@@ -1,64 +1,87 @@
 # Project Template Registry
 #
-# This file maps project types to external cookiecutter templates.
+# This file maps project types to external templates (cookiecutter or GitHub templates).
 # When you run `./scripts/add-project.py <type> <name>`, it references this file
 # to pull the appropriate template and integrate it into the monorepo.
 #
 # Template Configuration:
+#   template_type: "cookiecutter" or "github-template" (default: "cookiecutter")
 #   repo: Git repository URL (https or gh:username/repo format)
 #   version: Git branch name (typically "main" for latest)
 #   target_dir: Where to place the generated project (apps, services, packages, data-pipelines)
 #   description: (optional) Human-readable description of the template
+#
+# For cookiecutter templates:
 #   defaults: (optional) Default values for cookiecutter variables (enables --no-input mode)
 #   integrate_path: (optional) Path to subdirectory to integrate (for nested templates)
 #                   Use {project_slug} as placeholder for the generated project slug
 #                   Example: "{project_slug}/main-app" extracts main-app from nested structure
+#
+# For github-template templates:
+#   customizations: (optional) Simple text replacements to customize the template
+#                   Key-value pairs where {key} in files will be replaced with value
+#                   Example: {"project_name": "My App"} replaces {project_name} in all files
+#
+# Common to both:
 #   integration_hook: (optional) Python file in .monorepo/integration-hooks/ for post-processing
 #
 # Example configuration:
 #
 # templates:
-#   # Python Projects
+#   # Cookiecutter Templates (Python)
 #   cli:
-#     repo: "https://github.com/JeffreyUrban/cli-template"
+#     template_type: "cookiecutter"
+#     repo: "https://github.com/{{cookiecutter.github_username}}/cli-template"
 #     version: "main"
 #     target_dir: "apps"
 #     description: "Python command-line application"
 #
 #   api:
-#     repo: "https://github.com/JeffreyUrban/api-template"
+#     template_type: "cookiecutter"
+#     repo: "https://github.com/{{cookiecutter.github_username}}/api-template"
 #     version: "main"
 #     target_dir: "services"
 #     description: "Python API service (FastAPI, Flask, etc.)"
 #
 #   web-python:
-#     repo: "https://github.com/JeffreyUrban/web-python-template"
+#     template_type: "cookiecutter"
+#     repo: "https://github.com/{{cookiecutter.github_username}}/web-python-template"
 #     version: "main"
 #     target_dir: "apps"
 #     description: "Python web application (HTMX, Django, Flask, etc.)"
 #
 #   lib-python:
-#     repo: "https://github.com/JeffreyUrban/lib-python-template"
+#     template_type: "cookiecutter"
+#     repo: "https://github.com/{{cookiecutter.github_username}}/lib-python-template"
 #     version: "main"
 #     target_dir: "packages"
 #     description: "Python shared library"
 #
-#   # TypeScript Projects
-#   web-typescript:
-#     repo: "https://github.com/JeffreyUrban/web-typescript-template"
+#   # GitHub Template Repositories (TypeScript/React)
+#   web-react:
+#     template_type: "github-template"
+#     repo: "https://github.com/{{cookiecutter.github_username}}/web-react-router-template"
 #     version: "main"
 #     target_dir: "apps"
-#     description: "TypeScript web application (React, Vue, etc.)"
+#     description: "React + React Router + Tailwind CSS web application"
+#
+#   web-typescript:
+#     template_type: "github-template"
+#     repo: "https://github.com/{{cookiecutter.github_username}}/web-typescript-template"
+#     version: "main"
+#     target_dir: "apps"
+#     description: "TypeScript web application"
 #
 #   lib-typescript:
-#     repo: "https://github.com/JeffreyUrban/lib-typescript-template"
+#     template_type: "github-template"
+#     repo: "https://github.com/{{cookiecutter.github_username}}/lib-typescript-template"
 #     version: "main"
 #     target_dir: "packages"
 #     description: "TypeScript shared library"
 #
 # Optional: Provide defaults to run cookiecutter in non-interactive mode
 #   cli:
-#     repo: "https://github.com/JeffreyUrban/cli-template"
+#     repo: "https://github.com/{{cookiecutter.github_username}}/cli-template"
 #     version: "main"
 #     target_dir: "apps"
 #     defaults:
@@ -69,7 +92,7 @@
 # Optional: Handle nested template structures with integrate_path
 # (For templates that create workspace with multiple sub-projects)
 #   cli:
-#     repo: "https://github.com/JeffreyUrban/cli-template"
+#     repo: "https://github.com/{{cookiecutter.github_username}}/cli-template"
 #     version: "main"
 #     target_dir: "apps"
 #     integrate_path: "{project_slug}/test-cli"  # Extract just the CLI, skip homebrew tap
@@ -97,5 +120,11 @@
 #      - Add to appropriate workspace (uv for Python, npm/pnpm for TypeScript)
 #   5. Provide guidance to review testing configurations (pytest.ini, tox.ini, etc.)
 
-templates: {}
-# Add your template configurations here
+templates:
+  # GitHub Template Repositories (TypeScript/React)
+  web-react:
+    template_type: "github-template"
+    repo: "https://github.com/JeffreyUrban/web-react-router-template"
+    version: "main"
+    target_dir: "apps"
+    description: "React + React Router + Tailwind CSS web application"
