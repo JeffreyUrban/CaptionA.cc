@@ -1,0 +1,61 @@
+# CaptionA.cc - Workspace Configuration
+# This file coordinates all packages in the monorepo
+# Individual projects have their own pyproject.toml files
+
+[project]
+name = "captiona-cc-workspace"
+version = "0.1.0"
+description = "Captures hard-coded captions from video with accurate timing and content by establishing and leveraging priors and context"
+requires-python = ">=3.14"
+
+[tool.uv.workspace]
+members = [
+    "apps/*",
+    "services/*",
+    "data-pipelines/*",
+    "packages/*",
+]
+
+# Workspace-wide dependency version constraints
+# These override individual package versions to ensure consistency across workspace members
+# Policy: Keep all shared dependencies on same version unless there's a specific reason
+[tool.uv]
+override-dependencies = [
+    # Add shared dependency constraints here as your monorepo grows
+    # Example:
+    # "fastapi>=0.115.0,<1.0",
+    # "sqlalchemy>=2.0.36,<3.0",
+    # "pydantic>=2.9.0,<3.0",
+]
+
+# Common tool settings shared across all workspace members
+[tool.ruff]
+line-length = 120
+target-version = "py314"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]  # pycodestyle errors, pyflakes, isort
+ignore = []
+
+[tool.ruff.format]
+quote-style = "double"
+
+# Common pyright settings for all workspace members
+# Individual projects can override or extend these
+[tool.pyright]
+pythonVersion = "3.14"
+typeCheckingMode = "standard"
+reportMissingImports = true
+reportMissingTypeStubs = false
+
+# Workspace-level dev dependencies
+# All workspace members inherit these tools automatically
+# These are installed by default with `uv sync`
+[dependency-groups]
+dev = [
+    "ruff>=0.7.0",
+    "pyright>=1.1.350",
+    "pytest>=8.3.0",
+    "pytest-cov>=5.0.0",
+    "pyyaml>=6.0.0",
+]

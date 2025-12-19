@@ -1,0 +1,197 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  PYTHON_VERSION: 3.14
+
+jobs:
+  # Python linting and type checking
+  python-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for Python projects
+        id: check-python
+        run: |
+          if find apps services packages data-pipelines -name "pyproject.toml" 2>/dev/null | grep -q .; then
+            echo "has_python=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_python=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Set up Python
+        if: steps.check-python.outputs.has_python == 'true'
+
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install uv
+        if: steps.check-python.outputs.has_python == 'true'
+
+        uses: astral-sh/setup-uv@v3
+
+      - name: Install dependencies
+        if: steps.check-python.outputs.has_python == 'true'
+
+        run: uv sync --all-extras
+
+      - name: Lint with ruff
+        if: steps.check-python.outputs.has_python == 'true'
+
+        run: uv run ruff check .
+
+      - name: Format check with ruff
+        if: steps.check-python.outputs.has_python == 'true'
+
+        run: uv run ruff format --check .
+
+      - name: Type check with pyright
+        if: steps.check-python.outputs.has_python == 'true'
+
+        run: uv run pyright
+
+  # TypeScript linting and type checking
+  typescript-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for TypeScript projects
+        id: check-typescript
+        run: |
+          if find apps services packages -name "package.json" -not -path "*/node_modules/*" 2>/dev/null | grep -q .; then
+            echo "has_typescript=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_typescript=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Set up Node.js
+        if: steps.check-typescript.outputs.has_typescript == 'true'
+
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+
+      - name: Install dependencies
+        if: steps.check-typescript.outputs.has_typescript == 'true'
+
+        run: npm install
+
+      - name: Lint TypeScript projects
+        if: steps.check-typescript.outputs.has_typescript == 'true'
+
+        run: |
+          # Run lint in each TypeScript project
+          for dir in apps/* services/* packages/*; do
+            if [ -f "$dir/package.json" ]; then
+              echo "Linting $dir"
+              cd "$dir" && npm run lint --if-present && cd - || true
+            fi
+          done
+
+      - name: Type check TypeScript projects
+        if: steps.check-typescript.outputs.has_typescript == 'true'
+
+        run: |
+          # Run type checking in each TypeScript project
+          for dir in apps/* services/* packages/*; do
+            if [ -f "$dir/tsconfig.json" ]; then
+              echo "Type checking $dir"
+              cd "$dir" && npm run type-check --if-present && cd - || true
+            fi
+          done
+
+  # Python tests
+  python-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.14"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for Python projects
+        id: check-python
+        run: |
+          if find apps services packages data-pipelines -name "pyproject.toml" 2>/dev/null | grep -q .; then
+            echo "has_python=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_python=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Set up Python ${{ matrix.python-version }}
+
+        if: steps.check-python.outputs.has_python == 'true'
+
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install uv
+        if: steps.check-python.outputs.has_python == 'true'
+
+        uses: astral-sh/setup-uv@v3
+
+      - name: Install dependencies
+        if: steps.check-python.outputs.has_python == 'true'
+
+        run: uv sync --all-extras
+
+      - name: Run tests
+        if: steps.check-python.outputs.has_python == 'true'
+
+        run: uv run pytest --cov --cov-report=xml --cov-report=term
+
+      - name: Upload coverage
+        if: steps.check-python.outputs.has_python == 'true' && matrix.python-version == env.PYTHON_VERSION
+
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+          fail_ci_if_error: false
+
+  # TypeScript tests
+  typescript-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for TypeScript projects
+        id: check-typescript
+        run: |
+          if find apps services packages -name "package.json" -not -path "*/node_modules/*" 2>/dev/null | grep -q .; then
+            echo "has_typescript=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_typescript=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Set up Node.js
+        if: steps.check-typescript.outputs.has_typescript == 'true'
+
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+
+      - name: Install dependencies
+        if: steps.check-typescript.outputs.has_typescript == 'true'
+
+        run: npm install
+
+      - name: Run tests
+        if: steps.check-typescript.outputs.has_typescript == 'true'
+
+        run: |
+          # Run tests in each TypeScript project
+          for dir in apps/* services/* packages/*; do
+            if [ -f "$dir/package.json" ]; then
+              echo "Testing $dir"
+              cd "$dir" && npm test --if-present && cd - || true
+            fi
+          done

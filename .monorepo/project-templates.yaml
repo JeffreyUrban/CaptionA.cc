@@ -1,0 +1,101 @@
+# Project Template Registry
+#
+# This file maps project types to external cookiecutter templates.
+# When you run `./scripts/add-project.py <type> <name>`, it references this file
+# to pull the appropriate template and integrate it into the monorepo.
+#
+# Template Configuration:
+#   repo: Git repository URL (https or gh:username/repo format)
+#   version: Git branch name (typically "main" for latest)
+#   target_dir: Where to place the generated project (apps, services, packages, data-pipelines)
+#   description: (optional) Human-readable description of the template
+#   defaults: (optional) Default values for cookiecutter variables (enables --no-input mode)
+#   integrate_path: (optional) Path to subdirectory to integrate (for nested templates)
+#                   Use {project_slug} as placeholder for the generated project slug
+#                   Example: "{project_slug}/main-app" extracts main-app from nested structure
+#   integration_hook: (optional) Python file in .monorepo/integration-hooks/ for post-processing
+#
+# Example configuration:
+#
+# templates:
+#   # Python Projects
+#   cli:
+#     repo: "https://github.com/JeffreyUrban/cli-template"
+#     version: "main"
+#     target_dir: "apps"
+#     description: "Python command-line application"
+#
+#   api:
+#     repo: "https://github.com/JeffreyUrban/api-template"
+#     version: "main"
+#     target_dir: "services"
+#     description: "Python API service (FastAPI, Flask, etc.)"
+#
+#   web-python:
+#     repo: "https://github.com/JeffreyUrban/web-python-template"
+#     version: "main"
+#     target_dir: "apps"
+#     description: "Python web application (HTMX, Django, Flask, etc.)"
+#
+#   lib-python:
+#     repo: "https://github.com/JeffreyUrban/lib-python-template"
+#     version: "main"
+#     target_dir: "packages"
+#     description: "Python shared library"
+#
+#   # TypeScript Projects
+#   web-typescript:
+#     repo: "https://github.com/JeffreyUrban/web-typescript-template"
+#     version: "main"
+#     target_dir: "apps"
+#     description: "TypeScript web application (React, Vue, etc.)"
+#
+#   lib-typescript:
+#     repo: "https://github.com/JeffreyUrban/lib-typescript-template"
+#     version: "main"
+#     target_dir: "packages"
+#     description: "TypeScript shared library"
+#
+# Optional: Provide defaults to run cookiecutter in non-interactive mode
+#   cli:
+#     repo: "https://github.com/JeffreyUrban/cli-template"
+#     version: "main"
+#     target_dir: "apps"
+#     defaults:
+#       project_name: "My CLI"
+#       author_name: "Your Name"
+#       python_version: "3.14"
+#
+# Optional: Handle nested template structures with integrate_path
+# (For templates that create workspace with multiple sub-projects)
+#   cli:
+#     repo: "https://github.com/JeffreyUrban/cli-template"
+#     version: "main"
+#     target_dir: "apps"
+#     integrate_path: "{project_slug}/test-cli"  # Extract just the CLI, skip homebrew tap
+#     defaults:
+#       project_name: "My CLI"
+#       python_version: "3.14"
+#
+# After adding your template URLs, run:
+#   ./scripts/add-project.py cli my-awesome-cli
+#   ./scripts/add-project.py web-typescript my-react-app
+#
+# Integration Process:
+#   1. Clone the template from specified branch
+#   2. Run cookiecutter to generate the project
+#   3. Place it in the target directory (e.g., apps/my-awesome-cli/)
+#   4. Integrate with monorepo:
+#      - Remove .git directory (monorepo is the single git repo)
+#      - Keep project documentation (README.md, CHANGELOG.md, docs/, etc.)
+#      - Keep LICENSE file (warns if different from monorepo LICENSE)
+#      - Merge .gitattributes to monorepo level with path prefixes
+#      - Merge pre-commit hooks to monorepo config with file pattern scoping
+#      - Migrate GitHub workflows to monorepo with path filters
+#      - Fix git-based versioning (hatch-vcs, setuptools-scm)
+#      - Remove duplicate configs (ruff.toml, pyrightconfig.json for Python)
+#      - Add to appropriate workspace (uv for Python, npm/pnpm for TypeScript)
+#   5. Provide guidance to review testing configurations (pytest.ini, tox.ini, etc.)
+
+templates: {}
+# Add your template configurations here
