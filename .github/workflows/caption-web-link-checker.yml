@@ -1,0 +1,123 @@
+name: Link Checker
+
+on:
+  # Run weekly on Wednesdays at 3:17 AM UTC
+  schedule:
+    - cron: '17 3 * * 3'
+  # Allow manual triggering
+  workflow_dispatch:
+  # Also run on pushes to main to catch broken links early
+  push:
+    branches:
+      - main
+
+jobs:
+  check-links:
+    name: Check for Broken Links
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check external link attributes
+        run: npm run check:external-links
+
+      - name: Check production site for broken links
+        run: npm run check:links
+        continue-on-error: true
+        id: link_check
+
+      - name: Create issue if broken links found
+        if: steps.link_check.outcome == 'failure'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const title = '🔗 Broken links detected on production site';
+            const body = `The scheduled link checker found broken links on the production site.
+
+            **Workflow run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+            Please review the workflow logs to see which links are broken and fix them.
+
+            To run the link checker locally:
+            \`\`\`bash
+            npm run check:links
+            \`\`\`
+
+            ---
+            *This issue was automatically created by the [Link Checker workflow](${{ github.server_url }}/${{ github.repository }}/blob/main/.github/workflows/link-checker.yml)*`;
+
+            // Check if an issue already exists
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'broken-links'
+            });
+
+            if (issues.data.length === 0) {
+              // Create new issue
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: title,
+                body: body,
+                labels: ['broken-links', 'automated']
+              });
+              console.log('Created new issue for broken links');
+            } else {
+              // Add comment to existing issue
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issues.data[0].number,
+                body: `🔗 Broken links still detected as of ${new Date().toISOString()}\n\n**Latest run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`
+              });
+              console.log('Added comment to existing broken links issue');
+            }
+
+      - name: Close issue if links are fixed
+        if: steps.link_check.outcome == 'success'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            // Check if an open issue exists
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'broken-links'
+            });
+
+            if (issues.data.length > 0) {
+              // Close the issue
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issues.data[0].number,
+                state: 'closed'
+              });
+
+              // Add closing comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issues.data[0].number,
+                body: `✅ All links are now working! Verified on ${new Date().toISOString()}\n\nClosing this issue automatically.`
+              });
+
+              console.log('Closed broken links issue - all links working');
+            }

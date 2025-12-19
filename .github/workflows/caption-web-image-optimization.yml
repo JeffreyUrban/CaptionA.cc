@@ -1,0 +1,74 @@
+name: Image Optimization Check
+
+on:
+  pull_request:
+    paths:
+      - 'public/images/**'
+  push:
+    branches:
+      - main
+    paths:
+      - 'public/images/**'
+
+jobs:
+  validate-images:
+    name: Validate Image Optimization
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Make validation script executable
+        run: chmod +x scripts/validate-images.sh
+
+      - name: Validate images
+        run: ./scripts/validate-images.sh
+
+      - name: Comment on PR (if issues found)
+        if: failure() && github.event_name == 'pull_request'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const fs = require('fs');
+
+            const body = [
+              '## 🖼️ Image Optimization Issues Detected',
+              '',
+              'The image validation check found some issues with the images in this PR.',
+              '',
+              '### Common Issues:',
+              '- **PNG in photo directories**: Photos should use JPG format for smaller file sizes',
+              '- **Large file sizes**: Images over 500KB should be optimized',
+              '',
+              '### How to Fix:',
+              '',
+              '**Convert PNG to JPG:**',
+              '```bash',
+              'sips -s format jpeg -s formatOptions 90 "image.png" --out "image.jpg"',
+              'rm image.png',
+              '```',
+              '',
+              '**Optimize large JPG:**',
+              '```bash',
+              'sips -s formatOptions 85 "image.jpg" --out "image.jpg"',
+              '```',
+              '',
+              '### Best Practices:',
+              '- 📸 **Photos**: Use JPG (85-90% quality)',
+              '- 🎨 **Logos/Icons**: Use PNG (need transparency)',
+              '- 📊 **Charts/Diagrams**: Use PNG (sharp text)',
+              '- 🚀 **Modern formats**: Consider WebP for even smaller sizes',
+              '',
+              'See the workflow logs for specific files that need attention.',
+              '',
+              '---',
+              '*This check helps maintain fast page load times by ensuring images are properly optimized.*'
+            ].join('\n');
+
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: body
+            });
