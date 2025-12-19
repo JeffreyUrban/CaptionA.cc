@@ -1,0 +1,53 @@
+---
+title: MDX Example
+description: A demonstration of MDX content with React components
+---
+
+import { Container } from '~/components/Container'
+
+export const meta = () => {
+  return [
+    { title: "MDX Example" },
+    { name: "description", content: "A demonstration of MDX content" },
+  ]
+}
+
+<Container className="mt-16 sm:mt-32">
+  <div className="max-w-2xl">
+    <div className="prose dark:prose-invert">
+
+# MDX Content Example
+
+This page demonstrates **MDX** (Markdown + JSX) in action. You can write regular markdown with all its features:
+
+## Features
+
+- **Bold** and *italic* text
+- [Links](/) to other pages
+- Lists and formatting
+- Code blocks with syntax highlighting
+
+## Code Example
+
+```typescript
+const greeting = "Hello from MDX!"
+console.log(greeting)
+```
+
+## Why Use MDX?
+
+MDX combines the simplicity of Markdown with the power of React components. You can:
+
+1. Write content in Markdown
+2. Import and use React components
+3. Mix both seamlessly in the same file
+
+This makes it perfect for blog posts, documentation, and content-rich pages where you need occasional interactivity.
+
+---
+
+**Note:** This is a live example! You can edit `app/routes/example.mdx` to change this content.
+
+    </div>
+  </div>
+</Container>
