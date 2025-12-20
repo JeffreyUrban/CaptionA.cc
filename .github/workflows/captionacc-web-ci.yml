@@ -3,7 +3,7 @@ name: CI
 on:
   pull_request:
     paths:
-      - 'apps/captionsa-cc-web/**'
+      - 'apps/captionsacc-web/**'
   push:
     branches:
       - main
