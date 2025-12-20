@@ -642,34 +642,63 @@ def integrate_project(project_path: Path, monorepo_root: Path) -> None:
                 # Read workflow
                 content = workflow_file.read_text()
 
-                # Add path filter if not present
+                # Add path filters if not present (using improved regex patterns)
                 if "paths:" not in content and "on:" in content:
-                    # Add path filter after the 'on:' trigger
                     import re
 
-                    # Find the trigger section and add paths
+                    # Pattern 1: Simple trigger (on: push:) - add paths right after
+                    # Matches: "on:\n  push:" or "on:\n  pull_request:"
                     content = re.sub(
-                        r"(on:\s*\n\s*(?:push|pull_request):)",
-                        f"\\1\n    paths:\n      - '{project_rel_path}/**'",
+                        r"(on:\s*\n\s*)(push|pull_request)(:)(\s*)(\n)",
+                        f"\\1\\2\\3\\4\\5    paths:\\n      - '{project_rel_path}/**'\\n",
+                        content,
+                    )
+
+                    # Pattern 2: Trigger with properties (types, branches, etc.)
+                    # Matches: "pull_request:\n    types: [...]" and adds paths after types
+                    # This handles the review app case where types: is specified
+                    content = re.sub(
+                        r"(on:\s*\n\s*(?:push|pull_request):\s*\n\s*types:\s*\[.*?\])(\s*\n)",
+                        f"\\1\\2    paths:\\n      - '{project_rel_path}/**'\\n",
+                        content,
+                    )
+
+                    # Pattern 3: Trigger with branches but no types
+                    # Matches: "push:\n    branches:" and adds paths after branches list
+                    content = re.sub(
+                        r"(on:\s*\n\s*(?:push|pull_request):\s*\n\s*branches:\s*\n\s*-\s*.*?)(\n(?:\s{4})?(?:[^\s]|$))",
+                        f"\\1\\n    paths:\\n      - '{project_rel_path}/**'\\2",
                         content,
                     )
 
                 # Fix Fly.io deployment actions to include path parameter
-                import re
-
-                # Detect Fly.io actions and add path parameter if missing
                 if "superfly/fly-pr-review-apps" in content or "superfly/flyctl-actions" in content:
-                    # Check if 'with:' section exists but 'path:' doesn't
+                    import re
+
+                    # Add path parameter to fly-pr-review-apps if missing
                     if re.search(r"uses:\s+superfly/fly-pr-review-apps", content):
-                        # Find the 'with:' block and add 'path:' if not present
+                        # Check if 'with:' section exists but 'path:' doesn't
                         if "with:" in content and f"path: {project_rel_path}" not in content:
                             # Add path parameter after 'with:'
                             content = re.sub(
                                 r"(uses:\s+superfly/fly-pr-review-apps@[^\n]+\n\s+with:\n)",
-                                f"\\1          path: {project_rel_path}\n",
+                                f"\\1          path: {project_rel_path}\\n",
                                 content,
                             )
-                            print(f"    Added path parameter to Fly.io action in {workflow_file.name}")
+                            print(f"    Added 'path: {project_rel_path}' to Fly.io action in {workflow_file.name}")
+
+                    # Add path parameter to flyctl-actions deploy if missing
+                    if re.search(r"uses:\s+superfly/flyctl-actions/setup-flyctl", content):
+                        # For flyctl deploy, we need to add --config parameter to the flyctl deploy command
+                        # Check if the deploy command exists and doesn't have --config
+                        if re.search(r"flyctl deploy.*--remote-only", content):
+                            if f"--config {project_rel_path}/fly.toml" not in content:
+                                content = re.sub(
+                                    r"(flyctl deploy)(.*--remote-only)",
+                                    f"\\1 --config {project_rel_path}/fly.toml\\2",
+                                    content,
+                                )
+                                print(f"    Added '--config {project_rel_path}/fly.toml' to flyctl deploy in {workflow_file.name}")
 
                 # Write to monorepo workflows with project prefix
                 new_name = f"{project_path.name}-{workflow_file.name}"
