@@ -544,6 +544,23 @@ def integrate_project(project_path: Path, monorepo_root: Path) -> None:
                         content,
                     )
 
+                # Fix Fly.io deployment actions to include path parameter
+                import re
+
+                # Detect Fly.io actions and add path parameter if missing
+                if "superfly/fly-pr-review-apps" in content or "superfly/flyctl-actions" in content:
+                    # Check if 'with:' section exists but 'path:' doesn't
+                    if re.search(r"uses:\s+superfly/fly-pr-review-apps", content):
+                        # Find the 'with:' block and add 'path:' if not present
+                        if "with:" in content and f"path: {project_rel_path}" not in content:
+                            # Add path parameter after 'with:'
+                            content = re.sub(
+                                r"(uses:\s+superfly/fly-pr-review-apps@[^\n]+\n\s+with:\n)",
+                                f"\\1          path: {project_rel_path}\n",
+                                content,
+                            )
+                            print(f"    Added path parameter to Fly.io action in {workflow_file.name}")
+
                 # Write to monorepo workflows with project prefix
                 new_name = f"{project_path.name}-{workflow_file.name}"
                 new_path = monorepo_workflows / new_name
