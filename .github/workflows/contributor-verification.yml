@@ -1,0 +1,39 @@
+name: Contributor Verification
+on:
+  pull_request:
+    types: [opened]
+
+jobs:
+  verify-contributor:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check if contributor is authorized
+        run: |
+          ALLOWED=("JeffreyUrban" "renovate[bot]")
+          AUTHOR="${{ github.event.pull_request.user.login }}"
+          
+          if [[ " ${ALLOWED[@]} " =~ " ${AUTHOR} " ]]; then
+            echo "✅ Authorized contributor: $AUTHOR"
+            exit 0
+          else
+            echo "❌ Unauthorized contributor: $AUTHOR"
+            echo "This project does not accept external contributions."
+            exit 1
+          fi
+      - name: Close unauthorized PR
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: 'This project does not accept external contributions. See LICENSE for terms.'
+            });
+            await github.rest.pulls.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+              state: 'closed'
+            });

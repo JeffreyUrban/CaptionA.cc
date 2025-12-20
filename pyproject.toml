@@ -3,7 +3,7 @@
 # Individual projects have their own pyproject.toml files
 
 [project]
-name = "captiona-cc-workspace"
+name = "captionacc-workspace"
 version = "0.1.0"
 description = "Captures hard-coded captions from video with accurate timing and content by establishing and leveraging priors and context"
 requires-python = ">=3.14"

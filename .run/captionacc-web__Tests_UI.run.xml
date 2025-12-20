@@ -1,9 +1,9 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="Web: Lint" type="js.build_tools.npm">
-    <package-json value="$PROJECT_DIR$/apps/captiona-cc-web/package.json" />
+  <configuration default="false" name="captionacc-web: Tests (UI)" type="js.build_tools.npm">
+    <package-json value="$PROJECT_DIR$/apps/captionacc-web/package.json" />
     <command value="run" />
     <scripts>
-      <script value="lint" />
+      <script value="test:ui" />
     </scripts>
     <node-interpreter value="project" />
     <envs />
