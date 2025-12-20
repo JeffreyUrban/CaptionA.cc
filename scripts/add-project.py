@@ -377,7 +377,7 @@ def generate_webstorm_run_configs(project_path: Path, monorepo_root: Path) -> No
     """
     Generate WebStorm run configurations for TypeScript/JavaScript projects.
 
-    Creates .run/*.run.xml files based on package.json scripts.
+    Creates .run/<project>/*.run.xml files based on package.json scripts.
     """
     import json
 
@@ -419,6 +419,10 @@ def generate_webstorm_run_configs(project_path: Path, monorepo_root: Path) -> No
     project_name = project_path.name
     project_rel_path = project_path.relative_to(monorepo_root)
 
+    # Create project directory if it doesn't exist
+    proj_dir = run_dir / project_name
+    proj_dir.mkdir(exist_ok=True)
+
     configs_created = []
 
     for script_name, (display_name, should_create) in script_configs.items():
@@ -428,7 +432,7 @@ def generate_webstorm_run_configs(project_path: Path, monorepo_root: Path) -> No
         # Create safe filename (replace special chars)
         safe_name = display_name.replace(" ", "_").replace("(", "").replace(")", "")
         config_filename = f"{project_name}__{safe_name}.run.xml"
-        config_path = run_dir / config_filename
+        config_path = proj_dir / config_filename
 
         # WebStorm run configuration XML
         config_content = f"""<component name="ProjectRunConfigurationManager">
