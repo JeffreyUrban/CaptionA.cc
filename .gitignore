@@ -12,6 +12,11 @@ eggs/
 .eggs/
 lib/
 lib64/
+
+# But allow app source lib directories
+!apps/*/app/lib/
+!services/*/app/lib/
+!packages/*/lib/
 parts/
 sdist/
 var/
