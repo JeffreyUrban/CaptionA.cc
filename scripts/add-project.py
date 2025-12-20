@@ -751,15 +751,31 @@ def integrate_project(project_path: Path, monorepo_root: Path) -> None:
 
                         # Create images.ts
                         images_ts = app_lib_dir / "images.ts"
-                        images_content = """// Image imports
-// Note: SVGs are imported as-is since they're already vector graphics
-// For raster images (PNG, JPG), you can use vite-imagetools query parameters
-// Example: import photo from '~/assets/images/photo.jpg?w=400;800;1200&format=webp'
-import placeholder from '~/assets/images/placeholder.svg'
+                        images_content = """/**
+ * Centralized image registry with type-safe imports
+ * All vite-imagetools imports are handled here to avoid TypeScript issues
+ *
+ * Important:
+ * - SVGs are imported as-is (they're already vector graphics, no optimization needed)
+ * - Raster images (PNG, JPG) use vite-imagetools for responsive image optimization
+ *
+ * Add your own images here and import them in your components
+ */
 
+import type { ImageOutput } from './imagetools';
+
+// SVG images - import directly without vite-imagetools
+import placeholderSvg from '~/assets/images/placeholder.svg';
+
+// Raster images - use vite-imagetools for responsive optimization
+// @ts-expect-error - Vite imagetools query parameters not recognized by TypeScript module resolution
+import placeholderImg from '~/assets/images/placeholder.jpg?w=400;800;1200&format=webp&as=picture';
+
+// Export organized by category with proper types
 export const examples = {
-    placeholder,
-}
+  placeholder: placeholderSvg, // SVG - used as string
+  placeholderOptimized: placeholderImg as ImageOutput[], // Raster - optimized with vite-imagetools
+};
 """
                         images_ts.write_text(images_content)
 
