@@ -12,6 +12,9 @@ jobs:
   quality:
     name: Code Quality Checks
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/captionacc-web
 
     steps:
       - name: Checkout code
@@ -20,8 +23,9 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version-file: '.nvmrc'
+          node-version-file: '../../.nvmrc'
           cache: 'npm'
+          cache-dependency-path: 'apps/captionacc-web/package-lock.json'
 
       - name: Install dependencies
         run: npm ci
