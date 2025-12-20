@@ -21,9 +21,9 @@ npm test  # For TypeScript projects
 ## Monorepo Structure
 
 ```
-captiona-cc/
+captionacc/
 ├── apps/                # Applications
-│   └── captiona-cc-web/ # React web application
+│   └── captionacc-web/ # React web application
 ├── services/            # Backend services (APIs, workers, etc.)
 ├── packages/            # Shared libraries
 ├── data-pipelines/      # Data processing pipelines
@@ -36,19 +36,19 @@ captiona-cc/
 
 ## Projects
 
-### Web Application (apps/captiona-cc-web)
+### Web Application (apps/captionacc-web)
 
 React + React Router 7 + Tailwind CSS 4 web application for caption capture interface.
 
 **Development:**
 ```bash
-cd apps/captiona-cc-web
+cd apps/captionacc-web
 npm run dev
 ```
 
 **Testing:**
 ```bash
-cd apps/captiona-cc-web
+cd apps/captionacc-web
 npm test              # Run tests once
 npm run test:watch    # Run tests in watch mode
 npm run test:coverage # Run with coverage
@@ -56,7 +56,7 @@ npm run test:coverage # Run with coverage
 
 **Building:**
 ```bash
-cd apps/captiona-cc-web
+cd apps/captionacc-web
 npm run build
 ```
 
@@ -64,14 +64,14 @@ npm run build
 
 Run configurations are automatically generated when adding TypeScript/JavaScript projects. Check the `.run/` directory for available configurations, which will appear in your IDE's run configuration dropdown.
 
-Current configurations for `captiona-cc-web`:
-- captiona-cc-web: Dev Server
-- captiona-cc-web: Build
-- captiona-cc-web: Tests
-- captiona-cc-web: Tests (Watch)
-- captiona-cc-web: Typecheck
-- captiona-cc-web: Lint
-- captiona-cc-web: Test Coverage
+Current configurations for `captionacc-web`:
+- captionacc-web: Dev Server
+- captionacc-web: Build
+- captionacc-web: Tests
+- captionacc-web: Tests (Watch)
+- captionacc-web: Typecheck
+- captionacc-web: Lint
+- captionacc-web: Test Coverage
 
 *Note: Run configurations use the project directory name as the prefix, making it easy to identify which project each configuration belongs to when you have multiple projects.*
 
@@ -137,7 +137,7 @@ ruff format .
 
 ```bash
 # Run development server
-cd apps/captiona-cc-web
+cd apps/captionacc-web
 npm run dev
 
 # Run tests
@@ -156,12 +156,12 @@ npm run build
 ## Working in Your IDE
 
 ### PyCharm / IntelliJ IDEA
-- **Open**: Open the monorepo root directory (`/Users/jurban/PycharmProjects/captiona-cc`)
+- **Open**: Open the monorepo root directory (`/Users/jurban/PycharmProjects/captionacc`)
 - **Python Interpreter**: PyCharm will auto-detect the `.venv` from uv
 - **Run Configurations**: Create run configurations with working directory set to specific projects
 
 ### WebStorm
-- **Open**: Open the monorepo root directory (`/Users/jurban/PycharmProjects/captiona-cc`)
+- **Open**: Open the monorepo root directory (`/Users/jurban/PycharmProjects/captionacc`)
 - **Node.js**: WebStorm will auto-detect workspace configuration
 - **Run Configurations**: Use the provided `.run/*.run.xml` configurations for the web app
 
@@ -199,7 +199,7 @@ pytest --cov=src --cov-report=html
 ### TypeScript
 ```bash
 # Run all tests in web app
-cd apps/captiona-cc-web
+cd apps/captionacc-web
 npm test
 
 # Run tests in watch mode
@@ -216,7 +216,7 @@ GitHub Actions workflows are configured at the monorepo level (`.github/workflow
 ### Active Workflows
 
 - `ci.yml`: Main CI pipeline for Python projects
-- `caption-web-ci.yml`: CI for web application (runs on changes to `apps/captiona-cc-web/**`)
+- `caption-web-ci.yml`: CI for web application (runs on changes to `apps/captionacc-web/**`)
 - `caption-web-*.yml`: Additional web app workflows (deployment, link checking, etc.)
 
 Workflows use path filters to run only when relevant files change.
@@ -252,7 +252,7 @@ find . -type d -name "*.egg-info" -exec rm -rf {} +
 find . -type d -name ".pytest_cache" -exec rm -rf {} +
 
 # TypeScript
-cd apps/captiona-cc-web && rm -rf node_modules dist build .vite
+cd apps/captionacc-web && rm -rf node_modules dist build .vite
 ```
 
 ## Architecture Principles
@@ -269,7 +269,7 @@ Issues and discussions welcome, but pull requests are not accepted.
 ### Code Style
 
 - **Python**: Follow PEP 8, enforced by ruff
-- **TypeScript**: Follow ESLint rules in `apps/captiona-cc-web/eslint.config.js`
+- **TypeScript**: Follow ESLint rules in `apps/captionacc-web/eslint.config.js`
 - **Formatting**: Use ruff (Python) and prettier (TypeScript)
 - **Line length**: 120 characters
 - **Quotes**: Single quotes preferred
