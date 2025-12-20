@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="captiona-cc-web: Lint" type="js.build_tools.npm">
-    <package-json value="$PROJECT_DIR$/apps/captiona-cc-web/package.json" />
+  <configuration default="false" name="captionacc-web: Lint" type="js.build_tools.npm">
+    <package-json value="$PROJECT_DIR$/apps/captionacc-web/package.json" />
     <command value="run" />
     <scripts>
       <script value="lint" />

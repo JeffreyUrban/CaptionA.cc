@@ -34,4 +34,4 @@ jobs:
         uses: superfly/fly-pr-review-apps@1.5.0
         with:
           name: pr-${{ github.event.number }}-web-react-router-template
-          path: apps/captiona-cc-web
+          path: apps/captionacc-web
