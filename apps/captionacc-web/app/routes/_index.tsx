@@ -4,7 +4,7 @@ import {examples} from '~/lib/images'
 import {getImageSrc} from '~/lib/imagetools'
 
 export default function Home() {
-    const placeholderSrc = getImageSrc(examples.placeholder)
+    const placeholderSrc = getImageSrc(examples.placeholderOptimized)
 
     return (
         <>
