@@ -123,9 +123,17 @@ def clone_github_template(template_config: dict[str, Any], project_name: str, ta
     """Clone a GitHub template repository directly (non-cookiecutter)"""
     import shutil
     import tempfile
+    import re
 
     repo = template_config["repo"]
     version = template_config.get("version", "main")
+
+    # Extract template repo name from URL for fallback replacement
+    # e.g., "https://github.com/user/web-react-router-template" -> "web-react-router-template"
+    template_repo_name = None
+    repo_match = re.search(r'/([^/]+?)(?:\.git)?$', repo)
+    if repo_match:
+        template_repo_name = repo_match.group(1)
 
     print(f"Cloning GitHub template: {repo} @ {version}")
     print(f"Target directory: {target_dir}")
@@ -171,7 +179,7 @@ def clone_github_template(template_config: dict[str, Any], project_name: str, ta
         customizations["project_slug"] = project_slug
 
         print(f"  Applying customizations...")
-        apply_customizations(tmp_path, customizations)
+        apply_customizations(tmp_path, customizations, template_repo_name=template_repo_name)
 
         # Copy to final location
         if final_path.exists():
@@ -184,9 +192,83 @@ def clone_github_template(template_config: dict[str, Any], project_name: str, ta
     return final_path
 
 
-def apply_customizations(project_path: Path, customizations: dict[str, str]) -> None:
-    """Apply simple text replacements to customize a GitHub template"""
+def apply_customizations(project_path: Path, customizations: dict[str, str], template_repo_name: str | None = None) -> None:
+    """
+    Apply text replacements to customize a GitHub template.
+
+    Strategy:
+    1. Primary: Check for .template-config.yml and apply specified customizations
+    2. Fallback: Heuristic detection - replace template repo name in common files
+
+    This allows templates to remain deployable while still being customizable.
+    """
     import json
+    import yaml
+
+    # Check for .template-config.yml (our convention for controlled templates)
+    template_config_file = project_path / ".template-config.yml"
+    if template_config_file.exists():
+        print("    Found .template-config.yml - applying template-defined customizations")
+        try:
+            with open(template_config_file) as f:
+                template_config = yaml.safe_load(f)
+
+            if template_config and "customizations" in template_config:
+                for custom in template_config["customizations"]:
+                    file_path = project_path / custom["file"]
+                    if not file_path.exists():
+                        continue
+
+                    content = file_path.read_text()
+                    original_content = content
+
+                    # Handle JSON path replacement for structured files
+                    if "json_path" in custom and file_path.suffix == ".json":
+                        try:
+                            data = json.loads(content)
+                            # Simple dot notation support (e.g., "name" or "config.app")
+                            keys = custom["json_path"].split(".")
+                            target = data
+                            for key in keys[:-1]:
+                                target = target[key]
+
+                            # Replace with appropriate value
+                            replace_value = customizations.get(custom["replace_with"], custom["replace_with"])
+                            target[keys[-1]] = replace_value
+                            content = json.dumps(data, indent=2) + "\n"
+                        except (json.JSONDecodeError, KeyError) as e:
+                            print(f"      Warning: Could not apply JSON customization to {custom['file']}: {e}")
+                    else:
+                        # Handle text replacement
+                        find_str = custom["find"]
+                        replace_with = custom.get("replace_with", "project_slug")
+
+                        # Replace placeholder with actual value
+                        if "{project_slug}" in replace_with:
+                            replace_value = replace_with.replace("{project_slug}", customizations.get("project_slug", ""))
+                        elif "{project_name}" in replace_with:
+                            replace_value = replace_with.replace("{project_name}", customizations.get("project_name", ""))
+                        else:
+                            replace_value = customizations.get(replace_with, replace_with)
+
+                        content = content.replace(find_str, replace_value)
+
+                    if content != original_content:
+                        file_path.write_text(content)
+                        relative_path = file_path.relative_to(project_path)
+                        print(f"      Customized {relative_path}")
+
+            # Remove .template-config.yml after applying
+            template_config_file.unlink()
+            print("    Removed .template-config.yml")
+            return  # Done with primary strategy
+
+        except Exception as e:
+            print(f"    Warning: Could not process .template-config.yml: {e}")
+            print("    Falling back to heuristic detection")
+
+    # Fallback: Heuristic detection for templates without .template-config.yml
+    print("    Using heuristic detection for customization")
 
     # Files to customize (common configuration files)
     customizable_files = [
@@ -195,19 +277,37 @@ def apply_customizations(project_path: Path, customizations: dict[str, str]) -> 
         "vite.config.ts",
         "vite.config.js",
         "tsconfig.json",
+        "fly.toml",
+        "Dockerfile",
+        "docker-compose.yml",
+        "pyproject.toml",
     ]
 
+    # Collect all files to customize
+    files_to_process = []
+
+    # Add root-level config files
     for file_name in customizable_files:
         file_path = project_path / file_name
-        if not file_path.exists():
-            continue
+        if file_path.exists():
+            files_to_process.append(file_path)
 
+    # Add workflow files if .github/workflows exists
+    workflows_dir = project_path / ".github" / "workflows"
+    if workflows_dir.exists():
+        for workflow_file in workflows_dir.glob("*.yml"):
+            files_to_process.append(workflow_file)
+        for workflow_file in workflows_dir.glob("*.yaml"):
+            files_to_process.append(workflow_file)
+
+    # Process all files
+    for file_path in files_to_process:
         try:
             content = file_path.read_text()
             original_content = content
 
             # For package.json, update the name field properly
-            if file_name == "package.json":
+            if file_path.name == "package.json":
                 try:
                     pkg_data = json.loads(content)
                     if "project_name" in customizations:
@@ -217,17 +317,23 @@ def apply_customizations(project_path: Path, customizations: dict[str, str]) -> 
                     # Fall back to text replacement if JSON is invalid
                     pass
 
-            # Apply text replacements
+            # Apply text replacements for {key} placeholders
             for key, value in customizations.items():
-                # Replace {key} placeholders
                 content = content.replace(f"{{{key}}}", value)
 
+            # Fallback: Replace template repo name with project slug
+            # This handles templates that use their repo name (e.g., 'web-react-router-template')
+            if template_repo_name and "project_slug" in customizations:
+                content = content.replace(template_repo_name, customizations["project_slug"])
+
             if content != original_content:
+                relative_path = file_path.relative_to(project_path)
                 file_path.write_text(content)
-                print(f"    Customized {file_name}")
+                print(f"    Customized {relative_path}")
 
         except Exception as e:
-            print(f"    Warning: Could not customize {file_name}: {e}")
+            relative_path = file_path.relative_to(project_path)
+            print(f"    Warning: Could not customize {relative_path}: {e}")
 
 
 def move_nested_project(project_path: Path, target_dir: Path) -> Path:
