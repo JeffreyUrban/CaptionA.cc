@@ -6,10 +6,13 @@ on:
     - cron: '17 3 * * 3'
   # Allow manual triggering
   workflow_dispatch:
-  # Also run on pushes to main to catch broken links early
+  # Also run on pushes to main when captionacc-web content changes
   push:
     branches:
       - main
+    paths:
+      - 'apps/captionacc-web/**'
+      - '**.md'
 
 jobs:
   check-links:

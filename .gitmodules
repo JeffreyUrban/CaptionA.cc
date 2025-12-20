@@ -1,0 +1,3 @@
+[submodule ".claude"]
+	path = .claude
+	url = git@github.com-JeffreyUrban:JeffreyUrban/claude-config-monorepo.git
