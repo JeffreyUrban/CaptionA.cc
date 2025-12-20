@@ -267,6 +267,85 @@ def move_nested_project(project_path: Path, target_dir: Path) -> Path:
     return project_path
 
 
+def generate_webstorm_run_configs(project_path: Path, monorepo_root: Path) -> None:
+    """
+    Generate WebStorm run configurations for TypeScript/JavaScript projects.
+
+    Creates .run/*.run.xml files based on package.json scripts.
+    """
+    import json
+
+    package_json_path = project_path / "package.json"
+    if not package_json_path.exists():
+        return
+
+    try:
+        with open(package_json_path) as f:
+            package_data = json.load(f)
+    except json.JSONDecodeError:
+        print("  Warning: Could not parse package.json for run configurations")
+        return
+
+    scripts = package_data.get("scripts", {})
+    if not scripts:
+        return
+
+    # Determine which scripts to create run configurations for
+    # Map script names to display names and whether they should be created
+    script_configs = {
+        "dev": ("Dev Server", True),
+        "start": ("Start", True),
+        "build": ("Build", True),
+        "test": ("Tests", True),
+        "test:watch": ("Tests (Watch)", True),
+        "test:ui": ("Tests (UI)", True),
+        "test:coverage": ("Test Coverage", True),
+        "lint": ("Lint", True),
+        "typecheck": ("Typecheck", True),
+        "format": ("Format", True),
+    }
+
+    # Create .run directory if it doesn't exist
+    run_dir = monorepo_root / ".run"
+    run_dir.mkdir(exist_ok=True)
+
+    # Get project name for config naming
+    project_name = project_path.name
+    project_rel_path = project_path.relative_to(monorepo_root)
+
+    configs_created = []
+
+    for script_name, (display_name, should_create) in script_configs.items():
+        if script_name not in scripts or not should_create:
+            continue
+
+        # Create safe filename (replace special chars)
+        safe_name = display_name.replace(" ", "_").replace("(", "").replace(")", "")
+        config_filename = f"{project_name}__{safe_name}.run.xml"
+        config_path = run_dir / config_filename
+
+        # WebStorm run configuration XML
+        config_content = f"""<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="{project_name}: {display_name}" type="js.build_tools.npm">
+    <package-json value="$PROJECT_DIR$/{project_rel_path}/package.json" />
+    <command value="run" />
+    <scripts>
+      <script value="{script_name}" />
+    </scripts>
+    <node-interpreter value="project" />
+    <envs />
+    <method v="2" />
+  </configuration>
+</component>
+"""
+
+        config_path.write_text(config_content)
+        configs_created.append(display_name)
+
+    if configs_created:
+        print(f"  Created {len(configs_created)} WebStorm run configuration(s): {', '.join(configs_created)}")
+
+
 def integrate_project(project_path: Path, monorepo_root: Path) -> None:
     """
     Integrate the generated project with monorepo conventions.
@@ -582,9 +661,13 @@ def integrate_project(project_path: Path, monorepo_root: Path) -> None:
                     json.dump(package_data, f, indent=2)
                     f.write("\n")  # Add trailing newline
 
+    # 11. Generate WebStorm run configurations for TypeScript projects
+    if project_type in ["typescript", "hybrid"]:
+        generate_webstorm_run_configs(project_path, monorepo_root)
+
     print("  ✓ Integration complete!")
 
-    # 11. Update workspaces
+    # 12. Update workspaces
     print("\nUpdating workspaces...")
 
     if project_type in ["python", "hybrid"]:

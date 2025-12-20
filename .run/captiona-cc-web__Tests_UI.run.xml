@@ -1,9 +1,9 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="Web: Build" type="js.build_tools.npm">
+  <configuration default="false" name="captiona-cc-web: Tests (UI)" type="js.build_tools.npm">
     <package-json value="$PROJECT_DIR$/apps/captiona-cc-web/package.json" />
     <command value="run" />
     <scripts>
-      <script value="build" />
+      <script value="test:ui" />
     </scripts>
     <node-interpreter value="project" />
     <envs />
