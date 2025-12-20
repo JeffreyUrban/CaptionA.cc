@@ -4,7 +4,7 @@
   "private": true,
   "description": "Captures hard-coded captions from video with accurate timing and content by establishing and leveraging priors and context",
   "workspaces": [
-    "apps/captionsacc-web"
+    "apps/captionacc-web"
   ],
   "scripts": {
     "test": "echo 'Run tests in individual TypeScript projects'",

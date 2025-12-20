@@ -4,7 +4,7 @@ name: Fly Deploy
 on:
   push:
     paths:
-      - 'apps/captionsacc-web/**'
+      - 'apps/captionacc-web/**'
     branches:
       - main
 jobs:
