@@ -1,5 +1,5 @@
 {
-  "name": "captiona-cc",
+  "name": "captionacc",
   "version": "0.1.0",
   "private": true,
   "description": "Captures hard-coded captions from video with accurate timing and content by establishing and leveraging priors and context",
