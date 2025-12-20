@@ -101,5 +101,4 @@ Thumbs.db
 .env.local
 .env.*.local
 /CLAUDE*
-/.claude/
 /.claude-name
