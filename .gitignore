@@ -100,5 +100,6 @@ Thumbs.db
 # Environment variables
 .env.local
 .env.*.local
-/CLAUDE.md
+/CLAUDE*
 /.claude/
+/.claude-name
