@@ -98,7 +98,7 @@ def analyze(
         console.print(f"  Expected frames: ~{expected_frames}")
         console.print()
 
-        # Step 1+2: Stream frames with OCR (combined for efficiency)
+        # Step 1+2: Stream frames with OCR (with timeout protection)
         console.print("[bold]Step 1/2: Streaming extraction + OCR[/bold]")
         frames_dir = output_dir / "frames" / "0.1Hz_full_frames"
         ocr_output = output_dir / "OCR.jsonl"

@@ -1,9 +1,11 @@
 """OCR processing using macOS LiveText API."""
 
 import json
+import signal
 import subprocess
 import time
 from collections import defaultdict
+from concurrent.futures import ProcessPoolExecutor, TimeoutError, as_completed
 from pathlib import Path
 from typing import Optional
 
@@ -12,27 +14,93 @@ from ocrmac import ocrmac
 from PIL import Image
 
 
-def process_frame_ocr(
-    image_path: Path, language: str = "zh-Hans"
+class OCRTimeoutError(Exception):
+    """Raised when OCR processing times out."""
+    pass
+
+
+def timeout_handler(signum, frame):
+    """Signal handler for OCR timeout."""
+    raise OCRTimeoutError("OCR processing timed out")
+
+
+def process_frame_ocr_with_retry(
+    image_path: Path,
+    language: str = "zh-Hans",
+    timeout: int = 10,
+    max_retries: int = 3,
+    base_backoff: float = 1.0,
 ) -> dict[str, any]:
-    """Run OCR on a single frame image.
+    """Run OCR on a single frame with timeout protection and retry logic.
+
+    This function runs in a worker process and uses signal.alarm() for timeout.
+    Uses exponential backoff between retries.
 
     Args:
         image_path: Path to image file
         language: OCR language preference (default: "zh-Hans" for Simplified Chinese)
+        timeout: Maximum seconds to wait per attempt (default: 10)
+        max_retries: Maximum retry attempts (default: 3)
+        base_backoff: Base delay for exponential backoff in seconds (default: 1.0)
 
     Returns:
         Dictionary with OCR results
     """
-    annotations = ocrmac.OCR(
-        str(image_path), framework="livetext", language_preference=[language]
-    ).recognize()
+    last_error = None
 
+    for attempt in range(max_retries):
+        # Set up timeout alarm (works in worker process)
+        signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(timeout)
+
+        try:
+            annotations = ocrmac.OCR(
+                str(image_path), framework="livetext", language_preference=[language]
+            ).recognize()
+
+            # Cancel the alarm
+            signal.alarm(0)
+
+            if attempt > 0:
+                print(f"  OCR succeeded on {image_path.name} after {attempt + 1} attempts")
+
+            return {
+                "image_path": str(image_path.relative_to(image_path.parent.parent)),
+                "framework": "livetext",
+                "language_preference": language,
+                "annotations": annotations,
+            }
+
+        except OCRTimeoutError as e:
+            # Cancel the alarm
+            signal.alarm(0)
+            last_error = "timeout"
+            print(f"  OCR timeout on {image_path.name} (attempt {attempt + 1}/{max_retries})")
+            if attempt < max_retries - 1:
+                backoff_delay = base_backoff * (2 ** attempt)
+                print(f"  Retrying after {backoff_delay}s backoff...")
+                time.sleep(backoff_delay)
+            continue
+
+        except Exception as e:
+            # Cancel the alarm on any error
+            signal.alarm(0)
+            last_error = str(e)
+            print(f"  OCR error on {image_path.name} (attempt {attempt + 1}/{max_retries}): {e}")
+            if attempt < max_retries - 1:
+                backoff_delay = base_backoff * (2 ** attempt)
+                print(f"  Retrying after {backoff_delay}s backoff...")
+                time.sleep(backoff_delay)
+            continue
+
+    # All retries exhausted
+    print(f"ERROR: OCR failed on {image_path.name} after {max_retries} attempts")
     return {
         "image_path": str(image_path.relative_to(image_path.parent.parent)),
         "framework": "livetext",
         "language_preference": language,
-        "annotations": annotations,
+        "annotations": [],
+        "error": f"failed_after_{max_retries}_attempts: {last_error}",
     }
 
 
@@ -42,8 +110,9 @@ def process_frames_directory(
     language: str = "zh-Hans",
     progress_callback: Optional[callable] = None,
     keep_frames: bool = False,
+    max_workers: int = 1,
 ) -> Path:
-    """Process all frames in a directory with OCR.
+    """Process all frames in a directory with OCR using worker pool.
 
     Streams results directly to JSONL file without accumulating in memory.
     Deletes frames after processing unless keep_frames=True.
@@ -54,6 +123,7 @@ def process_frames_directory(
         language: OCR language preference
         progress_callback: Optional callback (current, total) -> None
         keep_frames: If True, keep frames after processing. If False, delete them.
+        max_workers: Maximum concurrent OCR workers (default: 1 for macOS OCR)
 
     Returns:
         Path to the first frame (kept for visualization)
@@ -66,19 +136,36 @@ def process_frames_directory(
     total = len(frame_files)
     first_frame = frame_files[0]
 
-    # Open output file and process each frame, writing immediately
+    # Open output file and process with worker pool
     with output_file.open("w") as f:
-        for idx, frame_path in enumerate(frame_files, 1):
-            result = process_frame_ocr(frame_path, language)
-            json.dump(result, f, ensure_ascii=False)
-            f.write("\n")
+        with ProcessPoolExecutor(max_workers=max_workers) as executor:
+            # Submit all frames to worker pool
+            futures = {
+                executor.submit(process_frame_ocr_with_retry, frame_path, language): (idx, frame_path)
+                for idx, frame_path in enumerate(frame_files, 1)
+            }
 
-            # Delete frame after processing (except first frame, needed for dimensions)
-            if not keep_frames and idx > 1:
-                frame_path.unlink()
+            # Collect and write results as they complete
+            completed_count = 0
+            for future in as_completed(futures):
+                idx, frame_path = futures[future]
+                try:
+                    result = future.result()
 
-            if progress_callback:
-                progress_callback(idx, total)
+                    # Write result immediately
+                    json.dump(result, f, ensure_ascii=False)
+                    f.write("\n")
+
+                    # Delete frame after processing (except first frame)
+                    if not keep_frames and idx > 1:
+                        frame_path.unlink()
+
+                    completed_count += 1
+                    if progress_callback:
+                        progress_callback(completed_count, total)
+
+                except Exception as e:
+                    print(f"UNEXPECTED ERROR: {frame_path.name}: {e}")
 
     return first_frame
 
@@ -90,12 +177,13 @@ def stream_video_with_ocr(
     rate_hz: float = 0.1,
     language: str = "zh-Hans",
     progress_callback: Optional[callable] = None,
+    max_workers: int = 1,
 ) -> None:
     """Extract frames from video and process with OCR in streaming fashion.
 
     Runs FFmpeg in background and processes frames as they become available,
-    deleting each frame immediately after OCR completes. Achieves constant
-    memory usage with no disk accumulation.
+    deleting each frame immediately after OCR completes. Uses worker pool
+    for OCR processing to avoid overwhelming the OCR backend.
 
     Args:
         video_path: Path to input video file
@@ -104,6 +192,7 @@ def stream_video_with_ocr(
         rate_hz: Frame sampling rate in Hz (default: 0.1)
         language: OCR language preference
         progress_callback: Optional callback (current, total) -> None
+        max_workers: Maximum concurrent OCR workers (default: 1 for macOS OCR)
     """
     # Create frames directory
     frames_dir.mkdir(parents=True, exist_ok=True)
@@ -127,65 +216,69 @@ def stream_video_with_ocr(
         .run_async(pipe_stdout=True, pipe_stderr=True)
     )
 
-    processed_frames = set()
+    submitted_frames = set()  # Frames submitted to workers
     current_count = 0
 
     # Open output file for streaming writes
     with output_file.open("w") as f:
-        # Process frames as they appear
-        while True:
-            # Check for new frames
-            frame_files = sorted(frames_dir.glob("frame_*.jpg"))
-            new_frames = [
-                frame for frame in frame_files if frame not in processed_frames
-            ]
+        # Create process pool
+        with ProcessPoolExecutor(max_workers=max_workers) as executor:
+            futures = {}  # future -> frame_path mapping
+            ffmpeg_done = False
 
-            # Process any new frames
-            for frame_path in new_frames:
-                # Wait a moment to ensure file is fully written
-                time.sleep(0.1)
-
-                # Process with OCR
-                result = process_frame_ocr(frame_path, language)
-                json.dump(result, f, ensure_ascii=False)
-                f.write("\n")
-                f.flush()  # Ensure immediate write
-
-                # Delete frame immediately
-                frame_path.unlink()
-
-                # Track progress
-                processed_frames.add(frame_path)
-                current_count += 1
-                if progress_callback:
-                    progress_callback(current_count, expected_frames)
-
-            # Check if FFmpeg has completed
-            poll_result = ffmpeg_process.poll()
-            if poll_result is not None:
-                # FFmpeg finished - process any remaining frames
+            # Process frames as they appear
+            while True:
+                # Check for new frames
                 frame_files = sorted(frames_dir.glob("frame_*.jpg"))
-                remaining_frames = [
-                    frame for frame in frame_files if frame not in processed_frames
+                new_frames = [
+                    frame for frame in frame_files if frame not in submitted_frames
                 ]
 
-                for frame_path in remaining_frames:
-                    result = process_frame_ocr(frame_path, language)
-                    json.dump(result, f, ensure_ascii=False)
-                    f.write("\n")
-                    f.flush()
+                # Submit new frames to worker pool
+                for frame_path in new_frames:
+                    # Wait a moment to ensure file is fully written
+                    time.sleep(0.1)
 
-                    frame_path.unlink()
+                    # Submit to worker pool with retry logic
+                    future = executor.submit(process_frame_ocr_with_retry, frame_path, language)
+                    futures[future] = frame_path
+                    submitted_frames.add(frame_path)
 
-                    processed_frames.add(frame_path)
-                    current_count += 1
-                    if progress_callback:
-                        progress_callback(current_count, expected_frames)
+                # Collect and write completed results (non-blocking)
+                for future in list(futures.keys()):
+                    if future.done():
+                        frame_path = futures.pop(future)
+                        try:
+                            result = future.result()
 
-                break
+                            # Write result immediately
+                            json.dump(result, f, ensure_ascii=False)
+                            f.write("\n")
+                            f.flush()
 
-            # Small sleep to avoid busy-waiting
-            time.sleep(0.5)
+                            # Delete frame
+                            frame_path.unlink()
+
+                            # Update progress
+                            current_count += 1
+                            if progress_callback:
+                                progress_callback(current_count, expected_frames)
+
+                        except Exception as e:
+                            print(f"UNEXPECTED ERROR: {frame_path.name}: {e}")
+
+                # Check if FFmpeg has completed
+                if not ffmpeg_done:
+                    poll_result = ffmpeg_process.poll()
+                    if poll_result is not None:
+                        ffmpeg_done = True
+
+                # Exit when FFmpeg is done and all futures are complete
+                if ffmpeg_done and not futures:
+                    break
+
+                # Small sleep to avoid busy-waiting
+                time.sleep(0.1)
 
     # Check for FFmpeg errors
     if ffmpeg_process.returncode != 0:

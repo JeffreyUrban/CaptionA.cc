@@ -109,21 +109,19 @@ def determine_anchor_type(boxes, episode_bounds):
     right_side_edges = [box[2] for box in right_side_boxes]
     right_consistency = stdev(right_side_edges) if len(right_side_edges) > 1 else float('inf')
 
-    # For center-aligned: filter to boxes near center, check center consistency
-    center_boxes = [box for box in boxes
-                    if abs((box[0] + box[2]) / 2 - region_center) <= region_width * 0.2]
-    center_positions = [(box[0] + box[2]) / 2 for box in center_boxes]
+    # For center-aligned: check consistency of ALL box centers
+    # (unlike left/right where we filter to one side)
+    center_positions = [(box[0] + box[2]) / 2 for box in boxes]
     center_consistency = stdev(center_positions) if len(center_positions) > 1 else float('inf')
 
-    # Penalize sides with too few boxes (likely just noise, not actual anchor)
+    # Penalize left/right with too few boxes (likely just noise, not actual anchor)
     # For aligned text, the anchor side should have many boxes
     min_boxes = len(boxes) * 0.1  # At least 10% of boxes on anchor side
     if len(left_side_boxes) < min_boxes:
         left_consistency = float('inf')
     if len(right_side_boxes) < min_boxes:
         right_consistency = float('inf')
-    if len(center_boxes) < min_boxes:
-        center_consistency = float('inf')
+    # Note: don't penalize center - we use ALL boxes for center detection
 
     # The side with the lowest std (most consistent) is the anchor
     min_consistency = min(left_consistency, right_consistency, center_consistency)
