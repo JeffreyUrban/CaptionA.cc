@@ -373,6 +373,73 @@ def move_nested_project(project_path: Path, target_dir: Path) -> Path:
     return project_path
 
 
+def update_template_run_configs(project_path: Path, monorepo_root: Path) -> None:
+    """
+    Update existing .run configurations from templates to use correct project name and paths.
+
+    Keeps configurations in the project's .run directory for better organization.
+    Handles both PyCharm/WebStorm run configurations that come with the template.
+    """
+    import re
+    import xml.etree.ElementTree as ET
+
+    project_run_dir = project_path / ".run"
+    if not project_run_dir.exists():
+        return
+
+    project_name = project_path.name
+    project_rel_path = project_path.relative_to(monorepo_root)
+
+    configs_updated = []
+
+    for config_file in project_run_dir.glob("*.run.xml"):
+        try:
+            # Read the configuration
+            tree = ET.parse(config_file)
+            root = tree.getroot()
+
+            # Find the configuration element
+            config = root.find(".//configuration")
+            if config is None:
+                continue
+
+            # Update configuration name to use project name
+            old_name = config.get("name", "")
+            # Replace template placeholders with actual project name
+            new_name = re.sub(r'\bcli_template\b', project_name, old_name, flags=re.IGNORECASE)
+            config.set("name", new_name)
+
+            # Update working directory if present
+            for option in config.findall(".//option[@name='WORKING_DIRECTORY']"):
+                old_value = option.get("value", "")
+                # Update to use monorepo project path
+                new_value = f"$PROJECT_DIR$/{project_rel_path}"
+                option.set("value", new_value)
+
+            # Update Python module paths for pytest
+            for option in config.findall(".//option[@name='_new_targetType']"):
+                if option.get("value") == "PATH":
+                    # Find the associated path option
+                    for path_option in config.findall(".//option[@name='_new_target']"):
+                        old_path = path_option.get("value", "")
+                        if old_path and not old_path.startswith("$PROJECT_DIR$"):
+                            # Make path relative to monorepo root
+                            new_path = f"$PROJECT_DIR$/{project_rel_path}/{old_path}"
+                            path_option.set("value", new_path)
+
+            # Write back to the same file in project's .run directory
+            tree.write(config_file, encoding="UTF-8", xml_declaration=True)
+
+            configs_updated.append(config_file.stem)
+
+        except Exception as e:
+            print(f"    Warning: Could not update {config_file.name}: {e}")
+            continue
+
+    if configs_updated:
+        print(f"  Updated {len(configs_updated)} run configuration(s) in {project_rel_path}/.run/")
+
+
 def generate_webstorm_run_configs(project_path: Path, monorepo_root: Path) -> None:
     """
     Generate WebStorm run configurations for TypeScript/JavaScript projects.
@@ -772,7 +839,10 @@ def integrate_project(project_path: Path, monorepo_root: Path) -> None:
         print("  Warning: Unknown project type (no pyproject.toml or package.json)")
         project_type = "unknown"
 
-    # 9. Remove duplicate configuration files for Python projects
+    # 9. Update .run configurations from template
+    update_template_run_configs(project_path, monorepo_root)
+
+    # 10. Remove duplicate configuration files for Python projects
     if project_type in ["python", "hybrid"]:
         duplicate_configs = [
             "ruff.toml",
@@ -787,7 +857,7 @@ def integrate_project(project_path: Path, monorepo_root: Path) -> None:
                 print(f"  Removing duplicate config: {config_file}")
                 config_path.unlink()
 
-    # 10. Add to workspace
+    # 11. Add to workspace
     if project_type in ["python", "hybrid"]:
         print("  Python project will be auto-discovered by uv workspace (glob patterns in pyproject.toml)")
 
@@ -817,13 +887,13 @@ def integrate_project(project_path: Path, monorepo_root: Path) -> None:
                     json.dump(package_data, f, indent=2)
                     f.write("\n")  # Add trailing newline
 
-    # 11. Generate WebStorm run configurations for TypeScript projects
+    # 12. Generate WebStorm run configurations for TypeScript projects
     if project_type in ["typescript", "hybrid"]:
         generate_webstorm_run_configs(project_path, monorepo_root)
 
     print("  ✓ Integration complete!")
 
-    # 12. Update workspaces
+    # 13. Update workspaces
     print("\nUpdating workspaces...")
 
     if project_type in ["python", "hybrid"]:
