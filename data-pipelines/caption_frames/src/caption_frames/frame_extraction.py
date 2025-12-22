@@ -9,10 +9,9 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Literal, Optional
 
-import ffmpeg
 from caption_models import load_analysis_text
 from image_utils import resize_image
-from video_utils import get_video_dimensions, get_video_duration
+from video_utils import extract_frames_streaming, get_video_dimensions, get_video_duration
 
 
 def stream_extract_and_resize(
@@ -76,20 +75,15 @@ def stream_extract_and_resize(
     cropped_dir.mkdir(parents=True, exist_ok=True)
     resized_dir.mkdir(parents=True, exist_ok=True)
 
-    # Start FFmpeg extraction with cropping in background
-    output_pattern = cropped_dir / "frame_%010d.jpg"
-    stream = ffmpeg.input(str(video_path))
-    stream = stream.filter("crop", w=crop_width, h=crop_height, x=x, y=y)
-    stream = stream.filter("fps", fps=rate_hz)
+    # Prepare crop box
+    crop_box = (x, y, crop_width, crop_height)
 
-    ffmpeg_process = (
-        stream.output(
-            str(output_pattern),
-            format="image2",
-            **{"q:v": 2},
-        )
-        .overwrite_output()
-        .run_async(pipe_stdout=True, pipe_stderr=True)
+    # Start FFmpeg extraction with cropping in background using shared utility
+    ffmpeg_process = extract_frames_streaming(
+        video_path=video_path,
+        output_dir=cropped_dir,
+        rate_hz=rate_hz,
+        crop_box=crop_box,
     )
 
     submitted_frames = set()  # Frames submitted to workers
@@ -156,8 +150,7 @@ def stream_extract_and_resize(
 
     # Check for FFmpeg errors
     if ffmpeg_process.returncode != 0:
-        stderr = ffmpeg_process.stderr.read().decode() if ffmpeg_process.stderr else ""
-        raise RuntimeError(f"FFmpeg failed: {stderr}")
+        raise RuntimeError(f"FFmpeg failed with return code {ffmpeg_process.returncode}")
 
     # Clean up cropped directory if not keeping cropped frames
     if not keep_cropped and cropped_dir.exists():
@@ -215,24 +208,14 @@ def stream_extract_frames(
     y = int(region.crop_top * height)
     crop_width = int((region.crop_right - region.crop_left) * width)
     crop_height = int((region.crop_bottom - region.crop_top) * height)
+    crop_box = (x, y, crop_width, crop_height)
 
-    # Create output directory
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    # Start FFmpeg extraction with cropping in background
-    output_pattern = output_dir / "frame_%010d.jpg"
-    stream = ffmpeg.input(str(video_path))
-    stream = stream.filter("crop", w=crop_width, h=crop_height, x=x, y=y)
-    stream = stream.filter("fps", fps=rate_hz)
-
-    ffmpeg_process = (
-        stream.output(
-            str(output_pattern),
-            format="image2",
-            **{"q:v": 2},
-        )
-        .overwrite_output()
-        .run_async(pipe_stdout=True, pipe_stderr=True)
+    # Start FFmpeg extraction with cropping in background using shared utility
+    ffmpeg_process = extract_frames_streaming(
+        video_path=video_path,
+        output_dir=output_dir,
+        rate_hz=rate_hz,
+        crop_box=crop_box,
     )
 
     seen_frames = set()  # Frames we've already seen
@@ -284,7 +267,6 @@ def stream_extract_frames(
 
     # Check for FFmpeg errors
     if ffmpeg_process.returncode != 0:
-        stderr = ffmpeg_process.stderr.read().decode() if ffmpeg_process.stderr else ""
-        raise RuntimeError(f"FFmpeg failed: {stderr}")
+        raise RuntimeError(f"FFmpeg failed with return code {ffmpeg_process.returncode}")
 
     return current_count

@@ -4,6 +4,7 @@ from ocr_utils.processing import (
     OCRTimeoutError,
     process_frame_ocr_with_retry,
     process_frames_directory,
+    process_frames_streaming,
 )
 from ocr_utils.visualization import create_ocr_visualization
 
@@ -19,5 +20,6 @@ __all__ = [
     "OCRTimeoutError",
     "process_frame_ocr_with_retry",
     "process_frames_directory",
+    "process_frames_streaming",
     "create_ocr_visualization",
 ]

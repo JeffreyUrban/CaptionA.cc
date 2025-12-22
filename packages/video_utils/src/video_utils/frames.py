@@ -1,5 +1,6 @@
 """Frame extraction from video using FFmpeg."""
 
+import subprocess
 from pathlib import Path
 from typing import Optional
 
@@ -126,3 +127,70 @@ def get_video_dimensions(video_path: Path) -> tuple[int, int]:
         return width, height
     except (ffmpeg.Error, KeyError, ValueError, StopIteration) as e:
         raise RuntimeError(f"Failed to get video dimensions: {e}") from e
+
+
+def extract_frames_streaming(
+    video_path: Path,
+    output_dir: Path,
+    rate_hz: float = 0.1,
+    crop_box: Optional[tuple[int, int, int, int]] = None,
+) -> subprocess.Popen:
+    """Extract frames from video as streaming background process.
+
+    Launches FFmpeg in background to extract frames at specified rate.
+    Frames are written as they're extracted. Caller should poll the
+    returned process to monitor progress and check completion.
+
+    Args:
+        video_path: Path to input video file
+        output_dir: Directory to save extracted frames
+        rate_hz: Frame sampling rate in Hz (default: 0.1)
+        crop_box: Optional crop region as (x, y, width, height)
+
+    Returns:
+        FFmpeg process handle (use .poll() to check status, .wait() to block)
+
+    Raises:
+        FileNotFoundError: If FFmpeg is not installed
+
+    Example:
+        >>> proc = extract_frames_streaming(video_path, output_dir, rate_hz=0.1)
+        >>> while proc.poll() is None:
+        ...     # Do other work while frames are being extracted
+        ...     time.sleep(0.1)
+        >>> if proc.returncode != 0:
+        ...     raise RuntimeError("FFmpeg failed")
+    """
+    # Create output directory
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Build FFmpeg pipeline
+    output_pattern = output_dir / "frame_%010d.jpg"
+    stream = ffmpeg.input(str(video_path))
+
+    # Apply crop filter if specified
+    if crop_box is not None:
+        x, y, width, height = crop_box
+        stream = stream.filter("crop", w=width, h=height, x=x, y=y)
+
+    # Apply fps filter
+    stream = stream.filter("fps", fps=rate_hz)
+
+    # Launch FFmpeg in background
+    ffmpeg_process = (
+        stream.output(
+            str(output_pattern),
+            format="image2",
+            **{
+                "q:v": 2,  # JPEG quality
+                "fps_mode": "passthrough",  # Pass through timestamps without sync
+                "frame_pts": "1",  # Use frame PTS for numbering
+            },
+        )
+        .global_args("-fflags", "+genpts")  # Generate presentation timestamps
+        .global_args("-flush_packets", "1")  # Flush packets immediately
+        .overwrite_output()
+        .run_async()
+    )
+
+    return ffmpeg_process

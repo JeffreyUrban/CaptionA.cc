@@ -1,9 +1,12 @@
 """Command-line interface for caption_frames."""
 
+import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Optional
 
 import typer
+from image_utils import resize_image
 from rich.console import Console
 from rich.progress import (
     BarColumn,
@@ -12,10 +15,10 @@ from rich.progress import (
     TaskProgressColumn,
     TextColumn,
 )
+from video_utils import extract_frames_streaming
 
 from . import __version__
 from .caption_frames import extract_frames_from_episode, resize_frames_in_directory
-from .streaming import stream_extract_and_resize, stream_extract_frames
 
 app = typer.Typer(
     name="caption_frames",
@@ -134,26 +137,21 @@ def extract_and_resize(
         dir_okay=False,
         resolve_path=True,
     ),
-    output_dir: Optional[Path] = typer.Option(
-        None,
-        "--output-dir",
-        "-o",
-        help="Output directory for frame subdirectories (default: same directory as video)",
-        exists=False,
-        file_okay=False,
-        resolve_path=True,
+    output_dir: Path = typer.Argument(
+        ...,
+        help="Output directory for frames",
     ),
-    analysis_filename: str = typer.Option(
-        "subtitle_analysis.txt",
-        "--analysis",
-        "-a",
-        help="Analysis filename in same directory as video (default: subtitle_analysis.txt)",
+    crop: str = typer.Option(
+        ...,
+        "--crop",
+        "-c",
+        help="Crop bounds as 'left,top,right,bottom' in pixels",
     ),
-    rate_hz: float = typer.Option(
+    rate: float = typer.Option(
         10.0,
-        "--rate-hz",
+        "--rate",
         "-r",
-        help="Frame sampling rate in Hz (frames per second)",
+        help="Frame sampling rate in Hz",
     ),
     width: int = typer.Option(
         480,
@@ -164,131 +162,127 @@ def extract_and_resize(
     height: int = typer.Option(
         48,
         "--height",
+        "-h",
         help="Target height in pixels",
     ),
-    preserve_aspect: bool = typer.Option(
-        False,
-        "--preserve-aspect/--stretch",
-        help="Preserve aspect ratio with padding (default: stretch to fill)",
-    ),
-    keep_cropped: bool = typer.Option(
-        True,
-        "--keep-cropped/--delete-cropped",
-        help="Keep intermediate cropped frames (default: keep both cropped and resized)",
-    ),
-    max_workers: int = typer.Option(
-        4,
-        "--max-workers",
-        help="Maximum concurrent resize workers",
-    ),
-    version: Optional[bool] = typer.Option(
-        None,
-        "--version",
-        callback=version_callback,
-        is_eager=True,
-        help="Show version and exit",
-    ),
 ) -> None:
-    """Extract and resize frames in one streaming pass (RECOMMENDED).
-
-    This command combines frame extraction and resizing in a streaming pipeline,
-    processing frames as they're extracted. Output directories are automatically
-    created based on parameters:
-    - Cropped: {rate_hz}Hz_cropped_frames
-    - Resized: {rate_hz}Hz_{width}x{height}_frames
-
-    By default, outputs to the same directory as the video. Use --output-dir to
-    specify a different location.
-
-    Benefits:
-    - Faster overall (parallelized resize during extraction)
-    - Single progress bar for entire operation
-    - Conventional directory naming
-    - Keeps both cropped and resized frames by default
-
-    Use --delete-cropped to save disk space by removing intermediate frames.
+    """Extract and resize frames in streaming fashion.
 
     \b
     Example:
-        # Extract and resize to 480x48 at 10Hz
-        # Creates: 10Hz_cropped_frames/ and 10Hz_480x48_frames/ in same dir as video
-        caption_frames extract-and-resize /path/to/video/episode.mp4
-
-        # Custom output directory
-        caption_frames extract-and-resize /path/to/video/episode.mp4 \\
-          --output-dir /path/to/frames
-
-        # Custom rate and dimensions
-        # Creates: 5Hz_cropped_frames/ and 5Hz_640x64_frames/
-        caption_frames extract-and-resize /path/to/video/show.mkv \\
-          --rate-hz 5 \\
-          --width 640 --height 64
+        caption_frames extract-and-resize video.mp4 ./output \\
+          --crop "100,200,700,250" --rate 10 --width 480 --height 48
     """
-    # Get output directory (default to video's parent directory)
-    if output_dir is None:
-        output_dir = video_path.parent
+    # Parse crop bounds [left, top, right, bottom]
+    try:
+        parts = [int(x.strip()) for x in crop.split(",")]
+        if len(parts) != 4:
+            raise ValueError("Crop must have exactly 4 values")
+        left, top, right, bottom = parts
+        # Convert to x, y, width, height for FFmpeg
+        x = left
+        y = top
+        crop_width = right - left
+        crop_height = bottom - top
+        crop_box = (x, y, crop_width, crop_height)
+    except ValueError as e:
+        console.print(f"[red]Error:[/red] Invalid crop format: {e}")
+        console.print(
+            "Expected format: 'left,top,right,bottom' (e.g., '100,200,700,250')"
+        )
+        raise typer.Exit(1)
 
-    # Derive directory names from parameters
-    rate_int = int(rate_hz) if rate_hz == int(rate_hz) else rate_hz
-    cropped_subdir = f"{rate_int}Hz_cropped_frames"
-    resized_subdir = f"{rate_int}Hz_{width}x{height}_frames"
+    # Create output directories
+    output_dir.mkdir(parents=True, exist_ok=True)
+    cropped_dir = output_dir / "cropped"
+    resized_dir = output_dir / "resized"
 
     console.print("[bold cyan]Streaming Frame Extraction & Resize[/bold cyan]")
     console.print(f"Video: {video_path}")
-    console.print(f"Output directory: {output_dir}")
-    console.print(f"Analysis: {analysis_filename}")
-    console.print(f"Rate: {rate_hz} Hz")
-    console.print(f"Target size: {width}×{height}")
-    console.print(f"Cropped output: {cropped_subdir}")
-    console.print(f"Resized output: {resized_subdir}")
-    console.print(f"Mode: {'preserve aspect' if preserve_aspect else 'stretch to fill'}")
-    console.print(f"Keep cropped: {keep_cropped}")
+    console.print(f"Output: {output_dir}")
+    console.print(f"Crop: [{left}, {top}, {right}, {bottom}]")
+    console.print(f"Rate: {rate} Hz")
+    console.print(f"Size: {width}×{height}")
     console.print()
 
-    try:
-        # Analysis file is in same directory as video (from caption_layout)
-        analysis_path = video_path.parent / analysis_filename
-        cropped_dir = output_dir / cropped_subdir
-        resized_dir = output_dir / resized_subdir
+    # Start FFmpeg extraction with cropping
+    ffmpeg_process = extract_frames_streaming(
+        video_path=video_path,
+        output_dir=cropped_dir,
+        rate_hz=rate,
+        crop_box=crop_box,
+    )
 
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TaskProgressColumn(),
-            console=console,
-        ) as progress:
-            task = progress.add_task("Processing frames...", total=None)
+    # Process frames as they appear
+    submitted_frames = set()
+    current_count = 0
 
-            def update_progress(current: int, total: int) -> None:
-                progress.update(task, completed=current, total=total)
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        console=console,
+    ) as progress:
+        task = progress.add_task("Processing frames...", total=None)
 
-            num_frames = stream_extract_and_resize(
-                video_path,
-                analysis_path,
-                cropped_dir,
-                resized_dir,
-                rate_hz=rate_hz,
-                target_width=width,
-                target_height=height,
-                preserve_aspect=preserve_aspect,
-                keep_cropped=keep_cropped,
-                progress_callback=update_progress,
-                max_workers=max_workers,
-            )
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            futures = {}
+            ffmpeg_done = False
 
-        console.print(f"[green]✓[/green] Processed {num_frames} frames")
-        console.print(f"  Cropped frames: {cropped_dir}")
-        console.print(f"  Resized frames: {resized_dir}")
-        if not keep_cropped:
-            console.print(f"[dim]  (Cropped frames deleted to save space)[/dim]")
+            while True:
+                # Check for new frames
+                frame_files = sorted(cropped_dir.glob("frame_*.jpg"))
+                new_frames = [
+                    frame for frame in frame_files if frame not in submitted_frames
+                ]
 
-    except FileNotFoundError as e:
-        console.print(f"[red]Error:[/red] {e}")
-        raise typer.Exit(1)
-    except Exception as e:
-        console.print(f"[red]Error:[/red] {e}")
-        raise typer.Exit(1)
+                # Submit new frames to worker pool
+                for frame_path in new_frames:
+                    time.sleep(0.05)  # Ensure file is fully written
+                    output_path = resized_dir / frame_path.name
+                    future = executor.submit(
+                        resize_image,
+                        frame_path,
+                        output_path,
+                        target_size=(width, height),
+                        preserve_aspect=False,
+                    )
+                    futures[future] = frame_path
+                    submitted_frames.add(frame_path)
+
+                # Collect completed results
+                for future in list(futures.keys()):
+                    if future.done():
+                        frame_path = futures.pop(future)
+                        try:
+                            future.result()
+                            current_count += 1
+                            progress.update(task, completed=current_count)
+                        except Exception as e:
+                            console.print(f"ERROR processing {frame_path.name}: {e}")
+
+                # Check if FFmpeg has completed
+                if not ffmpeg_done:
+                    poll_result = ffmpeg_process.poll()
+                    if poll_result is not None:
+                        ffmpeg_done = True
+
+                # Exit when FFmpeg is done and all futures are complete
+                if ffmpeg_done and not futures:
+                    break
+
+                time.sleep(0.1)
+
+    # Check for FFmpeg errors
+    if ffmpeg_process.returncode != 0:
+        raise RuntimeError(
+            f"FFmpeg failed with return code {ffmpeg_process.returncode}"
+        )
+
+    console.print(f"[green]✓[/green] Processed {current_count} frames")
+    console.print(f"  Cropped: {cropped_dir}")
+    console.print(f"  Resized: {resized_dir}")
 
 
 @app.command()

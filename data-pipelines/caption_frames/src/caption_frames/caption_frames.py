@@ -12,7 +12,7 @@ from caption_models import load_analysis_text
 from image_utils import resize_directory
 from video_utils import extract_frames, get_video_dimensions
 
-from .streaming import stream_extract_and_resize, stream_extract_frames
+from .frame_extraction import stream_extract_and_resize, stream_extract_frames
 
 
 def extract_frames_from_episode(

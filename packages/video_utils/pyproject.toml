@@ -28,7 +28,12 @@ classifiers = [
 ]
 dependencies = [
     "ffmpeg-python>=0.2.0",
+    "typer>=0.9.0",
+    "rich>=13.0.0",
 ]
+
+[project.scripts]
+video_utils = "video_utils.cli:app"
 
 [project.optional-dependencies]
 dev = [
