@@ -76,10 +76,12 @@ def box_overlap_fraction(box1, box2):
 
 
 def determine_anchor_type(boxes, episode_bounds):
-    """Determine if boxes are left, center, or right anchored.
+    """Determine if boxes are left, center, or right anchored based on location.
 
-    Uses mode (most common position) and counts boxes at that position.
-    The edge with the most boxes clustered at its mode is the anchor.
+    Checks which edge has consistency on its respective side:
+    - Left-aligned: consistent left edges on the left side of region
+    - Right-aligned: consistent right edges on the right side of region
+    - Center-aligned: consistent centers in the middle
     """
     if not boxes:
         return "center"
@@ -87,69 +89,126 @@ def determine_anchor_type(boxes, episode_bounds):
     # Extract edge positions
     left_edges = [box[0] for box in boxes]
     right_edges = [box[2] for box in boxes]
-    centers = [(box[0] + box[2]) / 2 for box in boxes]
 
-    # Find mode (most common position) for each edge type
-    from statistics import mode
-    try:
-        left_mode = mode(left_edges)
-        right_mode = mode(right_edges)
-        center_mode = mode([int(c) for c in centers])  # Round centers for mode
-    except:
-        # If mode fails (no unique mode), fall back to median
-        left_mode = sorted(left_edges)[len(left_edges) // 2]
-        right_mode = sorted(right_edges)[len(right_edges) // 2]
-        center_mode = sorted(centers)[len(centers) // 2]
+    # Get bounds
+    min_left = min(left_edges)
+    max_right = max(right_edges)
+    region_width = max_right - min_left
+    region_center = (min_left + max_right) / 2
 
-    # Count boxes at or near each mode (within tolerance)
-    tolerance = 5  # pixels
-    left_count = sum(1 for x in left_edges if abs(x - left_mode) <= tolerance)
-    right_count = sum(1 for x in right_edges if abs(x - right_mode) <= tolerance)
-    center_count = sum(1 for c in centers if abs(c - center_mode) <= tolerance)
+    # For left-aligned: filter to boxes on left side, check left edge consistency
+    left_threshold = min_left + region_width * 0.2  # Left 20% of region
+    left_side_boxes = [box for box in boxes if box[0] <= left_threshold]
+    left_side_edges = [box[0] for box in left_side_boxes]
+    from statistics import stdev
+    left_consistency = stdev(left_side_edges) if len(left_side_edges) > 1 else float('inf')
 
-    # The edge with the most boxes at its mode is the anchor
-    max_count = max(left_count, right_count, center_count)
-    if max_count == left_count:
+    # For right-aligned: filter to boxes on right side, check right edge consistency
+    right_threshold = max_right - region_width * 0.2  # Right 20% of region
+    right_side_boxes = [box for box in boxes if box[2] >= right_threshold]
+    right_side_edges = [box[2] for box in right_side_boxes]
+    right_consistency = stdev(right_side_edges) if len(right_side_edges) > 1 else float('inf')
+
+    # For center-aligned: filter to boxes near center, check center consistency
+    center_boxes = [box for box in boxes
+                    if abs((box[0] + box[2]) / 2 - region_center) <= region_width * 0.2]
+    center_positions = [(box[0] + box[2]) / 2 for box in center_boxes]
+    center_consistency = stdev(center_positions) if len(center_positions) > 1 else float('inf')
+
+    # Penalize sides with too few boxes (likely just noise, not actual anchor)
+    # For aligned text, the anchor side should have many boxes
+    min_boxes = len(boxes) * 0.1  # At least 10% of boxes on anchor side
+    if len(left_side_boxes) < min_boxes:
+        left_consistency = float('inf')
+    if len(right_side_boxes) < min_boxes:
+        right_consistency = float('inf')
+    if len(center_boxes) < min_boxes:
+        center_consistency = float('inf')
+
+    # The side with the lowest std (most consistent) is the anchor
+    min_consistency = min(left_consistency, right_consistency, center_consistency)
+    if min_consistency == left_consistency:
         return "left"
-    elif max_count == right_count:
+    elif min_consistency == right_consistency:
         return "right"
     else:
         return "center"
 
 
-def get_anchor_position(boxes, anchor_type, episode_bounds):
-    """Get the mode position of the anchor point based on anchor type."""
+def get_anchor_position(boxes, anchor_type, crop_left, crop_right):
+    """Get the mode position of the anchor edge from boxes on that end.
+
+    Args:
+        boxes: List of bounding boxes [left, top, right, bottom]
+        anchor_type: "left", "right", or "center"
+        crop_left: Left edge of subtitle region
+        crop_right: Right edge of subtitle region
+
+    Returns:
+        Mode position of the anchor edge
+    """
     if not boxes:
         return None
 
-    positions = []
-    for box in boxes:
-        if anchor_type == "left":
-            positions.append(box[0])  # Left edge
-        elif anchor_type == "right":
-            positions.append(box[2])  # Right edge
-        else:  # center
-            positions.append((box[0] + box[2]) // 2)  # Center point
+    # Filter to boxes on the anchor end and extract their positions
+    threshold = 50  # pixels from the edge to consider "on that end"
 
-    # Round positions to nearest pixel to help find mode
-    positions = [round(p) for p in positions]
-    try:
-        return mode(positions)
-    except:
-        # If no unique mode, return median
-        return sorted(positions)[len(positions) // 2]
+    if anchor_type == "left":
+        # Get boxes whose left edge is near the left end
+        edge_boxes = [box for box in boxes if box[0] <= crop_left + threshold]
+        positions = [box[0] for box in edge_boxes]
+    elif anchor_type == "right":
+        # Get boxes whose right edge is near the right end
+        edge_boxes = [box for box in boxes if box[2] >= crop_right - threshold]
+        positions = [box[2] for box in edge_boxes]
+    else:  # center
+        # For center-aligned, use ALL boxes and find median of centers
+        # Median is more robust than mode for finding the central alignment line
+        positions = [(box[0] + box[2]) // 2 for box in boxes]
+
+    if not positions:
+        return None
+
+    if anchor_type == "center":
+        # For center-aligned text, use iterative weighted average
+        # Boxes closer to the center line get more weight
+        # This is more robust to outliers and finds the alignment line
+
+        # Start with simple mean as initial estimate
+        center = sum(positions) / len(positions)
+
+        # Iteratively refine: weight boxes by inverse distance from center
+        # Scale controls weighting strength (larger = less aggressive weighting)
+        scale = 20  # pixels - typical character width
+        for _ in range(3):  # A few iterations is enough
+            weights = [1.0 / (1.0 + abs(pos - center) / scale) for pos in positions]
+            total_weight = sum(weights)
+            center = sum(pos * w for pos, w in zip(positions, weights)) / total_weight
+
+        return int(round(center))
+    else:
+        # For left/right-aligned, use mode with binning
+        bin_size = 5
+        binned = [round(p / bin_size) * bin_size for p in positions]
+
+        from collections import Counter
+        counter = Counter(binned)
+        mode_value = counter.most_common(1)[0][0]
+        return mode_value
 
 
 def analyze_subtitle_region(
     ocr_annotations: list[dict],
-    reference_image: Path,
+    width: int,
+    height: int,
     min_overlap: float = 0.75,
 ) -> SubtitleRegion:
     """Analyze OCR boxes to determine subtitle region characteristics.
 
     Args:
         ocr_annotations: List of OCR result dictionaries
-        reference_image: Path to reference frame for dimensions
+        width: Video frame width in pixels
+        height: Video frame height in pixels
         min_overlap: Minimum overlap fraction to consider a box (0-1)
 
     Returns:
@@ -158,12 +217,8 @@ def analyze_subtitle_region(
     if not ocr_annotations:
         raise ValueError("No OCR annotations provided")
 
-    # Get image dimensions from reference frame
-    img = cv2.imread(str(reference_image))
-    if img is None:
-        raise ValueError(f"Failed to load image at {reference_image}")
-
-    img_height, img_width = img.shape[:2]
+    img_width = width
+    img_height = height
 
     # Default initial region: bottom third of frame
     # In pixel coordinates: [left, top, right, bottom]
@@ -221,7 +276,16 @@ def analyze_subtitle_region(
 
     # Step 4: Determine anchor by which side is most populated and consistent
     anchor_type = determine_anchor_type(typical_boxes, episode_bounds)
-    anchor_position = get_anchor_position(typical_boxes, anchor_type, episode_bounds)
+    anchor_position = get_anchor_position(typical_boxes, anchor_type, crop_left, crop_right)
+
+    # Adjust crop bounds based on anchor type
+    if anchor_type == "center":
+        # For center-aligned text, make crop symmetric around anchor
+        left_dist = anchor_position - crop_left
+        right_dist = crop_right - anchor_position
+        max_dist = max(left_dist, right_dist)
+        crop_left = max(0, anchor_position - max_dist)
+        crop_right = min(img_width, anchor_position + max_dist)
 
     # Calculate statistics for reporting
     heights = [box[3] - box[1] for box in typical_boxes]
@@ -287,7 +351,6 @@ def create_analysis_visualization(
     region: SubtitleRegion,
     ocr_annotations: list[dict],
     output_image: Path,
-    reference_image: Path,
 ) -> None:
     """Create visualization of subtitle region analysis.
 
@@ -297,7 +360,6 @@ def create_analysis_visualization(
         region: Analyzed subtitle region
         ocr_annotations: OCR annotations for drawing boxes
         output_image: Path to save visualization
-        reference_image: Path to reference frame image
     """
     # Load the OCR.png visualization
     ocr_img_path = output_image.parent / "OCR.png"

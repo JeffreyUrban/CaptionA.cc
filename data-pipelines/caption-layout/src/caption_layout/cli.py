@@ -21,8 +21,8 @@ from .analysis import (
     load_ocr_annotations,
     save_analysis_text,
 )
-from .frames import extract_frames, get_video_duration
-from .ocr import create_ocr_visualization, process_frames_directory
+from .frames import extract_frames, get_video_dimensions, get_video_duration
+from .ocr import create_ocr_visualization, process_frames_directory, stream_video_with_ocr
 
 app = typer.Typer(
     name="caption-layout",
@@ -88,38 +88,19 @@ def analyze(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     try:
-        # Step 1: Extract frames
-        console.print("[bold]Step 1/3: Extracting frames[/bold]")
-        frames_dir = output_dir / "frames" / "0.1Hz_full_frames"
-        frames_dir.mkdir(parents=True, exist_ok=True)
-
+        # Get video info upfront
         duration = get_video_duration(video)
         expected_frames = int(duration * frame_rate)
+        width, height = get_video_dimensions(video)
+
         console.print(f"  Video duration: {duration:.1f}s")
+        console.print(f"  Video dimensions: {width}×{height}")
         console.print(f"  Expected frames: ~{expected_frames}")
-
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TaskProgressColumn(),
-            console=console,
-        ) as progress:
-            task = progress.add_task("  Extracting...", total=expected_frames)
-            frames = extract_frames(
-                video,
-                frames_dir,
-                frame_rate,
-                progress_callback=lambda current, total: progress.update(
-                    task, completed=current
-                ),
-            )
-
-        console.print(f"  [green]✓[/green] Extracted {len(frames)} frames")
         console.print()
 
-        # Step 2: Run OCR
-        console.print("[bold]Step 2/3: Running OCR[/bold]")
+        # Step 1+2: Stream frames with OCR (combined for efficiency)
+        console.print("[bold]Step 1/2: Streaming extraction + OCR[/bold]")
+        frames_dir = output_dir / "frames" / "0.1Hz_full_frames"
         ocr_output = output_dir / "OCR.jsonl"
 
         with Progress(
@@ -129,29 +110,32 @@ def analyze(
             TaskProgressColumn(),
             console=console,
         ) as progress:
-            task = progress.add_task("  Processing...", total=len(frames))
-            first_frame = process_frames_directory(
-                frames_dir,
+            task = progress.add_task("  Processing...", total=expected_frames)
+            stream_video_with_ocr(
+                video,
                 ocr_output,
+                frames_dir,
+                frame_rate,
                 "zh-Hans",  # Default language
                 progress_callback=lambda current, total: progress.update(
                     task, completed=current
                 ),
-                keep_frames=False,  # Delete frames as we process them
             )
 
-        console.print(f"  [green]✓[/green] OCR complete: {ocr_output}")
+        console.print(f"  [green]✓[/green] Processed {expected_frames} frames with OCR")
+        console.print(f"  [green]✓[/green] Results: {ocr_output}")
 
         # Create OCR visualization
+        console.print("  Creating OCR visualization...")
         viz_output = output_dir / "OCR.png"
-        create_ocr_visualization(ocr_output, viz_output, frames_dir)
+        create_ocr_visualization(ocr_output, viz_output, width, height)
         console.print(f"  [green]✓[/green] Visualization: {viz_output}")
         console.print()
 
-        # Step 3: Analyze region
-        console.print("[bold]Step 3/3: Analyzing subtitle region[/bold]")
+        # Step 2/2: Analyze region
+        console.print("[bold]Step 2/2: Analyzing subtitle region[/bold]")
         annotations = load_ocr_annotations(ocr_output)
-        region = analyze_subtitle_region(annotations, first_frame)
+        region = analyze_subtitle_region(annotations, width, height)
 
         # Save analysis
         text_output = output_dir / "subtitle_analysis.txt"
@@ -160,15 +144,13 @@ def analyze(
 
         # Create analysis visualization
         analysis_viz = output_dir / "subtitle_analysis.png"
-        create_analysis_visualization(region, annotations, analysis_viz, first_frame)
+        create_analysis_visualization(region, annotations, analysis_viz)
         console.print(f"  [green]✓[/green] Visualization: {analysis_viz}")
         console.print()
 
-        # Clean up frames directory
-        console.print("[dim]Cleaning up frames...[/dim]")
+        # Clean up frames directory (should be empty after streaming)
+        console.print("[dim]Cleaning up...[/dim]")
         import shutil
-        if first_frame.exists():
-            first_frame.unlink()
         frames_parent = output_dir / "frames"
         if frames_parent.exists():
             shutil.rmtree(frames_parent)
@@ -304,6 +286,16 @@ def run_ocr(
         console.print(f"Found {total_frames} frames")
         console.print()
 
+        # Get dimensions from first frame
+        import cv2
+        first_frame_img = cv2.imread(str(frame_files[0]))
+        if first_frame_img is None:
+            console.print(f"[red]Error:[/red] Failed to read {frame_files[0]}")
+            raise typer.Exit(1)
+        height, width = first_frame_img.shape[:2]
+        console.print(f"Frame dimensions: {width}×{height}")
+        console.print()
+
         # Process frames with OCR
         ocr_output = output_dir / "OCR.jsonl"
 
@@ -331,7 +323,7 @@ def run_ocr(
         # Create visualization
         console.print("Creating OCR visualization...")
         viz_output = output_dir / "OCR.png"
-        create_ocr_visualization(ocr_output, viz_output, frames_dir)
+        create_ocr_visualization(ocr_output, viz_output, width, height)
         console.print(f"[green]✓[/green] Visualization saved to {viz_output}")
 
     except FileNotFoundError as e:
@@ -351,6 +343,24 @@ def analyze_region(
         dir_okay=False,
         resolve_path=True,
     ),
+    video: Path = typer.Option(
+        None,
+        "--video",
+        help="Path to original video file (to get dimensions)",
+        exists=True,
+        dir_okay=False,
+        resolve_path=True,
+    ),
+    width: int = typer.Option(
+        None,
+        "--width",
+        help="Video width in pixels (if not providing --video)",
+    ),
+    height: int = typer.Option(
+        None,
+        "--height",
+        help="Video height in pixels (if not providing --video)",
+    ),
     output_dir: Path = typer.Option(
         Path("output"),
         "--output-dir",
@@ -365,6 +375,8 @@ def analyze_region(
     - Horizontal anchoring (left/center/right)
     - Crop coordinates for future processing
 
+    Requires either --video path or both --width and --height to get video dimensions.
+
     Outputs:
     - subtitle_analysis.txt: Statistical summary
     - subtitle_analysis.png: Visualization with detected bounds
@@ -377,25 +389,25 @@ def analyze_region(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     try:
+        # Get video dimensions
+        if video:
+            width, height = get_video_dimensions(video)
+            console.print(f"Video dimensions: {width}×{height}")
+        elif width and height:
+            console.print(f"Using provided dimensions: {width}×{height}")
+        else:
+            console.print("[red]Error:[/red] Must provide either --video or both --width and --height")
+            raise typer.Exit(1)
+
         # Load OCR annotations
         console.print("Loading OCR annotations...")
         annotations = load_ocr_annotations(ocr_file)
         console.print(f"Loaded {len(annotations)} frames with OCR data")
         console.print()
 
-        # Find first frame for reference
-        frames_dir = ocr_file.parent / "frames" / "0.1Hz_full_frames"
-        if not frames_dir.exists():
-            frames_dir = ocr_file.parent.parent / "frames" / "0.1Hz_full_frames"
-
-        frame_files = sorted(frames_dir.glob("frame_*.jpg"))
-        if not frame_files:
-            console.print("[red]Error:[/red] No frames found for analysis")
-            raise typer.Exit(1)
-
         # Analyze subtitle region
         console.print("Analyzing subtitle region characteristics...")
-        region = analyze_subtitle_region(annotations, frame_files[0])
+        region = analyze_subtitle_region(annotations, width, height)
 
         # Save text analysis
         text_output = output_dir / "subtitle_analysis.txt"
@@ -405,9 +417,7 @@ def analyze_region(
         # Create visualization
         console.print("Creating analysis visualization...")
         viz_output = output_dir / "subtitle_analysis.png"
-        create_analysis_visualization(
-            region, annotations, viz_output, frame_files[0]
-        )
+        create_analysis_visualization(region, annotations, viz_output)
         console.print(f"[green]✓[/green] Visualization saved to {viz_output}")
 
         # Print summary
