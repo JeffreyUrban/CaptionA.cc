@@ -71,7 +71,7 @@ def stream_video_with_ocr(
             format="image2",
             **{
                 "q:v": 2,  # JPEG quality
-                "vsync": "0",  # Pass through timestamps without sync
+                "fps_mode": "passthrough",  # Pass through timestamps without sync
                 "frame_pts": "1",  # Use frame PTS for numbering
             },
         )
@@ -99,13 +99,13 @@ def stream_video_with_ocr(
             while True:
                 iteration += 1
 
-                # Debug: Print status periodically or when stuck
-                if (current_count % 10 == 0 and len(futures) > 0) or (iteration % 100 == 0 and len(futures) > 0):
-                    print(f"DEBUG: {len(futures)} active futures, {len(pending_retries)} pending retries, {current_count} completed")
-                    for future, (fp, st, rc) in futures.items():
-                        elapsed = time.time() - st
-                        status = "STUCK!" if elapsed > 10 else ""
-                        print(f"  - {fp.name}: {elapsed:.1f}s elapsed, retry {rc} {status}")
+                # # Debug: Print status periodically or when stuck
+                # if (current_count % 10 == 0 and len(futures) > 0) or (iteration % 100 == 0 and len(futures) > 0):
+                #     print(f"DEBUG: {len(futures)} active futures, {len(pending_retries)} pending retries, {current_count} completed")
+                #     for future, (fp, st, rc) in futures.items():
+                #         elapsed = time.time() - st
+                #         status = "STUCK!" if elapsed > 10 else ""
+                #         print(f"  - {fp.name}: {elapsed:.1f}s elapsed, retry {rc} {status}")
 
                 # Check for new frames
                 frame_files = sorted(frames_dir.glob("frame_*.jpg"))
