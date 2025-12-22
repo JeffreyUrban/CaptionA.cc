@@ -1,0 +1,53 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write  # Required for uploading release assets
+  id-token: write  # Required for PyPI trusted publishing
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Required for hatch-vcs to read Git history
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install build hatch-vcs
+
+      - name: Build package
+        run: python -m build
+
+      - name: Verify version matches tag
+        run: |
+          TAG_VERSION=${GITHUB_REF#refs/tags/v}
+          echo "Tag version: $TAG_VERSION"
+          pip install dist/*.whl
+          BUILT_VERSION=$(python -c "import {{ cookiecutter.project_slug }}; print({{ cookiecutter.project_slug }}.__version__)")
+          echo "Built version: $BUILT_VERSION"
+          if [ "$TAG_VERSION" != "$BUILT_VERSION" ]; then
+            echo "❌ Version mismatch: tag=$TAG_VERSION, built=$BUILT_VERSION"
+            exit 1
+          fi
+          echo "✅ Version verified: $BUILT_VERSION"
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.tar.gz
+            dist/*.whl
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1

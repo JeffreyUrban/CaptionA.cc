@@ -1,0 +1,13 @@
+# Documentation build requirements for Read the Docs
+# See https://docs.readthedocs.io/en/stable/guides/reproducible-builds.html
+
+# Core MkDocs and theme
+mkdocs>=1.6.0
+mkdocs-material>=9.5.0
+
+# Plugins
+termynal>=0.13.0
+mkdocstrings[python]>=0.26.0
+
+# Markdown extensions
+pymdown-extensions>=10.0

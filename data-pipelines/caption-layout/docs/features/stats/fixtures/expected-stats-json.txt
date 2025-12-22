@@ -1,0 +1,7 @@
+TEMPLATE_PLACEHOLDER
+Processing: input.txt
+{
+  "statistics": {
+    "TEMPLATE_PLACEHOLDER": TEMPLATE_PLACEHOLDER
+  }
+}

@@ -1,0 +1,2 @@
+Auto-detected file input: using TEMPLATE_PLACEHOLDER (override with --TEMPLATE_PLACEHOLDER)
+TEMPLATE_PLACEHOLDER

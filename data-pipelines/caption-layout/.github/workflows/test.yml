@@ -1,0 +1,94 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel old runs when new commits are pushed
+concurrency:
+  group: {% raw %}${{ github.workflow }}-${{ github.ref }}{% endraw %}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # Run quality checks and link checks in parallel
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run ruff (lint)
+        run: |
+          ruff check .
+
+      - name: Run ruff (format check)
+        run: |
+          ruff format --check .
+
+      - name: Run pyright
+        run: |
+          pyright
+
+  link-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Check documentation links
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: --verbose --no-progress --accept 200,403,404,429 --timeout 30 --exclude 'github\.com/.*/settings/' '**/*.md' 'docs/**/*.md' 'mkdocs.yml'
+          fail: true
+
+  test:
+    needs: [quality, link-check]  # Run tests after both quality and link checks pass
+    runs-on: ubuntu-latest
+    timeout-minutes: 15  # Prevent jobs from hanging indefinitely
+    strategy:
+      matrix:
+        python-version: ["3.14", "3.14"]
+#        python-version: ["3.14", "", "", "", "", "3.14"]
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python {% raw %}${{ matrix.python-version }}{% endraw %}
+        uses: actions/setup-python@v5
+        with:
+          python-version: {% raw %}${{ matrix.python-version }}{% endraw %}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,docs]"
+
+      - name: Run tests with coverage
+        env:
+          COLUMNS: 120  # Set terminal width for consistent Rich output formatting
+        run: |
+          pytest --cov=src/{{ cookiecutter.project_slug }} --cov-report=xml --cov-report=term --cov-fail-under=0
+
+      - name: Upload coverage to Codecov
+        if: matrix.python-version == '3.14'
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+          fail_ci_if_error: false

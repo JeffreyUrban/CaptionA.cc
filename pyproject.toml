@@ -10,10 +10,13 @@ requires-python = ">=3.14"
 
 [tool.uv.workspace]
 members = [
-    "apps/*",
+    # Note: captionacc-web is a TypeScript app, excluded from Python workspace
     "services/*",
     "data-pipelines/*",
     "packages/*",
+]
+exclude = [
+    "apps/captionacc-web",
 ]
 
 # Workspace-wide dependency version constraints
