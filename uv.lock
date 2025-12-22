@@ -4,6 +4,7 @@ requires-python = ">=3.14"
 
 [manifest]
 members = [
+    "caption-frames",
     "caption-layout",
     "caption-models",
     "captionacc-workspace",
@@ -35,8 +36,22 @@ wheels = [
 ]
 
 [[package]]
+name = "caption-frames"
+source = { editable = "data-pipelines/caption_frames" }
+dependencies = [
+    { name = "rich" },
+    { name = "typer" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "rich", specifier = ">=13.0.0" },
+    { name = "typer", specifier = ">=0.9.0" },
+]
+
+[[package]]
 name = "caption-layout"
-source = { editable = "data-pipelines/caption-layout" }
+source = { editable = "data-pipelines/caption_layout" }
 dependencies = [
     { name = "caption-models" },
     { name = "ocr-utils" },
