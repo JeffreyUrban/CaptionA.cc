@@ -109,3 +109,4 @@ Thumbs.db
 # CRITICAL: Nothing in local/ should ever be committed to avoid pushing content
 # references to remote repository
 local/
+/CLAUDE.md
