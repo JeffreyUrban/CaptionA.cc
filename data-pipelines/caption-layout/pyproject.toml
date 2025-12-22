@@ -8,7 +8,6 @@ name = "caption_layout"
 dynamic = ["version"]
 description = "A brief description of what your CLI tool does"
 readme = "README.md"
-license = {file = "LICENSE"}
 authors = [
     {name = "Your Name"}
 ]
@@ -35,10 +34,9 @@ classifiers = [
 dependencies = [
     "typer>=0.9.0",
     "rich>=13.0.0",
-    "ffmpeg-python>=0.2.0",
-    "pillow>=10.0.0",
-    "opencv-python>=4.8.0",
-    "ocrmac>=0.1.0",
+    "video_utils",
+    "ocr_utils",
+    "caption_models",
 ]
 
 [project.optional-dependencies]
@@ -140,3 +138,8 @@ exclude_lines = [
 
 [tool.hatch.build.hooks.vcs]
 version-file = "src/caption_layout/_version.py"
+
+[tool.uv.sources]
+video_utils = { workspace = true }
+ocr_utils = { workspace = true }
+caption_models = { workspace = true }

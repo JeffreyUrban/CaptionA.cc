@@ -110,3 +110,4 @@ Thumbs.db
 # references to remote repository
 local/
 /CLAUDE.md
+/packages/*/src/*/_version.py
