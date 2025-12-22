@@ -130,27 +130,28 @@ def analyze(
             console=console,
         ) as progress:
             task = progress.add_task("  Processing...", total=len(frames))
-            ocr_results = process_frames_directory(
+            first_frame = process_frames_directory(
                 frames_dir,
                 ocr_output,
                 "zh-Hans",  # Default language
                 progress_callback=lambda current, total: progress.update(
                     task, completed=current
                 ),
+                keep_frames=False,  # Delete frames as we process them
             )
 
         console.print(f"  [green]✓[/green] OCR complete: {ocr_output}")
 
         # Create OCR visualization
         viz_output = output_dir / "OCR.png"
-        create_ocr_visualization(ocr_results, viz_output, frames_dir)
+        create_ocr_visualization(ocr_output, viz_output, frames_dir)
         console.print(f"  [green]✓[/green] Visualization: {viz_output}")
         console.print()
 
         # Step 3: Analyze region
         console.print("[bold]Step 3/3: Analyzing subtitle region[/bold]")
         annotations = load_ocr_annotations(ocr_output)
-        region = analyze_subtitle_region(annotations, frames[0])
+        region = analyze_subtitle_region(annotations, first_frame)
 
         # Save analysis
         text_output = output_dir / "subtitle_analysis.txt"
@@ -159,9 +160,18 @@ def analyze(
 
         # Create analysis visualization
         analysis_viz = output_dir / "subtitle_analysis.png"
-        create_analysis_visualization(region, annotations, analysis_viz, frames[0])
+        create_analysis_visualization(region, annotations, analysis_viz, first_frame)
         console.print(f"  [green]✓[/green] Visualization: {analysis_viz}")
         console.print()
+
+        # Clean up frames directory
+        console.print("[dim]Cleaning up frames...[/dim]")
+        import shutil
+        if first_frame.exists():
+            first_frame.unlink()
+        frames_parent = output_dir / "frames"
+        if frames_parent.exists():
+            shutil.rmtree(frames_parent)
 
         # Print final summary
         console.print("[bold green]Pipeline Complete![/bold green]")
@@ -306,13 +316,14 @@ def run_ocr(
         ) as progress:
             task = progress.add_task("Processing OCR...", total=total_frames)
 
-            results = process_frames_directory(
+            first_frame = process_frames_directory(
                 frames_dir,
                 ocr_output,
                 language,
                 progress_callback=lambda current, total: progress.update(
                     task, completed=current
                 ),
+                keep_frames=True,  # Keep frames for standalone OCR command
             )
 
         console.print(f"[green]✓[/green] OCR results saved to {ocr_output}")
@@ -320,7 +331,7 @@ def run_ocr(
         # Create visualization
         console.print("Creating OCR visualization...")
         viz_output = output_dir / "OCR.png"
-        create_ocr_visualization(results, viz_output, frames_dir)
+        create_ocr_visualization(ocr_output, viz_output, frames_dir)
         console.print(f"[green]✓[/green] Visualization saved to {viz_output}")
 
     except FileNotFoundError as e:
