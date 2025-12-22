@@ -11,6 +11,9 @@ readme = "README.md"
 dependencies = [
     "typer>=0.9.0",
     "rich>=13.0.0",
+    "caption_models",
+    "image_utils",
+    "video_utils",
 ]
 
 
@@ -40,12 +43,12 @@ markers = [
 ]
 
 [tool.black]
-line-length = 100
-target-version = ["py39"]
+line-length = 120
+target-version = ["py314"]
 
 [tool.ruff]
-line-length = 100
-target-version = "py39"
+line-length = 120
+target-version = "py314"
 
 [tool.ruff.lint]
 select = [
@@ -93,3 +96,9 @@ exclude_lines = [
 
 [tool.hatch.build.hooks.vcs]
 version-file = "src/caption_frames/_version.py"
+
+[tool.uv.sources]
+image_utils = { workspace = true }
+video_utils = { workspace = true }
+ocr_utils = { workspace = true }
+caption_models = { workspace = true }

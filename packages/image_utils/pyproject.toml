@@ -3,25 +3,24 @@ requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [project]
-name = "ocr_utils"
+name = "image_utils"
 dynamic = ["version"]
-description = "Shared OCR processing utilities using macOS LiveText"
+description = "Shared image processing utilities"
 readme = "README.md"
 authors = [
     {name = "Jeffrey Urban"}
 ]
 requires-python = ">=3.14"
 keywords = [
-    "ocr",
-    "livetext",
-    "macos",
-    "text-recognition",
+    "image",
+    "processing",
+    "resize",
+    "crop",
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "Topic :: Multimedia :: Graphics :: Capture",
-    "Topic :: Text Processing",
+    "Topic :: Multimedia :: Graphics",
     "Topic :: Utilities",
     "Operating System :: MacOS",
     "License :: OSI Approved :: MIT License",
@@ -29,15 +28,8 @@ classifiers = [
     "Programming Language :: Python :: 3.14",
 ]
 dependencies = [
-    "ocrmac>=0.1.0",
-    "pillow>=10.0.0",
-    "opencv-python>=4.8.0",
-    "typer>=0.9.0",
-    "rich>=13.0.0",
+    "Pillow>=10.0.0",
 ]
-
-[project.scripts]
-ocr_utils = "ocr_utils.cli:app"
 
 [project.optional-dependencies]
 dev = [
@@ -54,7 +46,7 @@ source = "vcs"
 root = "../.."
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/ocr_utils"]
+packages = ["src/image_utils"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -63,11 +55,11 @@ python_classes = ["Test*"]
 python_functions = ["test_*"]
 markers = [
     "unit: Unit tests for individual components",
-    "integration: Integration tests requiring macOS LiveText",
+    "integration: Integration tests requiring sample images",
 ]
 
 [tool.coverage.run]
-source = ["src/ocr_utils"]
+source = ["src/image_utils"]
 omit = ["*/tests/*"]
 branch = true
 
@@ -82,4 +74,4 @@ exclude_lines = [
 ]
 
 [tool.hatch.build.hooks.vcs]
-version-file = "src/ocr_utils/_version.py"
+version-file = "src/image_utils/_version.py"

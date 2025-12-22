@@ -30,6 +30,7 @@ def extract_frames(
     video_path: Path,
     output_dir: Path,
     rate_hz: float = 0.1,
+    crop_box: Optional[tuple[int, int, int, int]] = None,
     progress_callback: Optional[callable] = None,
 ) -> list[Path]:
     """Extract frames from video at specified rate.
@@ -38,6 +39,7 @@ def extract_frames(
         video_path: Path to input video file
         output_dir: Directory to save extracted frames
         rate_hz: Frame sampling rate in Hz (frames per second). Default: 0.1 (1 frame per 10 seconds)
+        crop_box: Optional crop region as (x, y, width, height) in pixels. Cropping is applied before extraction.
         progress_callback: Optional callback function (current_frame, total_frames) -> None
 
     Returns:
@@ -61,10 +63,18 @@ def extract_frames(
     output_pattern = output_dir / "frame_%010d.jpg"
 
     try:
+        stream = ffmpeg.input(str(video_path))
+
+        # Apply crop filter if specified
+        if crop_box is not None:
+            x, y, width, height = crop_box
+            stream = stream.filter("crop", w=width, h=height, x=x, y=y)
+
+        # Apply fps filter and output
+        stream = stream.filter("fps", fps=rate_hz)
+
         (
-            ffmpeg.input(str(video_path))
-            .filter("fps", fps=rate_hz)
-            .output(
+            stream.output(
                 str(output_pattern),
                 format="image2",
                 **{"q:v": 2},  # JPEG quality

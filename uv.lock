@@ -8,6 +8,7 @@ members = [
     "caption-layout",
     "caption-models",
     "captionacc-workspace",
+    "image-utils",
     "ocr-utils",
     "video-utils",
 ]
@@ -39,14 +40,20 @@ wheels = [
 name = "caption-frames"
 source = { editable = "data-pipelines/caption_frames" }
 dependencies = [
+    { name = "caption-models" },
+    { name = "image-utils" },
     { name = "rich" },
     { name = "typer" },
+    { name = "video-utils" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "caption-models", editable = "packages/caption_models" },
+    { name = "image-utils", editable = "packages/image_utils" },
     { name = "rich", specifier = ">=13.0.0" },
     { name = "typer", specifier = ">=0.9.0" },
+    { name = "video-utils", editable = "packages/video_utils" },
 ]
 
 [[package]]
@@ -323,6 +330,31 @@ wheels = [
 ]
 
 [[package]]
+name = "image-utils"
+source = { editable = "packages/image_utils" }
+dependencies = [
+    { name = "pillow" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "pyright" },
+    { name = "pytest" },
+    { name = "pytest-cov" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "pillow", specifier = ">=10.0.0" },
+    { name = "pyright", marker = "extra == 'dev'", specifier = ">=1.1.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.4.0" },
+    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.1.0" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.9" },
+]
+provides-extras = ["dev"]
+
+[[package]]
 name = "iniconfig"
 version = "2.3.0"
 source = { registry = "https://pypi.org/simple" }
@@ -553,6 +585,8 @@ dependencies = [
     { name = "ocrmac" },
     { name = "opencv-python" },
     { name = "pillow" },
+    { name = "rich" },
+    { name = "typer" },
 ]
 
 [package.optional-dependencies]
@@ -571,7 +605,9 @@ requires-dist = [
     { name = "pyright", marker = "extra == 'dev'", specifier = ">=1.1.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.4.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.1.0" },
+    { name = "rich", specifier = ">=13.0.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.9" },
+    { name = "typer", specifier = ">=0.9.0" },
 ]
 provides-extras = ["dev"]
 
