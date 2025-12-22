@@ -1,0 +1,145 @@
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[project]
+name = "caption_layout"
+# Version is automatically determined from git tags via hatch-vcs
+dynamic = ["version"]
+description = "A brief description of what your CLI tool does"
+readme = "README.md"
+authors = [
+    {name = "Your Name"}
+]
+requires-python = ">=3.14"
+keywords = [
+    "video",
+    "captions",
+    "subtitles",
+    "ocr",
+    "layout-analysis",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Multimedia :: Video",
+    "Topic :: Text Processing",
+    "Topic :: Utilities",
+    "Environment :: Console",
+    "Operating System :: MacOS",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.14",
+]
+dependencies = [
+    "typer>=0.9.0",
+    "rich>=13.0.0",
+    "video_utils",
+    "ocr_utils",
+    "caption_models",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "ruff>=0.1.9",
+    "pyright>=1.1.0",
+    "pre-commit>=3.6.0",
+]
+docs = [
+    "mkdocs-material>=9.5.0",
+    "mkdocstrings[python]>=0.25.0",
+    "sybil>=6.0.0",
+    "pymdown-extensions>=10.0.0",
+    "termynal>=0.12.0",
+]
+
+[project.scripts]
+caption_layout = "caption_layout.cli:app"
+
+[project.urls]
+Homepage = "https://github.com/yourusername/caption-layout"
+Repository = "https://github.com/yourusername/caption-layout"
+Issues = "https://github.com/yourusername/caption-layout/issues"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.version.raw-options]
+root = "../.."
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/caption_layout"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "docs"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+markers = [
+    "unit: Unit tests for individual components",
+    "integration: Integration tests for multiple components",
+    "property: Property-based tests (invariants)",
+    "slow: Slow tests (skipped by default)",
+]
+
+[tool.black]
+line-length = 100
+target-version = ["py39"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+]
+ignore = [
+    "B008",  # Function calls in argument defaults (typer idiom)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["E741", "E501"]  # Allow short var names and long lines in tests
+"tests/generate_fixtures.py" = ["E402"]  # Module imports after sys.path modification
+"*/_version.py" = ["UP", "I001"]  # Auto-generated file by hatch-vcs
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.pyright]
+pythonVersion = "3.14"
+typeCheckingMode = "strict"
+reportUnusedImport = true
+reportUnusedVariable = true
+reportDuplicateImport = true
+
+[tool.coverage.run]
+source = ["src/caption_layout"]
+omit = ["*/tests/*"]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/caption_layout/_version.py"
+
+[tool.uv.sources]
+video_utils = { workspace = true }
+ocr_utils = { workspace = true }
+caption_models = { workspace = true }
