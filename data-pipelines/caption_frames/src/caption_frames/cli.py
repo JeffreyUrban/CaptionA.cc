@@ -248,7 +248,7 @@ def extract_and_resize(
                         frame_path,
                         output_path,
                         target_size=(width, height),
-                        resample=Image.Resampling.BILINEAR,
+                        resample=Image.Resampling.LANCZOS,
                         preserve_aspect=False,
                     )
                     futures[future] = frame_path

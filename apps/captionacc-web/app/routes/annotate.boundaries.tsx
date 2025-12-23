@@ -83,6 +83,10 @@ export default function BoundaryWorkflow() {
   const [hasPrevAnnotation, setHasPrevAnnotation] = useState(false)
   const [hasNextAnnotation, setHasNextAnnotation] = useState(false)
 
+  // Workflow progress tracking
+  const [workflowProgress, setWorkflowProgress] = useState(0) // Percentage of completed frames
+  const [completedFrames, setCompletedFrames] = useState(0) // Count of non-gap, non-pending frames
+
   const [frameSpacing, setFrameSpacing] = useState<FrameSpacing>('linear')
   const [windowHeight, setWindowHeight] = useState(typeof window !== 'undefined' ? window.innerHeight : 1000)
   const [jumpToFrameInput, setJumpToFrameInput] = useState('')
@@ -98,6 +102,12 @@ export default function BoundaryWorkflow() {
         const metadataResponse = await fetch(`/api/videos/${encodedVideoId}/metadata`)
         const metadataData = await metadataResponse.json()
         setTotalFrames(metadataData.totalFrames)
+
+        // Load workflow progress
+        const progressResponse = await fetch(`/api/annotations/${encodedVideoId}/progress`)
+        const progressData = await progressResponse.json()
+        setWorkflowProgress(progressData.progress_percent)
+        setCompletedFrames(progressData.completed_frames)
 
         // Load next annotation to work on
         const nextResponse = await fetch(`/api/annotations/${encodedVideoId}/next`)
@@ -127,6 +137,19 @@ export default function BoundaryWorkflow() {
       }
     }
     loadMetadata()
+  }, [videoId])
+
+  // Helper: Update progress from database
+  const updateProgress = useCallback(async () => {
+    try {
+      const encodedVideoId = encodeURIComponent(videoId)
+      const progressResponse = await fetch(`/api/annotations/${encodedVideoId}/progress`)
+      const progressData = await progressResponse.json()
+      setWorkflowProgress(progressData.progress_percent)
+      setCompletedFrames(progressData.completed_frames)
+    } catch (error) {
+      console.error('Failed to update progress:', error)
+    }
   }, [videoId])
 
   // Track window height for dynamic frame count
@@ -314,6 +337,7 @@ export default function BoundaryWorkflow() {
 
     try {
       const encodedVideoId = encodeURIComponent(videoId)
+
       const response = await fetch(
         `/api/annotations/${encodedVideoId}/${activeAnnotation.id}/delete`,
         { method: 'POST' }
@@ -322,6 +346,9 @@ export default function BoundaryWorkflow() {
       if (!response.ok) {
         throw new Error('Failed to delete annotation')
       }
+
+      // Update progress from database
+      await updateProgress()
 
       // Load next annotation
       const nextResponse = await fetch(`/api/annotations/${encodedVideoId}/next`)
@@ -348,13 +375,14 @@ export default function BoundaryWorkflow() {
     } catch (error) {
       console.error('Failed to delete annotation:', error)
     }
-  }, [activeAnnotation, videoId])
+  }, [activeAnnotation, videoId, updateProgress])
 
   // Save annotation
   const saveAnnotation = useCallback(async () => {
     if (!canSave || !activeAnnotation) return
 
     // TODO: Implement full save logic with overlap resolution
+    // TODO: After saving, call updateProgress() to refresh progress from database
     console.log('Saving annotation:', {
       id: activeAnnotation.id,
       start_frame_index: markedStart,
@@ -641,7 +669,7 @@ export default function BoundaryWorkflow() {
                 Frame: {currentFrameIndex.toLocaleString()} / {totalFrames.toLocaleString()}
               </div>
               <div className="mt-1 text-xs text-gray-500 dark:text-gray-500">
-                Progress: {((currentFrameIndex / totalFrames) * 100).toFixed(2)}%
+                Progress: {workflowProgress.toFixed(2)}% ({completedFrames.toLocaleString()} / {totalFrames.toLocaleString()} completed)
               </div>
 
               {/* Jump to frame */}
