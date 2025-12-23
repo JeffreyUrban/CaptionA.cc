@@ -78,7 +78,7 @@ def extract_frames(
             stream.output(
                 str(output_pattern),
                 format="image2",
-                **{"q:v": 2},  # JPEG quality
+                **{"q:v": 6},  # JPEG quality (lower is better, 1-31 range)
             )
             .overwrite_output()
             .run(capture_stdout=True, capture_stderr=True)
@@ -182,7 +182,7 @@ def extract_frames_streaming(
             str(output_pattern),
             format="image2",
             **{
-                "q:v": 2,  # JPEG quality
+                "q:v": 6,  # JPEG quality (lower is better, 1-31 range)
                 "fps_mode": "passthrough",  # Pass through timestamps without sync
                 "frame_pts": "1",  # Use frame PTS for numbering
             },

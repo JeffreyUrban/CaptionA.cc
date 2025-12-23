@@ -67,11 +67,11 @@ def resize_image(
                 paste_y = 0
 
             canvas.paste(resized, (paste_x, paste_y))
-            canvas.save(output_path, quality=95)
+            canvas.save(output_path, quality=85, optimize=True)
         else:
             # Stretch to fill target dimensions
             resized = img.resize(target_size, resample=resample)
-            resized.save(output_path, quality=95)
+            resized.save(output_path, quality=85, optimize=True)
 
     return output_path
 
