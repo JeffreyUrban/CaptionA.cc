@@ -1,5 +1,6 @@
 """Command-line interface for caption_frames."""
 
+import os
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -7,6 +8,7 @@ from typing import Optional
 
 import typer
 from image_utils import resize_image
+from PIL import Image
 from rich.console import Console
 from rich.progress import (
     BarColumn,
@@ -226,7 +228,7 @@ def extract_and_resize(
     ) as progress:
         task = progress.add_task("Processing frames...", total=None)
 
-        with ThreadPoolExecutor(max_workers=4) as executor:
+        with ThreadPoolExecutor(max_workers=os.cpu_count()) as executor:
             futures = {}
             ffmpeg_done = False
 
@@ -246,6 +248,7 @@ def extract_and_resize(
                         frame_path,
                         output_path,
                         target_size=(width, height),
+                        resample=Image.Resampling.BILINEAR,
                         preserve_aspect=False,
                     )
                     futures[future] = frame_path
