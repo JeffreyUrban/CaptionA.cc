@@ -244,9 +244,12 @@ export default function BoundaryWorkflow() {
   }, [markedEnd])
 
   const clearMarks = useCallback(() => {
-    setMarkedStart(null)
-    setMarkedEnd(null)
-  }, [])
+    // Reset marks to original annotation boundaries (cancel any changes)
+    if (activeAnnotation) {
+      setMarkedStart(activeAnnotation.start_frame_index)
+      setMarkedEnd(activeAnnotation.end_frame_index)
+    }
+  }, [activeAnnotation])
 
   // Navigate to previous/next annotation by updated_at time
   const navigateToAnnotation = useCallback(async (direction: 'prev' | 'next') => {
