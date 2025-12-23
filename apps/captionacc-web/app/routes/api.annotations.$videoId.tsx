@@ -91,17 +91,61 @@ export async function action({ params, request }: ActionFunctionArgs) {
     const db = getDatabase(videoId)
 
     if (request.method === 'PUT') {
-      // Update existing annotation
+      // Update existing annotation with overlap resolution
       const { id, start_frame_index, end_frame_index, state, pending } = body
 
+      // Find overlapping annotations (excluding the one being updated)
+      const overlapping = db.prepare(`
+        SELECT * FROM annotations
+        WHERE id != ?
+        AND NOT (end_frame_index < ? OR start_frame_index > ?)
+      `).all(id, start_frame_index, end_frame_index) as Annotation[]
+
+      // Resolve overlaps by adjusting conflicting annotations
+      for (const overlap of overlapping) {
+        if (overlap.start_frame_index >= start_frame_index && overlap.end_frame_index <= end_frame_index) {
+          // Completely contained - delete it
+          db.prepare('DELETE FROM annotations WHERE id = ?').run(overlap.id)
+        } else if (overlap.start_frame_index < start_frame_index && overlap.end_frame_index > end_frame_index) {
+          // New annotation is contained within existing - split the existing
+          // Keep the left part, set to pending
+          db.prepare(`
+            UPDATE annotations
+            SET end_frame_index = ?, pending = 1
+            WHERE id = ?
+          `).run(start_frame_index - 1, overlap.id)
+
+          // Create right part as pending
+          db.prepare(`
+            INSERT INTO annotations (video_id, start_frame_index, end_frame_index, state, pending, text)
+            VALUES (?, ?, ?, ?, 1, ?)
+          `).run(videoId, end_frame_index + 1, overlap.end_frame_index, overlap.state, overlap.text)
+        } else if (overlap.start_frame_index < start_frame_index) {
+          // Overlaps on the left - trim it
+          db.prepare(`
+            UPDATE annotations
+            SET end_frame_index = ?, pending = 1
+            WHERE id = ?
+          `).run(start_frame_index - 1, overlap.id)
+        } else {
+          // Overlaps on the right - trim it
+          db.prepare(`
+            UPDATE annotations
+            SET start_frame_index = ?, pending = 1
+            WHERE id = ?
+          `).run(end_frame_index + 1, overlap.id)
+        }
+      }
+
+      // Update the annotation and mark as confirmed
       db.prepare(`
         UPDATE annotations
         SET start_frame_index = ?,
             end_frame_index = ?,
             state = ?,
-            pending = ?
+            pending = 0
         WHERE id = ?
-      `).run(start_frame_index, end_frame_index, state, pending ? 1 : 0, id)
+      `).run(start_frame_index, end_frame_index, state || 'confirmed', id)
 
       const annotation = db.prepare('SELECT * FROM annotations WHERE id = ?').get(id)
       db.close()

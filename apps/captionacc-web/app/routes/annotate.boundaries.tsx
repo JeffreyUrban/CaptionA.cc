@@ -172,6 +172,21 @@ export default function BoundaryWorkflow() {
     }
   }, [videoId])
 
+  // Helper: Load annotations for visible range
+  const loadAnnotations = useCallback(async (startFrame: number, endFrame: number) => {
+    const encodedVideoId = encodeURIComponent(videoId)
+
+    try {
+      const response = await fetch(
+        `/api/annotations/${encodedVideoId}?start=${startFrame}&end=${endFrame}`
+      )
+      const data = await response.json()
+      setAnnotations(data.annotations || [])
+    } catch (error) {
+      console.error('Failed to load annotations:', error)
+    }
+  }, [videoId])
+
   // Track window height for dynamic frame count
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -486,30 +501,42 @@ export default function BoundaryWorkflow() {
 
   // Save annotation
   const saveAnnotation = useCallback(async () => {
-    if (!canSave || !activeAnnotation) return
+    if (!canSave || !activeAnnotation || markedStart === null || markedEnd === null) return
 
-    // TODO: Implement full save logic with overlap resolution
-    // TODO: After saving, call updateProgress() to refresh progress from database
-    console.log('Saving annotation:', {
-      id: activeAnnotation.id,
-      start_frame_index: markedStart,
-      end_frame_index: markedEnd
-    })
-
-    // For now, just load the next annotation
     try {
       const encodedVideoId = encodeURIComponent(videoId)
-      const response = await fetch(`/api/annotations/${encodedVideoId}/next`)
-      const data = await response.json()
 
-      if (data.annotation) {
-        setActiveAnnotation(data.annotation)
-        setCurrentFrameIndex(data.annotation.start_frame_index)
-        setMarkedStart(data.annotation.start_frame_index)
-        setMarkedEnd(data.annotation.end_frame_index)
+      // Save the annotation with overlap resolution
+      const saveResponse = await fetch(`/api/annotations/${encodedVideoId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: activeAnnotation.id,
+          start_frame_index: markedStart,
+          end_frame_index: markedEnd,
+          state: activeAnnotation.state === 'gap' ? 'confirmed' : activeAnnotation.state,
+          pending: false
+        })
+      })
+
+      if (!saveResponse.ok) {
+        throw new Error('Failed to save annotation')
+      }
+
+      // Update progress from database
+      await updateProgress()
+
+      // Load next annotation
+      const nextResponse = await fetch(`/api/annotations/${encodedVideoId}/next`)
+      const nextData = await nextResponse.json()
+
+      if (nextData.annotation) {
+        setActiveAnnotation(nextData.annotation)
+        setCurrentFrameIndex(nextData.annotation.start_frame_index)
+        setMarkedStart(nextData.annotation.start_frame_index)
+        setMarkedEnd(nextData.annotation.end_frame_index)
 
         // After save, we know there's a previous (the one we just saved)
-        // and no next (we loaded the next pending/gap)
         setHasPrevAnnotation(true)
         setHasNextAnnotation(false)
       } else {
@@ -521,9 +548,9 @@ export default function BoundaryWorkflow() {
         setHasNextAnnotation(false)
       }
     } catch (error) {
-      console.error('Failed to load next annotation:', error)
+      console.error('Failed to save annotation:', error)
     }
-  }, [canSave, markedStart, markedEnd, videoId, activeAnnotation])
+  }, [canSave, markedStart, markedEnd, videoId, activeAnnotation, updateProgress])
 
   // Keyboard event handler
   useEffect(() => {
@@ -596,24 +623,10 @@ export default function BoundaryWorkflow() {
   useEffect(() => {
     if (visibleFrameIndices.length === 0) return
 
-    const loadAnnotations = async () => {
-      const startFrame = Math.min(...visibleFrameIndices)
-      const endFrame = Math.max(...visibleFrameIndices)
-      const encodedVideoId = encodeURIComponent(videoId)
-
-      try {
-        const response = await fetch(
-          `/api/annotations/${encodedVideoId}?start=${startFrame}&end=${endFrame}`
-        )
-        const data = await response.json()
-        setAnnotations(data.annotations || [])
-      } catch (error) {
-        console.error('Failed to load annotations:', error)
-      }
-    }
-
-    loadAnnotations()
-  }, [visibleFrameIndices, videoId])
+    const startFrame = Math.min(...visibleFrameIndices)
+    const endFrame = Math.max(...visibleFrameIndices)
+    loadAnnotations(startFrame, endFrame)
+  }, [visibleFrameIndices, loadAnnotations])
 
   // Load frames for visible indices
   useEffect(() => {
@@ -679,6 +692,23 @@ export default function BoundaryWorkflow() {
   return (
     <AppLayout fullScreen>
       <div className="flex h-[calc(100vh-4rem)] max-h-[calc(100vh-4rem)] flex-col overflow-hidden px-4 py-4">
+        {/* Workflow completion banner */}
+        {workflowProgress >= 100 && (
+          <div className="mb-4 rounded-lg bg-green-50 border-2 border-green-500 p-4 dark:bg-green-950 dark:border-green-600">
+            <div className="flex items-center gap-3">
+              <div className="text-3xl">🎉</div>
+              <div className="flex-1">
+                <div className="text-lg font-bold text-green-900 dark:text-green-100">
+                  Workflow Complete!
+                </div>
+                <div className="text-sm text-green-700 dark:text-green-300">
+                  All {totalFrames.toLocaleString()} frames have been annotated. You can continue reviewing and editing as needed.
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Main content */}
         <div className="flex h-full flex-1 gap-6 overflow-hidden">
           {/* Left: Frame stack (2/3 width) */}
