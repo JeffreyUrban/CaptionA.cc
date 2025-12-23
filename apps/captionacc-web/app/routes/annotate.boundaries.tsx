@@ -142,11 +142,19 @@ export default function BoundaryWorkflow() {
   // Marking functions
   const markStart = useCallback(() => {
     setMarkedStart(currentFrameIndex)
-  }, [currentFrameIndex])
+    // If marking start after current end, clear end to prevent invalid order
+    if (markedEnd !== null && currentFrameIndex > markedEnd) {
+      setMarkedEnd(null)
+    }
+  }, [currentFrameIndex, markedEnd])
 
   const markEnd = useCallback(() => {
     setMarkedEnd(currentFrameIndex)
-  }, [currentFrameIndex])
+    // If marking end before current start, clear start to prevent invalid order
+    if (markedStart !== null && currentFrameIndex < markedStart) {
+      setMarkedStart(null)
+    }
+  }, [currentFrameIndex, markedStart])
 
   const jumpToStart = useCallback(() => {
     const target = markedStart ?? predictedStart
@@ -315,6 +323,25 @@ export default function BoundaryWorkflow() {
                   const isMarkedEnd = frameIndex === markedEnd
                   const inRange = isInMarkedRange(frameIndex)
 
+                  // Determine border classes based on position in marked range
+                  let borderClasses = ''
+                  if (markedStart !== null && markedEnd !== null && inRange) {
+                    // Full sequence marked - create continuous border
+                    borderClasses = 'border-l-4 border-r-4 border-orange-500'
+                    if (isMarkedStart) {
+                      borderClasses += ' border-t-4 rounded-t'
+                    }
+                    if (isMarkedEnd) {
+                      borderClasses += ' border-b-4 rounded-b'
+                    }
+                  } else if (isMarkedStart && markedEnd === null) {
+                    // Only start marked
+                    borderClasses = 'border-4 border-orange-500 rounded'
+                  } else if (isMarkedEnd && markedStart === null) {
+                    // Only end marked
+                    borderClasses = 'border-4 border-orange-500 rounded'
+                  }
+
                   return (
                     <div
                       key={frameIndex}
@@ -323,18 +350,10 @@ export default function BoundaryWorkflow() {
                     >
                       {/* Frame container */}
                       <div
-                        className={`relative overflow-hidden rounded ${
-                          isCurrent ? 'ring-4 ring-teal-500' : ''
-                        } ${inRange ? 'bg-orange-50 dark:bg-orange-950' : ''}`}
+                        className={`relative overflow-hidden ${
+                          isCurrent ? 'ring-4 ring-teal-500 rounded' : ''
+                        } ${inRange ? 'bg-orange-50 dark:bg-orange-950' : ''} ${borderClasses}`}
                       >
-                        {/* Start/end markers */}
-                        {isMarkedStart && (
-                          <div className="absolute inset-y-0 left-0 w-1 bg-orange-500" />
-                        )}
-                        {isMarkedEnd && (
-                          <div className="absolute inset-y-0 right-0 w-1 bg-orange-500" />
-                        )}
-
                         {/* Frame image */}
                         {frame ? (
                           <img
@@ -355,15 +374,6 @@ export default function BoundaryWorkflow() {
                         ) : (
                           <div className="flex h-24 items-center justify-center bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
                             Loading frame {frameIndex}...
-                          </div>
-                        )}
-
-                        {/* Current frame indicator */}
-                        {isCurrent && (
-                          <div className="absolute inset-0 flex items-center justify-center bg-teal-500/10">
-                            <div className="rounded-full bg-teal-500 px-3 py-1 text-xs font-bold text-white">
-                              CURRENT
-                            </div>
                           </div>
                         )}
                       </div>
@@ -459,6 +469,13 @@ export default function BoundaryWorkflow() {
                   Mark End <span className="text-xs opacity-75">(D)</span>
                 </button>
               </div>
+
+              <button
+                onClick={clearMarks}
+                className="mt-2 w-full rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+              >
+                Clear Marks
+              </button>
             </div>
 
             {/* Sequence type */}
@@ -520,13 +537,7 @@ export default function BoundaryWorkflow() {
             )}
 
             {/* Actions */}
-            <div className="space-y-2">
-              <button
-                onClick={clearMarks}
-                className="w-full rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
-              >
-                Clear Marks
-              </button>
+            <div>
               <button
                 onClick={saveAnnotation}
                 disabled={!canSave}
