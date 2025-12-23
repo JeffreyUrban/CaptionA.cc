@@ -847,6 +847,17 @@ export default function BoundaryWorkflow() {
                           style={{ top: '100%', height: '0.5rem', opacity: 1 }}
                         />
                       )}
+
+                    {/* Border connector for regular annotation borders */}
+                    {primaryAnnotation &&
+                      borderColor &&
+                      frameIndex !== primaryAnnotation.end_frame_index &&
+                      visibleIndex < visibleFrameIndices.length - 1 && (
+                        <div
+                          className={`absolute left-0 right-0 border-l-4 border-r-4 ${borderColor} pointer-events-none`}
+                          style={{ top: '100%', height: '0.25rem', opacity }}
+                        />
+                      )}
                   </div>
                 )
               })}
