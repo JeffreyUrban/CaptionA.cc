@@ -206,8 +206,8 @@ export default function BoundaryWorkflow() {
     return OPACITY_MAP[distance] ?? 0.3
   }, [currentFrameIndex])
 
-  // Can save if both boundaries marked
-  const canSave = markedStart !== null && markedEnd !== null && markedStart < markedEnd
+  // Can save if both boundaries marked (single frame captions allowed: start == end)
+  const canSave = markedStart !== null && markedEnd !== null && markedStart <= markedEnd
 
   // Navigation functions
   const navigateFrame = useCallback((delta: number) => {
@@ -563,7 +563,7 @@ export default function BoundaryWorkflow() {
           {/* Left: Frame stack (2/3 width) */}
           <div className="frame-stack-container flex h-full w-2/3 flex-col overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
             <div className="flex h-full flex-1 flex-col justify-center gap-1 overflow-hidden p-4">
-                {visibleFrameIndices.map(frameIndex => {
+                {visibleFrameIndices.map((frameIndex, visibleIndex) => {
                   const frame = frames.get(frameIndex)
                   const isCurrent = frameIndex === currentFrameIndex
                   const opacity = getOpacity(frameIndex)
@@ -602,23 +602,53 @@ export default function BoundaryWorkflow() {
                     }
                   }
 
-                  // Background color for frames in the editing range
-                  let bgColor = ''
-                  if (inRange && activeAnnotation) {
-                    bgColor = 'bg-orange-50 dark:bg-orange-950'
+                  // Orange border for marked range (what will be saved)
+                  let orangeBorderClasses = ''
+                  if (markedStart !== null && markedEnd !== null && frameIndex >= markedStart && frameIndex <= markedEnd) {
+                    // Create continuous orange border around the marked range
+                    orangeBorderClasses = 'border-l-4 border-r-4 border-orange-500'
+                    if (frameIndex === markedStart) {
+                      orangeBorderClasses += ' border-t-4 rounded-t'
+                    }
+                    if (frameIndex === markedEnd) {
+                      orangeBorderClasses += ' border-b-4 rounded-b'
+                    }
                   }
 
                   return (
                     <div
                       key={frameIndex}
                       className="relative"
-                      style={{ opacity }}
                     >
+                      {/* Orange border overlay (not affected by opacity) */}
+                      {orangeBorderClasses && (
+                        <div className={`absolute inset-0 pointer-events-none z-10 ${orangeBorderClasses}`} style={{ opacity: 1 }} />
+                      )}
+
+                      {/* Current frame ring overlay (on top of everything) */}
+                      {isCurrent && (
+                        <div className="absolute inset-0 pointer-events-none z-20 ring-4 ring-teal-500 rounded" />
+                      )}
+
                       {/* Frame container */}
                       <div
-                        className={`relative overflow-hidden ${
-                          isCurrent ? 'ring-4 ring-teal-500 rounded' : ''
-                        } ${bgColor} ${borderClasses}`}
+                        onClick={() => {
+                          setMarkedStart(frameIndex)
+                          // Reset end if it's before the new start
+                          if (markedEnd !== null && frameIndex > markedEnd) {
+                            setMarkedEnd(null)
+                          }
+                        }}
+                        onContextMenu={(e) => {
+                          e.preventDefault()
+                          setMarkedEnd(frameIndex)
+                          // Reset start if it's after the new end
+                          if (markedStart !== null && frameIndex < markedStart) {
+                            setMarkedStart(null)
+                          }
+                        }}
+                        style={{ opacity }}
+                        className={`relative overflow-hidden cursor-pointer ${borderClasses}`}
                       >
                         {/* Frame image */}
                         {frame ? (
@@ -643,6 +673,14 @@ export default function BoundaryWorkflow() {
                           </div>
                         )}
                       </div>
+
+                      {/* Border connector to next frame in marked range */}
+                      {orangeBorderClasses && frameIndex !== markedEnd && visibleIndex < visibleFrameIndices.length - 1 && (
+                        <div
+                          className="absolute left-0 right-0 border-l-4 border-r-4 border-orange-500 pointer-events-none"
+                          style={{ top: '100%', height: '0.5rem', opacity: 1 }}
+                        />
+                      )}
                     </div>
                   )
                 })}
@@ -862,6 +900,8 @@ export default function BoundaryWorkflow() {
                 <div>Shift + Arrow: ±10 frames</div>
                 <div>Ctrl + Arrow: ±50 frames</div>
                 <div className="mt-2"><strong>Marking:</strong></div>
+                <div>Left Click: Mark Start</div>
+                <div>Right Click: Mark End</div>
                 <div>A: Jump to Start</div>
                 <div>S: Mark Start</div>
                 <div>D: Mark End</div>
