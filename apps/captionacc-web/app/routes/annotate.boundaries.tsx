@@ -982,25 +982,45 @@ export default function BoundaryWorkflow() {
               <div className="mt-4 grid grid-cols-2 gap-2">
                 <button
                   onClick={jumpToStart}
-                  className="rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+                  disabled={!activeAnnotation}
+                  className={`rounded-md border px-3 py-2 text-sm font-medium ${
+                    activeAnnotation
+                      ? 'border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800'
+                      : 'cursor-not-allowed border-gray-200 text-gray-400 dark:border-gray-800 dark:text-gray-600'
+                  }`}
                 >
                   Jump Start <span className="text-xs text-gray-500">(A)</span>
                 </button>
                 <button
                   onClick={markStart}
-                  className="rounded-md bg-orange-500 px-3 py-2 text-sm font-semibold text-white hover:bg-orange-600"
+                  disabled={!activeAnnotation}
+                  className={`rounded-md px-3 py-2 text-sm font-semibold ${
+                    activeAnnotation
+                      ? 'bg-orange-500 text-white hover:bg-orange-600'
+                      : 'cursor-not-allowed bg-gray-300 text-gray-500 dark:bg-gray-700 dark:text-gray-600'
+                  }`}
                 >
                   Mark Start <span className="text-xs opacity-75">(S)</span>
                 </button>
                 <button
                   onClick={jumpToEnd}
-                  className="rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+                  disabled={!activeAnnotation}
+                  className={`rounded-md border px-3 py-2 text-sm font-medium ${
+                    activeAnnotation
+                      ? 'border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800'
+                      : 'cursor-not-allowed border-gray-200 text-gray-400 dark:border-gray-800 dark:text-gray-600'
+                  }`}
                 >
                   Jump End <span className="text-xs text-gray-500">(F)</span>
                 </button>
                 <button
                   onClick={markEnd}
-                  className="rounded-md bg-orange-500 px-3 py-2 text-sm font-semibold text-white hover:bg-orange-600"
+                  disabled={!activeAnnotation}
+                  className={`rounded-md px-3 py-2 text-sm font-semibold ${
+                    activeAnnotation
+                      ? 'bg-orange-500 text-white hover:bg-orange-600'
+                      : 'cursor-not-allowed bg-gray-300 text-gray-500 dark:bg-gray-700 dark:text-gray-600'
+                  }`}
                 >
                   Mark End <span className="text-xs opacity-75">(D)</span>
                 </button>
@@ -1008,7 +1028,12 @@ export default function BoundaryWorkflow() {
 
               <button
                 onClick={clearMarks}
-                className="mt-2 w-full rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+                disabled={!activeAnnotation}
+                className={`mt-2 w-full rounded-md border px-4 py-2 text-sm font-medium ${
+                  activeAnnotation
+                    ? 'border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800'
+                    : 'cursor-not-allowed border-gray-200 text-gray-400 dark:border-gray-800 dark:text-gray-600'
+                }`}
               >
                 Clear Marks
               </button>
