@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { AppLayout } from '~/components/AppLayout'
 
 // Types
@@ -90,6 +90,25 @@ export default function BoundaryWorkflow() {
   const [frameSpacing, setFrameSpacing] = useState<FrameSpacing>('linear')
   const [windowHeight, setWindowHeight] = useState(typeof window !== 'undefined' ? window.innerHeight : 1000)
   const [jumpToFrameInput, setJumpToFrameInput] = useState('')
+
+  // Drag-to-scroll state (using refs for synchronous access)
+  const isDraggingRef = useRef(false)
+  const dragStartYRef = useRef(0)
+  const dragStartFrameRef = useRef(0)
+  const lastYRef = useRef(0)
+  const lastTimeRef = useRef(0)
+  const velocityRef = useRef(0)
+  const momentumFrameRef = useRef<number | null>(null)
+  const [cursorStyle, setCursorStyle] = useState<'grab' | 'grabbing'>('grab')
+
+  // Cleanup momentum animation on unmount
+  useEffect(() => {
+    return () => {
+      if (momentumFrameRef.current !== null) {
+        cancelAnimationFrame(momentumFrameRef.current)
+      }
+    }
+  }, [])
 
   // Load video metadata and initial annotation on mount
   useEffect(() => {
@@ -250,6 +269,90 @@ export default function BoundaryWorkflow() {
       setMarkedEnd(activeAnnotation.end_frame_index)
     }
   }, [activeAnnotation])
+
+  // Drag-to-scroll handlers
+  const handleDragStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault() // Prevent default drag behavior
+
+    // Cancel momentum if running
+    if (momentumFrameRef.current !== null) {
+      cancelAnimationFrame(momentumFrameRef.current)
+      momentumFrameRef.current = null
+    }
+
+    isDraggingRef.current = true
+    dragStartYRef.current = e.clientY
+    dragStartFrameRef.current = currentFrameIndex
+    lastYRef.current = e.clientY
+    lastTimeRef.current = Date.now()
+    velocityRef.current = 0
+    setCursorStyle('grabbing')
+
+    // Add global listeners for move and up
+    const handleMove = (moveEvent: MouseEvent) => {
+      if (!isDraggingRef.current) return
+
+      const now = Date.now()
+      const deltaY = dragStartYRef.current - moveEvent.clientY
+      const frameDelta = Math.round(deltaY / 30) // 30 pixels per frame
+      const newFrame = Math.max(0, Math.min(dragStartFrameRef.current + frameDelta, totalFrames - 1))
+
+      // Calculate velocity for momentum
+      const timeDelta = now - lastTimeRef.current
+      if (timeDelta > 0) {
+        const yDelta = lastYRef.current - moveEvent.clientY
+        velocityRef.current = (yDelta / timeDelta) * 16 / 30 // Convert to frames per 16ms
+      }
+
+      lastYRef.current = moveEvent.clientY
+      lastTimeRef.current = now
+      setCurrentFrameIndex(newFrame)
+    }
+
+    const handleUp = () => {
+      if (!isDraggingRef.current) return
+      isDraggingRef.current = false
+      setCursorStyle('grab')
+
+      // Remove listeners
+      window.removeEventListener('mousemove', handleMove)
+      window.removeEventListener('mouseup', handleUp)
+
+      // Apply momentum with fractional position tracking
+      const initialVelocity = velocityRef.current
+      if (Math.abs(initialVelocity) > 0.05) {
+        let velocity = initialVelocity
+        let position = currentFrameIndex // Track fractional position
+        const friction = 0.99 // Friction factor for smooth deceleration
+
+        const animate = () => {
+          velocity *= friction
+
+          // Stop when velocity becomes negligible
+          if (Math.abs(velocity) < 0.01) {
+            momentumFrameRef.current = null
+            return
+          }
+
+          // Update fractional position
+          position += velocity
+
+          // Clamp to valid range
+          position = Math.max(0, Math.min(position, totalFrames - 1))
+
+          // Update displayed frame (rounded from fractional position)
+          const newFrame = Math.round(position)
+          setCurrentFrameIndex(newFrame)
+
+          momentumFrameRef.current = requestAnimationFrame(animate)
+        }
+        momentumFrameRef.current = requestAnimationFrame(animate)
+      }
+    }
+
+    window.addEventListener('mousemove', handleMove)
+    window.addEventListener('mouseup', handleUp)
+  }, [currentFrameIndex, totalFrames])
 
   // Navigate to previous/next annotation by updated_at time
   const navigateToAnnotation = useCallback(async (direction: 'prev' | 'next') => {
@@ -564,7 +667,10 @@ export default function BoundaryWorkflow() {
         {/* Main content */}
         <div className="flex h-full flex-1 gap-6 overflow-hidden">
           {/* Left: Frame stack (2/3 width) */}
-          <div className="frame-stack-container flex h-full w-2/3 flex-col overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
+          <div
+            className={`frame-stack-container relative flex h-full w-2/3 flex-col overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900 cursor-${cursorStyle}`}
+            onMouseDown={handleDragStart}
+          >
             <div className="flex h-full flex-1 flex-col justify-center gap-1 overflow-hidden p-4">
                 {visibleFrameIndices.map((frameIndex, visibleIndex) => {
                   const frame = frames.get(frameIndex)
@@ -659,6 +765,7 @@ export default function BoundaryWorkflow() {
                             src={frame.image_url}
                             alt={`Frame ${frameIndex}`}
                             className="w-full"
+                            draggable={false}
                             onError={(e) => {
                               // Fallback for missing images
                               const target = e.target as HTMLImageElement
