@@ -526,6 +526,11 @@ export default function BoundaryWorkflow() {
       // Update progress from database
       await updateProgress()
 
+      // Reload annotations in current visible range to show updated borders
+      const startFrame = Math.min(...visibleFrameIndices)
+      const endFrame = Math.max(...visibleFrameIndices)
+      await loadAnnotations(startFrame, endFrame)
+
       // Load next annotation
       const nextResponse = await fetch(`/api/annotations/${encodedVideoId}/next`)
       const nextData = await nextResponse.json()
@@ -550,7 +555,7 @@ export default function BoundaryWorkflow() {
     } catch (error) {
       console.error('Failed to save annotation:', error)
     }
-  }, [canSave, markedStart, markedEnd, videoId, activeAnnotation, updateProgress])
+  }, [canSave, markedStart, markedEnd, videoId, activeAnnotation, updateProgress, visibleFrameIndices, loadAnnotations])
 
   // Keyboard event handler
   useEffect(() => {

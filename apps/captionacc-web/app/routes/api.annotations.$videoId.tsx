@@ -94,6 +94,9 @@ export async function action({ params, request }: ActionFunctionArgs) {
       // Update existing annotation with overlap resolution
       const { id, start_frame_index, end_frame_index, state, pending } = body
 
+      // Get the original annotation to check if range is being reduced
+      const original = db.prepare('SELECT * FROM annotations WHERE id = ?').get(id) as Annotation
+
       // Find overlapping annotations (excluding the one being updated)
       const overlapping = db.prepare(`
         SELECT * FROM annotations
@@ -135,6 +138,59 @@ export async function action({ params, request }: ActionFunctionArgs) {
             WHERE id = ?
           `).run(end_frame_index + 1, overlap.id)
         }
+      }
+
+      // Helper function to create or merge gap annotation
+      const createOrMergeGap = (gapStart: number, gapEnd: number) => {
+        // Find adjacent gap annotations
+        const adjacentGaps = db.prepare(`
+          SELECT * FROM annotations
+          WHERE state = 'gap'
+          AND (
+            end_frame_index = ? - 1
+            OR start_frame_index = ? + 1
+          )
+          ORDER BY start_frame_index
+        `).all(gapStart, gapEnd) as Annotation[]
+
+        // Calculate merged gap range
+        let mergedStart = gapStart
+        let mergedEnd = gapEnd
+        const gapIdsToDelete: number[] = []
+
+        for (const gap of adjacentGaps) {
+          if (gap.end_frame_index === gapStart - 1) {
+            // Gap is immediately before
+            mergedStart = gap.start_frame_index
+            gapIdsToDelete.push(gap.id)
+          } else if (gap.start_frame_index === gapEnd + 1) {
+            // Gap is immediately after
+            mergedEnd = gap.end_frame_index
+            gapIdsToDelete.push(gap.id)
+          }
+        }
+
+        // Delete adjacent gaps that will be merged
+        for (const gapId of gapIdsToDelete) {
+          db.prepare('DELETE FROM annotations WHERE id = ?').run(gapId)
+        }
+
+        // Create merged gap annotation
+        db.prepare(`
+          INSERT INTO annotations (video_id, start_frame_index, end_frame_index, state, pending)
+          VALUES (?, ?, ?, 'gap', 0)
+        `).run(videoId, mergedStart, mergedEnd)
+      }
+
+      // Create gap annotations for uncovered ranges when annotation is reduced
+      if (start_frame_index > original.start_frame_index) {
+        // Create gap for the range before the new annotation
+        createOrMergeGap(original.start_frame_index, start_frame_index - 1)
+      }
+
+      if (end_frame_index < original.end_frame_index) {
+        // Create gap for the range after the new annotation
+        createOrMergeGap(end_frame_index + 1, original.end_frame_index)
       }
 
       // Update the annotation and mark as confirmed
