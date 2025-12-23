@@ -37,7 +37,7 @@ def box_overlap_fraction(box1, box2):
     return intersection_area / (box1_area + 1e-6)
 
 
-def determine_anchor_type(boxes, episode_bounds):
+def determine_anchor_type(boxes, region_bounds):
     """Determine if boxes are left, center, or right anchored based on location.
 
     Checks which edge has consistency on its respective side:
@@ -173,7 +173,7 @@ def analyze_subtitle_region(
     img_height = height
 
     # Default initial region: bottom third of frame
-    episode_bounds = [0, int(img_height * 0.67), img_width, img_height]
+    region_bounds = [0, int(img_height * 0.67), img_width, img_height]
 
     # Process OCR annotations and filter by overlap
     valid_boxes = []
@@ -184,7 +184,7 @@ def analyze_subtitle_region(
         for text, confidence, frac_bounds in entry["annotations"]:
             # Convert fractional bounds to pixels
             box = convert_fractional_bounds_to_pixels(frac_bounds, img_width, img_height)
-            overlap = box_overlap_fraction(box, episode_bounds)
+            overlap = box_overlap_fraction(box, region_bounds)
 
             if overlap >= min_overlap:
                 valid_boxes.append(box)
@@ -223,7 +223,7 @@ def analyze_subtitle_region(
     crop_bottom = min(img_height, bottom_mode + margin)
 
     # Determine anchor type and position
-    anchor_type = determine_anchor_type(typical_boxes, episode_bounds)
+    anchor_type = determine_anchor_type(typical_boxes, region_bounds)
     anchor_position = get_anchor_position(typical_boxes, anchor_type, crop_left, crop_right)
 
     # Adjust crop bounds for center-aligned text

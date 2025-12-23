@@ -1,85 +1,192 @@
 """Core logic for caption frame extraction and processing.
 
-This module provides both streaming and batch processing modes:
-- Streaming: Process frames as they're extracted (lower disk usage)
-- Batch: Extract all frames first, then process (simpler but uses more disk)
+This module provides functions for extracting and resizing video frames with cropping.
+All functions work with generic video paths and crop coordinates.
 """
 
+import os
+import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Optional
 
-from caption_models import load_analysis_text
-from image_utils import resize_directory
-from video_utils import extract_frames, get_video_dimensions
-
-from .frame_extraction import stream_extract_and_resize, stream_extract_frames
+from image_utils import resize_directory, resize_image
+from PIL import Image
+from video_utils import extract_frames_streaming, get_video_duration
 
 
-def extract_frames_from_episode(
-    episode_dir: Path,
-    video_filename: str,
-    analysis_filename: str,
-    output_subdir: str,
+def extract_frames(
+    video_path: Path,
+    output_dir: Path,
+    crop_box: tuple[int, int, int, int],
     rate_hz: float = 10.0,
+    resize_to: Optional[tuple[int, int]] = None,
+    preserve_aspect: bool = False,
     progress_callback: Optional[callable] = None,
 ) -> tuple[Path, int]:
-    """Extract frames from video with cropping based on subtitle analysis.
+    """Extract frames from video with cropping and optional resizing.
 
     Args:
-        episode_dir: Directory containing video and analysis files
-        video_filename: Name of video file in episode directory
-        analysis_filename: Name of subtitle_analysis.txt file (e.g., "subtitle_analysis.txt")
-        output_subdir: Subdirectory name for output frames (e.g., "10Hz_cropped_frames")
+        video_path: Path to input video file
+        output_dir: Directory for output frames
+        crop_box: Crop region as (x, y, width, height) in pixels
         rate_hz: Frame sampling rate in Hz (default: 10.0)
+        resize_to: Optional (width, height) to resize frames after extraction
+        preserve_aspect: If True and resizing, maintain aspect ratio with padding
         progress_callback: Optional callback function (current, total) -> None
 
     Returns:
         Tuple of (output_dir, num_frames)
 
     Raises:
-        FileNotFoundError: If video or analysis file not found
-        ValueError: If analysis file is invalid
+        FileNotFoundError: If video file not found
+        RuntimeError: If FFmpeg fails
     """
-    video_path = episode_dir / video_filename
-    analysis_path = episode_dir / analysis_filename
-    output_dir = episode_dir / output_subdir
-
     if not video_path.exists():
         raise FileNotFoundError(f"Video file not found: {video_path}")
-    if not analysis_path.exists():
-        raise FileNotFoundError(f"Analysis file not found: {analysis_path}")
 
-    # Load subtitle region analysis
-    region = load_analysis_text(analysis_path)
+    # If not resizing, extract directly to output_dir
+    if resize_to is None:
+        output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Get video dimensions to convert fractional bounds to pixels
-    width, height = get_video_dimensions(video_path)
+        # Start FFmpeg extraction with cropping
+        ffmpeg_process = extract_frames_streaming(
+            video_path=video_path,
+            output_dir=output_dir,
+            rate_hz=rate_hz,
+            crop_box=crop_box,
+        )
 
-    # Convert fractional crop bounds to pixel coordinates
-    # region.crop_* are fractional (0-1), need to convert to pixels
-    x = int(region.crop_left * width)
-    y = int(region.crop_top * height)
-    crop_width = int((region.crop_right - region.crop_left) * width)
-    crop_height = int((region.crop_bottom - region.crop_top) * height)
+        # Monitor progress
+        duration = get_video_duration(video_path)
+        expected_frames = int(duration * rate_hz)
+        seen_frames = set()
+        ffmpeg_done = False
 
-    crop_box = (x, y, crop_width, crop_height)
+        while True:
+            # Check for new frames
+            frame_files = sorted(output_dir.glob("frame_*.jpg"))
+            new_frames = [frame for frame in frame_files if frame not in seen_frames]
 
-    # Extract frames with cropping
-    frames = extract_frames(
-        video_path,
-        output_dir,
-        rate_hz=rate_hz,
-        crop_box=crop_box,
-        progress_callback=progress_callback,
-    )
+            # Update progress for new frames
+            for frame_path in new_frames:
+                seen_frames.add(frame_path)
+                if progress_callback:
+                    progress_callback(len(seen_frames), expected_frames)
 
-    return output_dir, len(frames)
+            # Check if FFmpeg has completed
+            if not ffmpeg_done:
+                poll_result = ffmpeg_process.poll()
+                if poll_result is not None:
+                    ffmpeg_done = True
+
+            # Exit when FFmpeg is done
+            if ffmpeg_done:
+                # Final check for any remaining frames
+                frame_files = sorted(output_dir.glob("frame_*.jpg"))
+                final_frames = [frame for frame in frame_files if frame not in seen_frames]
+                for frame_path in final_frames:
+                    seen_frames.add(frame_path)
+                    if progress_callback:
+                        progress_callback(len(seen_frames), expected_frames)
+                break
+
+            time.sleep(0.1)
+
+        # Check for FFmpeg errors
+        if ffmpeg_process.returncode != 0:
+            raise RuntimeError(
+                f"FFmpeg failed with return code {ffmpeg_process.returncode}"
+            )
+
+        return output_dir, len(seen_frames)
+
+    # If resizing, extract to temp directory then resize in streaming fashion
+    else:
+        output_dir.mkdir(parents=True, exist_ok=True)
+        cropped_dir = output_dir / "cropped"
+        resized_dir = output_dir / "resized"
+        cropped_dir.mkdir(parents=True, exist_ok=True)
+        resized_dir.mkdir(parents=True, exist_ok=True)
+
+        # Start FFmpeg extraction with cropping
+        ffmpeg_process = extract_frames_streaming(
+            video_path=video_path,
+            output_dir=cropped_dir,
+            rate_hz=rate_hz,
+            crop_box=crop_box,
+        )
+
+        # Get expected frame count
+        duration = get_video_duration(video_path)
+        expected_frames = int(duration * rate_hz)
+
+        # Process frames as they appear
+        submitted_frames = set()
+        current_count = 0
+
+        with ThreadPoolExecutor(max_workers=os.cpu_count()) as executor:
+            futures = {}
+            ffmpeg_done = False
+
+            while True:
+                # Check for new frames
+                frame_files = sorted(cropped_dir.glob("frame_*.jpg"))
+                new_frames = [
+                    frame for frame in frame_files if frame not in submitted_frames
+                ]
+
+                # Submit new frames to worker pool
+                for frame_path in new_frames:
+                    time.sleep(0.05)  # Ensure file is fully written
+                    output_path = resized_dir / frame_path.name
+                    future = executor.submit(
+                        resize_image,
+                        frame_path,
+                        output_path,
+                        target_size=resize_to,
+                        resample=Image.Resampling.LANCZOS,
+                        preserve_aspect=preserve_aspect,
+                    )
+                    futures[future] = frame_path
+                    submitted_frames.add(frame_path)
+
+                # Collect completed results
+                for future in list(futures.keys()):
+                    if future.done():
+                        frame_path = futures.pop(future)
+                        try:
+                            future.result()
+                            current_count += 1
+                            if progress_callback:
+                                progress_callback(current_count, expected_frames)
+                        except Exception as e:
+                            print(f"ERROR processing {frame_path.name}: {e}")
+
+                # Check if FFmpeg has completed
+                if not ffmpeg_done:
+                    poll_result = ffmpeg_process.poll()
+                    if poll_result is not None:
+                        ffmpeg_done = True
+
+                # Exit when FFmpeg is done and all futures are complete
+                if ffmpeg_done and not futures:
+                    break
+
+                time.sleep(0.1)
+
+        # Check for FFmpeg errors
+        if ffmpeg_process.returncode != 0:
+            raise RuntimeError(
+                f"FFmpeg failed with return code {ffmpeg_process.returncode}"
+            )
+
+        return resized_dir, current_count
 
 
-def resize_frames_in_directory(
-    episode_dir: Path,
-    input_subdir: str,
-    output_subdir: str,
+def resize_frames(
+    input_dir: Path,
+    output_dir: Path,
     target_width: int,
     target_height: int,
     preserve_aspect: bool = False,
@@ -88,12 +195,11 @@ def resize_frames_in_directory(
     """Resize all frames in a directory to fixed dimensions.
 
     Args:
-        episode_dir: Episode directory containing frames
-        input_subdir: Subdirectory name containing input frames (e.g., "10Hz_cropped_frames")
-        output_subdir: Subdirectory name for output frames (e.g., "10Hz_480x48_frames")
+        input_dir: Directory containing input frames
+        output_dir: Directory for output frames
         target_width: Target width in pixels
         target_height: Target height in pixels
-        preserve_aspect: If True, maintain aspect ratio with padding (default: False, stretch to fill)
+        preserve_aspect: If True, maintain aspect ratio with padding (default: False, stretch)
         progress_callback: Optional callback function (current, total) -> None
 
     Returns:
@@ -102,9 +208,6 @@ def resize_frames_in_directory(
     Raises:
         FileNotFoundError: If input directory not found
     """
-    input_dir = episode_dir / input_subdir
-    output_dir = episode_dir / output_subdir
-
     if not input_dir.exists():
         raise FileNotFoundError(f"Input directory not found: {input_dir}")
 

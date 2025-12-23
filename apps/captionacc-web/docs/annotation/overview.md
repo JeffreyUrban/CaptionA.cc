@@ -39,10 +39,10 @@ For each video, we generate cropped caption frames at 10Hz (~25,000 frames per v
 
 ### 2. Video-Agnostic Data Model
 
-**CRITICAL:** Do not assume content is organized as shows/episodes.
+**CRITICAL:** Do not assume content is organized hierarchically.
 
-- Use generic `video_id` instead of `show_id`/`episode_id`
-- Show/episode concepts only exist in `/local/` data directory structure
+- Use generic `video_id` for all content references
+- Content organization concepts only exist in `/local/` data directory structure
 - Application code remains content-agnostic
 
 ### 3. Frame Aspect Ratio

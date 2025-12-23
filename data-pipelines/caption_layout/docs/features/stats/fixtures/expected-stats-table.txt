@@ -1,9 +1,0 @@
-TEMPLATE_PLACEHOLDER
-Processing: input.txt
-
-        TEMPLATE_PLACEHOLDER Statistics
-┏━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━┓
-┃ Metric                   ┃     Value ┃
-┡━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━┩
-│ TEMPLATE_PLACEHOLDER                     │      TEMPLATE_PLACEHOLDER │
-└──────────────────────────┴───────────┘

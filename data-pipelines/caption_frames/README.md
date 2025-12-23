@@ -1,22 +1,17 @@
 # caption_frames
 
-Extract and process video frames for caption regions.
+Extract and process video frames with cropping and optional resizing.
 
 ## Overview
 
-This pipeline provides tools for extracting frames from videos with intelligent cropping based on subtitle region analysis, and resizing those frames for processing (e.g., OCR, model training).
+This pipeline provides tools for extracting frames from videos with cropping and optional resizing for downstream processing (e.g., OCR, model training).
 
-Supports both **streaming** (recommended) and **batch** processing modes:
-- **Streaming**: Extract and resize frames in one pass with parallel processing (faster, more efficient)
-- **Batch**: Extract all frames first, then resize separately (simpler workflow, uses more disk)
-
-## Features
-
-- **Streaming Pipeline**: Extract and resize in one pass with parallel processing
-- **Smart Frame Extraction**: FFmpeg cropping based on subtitle_analysis.txt from caption_layout
-- **Frame Resizing**: High-quality LANCZOS resampling to fixed dimensions
-- **Progress Tracking**: Rich progress bars for all operations
-- **Flexible Storage**: Keep both cropped and resized frames for ongoing work
+**Key Features:**
+- Extract frames with FFmpeg-based cropping at specified frame rate
+- Optional integrated resizing with high-quality LANCZOS resampling
+- Parallel processing for efficient throughput
+- Progress tracking with rich progress bars
+- Generic interface - works with any video and crop coordinates
 
 ## Installation
 
@@ -27,199 +22,164 @@ uv pip install -e .
 
 ## Prerequisites
 
-This pipeline requires:
-- `caption_layout` pipeline output: `subtitle_analysis.txt` file
-- Shared packages: `video_utils`, `image_utils`, `caption_models`
 - FFmpeg installed (for frame extraction)
+- Shared packages: `video_utils`, `image_utils`
 
 ## Commands
 
-### extract-and-resize (RECOMMENDED)
+### extract-frames
 
-Extract and resize frames in one streaming pass - combines extraction and resizing for efficiency.
-
-Output directories are automatically created based on parameters:
-- **Cropped**: `{rate}Hz_cropped_frames` (e.g., `10Hz_cropped_frames`)
-- **Resized**: `{rate}Hz_{width}x{height}_frames` (e.g., `10Hz_480x48_frames`)
-
-By default, outputs to the same directory as the video. Use `--output-dir` to specify a different location.
+Extract frames from video with cropping and optional resizing.
 
 ```bash
-caption_frames extract-and-resize <video_path>
+caption_frames extract-frames <video_path> <output_dir> --crop "left,top,right,bottom"
 ```
 
-**Required:**
+**Required Arguments:**
 - `video_path`: Path to video file
+- `output_dir`: Output directory for frames
+- `--crop`, `-c`: Crop bounds as 'left,top,right,bottom' in pixels (e.g., "100,200,700,250")
 
-**Optional:**
-- `--output-dir`, `-o`: Output directory for frame subdirectories (default: same directory as video)
-- `--analysis`, `-a`: Analysis filename in same directory as video (default: `subtitle_analysis.txt`)
-- `--rate-hz`, `-r`: Frame sampling rate in Hz (default: 10.0)
-- `--width`, `-w`: Target width in pixels (default: 480)
-- `--height`: Target height in pixels (default: 48)
-- `--preserve-aspect/--stretch`: Preserve aspect ratio with padding (default: stretch)
-- `--keep-cropped/--delete-cropped`: Keep intermediate cropped frames (default: keep both)
-- `--max-workers`: Parallel resize workers (default: 4)
+**Optional Arguments:**
+- `--rate`, `-r`: Frame sampling rate in Hz (default: 10.0)
+- `--resize-width`: Resize extracted frames to this width (requires --resize-height)
+- `--resize-height`: Resize extracted frames to this height (requires --resize-width)
+- `--preserve-aspect/--stretch`: Preserve aspect ratio when resizing (default: stretch)
 
-**Example:**
+**Examples:**
+
 ```bash
-# Extract and resize to 480x48 at 10Hz
-# Creates: 10Hz_cropped_frames/ and 10Hz_480x48_frames/ next to video
-caption_frames extract-and-resize /path/to/videos/episode.mp4
+# Extract frames only (no resizing)
+caption_frames extract-frames video.mp4 ./frames \
+  --crop "100,200,700,250"
 
-# Custom output directory
-caption_frames extract-and-resize /path/to/videos/episode.mp4 \
-  --output-dir /path/to/frames
+# Extract and resize in one pass
+caption_frames extract-frames video.mp4 ./frames \
+  --crop "100,200,700,250" \
+  --resize-width 480 --resize-height 48
 
-# Custom rate and dimensions
-# Creates: 5Hz_cropped_frames/ and 5Hz_640x64_frames/
-caption_frames extract-and-resize /path/to/videos/show.mkv \
-  --rate-hz 5 \
-  --width 640 --height 64
-
-# Delete intermediate cropped frames to save disk space
-caption_frames extract-and-resize /path/to/videos/episode.mp4 \
-  --delete-cropped
+# Custom frame rate
+caption_frames extract-frames video.mp4 ./frames \
+  --crop "100,200,700,250" \
+  --rate 5
 ```
-
-**Input:**
-- `video_path` - Video file (e.g., `/path/to/videos/episode.mp4`)
-- `subtitle_analysis.txt` - Subtitle region analysis from caption_layout (same directory as video)
 
 **Output:**
-- `{output_dir}/{rate}Hz_cropped_frames/frame_*.jpg` - Cropped frames (intermediate)
-- `{output_dir}/{rate}Hz_{width}x{height}_frames/frame_*.jpg` - Resized frames (final)
-
-Where `{output_dir}` is the same directory as the video by default, or the directory specified with `--output-dir`.
+- Without resizing: `output_dir/frame_*.jpg` - Cropped frames
+- With resizing: `output_dir/cropped/frame_*.jpg` and `output_dir/resized/frame_*.jpg`
 
 **Benefits:**
-- ✅ Faster: Parallel resize during extraction
-- ✅ Efficient: Single progress bar
-- ✅ Flexible: Optional cleanup of intermediate frames
-- ✅ Storage: Keeps both sets for ongoing work by default
+- ✅ Generic interface - works with any video and crop coordinates
+- ✅ Efficient - optional integrated resizing with parallel processing
+- ✅ Flexible - resize is optional
 
 ---
 
-### extract-frames (Batch Mode)
+### resize-frames
 
-Extract frames only - use when you want to inspect cropped frames before resizing.
-
-```bash
-caption_frames extract-frames <episode_dir> --video <video_filename>
-```
-
-**Required:**
-- `episode_dir`: Directory containing video and subtitle_analysis.txt
-- `--video`, `-v`: Video filename in episode directory
-
-**Optional:**
-- `--analysis`, `-a`: Subtitle analysis filename (default: `subtitle_analysis.txt`)
-- `--output-subdir`, `-o`: Output subdirectory name (default: `10Hz_cropped_frames`)
-- `--rate-hz`, `-r`: Frame sampling rate in Hz (default: 10.0)
-
-**Output:**
-- `episode_dir/10Hz_cropped_frames/frame_*.jpg` - Extracted frames cropped to subtitle region
-
----
-
-### resize-frames (Batch Mode)
-
-Resize existing frames - use when you want different sizes from the same cropped frames.
+Batch resize existing frames to fixed dimensions.
 
 ```bash
-caption_frames resize-frames <episode_dir> --output-subdir <output_name>
+caption_frames resize-frames <input_dir> <output_dir> --width <w> --height <h>
 ```
 
-**Required:**
-- `episode_dir`: Episode directory containing frames subdirectory
-- `--output-subdir`, `-o`: Output subdirectory name (e.g., `10Hz_480x48_frames`)
+**Required Arguments:**
+- `input_dir`: Directory containing frames to resize
+- `output_dir`: Output directory for resized frames
+- `--width`, `-w`: Target width in pixels
+- `--height`, `-h`: Target height in pixels
 
-**Optional:**
-- `--input-subdir`, `-i`: Input subdirectory with frames to resize (default: `10Hz_cropped_frames`)
-- `--width`, `-w`: Target width in pixels (default: 480)
-- `--height`, `-h`: Target height in pixels (default: 48)
-- `--preserve-aspect`: Maintain aspect ratio with padding (default: stretch to fill)
+**Optional Arguments:**
+- `--preserve-aspect/--stretch`: Preserve aspect ratio with padding (default: stretch)
+
+**Examples:**
+
+```bash
+# Resize frames with stretching (default)
+caption_frames resize-frames ./cropped ./resized \
+  --width 480 --height 48
+
+# Resize with aspect ratio preservation
+caption_frames resize-frames ./cropped ./resized \
+  -w 480 -h 48 --preserve-aspect
+```
 
 **Output:**
-- `episode_dir/10Hz_480x48_frames/frame_*.jpg` - Resized frames
+- `output_dir/frame_*.jpg` - Resized frames
 
-## Typical Workflow
+## Typical Workflows
 
-This pipeline fits into the broader caption extraction workflow:
+### Workflow 1: Extract Only
 
-### Streaming Workflow (Recommended)
+Use when you only need cropped frames (e.g., for OCR at original resolution).
 
-1. **caption_layout analyze** - Analyze video to find subtitle region
-   - Output: `subtitle_analysis.txt`
+```bash
+# 1. Extract frames with cropping
+caption_frames extract-frames video.mp4 ./frames \
+  --crop "100,200,700,250" \
+  --rate 10
 
-2. **caption_frames extract-and-resize** - Extract and resize in one pass
-   - Input: video file, `subtitle_analysis.txt`
-   - Output: `10Hz_cropped_frames/`, `10Hz_480x48_frames/`
+# 2. Process frames (e.g., OCR)
+ocr_utils run ./frames
+```
 
-3. **ocr_utils run** - Run OCR on frames
-   - Input: `10Hz_cropped_frames/` or `10Hz_480x48_frames/`
-   - Output: `OCR.jsonl`
+### Workflow 2: Extract and Resize
 
-### Batch Workflow (Alternative)
+Use when you need resized frames (e.g., for fixed-size model input).
 
-1. **caption_layout analyze** - Analyze video to find subtitle region
-   - Output: `subtitle_analysis.txt`
+```bash
+# 1. Extract and resize in one pass
+caption_frames extract-frames video.mp4 ./frames \
+  --crop "100,200,700,250" \
+  --resize-width 480 --resize-height 48
 
-2. **caption_frames extract-frames** - Extract frames cropped to subtitle region
-   - Input: video file, `subtitle_analysis.txt`
-   - Output: `10Hz_cropped_frames/`
+# 2. Process resized frames
+ocr_utils run ./frames/resized
+```
 
-3. **caption_frames resize-frames** - Resize to fixed dimensions (if needed)
-   - Input: `10Hz_cropped_frames/`
-   - Output: `10Hz_480x48_frames/`
+### Workflow 3: Batch Resize Multiple Sizes
 
-4. **ocr_utils run** - Run OCR on frames
-   - Input: frame directory
-   - Output: `OCR.jsonl`
+Use when you need the same frames at different resolutions.
+
+```bash
+# 1. Extract frames once
+caption_frames extract-frames video.mp4 ./frames \
+  --crop "100,200,700,250"
+
+# 2. Resize to multiple sizes
+caption_frames resize-frames ./frames ./frames_480x48 -w 480 -h 48
+caption_frames resize-frames ./frames ./frames_640x64 -w 640 -h 64
+caption_frames resize-frames ./frames ./frames_320x32 -w 320 -h 32
+```
 
 ## Python API
 
-### Streaming API (Recommended)
-
 ```python
 from pathlib import Path
-from caption_frames import stream_extract_and_resize
+from caption_frames import extract_frames, resize_frames
 
-# Extract and resize in one streaming pass
-num_frames = stream_extract_and_resize(
-    video_path=Path("/path/to/episode/video.mp4"),
-    analysis_path=Path("/path/to/episode/subtitle_analysis.txt"),
-    cropped_dir=Path("/path/to/episode/10Hz_cropped_frames"),
-    resized_dir=Path("/path/to/episode/10Hz_480x48_frames"),
+# Extract frames with cropping (no resizing)
+output_dir, num_frames = extract_frames(
+    video_path=Path("video.mp4"),
+    output_dir=Path("./frames"),
+    crop_box=(100, 200, 600, 50),  # (x, y, width, height)
     rate_hz=10.0,
-    target_width=480,
-    target_height=48,
+)
+
+# Extract and resize in one pass
+output_dir, num_frames = extract_frames(
+    video_path=Path("video.mp4"),
+    output_dir=Path("./frames"),
+    crop_box=(100, 200, 600, 50),
+    rate_hz=10.0,
+    resize_to=(480, 48),  # (width, height)
     preserve_aspect=False,
-    keep_cropped=True,  # Keep both directories
-    max_workers=4,
-)
-```
-
-### Batch API (Alternative)
-
-```python
-from pathlib import Path
-from caption_frames import extract_frames_from_episode, resize_frames_in_directory
-
-# Extract frames with cropping
-output_dir, num_frames = extract_frames_from_episode(
-    episode_dir=Path("/path/to/episode"),
-    video_filename="episode.mp4",
-    analysis_filename="subtitle_analysis.txt",
-    output_subdir="10Hz_cropped_frames",
-    rate_hz=10.0,
 )
 
-# Resize frames separately
-output_dir, num_frames = resize_frames_in_directory(
-    episode_dir=Path("/path/to/episode"),
-    input_subdir="10Hz_cropped_frames",
-    output_subdir="10Hz_480x48_frames",
+# Batch resize existing frames
+output_dir, num_frames = resize_frames(
+    input_dir=Path("./frames"),
+    output_dir=Path("./frames_resized"),
     target_width=480,
     target_height=48,
     preserve_aspect=False,
@@ -228,28 +188,13 @@ output_dir, num_frames = resize_frames_in_directory(
 
 ## Technical Details
 
-### Streaming Pipeline
-
-The `extract-and-resize` command uses an efficient streaming architecture:
-
-1. **FFmpeg Background Process**: Runs asynchronously extracting frames with crop filter
-2. **Frame Monitor**: Polls for new frames as they're written to disk
-3. **Worker Pool**: ThreadPoolExecutor (default: 4 workers) processes frames in parallel
-4. **Resize Pipeline**: Each worker resizes a frame using high-quality LANCZOS resampling
-5. **Optional Cleanup**: Deletes intermediate cropped frames after resizing (if requested)
-
-**Benefits**:
-- Lower peak disk usage (frames processed as extracted, not all at once)
-- Faster overall (parallelized resize during extraction)
-- Progress tracking for entire pipeline
-
 ### Frame Extraction
 
-- Uses FFmpeg's crop filter for efficient cropping during extraction (not post-processing)
-- Converts fractional crop bounds from subtitle_analysis.txt to pixel coordinates
-- Naming pattern: `frame_0000000001.jpg`, `frame_0000000002.jpg`, etc.
+- Uses FFmpeg's crop filter for efficient cropping during extraction
+- Crop coordinates are in pixel coordinates: `(x, y, width, height)`
+- Frame naming pattern: `frame_0000000001.jpg`, `frame_0000000002.jpg`, etc.
 - JPEG quality: 2 (FFmpeg scale, high quality)
-- Async execution with `.run_async()` for streaming
+- Streaming extraction with progress monitoring
 
 ### Frame Resizing
 
@@ -259,10 +204,36 @@ The `extract-and-resize` command uses an efficient streaming architecture:
 - Parallel processing with ThreadPoolExecutor
 - Progress tracking via callback
 
+### Integrated Extract + Resize
+
+When both extraction and resizing are requested:
+1. **FFmpeg Process**: Runs asynchronously extracting cropped frames
+2. **Frame Monitor**: Polls for new frames as they're written
+3. **Worker Pool**: ThreadPoolExecutor processes frames in parallel
+4. **Resize Pipeline**: Each worker resizes using LANCZOS resampling
+5. **Output**: Both cropped and resized frames preserved
+
+**Benefits:**
+- Parallel processing during extraction
+- Progress tracking for entire pipeline
+- Keeps both versions for flexibility
+
+## Determining Crop Coordinates
+
+Crop coordinates must be provided as pixel coordinates. To determine them:
+
+1. **Manual inspection**: Use video player or image viewer to identify subtitle region
+2. **caption_layout pipeline**: Analyzes videos to automatically detect subtitle regions
+3. **FFplay preview**: Test crop coordinates before extraction:
+   ```bash
+   ffplay -i video.mp4 -vf "crop=w:h:x:y"
+   ```
+
+The `caption_layout` pipeline is recommended for automated subtitle region detection.
+
 ## See Also
 
-- `caption_layout` - Analyze subtitle region layout (prerequisite)
-- `ocr_utils` - Run OCR on extracted frames (next step)
+- `caption_layout` - Automated subtitle region detection
+- `ocr_utils` - OCR processing for extracted frames
 - `video_utils` - Shared video processing utilities
 - `image_utils` - Shared image processing utilities
-- `caption_models` - Data models for caption processing

@@ -68,7 +68,7 @@ function getAnnotationBorderColor(annotation: Annotation): string {
 
 export default function BoundaryWorkflow() {
   // State
-  const [videoId, setVideoId] = useState('a_bite_of_china/3')
+  const [videoId, setVideoId] = useState('')
   const [currentFrameIndex, setCurrentFrameIndex] = useState(0)
   const [totalFrames, setTotalFrames] = useState(0)
   const [frames, setFrames] = useState<Map<number, Frame>>(new Map())

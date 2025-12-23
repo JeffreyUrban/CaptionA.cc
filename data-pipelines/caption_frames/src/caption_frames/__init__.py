@@ -1,7 +1,6 @@
 """caption_frames - Extract and process video frames for caption regions."""
 
-from .caption_frames import extract_frames_from_episode, resize_frames_in_directory
-from .frame_extraction import stream_extract_and_resize, stream_extract_frames
+from .caption_frames import extract_frames, resize_frames
 
 # Version is managed by hatch-vcs and set during build
 try:
@@ -11,9 +10,7 @@ except ImportError:
     __version__ = "0.0.0.dev0+unknown"
 
 __all__ = [
-    "extract_frames_from_episode",
-    "resize_frames_in_directory",
-    "stream_extract_and_resize",
-    "stream_extract_frames",
+    "extract_frames",
+    "resize_frames",
     "__version__",
 ]

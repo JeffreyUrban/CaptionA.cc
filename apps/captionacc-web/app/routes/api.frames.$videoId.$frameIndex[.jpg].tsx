@@ -17,7 +17,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
   const paddedIndex = frameIndex.padStart(10, '0')
 
   // Construct path to frame image
-  // Format: /local/data/{show}/{episode}/caption_frames/cropped/frame_{index}.jpg
+  // Format: /local/data/{content_name}/{video_id}/caption_frames/cropped/frame_{index}.jpg
   const framePath = resolve(
     process.cwd(),
     '..',

@@ -10,11 +10,10 @@ Comprehensive specification of all database models for the CaptionA.cc capture c
 
 **Import models:**
 ```python
-from captionacc_db.models import Show, Episode, Content, Caption, User
+from captionacc_db.models import Video, Caption, User
 ```
 
 **Model organization:** Models are in `packages/data_access/src/captionacc_db/models/`:
-- `media.py` - Show, Episode, Content
 - `captions.py` - Caption, CaptionCharacter
 - `clips.py` - Clip transcription and alignment models
 - `users.py` - User, Session, Subscription
@@ -25,10 +24,8 @@ from captionacc_db.models import Show, Episode, Content, Caption, User
 ## Schema Organization
 
 ### Content Models
-Foundation models for TV show content:
-- `Show` - TV show metadata
-- `Episode` - Episode metadata with video information
-- `Content` - Production caption/segment data 
+Foundation models for video content:
+- `Video` - Video metadata with playback information
 
 ### User Models
 User authentication and access:
@@ -48,60 +45,18 @@ ML infrastructure and quality control:
 
 ## Core Content Models
 
-### Show
-**Purpose**: TV show catalog metadata
-
-**Key Fields**:
-- `show_id` (PK, string): URL-friendly identifier (e.g., 'a_bite_of_china')
-- `display_name`: Human-readable name
-- `primary_language`: Primary language (e.g., 'Mandarin Chinese')
-- `other_languages`: JSON list of additional languages (e.g., \['English', 'cantonese'\])
-- `country`: Primary country/region of production
-
-**Relationships**:
-- Has many `Episode`
-- Has many `Content`
-
----
-
-### Episode
-**Purpose**: Episode metadata with YouTube integration
+### Video
+**Purpose**: Video metadata
 
 **Key Fields**:
 - `id` (PK, int): Auto-increment primary key
-- `show_id` (FK): Parent show
-- `episode_id` (string): Episode identifier within show, URL-friendly (e.g., '20220101')
-- `youtube_video_id`: YouTube video ID for playback
+- `video_id` (string): Video identifier, URL-friendly
 - Caption crop coordinates: `caption_crop_left`, `caption_crop_right`, `caption_crop_top`, `caption_crop_bottom`
 - Video dimensions: `video_width`, `video_height`
-- `status`: 'active' or 'inactive' for use in production.
-  - TODO: Perhaps this should accommodate 'staging', etc for review before advancing to 'prod'
-
-**Relationships**:
-- Belongs to `Show`
-- Has many `Content`
 
 **Design Notes**:
 - Caption crop coords define burned-in subtitle region for hiding/showing
 - Video dimensions required for crop ratio calculations
-
----
-
-### Content
-**Purpose**: Production-ready caption/segment data 
-
-**Key Fields**:
-- `id` (PK, int)
-- `episode_id` (FK), `show_id` (FK)
-- Timing: `start_time`, `end_time` (float, seconds)
-- Content: `text`
-- ML metadata: `ml_confidence`, `annotation_status`
-
-**Design Notes**:
-- Captions are never nested or overlapping 
-- Clips may be nested or overlapping
-- Word boundaries may not align with caption boundaries
-- ML confidence tracked for quality control
 
 ---
 
@@ -147,14 +102,14 @@ ML infrastructure and quality control:
 
 **Key Fields**:
 - `id` (PK, int)
-- `episode_id` (FK), `show_id` (FK)
+- `video_id` (FK), `show_id` (FK)
 - Timing: `start_time`, `end_time`
 - OCR: `text`
 - See actual annotations for remaining fields 
 - ML (consider adding): `ml_model_version`, `detection_confidence`, `pipeline_metadata` (JSON)
 
 **Indexes**:
-- `(episode_id, start_time)`
+- `(video_id, start_time)`
 - `annotation_status`
 
 **Design Rationale**:
@@ -205,9 +160,8 @@ ML infrastructure and quality control:
 ## Key Design Principles
 
 ### 1. Language-Agnostic Design
-- `romanization` (not "pinyin") in Caption, VocabularyItem
-- `language_code` in VocabularyItem
-- No Chinese-specific fields: Future-proof for Japanese, Korean, Spanish, etc.
+- `romanization` (not "pinyin") in Caption
+- Future-proof for Japanese, Korean, Spanish, etc.
 
 ---
 
@@ -216,7 +170,7 @@ ML infrastructure and quality control:
 ### Current: SQLite
 - Suitable for development and initial production
 - Handles 300-900K caption records efficiently
-- Most queries scoped to single episode (~2K rows)
+- Queries scoped to single video (~2K rows)
 
 ### Future: PostgreSQL
 - Migrate when:
@@ -224,8 +178,3 @@ ML infrastructure and quality control:
   - Need better full-text search
   - Want advanced analytics queries
   - Need ARRAY type support (currently using JSON)
-
-### Vector Store (Future)
-- For embedding-based similarity search
-- Options: Pinecone, Weaviate, QDrant, PGVector
-- Would optimize concept similarity queries

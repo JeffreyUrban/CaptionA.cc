@@ -6,62 +6,20 @@ build-backend = "hatchling.build"
 name = "caption_layout"
 # Version is automatically determined from git tags via hatch-vcs
 dynamic = ["version"]
-description = "A brief description of what your CLI tool does"
-readme = "README.md"
-authors = [
-    {name = "Your Name"}
-]
-requires-python = ">=3.14"
-keywords = [
-    "video",
-    "captions",
-    "subtitles",
-    "ocr",
-    "layout-analysis",
-]
-classifiers = [
-    "Development Status :: 3 - Alpha",
-    "Intended Audience :: Developers",
-    "Topic :: Multimedia :: Video",
-    "Topic :: Text Processing",
-    "Topic :: Utilities",
-    "Environment :: Console",
-    "Operating System :: MacOS",
-    "License :: OSI Approved :: MIT License",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.14",
-]
+description = "Analyze the layout characteristics of burned-in captions in video"
 dependencies = [
     "typer>=0.9.0",
     "rich>=13.0.0",
     "video_utils",
     "ocr_utils",
     "caption_models",
+    "opencv-python>=4.10.0",
 ]
 
-[project.optional-dependencies]
-dev = [
-    "pytest>=7.4.0",
-    "pytest-cov>=4.1.0",
-    "ruff>=0.1.9",
-    "pyright>=1.1.0",
-    "pre-commit>=3.6.0",
-]
-docs = [
-    "mkdocs-material>=9.5.0",
-    "mkdocstrings[python]>=0.25.0",
-    "sybil>=6.0.0",
-    "pymdown-extensions>=10.0.0",
-    "termynal>=0.12.0",
-]
 
 [project.scripts]
 caption_layout = "caption_layout.cli:app"
 
-[project.urls]
-Homepage = "https://github.com/yourusername/caption-layout"
-Repository = "https://github.com/yourusername/caption-layout"
-Issues = "https://github.com/yourusername/caption-layout/issues"
 
 [tool.hatch.version]
 source = "vcs"
@@ -85,12 +43,12 @@ markers = [
 ]
 
 [tool.black]
-line-length = 100
-target-version = ["py39"]
+line-length = 120
+target-version = ["py314"]
 
 [tool.ruff]
-line-length = 100
-target-version = "py39"
+line-length = 120
+target-version = "py314"
 
 [tool.ruff.lint]
 select = [

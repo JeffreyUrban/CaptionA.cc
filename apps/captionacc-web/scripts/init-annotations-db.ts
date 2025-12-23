@@ -3,7 +3,7 @@
  * Initialize annotations database for a video
  *
  * Usage: node scripts/init-annotations-db.ts <video_path>
- * Example: node scripts/init-annotations-db.ts a_bite_of_china/3
+ * Example: node scripts/init-annotations-db.ts content_name/video_id
  */
 
 import Database from 'better-sqlite3'
@@ -15,7 +15,7 @@ const videoPath = process.argv[2]
 
 if (!videoPath) {
   console.error('Usage: node scripts/init-annotations-db.ts <video_path>')
-  console.error('Example: node scripts/init-annotations-db.ts a_bite_of_china/3')
+  console.error('Example: node scripts/init-annotations-db.ts show_name/video_id')
   process.exit(1)
 }
 
