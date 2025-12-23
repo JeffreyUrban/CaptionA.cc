@@ -1,5 +1,5 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="pytest in /Users/jurban/PycharmProjects/CaptionA.cc/docs" type="tests" factoryName="py.test" nameIsGenerated="true">
+  <configuration default="false" name="Python tests in caption_frames docs" type="tests" factoryName="py.test" nameIsGenerated="true">
     <module name="caption_frames" />
     <option name="ENV_FILES" value="" />
     <option name="INTERPRETER_OPTIONS" value="" />
