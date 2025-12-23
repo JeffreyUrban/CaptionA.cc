@@ -653,17 +653,25 @@ export default function BoundaryWorkflow() {
 
   // Make current frame's annotation active
   const activateCurrentFrameAnnotation = useCallback(async () => {
-    const frameAnnotations = getAnnotationsForFrame(currentFrameIndex)
-    if (frameAnnotations.length > 0) {
-      const annotation = frameAnnotations[0]
-      if (annotation) {
+    try {
+      const encodedVideoId = encodeURIComponent(videoId)
+      // Query database directly for annotations at current frame
+      const response = await fetch(
+        `/api/annotations/${encodedVideoId}?start=${currentFrameIndex}&end=${currentFrameIndex}`
+      )
+      const data = await response.json()
+
+      if (data.annotations && data.annotations.length > 0) {
+        const annotation = data.annotations[0]
         setActiveAnnotation(annotation)
         setMarkedStart(annotation.start_frame_index)
         setMarkedEnd(annotation.end_frame_index)
         await checkNavigationAvailability(annotation.id)
       }
+    } catch (error) {
+      console.error('Failed to activate current frame annotation:', error)
     }
-  }, [currentFrameIndex, getAnnotationsForFrame, checkNavigationAvailability])
+  }, [currentFrameIndex, videoId, checkNavigationAvailability])
 
   // Check if frame is in marked range (active annotation being edited)
   const isInMarkedRange = useCallback((frameIndex: number) => {
