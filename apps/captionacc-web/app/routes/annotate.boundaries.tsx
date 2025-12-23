@@ -638,6 +638,20 @@ export default function BoundaryWorkflow() {
     )
   }, [annotations])
 
+  // Make current frame's annotation active
+  const activateCurrentFrameAnnotation = useCallback(async () => {
+    const frameAnnotations = getAnnotationsForFrame(currentFrameIndex)
+    if (frameAnnotations.length > 0) {
+      const annotation = frameAnnotations[0]
+      if (annotation) {
+        setActiveAnnotation(annotation)
+        setMarkedStart(annotation.start_frame_index)
+        setMarkedEnd(annotation.end_frame_index)
+        await checkNavigationAvailability(annotation.id)
+      }
+    }
+  }, [currentFrameIndex, getAnnotationsForFrame, checkNavigationAvailability])
+
   // Check if frame is in marked range (active annotation being edited)
   const isInMarkedRange = useCallback((frameIndex: number) => {
     if (markedStart === null || markedEnd === null) return false
@@ -861,6 +875,14 @@ export default function BoundaryWorkflow() {
                   Jump
                 </button>
               </div>
+
+              {/* Activate current frame's annotation */}
+              <button
+                onClick={activateCurrentFrameAnnotation}
+                className="mt-2 w-full rounded-md border border-gray-300 px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+              >
+                Activate Current Frame
+              </button>
             </div>
 
             {/* Frame spacing */}
