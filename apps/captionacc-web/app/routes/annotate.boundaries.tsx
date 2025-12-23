@@ -89,21 +89,31 @@ export default function BoundaryWorkflow() {
 
   // Computed: visible frame indices based on window height
   const visibleFrameIndices = useMemo(() => {
-    // Calculate how many frames can fit based on window height
-    // Assume each frame is ~100px tall on average
-    const availableHeight = windowHeight - 200 // Account for nav, controls, etc.
-    const frameHeight = 100
-    const maxFrames = Math.floor(availableHeight / frameHeight)
+    // Calculate available height: total window height minus navbar (64px) and padding
+    const navbarHeight = 64
+    const availableHeight = windowHeight - navbarHeight
 
-    const offsets = FRAME_OFFSETS[frameSpacing]
+    // Estimate frame height: ~80-120px depending on aspect ratio
+    // Using 90px as conservative estimate to ensure we fill the height
+    const estimatedFrameHeight = 90
 
-    // If we have room for more frames, extend the offsets
-    let adjustedOffsets = [...offsets]
-    if (maxFrames > offsets.length) {
-      const maxOffset = Math.max(...offsets.map(Math.abs))
-      const additionalFrames = Math.floor((maxFrames - offsets.length) / 2)
-      for (let i = 1; i <= additionalFrames; i++) {
-        const offset = maxOffset + i
+    // Calculate how many frames we need to fill the height
+    const framesToFill = Math.ceil(availableHeight / estimatedFrameHeight)
+
+    // Get base offsets for the selected spacing
+    const baseOffsets = FRAME_OFFSETS[frameSpacing]
+
+    // Extend offsets to fill the available height
+    let adjustedOffsets = [...baseOffsets]
+    const maxBaseOffset = Math.max(...baseOffsets.map(Math.abs))
+
+    // Add more frames until we have enough to fill the height
+    if (framesToFill > baseOffsets.length) {
+      const additionalFramesNeeded = framesToFill - baseOffsets.length
+      const framesPerSide = Math.ceil(additionalFramesNeeded / 2)
+
+      for (let i = 1; i <= framesPerSide; i++) {
+        const offset = maxBaseOffset + i
         adjustedOffsets.push(-offset)
         adjustedOffsets.push(offset)
       }
@@ -274,7 +284,7 @@ export default function BoundaryWorkflow() {
   // Show loading state while metadata loads
   if (isLoadingMetadata) {
     return (
-      <AppLayout>
+      <AppLayout fullScreen>
         <div className="flex h-[calc(100vh-4rem)] items-center justify-center">
           <div className="text-center">
             <div className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -290,13 +300,13 @@ export default function BoundaryWorkflow() {
   }
 
   return (
-    <AppLayout>
-      <div className="flex h-[calc(100vh-4rem)] flex-col overflow-hidden">
+    <AppLayout fullScreen>
+      <div className="flex h-[calc(100vh-4rem)] max-h-[calc(100vh-4rem)] flex-col overflow-hidden px-4 py-4">
         {/* Main content */}
-        <div className="flex flex-1 gap-6 overflow-hidden">
+        <div className="flex h-full flex-1 gap-6 overflow-hidden">
           {/* Left: Frame stack (2/3 width) */}
-          <div className="frame-stack-container flex w-2/3 flex-col overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
-            <div className="flex flex-1 flex-col gap-1 overflow-hidden p-4">
+          <div className="frame-stack-container flex h-full w-2/3 flex-col overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
+            <div className="flex h-full flex-1 flex-col justify-center gap-1 overflow-hidden p-4">
                 {visibleFrameIndices.map(frameIndex => {
                   const frame = frames.get(frameIndex)
                   const isCurrent = frameIndex === currentFrameIndex
@@ -364,7 +374,7 @@ export default function BoundaryWorkflow() {
           </div>
 
           {/* Right: Controls (1/3 width) */}
-          <div className="flex w-1/3 flex-col gap-4 overflow-y-auto rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
+          <div className="flex h-full w-1/3 flex-col gap-4 overflow-y-auto rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
             {/* Mode toggle */}
             <div className="flex gap-2 rounded-md border border-gray-200 bg-gray-50 p-1 dark:border-gray-700 dark:bg-gray-950">
               <button className="flex-1 rounded py-2 text-sm font-semibold bg-teal-600 text-white">

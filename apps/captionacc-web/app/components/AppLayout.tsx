@@ -118,13 +118,14 @@ function ThemeSwitcher() {
 
 interface AppLayoutProps {
   children: React.ReactNode
+  fullScreen?: boolean
 }
 
-export function AppLayout({ children }: AppLayoutProps) {
+export function AppLayout({ children, fullScreen = false }: AppLayoutProps) {
   const location = useLocation()
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+    <div className={`min-h-screen bg-gray-50 dark:bg-gray-950 ${fullScreen ? 'h-screen overflow-hidden' : ''}`}>
       {/* Top Navigation Bar */}
       <nav className="sticky top-0 z-40 border-b border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -182,8 +183,8 @@ export function AppLayout({ children }: AppLayoutProps) {
       </nav>
 
       {/* Main Content */}
-      <main className="py-8">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      <main className={fullScreen ? '' : 'py-8'}>
+        <div className={fullScreen ? '' : 'mx-auto max-w-7xl px-4 sm:px-6 lg:px-8'}>
           {children}
         </div>
       </main>
