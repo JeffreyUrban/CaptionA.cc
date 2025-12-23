@@ -90,6 +90,7 @@ export default function BoundaryWorkflow() {
   const [frameSpacing, setFrameSpacing] = useState<FrameSpacing>('linear')
   const [windowHeight, setWindowHeight] = useState(typeof window !== 'undefined' ? window.innerHeight : 1000)
   const [jumpToFrameInput, setJumpToFrameInput] = useState('')
+  const [showHelpModal, setShowHelpModal] = useState(false)
 
   // Drag-to-scroll state (using refs for synchronous access)
   const isDraggingRef = useRef(false)
@@ -672,128 +673,139 @@ export default function BoundaryWorkflow() {
             onMouseDown={handleDragStart}
           >
             <div className="flex h-full flex-1 flex-col justify-center gap-1 overflow-hidden p-4">
-                {visibleFrameIndices.map((frameIndex, visibleIndex) => {
-                  const frame = frames.get(frameIndex)
-                  const isCurrent = frameIndex === currentFrameIndex
-                  const opacity = getOpacity(frameIndex)
-                  const frameAnnotations = getAnnotationsForFrame(frameIndex)
+              {visibleFrameIndices.map((frameIndex, visibleIndex) => {
+                const frame = frames.get(frameIndex)
+                const isCurrent = frameIndex === currentFrameIndex
+                const opacity = getOpacity(frameIndex)
+                const frameAnnotations = getAnnotationsForFrame(frameIndex)
 
-                  // Determine if this is part of the active annotation being edited
-                  const isMarkedStart = frameIndex === markedStart
-                  const isMarkedEnd = frameIndex === markedEnd
-                  const inRange = isInMarkedRange(frameIndex)
+                // Determine if this is part of the active annotation being edited
+                const isMarkedStart = frameIndex === markedStart
+                const isMarkedEnd = frameIndex === markedEnd
+                const inRange = isInMarkedRange(frameIndex)
 
-                  // Find the primary annotation to display (prefer active annotation)
-                  const primaryAnnotation = frameAnnotations.find(
-                    ann => activeAnnotation && ann.id === activeAnnotation.id
+                // Find the primary annotation to display (prefer active annotation)
+                const primaryAnnotation =
+                  frameAnnotations.find(
+                    (ann) => activeAnnotation && ann.id === activeAnnotation.id
                   ) || frameAnnotations[0]
 
-                  // Determine border classes
-                  let borderClasses = ''
-                  let borderColor = ''
+                // Determine border classes
+                let borderClasses = ''
+                let borderColor = ''
 
-                  if (primaryAnnotation) {
-                    borderColor = getAnnotationBorderColor(primaryAnnotation)
+                if (primaryAnnotation) {
+                  borderColor = getAnnotationBorderColor(primaryAnnotation)
 
-                    // Check if this frame is at the start or end of the annotation
-                    const isAnnotationStart = frameIndex === primaryAnnotation.start_frame_index
-                    const isAnnotationEnd = frameIndex === primaryAnnotation.end_frame_index
+                  // Check if this frame is at the start or end of the annotation
+                  const isAnnotationStart =
+                    frameIndex === primaryAnnotation.start_frame_index
+                  const isAnnotationEnd =
+                    frameIndex === primaryAnnotation.end_frame_index
 
-                    if (borderColor) {
-                      // Create continuous border for the annotation
-                      borderClasses = `border-l-4 border-r-4 ${borderColor}`
-                      if (isAnnotationStart) {
-                        borderClasses += ' border-t-4 rounded-t'
-                      }
-                      if (isAnnotationEnd) {
-                        borderClasses += ' border-b-4 rounded-b'
-                      }
+                  if (borderColor) {
+                    // Create continuous border for the annotation
+                    borderClasses = `border-l-4 border-r-4 ${borderColor}`
+                    if (isAnnotationStart) {
+                      borderClasses += ' border-t-4 rounded-t'
+                    }
+                    if (isAnnotationEnd) {
+                      borderClasses += ' border-b-4 rounded-b'
                     }
                   }
+                }
 
-                  // Orange border for marked range (what will be saved)
-                  let orangeBorderClasses = ''
-                  if (markedStart !== null && markedEnd !== null && frameIndex >= markedStart && frameIndex <= markedEnd) {
-                    // Create continuous orange border around the marked range
-                    orangeBorderClasses = 'border-l-4 border-r-4 border-orange-500'
-                    if (frameIndex === markedStart) {
-                      orangeBorderClasses += ' border-t-4 rounded-t'
-                    }
-                    if (frameIndex === markedEnd) {
-                      orangeBorderClasses += ' border-b-4 rounded-b'
-                    }
+                // Orange border for marked range (what will be saved)
+                let orangeBorderClasses = ''
+                if (
+                  markedStart !== null &&
+                  markedEnd !== null &&
+                  frameIndex >= markedStart &&
+                  frameIndex <= markedEnd
+                ) {
+                  // Create continuous orange border around the marked range
+                  orangeBorderClasses =
+                    'border-l-4 border-r-4 border-orange-500'
+                  if (frameIndex === markedStart) {
+                    orangeBorderClasses += ' border-t-4 rounded-t'
                   }
+                  if (frameIndex === markedEnd) {
+                    orangeBorderClasses += ' border-b-4 rounded-b'
+                  }
+                }
 
-                  return (
-                    <div
-                      key={frameIndex}
-                      className="relative"
-                    >
-                      {/* Orange border overlay (not affected by opacity) */}
-                      {orangeBorderClasses && (
-                        <div className={`absolute inset-0 pointer-events-none z-10 ${orangeBorderClasses}`} style={{ opacity: 1 }} />
-                      )}
-
-                      {/* Current frame ring overlay (on top of everything) */}
-                      {isCurrent && (
-                        <div className="absolute inset-0 pointer-events-none z-20 ring-4 ring-teal-500 rounded" />
-                      )}
-
-                      {/* Frame container */}
+                return (
+                  <div key={frameIndex} className="relative">
+                    {/* Orange border overlay (not affected by opacity) */}
+                    {orangeBorderClasses && (
                       <div
-                        onClick={() => {
-                          setMarkedStart(frameIndex)
-                          // Reset end if it's before the new start
-                          if (markedEnd !== null && frameIndex > markedEnd) {
-                            setMarkedEnd(null)
-                          }
-                        }}
-                        onContextMenu={(e) => {
-                          e.preventDefault()
-                          setMarkedEnd(frameIndex)
-                          // Reset start if it's after the new end
-                          if (markedStart !== null && frameIndex < markedStart) {
-                            setMarkedStart(null)
-                          }
-                        }}
-                        style={{ opacity }}
-                        className={`relative overflow-hidden cursor-pointer ${borderClasses}`}
-                      >
-                        {/* Frame image */}
-                        {frame ? (
-                          <img
-                            src={frame.image_url}
-                            alt={`Frame ${frameIndex}`}
-                            className="w-full"
-                            draggable={false}
-                            onError={(e) => {
-                              // Fallback for missing images
-                              const target = e.target as HTMLImageElement
-                              target.style.display = 'none'
-                              target.parentElement!.innerHTML += `
+                        className={`absolute inset-0 pointer-events-none z-10 ${orangeBorderClasses}`}
+                        style={{ opacity: 1 }}
+                      />
+                    )}
+
+                    {/* Current frame ring overlay (on top of everything) */}
+                    {isCurrent && (
+                      <div className="absolute inset-0 pointer-events-none z-20 ring-4 ring-teal-500 rounded" />
+                    )}
+
+                    {/* Frame container */}
+                    <div
+                      onClick={() => {
+                        setMarkedStart(frameIndex)
+                        // Reset end if it's before the new start
+                        if (markedEnd !== null && frameIndex > markedEnd) {
+                          setMarkedEnd(null)
+                        }
+                      }}
+                      onContextMenu={(e) => {
+                        e.preventDefault()
+                        setMarkedEnd(frameIndex)
+                        // Reset start if it's after the new end
+                        if (markedStart !== null && frameIndex < markedStart) {
+                          setMarkedStart(null)
+                        }
+                      }}
+                      style={{ opacity }}
+                      className={`relative overflow-hidden cursor-pointer ${borderClasses}`}
+                    >
+                      {/* Frame image */}
+                      {frame ? (
+                        <img
+                          src={frame.image_url}
+                          alt={`Frame ${frameIndex}`}
+                          className="w-full"
+                          draggable={false}
+                          onError={(e) => {
+                            // Fallback for missing images
+                            const target = e.target as HTMLImageElement
+                            target.style.display = 'none'
+                            target.parentElement!.innerHTML += `
                                 <div class="flex h-24 items-center justify-center bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
                                   Frame ${frameIndex}
                                 </div>
                               `
-                            }}
-                          />
-                        ) : (
-                          <div className="flex h-24 items-center justify-center bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
-                            Loading frame {frameIndex}...
-                          </div>
-                        )}
-                      </div>
+                          }}
+                        />
+                      ) : (
+                        <div className="flex h-24 items-center justify-center bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
+                          Loading frame {frameIndex}...
+                        </div>
+                      )}
+                    </div>
 
-                      {/* Border connector to next frame in marked range */}
-                      {orangeBorderClasses && frameIndex !== markedEnd && visibleIndex < visibleFrameIndices.length - 1 && (
+                    {/* Border connector to next frame in marked range */}
+                    {orangeBorderClasses &&
+                      frameIndex !== markedEnd &&
+                      visibleIndex < visibleFrameIndices.length - 1 && (
                         <div
                           className="absolute left-0 right-0 border-l-4 border-r-4 border-orange-500 pointer-events-none"
                           style={{ top: '100%', height: '0.5rem', opacity: 1 }}
                         />
                       )}
-                    </div>
-                  )
-                })}
+                  </div>
+                )
+              })}
             </div>
           </div>
 
@@ -811,13 +823,20 @@ export default function BoundaryWorkflow() {
 
             {/* Video info */}
             <div>
-              <div className="text-sm font-semibold text-gray-500 dark:text-gray-400">Video</div>
-              <div className="text-lg font-bold text-gray-900 dark:text-white">{videoId}</div>
+              <div className="text-sm font-semibold text-gray-500 dark:text-gray-400">
+                Video
+              </div>
+              <div className="text-lg font-bold text-gray-900 dark:text-white">
+                {videoId}
+              </div>
               <div className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                Frame: {currentFrameIndex.toLocaleString()} / {totalFrames.toLocaleString()}
+                Frame: {currentFrameIndex.toLocaleString()} /{' '}
+                {totalFrames.toLocaleString()}
               </div>
               <div className="mt-1 text-xs text-gray-500 dark:text-gray-500">
-                Progress: {workflowProgress.toFixed(2)}% ({completedFrames.toLocaleString()} / {totalFrames.toLocaleString()} completed)
+                Progress: {workflowProgress.toFixed(2)}% (
+                {completedFrames.toLocaleString()} /{' '}
+                {totalFrames.toLocaleString()} completed)
               </div>
 
               {/* Jump to frame */}
@@ -825,8 +844,8 @@ export default function BoundaryWorkflow() {
                 <input
                   type="number"
                   value={jumpToFrameInput}
-                  onChange={e => setJumpToFrameInput(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && jumpToFrame()}
+                  onChange={(e) => setJumpToFrameInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && jumpToFrame()}
                   placeholder="Frame #"
                   className="flex-1 rounded-md border border-gray-300 px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                 />
@@ -851,7 +870,9 @@ export default function BoundaryWorkflow() {
               </label>
               <select
                 value={frameSpacing}
-                onChange={e => setFrameSpacing(e.target.value as FrameSpacing)}
+                onChange={(e) =>
+                  setFrameSpacing(e.target.value as FrameSpacing)
+                }
                 className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
               >
                 <option value="linear">Linear (1,1,1...)</option>
@@ -867,7 +888,9 @@ export default function BoundaryWorkflow() {
               </div>
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Start:</span>
+                  <span className="text-gray-600 dark:text-gray-400">
+                    Start:
+                  </span>
                   <span className="font-mono font-semibold text-gray-900 dark:text-white">
                     {markedStart ?? 'not set'}
                   </span>
@@ -915,7 +938,6 @@ export default function BoundaryWorkflow() {
               </button>
             </div>
 
-
             {/* Active annotation info */}
             {activeAnnotation && (
               <div className="space-y-3">
@@ -925,21 +947,30 @@ export default function BoundaryWorkflow() {
                   </div>
                   <div className="space-y-1 text-sm">
                     <div className="flex justify-between">
-                      <span className="text-gray-600 dark:text-gray-400">State:</span>
+                      <span className="text-gray-600 dark:text-gray-400">
+                        State:
+                      </span>
                       <span className="font-semibold text-gray-900 dark:text-white capitalize">
                         {getEffectiveState(activeAnnotation)}
                       </span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600 dark:text-gray-400">Range:</span>
+                      <span className="text-gray-600 dark:text-gray-400">
+                        Range:
+                      </span>
                       <span className="font-mono text-gray-900 dark:text-white">
-                        {activeAnnotation.start_frame_index}-{activeAnnotation.end_frame_index}
+                        {activeAnnotation.start_frame_index}-
+                        {activeAnnotation.end_frame_index}
                       </span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600 dark:text-gray-400">Frames:</span>
+                      <span className="text-gray-600 dark:text-gray-400">
+                        Frames:
+                      </span>
                       <span className="font-mono text-gray-900 dark:text-white">
-                        {activeAnnotation.end_frame_index - activeAnnotation.start_frame_index + 1}
+                        {activeAnnotation.end_frame_index -
+                          activeAnnotation.start_frame_index +
+                          1}
                       </span>
                     </div>
                   </div>
@@ -955,7 +986,8 @@ export default function BoundaryWorkflow() {
                       : 'cursor-not-allowed bg-gray-400 dark:bg-gray-700'
                   }`}
                 >
-                  Save & Next <span className="text-xs opacity-75">(Enter)</span>
+                  Save & Next{' '}
+                  <span className="text-xs opacity-75">(Enter)</span>
                 </button>
 
                 {/* History Navigation */}
@@ -986,7 +1018,9 @@ export default function BoundaryWorkflow() {
 
                 <button
                   onClick={deleteAnnotation}
-                  disabled={!activeAnnotation || activeAnnotation.state === 'gap'}
+                  disabled={
+                    !activeAnnotation || activeAnnotation.state === 'gap'
+                  }
                   className={`w-full rounded-md border-2 px-4 py-2 text-sm font-semibold ${
                     activeAnnotation && activeAnnotation.state !== 'gap'
                       ? 'border-red-500 text-red-600 hover:bg-red-50 dark:border-red-600 dark:text-red-400 dark:hover:bg-red-950'
@@ -998,6 +1032,32 @@ export default function BoundaryWorkflow() {
               </div>
             )}
 
+            {/* Help button */}
+            <button
+              onClick={() => setShowHelpModal(true)}
+              className="w-full rounded-md border border-teal-500 bg-teal-50 px-4 py-2 text-sm font-medium text-teal-700 hover:bg-teal-100 dark:border-teal-600 dark:bg-teal-950 dark:text-teal-300 dark:hover:bg-teal-900"
+            >
+              📖 Annotation Guide
+            </button>
+
+            {/* Mouse shortcuts */}
+            <details className="rounded-md border border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-950">
+              <summary className="cursor-pointer p-2 text-xs font-semibold text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-900">
+                Mouse Shortcuts
+              </summary>
+              <div className="space-y-1 p-3 pt-1 text-xs text-gray-600 dark:text-gray-400">
+                <div>
+                  <strong>Navigation:</strong>
+                </div>
+                <div>Scroll Wheel: Navigate frames</div>
+                <div>Click & Drag: Scroll with momentum</div>
+                <div className="mt-2">
+                  <strong>Marking:</strong>
+                </div>
+                <div>Left Click: Mark Start</div>
+                <div>Right Click: Mark End</div>
+              </div>
+            </details>
 
             {/* Keyboard shortcuts */}
             <details className="rounded-md border border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-950">
@@ -1005,18 +1065,22 @@ export default function BoundaryWorkflow() {
                 Keyboard Shortcuts
               </summary>
               <div className="space-y-1 p-3 pt-1 text-xs text-gray-600 dark:text-gray-400">
-                <div><strong>Navigation:</strong></div>
+                <div>
+                  <strong>Navigation:</strong>
+                </div>
                 <div>↑/↓ or ←/→: ±1 frame</div>
                 <div>Shift + Arrow: ±10 frames</div>
                 <div>Ctrl + Arrow: ±50 frames</div>
-                <div className="mt-2"><strong>Marking:</strong></div>
-                <div>Left Click: Mark Start</div>
-                <div>Right Click: Mark End</div>
+                <div className="mt-2">
+                  <strong>Marking:</strong>
+                </div>
                 <div>A: Jump to Start</div>
                 <div>S: Mark Start</div>
                 <div>D: Mark End</div>
                 <div>F: Jump to End</div>
-                <div className="mt-2"><strong>Actions:</strong></div>
+                <div className="mt-2">
+                  <strong>Actions:</strong>
+                </div>
                 <div>Enter: Save & Next</div>
                 <div>Esc: Clear Marks</div>
               </div>
@@ -1024,6 +1088,173 @@ export default function BoundaryWorkflow() {
           </div>
         </div>
       </div>
+
+      {/* Help Modal */}
+      {showHelpModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-opacity-40 p-16 backdrop-blur-sm"
+          onClick={() => setShowHelpModal(false)}
+        >
+          <div
+            className="w-full max-w-3xl rounded-lg bg-white bg-opacity-75 px-2 py-5 shadow-xl dark:bg-gray-900 dark:bg-opacity-75"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                Caption Annotation Guide
+              </h2>
+              <button
+                onClick={() => setShowHelpModal(false)}
+                className="rounded-md p-2 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-4 text-sm text-gray-700 dark:text-gray-300">
+              <section>
+                <h3 className="mb-2 text-lg font-semibold text-gray-900 dark:text-white">
+                  Purpose
+                </h3>
+                <p>
+                  This page helps you review and correct frame range boundaries
+                  for video content. Each annotation is either a single
+                  caption&apos;s range or a single non-caption range between
+                  captions.
+                </p>
+                <p className="mt-2">
+                  <strong>Important:</strong> The bounds should include both the
+                  start and end frames of the range, as shown by the colored
+                  border around the frames.
+                </p>
+              </section>
+
+              <section>
+                <h3 className="mb-2 text-lg font-semibold text-gray-900 dark:text-white">
+                  Annotation Types
+                </h3>
+                <div className="space-y-3">
+                  <div className="rounded-md border-l-2 border-orange-500 bg-orange-50 p-3 dark:bg-orange-900">
+                    <div className="font-semibold text-orange-600 dark:text-orange-200">
+                      Active (Orange Border)
+                    </div>
+                    <p className="mt-1 text-orange-200 dark:text-orange-300">
+                      The active caption that is presently editable.
+                    </p>
+                  </div>
+
+                  <div className="rounded-md border-l-2 border-blue-500 bg-blue-50 p-3 dark:bg-blue-950">
+                    <div className="font-semibold text-blue-900 dark:text-blue-200">
+                      Predicted (Blue Border)
+                    </div>
+                    <p className="mt-1 text-blue-800 dark:text-blue-300">
+                      Machine learning predictions for frame range boundaries
+                      (captions or non-caption content). These are considered
+                      complete and are not included in the review workflow.
+                    </p>
+                  </div>
+
+                  <div className="rounded-md border-l-2 border-green-500 bg-green-50 p-3 dark:bg-green-950">
+                    <div className="font-semibold text-green-900 dark:text-green-200">
+                      Confirmed (Green Border)
+                    </div>
+                    <p className="mt-1 text-green-800 dark:text-green-300">
+                      Human-verified annotations with correct boundaries for
+                      either captions or non-caption content. These are
+                      considered complete and accurate.
+                    </p>
+                  </div>
+
+                  <div className="rounded-md border-l-2 border-pink-500 bg-pink-50 p-3 dark:bg-pink-950">
+                    <div className="font-semibold text-pink-900 dark:text-pink-200">
+                      Pending (Pink Border)
+                    </div>
+                    <p className="mt-1 text-pink-800 dark:text-pink-300">
+                      Annotations for captions or non-caption content that need
+                      review or correction. These appear in the workflow queue
+                      for human verification.
+                    </p>
+                  </div>
+                </div>
+              </section>
+
+              <section>
+                <h3 className="mb-2 text-lg font-semibold text-gray-900 dark:text-white">
+                  Gaps
+                </h3>
+                <p>
+                  Gaps are frame ranges that haven&apos;t been assigned yet.
+                  They appear in the workflow queue so you can determine what
+                  type of content they contain and annotate them accordingly.
+                </p>
+              </section>
+
+              <section>
+                <h3 className="mb-2 text-lg font-semibold text-gray-900 dark:text-white">
+                  Workflow
+                </h3>
+                <ol className="list-decimal space-y-2 pl-5">
+                  <li>
+                    Review the active annotation or gap shown with a colored
+                    border
+                  </li>
+                  <li>
+                    Navigate through frames using scroll wheel, drag, or
+                    keyboard shortcuts
+                  </li>
+                  <li>
+                    Adjust boundaries using Mark Start/End buttons or (left,
+                    right) mouse clicks
+                  </li>
+                  <li>
+                    The orange border shows the range that will be saved as the
+                    caption / non-caption
+                  </li>
+                  <li>
+                    Click &ldquo;Save &amp; Next&rdquo; to confirm and move to
+                    the next annotation
+                  </li>
+                  <li>
+                    Use &ldquo;Clear Marks&rdquo; to reset to original
+                    boundaries if needed
+                  </li>
+                </ol>
+              </section>
+
+              <section>
+                <h3 className="mb-2 text-lg font-semibold text-gray-900 dark:text-white">
+                  Rules &amp; Tips
+                </h3>
+                <ul className="list-disc space-y-2 pl-5">
+                  <li>
+                    Boundaries must include both start and end frames
+                    (inclusive)
+                  </li>
+                  <li>A caption can be a single frame (start = end)</li>
+                  <li>
+                    Annotations cannot overlap - each frame belongs to exactly
+                    one annotation
+                  </li>
+                  <li>
+                    A caption can be set to overlap with another caption - that
+                    caption will be adjusted and set to Pending status
+                  </li>
+                  <li>
+                    The teal ring highlights the currently displayed frame
+                  </li>
+                  <li>
+                    Use frame spacing controls to adjust visible frame density
+                  </li>
+                  <li>
+                    Progress tracks the percentage of confirmed and predicted
+                    frames
+                  </li>
+                </ul>
+              </section>
+            </div>
+          </div>
+        </div>
+      )}
     </AppLayout>
   )
 }
