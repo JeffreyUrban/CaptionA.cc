@@ -202,6 +202,17 @@ export default function BoundaryWorkflow() {
     }
   }, [videoId])
 
+  // Mark this video as being worked on for stats refresh on Videos page
+  useEffect(() => {
+    if (videoId && typeof window !== 'undefined') {
+      const touchedVideos = new Set(
+        JSON.parse(localStorage.getItem('touched-videos') || '[]')
+      )
+      touchedVideos.add(videoId)
+      localStorage.setItem('touched-videos', JSON.stringify(Array.from(touchedVideos)))
+    }
+  }, [videoId])
+
   // Track window height for dynamic frame count
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -216,14 +227,16 @@ export default function BoundaryWorkflow() {
   const visibleFrameIndices = useMemo(() => {
     // Calculate available height: total window height minus navbar (64px) and padding
     const navbarHeight = 64
-    const availableHeight = windowHeight - navbarHeight
+    // Safety: ensure minimum window height to prevent empty frame list
+    const safeWindowHeight = Math.max(windowHeight, 400)
+    const availableHeight = Math.max(safeWindowHeight - navbarHeight, 300)
 
     // Estimate frame height: ~80-120px depending on aspect ratio
     // Using 90px as conservative estimate to ensure we fill the height
     const estimatedFrameHeight = 90
 
     // Calculate how many frames we need to fill the height
-    const framesToFill = Math.ceil(availableHeight / estimatedFrameHeight)
+    const framesToFill = Math.max(Math.ceil(availableHeight / estimatedFrameHeight), 3)
 
     // Get base offsets for the selected spacing
     const baseOffsets = FRAME_OFFSETS[frameSpacing]

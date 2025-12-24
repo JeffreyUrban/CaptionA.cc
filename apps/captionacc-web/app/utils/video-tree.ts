@@ -2,21 +2,13 @@ import { resolve } from 'path'
 import { existsSync } from 'fs'
 import { readdir } from 'fs/promises'
 import Database from 'better-sqlite3'
-
-export interface VideoStats {
-  totalAnnotations: number
-  pendingReview: number
-  confirmedAnnotations: number
-  predictedAnnotations: number
-  gapAnnotations: number
-  progress: number
-  totalFrames: number
-  coveredFrames: number
-}
+import { type VideoStats } from './video-stats'
 
 export interface VideoInfo {
   videoId: string
 }
+
+export type { VideoStats }
 
 export type TreeNode = FolderNode | VideoNode
 
@@ -252,6 +244,22 @@ export function calculateFolderStats(node: FolderNode): void {
     coveredFrames
   }
   node.videoCount = videoCount
+}
+
+/**
+ * Calculates video count for each folder recursively
+ */
+export function calculateVideoCounts(node: FolderNode): number {
+  let count = 0
+  for (const child of node.children) {
+    if (child.type === 'video') {
+      count += 1
+    } else {
+      count += calculateVideoCounts(child)
+    }
+  }
+  node.videoCount = count
+  return count
 }
 
 /**

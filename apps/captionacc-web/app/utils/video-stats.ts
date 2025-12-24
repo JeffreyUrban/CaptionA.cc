@@ -10,6 +10,8 @@ export interface VideoStats {
   predictedAnnotations: number
   gapAnnotations: number
   progress: number
+  totalFrames: number
+  coveredFrames: number
 }
 
 export async function getVideoStats(videoId: string): Promise<VideoStats> {
@@ -47,7 +49,9 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
       confirmedAnnotations: 0,
       predictedAnnotations: 0,
       gapAnnotations: 0,
-      progress: 0
+      progress: 0,
+      totalFrames,
+      coveredFrames: 0
     }
   }
 
@@ -90,7 +94,9 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
       confirmedAnnotations: result.confirmed,
       predictedAnnotations: result.predicted,
       gapAnnotations: result.gaps,
-      progress
+      progress,
+      totalFrames,
+      coveredFrames
     }
   } finally {
     db.close()

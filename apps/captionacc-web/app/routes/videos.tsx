@@ -1,5 +1,5 @@
 import { useLoaderData, Link } from 'react-router'
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import { MagnifyingGlassIcon, ChevronRightIcon, ChevronDownIcon, EllipsisVerticalIcon } from '@heroicons/react/20/solid'
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react'
 import { readdir } from 'fs/promises'
@@ -8,8 +8,7 @@ import { existsSync } from 'fs'
 import { AppLayout } from '~/components/AppLayout'
 import {
   buildVideoTree,
-  getVideoStats,
-  calculateFolderStats,
+  calculateVideoCounts,
   sortTreeNodes,
   type TreeNode,
   type FolderNode,
@@ -74,35 +73,21 @@ export async function loader() {
     videoId
   }))
 
-  // Build tree structure
-  let tree = buildVideoTree(videos)
+  // Build tree structure (without stats - will be loaded client-side)
+  const tree = buildVideoTree(videos)
 
-  // Load stats for all videos in parallel
-  const loadStatsForNode = async (node: TreeNode): Promise<void> => {
-    if (node.type === 'video') {
-      node.stats = await getVideoStats(node.videoId)
-    } else {
-      // Recursively load stats for children
-      await Promise.all(node.children.map(loadStatsForNode))
-    }
-  }
-
-  await Promise.all(tree.map(loadStatsForNode))
-
-  // Calculate aggregate stats for folders
-  const calculateStatsForNode = (node: TreeNode): void => {
+  // Calculate video counts for each folder
+  tree.forEach(node => {
     if (node.type === 'folder') {
-      calculateFolderStats(node)
+      calculateVideoCounts(node)
     }
-  }
-
-  tree.forEach(calculateStatsForNode)
+  })
 
   // Sort tree: folders first, then videos
-  tree = sortTreeNodes(tree)
+  const sortedTree = sortTreeNodes(tree)
 
   return new Response(
-    JSON.stringify({ tree }),
+    JSON.stringify({ tree: sortedTree }),
     { headers: { 'Content-Type': 'application/json' } }
   )
 }
@@ -112,11 +97,77 @@ interface TreeRowProps {
   depth: number
   expandedPaths: Set<string>
   onToggle: (path: string) => void
+  videoStatsMap: Map<string, VideoStats>
+  onStatsUpdate: (videoId: string, stats: VideoStats) => void
 }
 
-function TreeRow({ node, depth, expandedPaths, onToggle }: TreeRowProps) {
+// Calculate aggregate stats for a folder from the stats map
+function calculateFolderStatsFromMap(node: FolderNode, statsMap: Map<string, VideoStats>): VideoStats | null {
+  const collectVideoIds = (n: TreeNode): string[] => {
+    if (n.type === 'video') {
+      return [n.videoId]
+    } else {
+      return n.children.flatMap(collectVideoIds)
+    }
+  }
+
+  const videoIds = collectVideoIds(node)
+  const videoStats = videoIds.map(id => statsMap.get(id)).filter((s): s is VideoStats => s !== undefined)
+
+  if (videoStats.length === 0) return null
+
+  const aggregated: VideoStats = {
+    totalAnnotations: 0,
+    pendingReview: 0,
+    confirmedAnnotations: 0,
+    predictedAnnotations: 0,
+    gapAnnotations: 0,
+    progress: 0,
+    totalFrames: 0,
+    coveredFrames: 0
+  }
+
+  for (const stats of videoStats) {
+    aggregated.totalAnnotations += stats.totalAnnotations || 0
+    aggregated.pendingReview += stats.pendingReview || 0
+    aggregated.confirmedAnnotations += stats.confirmedAnnotations || 0
+    aggregated.predictedAnnotations += stats.predictedAnnotations || 0
+    aggregated.gapAnnotations += stats.gapAnnotations || 0
+    aggregated.totalFrames += stats.totalFrames || 0
+    aggregated.coveredFrames += stats.coveredFrames || 0
+  }
+
+  aggregated.progress = aggregated.totalFrames > 0
+    ? Math.round((aggregated.coveredFrames / aggregated.totalFrames) * 100)
+    : 0
+
+  return aggregated
+}
+
+function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsUpdate }: TreeRowProps) {
+  const [loading, setLoading] = useState(false)
   const isExpanded = expandedPaths.has(node.path)
-  const stats = node.stats
+
+  // Load stats for video nodes
+  useEffect(() => {
+    if (node.type === 'video' && !videoStatsMap.has(node.videoId)) {
+      setLoading(true)
+      fetch(`/api/videos/${encodeURIComponent(node.videoId)}/stats`)
+        .then(res => res.json())
+        .then(data => {
+          onStatsUpdate(node.videoId, data)
+          setLoading(false)
+        })
+        .catch(err => {
+          console.error(`Failed to load stats for ${node.videoId}:`, err)
+          setLoading(false)
+        })
+    }
+  }, [node, videoStatsMap, onStatsUpdate])
+
+  const stats = node.type === 'video'
+    ? videoStatsMap.get(node.videoId) || null
+    : calculateFolderStatsFromMap(node, videoStatsMap)
 
   if (node.type === 'folder') {
     return (
@@ -207,6 +258,8 @@ function TreeRow({ node, depth, expandedPaths, onToggle }: TreeRowProps) {
             depth={depth + 1}
             expandedPaths={expandedPaths}
             onToggle={onToggle}
+            videoStatsMap={videoStatsMap}
+            onStatsUpdate={onStatsUpdate}
           />
         ))}
       </>
@@ -315,6 +368,22 @@ function TreeRow({ node, depth, expandedPaths, onToggle }: TreeRowProps) {
 export default function VideosPage() {
   const { tree } = useLoaderData<{ tree: TreeNode[] }>()
   const [searchQuery, setSearchQuery] = useState('')
+  const CACHE_VERSION = 'v2' // Increment to invalidate cache when VideoStats structure changes
+  const [videoStatsMap, setVideoStatsMap] = useState<Map<string, VideoStats>>(() => {
+    // Load cached stats from localStorage
+    if (typeof window !== 'undefined') {
+      const cached = localStorage.getItem(`video-stats-cache-${CACHE_VERSION}`)
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached)
+          return new Map(Object.entries(parsed))
+        } catch {
+          return new Map()
+        }
+      }
+    }
+    return new Map()
+  })
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(() => {
     // Load expansion state from localStorage
     if (typeof window !== 'undefined') {
@@ -329,6 +398,66 @@ export default function VideosPage() {
     }
     return new Set()
   })
+
+  // Save stats to localStorage whenever they update
+  useEffect(() => {
+    if (videoStatsMap.size > 0 && typeof window !== 'undefined') {
+      const cacheObj = Object.fromEntries(videoStatsMap.entries())
+      localStorage.setItem(`video-stats-cache-${CACHE_VERSION}`, JSON.stringify(cacheObj))
+    }
+  }, [videoStatsMap])
+
+  // Callback for videos to update their stats
+  const updateVideoStats = useCallback((videoId: string, stats: VideoStats) => {
+    setVideoStatsMap(prev => {
+      const next = new Map(prev)
+      next.set(videoId, stats)
+      return next
+    })
+  }, [])
+
+  // Eagerly load stats for all videos in the tree
+  useEffect(() => {
+    const collectAllVideoIds = (nodes: TreeNode[]): string[] => {
+      const ids: string[] = []
+      for (const node of nodes) {
+        if (node.type === 'video') {
+          ids.push(node.videoId)
+        } else {
+          ids.push(...collectAllVideoIds(node.children))
+        }
+      }
+      return ids
+    }
+
+    const videoIds = collectAllVideoIds(tree)
+
+    // Check for videos that were recently touched and need stats refresh
+    let touchedVideos: Set<string> = new Set()
+    if (typeof window !== 'undefined') {
+      const touchedList = localStorage.getItem('touched-videos')
+      if (touchedList) {
+        try {
+          touchedVideos = new Set(JSON.parse(touchedList))
+          // Clear the list after reading
+          localStorage.removeItem('touched-videos')
+        } catch (e) {
+          console.error('Failed to parse touched videos list:', e)
+        }
+      }
+    }
+
+    // Load stats for all videos (skip cached ones unless they were recently touched)
+    videoIds.forEach(videoId => {
+      const needsRefresh = touchedVideos.has(videoId)
+      if (needsRefresh || !videoStatsMap.has(videoId)) {
+        fetch(`/api/videos/${encodeURIComponent(videoId)}/stats`)
+          .then(res => res.json())
+          .then(data => updateVideoStats(videoId, data))
+          .catch(err => console.error(`Failed to load stats for ${videoId}:`, err))
+      }
+    })
+  }, [tree, videoStatsMap, updateVideoStats])
 
   // Save expansion state to localStorage
   const toggleExpand = (path: string) => {
@@ -531,6 +660,8 @@ export default function VideosPage() {
                         depth={0}
                         expandedPaths={expandedPaths}
                         onToggle={toggleExpand}
+                        videoStatsMap={videoStatsMap}
+                        onStatsUpdate={updateVideoStats}
                       />
                     ))}
                   </tbody>
