@@ -63,6 +63,16 @@ export default function AnnotateText() {
   const [textStatus, setTextStatus] = useState<string>('valid_caption')
   const [textNotes, setTextNotes] = useState('')
 
+  // Frame navigation state
+  const [currentFrameIndex, setCurrentFrameIndex] = useState(0)
+  const [perFrameOCR, setPerFrameOCR] = useState<Array<{ frame_index: number; ocr_text: string }>>([])
+  const [loadingFrames, setLoadingFrames] = useState(false)
+
+  // Drag state for frame navigation
+  const [isDragging, setIsDragging] = useState(false)
+  const [dragStartY, setDragStartY] = useState(0)
+  const [dragStartFrame, setDragStartFrame] = useState(0)
+
   // Mark this video as being worked on for stats refresh
   useEffect(() => {
     if (videoId && typeof window !== 'undefined') {
@@ -131,6 +141,10 @@ export default function AnnotateText() {
         setText(data.annotation.text || data.annotation.text_ocr_combined || '')
         setTextStatus(data.annotation.text_status || 'valid_caption')
         setTextNotes(data.annotation.text_notes || '')
+
+        // Set initial frame to start of annotation
+        setCurrentFrameIndex(data.annotation.start_frame_index)
+
         setLoading(false)
       } catch (err) {
         setError((err as Error).message)
@@ -140,6 +154,31 @@ export default function AnnotateText() {
 
     loadAnnotation()
   }, [videoId, queue, queueIndex])
+
+  // Load per-frame OCR data when annotation changes
+  useEffect(() => {
+    if (!videoId || !currentAnnotation) return
+
+    const loadFrameOCR = async () => {
+      setLoadingFrames(true)
+      try {
+        const response = await fetch(
+          `/api/annotations/${encodeURIComponent(videoId)}/${currentAnnotation.annotation.id}/frames`
+        )
+        if (!response.ok) throw new Error('Failed to load frame OCR')
+        const data = await response.json()
+
+        setPerFrameOCR(data.frames || [])
+        setLoadingFrames(false)
+      } catch (err) {
+        console.error('Failed to load frame OCR:', err)
+        setPerFrameOCR([])
+        setLoadingFrames(false)
+      }
+    }
+
+    loadFrameOCR()
+  }, [videoId, currentAnnotation])
 
   // Update progress from server
   const updateProgress = useCallback(async () => {
@@ -159,9 +198,15 @@ export default function AnnotateText() {
     }
   }, [videoId])
 
-  // Save annotation
+  // Save annotation with text
   const handleSave = async () => {
     if (!videoId || !currentAnnotation) return
+
+    // Validation: prevent saving if text is empty (use Save Empty Caption instead)
+    if (text.trim() === '') {
+      setError('Caption text is empty. Use "Save Empty Caption" button to confirm no caption, or enter caption text.')
+      return
+    }
 
     try {
       const response = await fetch(
@@ -178,6 +223,50 @@ export default function AnnotateText() {
       )
 
       if (!response.ok) throw new Error('Failed to save annotation')
+
+      // Clear any errors
+      setError(null)
+
+      // Update progress
+      await updateProgress()
+
+      // Move to next annotation
+      if (queueIndex < queue.length - 1) {
+        setQueueIndex(queueIndex + 1)
+      } else {
+        // Reload queue to check for new annotations
+        const queueResponse = await fetch(`/api/annotations/${encodeURIComponent(videoId)}/text-queue`)
+        const queueData = await queueResponse.json()
+        setQueue(queueData.annotations)
+        setQueueIndex(0)
+      }
+    } catch (err) {
+      setError((err as Error).message)
+    }
+  }
+
+  // Save annotation with empty caption
+  const handleSaveEmptyCaption = async () => {
+    if (!videoId || !currentAnnotation) return
+
+    try {
+      const response = await fetch(
+        `/api/annotations/${encodeURIComponent(videoId)}/${currentAnnotation.annotation.id}/text`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text: '',  // Empty string
+            text_status: textStatus,
+            text_notes: textNotes
+          })
+        }
+      )
+
+      if (!response.ok) throw new Error('Failed to save annotation')
+
+      // Clear any errors
+      setError(null)
 
       // Update progress
       await updateProgress()
@@ -233,19 +322,114 @@ export default function AnnotateText() {
     navigate(`/annotate/boundaries?videoId=${encodeURIComponent(videoId)}`)
   }
 
+  // Frame navigation helpers
+  const navigateFrame = useCallback((delta: number) => {
+    if (!currentAnnotation) return
+
+    const newIndex = currentFrameIndex + delta
+    const minFrame = currentAnnotation.annotation.start_frame_index
+    const maxFrame = currentAnnotation.annotation.end_frame_index
+
+    if (newIndex >= minFrame && newIndex <= maxFrame) {
+      setCurrentFrameIndex(newIndex)
+    }
+  }, [currentFrameIndex, currentAnnotation])
+
+  // Mouse wheel handler for frame navigation
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    e.preventDefault()
+    const delta = e.deltaY > 0 ? 1 : -1
+    navigateFrame(delta)
+  }, [navigateFrame])
+
+  // Drag handlers for frame navigation
+  const handleDragStart = useCallback((e: React.MouseEvent) => {
+    setIsDragging(true)
+    setDragStartY(e.clientY)
+    setDragStartFrame(currentFrameIndex)
+    e.preventDefault()
+  }, [currentFrameIndex])
+
+  const handleDragMove = useCallback((e: React.MouseEvent) => {
+    if (!isDragging || !currentAnnotation) return
+
+    const deltaY = dragStartY - e.clientY
+    const framesDelta = Math.floor(deltaY / 10) // 10 pixels per frame
+
+    const newIndex = dragStartFrame + framesDelta
+    const minFrame = currentAnnotation.annotation.start_frame_index
+    const maxFrame = currentAnnotation.annotation.end_frame_index
+
+    if (newIndex >= minFrame && newIndex <= maxFrame) {
+      setCurrentFrameIndex(newIndex)
+    }
+  }, [isDragging, dragStartY, dragStartFrame, currentAnnotation])
+
+  const handleDragEnd = useCallback(() => {
+    setIsDragging(false)
+  }, [])
+
+  // Global mouse handlers for drag
+  useEffect(() => {
+    if (!isDragging) return
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!currentAnnotation) return
+
+      const deltaY = dragStartY - e.clientY
+      const framesDelta = Math.floor(deltaY / 10)
+
+      const newIndex = dragStartFrame + framesDelta
+      const minFrame = currentAnnotation.annotation.start_frame_index
+      const maxFrame = currentAnnotation.annotation.end_frame_index
+
+      if (newIndex >= minFrame && newIndex <= maxFrame) {
+        setCurrentFrameIndex(newIndex)
+      }
+    }
+
+    const handleMouseUp = () => {
+      setIsDragging(false)
+    }
+
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mouseup', handleMouseUp)
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [isDragging, dragStartY, dragStartFrame, currentAnnotation])
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Skip if typing in input/textarea
-      if (document.activeElement?.tagName === 'INPUT' ||
-          document.activeElement?.tagName === 'TEXTAREA') {
+      // Skip if typing in input/textarea, unless it's a global shortcut (Ctrl+E)
+      const isTyping = document.activeElement?.tagName === 'INPUT' ||
+                       document.activeElement?.tagName === 'TEXTAREA'
+
+      // Ctrl+E for Save Empty Caption (works even when typing)
+      if (e.ctrlKey && e.key.toLowerCase() === 'e') {
+        e.preventDefault()
+        handleSaveEmptyCaption()
         return
       }
 
+      // Other shortcuts don't work when typing
+      if (isTyping) return
+
       const key = e.key.toLowerCase()
 
-      // Navigation
-      if (key === 'enter') {
+      // Frame navigation (up/down arrows)
+      if (key === 'arrowup') {
+        e.preventDefault()
+        navigateFrame(-1)
+      } else if (key === 'arrowdown') {
+        e.preventDefault()
+        navigateFrame(1)
+      }
+      // Annotation navigation
+      else if (key === 'enter') {
         e.preventDefault()
         handleSave()
       } else if (key === 'arrowleft') {
@@ -259,7 +443,7 @@ export default function AnnotateText() {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [handleSave, handlePrevious, handleSkip])
+  }, [handleSave, handleSaveEmptyCaption, handlePrevious, handleSkip, navigateFrame])
 
   // Show loading state while metadata loads
   if (loading && queue.length === 0) {
@@ -340,10 +524,79 @@ export default function AnnotateText() {
 
         {/* Main content */}
         <div className="flex h-full flex-1 gap-6 overflow-hidden">
-          {/* Left: Combined Image and OCR (2/3 width) */}
+          {/* Left: OCR, Image, and Caption Text (2/3 width) */}
           <div className="flex h-full w-2/3 flex-col gap-4 overflow-y-auto">
             {currentAnnotation ? (
               <>
+                {/* Current Frame Image */}
+                <div className="rounded-lg border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
+                  <div className="border-b border-gray-200 px-4 py-3 dark:border-gray-800">
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                      Frame-by-Frame
+                    </h2>
+                  </div>
+                  <div className="p-4">
+                    <div
+                      className="overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-800 cursor-grab active:cursor-grabbing"
+                      onWheel={handleWheel}
+                      onMouseDown={handleDragStart}
+                      style={{ userSelect: 'none' }}
+                    >
+                      <img
+                        src={`/api/frames/${encodeURIComponent(videoId)}/${currentFrameIndex}.jpg`}
+                        alt={`Frame ${currentFrameIndex}`}
+                        className="h-auto w-full"
+                        draggable={false}
+                      />
+                    </div>
+                    <div className="mt-3 flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
+                      <span>
+                        Frame {currentFrameIndex} / {currentAnnotation.annotation.end_frame_index}
+                      </span>
+                      <span className="text-xs">
+                        ({currentFrameIndex - currentAnnotation.annotation.start_frame_index + 1} of{' '}
+                        {currentAnnotation.annotation.end_frame_index - currentAnnotation.annotation.start_frame_index + 1})
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Per-Frame OCR Text */}
+                <div className="rounded-lg border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
+                  <div className="border-b border-gray-200 px-4 py-3 dark:border-gray-800">
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                      OCR Text (Frame {currentFrameIndex})
+                    </h2>
+                  </div>
+                  <div className="p-4">
+                    {loadingFrames ? (
+                      <div className="rounded-lg bg-gray-50 p-3 text-sm text-gray-500 dark:bg-gray-950 dark:text-gray-400">
+                        Loading frame OCR data...
+                      </div>
+                    ) : (
+                      <div className="rounded-lg bg-gray-50 p-3 font-mono text-sm whitespace-pre-wrap dark:bg-gray-950 dark:text-gray-300">
+                        {perFrameOCR.find(f => f.frame_index === currentFrameIndex)?.ocr_text ||
+                          '(No OCR text for this frame)'}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* OCR Text Display */}
+                <div className="rounded-lg border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
+                  <div className="border-b border-gray-200 px-4 py-3 dark:border-gray-800">
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                      OCR Text (Combined)
+                    </h2>
+                  </div>
+                  <div className="p-4">
+                    <div className="rounded-lg bg-gray-50 p-3 font-mono text-sm whitespace-pre-wrap dark:bg-gray-950 dark:text-gray-300">
+                      {currentAnnotation.annotation.text_ocr_combined ||
+                        '(No OCR text available)'}
+                    </div>
+                  </div>
+                </div>
+
                 {/* Combined Image */}
                 <div className="rounded-lg border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
                   <div className="border-b border-gray-200 px-4 py-3 dark:border-gray-800">
@@ -370,18 +623,20 @@ export default function AnnotateText() {
                   </div>
                 </div>
 
-                {/* OCR Text Display */}
+                {/* Caption Text Editor */}
                 <div className="rounded-lg border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
                   <div className="border-b border-gray-200 px-4 py-3 dark:border-gray-800">
                     <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                      OCR Text (Combined)
+                      Caption Text
                     </h2>
                   </div>
                   <div className="p-4">
-                    <div className="rounded-lg bg-gray-50 p-3 font-mono text-sm whitespace-pre-wrap dark:bg-gray-950 dark:text-gray-300">
-                      {currentAnnotation.annotation.text_ocr_combined ||
-                        '(No OCR text available)'}
-                    </div>
+                    <textarea
+                      value={text}
+                      onChange={(e) => setText(e.target.value)}
+                      className="w-full h-48 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 font-mono text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                      placeholder="Enter caption text..."
+                    />
                   </div>
                 </div>
               </>
@@ -479,19 +734,6 @@ export default function AnnotateText() {
               </div>
             )}
 
-            {/* Caption Text Editor */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                Caption Text
-              </label>
-              <textarea
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                className="w-full h-48 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 font-mono text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                placeholder="Enter caption text..."
-              />
-            </div>
-
             {/* Status */}
             <div>
               <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
@@ -537,6 +779,18 @@ export default function AnnotateText() {
                 Save & Next <span className="text-xs opacity-75">(Enter)</span>
               </button>
 
+              <button
+                onClick={handleSaveEmptyCaption}
+                disabled={!currentAnnotation}
+                className={`w-full rounded-md px-4 py-2 text-sm font-semibold ${
+                  currentAnnotation
+                    ? 'bg-orange-500 text-white hover:bg-orange-600'
+                    : 'cursor-not-allowed bg-gray-400 text-gray-600 dark:bg-gray-700'
+                }`}
+              >
+                Save Empty Caption <span className="text-xs opacity-75">(Ctrl+E)</span>
+              </button>
+
               {/* Navigation */}
               <div className="flex gap-2">
                 <button
@@ -579,14 +833,20 @@ export default function AnnotateText() {
               </summary>
               <div className="space-y-1 p-3 pt-1 text-xs text-gray-600 dark:text-gray-400">
                 <div>
-                  <strong>Navigation:</strong>
+                  <strong>Frame Navigation:</strong>
+                </div>
+                <div>↑ : Previous frame</div>
+                <div>↓ : Next frame</div>
+                <div className="mt-2">
+                  <strong>Annotation Navigation:</strong>
                 </div>
                 <div>← : Previous annotation</div>
                 <div>→ : Skip to next</div>
                 <div className="mt-2">
                   <strong>Actions:</strong>
                 </div>
-                <div>Enter: Save & Next</div>
+                <div>Enter: Save & Next (requires text)</div>
+                <div>Ctrl+E: Save Empty Caption</div>
               </div>
             </details>
           </div>
