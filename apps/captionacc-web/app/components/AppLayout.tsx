@@ -3,8 +3,7 @@ import { useState, useEffect } from 'react'
 
 const navigation = [
   { name: 'Home', href: '/' },
-  { name: 'Annotate', href: '/annotate' },
-  { name: 'Boundaries', href: '/annotate/boundaries' },
+  { name: 'Videos', href: '/videos' },
 ]
 
 function SunIcon(props: React.ComponentPropsWithoutRef<'svg'>) {

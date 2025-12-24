@@ -68,8 +68,8 @@ function getAnnotationBorderColor(annotation: Annotation): string {
   const effectiveState = getEffectiveState(annotation)
   switch (effectiveState) {
     case 'pending': return 'border-pink-500'
-    case 'predicted': return 'border-blue-500'
-    case 'confirmed': return 'border-green-500'
+    case 'predicted': return 'border-indigo-500'
+    case 'confirmed': return 'border-teal-500'
     case 'gap': return ''
   }
 }
@@ -818,7 +818,7 @@ export default function BoundaryWorkflow() {
 
                     {/* Current frame ring overlay (on top of everything) */}
                     {isCurrent && (
-                      <div className="absolute inset-0 pointer-events-none z-20 ring-4 ring-teal-500 rounded" />
+                      <div className="absolute inset-0 pointer-events-none z-20 ring-4 ring-yellow-300 dark:ring-yellow-400 rounded" />
                     )}
 
                     {/* Frame container */}
@@ -1259,22 +1259,22 @@ export default function BoundaryWorkflow() {
                     </p>
                   </div>
 
-                  <div className="rounded-md border-l-2 border-blue-500 bg-blue-50 p-3 dark:bg-blue-950">
-                    <div className="font-semibold text-blue-900 dark:text-blue-200">
-                      Predicted (Blue Border)
+                  <div className="rounded-md border-l-2 border-indigo-500 bg-indigo-50 p-3 dark:bg-indigo-950">
+                    <div className="font-semibold text-indigo-900 dark:text-indigo-200">
+                      Predicted (Indigo Border)
                     </div>
-                    <p className="mt-1 text-blue-800 dark:text-blue-300">
+                    <p className="mt-1 text-indigo-800 dark:text-indigo-300">
                       Machine learning predictions for frame range boundaries
                       (captions or non-caption content). These are considered
                       complete and are not included in the review workflow.
                     </p>
                   </div>
 
-                  <div className="rounded-md border-l-2 border-green-500 bg-green-50 p-3 dark:bg-green-950">
-                    <div className="font-semibold text-green-900 dark:text-green-200">
-                      Confirmed (Green Border)
+                  <div className="rounded-md border-l-2 border-teal-500 bg-teal-50 p-3 dark:bg-teal-950">
+                    <div className="font-semibold text-teal-900 dark:text-teal-200">
+                      Confirmed (Teal Border)
                     </div>
-                    <p className="mt-1 text-green-800 dark:text-green-300">
+                    <p className="mt-1 text-teal-800 dark:text-teal-300">
                       Human-verified annotations with correct boundaries for
                       either captions or non-caption content. These are
                       considered complete and accurate.

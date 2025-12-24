@@ -14,7 +14,7 @@ interface Annotation {
   updated_at: string
 }
 
-function getDatabase(videoId: string) {
+function getOrCreateDatabase(videoId: string) {
   const dbPath = resolve(
     process.cwd(),
     '..',
@@ -25,11 +25,43 @@ function getDatabase(videoId: string) {
     'annotations.db'
   )
 
-  if (!existsSync(dbPath)) {
-    throw new Error(`Database not found for video: ${videoId}`)
+  const dbExists = existsSync(dbPath)
+  const db = new Database(dbPath)
+
+  // If database is new, create the schema
+  if (!dbExists) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS annotations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        start_frame_index INTEGER NOT NULL,
+        end_frame_index INTEGER NOT NULL,
+        state TEXT NOT NULL CHECK(state IN ('predicted', 'confirmed', 'gap')),
+        pending INTEGER NOT NULL DEFAULT 0 CHECK(pending IN (0, 1)),
+        text TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_annotations_frame_range
+      ON annotations(start_frame_index, end_frame_index);
+
+      CREATE INDEX IF NOT EXISTS idx_annotations_granularity
+      ON annotations((start_frame_index / 100) * 100);
+
+      CREATE INDEX IF NOT EXISTS idx_annotations_pending_gap
+      ON annotations(pending, state, start_frame_index);
+
+      CREATE TRIGGER IF NOT EXISTS update_annotations_timestamp
+      AFTER UPDATE ON annotations
+      BEGIN
+        UPDATE annotations
+        SET updated_at = datetime('now')
+        WHERE id = NEW.id;
+      END;
+    `)
   }
 
-  return new Database(dbPath)
+  return db
 }
 
 // GET - Fetch annotations in a range
@@ -48,7 +80,7 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
   const endFrame = parseInt(url.searchParams.get('end') || '1000')
 
   try {
-    const db = getDatabase(videoId)
+    const db = getOrCreateDatabase(videoId)
 
     // Query annotations that overlap with the requested range
     const annotations = db.prepare(`
@@ -87,7 +119,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
   const body = await request.json()
 
   try {
-    const db = getDatabase(videoId)
+    const db = getOrCreateDatabase(videoId)
 
     if (request.method === 'PUT') {
       // Update existing annotation with overlap resolution
