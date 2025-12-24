@@ -72,6 +72,9 @@ export default function AnnotateText() {
   const [textSizePercent, setTextSizePercent] = useState<number>(3.0)
   const [actualTextSize, setActualTextSize] = useState<number>(16)
 
+  // Padding scale (multiplier for horizontal padding relative to text size)
+  const [paddingScale, setPaddingScale] = useState<number>(0.75)
+
   // Use effect to track image width and update text size
   const imageContainerRef = useCallback((node: HTMLDivElement | null) => {
     if (!node) return
@@ -105,25 +108,30 @@ export default function AnnotateText() {
     }
   }, [videoId])
 
-  // Load text size preference
+  // Load preferences (text size and padding)
   useEffect(() => {
     if (!videoId) return
 
-    const loadTextSize = async () => {
+    const loadPreferences = async () => {
       try {
         const response = await fetch(`/api/preferences/${encodeURIComponent(videoId)}`)
         const data = await response.json()
+
         if (data.text_size) {
-          // text_size is stored as percentage of image width
           const percent = typeof data.text_size === 'number' ? data.text_size : parseFloat(data.text_size) || 3.0
           setTextSizePercent(percent)
         }
+
+        if (data.padding_scale !== undefined) {
+          const scale = typeof data.padding_scale === 'number' ? data.padding_scale : parseFloat(data.padding_scale) || 0.75
+          setPaddingScale(scale)
+        }
       } catch (error) {
-        console.error('Failed to load text size preference:', error)
+        console.error('Failed to load preferences:', error)
       }
     }
 
-    loadTextSize()
+    loadPreferences()
   }, [videoId])
 
   // Load video metadata and progress
@@ -356,6 +364,24 @@ export default function AnnotateText() {
         })
       } catch (error) {
         console.error('Failed to save text size preference:', error)
+      }
+    }
+  }
+
+  // Handle padding scale change
+  const handlePaddingScaleChange = async (newScale: number) => {
+    setPaddingScale(newScale)
+
+    // Save to database
+    if (videoId) {
+      try {
+        await fetch(`/api/preferences/${encodeURIComponent(videoId)}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ padding_scale: newScale })
+        })
+      } catch (error) {
+        console.error('Failed to save padding scale preference:', error)
       }
     }
   }
@@ -626,8 +652,14 @@ export default function AnnotateText() {
                         </div>
                       ) : (
                         <div
-                          className="rounded-lg bg-gray-50 p-3 font-mono whitespace-pre-wrap dark:bg-gray-950 dark:text-gray-300 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors"
-                          style={{ fontSize: `${actualTextSize}px` }}
+                          className="rounded-lg bg-gray-50 font-mono whitespace-pre-wrap dark:bg-gray-950 dark:text-gray-300 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors"
+                          style={{
+                            fontSize: `${actualTextSize}px`,
+                            paddingTop: '0.75rem',
+                            paddingBottom: '0.75rem',
+                            paddingLeft: `${paddingScale}em`,
+                            paddingRight: `${paddingScale}em`
+                          }}
                           role="button"
                           tabIndex={0}
                           onClick={() => {
@@ -660,8 +692,14 @@ export default function AnnotateText() {
                   </div>
                   <div className="p-4">
                     <div
-                      className="rounded-lg bg-gray-50 p-3 font-mono whitespace-pre-wrap dark:bg-gray-950 dark:text-gray-300 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors"
-                      style={{ fontSize: `${actualTextSize}px` }}
+                      className="rounded-lg bg-gray-50 font-mono whitespace-pre-wrap dark:bg-gray-950 dark:text-gray-300 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors"
+                      style={{
+                        fontSize: `${actualTextSize}px`,
+                        paddingTop: '0.75rem',
+                        paddingBottom: '0.75rem',
+                        paddingLeft: `${paddingScale}em`,
+                        paddingRight: `${paddingScale}em`
+                      }}
                       role="button"
                       tabIndex={0}
                       onClick={() => {
@@ -720,8 +758,14 @@ export default function AnnotateText() {
                     <textarea
                       value={text}
                       onChange={(e) => setText(e.target.value)}
-                      className="w-full h-48 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 font-mono dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                      style={{ fontSize: `${actualTextSize}px` }}
+                      className="w-full h-48 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 font-mono dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                      style={{
+                        fontSize: `${actualTextSize}px`,
+                        paddingTop: '0.75rem',
+                        paddingBottom: '0.75rem',
+                        paddingLeft: `${paddingScale}em`,
+                        paddingRight: `${paddingScale}em`
+                      }}
                       placeholder="Enter caption text..."
                     />
                   </div>
@@ -838,6 +882,26 @@ export default function AnnotateText() {
                   className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
                 />
                 <span className="text-xs text-gray-500 dark:text-gray-400">10%</span>
+              </div>
+            </div>
+
+            {/* Horizontal Padding */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                Horizontal Padding: {paddingScale.toFixed(2)}em
+              </label>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-500 dark:text-gray-400">0</span>
+                <input
+                  type="range"
+                  min="0.0"
+                  max="2.0"
+                  step="0.05"
+                  value={paddingScale}
+                  onChange={(e) => handlePaddingScaleChange(parseFloat(e.target.value))}
+                  className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
+                />
+                <span className="text-xs text-gray-500 dark:text-gray-400">2em</span>
               </div>
             </div>
 

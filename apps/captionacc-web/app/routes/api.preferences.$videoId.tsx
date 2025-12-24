@@ -5,6 +5,7 @@ import { existsSync } from 'fs'
 
 interface VideoPreferences {
   text_size: number
+  padding_scale: number
 }
 
 function getDatabase(videoId: string) {
@@ -40,13 +41,13 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
   try {
     const db = getDatabase(videoId)
-    const prefs = db.prepare('SELECT text_size FROM video_preferences WHERE id = 1').get() as VideoPreferences | undefined
+    const prefs = db.prepare('SELECT text_size, padding_scale FROM video_preferences WHERE id = 1').get() as VideoPreferences | undefined
 
     db.close()
 
     if (!prefs) {
-      // Return default if not found (3% of image width)
-      return Response.json({ text_size: 3.0 })
+      // Return default if not found (3% of image width, 0.75em padding)
+      return Response.json({ text_size: 3.0, padding_scale: 0.75 })
     }
 
     return Response.json(prefs)
@@ -76,11 +77,19 @@ export async function action({ params, request }: ActionFunctionArgs) {
 
   try {
     const body = await request.json()
-    const { text_size } = body
+    const { text_size, padding_scale } = body
 
     // Validate text_size is a number between 1.0 and 10.0 (percentage of image width)
-    if (typeof text_size !== 'number' || text_size < 1.0 || text_size > 10.0) {
+    if (text_size !== undefined && (typeof text_size !== 'number' || text_size < 1.0 || text_size > 10.0)) {
       return new Response(JSON.stringify({ error: 'Invalid text_size (must be number between 1.0 and 10.0)' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      })
+    }
+
+    // Validate padding_scale is a number between 0.0 and 2.0
+    if (padding_scale !== undefined && (typeof padding_scale !== 'number' || padding_scale < 0.0 || padding_scale > 2.0)) {
+      return new Response(JSON.stringify({ error: 'Invalid padding_scale (must be number between 0.0 and 2.0)' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' }
       })
@@ -88,11 +97,28 @@ export async function action({ params, request }: ActionFunctionArgs) {
 
     const db = getDatabase(videoId)
 
-    db.prepare(`
-      UPDATE video_preferences
-      SET text_size = ?, updated_at = datetime('now')
-      WHERE id = 1
-    `).run(text_size)
+    // Build update query dynamically based on which fields are provided
+    const updates: string[] = []
+    const values: number[] = []
+
+    if (text_size !== undefined) {
+      updates.push('text_size = ?')
+      values.push(text_size)
+    }
+
+    if (padding_scale !== undefined) {
+      updates.push('padding_scale = ?')
+      values.push(padding_scale)
+    }
+
+    if (updates.length > 0) {
+      updates.push('updated_at = datetime(\'now\')')
+      db.prepare(`
+        UPDATE video_preferences
+        SET ${updates.join(', ')}
+        WHERE id = 1
+      `).run(...values)
+    }
 
     db.close()
 

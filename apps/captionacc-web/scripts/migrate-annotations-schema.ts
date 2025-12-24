@@ -48,11 +48,13 @@ function migrateDatabase(dbPath: string, videoPath: string): boolean {
     const framesOcrExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='frames_ocr'").get()
     const videoPrefsExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='video_preferences'").get()
 
-    // Check if video_preferences has correct schema (REAL text_size)
+    // Check if video_preferences has correct schema (REAL text_size and padding_scale)
     let videoPrefsHasCorrectSchema = false
     if (videoPrefsExists) {
       const prefTableInfo = db.prepare("PRAGMA table_info(video_preferences)").all() as Array<{ name: string, type: string }>
-      videoPrefsHasCorrectSchema = prefTableInfo.some(col => col.name === 'text_size' && col.type === 'REAL')
+      const hasTextSize = prefTableInfo.some(col => col.name === 'text_size' && col.type === 'REAL')
+      const hasPaddingScale = prefTableInfo.some(col => col.name === 'padding_scale' && col.type === 'REAL')
+      videoPrefsHasCorrectSchema = hasTextSize && hasPaddingScale
     }
 
     if (hasNewSchema && framesOcrExists && videoPrefsExists && videoPrefsHasCorrectSchema) {
@@ -144,9 +146,10 @@ function migrateDatabase(dbPath: string, videoPath: string): boolean {
       const prefTableInfo = db.prepare("PRAGMA table_info(video_preferences)").all() as Array<{ name: string, type: string }>
       const hasOldTextSchema = prefTableInfo.length > 0 && prefTableInfo.some(col => col.name === 'text_size' && col.type === 'TEXT')
       const hasOldIntegerSchema = prefTableInfo.length > 0 && prefTableInfo.some(col => col.name === 'text_size' && col.type === 'INTEGER')
+      const missingPaddingScale = prefTableInfo.length > 0 && !prefTableInfo.some(col => col.name === 'padding_scale')
 
-      if (hasOldTextSchema || hasOldIntegerSchema) {
-        console.log('    - Migrating video_preferences to REAL schema...')
+      if (hasOldTextSchema || hasOldIntegerSchema || missingPaddingScale) {
+        console.log('    - Migrating video_preferences schema...')
         db.exec(`DROP TABLE video_preferences`)
       }
 
@@ -155,12 +158,13 @@ function migrateDatabase(dbPath: string, videoPath: string): boolean {
         CREATE TABLE IF NOT EXISTS video_preferences (
           id INTEGER PRIMARY KEY CHECK(id = 1),
           text_size REAL DEFAULT 3.0 CHECK(text_size >= 1.0 AND text_size <= 10.0),
+          padding_scale REAL DEFAULT 0.75 CHECK(padding_scale >= 0.0 AND padding_scale <= 2.0),
           updated_at TEXT NOT NULL DEFAULT (datetime('now'))
         )
       `)
 
       // Insert default preferences if not exists
-      db.exec(`INSERT OR IGNORE INTO video_preferences (id, text_size) VALUES (1, 3.0)`)
+      db.exec(`INSERT OR IGNORE INTO video_preferences (id, text_size, padding_scale) VALUES (1, 3.0, 0.75)`)
 
       console.log('    - Creating new indexes...')
 
