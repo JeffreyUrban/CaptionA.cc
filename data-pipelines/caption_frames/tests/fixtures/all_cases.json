@@ -1,0 +1,23 @@
+[
+  {
+    "name": "TEMPLATE_PLACEHOLDER",
+    "description": "TEMPLATE_PLACEHOLDER",
+    "generator": {
+      "type": "handcrafted"
+      }
+  },
+  {
+    "name": "TEMPLATE_PLACEHOLDER",
+    "description": "TEMPLATE_PLACEHOLDER",
+    "generator": {
+      "type": "edge_case"
+      }
+  },
+  {
+    "name": "TEMPLATE_PLACEHOLDER",
+    "description": "TEMPLATE_PLACEHOLDER",
+    "generator": {
+      "type": "random"
+      }
+  }
+]

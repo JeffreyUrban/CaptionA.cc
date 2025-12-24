@@ -104,3 +104,10 @@ Thumbs.db
 # Claude
 /CLAUDE-*
 /.claude-name
+
+# Local content work - ALL content processing, analysis, and external references
+# CRITICAL: Nothing in local/ should ever be committed to avoid pushing content
+# references to remote repository
+local/
+/CLAUDE.md
+/packages/*/src/*/_version.py

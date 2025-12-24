@@ -67,7 +67,7 @@ Create a data annotation and training pipeline and maintainable SaaS application
 
 ## Database Design Considerations
 
-The episode is divided into audio segments and burned-in captions. Audio segments may be nested or overlapping. Audio segment word boundaries may not match burned-in caption word boundaries. 
+The video is divided into audio segments and burned-in captions. Audio segments may be nested or overlapping. Audio segment word boundaries may not match burned-in caption word boundaries. 
 
 ### Core Data Models
 
@@ -84,7 +84,6 @@ The episode is divided into audio segments and burned-in captions. Audio segment
 
 ### Timing Precision
 - Store times as **milliseconds** or **10Hz indices** (0.1s precision)
-  - YouTube API uses seconds (float)
   - Database uses integer indices for precision
   - Example: `start_time_ms = 12500` → 12.5 seconds
 - Caption sync requires precision for accurate segment playback
@@ -135,9 +134,6 @@ The episode is divided into audio segments and burned-in captions. Audio segment
 # Database
 export DATABASE_URL="postgresql://..."  # or sqlite:///data/captionacc.db
 
-# YouTube API (if needed for metadata)
-export YOUTUBE_API_KEY="..."
-
 # Payment processor
 export STRIPE_SECRET_KEY="..."
 
@@ -160,11 +156,11 @@ Pipelines are in subdirectories:
 
 ### Caption Pipeline (Burned-in Captions)
 
-**Why Not YouTube Captions?**: YouTube's auto-generated captions are speech-to-text based, resulting in incorrect text content and inaccurate timing. We use ML to detect and extract burned-in captions directly from video frames, and we have our own speech to text pipeline.
+**Why Not Video Hosting Provider Captions?**: Auto-generated captions are generally speech-to-text based, resulting in incorrect text content and inaccurate timing. We use ML to detect and extract burned-in captions directly from video frames, and we have our own speech to text pipeline.
 
 **Process**:
 1. **Caption Detection**: ML models identify burned-in caption regions in video frames
-2. **Bounds Extraction**: Determine caption bounding box per episode (e.g., bottom of frame)
+2. **Bounds Extraction**: Determine caption bounding box per video (e.g., bottom of frame)
 3. **OCR**: Extract text content from detected caption regions
 4. **Timing**: Capture precise start/end timestamps for each caption
 5. **Annotation Workflow**: Human review and correction of ML-generated annotations
@@ -206,25 +202,6 @@ TODO: User can also flag issues with captions or audio segments, and suggest cor
 3. **Single Source of Truth**: One database for both app and pipelines. Content is promoted from draft to production and can be demoted back from production to issue-to-fix.
 4. **Simplified Workflow**: No context switching between tools
 
-### YouTube Integration
-
-**Playback Control**:
-1. **Content Selection**: Curate TV shows available on YouTube
-2. **Episode Metadata**: Store YouTube video IDs in database
-3. **Playback Control**:
-   - Load YouTube IFrame API
-   - Control via JavaScript: `player.seekTo(startTime)`, `player.playVideo()`
-   - Use HTMX to trigger playback actions from backend-rendered content
-4. **Caption Visibility Control**:
-   - Use CSS overlays to show/hide burned-in caption regions
-   - Caption bounds from ML pipeline stored in episode metadata
-
-**No FFmpeg/Clip Extraction Needed (for production site, for YouTube videos)**:
-- YouTube handles all video delivery
-- No storage/bandwidth costs for video hosting
-- No clip pre-generation or caching
-- Rely on YouTube's CDN and performance
-
 ### Media File Storage (Open Question)
 
 **Options**:
@@ -234,9 +211,8 @@ TODO: User can also flag issues with captions or audio segments, and suggest cor
 - [ ] Hybrid: Development files local, production in cloud
 
 **Considerations**:
-- Media files are large (multiple GB per show)
+- Media files can be large (multiple GB per video)
 - Needed for pipeline development and testing
-- Not needed for main app (uses YouTube embeds)
 - Must avoid committing to git
 
 ## Future Considerations

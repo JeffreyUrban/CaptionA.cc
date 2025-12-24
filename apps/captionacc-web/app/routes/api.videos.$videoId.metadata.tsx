@@ -1,0 +1,172 @@
+import { type LoaderFunctionArgs } from 'react-router'
+import { resolve } from 'path'
+import { readdir } from 'fs/promises'
+import { existsSync } from 'fs'
+import Database from 'better-sqlite3'
+
+interface Annotation {
+  id: number
+  start_frame_index: number
+  end_frame_index: number
+  state: 'predicted' | 'confirmed' | 'gap'
+  pending: number
+}
+
+function getOrCreateDatabase(videoId: string) {
+  const dbPath = resolve(
+    process.cwd(),
+    '..',
+    '..',
+    'local',
+    'data',
+    ...videoId.split('/'),
+    'annotations.db'
+  )
+
+  const dbExists = existsSync(dbPath)
+  const db = new Database(dbPath)
+
+  // If database is new, create the schema
+  if (!dbExists) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS annotations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        start_frame_index INTEGER NOT NULL,
+        end_frame_index INTEGER NOT NULL,
+        state TEXT NOT NULL CHECK(state IN ('predicted', 'confirmed', 'gap')),
+        pending INTEGER NOT NULL DEFAULT 0 CHECK(pending IN (0, 1)),
+        text TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_annotations_frame_range
+      ON annotations(start_frame_index, end_frame_index);
+
+      CREATE INDEX IF NOT EXISTS idx_annotations_granularity
+      ON annotations((start_frame_index / 100) * 100);
+
+      CREATE INDEX IF NOT EXISTS idx_annotations_pending_gap
+      ON annotations(pending, state, start_frame_index);
+
+      CREATE TRIGGER IF NOT EXISTS update_annotations_timestamp
+      AFTER UPDATE ON annotations
+      BEGIN
+        UPDATE annotations
+        SET updated_at = datetime('now')
+        WHERE id = NEW.id;
+      END;
+    `)
+  }
+
+  return db
+}
+
+function fillAnnotationGaps(db: Database, totalFrames: number): number {
+  // Find all gaps in annotation coverage and create gap annotations for them
+  // Returns the number of gap annotations created
+
+  // Get all existing annotations sorted by start_frame_index
+  const annotations = db.prepare(`
+    SELECT start_frame_index, end_frame_index
+    FROM annotations
+    ORDER BY start_frame_index
+  `).all() as Array<{ start_frame_index: number; end_frame_index: number }>
+
+  let gapsCreated = 0
+  let expectedFrame = 0
+
+  for (const annotation of annotations) {
+    // Check if there's a gap before this annotation
+    if (annotation.start_frame_index > expectedFrame) {
+      // Create gap annotation for frames [expectedFrame, annotation.start_frame_index - 1]
+      db.prepare(`
+        INSERT INTO annotations (start_frame_index, end_frame_index, state, pending)
+        VALUES (?, ?, 'gap', 0)
+      `).run(expectedFrame, annotation.start_frame_index - 1)
+      gapsCreated++
+    }
+
+    // Move expectedFrame to after this annotation
+    expectedFrame = Math.max(expectedFrame, annotation.end_frame_index + 1)
+  }
+
+  // Check if there's a gap at the end
+  if (expectedFrame < totalFrames) {
+    db.prepare(`
+      INSERT INTO annotations (start_frame_index, end_frame_index, state, pending)
+      VALUES (?, ?, 'gap', 0)
+    `).run(expectedFrame, totalFrames - 1)
+    gapsCreated++
+  }
+
+  return gapsCreated
+}
+
+export async function loader({ params }: LoaderFunctionArgs) {
+  const { videoId: encodedVideoId } = params
+
+  if (!encodedVideoId) {
+    return new Response(
+      JSON.stringify({ error: 'Missing videoId' }),
+      {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    )
+  }
+
+  // Decode the URL-encoded videoId
+  const videoId = decodeURIComponent(encodedVideoId)
+
+  // Construct path to cropped frames directory
+  const croppedDir = resolve(
+    process.cwd(),
+    '..',
+    '..',
+    'local',
+    'data',
+    ...videoId.split('/'),
+    'caption_frames'
+  )
+
+  // Check if directory exists
+  if (!existsSync(croppedDir)) {
+    return new Response(
+      JSON.stringify({ error: 'Video not found' }),
+      {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    )
+  }
+
+  // Count frame files
+  const files = await readdir(croppedDir)
+  const frameFiles = files.filter(f => f.startsWith('frame_') && f.endsWith('.jpg'))
+  const totalFrames = frameFiles.length
+
+  // Get or create database, then fill any gaps in annotation coverage
+  let gapsCreated = 0
+
+  try {
+    const db = getOrCreateDatabase(videoId)
+    gapsCreated = fillAnnotationGaps(db, totalFrames)
+    db.close()
+  } catch (error) {
+    console.error('Error filling annotation gaps:', error)
+  }
+
+  return new Response(
+    JSON.stringify({
+      videoId,
+      totalFrames,
+      firstFrame: 0,
+      lastFrame: totalFrames - 1,
+      gapsCreated, // Include info about gaps that were filled
+    }),
+    {
+      headers: { 'Content-Type': 'application/json' }
+    }
+  )
+}

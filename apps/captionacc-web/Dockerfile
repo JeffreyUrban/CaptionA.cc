@@ -6,7 +6,7 @@ FROM node:${NODE_VERSION}-slim as base
 
 LABEL fly_launch_runtime="React Router"
 
-# Remix app lives here
+# React Router app lives here
 WORKDIR /app
 
 # Set production environment
