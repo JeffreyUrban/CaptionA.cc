@@ -5,7 +5,6 @@ import { existsSync } from 'fs'
 
 interface Annotation {
   id: number
-  video_id: string
   start_frame_index: number
   end_frame_index: number
   state: 'predicted' | 'confirmed' | 'gap'

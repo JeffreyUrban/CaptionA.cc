@@ -149,7 +149,6 @@ For each video, we generate cropped caption frames at 10Hz (~25,000 frames per v
 ```typescript
 interface Annotation {
   id: number
-  video_id: string
   start_frame_index: number
   end_frame_index: number
   annotation_type: 'caption' | 'non_caption'

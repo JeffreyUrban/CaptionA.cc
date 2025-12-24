@@ -5,7 +5,6 @@ import { existsSync } from 'fs'
 
 interface Annotation {
   id: number
-  video_id: string
   start_frame_index: number
   end_frame_index: number
   state: 'predicted' | 'confirmed' | 'gap'
@@ -120,9 +119,9 @@ export async function action({ params, request }: ActionFunctionArgs) {
 
           // Create right part as pending
           db.prepare(`
-            INSERT INTO annotations (video_id, start_frame_index, end_frame_index, state, pending, text)
-            VALUES (?, ?, ?, ?, 1, ?)
-          `).run(videoId, end_frame_index + 1, overlap.end_frame_index, overlap.state, overlap.text)
+            INSERT INTO annotations (start_frame_index, end_frame_index, state, pending, text)
+            VALUES (?, ?, ?, 1, ?)
+          `).run(end_frame_index + 1, overlap.end_frame_index, overlap.state, overlap.text)
         } else if (overlap.start_frame_index < start_frame_index) {
           // Overlaps on the left - trim it
           db.prepare(`
@@ -177,9 +176,9 @@ export async function action({ params, request }: ActionFunctionArgs) {
 
         // Create merged gap annotation
         db.prepare(`
-          INSERT INTO annotations (video_id, start_frame_index, end_frame_index, state, pending)
-          VALUES (?, ?, ?, 'gap', 0)
-        `).run(videoId, mergedStart, mergedEnd)
+          INSERT INTO annotations (start_frame_index, end_frame_index, state, pending)
+          VALUES (?, ?, 'gap', 0)
+        `).run(mergedStart, mergedEnd)
       }
 
       // Create gap annotations for uncovered ranges when annotation is reduced
@@ -214,9 +213,9 @@ export async function action({ params, request }: ActionFunctionArgs) {
       const { start_frame_index, end_frame_index, state, pending, text } = body
 
       const result = db.prepare(`
-        INSERT INTO annotations (video_id, start_frame_index, end_frame_index, state, pending, text)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `).run(videoId, start_frame_index, end_frame_index, state, pending ? 1 : 0, text || null)
+        INSERT INTO annotations (start_frame_index, end_frame_index, state, pending, text)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(start_frame_index, end_frame_index, state, pending ? 1 : 0, text || null)
 
       const annotation = db.prepare('SELECT * FROM annotations WHERE id = ?').get(result.lastInsertRowid)
       db.close()

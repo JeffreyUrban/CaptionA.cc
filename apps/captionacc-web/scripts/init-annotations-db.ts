@@ -66,11 +66,11 @@ console.log(`Video has ${totalFrames} frames`)
 
 // Initialize with a single gap annotation covering all frames
 const insertGap = db.prepare(`
-  INSERT INTO annotations (video_id, start_frame_index, end_frame_index, state, pending)
-  VALUES (?, ?, ?, 'gap', 0)
+  INSERT INTO annotations (start_frame_index, end_frame_index, state, pending)
+  VALUES (?, ?, 'gap', 0)
 `)
 
-insertGap.run(videoPath, 0, totalFrames - 1)
+insertGap.run(0, totalFrames - 1)
 
 console.log(`Created initial gap annotation: 0-${totalFrames - 1}`)
 

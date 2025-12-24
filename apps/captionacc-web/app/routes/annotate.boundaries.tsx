@@ -14,7 +14,6 @@ type AnnotationState = 'predicted' | 'confirmed' | 'gap'
 
 interface Annotation {
   id: number
-  video_id: string
   start_frame_index: number
   end_frame_index: number
   state: AnnotationState

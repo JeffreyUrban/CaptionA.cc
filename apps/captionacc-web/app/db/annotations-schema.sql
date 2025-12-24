@@ -3,7 +3,6 @@
 
 CREATE TABLE IF NOT EXISTS annotations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    video_id TEXT NOT NULL,
     start_frame_index INTEGER NOT NULL,
     end_frame_index INTEGER NOT NULL,
     state TEXT NOT NULL CHECK(state IN ('predicted', 'confirmed', 'gap')),

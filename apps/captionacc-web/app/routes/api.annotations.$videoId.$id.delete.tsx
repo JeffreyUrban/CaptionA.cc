@@ -97,9 +97,9 @@ export async function action({ params }: ActionFunctionArgs) {
 
     // Create merged gap annotation
     const result = db.prepare(`
-      INSERT INTO annotations (video_id, start_frame_index, end_frame_index, state, pending)
-      VALUES (?, ?, ?, 'gap', 0)
-    `).run(videoId, mergedStart, mergedEnd)
+      INSERT INTO annotations (start_frame_index, end_frame_index, state, pending)
+      VALUES (?, ?, 'gap', 0)
+    `).run(mergedStart, mergedEnd)
 
     const mergedGap = db.prepare('SELECT * FROM annotations WHERE id = ?').get(result.lastInsertRowid)
 
