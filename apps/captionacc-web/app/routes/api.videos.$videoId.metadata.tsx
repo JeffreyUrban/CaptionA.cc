@@ -27,8 +27,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
     'local',
     'data',
     ...videoId.split('/'),
-    'caption_frames',
-    'cropped'
+    'caption_frames'
   )
 
   // Check if directory exists

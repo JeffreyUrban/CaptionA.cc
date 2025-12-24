@@ -1,4 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useSearchParams, useLoaderData } from 'react-router'
+import type { LoaderFunctionArgs } from 'react-router'
 import { AppLayout } from '~/components/AppLayout'
 
 // Types
@@ -47,6 +49,13 @@ const OPACITY_MAP: Record<number, number> = {
   10: 0.2
 }
 
+// Loader function to expose environment variables
+export async function loader() {
+  return {
+    defaultVideoId: process.env.DEFAULT_VIDEO_ID || ''
+  }
+}
+
 // Helper functions for annotation management
 function getAnnotationIndexKey(frameIndex: number): number {
   return Math.floor(frameIndex / ANNOTATION_INDEX_GRANULARITY) * ANNOTATION_INDEX_GRANULARITY
@@ -67,8 +76,15 @@ function getAnnotationBorderColor(annotation: Annotation): string {
 }
 
 export default function BoundaryWorkflow() {
+  const [searchParams] = useSearchParams()
+  const loaderData = useLoaderData<typeof loader>()
+  const defaultVideoId = loaderData?.defaultVideoId || ''
+
+  // Get videoId from URL params, fallback to empty string
+  const videoIdFromUrl = searchParams.get('videoId') || ''
+
   // State
-  const [videoId, setVideoId] = useState('')
+  const [videoId, setVideoId] = useState(videoIdFromUrl)
   const [currentFrameIndex, setCurrentFrameIndex] = useState(0)
   const [totalFrames, setTotalFrames] = useState(0)
   const [frames, setFrames] = useState<Map<number, Frame>>(new Map())
@@ -706,7 +722,7 @@ export default function BoundaryWorkflow() {
     <AppLayout fullScreen>
       <div className="flex h-[calc(100vh-4rem)] max-h-[calc(100vh-4rem)] flex-col overflow-hidden px-4 py-4">
         {/* Workflow completion banner */}
-        {workflowProgress >= 100 && (
+        {(workflowProgress || 0) >= 100 && (
           <div className="mb-4 rounded-lg bg-green-50 border-2 border-green-500 p-4 dark:bg-green-950 dark:border-green-600">
             <div className="flex items-center gap-3">
               <div className="text-3xl">🎉</div>
@@ -902,8 +918,8 @@ export default function BoundaryWorkflow() {
                 {totalFrames.toLocaleString()}
               </div>
               <div className="mt-1 text-xs text-gray-500 dark:text-gray-500">
-                Progress: {workflowProgress.toFixed(2)}% (
-                {completedFrames.toLocaleString()} /{' '}
+                Progress: {(workflowProgress || 0).toFixed(2)}% (
+                {(completedFrames || 0).toLocaleString()} /{' '}
                 {totalFrames.toLocaleString()} completed)
               </div>
 

@@ -134,6 +134,7 @@ def extract_frames_streaming(
     output_dir: Path,
     rate_hz: float = 0.1,
     crop_box: Optional[tuple[int, int, int, int]] = None,
+    max_threads: int = 4,
 ) -> subprocess.Popen:
     """Extract frames from video as streaming background process.
 
@@ -146,6 +147,7 @@ def extract_frames_streaming(
         output_dir: Directory to save extracted frames
         rate_hz: Frame sampling rate in Hz (default: 0.1)
         crop_box: Optional crop region as (x, y, width, height)
+        max_threads: Maximum threads for FFmpeg (default: 4 for IDE responsiveness)
 
     Returns:
         FFmpeg process handle (use .poll() to check status, .wait() to block)
@@ -187,6 +189,7 @@ def extract_frames_streaming(
                 "frame_pts": "1",  # Use frame PTS for numbering
             },
         )
+        .global_args("-threads", str(max_threads))  # Limit threads for IDE responsiveness
         .global_args("-fflags", "+genpts")  # Generate presentation timestamps
         .global_args("-flush_packets", "1")  # Flush packets immediately
         .overwrite_output()

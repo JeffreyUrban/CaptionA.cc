@@ -1,7 +1,15 @@
-import { Link } from 'react-router'
+import { Link, useLoaderData } from 'react-router'
 import { AppLayout } from '~/components/AppLayout'
 
+// Loader function to expose default video ID from environment
+export async function loader() {
+  return {
+    defaultVideoId: process.env.DEFAULT_VIDEO_ID || ''
+  }
+}
+
 export default function Home() {
+  const { defaultVideoId } = useLoaderData<typeof loader>()
   return (
     <AppLayout>
       <div>
@@ -50,7 +58,7 @@ export default function Home() {
               </p>
               <div className="mt-10 flex items-center justify-center gap-x-6">
                 <Link
-                  to="/annotate/boundaries"
+                  to={defaultVideoId ? `/annotate/boundaries?videoId=${encodeURIComponent(defaultVideoId)}` : '/annotate/boundaries'}
                   className="rounded-md bg-white px-6 py-3 text-sm font-semibold text-teal-600 shadow-sm hover:bg-teal-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
                 >
                   Mark Caption Boundaries
