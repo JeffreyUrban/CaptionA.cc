@@ -816,9 +816,34 @@ export default function BoundaryWorkflow() {
                       />
                     )}
 
-                    {/* Current frame ring overlay (on top of everything) */}
+                    {/* Current frame indicators - gray triangles on left and right */}
                     {isCurrent && (
-                      <div className="absolute inset-0 pointer-events-none z-20 ring-4 ring-yellow-300 dark:ring-yellow-400 rounded" />
+                      <>
+                        {/* Left triangle pointing right */}
+                        <div
+                          className="absolute top-1/2 -translate-y-1/2 pointer-events-none z-20"
+                          style={{
+                            left: '-12px',
+                            width: 0,
+                            height: 0,
+                            borderTop: '12px solid transparent',
+                            borderBottom: '12px solid transparent',
+                            borderLeft: '12px solid rgb(156, 163, 175)' // gray-400
+                          }}
+                        />
+                        {/* Right triangle pointing left */}
+                        <div
+                          className="absolute top-1/2 -translate-y-1/2 pointer-events-none z-20"
+                          style={{
+                            right: '-12px',
+                            width: 0,
+                            height: 0,
+                            borderTop: '12px solid transparent',
+                            borderBottom: '12px solid transparent',
+                            borderRight: '12px solid rgb(156, 163, 175)' // gray-400
+                          }}
+                        />
+                      </>
                     )}
 
                     {/* Frame container */}
