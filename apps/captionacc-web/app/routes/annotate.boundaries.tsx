@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { useSearchParams, useLoaderData } from 'react-router'
+import { useSearchParams, useLoaderData, useNavigate } from 'react-router'
 import type { LoaderFunctionArgs } from 'react-router'
 import { AppLayout } from '~/components/AppLayout'
 
@@ -76,6 +76,7 @@ function getAnnotationBorderColor(annotation: Annotation): string {
 
 export default function BoundaryWorkflow() {
   const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
   const loaderData = useLoaderData<typeof loader>()
   const defaultVideoId = loaderData?.defaultVideoId || ''
 
@@ -712,6 +713,11 @@ export default function BoundaryWorkflow() {
     return frameIndex >= markedStart && frameIndex <= markedEnd
   }, [markedStart, markedEnd])
 
+  // Switch to text correction mode
+  const switchToTextCorrection = () => {
+    navigate(`/annotate/text?videoId=${encodeURIComponent(videoId)}`)
+  }
+
   // Show loading state while metadata loads
   if (isLoadingMetadata) {
     return (
@@ -937,7 +943,10 @@ export default function BoundaryWorkflow() {
               <button className="flex-1 rounded py-2 text-sm font-semibold bg-teal-600 text-white">
                 Boundaries
               </button>
-              <button className="flex-1 rounded py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800">
+              <button
+                onClick={switchToTextCorrection}
+                className="flex-1 rounded py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+              >
                 Text Correction
               </button>
             </div>

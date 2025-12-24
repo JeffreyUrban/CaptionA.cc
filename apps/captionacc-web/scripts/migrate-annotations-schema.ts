@@ -106,8 +106,12 @@ function migrateDatabase(dbPath: string, videoPath: string): boolean {
 
         if (!tableInfo.some(col => col.name === 'text_updated_at')) {
           db.exec(`ALTER TABLE annotations ADD COLUMN text_updated_at TEXT`)
-          db.exec(`UPDATE annotations SET text_updated_at = COALESCE(updated_at, datetime('now'))`)
+          // Leave NULL - will be set when first text annotation is saved
         }
+
+        // Reset text_updated_at to NULL for annotations without text annotation
+        // (Fix for previous migration that incorrectly populated this field)
+        db.exec(`UPDATE annotations SET text_updated_at = NULL WHERE text IS NULL`)
       }
 
       console.log('    - Creating frames table...')
@@ -172,7 +176,7 @@ function migrateDatabase(dbPath: string, videoPath: string): boolean {
           text_status TEXT CHECK(text_status IN ('valid_caption', 'ocr_error', 'partial_caption', 'text_unclear', 'other_issue')),
           text_notes TEXT,
           text_ocr_combined TEXT,
-          text_updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+          text_updated_at TEXT,
           created_at TEXT NOT NULL DEFAULT (datetime('now'))
         )
       `)
@@ -236,7 +240,7 @@ function migrateDatabase(dbPath: string, videoPath: string): boolean {
 
       db.exec(`
         CREATE TRIGGER IF NOT EXISTS update_text_timestamp
-        AFTER UPDATE OF text, text_pending, text_status, text_notes, text_ocr_combined ON annotations
+        AFTER UPDATE OF text, text_status, text_notes ON annotations
         BEGIN
           UPDATE annotations
           SET text_updated_at = datetime('now')

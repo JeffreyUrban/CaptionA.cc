@@ -12,6 +12,9 @@ import { existsSync, mkdirSync } from 'fs'
 // Image quality constant
 const COMBINED_IMAGE_QUALITY = 95
 
+// Maximum number of frames to use for combined image (to prevent memory issues)
+const MAX_FRAMES_FOR_COMBINED_IMAGE = 30
+
 /**
  * Generate a combined image from a sequence of frames using median pixel values.
  *
@@ -45,7 +48,7 @@ export async function generateCombinedImage(
   const frameBuffers: sharp.Sharp[] = []
 
   for (let i = startFrame; i <= endFrame; i++) {
-    const framePath = resolve(framesDir, `frame_${i.toString().padStart(6, '0')}.jpg`)
+    const framePath = resolve(framesDir, `frame_${i.toString().padStart(10, '0')}.jpg`)
 
     if (existsSync(framePath)) {
       frameBuffers.push(sharp(framePath))
@@ -200,7 +203,7 @@ export async function getOrGenerateCombinedImage(
   const frameBuffers: sharp.Sharp[] = []
 
   for (let i = startFrame; i <= endFrame; i++) {
-    const framePath = resolve(framesDir, `frame_${i.toString().padStart(6, '0')}.jpg`)
+    const framePath = resolve(framesDir, `frame_${i.toString().padStart(10, '0')}.jpg`)
 
     if (existsSync(framePath)) {
       frameBuffers.push(sharp(framePath))

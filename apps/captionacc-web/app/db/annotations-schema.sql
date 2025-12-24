@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS annotations (
     text_status TEXT CHECK(text_status IN ('valid_caption', 'ocr_error', 'partial_caption', 'text_unclear', 'other_issue')),
     text_notes TEXT,
     text_ocr_combined TEXT,  -- Cached OCR result from combined image
-    text_updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    text_updated_at TEXT,  -- NULL until first text annotation save
 
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -77,7 +77,7 @@ BEGIN
 END;
 
 CREATE TRIGGER IF NOT EXISTS update_text_timestamp
-AFTER UPDATE OF text, text_pending, text_status, text_notes, text_ocr_combined ON annotations
+AFTER UPDATE OF text, text_status, text_notes ON annotations
 BEGIN
     UPDATE annotations
     SET text_updated_at = datetime('now')
