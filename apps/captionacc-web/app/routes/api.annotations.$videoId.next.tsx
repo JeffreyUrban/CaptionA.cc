@@ -7,11 +7,11 @@ interface Annotation {
   id: number
   start_frame_index: number
   end_frame_index: number
-  state: 'predicted' | 'confirmed' | 'gap'
-  pending: number
+  boundary_state: 'predicted' | 'confirmed' | 'gap'
+  boundary_pending: number
+  boundary_updated_at: string
   text: string | null
   created_at: string
-  updated_at: string
 }
 
 function getDatabase(videoId: string) {
@@ -51,8 +51,8 @@ export async function loader({ params }: LoaderFunctionArgs) {
     // Pending annotations take priority over gaps
     const annotation = db.prepare(`
       SELECT * FROM annotations
-      WHERE pending = 1 OR state = 'gap'
-      ORDER BY pending DESC, start_frame_index ASC
+      WHERE boundary_pending = 1 OR boundary_state = 'gap'
+      ORDER BY boundary_pending DESC, start_frame_index ASC
       LIMIT 1
     `).get() as Annotation | undefined
 

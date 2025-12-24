@@ -16,11 +16,11 @@ interface Annotation {
   id: number
   start_frame_index: number
   end_frame_index: number
-  state: AnnotationState
-  pending: boolean  // When true, annotation is treated as pending for workflow purposes
+  boundary_state: AnnotationState
+  boundary_pending: boolean  // When true, annotation is treated as pending for workflow purposes
+  boundary_updated_at?: string
   text: string | null
   created_at?: string
-  updated_at?: string
 }
 
 type FrameSpacing = 'linear' | 'exponential' | 'hybrid'
@@ -61,7 +61,7 @@ function getAnnotationIndexKey(frameIndex: number): number {
 }
 
 function getEffectiveState(annotation: Annotation): 'pending' | AnnotationState {
-  return annotation.pending ? 'pending' : annotation.state
+  return annotation.boundary_pending ? 'pending' : annotation.boundary_state
 }
 
 function getAnnotationBorderColor(annotation: Annotation): string {
@@ -542,8 +542,8 @@ export default function BoundaryWorkflow() {
           id: activeAnnotation.id,
           start_frame_index: markedStart,
           end_frame_index: markedEnd,
-          state: activeAnnotation.state === 'gap' ? 'confirmed' : activeAnnotation.state,
-          pending: false
+          boundary_state: activeAnnotation.boundary_state === 'gap' ? 'confirmed' : activeAnnotation.boundary_state,
+          boundary_pending: false
         })
       })
 
@@ -1173,10 +1173,10 @@ export default function BoundaryWorkflow() {
                 <button
                   onClick={deleteAnnotation}
                   disabled={
-                    !activeAnnotation || activeAnnotation.state === 'gap'
+                    !activeAnnotation || activeAnnotation.boundary_state === 'gap'
                   }
                   className={`w-full rounded-md border-2 px-4 py-2 text-sm font-semibold ${
-                    activeAnnotation && activeAnnotation.state !== 'gap'
+                    activeAnnotation && activeAnnotation.boundary_state !== 'gap'
                       ? 'border-red-500 text-red-600 hover:bg-red-50 dark:border-red-600 dark:text-red-400 dark:hover:bg-red-950'
                       : 'cursor-not-allowed border-gray-300 text-gray-400 dark:border-gray-700 dark:text-gray-600'
                   }`}

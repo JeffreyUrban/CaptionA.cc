@@ -66,7 +66,7 @@ console.log(`Video has ${totalFrames} frames`)
 
 // Initialize with a single gap annotation covering all frames
 const insertGap = db.prepare(`
-  INSERT INTO annotations (start_frame_index, end_frame_index, state, pending)
+  INSERT INTO annotations (start_frame_index, end_frame_index, boundary_state, boundary_pending)
   VALUES (?, ?, 'gap', 0)
 `)
 

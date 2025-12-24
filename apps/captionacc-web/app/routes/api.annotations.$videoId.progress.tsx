@@ -40,7 +40,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
     const result = db.prepare(`
       SELECT SUM(end_frame_index - start_frame_index + 1) as completed_frames
       FROM annotations
-      WHERE state != 'gap' AND pending = 0
+      WHERE boundary_state != 'gap' AND boundary_pending = 0
     `).get() as { completed_frames: number | null }
 
     // Get total frames from all annotations (should equal video total)

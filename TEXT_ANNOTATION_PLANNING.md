@@ -9,7 +9,7 @@ Implement the Text Correction workflow as specified in `apps/captionacc-web/docs
 - **Database**: Each video has SQLite DB at `local/data/[videoPath]/annotations.db`
 - **Annotations Table**: Shared table for boundary and text data
   - Boundary fields: `start_frame_index`, `end_frame_index`, `boundary_state`, `boundary_pending`
-  - Text fields: `text`, `text_pending`, `status`, `notes`
+  - Text fields: `text`, `text_pending`, `text_status`, `text_notes`, `text_ocr_combined`, `text_updated_at`
   - Boundary states: 'predicted', 'confirmed', 'gap' (boundary workflow only)
 - **Workflow**:
   - Phase 1: Boundary annotation (mark caption ranges)
@@ -25,8 +25,10 @@ Implement the Text Correction workflow as specified in `apps/captionacc-web/docs
 ✓ Text annotations use same `annotations` table with additional fields:
   - `text` field: NULL = not yet annotated, empty string = annotated as "no caption"
   - `text_pending`: flag for when boundaries change and text needs re-annotation
-  - `status`: text quality indicator (separate from boundary_state)
-  - `notes`: user notes during text annotation
+  - `text_status`: text quality indicator (separate from boundary_state)
+  - `text_notes`: user notes during text annotation
+  - `text_ocr_combined`: cached OCR result from combined image
+  - `text_updated_at`: timestamp of last text annotation update (separate from boundary_updated_at)
 ✓ Separate route for text annotation workflow (text correction = text annotation)
 ✓ Boundary states/pending are boundary-specific, text has own pending flag
 
@@ -44,11 +46,16 @@ Implement the Text Correction workflow as specified in `apps/captionacc-web/docs
 2. **Add text-specific fields**:
    - `text_pending` INTEGER DEFAULT 0 CHECK(text_pending IN (0, 1))
      - Set to 1 when boundaries change and text needs re-annotation
-   - `status` TEXT (nullable)
+   - `text_status` TEXT (nullable)
      - Text quality: 'valid_caption', 'ocr_error', 'partial_caption', 'text_unclear', 'other_issue'
-   - `notes` TEXT (nullable)
+   - `text_notes` TEXT (nullable)
      - User notes during text annotation
+   - `text_ocr_combined` TEXT (nullable)
+     - Cached OCR result from combined image
+   - `text_updated_at` TEXT NOT NULL DEFAULT (datetime('now'))
+     - Timestamp of last text annotation update
    - Keep `text` TEXT (NULL = not annotated, empty string = no caption)
+   - Also add `boundary_updated_at` TEXT NOT NULL DEFAULT (datetime('now'))
 
 3. **Add frames table** (for per-frame OCR data):
    ```sql
@@ -109,7 +116,7 @@ Implement the Text Correction workflow as specified in `apps/captionacc-web/docs
     - Trigger per-frame OCR (async)
     - Return: annotation data, combined image URL, combined OCR text, per-frame OCR if available
   - PUT: Update text annotation
-    - Body: `{ text, status, notes }`
+    - Body: `{ text, text_status, text_notes }`
     - Set `text_pending = 0`
     - Return updated annotation
 
@@ -120,7 +127,7 @@ Implement the Text Correction workflow as specified in `apps/captionacc-web/docs
 
 **Modify existing:**
 - `app/routes/api.annotations.$videoId.tsx`
-  - GET: Add text-related fields (text, text_pending, status, notes) to responses
+  - GET: Add text-related fields (text, text_pending, text_status, text_notes, text_ocr_combined, text_updated_at) to responses
   - PUT: When updating boundaries (start/end frame), set `text_pending = 1` if text is not NULL
 
 ### Phase 4: Core Text Annotation Page
@@ -162,8 +169,8 @@ Implement the Text Correction workflow as specified in `apps/captionacc-web/docs
 
 - `app/components/TextCorrection/AnnotationInfo.tsx`
   - Display annotation ID, video, frame range
-  - Status dropdown
-  - Notes textarea
+  - Text status dropdown
+  - Text notes textarea
   - Save/Skip/Next buttons
 
 **Frame-by-frame OCR Components:**

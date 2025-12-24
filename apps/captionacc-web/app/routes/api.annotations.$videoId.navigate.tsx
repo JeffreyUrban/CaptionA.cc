@@ -7,11 +7,11 @@ interface Annotation {
   id: number
   start_frame_index: number
   end_frame_index: number
-  state: 'predicted' | 'confirmed' | 'gap'
-  pending: number
+  boundary_state: 'predicted' | 'confirmed' | 'gap'
+  boundary_pending: number
+  boundary_updated_at: string
   text: string | null
   created_at: string
-  updated_at: string
 }
 
 function getDatabase(videoId: string) {
@@ -57,9 +57,9 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
   try {
     const db = getDatabase(videoId)
 
-    // Get current annotation's updated_at for comparison
-    const current = db.prepare('SELECT updated_at FROM annotations WHERE id = ?').get(currentId) as
-      { updated_at: string } | undefined
+    // Get current annotation's boundary_updated_at for comparison
+    const current = db.prepare('SELECT boundary_updated_at FROM annotations WHERE id = ?').get(currentId) as
+      { boundary_updated_at: string } | undefined
 
     if (!current) {
       db.close()
@@ -72,23 +72,23 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
     let annotation: Annotation | undefined
 
     if (direction === 'prev') {
-      // Get previous non-gap annotation (earlier updated_at, or same updated_at with lower id)
+      // Get previous non-gap annotation (earlier boundary_updated_at, or same boundary_updated_at with lower id)
       annotation = db.prepare(`
         SELECT * FROM annotations
-        WHERE (updated_at < ? OR (updated_at = ? AND id < ?))
-        AND state IN ('predicted', 'confirmed')
-        ORDER BY updated_at DESC, id DESC
+        WHERE (boundary_updated_at < ? OR (boundary_updated_at = ? AND id < ?))
+        AND boundary_state IN ('predicted', 'confirmed')
+        ORDER BY boundary_updated_at DESC, id DESC
         LIMIT 1
-      `).get(current.updated_at, current.updated_at, currentId) as Annotation | undefined
+      `).get(current.boundary_updated_at, current.boundary_updated_at, currentId) as Annotation | undefined
     } else {
-      // Get next non-gap annotation (later updated_at, or same updated_at with higher id)
+      // Get next non-gap annotation (later boundary_updated_at, or same boundary_updated_at with higher id)
       annotation = db.prepare(`
         SELECT * FROM annotations
-        WHERE (updated_at > ? OR (updated_at = ? AND id > ?))
-        AND state IN ('predicted', 'confirmed')
-        ORDER BY updated_at ASC, id ASC
+        WHERE (boundary_updated_at > ? OR (boundary_updated_at = ? AND id > ?))
+        AND boundary_state IN ('predicted', 'confirmed')
+        ORDER BY boundary_updated_at ASC, id ASC
         LIMIT 1
-      `).get(current.updated_at, current.updated_at, currentId) as Annotation | undefined
+      `).get(current.boundary_updated_at, current.boundary_updated_at, currentId) as Annotation | undefined
     }
 
     db.close()

@@ -58,7 +58,7 @@ export async function action({ params }: ActionFunctionArgs) {
     // Find adjacent gap annotations
     const adjacentGaps = db.prepare(`
       SELECT * FROM annotations
-      WHERE state = 'gap'
+      WHERE boundary_state = 'gap'
       AND (
         end_frame_index = ? - 1
         OR start_frame_index = ? + 1
@@ -97,7 +97,7 @@ export async function action({ params }: ActionFunctionArgs) {
 
     // Create merged gap annotation
     const result = db.prepare(`
-      INSERT INTO annotations (start_frame_index, end_frame_index, state, pending)
+      INSERT INTO annotations (start_frame_index, end_frame_index, boundary_state, boundary_pending)
       VALUES (?, ?, 'gap', 0)
     `).run(mergedStart, mergedEnd)
 
