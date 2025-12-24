@@ -2,6 +2,7 @@ import { type ActionFunctionArgs } from 'react-router'
 import Database from 'better-sqlite3'
 import { resolve } from 'path'
 import { existsSync } from 'fs'
+import { deleteCombinedImage } from '~/utils/image-processing'
 
 function getDatabase(videoId: string) {
   const dbPath = resolve(
@@ -88,9 +89,11 @@ export async function action({ params }: ActionFunctionArgs) {
       }
     }
 
-    // Delete the annotation and adjacent gaps
+    // Delete the annotation and its combined image
+    deleteCombinedImage(videoId, annotationId)
     db.prepare('DELETE FROM annotations WHERE id = ?').run(annotationId)
 
+    // Delete adjacent gaps (gaps don't have combined images, so no cleanup needed)
     for (const gapId of gapIdsToDelete) {
       db.prepare('DELETE FROM annotations WHERE id = ?').run(gapId)
     }

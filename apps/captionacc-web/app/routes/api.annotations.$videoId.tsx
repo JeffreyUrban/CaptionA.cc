@@ -2,6 +2,7 @@ import { type LoaderFunctionArgs, type ActionFunctionArgs } from 'react-router'
 import Database from 'better-sqlite3'
 import { resolve } from 'path'
 import { existsSync } from 'fs'
+import { deleteCombinedImage, getOrGenerateCombinedImage } from '~/utils/image-processing'
 
 interface Annotation {
   id: number
@@ -88,6 +89,32 @@ function getOrCreateDatabase(videoId: string) {
   return db
 }
 
+/**
+ * Regenerate combined image when annotation boundaries change.
+ * Deletes old image, generates new one, and clears OCR cache.
+ */
+async function regenerateCombinedImageForAnnotation(
+  videoId: string,
+  annotationId: number,
+  startFrame: number,
+  endFrame: number,
+  db: Database.Database
+): Promise<void> {
+  // Delete old combined image
+  deleteCombinedImage(videoId, annotationId)
+
+  // Generate new combined image immediately (for ML training)
+  await getOrGenerateCombinedImage(videoId, annotationId, startFrame, endFrame)
+
+  // Clear OCR cache and mark text as pending
+  db.prepare(`
+    UPDATE annotations
+    SET text_ocr_combined = NULL,
+        text_pending = 1
+    WHERE id = ?
+  `).run(annotationId)
+}
+
 // GET - Fetch annotations in a range
 export async function loader({ params, request }: LoaderFunctionArgs) {
   const { videoId: encodedVideoId } = params
@@ -160,9 +187,12 @@ export async function action({ params, request }: ActionFunctionArgs) {
       `).all(id, start_frame_index, end_frame_index) as Annotation[]
 
       // Resolve overlaps by adjusting conflicting annotations
+      const modifiedAnnotations: Array<{ id: number; startFrame: number; endFrame: number }> = []
+
       for (const overlap of overlapping) {
         if (overlap.start_frame_index >= start_frame_index && overlap.end_frame_index <= end_frame_index) {
-          // Completely contained - delete it
+          // Completely contained - delete it and its combined image
+          deleteCombinedImage(videoId, overlap.id)
           db.prepare('DELETE FROM annotations WHERE id = ?').run(overlap.id)
         } else if (overlap.start_frame_index < start_frame_index && overlap.end_frame_index > end_frame_index) {
           // New annotation is contained within existing - split the existing
@@ -172,12 +202,14 @@ export async function action({ params, request }: ActionFunctionArgs) {
             SET end_frame_index = ?, boundary_pending = 1
             WHERE id = ?
           `).run(start_frame_index - 1, overlap.id)
+          modifiedAnnotations.push({ id: overlap.id, startFrame: overlap.start_frame_index, endFrame: start_frame_index - 1 })
 
           // Create right part as pending
-          db.prepare(`
+          const result = db.prepare(`
             INSERT INTO annotations (start_frame_index, end_frame_index, boundary_state, boundary_pending, text)
             VALUES (?, ?, ?, 1, ?)
           `).run(end_frame_index + 1, overlap.end_frame_index, overlap.boundary_state, overlap.text)
+          modifiedAnnotations.push({ id: result.lastInsertRowid as number, startFrame: end_frame_index + 1, endFrame: overlap.end_frame_index })
         } else if (overlap.start_frame_index < start_frame_index) {
           // Overlaps on the left - trim it
           db.prepare(`
@@ -185,6 +217,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
             SET end_frame_index = ?, boundary_pending = 1
             WHERE id = ?
           `).run(start_frame_index - 1, overlap.id)
+          modifiedAnnotations.push({ id: overlap.id, startFrame: overlap.start_frame_index, endFrame: start_frame_index - 1 })
         } else {
           // Overlaps on the right - trim it
           db.prepare(`
@@ -192,7 +225,13 @@ export async function action({ params, request }: ActionFunctionArgs) {
             SET start_frame_index = ?, boundary_pending = 1
             WHERE id = ?
           `).run(end_frame_index + 1, overlap.id)
+          modifiedAnnotations.push({ id: overlap.id, startFrame: end_frame_index + 1, endFrame: overlap.end_frame_index })
         }
+      }
+
+      // Regenerate combined images for all modified overlapping annotations
+      for (const modified of modifiedAnnotations) {
+        await regenerateCombinedImageForAnnotation(videoId, modified.id, modified.startFrame, modified.endFrame, db)
       }
 
       // Helper function to create or merge gap annotation
@@ -258,6 +297,11 @@ export async function action({ params, request }: ActionFunctionArgs) {
         WHERE id = ?
       `).run(start_frame_index, end_frame_index, boundary_state || 'confirmed', id)
 
+      // Regenerate combined image if boundaries changed
+      if (start_frame_index !== original.start_frame_index || end_frame_index !== original.end_frame_index) {
+        await regenerateCombinedImageForAnnotation(videoId, id, start_frame_index, end_frame_index, db)
+      }
+
       const annotation = db.prepare('SELECT * FROM annotations WHERE id = ?').get(id)
       db.close()
 
@@ -273,7 +317,17 @@ export async function action({ params, request }: ActionFunctionArgs) {
         VALUES (?, ?, ?, ?, ?)
       `).run(start_frame_index, end_frame_index, boundary_state, boundary_pending ? 1 : 0, text || null)
 
-      const annotation = db.prepare('SELECT * FROM annotations WHERE id = ?').get(result.lastInsertRowid)
+      const annotationId = result.lastInsertRowid as number
+
+      // Generate combined image for new confirmed annotations (for ML training)
+      // Skip if it's a gap or pending review
+      const isPending = boundary_pending ? 1 : 0
+      const isGap = boundary_state === 'gap'
+      if (!isGap && !isPending) {
+        await getOrGenerateCombinedImage(videoId, annotationId, start_frame_index, end_frame_index)
+      }
+
+      const annotation = db.prepare('SELECT * FROM annotations WHERE id = ?').get(annotationId)
       db.close()
 
       return new Response(JSON.stringify({ annotation }), {
