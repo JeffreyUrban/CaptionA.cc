@@ -44,10 +44,18 @@ function migrateDatabase(dbPath: string, videoPath: string): boolean {
     const hasIntermediateSchema = tableInfo.some(col => col.name === 'boundary_state') && tableInfo.some(col => col.name === 'status')
     const hasNewSchema = tableInfo.some(col => col.name === 'boundary_state') && tableInfo.some(col => col.name === 'text_status')
 
-    // Check if frames_ocr table exists
+    // Check if frames_ocr and video_preferences tables exist
     const framesOcrExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='frames_ocr'").get()
+    const videoPrefsExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='video_preferences'").get()
 
-    if (hasNewSchema && framesOcrExists) {
+    // Check if video_preferences has correct schema (INTEGER text_size)
+    let videoPrefsHasCorrectSchema = false
+    if (videoPrefsExists) {
+      const prefTableInfo = db.prepare("PRAGMA table_info(video_preferences)").all() as Array<{ name: string, type: string }>
+      videoPrefsHasCorrectSchema = prefTableInfo.some(col => col.name === 'text_size' && col.type === 'INTEGER')
+    }
+
+    if (hasNewSchema && framesOcrExists && videoPrefsExists && videoPrefsHasCorrectSchema) {
       console.log(`  ✓ Already migrated: ${videoPath}`)
       db.close()
       return true
@@ -129,6 +137,29 @@ function migrateDatabase(dbPath: string, videoPath: string): boolean {
           created_at TEXT NOT NULL DEFAULT (datetime('now'))
         )
       `)
+
+      console.log('    - Creating video_preferences table...')
+
+      // Check if video_preferences table exists and has old schema
+      const prefTableInfo = db.prepare("PRAGMA table_info(video_preferences)").all() as Array<{ name: string, type: string }>
+      const hasOldTextSchema = prefTableInfo.length > 0 && prefTableInfo.some(col => col.name === 'text_size' && col.type === 'TEXT')
+
+      if (hasOldTextSchema) {
+        console.log('    - Migrating video_preferences from TEXT to INTEGER schema...')
+        db.exec(`DROP TABLE video_preferences`)
+      }
+
+      // Create video_preferences table for per-video settings (if not exists with correct schema)
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS video_preferences (
+          id INTEGER PRIMARY KEY CHECK(id = 1),
+          text_size INTEGER DEFAULT 16 CHECK(text_size >= 16 AND text_size <= 64),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+      `)
+
+      // Insert default preferences if not exists
+      db.exec(`INSERT OR IGNORE INTO video_preferences (id, text_size) VALUES (1, 16)`)
 
       console.log('    - Creating new indexes...')
 

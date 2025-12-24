@@ -68,6 +68,9 @@ export default function AnnotateText() {
   const [perFrameOCR, setPerFrameOCR] = useState<Array<{ frameIndex: number; ocrText: string }>>([])
   const [loadingFrames, setLoadingFrames] = useState(false)
 
+  // Text size preference (in pixels)
+  const [textSize, setTextSize] = useState<number>(16)
+
   // Drag state for frame navigation
   const [isDragging, setIsDragging] = useState(false)
   const [dragStartY, setDragStartY] = useState(0)
@@ -82,6 +85,27 @@ export default function AnnotateText() {
       touchedVideos.add(videoId)
       localStorage.setItem('touched-videos', JSON.stringify(Array.from(touchedVideos)))
     }
+  }, [videoId])
+
+  // Load text size preference
+  useEffect(() => {
+    if (!videoId) return
+
+    const loadTextSize = async () => {
+      try {
+        const response = await fetch(`/api/preferences/${encodeURIComponent(videoId)}`)
+        const data = await response.json()
+        if (data.text_size) {
+          // Convert from stored value to pixels (text_size is stored as pixels)
+          const size = typeof data.text_size === 'number' ? data.text_size : parseInt(data.text_size) || 16
+          setTextSize(size)
+        }
+      } catch (error) {
+        console.error('Failed to load text size preference:', error)
+      }
+    }
+
+    loadTextSize()
   }, [videoId])
 
   // Load video metadata and progress
@@ -297,6 +321,24 @@ export default function AnnotateText() {
   const handlePrevious = () => {
     if (queueIndex > 0) {
       setQueueIndex(queueIndex - 1)
+    }
+  }
+
+  // Handle text size change
+  const handleTextSizeChange = async (newSize: number) => {
+    setTextSize(newSize)
+
+    // Save to database
+    if (videoId) {
+      try {
+        await fetch(`/api/preferences/${encodeURIComponent(videoId)}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text_size: newSize })
+        })
+      } catch (error) {
+        console.error('Failed to save text size preference:', error)
+      }
     }
   }
 
@@ -528,14 +570,21 @@ export default function AnnotateText() {
           <div className="flex h-full w-2/3 flex-col gap-4 overflow-y-auto">
             {currentAnnotation ? (
               <>
-                {/* Current Frame Image */}
+                {/* Frame-by-Frame View */}
                 <div className="rounded-lg border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
-                  <div className="border-b border-gray-200 px-4 py-3 dark:border-gray-800">
-                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                      Frame-by-Frame
-                    </h2>
-                  </div>
                   <div className="p-4">
+                    {/* Frame info header */}
+                    <div className="mb-3 flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
+                      <span className="font-medium">
+                        Frame {currentFrameIndex}
+                      </span>
+                      <span className="text-xs">
+                        ({currentFrameIndex - currentAnnotation.annotation.start_frame_index + 1} of{' '}
+                        {currentAnnotation.annotation.end_frame_index - currentAnnotation.annotation.start_frame_index + 1})
+                      </span>
+                    </div>
+
+                    {/* Frame image */}
                     <div
                       className="overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-800 cursor-grab active:cursor-grabbing"
                       onWheel={handleWheel}
@@ -550,32 +599,36 @@ export default function AnnotateText() {
                       />
                     </div>
 
-
-                    <div className="mt-3 flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
-                      <span>
-                        Frame {currentFrameIndex}
-                      </span>
-                      <span className="text-xs">
-                        ({currentFrameIndex - currentAnnotation.annotation.start_frame_index + 1} of{' '}
-                        {currentAnnotation.annotation.end_frame_index - currentAnnotation.annotation.start_frame_index + 1})
-                      </span>
+                    {/* Per-frame OCR text */}
+                    <div className="mt-3">
+                      {loadingFrames ? (
+                        <div className="rounded-lg bg-gray-50 p-3 text-sm text-gray-500 dark:bg-gray-950 dark:text-gray-400">
+                          Loading frame OCR data...
+                        </div>
+                      ) : (
+                        <div
+                          className="rounded-lg bg-gray-50 p-3 font-mono whitespace-pre-wrap dark:bg-gray-950 dark:text-gray-300 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors"
+                          style={{ fontSize: `${textSize}px` }}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => {
+                            const frameText = perFrameOCR.find(f => f.frameIndex === currentFrameIndex)?.ocrText
+                            if (frameText) setText(frameText)
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault()
+                              const frameText = perFrameOCR.find(f => f.frameIndex === currentFrameIndex)?.ocrText
+                              if (frameText) setText(frameText)
+                            }
+                          }}
+                          title="Click to copy to Caption Text"
+                        >
+                          {perFrameOCR.find(f => f.frameIndex === currentFrameIndex)?.ocrText ||
+                            '(No OCR text for this frame)'}
+                        </div>
+                      )}
                     </div>
-                  </div>
-                </div>
-
-                {/* Per-Frame OCR Text */}
-                <div className="rounded-lg border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
-                  <div className="p-4">
-                    {loadingFrames ? (
-                      <div className="rounded-lg bg-gray-50 p-3 text-sm text-gray-500 dark:bg-gray-950 dark:text-gray-400">
-                        Loading frame OCR data...
-                      </div>
-                    ) : (
-                      <div className="rounded-lg bg-gray-50 p-3 font-mono text-sm whitespace-pre-wrap dark:bg-gray-950 dark:text-gray-300">
-                        {perFrameOCR.find(f => f.frameIndex === currentFrameIndex)?.ocrText ||
-                          '(No OCR text for this frame)'}
-                      </div>
-                    )}
                   </div>
                 </div>
 
@@ -587,7 +640,24 @@ export default function AnnotateText() {
                     </h2>
                   </div>
                   <div className="p-4">
-                    <div className="rounded-lg bg-gray-50 p-3 font-mono text-sm whitespace-pre-wrap dark:bg-gray-950 dark:text-gray-300">
+                    <div
+                      className="rounded-lg bg-gray-50 p-3 font-mono whitespace-pre-wrap dark:bg-gray-950 dark:text-gray-300 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors"
+                      style={{ fontSize: `${textSize}px` }}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => {
+                        const combinedText = currentAnnotation.annotation.text_ocr_combined
+                        if (combinedText) setText(combinedText)
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          const combinedText = currentAnnotation.annotation.text_ocr_combined
+                          if (combinedText) setText(combinedText)
+                        }
+                      }}
+                      title="Click to copy to Caption Text"
+                    >
                       {currentAnnotation.annotation.text_ocr_combined ||
                         '(No OCR text available)'}
                     </div>
@@ -631,7 +701,8 @@ export default function AnnotateText() {
                     <textarea
                       value={text}
                       onChange={(e) => setText(e.target.value)}
-                      className="w-full h-48 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 font-mono text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                      className="w-full h-48 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 font-mono dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                      style={{ fontSize: `${textSize}px` }}
                       placeholder="Enter caption text..."
                     />
                   </div>
@@ -730,6 +801,26 @@ export default function AnnotateText() {
                 </div>
               </div>
             )}
+
+            {/* Text Size */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                Text Size: {textSize}px
+              </label>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-500 dark:text-gray-400">16</span>
+                <input
+                  type="range"
+                  min="16"
+                  max="64"
+                  step="1"
+                  value={textSize}
+                  onChange={(e) => handleTextSizeChange(parseInt(e.target.value))}
+                  className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
+                />
+                <span className="text-xs text-gray-500 dark:text-gray-400">64</span>
+              </div>
+            </div>
 
             {/* Status */}
             <div>
