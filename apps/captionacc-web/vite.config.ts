@@ -8,6 +8,7 @@ import { imagetools } from "vite-imagetools";
 import path from "path";
 
 export default defineConfig({
+  envDir: path.resolve(__dirname, "../.."), // Load .env from monorepo root
   resolve: {
     alias: {
       "~": path.resolve(__dirname, "./app"),

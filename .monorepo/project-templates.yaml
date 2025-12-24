@@ -121,6 +121,15 @@
 #   5. Provide guidance to review testing configurations (pytest.ini, tox.ini, etc.)
 
 templates:
+  # Python CLI Tools
+  cli:
+    template_type: "cookiecutter"
+    repo: "/Users/jurban/PycharmProjects/cli-template"
+    version: "main"
+    target_dir: "data-pipelines"
+    description: "Python CLI tool for data pipelines"
+    integrate_path: "{project_slug}-workspace/{project_slug}"
+
   # GitHub Template Repositories (TypeScript/React)
   web-react:
     template_type: "github-template"

@@ -1,0 +1,33 @@
+repos:
+- repo: https://github.com/astral-sh/ruff-pre-commit
+  rev: v0.14.6
+  hooks:
+  - id: ruff
+    args:
+    - --fix
+    files: ^data-pipelines/caption_frames/
+  - id: ruff-format
+    files: ^data-pipelines/caption_frames/
+- repo: https://github.com/RobertCraigie/pyright-python
+  rev: v1.1.390
+  hooks:
+  - id: pyright
+    additional_dependencies:
+    - typer>=0.9.0
+    - rich>=13.0.0
+    files: ^src/
+- repo: https://github.com/pre-commit/pre-commit-hooks
+  rev: v4.5.0
+  hooks:
+  - id: trailing-whitespace
+    files: ^data-pipelines/caption_frames/
+  - id: end-of-file-fixer
+    files: ^data-pipelines/caption_frames/
+  - id: check-yaml
+    files: ^data-pipelines/caption_frames/
+  - id: check-added-large-files
+    files: ^data-pipelines/caption_frames/
+  - id: check-merge-conflict
+    files: ^data-pipelines/caption_frames/
+  - id: mixed-line-ending
+    files: ^data-pipelines/caption_frames/
