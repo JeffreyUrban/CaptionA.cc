@@ -48,11 +48,11 @@ function migrateDatabase(dbPath: string, videoPath: string): boolean {
     const framesOcrExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='frames_ocr'").get()
     const videoPrefsExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='video_preferences'").get()
 
-    // Check if video_preferences has correct schema (INTEGER text_size)
+    // Check if video_preferences has correct schema (REAL text_size)
     let videoPrefsHasCorrectSchema = false
     if (videoPrefsExists) {
       const prefTableInfo = db.prepare("PRAGMA table_info(video_preferences)").all() as Array<{ name: string, type: string }>
-      videoPrefsHasCorrectSchema = prefTableInfo.some(col => col.name === 'text_size' && col.type === 'INTEGER')
+      videoPrefsHasCorrectSchema = prefTableInfo.some(col => col.name === 'text_size' && col.type === 'REAL')
     }
 
     if (hasNewSchema && framesOcrExists && videoPrefsExists && videoPrefsHasCorrectSchema) {
@@ -143,9 +143,10 @@ function migrateDatabase(dbPath: string, videoPath: string): boolean {
       // Check if video_preferences table exists and has old schema
       const prefTableInfo = db.prepare("PRAGMA table_info(video_preferences)").all() as Array<{ name: string, type: string }>
       const hasOldTextSchema = prefTableInfo.length > 0 && prefTableInfo.some(col => col.name === 'text_size' && col.type === 'TEXT')
+      const hasOldIntegerSchema = prefTableInfo.length > 0 && prefTableInfo.some(col => col.name === 'text_size' && col.type === 'INTEGER')
 
-      if (hasOldTextSchema) {
-        console.log('    - Migrating video_preferences from TEXT to INTEGER schema...')
+      if (hasOldTextSchema || hasOldIntegerSchema) {
+        console.log('    - Migrating video_preferences to REAL schema...')
         db.exec(`DROP TABLE video_preferences`)
       }
 
@@ -153,13 +154,13 @@ function migrateDatabase(dbPath: string, videoPath: string): boolean {
       db.exec(`
         CREATE TABLE IF NOT EXISTS video_preferences (
           id INTEGER PRIMARY KEY CHECK(id = 1),
-          text_size INTEGER DEFAULT 16 CHECK(text_size >= 16 AND text_size <= 64),
+          text_size REAL DEFAULT 3.0 CHECK(text_size >= 1.0 AND text_size <= 10.0),
           updated_at TEXT NOT NULL DEFAULT (datetime('now'))
         )
       `)
 
       // Insert default preferences if not exists
-      db.exec(`INSERT OR IGNORE INTO video_preferences (id, text_size) VALUES (1, 16)`)
+      db.exec(`INSERT OR IGNORE INTO video_preferences (id, text_size) VALUES (1, 3.0)`)
 
       console.log('    - Creating new indexes...')
 

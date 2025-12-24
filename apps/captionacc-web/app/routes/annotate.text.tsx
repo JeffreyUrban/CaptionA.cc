@@ -68,8 +68,26 @@ export default function AnnotateText() {
   const [perFrameOCR, setPerFrameOCR] = useState<Array<{ frameIndex: number; ocrText: string }>>([])
   const [loadingFrames, setLoadingFrames] = useState(false)
 
-  // Text size preference (in pixels)
-  const [textSize, setTextSize] = useState<number>(16)
+  // Text size preference (as percentage of image width)
+  const [textSizePercent, setTextSizePercent] = useState<number>(3.0)
+  const [actualTextSize, setActualTextSize] = useState<number>(16)
+
+  // Use effect to track image width and update text size
+  const imageContainerRef = useCallback((node: HTMLDivElement | null) => {
+    if (!node) return
+
+    const updateTextSize = () => {
+      const width = node.offsetWidth
+      setActualTextSize(width * (textSizePercent / 100))
+    }
+
+    updateTextSize()
+
+    const resizeObserver = new ResizeObserver(updateTextSize)
+    resizeObserver.observe(node)
+
+    return () => resizeObserver.disconnect()
+  }, [textSizePercent])
 
   // Drag state for frame navigation
   const [isDragging, setIsDragging] = useState(false)
@@ -96,9 +114,9 @@ export default function AnnotateText() {
         const response = await fetch(`/api/preferences/${encodeURIComponent(videoId)}`)
         const data = await response.json()
         if (data.text_size) {
-          // Convert from stored value to pixels (text_size is stored as pixels)
-          const size = typeof data.text_size === 'number' ? data.text_size : parseInt(data.text_size) || 16
-          setTextSize(size)
+          // text_size is stored as percentage of image width
+          const percent = typeof data.text_size === 'number' ? data.text_size : parseFloat(data.text_size) || 3.0
+          setTextSizePercent(percent)
         }
       } catch (error) {
         console.error('Failed to load text size preference:', error)
@@ -325,8 +343,8 @@ export default function AnnotateText() {
   }
 
   // Handle text size change
-  const handleTextSizeChange = async (newSize: number) => {
-    setTextSize(newSize)
+  const handleTextSizeChange = async (newPercent: number) => {
+    setTextSizePercent(newPercent)
 
     // Save to database
     if (videoId) {
@@ -334,7 +352,7 @@ export default function AnnotateText() {
         await fetch(`/api/preferences/${encodeURIComponent(videoId)}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text_size: newSize })
+          body: JSON.stringify({ text_size: newPercent })
         })
       } catch (error) {
         console.error('Failed to save text size preference:', error)
@@ -586,6 +604,7 @@ export default function AnnotateText() {
 
                     {/* Frame image */}
                     <div
+                      ref={imageContainerRef}
                       className="overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-800 cursor-grab active:cursor-grabbing"
                       onWheel={handleWheel}
                       onMouseDown={handleDragStart}
@@ -608,7 +627,7 @@ export default function AnnotateText() {
                       ) : (
                         <div
                           className="rounded-lg bg-gray-50 p-3 font-mono whitespace-pre-wrap dark:bg-gray-950 dark:text-gray-300 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors"
-                          style={{ fontSize: `${textSize}px` }}
+                          style={{ fontSize: `${actualTextSize}px` }}
                           role="button"
                           tabIndex={0}
                           onClick={() => {
@@ -642,7 +661,7 @@ export default function AnnotateText() {
                   <div className="p-4">
                     <div
                       className="rounded-lg bg-gray-50 p-3 font-mono whitespace-pre-wrap dark:bg-gray-950 dark:text-gray-300 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors"
-                      style={{ fontSize: `${textSize}px` }}
+                      style={{ fontSize: `${actualTextSize}px` }}
                       role="button"
                       tabIndex={0}
                       onClick={() => {
@@ -702,7 +721,7 @@ export default function AnnotateText() {
                       value={text}
                       onChange={(e) => setText(e.target.value)}
                       className="w-full h-48 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 font-mono dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                      style={{ fontSize: `${textSize}px` }}
+                      style={{ fontSize: `${actualTextSize}px` }}
                       placeholder="Enter caption text..."
                     />
                   </div>
@@ -805,20 +824,20 @@ export default function AnnotateText() {
             {/* Text Size */}
             <div>
               <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                Text Size: {textSize}px
+                Text Size: {textSizePercent.toFixed(1)}% ({Math.round(actualTextSize)}px)
               </label>
               <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-500 dark:text-gray-400">16</span>
+                <span className="text-xs text-gray-500 dark:text-gray-400">1%</span>
                 <input
                   type="range"
-                  min="16"
-                  max="64"
-                  step="1"
-                  value={textSize}
-                  onChange={(e) => handleTextSizeChange(parseInt(e.target.value))}
+                  min="1.0"
+                  max="10.0"
+                  step="0.1"
+                  value={textSizePercent}
+                  onChange={(e) => handleTextSizeChange(parseFloat(e.target.value))}
                   className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
                 />
-                <span className="text-xs text-gray-500 dark:text-gray-400">64</span>
+                <span className="text-xs text-gray-500 dark:text-gray-400">10%</span>
               </div>
             </div>
 

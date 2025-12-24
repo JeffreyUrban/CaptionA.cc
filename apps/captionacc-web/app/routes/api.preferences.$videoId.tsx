@@ -45,8 +45,8 @@ export async function loader({ params }: LoaderFunctionArgs) {
     db.close()
 
     if (!prefs) {
-      // Return default if not found
-      return Response.json({ text_size: 16 })
+      // Return default if not found (3% of image width)
+      return Response.json({ text_size: 3.0 })
     }
 
     return Response.json(prefs)
@@ -78,9 +78,9 @@ export async function action({ params, request }: ActionFunctionArgs) {
     const body = await request.json()
     const { text_size } = body
 
-    // Validate text_size is a number between 16 and 64
-    if (typeof text_size !== 'number' || text_size < 16 || text_size > 64) {
-      return new Response(JSON.stringify({ error: 'Invalid text_size (must be number between 16 and 64)' }), {
+    // Validate text_size is a number between 1.0 and 10.0 (percentage of image width)
+    if (typeof text_size !== 'number' || text_size < 1.0 || text_size > 10.0) {
+      return new Response(JSON.stringify({ error: 'Invalid text_size (must be number between 1.0 and 10.0)' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' }
       })
