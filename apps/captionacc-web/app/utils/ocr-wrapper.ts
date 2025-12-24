@@ -61,6 +61,9 @@ export async function runOCR(
   language: string = DEFAULT_LANGUAGE,
   timeout: number = DEFAULT_TIMEOUT
 ): Promise<OCRResult> {
+  const reqId = Math.random().toString(36).substring(7)
+  console.log(`[${reqId}] runOCR called for ${imagePath}`)
+
   return new Promise((resolve, reject) => {
     // Construct path to Python script
     const scriptPath = resolve(
@@ -95,8 +98,8 @@ result = process_frame_ocr_with_retry(
     max_retries=${MAX_RETRIES}
 )
 
-# Output as JSON
-print(json.dumps(result))
+# Output as JSON (ensure_ascii=False for Chinese characters)
+print(json.dumps(result, ensure_ascii=False))
       `
     ])
 
@@ -123,14 +126,20 @@ print(json.dumps(result))
         // Extract clean text from annotations
         const text = extractTextFromAnnotations(result.annotations || [])
 
-        resolve({
+        const resolvedObj: any = {
           imagePath: result.image_path,
           framework: result.framework,
           languagePreference: result.language_preference,
-          text,
+          text: text,  // Explicit property name
           annotations: result.annotations || [],
-          error: result.error
-        })
+          error: result.error,
+          __debug_reqId: reqId,  // Debug marker
+          __debug_textLength: text?.length
+        }
+
+        console.log(`[${reqId}] runOCR resolving with debug markers, text len=${text?.length}`)
+
+        resolve(resolvedObj)
       } catch (error) {
         reject(new Error(`Failed to parse OCR output: ${error}`))
       }
@@ -152,14 +161,32 @@ print(json.dumps(result))
  */
 export function extractTextFromAnnotations(annotations: any[]): string {
   if (!annotations || annotations.length === 0) {
+    console.log('extractTextFromAnnotations: no annotations')
     return ''
   }
 
-  // OCRmac returns annotations as array of objects with 'text' field
-  return annotations
-    .map(ann => ann.text || '')
+  console.log(`extractTextFromAnnotations: ${annotations.length} annotations, first one:`, annotations[0])
+
+  // Handle two formats:
+  // 1. Array format from Python: [text, confidence, bbox]
+  // 2. Object format: {text: "...", confidence: ..., boundingBox: ...}
+  const texts = annotations
+    .map(ann => {
+      if (Array.isArray(ann)) {
+        // Array format: [text, confidence, bbox]
+        return ann[0] || ''
+      } else {
+        // Object format: {text: "..."}
+        return ann.text || ''
+      }
+    })
     .filter(text => text.trim().length > 0)
-    .join('\n')
+
+  console.log(`extractTextFromAnnotations: extracted ${texts.length} text items`)
+  const result = texts.join('\n')
+  console.log(`extractTextFromAnnotations: result length=${result.length}`)
+
+  return result
 }
 
 /**
@@ -170,11 +197,14 @@ export function extractTextFromAnnotations(annotations: any[]): string {
  * @param language - Language preference
  * @returns Map of frame index to OCR result
  */
-export async function runOCROnFrames(
+export async function runOCROnFramesV2(
   videoPath: string,
   frameIndices: number[],
   language: string = DEFAULT_LANGUAGE
 ): Promise<Map<number, FrameOCRResult>> {
+  console.log(`=== runOCROnFrames VERSION 2024-12-24 ===`)
+  console.log(`runOCROnFrames called for ${videoPath}, ${frameIndices.length} frames`)
+
   const framesDir = resolve(
     process.cwd(),
     '..',
@@ -185,21 +215,38 @@ export async function runOCROnFrames(
     'caption_frames'
   )
 
+  console.log(`Looking for frames in: ${framesDir}`)
+
   // Run OCR on all frames in parallel
   const results = await Promise.all(
     frameIndices.map(async (frameIndex) => {
-      const framePath = resolve(framesDir, `frame_${frameIndex.toString().padStart(6, '0')}.jpg`)
+      const framePath = resolve(framesDir, `frame_${frameIndex.toString().padStart(10, '0')}.jpg`)
 
       try {
+        console.log(`[runOCROnFrames] Calling runOCR for frame ${frameIndex}`)
         const ocrResult = await runOCR(framePath, language)
+        console.log(`[runOCROnFrames] Got result for frame ${frameIndex}:`, {
+          hasText: 'text' in ocrResult,
+          textLength: ocrResult.text?.length,
+          debugReqId: (ocrResult as any).__debug_reqId,
+          debugTextLength: (ocrResult as any).__debug_textLength,
+          keys: Object.keys(ocrResult)
+        })
+
+        const text = ocrResult.text || ''
+        console.log(`Frame ${frameIndex}: after extracting, text="${text.substring(0,20)}" len=${text.length}`)
+
+        const resultObj = {
+          frameIndex,
+          ocrText: text,
+          ocrConfidence: calculateAverageConfidence(ocrResult.annotations)
+        }
+
+        console.log(`Frame ${frameIndex} final result:`, JSON.stringify(resultObj))
 
         return {
           frameIndex,
-          result: {
-            frameIndex,
-            ocrText: ocrResult.text,
-            ocrConfidence: calculateAverageConfidence(ocrResult.annotations)
-          }
+          result: resultObj
         }
       } catch (error) {
         console.error(`OCR failed for frame ${frameIndex}:`, error)
@@ -218,9 +265,11 @@ export async function runOCROnFrames(
   // Convert to Map
   const resultMap = new Map<number, FrameOCRResult>()
   results.forEach(({ frameIndex, result }) => {
+    console.log(`Adding to map: frame ${frameIndex}, ocrText="${result.ocrText}", length=${result.ocrText?.length}`)
     resultMap.set(frameIndex, result)
   })
 
+  console.log(`Returning map with ${resultMap.size} entries`)
   return resultMap
 }
 
@@ -230,17 +279,28 @@ export async function runOCROnFrames(
  * @param annotations - Array of OCR annotations
  * @returns Average confidence (0-1), or 1 if no confidence data
  */
-function calculateAverageConfidence(annotations: OCRAnnotation[]): number {
+function calculateAverageConfidence(annotations: any[]): number {
   if (!annotations || annotations.length === 0) {
     return 0
   }
 
+  // Handle two formats:
+  // 1. Array format from Python: [text, confidence, bbox]
+  // 2. Object format: {text: "...", confidence: ..., boundingBox: ...}
   const confidences = annotations
-    .map(ann => ann.confidence)
-    .filter(conf => conf !== undefined) as number[]
+    .map(ann => {
+      if (Array.isArray(ann)) {
+        // Array format: [text, confidence, bbox]
+        return ann[1]  // confidence at index 1
+      } else {
+        // Object format: {confidence: ...}
+        return ann.confidence
+      }
+    })
+    .filter(conf => conf !== undefined && conf !== null) as number[]
 
   if (confidences.length === 0) {
-    // OCRmac doesn't provide confidence, return 1 (assumed high quality)
+    // No confidence data available, return 1 (assumed high quality)
     return 1
   }
 

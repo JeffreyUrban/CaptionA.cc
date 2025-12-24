@@ -65,7 +65,7 @@ export default function AnnotateText() {
 
   // Frame navigation state
   const [currentFrameIndex, setCurrentFrameIndex] = useState(0)
-  const [perFrameOCR, setPerFrameOCR] = useState<Array<{ frame_index: number; ocr_text: string }>>([])
+  const [perFrameOCR, setPerFrameOCR] = useState<Array<{ frameIndex: number; ocrText: string }>>([])
   const [loadingFrames, setLoadingFrames] = useState(false)
 
   // Drag state for frame navigation
@@ -549,9 +549,11 @@ export default function AnnotateText() {
                         draggable={false}
                       />
                     </div>
+
+
                     <div className="mt-3 flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
                       <span>
-                        Frame {currentFrameIndex} / {currentAnnotation.annotation.end_frame_index}
+                        Frame {currentFrameIndex}
                       </span>
                       <span className="text-xs">
                         ({currentFrameIndex - currentAnnotation.annotation.start_frame_index + 1} of{' '}
@@ -563,11 +565,6 @@ export default function AnnotateText() {
 
                 {/* Per-Frame OCR Text */}
                 <div className="rounded-lg border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
-                  <div className="border-b border-gray-200 px-4 py-3 dark:border-gray-800">
-                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                      OCR Text (Frame {currentFrameIndex})
-                    </h2>
-                  </div>
                   <div className="p-4">
                     {loadingFrames ? (
                       <div className="rounded-lg bg-gray-50 p-3 text-sm text-gray-500 dark:bg-gray-950 dark:text-gray-400">
@@ -575,7 +572,7 @@ export default function AnnotateText() {
                       </div>
                     ) : (
                       <div className="rounded-lg bg-gray-50 p-3 font-mono text-sm whitespace-pre-wrap dark:bg-gray-950 dark:text-gray-300">
-                        {perFrameOCR.find(f => f.frame_index === currentFrameIndex)?.ocr_text ||
+                        {perFrameOCR.find(f => f.frameIndex === currentFrameIndex)?.ocrText ||
                           '(No OCR text for this frame)'}
                       </div>
                     )}

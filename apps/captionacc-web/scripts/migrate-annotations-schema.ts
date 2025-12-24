@@ -44,13 +44,16 @@ function migrateDatabase(dbPath: string, videoPath: string): boolean {
     const hasIntermediateSchema = tableInfo.some(col => col.name === 'boundary_state') && tableInfo.some(col => col.name === 'status')
     const hasNewSchema = tableInfo.some(col => col.name === 'boundary_state') && tableInfo.some(col => col.name === 'text_status')
 
-    if (hasNewSchema) {
+    // Check if frames_ocr table exists
+    const framesOcrExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='frames_ocr'").get()
+
+    if (hasNewSchema && framesOcrExists) {
       console.log(`  ✓ Already migrated: ${videoPath}`)
       db.close()
       return true
     }
 
-    if (!hasOldSchema && !hasIntermediateSchema) {
+    if (!hasOldSchema && !hasIntermediateSchema && !hasNewSchema) {
       console.log(`  ⚠ Unexpected schema: ${videoPath}`)
       db.close()
       return false
@@ -114,18 +117,16 @@ function migrateDatabase(dbPath: string, videoPath: string): boolean {
         db.exec(`UPDATE annotations SET text_updated_at = NULL WHERE text IS NULL`)
       }
 
-      console.log('    - Creating frames table...')
+      console.log('    - Creating frames_ocr table...')
 
-      // Create frames table
+      // Create frames_ocr table (frame OCR data independent of annotations)
       db.exec(`
-        CREATE TABLE IF NOT EXISTS frames (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          annotation_id INTEGER NOT NULL,
-          frame_index INTEGER NOT NULL,
+        CREATE TABLE IF NOT EXISTS frames_ocr (
+          frame_index INTEGER PRIMARY KEY,
           ocr_text TEXT,
+          ocr_annotations TEXT,
           ocr_confidence REAL,
-          created_at TEXT NOT NULL DEFAULT (datetime('now')),
-          FOREIGN KEY (annotation_id) REFERENCES annotations(id) ON DELETE CASCADE
+          created_at TEXT NOT NULL DEFAULT (datetime('now'))
         )
       `)
 
@@ -133,6 +134,8 @@ function migrateDatabase(dbPath: string, videoPath: string): boolean {
 
       // Drop old indexes
       db.exec('DROP INDEX IF EXISTS idx_annotations_pending_gap')
+      db.exec('DROP INDEX IF EXISTS idx_frames_annotation')
+      db.exec('DROP INDEX IF EXISTS idx_frames_unique')
 
       // Create new indexes
       db.exec(`
@@ -148,16 +151,6 @@ function migrateDatabase(dbPath: string, videoPath: string): boolean {
       db.exec(`
         CREATE INDEX IF NOT EXISTS idx_annotations_text_null
         ON annotations((text IS NULL), text_pending, start_frame_index)
-      `)
-
-      db.exec(`
-        CREATE INDEX IF NOT EXISTS idx_frames_annotation
-        ON frames(annotation_id)
-      `)
-
-      db.exec(`
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_frames_unique
-        ON frames(annotation_id, frame_index)
       `)
 
       console.log('    - Creating new table with renamed columns...')
