@@ -177,7 +177,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
         totalBoxCount,
         captionBoxCount,
         hasAnnotations: hasAnnotations.count > 0,
-        imageUrl: `/api/frames/${encodeURIComponent(videoId)}/${frame.frame_index}.jpg`
+        imageUrl: `/api/full-frames/${encodeURIComponent(videoId)}/${frame.frame_index}.jpg`
       }
     })
 
@@ -211,7 +211,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
         anchorPosition: layoutConfig.anchor_position,
         cropBoundsVersion: layoutConfig.crop_bounds_version,
       },
-      subtitleAnalysisUrl: `/api/images/${encodeURIComponent(videoId)}/subtitle_analysis.png`
+      subtitleAnalysisUrl: `/api/images/${encodeURIComponent(videoId)}/caption_layout/subtitle_analysis.png`
     }
 
     db.close()

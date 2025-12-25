@@ -283,7 +283,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
     const response = {
       frameIndex,
-      imageUrl: `/api/frames/${encodeURIComponent(videoId)}/${frameIndex}.jpg`,
+      imageUrl: `/api/full-frames/${encodeURIComponent(videoId)}/${frameIndex}.jpg`,
       cropBounds: {
         left: layoutConfig.crop_left,
         top: layoutConfig.crop_top,
