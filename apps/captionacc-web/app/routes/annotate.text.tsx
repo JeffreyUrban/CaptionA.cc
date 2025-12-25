@@ -700,7 +700,7 @@ export default function AnnotateText() {
                     {/* Frame info header */}
                     <div className="mb-3 flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
                       <span className="font-medium">
-                        Frame {currentFrameIndex}
+                        Frame {currentFrameIndex}: Image and OCR
                       </span>
                       <span className="text-xs">
                         ({currentFrameIndex - currentAnnotation.annotation.start_frame_index + 1} of{' '}

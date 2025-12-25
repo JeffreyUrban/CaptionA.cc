@@ -6,7 +6,7 @@
  */
 
 import { spawn } from 'child_process'
-import { resolve } from 'path'
+import path from 'path'
 
 // OCR configuration constants
 const DEFAULT_LANGUAGE = 'zh-Hans' // Simplified Chinese
@@ -63,10 +63,14 @@ export async function runOCR(
 ): Promise<OCRResult> {
   const reqId = Math.random().toString(36).substring(7)
   console.log(`[${reqId}] runOCR called for ${imagePath}`)
+  console.log(`[${reqId}] Creating Promise...`)
 
-  return new Promise((resolve, reject) => {
+  const promiseResult = new Promise<OCRResult>((resolve, reject) => {
+    console.log(`[${reqId}] Inside Promise constructor`)
+    console.log(`[${reqId}] process.cwd() =`, process.cwd())
+
     // Construct path to Python script
-    const scriptPath = resolve(
+    const scriptPath = path.resolve(
       process.cwd(),
       '..',
       '..',
@@ -76,6 +80,7 @@ export async function runOCR(
       'ocr_utils',
       'processing.py'
     )
+    console.log(`[${reqId}] scriptPath =`, scriptPath)
 
     // Spawn Python process
     const python = spawn('python3', [
@@ -86,7 +91,7 @@ import json
 from pathlib import Path
 
 # Add package to path
-sys.path.insert(0, '${resolve(process.cwd(), '..', '..', 'packages', 'ocr_utils', 'src')}')
+sys.path.insert(0, '${path.resolve(process.cwd(), '..', '..', 'packages', 'ocr_utils', 'src')}')
 
 from ocr_utils.processing import process_frame_ocr_with_retry
 
@@ -115,13 +120,20 @@ print(json.dumps(result, ensure_ascii=False))
     })
 
     python.on('close', (code) => {
+      console.log(`[${reqId}] Python process closed with code ${code}`)
+      console.log(`[${reqId}] stdout length: ${stdout.length}, stderr length: ${stderr.length}`)
+      console.log(`[${reqId}] stdout content:`, stdout.substring(0, 500))
+      console.log(`[${reqId}] stderr content:`, stderr.substring(0, 500))
+
       if (code !== 0) {
         reject(new Error(`OCR process failed: ${stderr}`))
         return
       }
 
       try {
+        console.log(`[${reqId}] Attempting to parse stdout as JSON...`)
         const result = JSON.parse(stdout)
+        console.log(`[${reqId}] JSON parsed successfully, keys:`, Object.keys(result))
 
         // Extract clean text from annotations
         const text = extractTextFromAnnotations(result.annotations || [])
@@ -151,6 +163,9 @@ print(json.dumps(result, ensure_ascii=False))
       reject(new Error(`OCR timeout after ${timeout}ms`))
     }, timeout)
   })
+
+  console.log(`[${reqId}] Returning promise`)
+  return promiseResult
 }
 
 /**
@@ -205,7 +220,7 @@ export async function runOCROnFramesV2(
   console.log(`=== runOCROnFrames VERSION 2024-12-24 ===`)
   console.log(`runOCROnFrames called for ${videoPath}, ${frameIndices.length} frames`)
 
-  const framesDir = resolve(
+  const framesDir = path.resolve(
     process.cwd(),
     '..',
     '..',
@@ -220,7 +235,7 @@ export async function runOCROnFramesV2(
   // Run OCR on all frames in parallel
   const results = await Promise.all(
     frameIndices.map(async (frameIndex) => {
-      const framePath = resolve(framesDir, `frame_${frameIndex.toString().padStart(10, '0')}.jpg`)
+      const framePath = path.resolve(framesDir, `frame_${frameIndex.toString().padStart(10, '0')}.jpg`)
 
       try {
         console.log(`[runOCROnFrames] Calling runOCR for frame ${frameIndex}`)
@@ -308,7 +323,7 @@ function calculateAverageConfidence(annotations: any[]): number {
 }
 
 /**
- * Run OCR on a combined image and cache the result.
+ * Run OCR on a combined image using the same script as frame OCR.
  *
  * @param imagePath - Path to the combined image
  * @param language - Language preference
@@ -318,5 +333,69 @@ export async function runOCROnCombinedImage(
   imagePath: string,
   language: string = DEFAULT_LANGUAGE
 ): Promise<OCRResult> {
-  return runOCR(imagePath, language)
+  const reqId = Math.random().toString(36).substring(7)
+  console.log(`[${reqId}] runOCROnCombinedImage called for ${imagePath}`)
+
+  return new Promise((resolve, reject) => {
+    const scriptPath = path.resolve(process.cwd(), 'scripts', 'run-frame-ocr.py')
+    const args = ['--single', imagePath, language]
+
+    console.log(`[${reqId}] Spawning python3 ${scriptPath} ${args.join(' ')}`)
+    const python = spawn('python3', [scriptPath, ...args])
+
+    let stdout = ''
+    let stderr = ''
+
+    python.stdout.on('data', (data) => {
+      stdout += data.toString()
+    })
+
+    python.stderr.on('data', (data) => {
+      stderr += data.toString()
+    })
+
+    python.on('close', (code) => {
+      console.log(`[${reqId}] Python process closed with code ${code}`)
+      console.log(`[${reqId}] stdout:`, stdout.substring(0, 200))
+      console.log(`[${reqId}] stderr:`, stderr.substring(0, 200))
+
+      if (code !== 0) {
+        console.error(`[${reqId}] OCR process failed:`, stderr)
+        reject(new Error(`OCR process exited with code ${code}: ${stderr}`))
+        return
+      }
+
+      try {
+        const result = JSON.parse(stdout)
+        console.log(`[${reqId}] Parsed result:`, result)
+
+        if (result.error) {
+          reject(new Error(`OCR error: ${result.error}`))
+          return
+        }
+
+        // Convert to OCRResult format
+        const ocrResult: OCRResult = {
+          imagePath,
+          framework: result.framework || 'unknown',
+          languagePreference: result.language || language,
+          text: result.text || '',
+          annotations: [],
+          error: result.error
+        }
+
+        console.log(`[${reqId}] Resolving with text length: ${ocrResult.text.length}`)
+        resolve(ocrResult)
+      } catch (error) {
+        console.error(`[${reqId}] Failed to parse JSON:`, error)
+        reject(new Error(`Failed to parse OCR output: ${error}`))
+      }
+    })
+
+    // Set timeout
+    setTimeout(() => {
+      python.kill()
+      reject(new Error(`OCR timeout after ${DEFAULT_TIMEOUT}ms`))
+    }, DEFAULT_TIMEOUT)
+  })
 }

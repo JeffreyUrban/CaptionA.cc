@@ -2,8 +2,8 @@ import { type LoaderFunctionArgs, type ActionFunctionArgs } from 'react-router'
 import Database from 'better-sqlite3'
 import { resolve } from 'path'
 import { existsSync } from 'fs'
-import { getOrGenerateCombinedImage } from '~/utils/image-processing'
-import { runOCROnCombinedImage } from '~/utils/ocr-wrapper'
+import { getOrGenerateCombinedImage } from '../utils/image-processing'
+import { runOCROnCombinedImage } from '../utils/ocr-wrapper'
 
 interface Annotation {
   id: number
@@ -41,7 +41,9 @@ function getDatabase(videoId: string) {
 
 // GET - Load annotation for text annotation with OCR
 export async function loader({ params }: LoaderFunctionArgs) {
+  console.log('=== TEXT API LOADER CALLED ===', new Date().toISOString())
   const { videoId: encodedVideoId, id } = params
+  console.log('  encodedVideoId:', encodedVideoId, 'id:', id)
 
   if (!encodedVideoId || !id) {
     return new Response(JSON.stringify({ error: 'Missing videoId or id' }), {
@@ -52,6 +54,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
   const videoId = decodeURIComponent(encodedVideoId)
   const annotationId = parseInt(id)
+  console.log('  Decoded videoId:', videoId, 'annotationId:', annotationId)
 
   try {
     const db = getDatabase(videoId)
@@ -69,8 +72,10 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
     // Check if combined OCR is already cached in database
     let combinedOCRText = annotation.text_ocr_combined
+    console.log('  Current text_ocr_combined:', combinedOCRText ? `"${combinedOCRText.substring(0, 50)}..."` : 'null')
 
     if (!combinedOCRText) {
+      console.log('  Generating combined image and running OCR...')
       // Generate or get cached combined image
       const combinedImagePath = await getOrGenerateCombinedImage(
         videoId,
@@ -78,17 +83,49 @@ export async function loader({ params }: LoaderFunctionArgs) {
         annotation.start_frame_index,
         annotation.end_frame_index
       )
+      console.log('  Combined image path:', combinedImagePath)
 
       // Run OCR on combined image
-      const ocrResult = await runOCROnCombinedImage(combinedImagePath)
-      combinedOCRText = ocrResult.text
+      console.log('  Calling runOCROnCombinedImage with path:', combinedImagePath)
+      console.log('  runOCROnCombinedImage function type:', typeof runOCROnCombinedImage)
+      console.log('  runOCROnCombinedImage function:', runOCROnCombinedImage.toString().substring(0, 200))
+
+      let ocrResult
+      try {
+        console.log('  About to await runOCROnCombinedImage...')
+        ocrResult = await runOCROnCombinedImage(combinedImagePath)
+        console.log('  Await completed, result:', ocrResult)
+      } catch (error) {
+        console.error('  ERROR in runOCROnCombinedImage:', error)
+        throw error
+      }
+      console.log('  OCR result type:', typeof ocrResult)
+      console.log('  OCR result is string:', typeof ocrResult === 'string')
+      console.log('  OCR result is array:', Array.isArray(ocrResult))
+      console.log('  OCR result value:', ocrResult)
+      console.log('  OCR result object keys:', Object.keys(ocrResult))
+      console.log('  OCR result.text:', ocrResult.text)
+      console.log('  OCR result annotations count:', ocrResult.annotations?.length)
+
+      // If ocrResult is a string (the bug), use it directly
+      if (typeof ocrResult === 'string') {
+        combinedOCRText = ocrResult
+        console.log('  WARNING: OCR returned string directly, using it as text')
+      } else {
+        combinedOCRText = ocrResult.text
+      }
+      console.log('  OCR extracted text:', combinedOCRText ? `"${combinedOCRText.substring(0, 50)}..." (length: ${combinedOCRText.length})` : 'empty')
 
       // Cache OCR result in database
+      console.log('  Saving to database...')
       db.prepare(`
         UPDATE annotations
         SET text_ocr_combined = ?
         WHERE id = ?
       `).run(combinedOCRText, annotationId)
+      console.log('  Database updated successfully')
+    } else {
+      console.log('  Using cached OCR text from database')
     }
 
     db.close()

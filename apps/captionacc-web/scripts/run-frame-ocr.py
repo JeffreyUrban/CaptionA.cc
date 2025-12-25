@@ -50,8 +50,38 @@ def calculate_average_confidence(annotations):
 
 
 def main():
+    # Check for single image mode
+    if len(sys.argv) >= 3 and sys.argv[1] == '--single':
+        image_path = Path(sys.argv[2])
+        language = sys.argv[3] if len(sys.argv) > 3 else 'zh-Hans'
+
+        try:
+            ocr_result = process_frame_ocr_with_retry(
+                image_path,
+                language=language,
+                timeout=10,
+                max_retries=3
+            )
+
+            annotations = ocr_result.get('annotations', [])
+            text = extract_text_from_annotations(annotations)
+
+            # Output simple result for single image
+            print(json.dumps({
+                'text': text,
+                'framework': ocr_result.get('framework', 'unknown'),
+                'language': language
+            }, ensure_ascii=False))
+
+        except Exception as e:
+            print(json.dumps({'error': str(e)}), file=sys.stderr)
+            sys.exit(1)
+        return
+
+    # Original multi-frame mode
     if len(sys.argv) < 4:
         print("Usage: run-frame-ocr.py <frames_dir> <language> <frame_index1> [frame_index2] ...", file=sys.stderr)
+        print("   or: run-frame-ocr.py --single <image_path> [language]", file=sys.stderr)
         sys.exit(1)
 
     frames_dir = Path(sys.argv[1])
