@@ -664,7 +664,8 @@ export default function AnnotateText() {
                   Workflow Complete!
                 </div>
                 <div className="text-sm text-green-700 dark:text-green-300">
-                  All annotations have been reviewed. You can continue editing as needed.
+                  All annotations have been reviewed. You can continue editing
+                  as needed.
                 </div>
               </div>
             </div>
@@ -703,8 +704,15 @@ export default function AnnotateText() {
                         Frame {currentFrameIndex}: Image and OCR
                       </span>
                       <span className="text-xs">
-                        ({currentFrameIndex - currentAnnotation.annotation.start_frame_index + 1} of{' '}
-                        {currentAnnotation.annotation.end_frame_index - currentAnnotation.annotation.start_frame_index + 1})
+                        (
+                        {currentFrameIndex -
+                          currentAnnotation.annotation.start_frame_index +
+                          1}{' '}
+                        of{' '}
+                        {currentAnnotation.annotation.end_frame_index -
+                          currentAnnotation.annotation.start_frame_index +
+                          1}
+                        )
                       </span>
                     </div>
 
@@ -737,66 +745,48 @@ export default function AnnotateText() {
                           role="button"
                           tabIndex={0}
                           onClick={() => {
-                            const frameText = perFrameOCR.find(f => f.frameIndex === currentFrameIndex)?.ocrText
+                            const frameText = perFrameOCR.find(
+                              (f) => f.frameIndex === currentFrameIndex
+                            )?.ocrText
                             if (frameText) setText(frameText)
                           }}
                           onKeyDown={(e) => {
                             if (e.key === 'Enter' || e.key === ' ') {
                               e.preventDefault()
-                              const frameText = perFrameOCR.find(f => f.frameIndex === currentFrameIndex)?.ocrText
+                              const frameText = perFrameOCR.find(
+                                (f) => f.frameIndex === currentFrameIndex
+                              )?.ocrText
                               if (frameText) setText(frameText)
                             }
                           }}
                           title="Click to copy to Caption Text"
                         >
-                          {perFrameOCR.find(f => f.frameIndex === currentFrameIndex)?.ocrText ||
-                            '(No OCR text for this frame)'}
+                          {perFrameOCR.find(
+                            (f) => f.frameIndex === currentFrameIndex
+                          )?.ocrText || '(No OCR text for this frame)'}
                         </div>
                       )}
                     </div>
                   </div>
                 </div>
 
-                {/* OCR Text Display */}
+                {/* Caption Text Editor */}
                 <div className="rounded-lg border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
-                  <div className="border-b border-gray-200 px-4 py-3 dark:border-gray-800">
-                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                      OCR Text (Combined)
-                    </h2>
-                  </div>
                   <div className="p-4">
-                    <div
-                      className="rounded-lg bg-gray-50 font-mono whitespace-pre-wrap dark:bg-gray-950 dark:text-gray-300 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors"
+                    <textarea
+                      value={text}
+                      onChange={(e) => setText(e.target.value)}
+                      className="w-full h-26 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 font-mono dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                       style={getTextStyle()}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => {
-                        const combinedText = currentAnnotation.annotation.text_ocr_combined
-                        if (combinedText) setText(combinedText)
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault()
-                          const combinedText = currentAnnotation.annotation.text_ocr_combined
-                          if (combinedText) setText(combinedText)
-                        }
-                      }}
-                      title="Click to copy to Caption Text"
-                    >
-                      {currentAnnotation.annotation.text_ocr_combined ||
-                        '(No OCR text available)'}
-                    </div>
+                      placeholder="Enter caption text..."
+                    />
                   </div>
                 </div>
 
-                {/* Combined Image */}
+                {/* Combined Frames: Image and OCR */}
                 <div className="rounded-lg border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
-                  <div className="border-b border-gray-200 px-4 py-3 dark:border-gray-800">
-                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                      Combined Image
-                    </h2>
-                  </div>
                   <div className="p-4">
+                    {/* Combined image */}
                     <div className="overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-800">
                       <img
                         src={currentAnnotation.combinedImageUrl}
@@ -804,39 +794,53 @@ export default function AnnotateText() {
                         className="h-auto w-full"
                       />
                     </div>
-                    <div className="mt-3 text-sm text-gray-600 dark:text-gray-400">
-                      Frames {currentAnnotation.annotation.start_frame_index} -{' '}
+
+                    {/* Combined OCR text */}
+                    <div className="mt-3">
+                      <div
+                        className="rounded-lg bg-gray-50 font-mono whitespace-pre-wrap dark:bg-gray-950 dark:text-gray-300 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors"
+                        style={getTextStyle()}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => {
+                          const combinedText =
+                            currentAnnotation.annotation.text_ocr_combined
+                          if (combinedText) setText(combinedText)
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            const combinedText =
+                              currentAnnotation.annotation.text_ocr_combined
+                            if (combinedText) setText(combinedText)
+                          }
+                        }}
+                        title="Click to copy to Caption Text"
+                      >
+                        {currentAnnotation.annotation.text_ocr_combined ||
+                          '(No OCR text available)'}
+                      </div>
+                    </div>
+
+                    {/* Title at bottom */}
+                    <div className="mt-3 text-sm text-gray-600 dark:text-gray-400 font-medium">
+                      Combined Frames{' '}
+                      {currentAnnotation.annotation.start_frame_index} -{' '}
                       {currentAnnotation.annotation.end_frame_index} (
                       {currentAnnotation.annotation.end_frame_index -
                         currentAnnotation.annotation.start_frame_index +
                         1}{' '}
-                      frames)
+                      frames): Image and OCR
                     </div>
-                  </div>
-                </div>
-
-                {/* Caption Text Editor */}
-                <div className="rounded-lg border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
-                  <div className="border-b border-gray-200 px-4 py-3 dark:border-gray-800">
-                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                      Caption Text
-                    </h2>
-                  </div>
-                  <div className="p-4">
-                    <textarea
-                      value={text}
-                      onChange={(e) => setText(e.target.value)}
-                      className="w-full h-48 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 font-mono dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                      style={getTextStyle()}
-                      placeholder="Enter caption text..."
-                    />
                   </div>
                 </div>
               </>
             ) : (
               <div className="flex h-full items-center justify-center rounded-lg border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
                 <div className="text-center text-gray-500 dark:text-gray-400">
-                  {queue.length === 0 ? 'No annotations in queue' : 'Loading annotation...'}
+                  {queue.length === 0
+                    ? 'No annotations in queue'
+                    : 'Loading annotation...'}
                 </div>
               </div>
             )}
@@ -869,8 +873,8 @@ export default function AnnotateText() {
                 Annotation: {queueIndex + 1} / {queue.length}
               </div>
               <div className="mt-1 text-xs text-gray-500 dark:text-gray-500">
-                Progress: {(workflowProgress || 0).toFixed(2)}% ({completedAnnotations}{' '}
-                completed)
+                Progress: {(workflowProgress || 0).toFixed(2)}% (
+                {completedAnnotations} completed)
               </div>
 
               {/* Jump to annotation */}
@@ -905,19 +909,25 @@ export default function AnnotateText() {
                 </div>
                 <div className="space-y-1 text-sm">
                   <div className="flex justify-between">
-                    <span className="text-gray-600 dark:text-gray-400">ID:</span>
+                    <span className="text-gray-600 dark:text-gray-400">
+                      ID:
+                    </span>
                     <span className="font-mono font-semibold text-gray-900 dark:text-white">
                       {currentAnnotation.annotation.id}
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-600 dark:text-gray-400">State:</span>
+                    <span className="text-gray-600 dark:text-gray-400">
+                      State:
+                    </span>
                     <span className="font-semibold text-gray-900 dark:text-white capitalize">
                       {currentAnnotation.annotation.boundary_state}
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-600 dark:text-gray-400">Frames:</span>
+                    <span className="text-gray-600 dark:text-gray-400">
+                      Frames:
+                    </span>
                     <span className="font-mono text-gray-900 dark:text-white">
                       {currentAnnotation.annotation.start_frame_index}-
                       {currentAnnotation.annotation.end_frame_index}
@@ -943,7 +953,12 @@ export default function AnnotateText() {
                   stroke="currentColor"
                   viewBox="0 0 24 24"
                 >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M19 9l-7 7-7-7"
+                  />
                 </svg>
               </button>
 
@@ -994,20 +1009,27 @@ export default function AnnotateText() {
                   {/* Text Size */}
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                      Text Size: {textSizePercent.toFixed(1)}% ({Math.round(actualTextSize)}px)
+                      Text Size: {textSizePercent.toFixed(1)}% (
+                      {Math.round(actualTextSize)}px)
                     </label>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-500 dark:text-gray-400">1%</span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                        1%
+                      </span>
                       <input
                         type="range"
                         min="1.0"
                         max="10.0"
                         step="0.1"
                         value={textSizePercent}
-                        onChange={(e) => handleTextSizeChange(parseFloat(e.target.value))}
+                        onChange={(e) =>
+                          handleTextSizeChange(parseFloat(e.target.value))
+                        }
                         className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
                       />
-                      <span className="text-xs text-gray-500 dark:text-gray-400">10%</span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                        10%
+                      </span>
                     </div>
                   </div>
 
@@ -1016,28 +1038,42 @@ export default function AnnotateText() {
                     <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                       {textAnchor === 'center'
                         ? `Center Offset: ${paddingScale >= 0 ? '+' : ''}${paddingScale.toFixed(2)}em`
-                        : `${textAnchor === 'left' ? 'Left' : 'Right'} Padding: ${paddingScale.toFixed(2)}em`
-                      }
+                        : `${textAnchor === 'left' ? 'Left' : 'Right'} Padding: ${paddingScale.toFixed(2)}em`}
                     </label>
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-gray-500 dark:text-gray-400">
-                        {textAnchor === 'center' ? '-2em' : textAnchor === 'right' ? '2em' : '0'}
+                        {textAnchor === 'center'
+                          ? '-2em'
+                          : textAnchor === 'right'
+                            ? '2em'
+                            : '0'}
                       </span>
                       <input
                         type="range"
                         min={textAnchor === 'center' ? '-2.0' : '0.0'}
                         max="2.0"
                         step="0.05"
-                        value={textAnchor === 'right' ? 2.0 - paddingScale : paddingScale}
+                        value={
+                          textAnchor === 'right'
+                            ? 2.0 - paddingScale
+                            : paddingScale
+                        }
                         onChange={(e) => {
                           const sliderValue = parseFloat(e.target.value)
-                          const actualValue = textAnchor === 'right' ? 2.0 - sliderValue : sliderValue
+                          const actualValue =
+                            textAnchor === 'right'
+                              ? 2.0 - sliderValue
+                              : sliderValue
                           handlePaddingScaleChange(actualValue)
                         }}
                         className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
                       />
                       <span className="text-xs text-gray-500 dark:text-gray-400">
-                        {textAnchor === 'center' ? '+2em' : textAnchor === 'right' ? '0' : '2em'}
+                        {textAnchor === 'center'
+                          ? '+2em'
+                          : textAnchor === 'right'
+                            ? '0'
+                            : '2em'}
                       </span>
                     </div>
                   </div>
@@ -1099,7 +1135,8 @@ export default function AnnotateText() {
                     : 'cursor-not-allowed bg-gray-400 text-gray-600 dark:bg-gray-700'
                 }`}
               >
-                Save Empty Caption <span className="text-xs opacity-75">(Ctrl+E)</span>
+                Save Empty Caption{' '}
+                <span className="text-xs opacity-75">(Ctrl+E)</span>
               </button>
 
               {/* Navigation */}
@@ -1192,9 +1229,10 @@ export default function AnnotateText() {
                   Purpose
                 </h3>
                 <p>
-                  This page helps you review and correct text extracted from video
-                  captions. Each annotation shows a combined image of all frames in the
-                  caption along with OCR-extracted text that you can correct.
+                  This page helps you review and correct text extracted from
+                  video captions. Each annotation shows a combined image of all
+                  frames in the caption along with OCR-extracted text that you
+                  can correct.
                 </p>
               </section>
 
@@ -1208,7 +1246,9 @@ export default function AnnotateText() {
                   <li>Edit the caption text to correct any OCR errors</li>
                   <li>Select the appropriate status for the annotation</li>
                   <li>Add notes if needed (optional)</li>
-                  <li>Click "Save & Next" to save and move to the next annotation</li>
+                  <li>
+                    Click "Save & Next" to save and move to the next annotation
+                  </li>
                 </ol>
               </section>
 
@@ -1218,23 +1258,33 @@ export default function AnnotateText() {
                 </h3>
                 <div className="space-y-2">
                   <div>
-                    <strong className="text-gray-900 dark:text-white">Valid Caption:</strong>{' '}
+                    <strong className="text-gray-900 dark:text-white">
+                      Valid Caption:
+                    </strong>{' '}
                     Caption text is correct and complete
                   </div>
                   <div>
-                    <strong className="text-gray-900 dark:text-white">OCR Error:</strong>{' '}
+                    <strong className="text-gray-900 dark:text-white">
+                      OCR Error:
+                    </strong>{' '}
                     OCR extracted incorrect text that was corrected
                   </div>
                   <div>
-                    <strong className="text-gray-900 dark:text-white">Partial Caption:</strong>{' '}
+                    <strong className="text-gray-900 dark:text-white">
+                      Partial Caption:
+                    </strong>{' '}
                     Only part of the caption is visible or readable
                   </div>
                   <div>
-                    <strong className="text-gray-900 dark:text-white">Text Unclear:</strong>{' '}
+                    <strong className="text-gray-900 dark:text-white">
+                      Text Unclear:
+                    </strong>{' '}
                     Text is difficult to read in the image
                   </div>
                   <div>
-                    <strong className="text-gray-900 dark:text-white">Other Issue:</strong>{' '}
+                    <strong className="text-gray-900 dark:text-white">
+                      Other Issue:
+                    </strong>{' '}
                     Other problems with the annotation (explain in notes)
                   </div>
                 </div>
