@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS annotations (
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
--- Frames table for per-frame OCR data
+-- Frames table for per-frame OCR data (linked to annotations)
 CREATE TABLE IF NOT EXISTS frames (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     annotation_id INTEGER NOT NULL,
@@ -32,6 +32,82 @@ CREATE TABLE IF NOT EXISTS frames (
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (annotation_id) REFERENCES annotations(id) ON DELETE CASCADE
 );
+
+-- Frames OCR table for per-frame OCR data (independent of annotations)
+CREATE TABLE IF NOT EXISTS frames_ocr (
+    frame_index INTEGER PRIMARY KEY,
+    ocr_text TEXT,
+    ocr_annotations TEXT,  -- JSON: [[text, conf, [x, y, w, h]], ...]
+    ocr_confidence REAL,
+    crop_bounds_version INTEGER DEFAULT 1,  -- Invalidation tracking
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- OCR box annotations table for user annotations on character boxes
+CREATE TABLE IF NOT EXISTS ocr_box_annotations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    frame_index INTEGER NOT NULL,
+    box_index INTEGER NOT NULL,
+
+    -- Box identification (ORIGINAL non-cropped absolute pixel coords)
+    box_text TEXT NOT NULL,
+    box_left INTEGER NOT NULL,
+    box_top INTEGER NOT NULL,
+    box_right INTEGER NOT NULL,
+    box_bottom INTEGER NOT NULL,
+
+    -- Annotation
+    label TEXT NOT NULL CHECK(label IN ('in', 'out')),
+    annotation_source TEXT NOT NULL CHECK(annotation_source IN ('user', 'model')),
+
+    -- Model prediction (for comparison)
+    predicted_label TEXT CHECK(predicted_label IN ('in', 'out')),
+    predicted_confidence REAL CHECK(predicted_confidence >= 0.0 AND predicted_confidence <= 1.0),
+    model_version TEXT,
+
+    -- Metadata
+    annotated_at TEXT NOT NULL DEFAULT (datetime('now')),
+
+    FOREIGN KEY (frame_index) REFERENCES frames_ocr(frame_index) ON DELETE CASCADE,
+    UNIQUE(frame_index, box_index)
+);
+
+-- Video layout configuration (one row per video)
+CREATE TABLE IF NOT EXISTS video_layout_config (
+    id INTEGER PRIMARY KEY CHECK(id = 1),
+
+    -- Frame dimensions (required for coordinate conversions)
+    frame_width INTEGER NOT NULL,
+    frame_height INTEGER NOT NULL,
+
+    -- Cropping bounds (absolute pixel coords in original frame)
+    crop_left INTEGER NOT NULL DEFAULT 0,
+    crop_top INTEGER NOT NULL,  -- No default - set from video analysis
+    crop_right INTEGER NOT NULL,  -- No default - set to frame_width
+    crop_bottom INTEGER NOT NULL,  -- No default - set to frame_height
+
+    -- Selection rectangle constraint (absolute pixels within original frame)
+    selection_left INTEGER,
+    selection_top INTEGER,
+    selection_right INTEGER,
+    selection_bottom INTEGER,
+    selection_mode TEXT NOT NULL DEFAULT 'hard' CHECK(selection_mode IN ('hard', 'soft', 'disabled')),
+
+    -- Layout parameters (Bayesian priors, absolute pixels in original frame)
+    vertical_position INTEGER,  -- Mode vertical center position
+    vertical_std REAL,  -- Standard deviation for Bayesian prior
+    box_height INTEGER,  -- Mode box height
+    box_height_std REAL,  -- Standard deviation for Bayesian prior
+    anchor_type TEXT CHECK(anchor_type IN ('left', 'center', 'right')),
+    anchor_position INTEGER,  -- Mode anchor position
+
+    -- Invalidation tracking
+    crop_bounds_version INTEGER NOT NULL DEFAULT 1,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Note: video_layout_config initialized when video is first analyzed
+-- (requires frame dimensions from video)
 
 -- Indexes for annotations table
 
@@ -64,6 +140,27 @@ ON frames(annotation_id);
 -- Unique index to prevent duplicate frame entries
 CREATE UNIQUE INDEX IF NOT EXISTS idx_frames_unique
 ON frames(annotation_id, frame_index);
+
+-- Indexes for frames_ocr table
+
+-- Index for invalidation queries
+CREATE INDEX IF NOT EXISTS idx_frames_ocr_crop_version
+ON frames_ocr(crop_bounds_version);
+
+-- Indexes for ocr_box_annotations table
+
+-- Index for fast lookups by frame
+CREATE INDEX IF NOT EXISTS idx_ocr_box_annotations_frame
+ON ocr_box_annotations(frame_index);
+
+-- Index for finding user annotations (for training data)
+CREATE INDEX IF NOT EXISTS idx_ocr_box_annotations_user
+ON ocr_box_annotations(annotation_source, annotated_at)
+WHERE annotation_source = 'user';
+
+-- Index for model version tracking
+CREATE INDEX IF NOT EXISTS idx_ocr_box_annotations_model_version
+ON ocr_box_annotations(model_version, annotation_source);
 
 -- Triggers
 
