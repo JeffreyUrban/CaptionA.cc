@@ -75,6 +75,12 @@ export default function AnnotateText() {
   // Padding scale (multiplier for horizontal padding relative to text size)
   const [paddingScale, setPaddingScale] = useState<number>(0.75)
 
+  // Text anchor mode (left/center/right)
+  const [textAnchor, setTextAnchor] = useState<'left' | 'center' | 'right'>('left')
+
+  // Collapsible section state
+  const [textControlsExpanded, setTextControlsExpanded] = useState(false)
+
   // Use effect to track image width and update text size
   const imageContainerRef = useCallback((node: HTMLDivElement | null) => {
     if (!node) return
@@ -125,6 +131,10 @@ export default function AnnotateText() {
         if (data.padding_scale !== undefined) {
           const scale = typeof data.padding_scale === 'number' ? data.padding_scale : parseFloat(data.padding_scale) || 0.75
           setPaddingScale(scale)
+        }
+
+        if (data.text_anchor) {
+          setTextAnchor(data.text_anchor as 'left' | 'center' | 'right')
         }
       } catch (error) {
         console.error('Failed to load preferences:', error)
@@ -383,6 +393,76 @@ export default function AnnotateText() {
       } catch (error) {
         console.error('Failed to save padding scale preference:', error)
       }
+    }
+  }
+
+  // Handle text anchor change
+  const handleTextAnchorChange = async (newAnchor: 'left' | 'center' | 'right') => {
+    const oldAnchor = textAnchor
+    setTextAnchor(newAnchor)
+
+    // Reset padding scale to appropriate default when switching anchor modes
+    let newPaddingScale = paddingScale
+
+    // When switching to center, default to 0 (centered)
+    if (newAnchor === 'center' && oldAnchor !== 'center') {
+      newPaddingScale = 0
+      setPaddingScale(0)
+    }
+    // When switching from center to left/right, default to 0.75
+    else if (oldAnchor === 'center' && newAnchor !== 'center') {
+      newPaddingScale = 0.75
+      setPaddingScale(0.75)
+    }
+
+    // Save to database
+    if (videoId) {
+      try {
+        await fetch(`/api/preferences/${encodeURIComponent(videoId)}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text_anchor: newAnchor,
+            padding_scale: newPaddingScale
+          })
+        })
+      } catch (error) {
+        console.error('Failed to save text anchor preference:', error)
+      }
+    }
+  }
+
+  // Get text style based on anchor mode
+  const getTextStyle = () => {
+    const baseStyle = {
+      fontSize: `${actualTextSize}px`,
+      paddingTop: '0.75rem',
+      paddingBottom: '0.75rem',
+    }
+
+    switch (textAnchor) {
+      case 'left':
+        return {
+          ...baseStyle,
+          paddingLeft: `${paddingScale}em`,
+          paddingRight: '0',
+          textAlign: 'left' as const
+        }
+      case 'center':
+        // Use asymmetric padding to shift centered text while keeping container fixed
+        return {
+          ...baseStyle,
+          paddingLeft: paddingScale >= 0 ? `${paddingScale}em` : '0',
+          paddingRight: paddingScale < 0 ? `${-paddingScale}em` : '0',
+          textAlign: 'center' as const
+        }
+      case 'right':
+        return {
+          ...baseStyle,
+          paddingLeft: '0',
+          paddingRight: `${paddingScale}em`,
+          textAlign: 'right' as const
+        }
     }
   }
 
@@ -653,13 +733,7 @@ export default function AnnotateText() {
                       ) : (
                         <div
                           className="rounded-lg bg-gray-50 font-mono whitespace-pre-wrap dark:bg-gray-950 dark:text-gray-300 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors"
-                          style={{
-                            fontSize: `${actualTextSize}px`,
-                            paddingTop: '0.75rem',
-                            paddingBottom: '0.75rem',
-                            paddingLeft: `${paddingScale}em`,
-                            paddingRight: `${paddingScale}em`
-                          }}
+                          style={getTextStyle()}
                           role="button"
                           tabIndex={0}
                           onClick={() => {
@@ -693,13 +767,7 @@ export default function AnnotateText() {
                   <div className="p-4">
                     <div
                       className="rounded-lg bg-gray-50 font-mono whitespace-pre-wrap dark:bg-gray-950 dark:text-gray-300 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors"
-                      style={{
-                        fontSize: `${actualTextSize}px`,
-                        paddingTop: '0.75rem',
-                        paddingBottom: '0.75rem',
-                        paddingLeft: `${paddingScale}em`,
-                        paddingRight: `${paddingScale}em`
-                      }}
+                      style={getTextStyle()}
                       role="button"
                       tabIndex={0}
                       onClick={() => {
@@ -759,13 +827,7 @@ export default function AnnotateText() {
                       value={text}
                       onChange={(e) => setText(e.target.value)}
                       className="w-full h-48 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 font-mono dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                      style={{
-                        fontSize: `${actualTextSize}px`,
-                        paddingTop: '0.75rem',
-                        paddingBottom: '0.75rem',
-                        paddingLeft: `${paddingScale}em`,
-                        paddingRight: `${paddingScale}em`
-                      }}
+                      style={getTextStyle()}
                       placeholder="Enter caption text..."
                     />
                   </div>
@@ -865,44 +927,122 @@ export default function AnnotateText() {
               </div>
             )}
 
-            {/* Text Size */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                Text Size: {textSizePercent.toFixed(1)}% ({Math.round(actualTextSize)}px)
-              </label>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-500 dark:text-gray-400">1%</span>
-                <input
-                  type="range"
-                  min="1.0"
-                  max="10.0"
-                  step="0.1"
-                  value={textSizePercent}
-                  onChange={(e) => handleTextSizeChange(parseFloat(e.target.value))}
-                  className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
-                />
-                <span className="text-xs text-gray-500 dark:text-gray-400">10%</span>
-              </div>
-            </div>
+            {/* Text Display Controls - Collapsible */}
+            <div className="border border-gray-200 dark:border-gray-700 rounded-lg">
+              <button
+                type="button"
+                onClick={() => setTextControlsExpanded(!textControlsExpanded)}
+                className="w-full px-4 py-3 flex items-center justify-between text-left bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-750 rounded-lg transition-colors"
+              >
+                <span className="font-semibold text-gray-700 dark:text-gray-300">
+                  Text Display Controls
+                </span>
+                <svg
+                  className={`w-5 h-5 text-gray-500 transition-transform ${textControlsExpanded ? 'rotate-180' : ''}`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
 
-            {/* Horizontal Padding */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                Horizontal Padding: {paddingScale.toFixed(2)}em
-              </label>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-500 dark:text-gray-400">0</span>
-                <input
-                  type="range"
-                  min="0.0"
-                  max="2.0"
-                  step="0.05"
-                  value={paddingScale}
-                  onChange={(e) => handlePaddingScaleChange(parseFloat(e.target.value))}
-                  className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
-                />
-                <span className="text-xs text-gray-500 dark:text-gray-400">2em</span>
-              </div>
+              {textControlsExpanded && (
+                <div className="p-4 space-y-4">
+                  {/* Text Anchor */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                      Text Anchor
+                    </label>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleTextAnchorChange('left')}
+                        className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
+                          textAnchor === 'left'
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
+                        }`}
+                      >
+                        Left
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleTextAnchorChange('center')}
+                        className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
+                          textAnchor === 'center'
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
+                        }`}
+                      >
+                        Center
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleTextAnchorChange('right')}
+                        className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
+                          textAnchor === 'right'
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
+                        }`}
+                      >
+                        Right
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Text Size */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                      Text Size: {textSizePercent.toFixed(1)}% ({Math.round(actualTextSize)}px)
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-500 dark:text-gray-400">1%</span>
+                      <input
+                        type="range"
+                        min="1.0"
+                        max="10.0"
+                        step="0.1"
+                        value={textSizePercent}
+                        onChange={(e) => handleTextSizeChange(parseFloat(e.target.value))}
+                        className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
+                      />
+                      <span className="text-xs text-gray-500 dark:text-gray-400">10%</span>
+                    </div>
+                  </div>
+
+                  {/* Padding / Center Offset */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                      {textAnchor === 'center'
+                        ? `Center Offset: ${paddingScale >= 0 ? '+' : ''}${paddingScale.toFixed(2)}em`
+                        : `${textAnchor === 'left' ? 'Left' : 'Right'} Padding: ${paddingScale.toFixed(2)}em`
+                      }
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                        {textAnchor === 'center' ? '-2em' : textAnchor === 'right' ? '2em' : '0'}
+                      </span>
+                      <input
+                        type="range"
+                        min={textAnchor === 'center' ? '-2.0' : '0.0'}
+                        max="2.0"
+                        step="0.05"
+                        value={textAnchor === 'right' ? 2.0 - paddingScale : paddingScale}
+                        onChange={(e) => {
+                          const sliderValue = parseFloat(e.target.value)
+                          const actualValue = textAnchor === 'right' ? 2.0 - sliderValue : sliderValue
+                          handlePaddingScaleChange(actualValue)
+                        }}
+                        className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
+                      />
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                        {textAnchor === 'center' ? '+2em' : textAnchor === 'right' ? '0' : '2em'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Status */}

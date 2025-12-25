@@ -48,13 +48,14 @@ function migrateDatabase(dbPath: string, videoPath: string): boolean {
     const framesOcrExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='frames_ocr'").get()
     const videoPrefsExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='video_preferences'").get()
 
-    // Check if video_preferences has correct schema (REAL text_size and padding_scale)
+    // Check if video_preferences has correct schema (REAL text_size and padding_scale, TEXT text_anchor)
     let videoPrefsHasCorrectSchema = false
     if (videoPrefsExists) {
       const prefTableInfo = db.prepare("PRAGMA table_info(video_preferences)").all() as Array<{ name: string, type: string }>
       const hasTextSize = prefTableInfo.some(col => col.name === 'text_size' && col.type === 'REAL')
       const hasPaddingScale = prefTableInfo.some(col => col.name === 'padding_scale' && col.type === 'REAL')
-      videoPrefsHasCorrectSchema = hasTextSize && hasPaddingScale
+      const hasTextAnchor = prefTableInfo.some(col => col.name === 'text_anchor' && col.type === 'TEXT')
+      videoPrefsHasCorrectSchema = hasTextSize && hasPaddingScale && hasTextAnchor
     }
 
     if (hasNewSchema && framesOcrExists && videoPrefsExists && videoPrefsHasCorrectSchema) {
@@ -147,8 +148,9 @@ function migrateDatabase(dbPath: string, videoPath: string): boolean {
       const hasOldTextSchema = prefTableInfo.length > 0 && prefTableInfo.some(col => col.name === 'text_size' && col.type === 'TEXT')
       const hasOldIntegerSchema = prefTableInfo.length > 0 && prefTableInfo.some(col => col.name === 'text_size' && col.type === 'INTEGER')
       const missingPaddingScale = prefTableInfo.length > 0 && !prefTableInfo.some(col => col.name === 'padding_scale')
+      const missingTextAnchor = prefTableInfo.length > 0 && !prefTableInfo.some(col => col.name === 'text_anchor')
 
-      if (hasOldTextSchema || hasOldIntegerSchema || missingPaddingScale) {
+      if (hasOldTextSchema || hasOldIntegerSchema || missingPaddingScale || missingTextAnchor) {
         console.log('    - Migrating video_preferences schema...')
         db.exec(`DROP TABLE video_preferences`)
       }
@@ -159,12 +161,13 @@ function migrateDatabase(dbPath: string, videoPath: string): boolean {
           id INTEGER PRIMARY KEY CHECK(id = 1),
           text_size REAL DEFAULT 3.0 CHECK(text_size >= 1.0 AND text_size <= 10.0),
           padding_scale REAL DEFAULT 0.75 CHECK(padding_scale >= 0.0 AND padding_scale <= 2.0),
+          text_anchor TEXT DEFAULT 'left' CHECK(text_anchor IN ('left', 'center', 'right')),
           updated_at TEXT NOT NULL DEFAULT (datetime('now'))
         )
       `)
 
       // Insert default preferences if not exists
-      db.exec(`INSERT OR IGNORE INTO video_preferences (id, text_size, padding_scale) VALUES (1, 3.0, 0.75)`)
+      db.exec(`INSERT OR IGNORE INTO video_preferences (id, text_size, padding_scale, text_anchor) VALUES (1, 3.0, 0.75, 'left')`)
 
       console.log('    - Creating new indexes...')
 

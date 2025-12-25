@@ -6,6 +6,7 @@ import { existsSync } from 'fs'
 interface VideoPreferences {
   text_size: number
   padding_scale: number
+  text_anchor: 'left' | 'center' | 'right'
 }
 
 function getDatabase(videoId: string) {
@@ -41,13 +42,13 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
   try {
     const db = getDatabase(videoId)
-    const prefs = db.prepare('SELECT text_size, padding_scale FROM video_preferences WHERE id = 1').get() as VideoPreferences | undefined
+    const prefs = db.prepare('SELECT text_size, padding_scale, text_anchor FROM video_preferences WHERE id = 1').get() as VideoPreferences | undefined
 
     db.close()
 
     if (!prefs) {
-      // Return default if not found (3% of image width, 0.75em padding)
-      return Response.json({ text_size: 3.0, padding_scale: 0.75 })
+      // Return default if not found (3% of image width, 0.75em padding, left anchor)
+      return Response.json({ text_size: 3.0, padding_scale: 0.75, text_anchor: 'left' })
     }
 
     return Response.json(prefs)
@@ -77,7 +78,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
 
   try {
     const body = await request.json()
-    const { text_size, padding_scale } = body
+    const { text_size, padding_scale, text_anchor } = body
 
     // Validate text_size is a number between 1.0 and 10.0 (percentage of image width)
     if (text_size !== undefined && (typeof text_size !== 'number' || text_size < 1.0 || text_size > 10.0)) {
@@ -95,11 +96,19 @@ export async function action({ params, request }: ActionFunctionArgs) {
       })
     }
 
+    // Validate text_anchor is one of the allowed values
+    if (text_anchor !== undefined && !['left', 'center', 'right'].includes(text_anchor)) {
+      return new Response(JSON.stringify({ error: 'Invalid text_anchor (must be "left", "center", or "right")' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      })
+    }
+
     const db = getDatabase(videoId)
 
     // Build update query dynamically based on which fields are provided
     const updates: string[] = []
-    const values: number[] = []
+    const values: (number | string)[] = []
 
     if (text_size !== undefined) {
       updates.push('text_size = ?')
@@ -109,6 +118,11 @@ export async function action({ params, request }: ActionFunctionArgs) {
     if (padding_scale !== undefined) {
       updates.push('padding_scale = ?')
       values.push(padding_scale)
+    }
+
+    if (text_anchor !== undefined) {
+      updates.push('text_anchor = ?')
+      values.push(text_anchor)
     }
 
     if (updates.length > 0) {
