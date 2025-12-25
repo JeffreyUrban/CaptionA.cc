@@ -56,12 +56,18 @@ export default function Home() {
                 Review and annotate video captions with our professional annotation interface.
                 Navigate frames, mark precise boundaries, and ensure caption quality.
               </p>
-              <div className="mt-10 flex items-center justify-center gap-x-6">
+              <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row sm:gap-x-6">
                 <Link
                   to={defaultVideoId ? `/annotate/boundaries?videoId=${encodeURIComponent(defaultVideoId)}` : '/annotate/boundaries'}
                   className="rounded-md bg-white px-6 py-3 text-sm font-semibold text-teal-600 shadow-sm hover:bg-teal-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
                 >
                   Mark Caption Boundaries
+                </Link>
+                <Link
+                  to={defaultVideoId ? `/annotate/text?videoId=${encodeURIComponent(defaultVideoId)}` : '/annotate/text'}
+                  className="rounded-md bg-white px-6 py-3 text-sm font-semibold text-teal-600 shadow-sm hover:bg-teal-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                >
+                  Annotate Caption Text
                 </Link>
                 <a
                   href="#features"
