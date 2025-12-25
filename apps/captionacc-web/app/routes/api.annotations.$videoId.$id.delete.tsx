@@ -2,6 +2,7 @@ import { type ActionFunctionArgs } from 'react-router'
 import Database from 'better-sqlite3'
 import { resolve } from 'path'
 import { existsSync } from 'fs'
+import { deleteCombinedImage } from '~/utils/image-processing'
 
 function getDatabase(videoId: string) {
   const dbPath = resolve(
@@ -58,7 +59,7 @@ export async function action({ params }: ActionFunctionArgs) {
     // Find adjacent gap annotations
     const adjacentGaps = db.prepare(`
       SELECT * FROM annotations
-      WHERE state = 'gap'
+      WHERE boundary_state = 'gap'
       AND (
         end_frame_index = ? - 1
         OR start_frame_index = ? + 1
@@ -88,16 +89,18 @@ export async function action({ params }: ActionFunctionArgs) {
       }
     }
 
-    // Delete the annotation and adjacent gaps
+    // Delete the annotation and its combined image
+    deleteCombinedImage(videoId, annotationId)
     db.prepare('DELETE FROM annotations WHERE id = ?').run(annotationId)
 
+    // Delete adjacent gaps (gaps don't have combined images, so no cleanup needed)
     for (const gapId of gapIdsToDelete) {
       db.prepare('DELETE FROM annotations WHERE id = ?').run(gapId)
     }
 
     // Create merged gap annotation
     const result = db.prepare(`
-      INSERT INTO annotations (start_frame_index, end_frame_index, state, pending)
+      INSERT INTO annotations (start_frame_index, end_frame_index, boundary_state, boundary_pending)
       VALUES (?, ?, 'gap', 0)
     `).run(mergedStart, mergedEnd)
 

@@ -350,12 +350,12 @@ function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsU
                 </Link>
               </MenuItem>
               <MenuItem>
-                <button
-                  className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 data-[focus]:bg-gray-100 dark:data-[focus]:bg-gray-700 data-[focus]:text-gray-900 dark:data-[focus]:text-white data-[focus]:outline-none opacity-50 cursor-not-allowed"
-                  disabled
+                <Link
+                  to={`/annotate/text?videoId=${encodeURIComponent(videoId)}`}
+                  className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 data-[focus]:bg-gray-100 dark:data-[focus]:bg-gray-700 data-[focus]:text-gray-900 dark:data-[focus]:text-white data-[focus]:outline-none"
                 >
-                  Annotate Text (Coming Soon)
-                </button>
+                  Annotate Text
+                </Link>
               </MenuItem>
             </div>
           </MenuItems>

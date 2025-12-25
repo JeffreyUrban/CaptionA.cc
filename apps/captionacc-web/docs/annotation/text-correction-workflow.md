@@ -1,8 +1,16 @@
-# Text Correction Workflow - Detailed Design
+# Text Annotation Workflow - Design Document
 
-**Status:** Design Document (Planning Phase)
+**Status:** Planning Phase - See [/TEXT_ANNOTATION_PLANNING.md](../../../../TEXT_ANNOTATION_PLANNING.md) for current implementation plan
 **Parent:** [overview.md](./overview.md)
 **Purpose:** Determine and correct caption text for annotated sequences
+
+---
+
+**Note:** This document contains the original UX/UI design. For the current implementation plan including database schema, API routes, and technical decisions, see the comprehensive planning document at `/TEXT_ANNOTATION_PLANNING.md`.
+
+After implementation is complete, this document will be updated to describe the actual implementation as work product documentation.
+
+---
 
 ## Workflow Purpose
 
