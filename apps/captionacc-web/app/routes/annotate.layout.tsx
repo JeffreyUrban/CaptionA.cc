@@ -318,11 +318,28 @@ export default function AnnotateLayout() {
 
       // Draw text label if hovered
       if (hoveredBoxIndex === index) {
+        // Scale font size to match box height
+        const fontSize = Math.max(Math.floor(boxHeight), 10)
+        const labelHeight = fontSize + 8
+
+        // Set font before measuring text
+        ctx.font = `${fontSize}px monospace`
+        const textWidth = ctx.measureText(box.text).width
+        const labelWidth = Math.max(boxWidth, textWidth + 8)
+
+        // Draw background
         ctx.fillStyle = 'rgba(0, 0, 0, 0.75)'
-        ctx.fillRect(boxX, boxY - 20, boxWidth, 20)
+        ctx.fillRect(boxX, boxY - labelHeight, labelWidth, labelHeight)
+
+        // Draw centered text
         ctx.fillStyle = '#ffffff'
-        ctx.font = '12px monospace'
-        ctx.fillText(box.text, boxX + 4, boxY - 6)
+        ctx.textBaseline = 'middle'
+        ctx.textAlign = 'center'
+        ctx.fillText(box.text, boxX + labelWidth / 2, boxY - labelHeight / 2)
+
+        // Reset to defaults
+        ctx.textBaseline = 'alphabetic'
+        ctx.textAlign = 'left'
       }
     })
 
@@ -650,8 +667,11 @@ export default function AnnotateLayout() {
   }
 
   return (
-    <AppLayout>
-      <div className="flex h-screen flex-col gap-4 p-4">
+    <AppLayout fullScreen={true}>
+      <div
+        className="flex flex-col gap-4 p-4 overflow-hidden"
+        style={{ height: 'calc(100vh - 4rem)' }}
+      >
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
@@ -665,24 +685,24 @@ export default function AnnotateLayout() {
         </div>
 
         {/* Main content */}
-        <div className="flex flex-1 gap-4 overflow-auto">
+        <div className="flex flex-1 min-h-0 gap-4 overflow-hidden">
           {/* Left: Canvas (2/3 width) */}
-          <div className="flex w-2/3 flex-col gap-4">
+          <div className="flex min-h-0 w-2/3 flex-col gap-4">
             {/* Main canvas */}
-            <div className="relative flex items-center justify-center rounded-lg border border-gray-200 bg-gray-50 dark:border-gray-800 dark:bg-gray-950 p-4">
+            <div className="relative flex flex-shrink-0 items-center justify-center rounded-lg border border-gray-300 bg-gray-200 dark:border-gray-600 dark:bg-gray-700 p-4">
               {viewMode === 'analysis' && subtitleAnalysisUrl ? (
                 <img
                   src={subtitleAnalysisUrl}
                   alt="Subtitle Analysis"
-                  className="max-h-full max-w-full object-contain"
+                  className="max-w-full max-h-full object-contain"
                 />
               ) : viewMode === 'frame' && currentFrameBoxes ? (
-                <div className="relative inline-block">
+                <div className="relative inline-block max-w-full max-h-full">
                   <img
                     ref={imageRef}
                     src={currentFrameBoxes.imageUrl}
                     alt={`Frame ${currentFrameBoxes.frameIndex}`}
-                    className="max-h-full max-w-full object-contain"
+                    className="max-w-full max-h-full object-contain"
                   />
                   <canvas
                     ref={canvasRef}
@@ -695,52 +715,60 @@ export default function AnnotateLayout() {
                 </div>
               ) : (
                 <div className="flex min-h-[400px] items-center justify-center text-gray-500 dark:text-gray-400">
-                  {loadingFrame ? 'Loading frame...' : 'Select a frame to annotate'}
+                  {loadingFrame
+                    ? 'Loading frame...'
+                    : 'Select a frame to annotate'}
                 </div>
               )}
             </div>
 
             {/* Thumbnail panel */}
             <div
-              className="w-full rounded-lg border border-gray-200 bg-white p-2 dark:border-gray-800 dark:bg-gray-900"
-              style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.5rem' }}
+              className="grid w-full h-0 flex-1 auto-rows-min gap-3 overflow-y-auto rounded-lg border border-gray-300 bg-gray-200 p-3 dark:border-gray-600 dark:bg-gray-700"
+              style={{
+                gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+              }}
             >
               {/* Subtitle analysis thumbnail */}
               <button
                 onClick={() => handleThumbnailClick('analysis')}
-                className={`w-full overflow-hidden rounded border-2 ${
+                className={`flex w-full flex-col overflow-hidden rounded border-2 ${
                   viewMode === 'analysis'
                     ? 'border-teal-600'
                     : 'border-gray-300 dark:border-gray-700'
                 }`}
               >
-                <img
-                  src={subtitleAnalysisUrl}
-                  alt="Analysis"
-                  className="h-20 w-full object-cover"
-                />
-                <div className="bg-gray-100 px-2 py-1 text-xs dark:bg-gray-800">
+                <div className="aspect-video w-full bg-black">
+                  <img
+                    src={subtitleAnalysisUrl}
+                    alt="Analysis"
+                    className="h-full w-full object-contain"
+                  />
+                </div>
+                <div className="flex h-11 flex-col items-center justify-center bg-gray-100 px-2 py-1 text-xs text-gray-900 dark:bg-gray-800 dark:text-gray-100">
                   Analysis
                 </div>
               </button>
 
               {/* Frame thumbnails */}
-              {frames.map(frame => (
+              {frames.map((frame) => (
                 <button
                   key={frame.frameIndex}
                   onClick={() => handleThumbnailClick(frame.frameIndex)}
-                  className={`w-full overflow-hidden rounded border-2 ${
+                  className={`flex w-full flex-col overflow-hidden rounded border-2 ${
                     selectedFrameIndex === frame.frameIndex
                       ? 'border-teal-600'
                       : 'border-gray-300 dark:border-gray-700'
                   }`}
                 >
-                  <img
-                    src={frame.imageUrl}
-                    alt={`Frame ${frame.frameIndex}`}
-                    className="h-20 w-full object-cover"
-                  />
-                  <div className="bg-gray-100 px-2 py-1 text-xs dark:bg-gray-800">
+                  <div className="aspect-video w-full bg-black">
+                    <img
+                      src={frame.imageUrl}
+                      alt={`Frame ${frame.frameIndex}`}
+                      className="h-full w-full object-contain"
+                    />
+                  </div>
+                  <div className="flex h-11 flex-col items-center justify-center bg-gray-100 px-2 py-1 text-xs text-gray-900 dark:bg-gray-800 dark:text-gray-100">
                     Frame {frame.frameIndex}
                     <br />
                     {frame.captionBoxCount}/{frame.totalBoxCount} boxes
@@ -751,7 +779,7 @@ export default function AnnotateLayout() {
           </div>
 
           {/* Right: Controls (1/3 width) */}
-          <div className="flex w-1/3 flex-col gap-4 overflow-y-auto rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
+          <div className="flex min-h-0 w-1/3 flex-col gap-4 overflow-y-auto rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
               Layout Controls
             </h2>
@@ -784,9 +812,17 @@ export default function AnnotateLayout() {
                 <div className="mt-1 text-xs text-gray-600 dark:text-gray-400">
                   {currentFrameBoxes.boxes.length} total boxes
                   <br />
-                  {currentFrameBoxes.boxes.filter(b => b.userLabel === 'in').length} annotated as caption
+                  {
+                    currentFrameBoxes.boxes.filter((b) => b.userLabel === 'in')
+                      .length
+                  }{' '}
+                  annotated as caption
                   <br />
-                  {currentFrameBoxes.boxes.filter(b => b.userLabel === 'out').length} annotated as noise
+                  {
+                    currentFrameBoxes.boxes.filter((b) => b.userLabel === 'out')
+                      .length
+                  }{' '}
+                  annotated as noise
                 </div>
               </div>
             )}
@@ -798,24 +834,64 @@ export default function AnnotateLayout() {
               </div>
               <div className="mt-2 space-y-1 text-xs">
                 <div className="flex items-center gap-2">
-                  <div className="h-4 w-4 rounded border-2" style={{ borderColor: '#14b8a6', backgroundColor: 'rgba(20,184,166,0.25)' }} />
-                  <span className="text-gray-700 dark:text-gray-300">Annotated: Caption</span>
+                  <div
+                    className="h-4 w-4 rounded border-2"
+                    style={{
+                      borderColor: '#14b8a6',
+                      backgroundColor: 'rgba(20,184,166,0.25)',
+                    }}
+                  />
+                  <span className="text-gray-700 dark:text-gray-300">
+                    Annotated: Caption
+                  </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="h-4 w-4 rounded border-2" style={{ borderColor: '#dc2626', backgroundColor: 'rgba(220,38,38,0.25)' }} />
-                  <span className="text-gray-700 dark:text-gray-300">Annotated: Noise</span>
+                  <div
+                    className="h-4 w-4 rounded border-2"
+                    style={{
+                      borderColor: '#dc2626',
+                      backgroundColor: 'rgba(220,38,38,0.25)',
+                    }}
+                  />
+                  <span className="text-gray-700 dark:text-gray-300">
+                    Annotated: Noise
+                  </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="h-4 w-4 rounded border-2" style={{ borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.15)' }} />
-                  <span className="text-gray-700 dark:text-gray-300">Predicted: Caption (high conf)</span>
+                  <div
+                    className="h-4 w-4 rounded border-2"
+                    style={{
+                      borderColor: '#10b981',
+                      backgroundColor: 'rgba(16,185,129,0.15)',
+                    }}
+                  />
+                  <span className="text-gray-700 dark:text-gray-300">
+                    Predicted: Caption (high conf)
+                  </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="h-4 w-4 rounded border-2" style={{ borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,0.15)' }} />
-                  <span className="text-gray-700 dark:text-gray-300">Predicted: Noise (high conf)</span>
+                  <div
+                    className="h-4 w-4 rounded border-2"
+                    style={{
+                      borderColor: '#ef4444',
+                      backgroundColor: 'rgba(239,68,68,0.15)',
+                    }}
+                  />
+                  <span className="text-gray-700 dark:text-gray-300">
+                    Predicted: Noise (high conf)
+                  </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="h-4 w-4 rounded border-2" style={{ borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.1)' }} />
-                  <span className="text-gray-700 dark:text-gray-300">Uncertain</span>
+                  <div
+                    className="h-4 w-4 rounded border-2"
+                    style={{
+                      borderColor: '#f59e0b',
+                      backgroundColor: 'rgba(245,158,11,0.1)',
+                    }}
+                  />
+                  <span className="text-gray-700 dark:text-gray-300">
+                    Uncertain
+                  </span>
                 </div>
               </div>
             </div>
@@ -827,10 +903,22 @@ export default function AnnotateLayout() {
                   Layout Parameters
                 </div>
                 <div className="mt-2 space-y-1 text-xs text-gray-600 dark:text-gray-400">
-                  <div>Vertical Position: {layoutConfig.verticalPosition ?? 'N/A'}px (±{layoutConfig.verticalStd ?? 'N/A'})</div>
-                  <div>Box Height: {layoutConfig.boxHeight ?? 'N/A'}px (±{layoutConfig.boxHeightStd ?? 'N/A'})</div>
-                  <div>Anchor: {layoutConfig.anchorType ?? 'N/A'} ({layoutConfig.anchorPosition ?? 'N/A'}px)</div>
-                  <div>Crop: [{layoutConfig.cropLeft}, {layoutConfig.cropTop}] - [{layoutConfig.cropRight}, {layoutConfig.cropBottom}]</div>
+                  <div>
+                    Vertical Position: {layoutConfig.verticalPosition ?? 'N/A'}
+                    px (±{layoutConfig.verticalStd ?? 'N/A'})
+                  </div>
+                  <div>
+                    Box Height: {layoutConfig.boxHeight ?? 'N/A'}px (±
+                    {layoutConfig.boxHeightStd ?? 'N/A'})
+                  </div>
+                  <div>
+                    Anchor: {layoutConfig.anchorType ?? 'N/A'} (
+                    {layoutConfig.anchorPosition ?? 'N/A'}px)
+                  </div>
+                  <div>
+                    Crop: [{layoutConfig.cropLeft}, {layoutConfig.cropTop}] - [
+                    {layoutConfig.cropRight}, {layoutConfig.cropBottom}]
+                  </div>
                 </div>
               </div>
             )}
