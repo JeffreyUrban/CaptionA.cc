@@ -78,13 +78,15 @@ function estimateCaptionBoxCount(
   for (const annotation of ocrAnnotations) {
     // OCR annotation format: [text, confidence, [x, y, width, height]]
     // Coordinates are fractional [0-1]
+    // IMPORTANT: y is measured from BOTTOM of image, not top
     const [_text, _conf, [x, y, width, height]] = annotation
 
     // Convert fractional to pixels
     const boxLeft = Math.floor(x * frameWidth)
-    const boxTop = Math.floor(y * frameHeight)
+    // Convert y from bottom-referenced to top-referenced
+    const boxBottom = Math.floor((1 - y) * frameHeight)
+    const boxTop = boxBottom - Math.floor(height * frameHeight)
     const boxRight = boxLeft + Math.floor(width * frameWidth)
-    const boxBottom = boxTop + Math.floor(height * frameHeight)
 
     // Check if box is inside crop bounds
     const insideCrop = (
@@ -119,19 +121,122 @@ export async function loader({ params }: LoaderFunctionArgs) {
   try {
     const db = getDatabase(videoId)
 
-    // Get layout config (or create default if not exists)
+    // Get layout config (or auto-initialize from subtitle_analysis.txt)
     let layoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as VideoLayoutConfig | undefined
 
     if (!layoutConfig) {
-      // TODO: Initialize from subtitle_region analysis
-      // For now, return error - layout config must be initialized first
-      db.close()
-      return new Response(JSON.stringify({
-        error: 'Layout config not initialized. Run subtitle region analysis first.'
-      }), {
-        status: 404,
-        headers: { 'Content-Type': 'application/json' }
-      })
+      // Auto-initialize from subtitle_analysis.txt
+      const analysisPath = resolve(
+        process.cwd(),
+        '..',
+        '..',
+        'local',
+        'data',
+        ...videoId.split('/'),
+        'caption_layout',
+        'subtitle_analysis.txt'
+      )
+
+      if (!existsSync(analysisPath)) {
+        db.close()
+        return new Response(JSON.stringify({
+          error: 'subtitle_analysis.txt not found. Run caption_layout analysis first.'
+        }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' }
+        })
+      }
+
+      // Parse subtitle_analysis.txt to get layout parameters
+      const analysisContent = readFileSync(analysisPath, 'utf-8')
+      const jsonStart = analysisContent.indexOf('---\n') + 4
+      const jsonContent = analysisContent.slice(jsonStart).trim()
+      const analysisData = JSON.parse(jsonContent)
+
+      // Get frame dimensions from first frame image
+      const framesDir = resolve(
+        process.cwd(),
+        '..',
+        '..',
+        'local',
+        'data',
+        ...videoId.split('/'),
+        'caption_layout',
+        'full_frames'
+      )
+
+      let frameWidth = 1280  // Default
+      let frameHeight = 720  // Default
+
+      // Find first frame to get actual dimensions
+      const { readdirSync } = await import('fs')
+      const frameFiles = readdirSync(framesDir).filter(f => f.startsWith('frame_') && f.endsWith('.jpg'))
+
+      if (frameFiles.length > 0) {
+        const firstFramePath = resolve(framesDir, frameFiles[0])
+
+        // Read image dimensions using sharp
+        try {
+          const sharp = (await import('sharp')).default
+          const metadata = await sharp(firstFramePath).metadata()
+          frameWidth = metadata.width || 1280
+          frameHeight = metadata.height || 720
+          console.log(`Detected frame dimensions: ${frameWidth}x${frameHeight}`)
+        } catch (error) {
+          console.warn('Failed to read frame dimensions, using defaults:', error)
+        }
+      }
+
+      // Initialize video_layout_config table
+      db.prepare(`
+        INSERT INTO video_layout_config (
+          id,
+          frame_width,
+          frame_height,
+          crop_left,
+          crop_top,
+          crop_right,
+          crop_bottom,
+          selection_left,
+          selection_top,
+          selection_right,
+          selection_bottom,
+          selection_mode,
+          vertical_position,
+          vertical_std,
+          box_height,
+          box_height_std,
+          anchor_type,
+          anchor_position,
+          crop_bounds_version
+        ) VALUES (
+          1,
+          ?, ?, ?, ?, ?, ?,
+          NULL, NULL, NULL, NULL,
+          'hard',
+          ?, ?, ?, ?,
+          ?, ?,
+          1
+        )
+      `).run(
+        frameWidth,
+        frameHeight,
+        analysisData.crop_bounds[0],  // crop_left
+        analysisData.crop_bounds[1],  // crop_top
+        analysisData.crop_bounds[2],  // crop_right
+        analysisData.crop_bounds[3],  // crop_bottom
+        analysisData.vertical_position_mode,
+        analysisData.vertical_position_std,
+        analysisData.height_mode,
+        analysisData.height_std,
+        analysisData.anchor_type,
+        analysisData.anchor_position
+      )
+
+      console.log('Initialized video_layout_config from subtitle_analysis.txt')
+
+      // Reload config
+      layoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as VideoLayoutConfig
     }
 
     // Load frames from caption_layout OCR.jsonl

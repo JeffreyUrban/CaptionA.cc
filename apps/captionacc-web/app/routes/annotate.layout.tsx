@@ -84,6 +84,12 @@ export default function AnnotateLayout() {
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 })
   const [hoveredBoxIndex, setHoveredBoxIndex] = useState<number | null>(null)
 
+  // Selection rectangle state (click-to-start, click-to-end)
+  const [isSelecting, setIsSelecting] = useState(false)
+  const [selectionStart, setSelectionStart] = useState<{ x: number; y: number } | null>(null)
+  const [selectionCurrent, setSelectionCurrent] = useState<{ x: number; y: number } | null>(null)
+  const [selectionLabel, setSelectionLabel] = useState<'in' | 'out' | null>(null) // Based on which button started selection
+
   // Layout controls state (local modifications before save)
   const [cropBoundsEdit, setCropBoundsEdit] = useState<{ left: number; top: number; right: number; bottom: number } | null>(null)
   const [selectionRectEdit, setSelectionRectEdit] = useState<{ left: number; top: number; right: number; bottom: number } | null>(null)
@@ -273,8 +279,8 @@ export default function AnnotateLayout() {
     return () => window.removeEventListener('resize', updateCanvasSize)
   }, [viewMode, currentFrameBoxes])
 
-  // Draw boxes on canvas overlay
-  useEffect(() => {
+  // Continuous animation loop for smooth drag visualization
+  const drawCanvas = useCallback(() => {
     if (!canvasRef.current || !imageRef.current || viewMode !== 'frame' || !currentFrameBoxes || canvasSize.width === 0) return
 
     const canvas = canvasRef.current
@@ -319,7 +325,34 @@ export default function AnnotateLayout() {
         ctx.fillText(box.text, boxX + 4, boxY - 6)
       }
     })
-  }, [canvasSize, viewMode, currentFrameBoxes, hoveredBoxIndex])
+
+    // Draw selection rectangle (click-to-start, click-to-end)
+    if (isSelecting && selectionStart && selectionCurrent && selectionLabel) {
+      const selLeft = Math.min(selectionStart.x, selectionCurrent.x)
+      const selTop = Math.min(selectionStart.y, selectionCurrent.y)
+      const selWidth = Math.abs(selectionCurrent.x - selectionStart.x)
+      const selHeight = Math.abs(selectionCurrent.y - selectionStart.y)
+
+      // Color based on selection label (in=green, out=red)
+      const selColor = selectionLabel === 'in' ? '#10b981' : '#ef4444'
+      const selBgColor = selectionLabel === 'in' ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)'
+
+      ctx.strokeStyle = selColor
+      ctx.fillStyle = selBgColor
+      ctx.lineWidth = 3
+      ctx.setLineDash([5, 5])
+
+      ctx.fillRect(selLeft, selTop, selWidth, selHeight)
+      ctx.strokeRect(selLeft, selTop, selWidth, selHeight)
+
+      ctx.setLineDash([])
+    }
+  }, [canvasSize, viewMode, currentFrameBoxes, hoveredBoxIndex, isSelecting, selectionStart, selectionCurrent, selectionLabel])
+
+  // Call drawCanvas in an effect when dependencies change
+  useEffect(() => {
+    drawCanvas()
+  }, [drawCanvas])
 
   // Get box colors based on color code
   const getBoxColors = (colorCode: string): { border: string; background: string } => {
@@ -337,19 +370,96 @@ export default function AnnotateLayout() {
     return colorMap[colorCode] || { border: '#9ca3af', background: 'rgba(156,163,175,0.1)' }
   }
 
-  // Handle canvas mouse events for box interaction
+  // Complete selection and annotate boxes
+  const completeSelection = useCallback(() => {
+    if (!isSelecting || !selectionStart || !selectionCurrent || !selectionLabel || !currentFrameBoxes) return
+
+    // Calculate selection rectangle
+    const selRect = {
+      left: Math.min(selectionStart.x, selectionCurrent.x),
+      top: Math.min(selectionStart.y, selectionCurrent.y),
+      right: Math.max(selectionStart.x, selectionCurrent.x),
+      bottom: Math.max(selectionStart.y, selectionCurrent.y),
+    }
+
+    const scale = canvasSize.width / currentFrameBoxes.frameWidth
+
+    // Find all boxes fully enclosed by selection rectangle
+    const enclosedBoxes: number[] = []
+    currentFrameBoxes.boxes.forEach((box) => {
+      const boxX = box.originalBounds.left * scale
+      const boxY = box.originalBounds.top * scale
+      const boxRight = box.originalBounds.right * scale
+      const boxBottom = box.originalBounds.bottom * scale
+
+      // Check if box is fully enclosed
+      if (
+        boxX >= selRect.left &&
+        boxY >= selRect.top &&
+        boxRight <= selRect.right &&
+        boxBottom <= selRect.bottom
+      ) {
+        enclosedBoxes.push(box.boxIndex)
+      }
+    })
+
+    // Annotate all enclosed boxes
+    if (enclosedBoxes.length > 0) {
+      const annotations = enclosedBoxes.map(boxIndex => ({ boxIndex, label: selectionLabel }))
+
+      // Save annotations
+      fetch(
+        `/api/annotations/${encodeURIComponent(videoId)}/frames/${currentFrameBoxes.frameIndex}/boxes`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ annotations }),
+        }
+      ).then(() => {
+        // Reload frame boxes to get updated colors
+        if (selectedFrameIndex !== null) {
+          fetch(`/api/annotations/${encodeURIComponent(videoId)}/frames/${selectedFrameIndex}/boxes`)
+            .then(res => res.json())
+            .then(data => setCurrentFrameBoxes(data))
+        }
+      })
+    }
+
+    // Reset selection state
+    setIsSelecting(false)
+    setSelectionStart(null)
+    setSelectionCurrent(null)
+    setSelectionLabel(null)
+  }, [isSelecting, selectionStart, selectionCurrent, selectionLabel, currentFrameBoxes, canvasSize, videoId, selectedFrameIndex])
+
+  // Handle canvas click - individual box annotation, or start/complete selection
   const handleCanvasClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!currentFrameBoxes || !canvasRef.current || canvasSize.width === 0) return
+
+    // Only handle left and right button
+    if (e.button !== 0 && e.button !== 2) return
+
+    // Prevent context menu on right click
+    if (e.button === 2) {
+      e.preventDefault()
+      e.stopPropagation()
+    }
 
     const canvas = canvasRef.current
     const rect = canvas.getBoundingClientRect()
     const x = e.clientX - rect.left
     const y = e.clientY - rect.top
 
-    // Calculate scale factor
-    const scale = canvasSize.width / currentFrameBoxes.frameWidth
+    if (isSelecting) {
+      // Already selecting - second click completes selection
+      completeSelection()
+      return
+    }
 
-    // Find clicked box using original bounds
+    // Check if clicking on a box
+    const scale = canvasSize.width / currentFrameBoxes.frameWidth
+    let clickedBoxIndex: number | null = null
+
     for (let i = currentFrameBoxes.boxes.length - 1; i >= 0; i--) {
       const box = currentFrameBoxes.boxes[i]
       const boxX = box.originalBounds.left * scale
@@ -358,19 +468,26 @@ export default function AnnotateLayout() {
       const boxHeight = (box.originalBounds.bottom - box.originalBounds.top) * scale
 
       if (x >= boxX && x <= boxX + boxWidth && y >= boxY && y <= boxY + boxHeight) {
-        // Left click = in, Right click = out
-        const label = e.button === 0 ? 'in' : 'out'
-        handleBoxClick(box.boxIndex, label)
-        return
+        clickedBoxIndex = box.boxIndex
+        break
       }
     }
-  }, [currentFrameBoxes, canvasSize, handleBoxClick])
 
-  const handleCanvasContextMenu = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
-    e.preventDefault()
-    handleCanvasClick(e)
-  }, [handleCanvasClick])
+    if (clickedBoxIndex !== null) {
+      // Clicked on a box - annotate it individually
+      const label = e.button === 0 ? 'in' : 'out'
+      handleBoxClick(clickedBoxIndex, label)
+    } else {
+      // Clicked on empty space - start rectangle selection
+      const label = e.button === 0 ? 'in' : 'out'
+      setIsSelecting(true)
+      setSelectionStart({ x, y })
+      setSelectionCurrent({ x, y })
+      setSelectionLabel(label)
+    }
+  }, [currentFrameBoxes, canvasSize, isSelecting, completeSelection, handleBoxClick])
 
+  // Handle mouse move - update selection rectangle or detect hover
   const handleCanvasMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!currentFrameBoxes || !canvasRef.current || canvasSize.width === 0) return
 
@@ -378,6 +495,12 @@ export default function AnnotateLayout() {
     const rect = canvas.getBoundingClientRect()
     const x = e.clientX - rect.left
     const y = e.clientY - rect.top
+
+    // Update selection current position if selecting
+    if (isSelecting) {
+      setSelectionCurrent({ x, y })
+      return
+    }
 
     // Calculate scale factor
     const scale = canvasSize.width / currentFrameBoxes.frameWidth
@@ -398,7 +521,12 @@ export default function AnnotateLayout() {
     }
 
     setHoveredBoxIndex(foundIndex)
-  }, [currentFrameBoxes, canvasSize])
+  }, [currentFrameBoxes, canvasSize, isSelecting])
+
+  const handleCanvasContextMenu = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+  }, [])
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -435,8 +563,15 @@ export default function AnnotateLayout() {
 
         case 'Escape':
           e.preventDefault()
-          // Return to analysis view
-          handleThumbnailClick('analysis')
+          // Cancel selection if selecting, otherwise return to analysis view
+          if (isSelecting) {
+            setIsSelecting(false)
+            setSelectionStart(null)
+            setSelectionCurrent(null)
+            setSelectionLabel(null)
+          } else {
+            handleThumbnailClick('analysis')
+          }
           break
 
         case 'i':
@@ -490,7 +625,7 @@ export default function AnnotateLayout() {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [viewMode, selectedFrameIndex, frames, hoveredBoxIndex, currentFrameBoxes, handleThumbnailClick, handleBoxClick])
+  }, [viewMode, selectedFrameIndex, frames, hoveredBoxIndex, currentFrameBoxes, isSelecting, handleThumbnailClick, handleBoxClick])
 
   if (loading) {
     return (
@@ -552,9 +687,10 @@ export default function AnnotateLayout() {
                   <canvas
                     ref={canvasRef}
                     className="absolute left-0 top-0 cursor-crosshair"
-                    onClick={handleCanvasClick}
-                    onContextMenu={handleCanvasContextMenu}
+                    style={{ touchAction: 'none' }}
+                    onMouseDown={handleCanvasClick}
                     onMouseMove={handleCanvasMouseMove}
+                    onContextMenu={handleCanvasContextMenu}
                   />
                 </div>
               ) : (

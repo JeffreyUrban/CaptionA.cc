@@ -44,6 +44,8 @@ CREATE TABLE IF NOT EXISTS frames_ocr (
 );
 
 -- OCR box annotations table for user annotations on character boxes
+-- Note: No foreign key to frames_ocr because we annotate caption_layout frames
+-- which are not in frames_ocr (they're sampled at 0.1Hz vs 10Hz)
 CREATE TABLE IF NOT EXISTS ocr_box_annotations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     frame_index INTEGER NOT NULL,
@@ -68,7 +70,6 @@ CREATE TABLE IF NOT EXISTS ocr_box_annotations (
     -- Metadata
     annotated_at TEXT NOT NULL DEFAULT (datetime('now')),
 
-    FOREIGN KEY (frame_index) REFERENCES frames_ocr(frame_index) ON DELETE CASCADE,
     UNIQUE(frame_index, box_index)
 );
 
