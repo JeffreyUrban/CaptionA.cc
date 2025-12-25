@@ -15,82 +15,33 @@ export async function loader({ params }: LoaderFunctionArgs) {
   }
 
   const videoId = decodeURIComponent(encodedVideoId)
-  const frameNum = parseInt(frameIndex)
 
-  // Get level2 name (last part of videoId)
-  const level2 = videoId.split('/').pop()
-  if (!level2) {
-    return new Response('Invalid videoId', { status: 400 })
-  }
-
-  // Path to video file
-  const videoPath = resolve(
-    process.cwd(),
-    '..',
-    '..',
-    'local',
-    'data',
-    ...videoId.split('/'),
-    `${level2}.mp4`
-  )
-
-  if (!existsSync(videoPath)) {
-    return new Response('Video file not found', { status: 404 })
-  }
-
-  // Cache directory for extracted frames
-  const cacheDir = resolve(
-    process.cwd(),
-    '..',
-    '..',
-    'local',
-    'data',
-    ...videoId.split('/'),
-    'full_frames'
-  )
-
-  // Cached frame path
+  // caption_layout frames are at 10Hz, matching database frame_index 1:1
   const paddedIndex = frameIndex.padStart(10, '0')
-  const cachedFramePath = resolve(cacheDir, `frame_${paddedIndex}.jpg`)
 
-  // Check if frame is already cached
-  if (existsSync(cachedFramePath)) {
-    const imageBuffer = await readFile(cachedFramePath)
-    return new Response(imageBuffer, {
-      headers: {
-        'Content-Type': 'image/jpeg',
-        'Cache-Control': 'public, max-age=31536000, immutable',
-      },
-    })
+  const framePath = resolve(
+    process.cwd(),
+    '..',
+    '..',
+    'local',
+    'data',
+    ...videoId.split('/'),
+    'caption_layout',
+    'full_frames',
+    `frame_${paddedIndex}.jpg`
+  )
+
+  // Check if frame exists
+  if (!existsSync(framePath)) {
+    return new Response(`Frame ${frameIndex} not found`, { status: 404 })
   }
 
-  // Extract frame using ffmpeg
-  try {
-    // Create cache directory if it doesn't exist
-    await mkdir(cacheDir, { recursive: true })
-
-    // Extract specific frame using ffmpeg
-    // Frame number starts at 0, select_eq(n,frameNum) selects the specific frame
-    const command = `ffmpeg -i "${videoPath}" -vf "select=eq(n\\,${frameNum})" -frames:v 1 -y "${cachedFramePath}"`
-
-    await execAsync(command)
-
-    // Read and return the extracted frame
-    if (existsSync(cachedFramePath)) {
-      const imageBuffer = await readFile(cachedFramePath)
-      return new Response(imageBuffer, {
-        headers: {
-          'Content-Type': 'image/jpeg',
-          'Cache-Control': 'public, max-age=31536000, immutable',
-        },
-      })
-    } else {
-      return new Response('Failed to extract frame', { status: 500 })
-    }
-  } catch (error) {
-    console.error('Error extracting frame:', error)
-    return new Response('Failed to extract frame: ' + (error instanceof Error ? error.message : 'Unknown error'), {
-      status: 500
-    })
-  }
+  // Read and return the frame
+  const imageBuffer = await readFile(framePath)
+  return new Response(imageBuffer, {
+    headers: {
+      'Content-Type': 'image/jpeg',
+      'Cache-Control': 'public, max-age=31536000, immutable',
+    },
+  })
 }

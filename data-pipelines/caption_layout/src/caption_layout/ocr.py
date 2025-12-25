@@ -34,12 +34,13 @@ def stream_video_with_ocr(
     language: str = "zh-Hans",
     progress_callback: Optional[callable] = None,
     max_workers: int = 2,
+    keep_frames: bool = False,
 ) -> None:
     """Extract frames from video and process with OCR in streaming fashion.
 
-    Runs FFmpeg in background and processes frames as they become available,
-    deleting each frame immediately after OCR completes. Uses worker pool
-    for OCR processing to avoid overwhelming the OCR backend.
+    Runs FFmpeg in background and processes frames as they become available.
+    By default, deletes each frame immediately after OCR completes to save space.
+    Uses worker pool for OCR processing to avoid overwhelming the OCR backend.
 
     This is a thin orchestration layer that combines shared video_utils and
     ocr_utils streaming functions.
@@ -47,11 +48,12 @@ def stream_video_with_ocr(
     Args:
         video_path: Path to input video file
         output_file: Path to output JSONL file
-        frames_dir: Directory for temporary frame storage
+        frames_dir: Directory for frame storage
         rate_hz: Frame sampling rate in Hz (default: 0.1)
         language: OCR language preference
         progress_callback: Optional callback (current, total) -> None
         max_workers: Maximum concurrent OCR workers (default: 2)
+        keep_frames: If True, keep frames after OCR processing (default: False)
     """
     # Create frames directory
     frames_dir.mkdir(parents=True, exist_ok=True)
@@ -72,6 +74,7 @@ def stream_video_with_ocr(
         max_workers=max_workers,
         progress_callback=progress_callback,
         ffmpeg_running_check=lambda: ffmpeg_process.poll() is None,
+        keep_frames=keep_frames,
     )
 
     # Check for FFmpeg errors

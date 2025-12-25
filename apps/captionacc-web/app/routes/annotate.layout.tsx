@@ -79,6 +79,7 @@ export default function AnnotateLayout() {
   const [loadingFrame, setLoadingFrame] = useState(false)
 
   // Canvas state
+  const imageRef = useRef<HTMLImageElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 })
   const [hoveredBoxIndex, setHoveredBoxIndex] = useState<number | null>(null)
@@ -165,12 +166,20 @@ export default function AnnotateLayout() {
 
     const loadFrameBoxes = async () => {
       setLoadingFrame(true)
+      console.log('Loading boxes for frame:', selectedFrameIndex)
       try {
         const response = await fetch(
           `/api/annotations/${encodeURIComponent(videoId)}/frames/${selectedFrameIndex}/boxes`
         )
         if (!response.ok) throw new Error('Failed to load frame boxes')
         const data = await response.json()
+
+        console.log('Loaded frame boxes:', {
+          requestedFrame: selectedFrameIndex,
+          receivedFrame: data.frameIndex,
+          imageUrl: data.imageUrl,
+          boxCount: data.boxes?.length
+        })
 
         setCurrentFrameBoxes(data)
         setLoadingFrame(false)
@@ -237,121 +246,80 @@ export default function AnnotateLayout() {
     }
   }, [videoId, currentFrameBoxes])
 
-  // Handle canvas resize
+  // Sync canvas size with displayed image
   useEffect(() => {
     const updateCanvasSize = () => {
-      if (canvasRef.current) {
-        const container = canvasRef.current.parentElement
-        if (container) {
-          // Account for padding (p-4 = 1rem = 16px on each side)
-          const padding = 32 // 16px * 2
-          setCanvasSize({
-            width: container.clientWidth - padding,
-            height: 600 // Match the explicit canvas height
-          })
-        }
-      }
-    }
-
-    updateCanvasSize()
-    window.addEventListener('resize', updateCanvasSize)
-    return () => window.removeEventListener('resize', updateCanvasSize)
-  }, [])
-
-  // Update canvas size when switching to frame view
-  useEffect(() => {
-    if (viewMode === 'frame' && canvasRef.current) {
-      const container = canvasRef.current.parentElement
-      if (container) {
-        const padding = 32
+      if (imageRef.current && canvasRef.current) {
+        const img = imageRef.current
         setCanvasSize({
-          width: container.clientWidth - padding,
-          height: 600
+          width: img.clientWidth,
+          height: img.clientHeight
         })
       }
     }
+
+    if (viewMode === 'frame' && imageRef.current) {
+      // Wait for image to load
+      const img = imageRef.current
+      if (img.complete) {
+        updateCanvasSize()
+      } else {
+        img.addEventListener('load', updateCanvasSize)
+        return () => img.removeEventListener('load', updateCanvasSize)
+      }
+    }
+
+    window.addEventListener('resize', updateCanvasSize)
+    return () => window.removeEventListener('resize', updateCanvasSize)
   }, [viewMode, currentFrameBoxes])
 
-  // Draw canvas (boxes on frame)
+  // Draw boxes on canvas overlay
   useEffect(() => {
-    if (!canvasRef.current || viewMode !== 'frame' || !currentFrameBoxes) return
+    if (!canvasRef.current || !imageRef.current || viewMode !== 'frame' || !currentFrameBoxes || canvasSize.width === 0) return
 
     const canvas = canvasRef.current
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    console.log('Drawing canvas:', {
-      canvasSize,
-      frameWidth: currentFrameBoxes.frameWidth,
-      frameHeight: currentFrameBoxes.frameHeight,
-      imageUrl: currentFrameBoxes.imageUrl
-    })
-
-    // Set canvas dimensions
+    // Set canvas dimensions to match displayed image
     canvas.width = canvasSize.width
     canvas.height = canvasSize.height
 
-    // Load and draw frame image
-    const img = new Image()
-    img.src = currentFrameBoxes.imageUrl
-    img.onerror = (e) => {
-      console.error('Failed to load frame image:', currentFrameBoxes.imageUrl, e)
-    }
-    img.onload = () => {
-      console.log('Image loaded:', img.width, 'x', img.height)
+    // Clear canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
 
-      // Calculate scaling to fit full frame on canvas
-      const scale = Math.min(
-        canvasSize.width / currentFrameBoxes.frameWidth,
-        canvasSize.height / currentFrameBoxes.frameHeight
-      )
-      const scaledWidth = currentFrameBoxes.frameWidth * scale
-      const scaledHeight = currentFrameBoxes.frameHeight * scale
-      const offsetX = (canvasSize.width - scaledWidth) / 2
-      const offsetY = (canvasSize.height - scaledHeight) / 2
+    // Calculate scale factor from original frame to displayed image
+    const scale = canvasSize.width / currentFrameBoxes.frameWidth
 
-      console.log('Drawing full frame:', {
-        scale,
-        scaledWidth,
-        scaledHeight,
-        offsetX,
-        offsetY
-      })
+    // Draw boxes using original bounds
+    currentFrameBoxes.boxes.forEach((box, index) => {
+      // Convert original pixel bounds to canvas coordinates
+      const boxX = box.originalBounds.left * scale
+      const boxY = box.originalBounds.top * scale
+      const boxWidth = (box.originalBounds.right - box.originalBounds.left) * scale
+      const boxHeight = (box.originalBounds.bottom - box.originalBounds.top) * scale
 
-      // Clear and draw full frame image
-      ctx.clearRect(0, 0, canvas.width, canvas.height)
-      ctx.drawImage(img, offsetX, offsetY, scaledWidth, scaledHeight)
+      // Get color based on color code
+      const colors = getBoxColors(box.colorCode)
 
-      // Draw boxes using original bounds
-      currentFrameBoxes.boxes.forEach((box, index) => {
-        // Convert original pixel bounds to canvas coordinates
-        const boxX = offsetX + (box.originalBounds.left / currentFrameBoxes.frameWidth) * scaledWidth
-        const boxY = offsetY + (box.originalBounds.top / currentFrameBoxes.frameHeight) * scaledHeight
-        const boxWidth = ((box.originalBounds.right - box.originalBounds.left) / currentFrameBoxes.frameWidth) * scaledWidth
-        const boxHeight = ((box.originalBounds.bottom - box.originalBounds.top) / currentFrameBoxes.frameHeight) * scaledHeight
+      // Draw box
+      ctx.strokeStyle = colors.border
+      ctx.fillStyle = colors.background
+      ctx.lineWidth = hoveredBoxIndex === index ? 3 : 2
 
-        // Get color based on color code
-        const colors = getBoxColors(box.colorCode)
+      ctx.fillRect(boxX, boxY, boxWidth, boxHeight)
+      ctx.strokeRect(boxX, boxY, boxWidth, boxHeight)
 
-        // Draw box
-        ctx.strokeStyle = colors.border
-        ctx.fillStyle = colors.background
-        ctx.lineWidth = hoveredBoxIndex === index ? 3 : 2
-
-        ctx.fillRect(boxX, boxY, boxWidth, boxHeight)
-        ctx.strokeRect(boxX, boxY, boxWidth, boxHeight)
-
-        // Draw text label if hovered
-        if (hoveredBoxIndex === index) {
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.75)'
-          ctx.fillRect(boxX, boxY - 20, boxWidth, 20)
-          ctx.fillStyle = '#ffffff'
-          ctx.font = '12px monospace'
-          ctx.fillText(box.text, boxX + 4, boxY - 6)
-        }
-      })
-    }
-  }, [canvasRef, canvasSize, viewMode, currentFrameBoxes, hoveredBoxIndex])
+      // Draw text label if hovered
+      if (hoveredBoxIndex === index) {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.75)'
+        ctx.fillRect(boxX, boxY - 20, boxWidth, 20)
+        ctx.fillStyle = '#ffffff'
+        ctx.font = '12px monospace'
+        ctx.fillText(box.text, boxX + 4, boxY - 6)
+      }
+    })
+  }, [canvasSize, viewMode, currentFrameBoxes, hoveredBoxIndex])
 
   // Get box colors based on color code
   const getBoxColors = (colorCode: string): { border: string; background: string } => {
@@ -371,30 +339,23 @@ export default function AnnotateLayout() {
 
   // Handle canvas mouse events for box interaction
   const handleCanvasClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!currentFrameBoxes || !canvasRef.current) return
+    if (!currentFrameBoxes || !canvasRef.current || canvasSize.width === 0) return
 
     const canvas = canvasRef.current
     const rect = canvas.getBoundingClientRect()
     const x = e.clientX - rect.left
     const y = e.clientY - rect.top
 
-    // Calculate scaling
-    const scale = Math.min(
-      canvasSize.width / currentFrameBoxes.frameWidth,
-      canvasSize.height / currentFrameBoxes.frameHeight
-    )
-    const scaledWidth = currentFrameBoxes.frameWidth * scale
-    const scaledHeight = currentFrameBoxes.frameHeight * scale
-    const offsetX = (canvasSize.width - scaledWidth) / 2
-    const offsetY = (canvasSize.height - scaledHeight) / 2
+    // Calculate scale factor
+    const scale = canvasSize.width / currentFrameBoxes.frameWidth
 
     // Find clicked box using original bounds
     for (let i = currentFrameBoxes.boxes.length - 1; i >= 0; i--) {
       const box = currentFrameBoxes.boxes[i]
-      const boxX = offsetX + (box.originalBounds.left / currentFrameBoxes.frameWidth) * scaledWidth
-      const boxY = offsetY + (box.originalBounds.top / currentFrameBoxes.frameHeight) * scaledHeight
-      const boxWidth = ((box.originalBounds.right - box.originalBounds.left) / currentFrameBoxes.frameWidth) * scaledWidth
-      const boxHeight = ((box.originalBounds.bottom - box.originalBounds.top) / currentFrameBoxes.frameHeight) * scaledHeight
+      const boxX = box.originalBounds.left * scale
+      const boxY = box.originalBounds.top * scale
+      const boxWidth = (box.originalBounds.right - box.originalBounds.left) * scale
+      const boxHeight = (box.originalBounds.bottom - box.originalBounds.top) * scale
 
       if (x >= boxX && x <= boxX + boxWidth && y >= boxY && y <= boxY + boxHeight) {
         // Left click = in, Right click = out
@@ -411,31 +372,24 @@ export default function AnnotateLayout() {
   }, [handleCanvasClick])
 
   const handleCanvasMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!currentFrameBoxes || !canvasRef.current) return
+    if (!currentFrameBoxes || !canvasRef.current || canvasSize.width === 0) return
 
     const canvas = canvasRef.current
     const rect = canvas.getBoundingClientRect()
     const x = e.clientX - rect.left
     const y = e.clientY - rect.top
 
-    // Calculate scaling
-    const scale = Math.min(
-      canvasSize.width / currentFrameBoxes.frameWidth,
-      canvasSize.height / currentFrameBoxes.frameHeight
-    )
-    const scaledWidth = currentFrameBoxes.frameWidth * scale
-    const scaledHeight = currentFrameBoxes.frameHeight * scale
-    const offsetX = (canvasSize.width - scaledWidth) / 2
-    const offsetY = (canvasSize.height - scaledHeight) / 2
+    // Calculate scale factor
+    const scale = canvasSize.width / currentFrameBoxes.frameWidth
 
     // Find hovered box using original bounds
     let foundIndex: number | null = null
     for (let i = currentFrameBoxes.boxes.length - 1; i >= 0; i--) {
       const box = currentFrameBoxes.boxes[i]
-      const boxX = offsetX + (box.originalBounds.left / currentFrameBoxes.frameWidth) * scaledWidth
-      const boxY = offsetY + (box.originalBounds.top / currentFrameBoxes.frameHeight) * scaledHeight
-      const boxWidth = ((box.originalBounds.right - box.originalBounds.left) / currentFrameBoxes.frameWidth) * scaledWidth
-      const boxHeight = ((box.originalBounds.bottom - box.originalBounds.top) / currentFrameBoxes.frameHeight) * scaledHeight
+      const boxX = box.originalBounds.left * scale
+      const boxY = box.originalBounds.top * scale
+      const boxWidth = (box.originalBounds.right - box.originalBounds.left) * scale
+      const boxHeight = (box.originalBounds.bottom - box.originalBounds.top) * scale
 
       if (x >= boxX && x <= boxX + boxWidth && y >= boxY && y <= boxY + boxHeight) {
         foundIndex = i
@@ -580,7 +534,7 @@ export default function AnnotateLayout() {
           {/* Left: Canvas (2/3 width) */}
           <div className="flex w-2/3 flex-col gap-4">
             {/* Main canvas */}
-            <div className="relative rounded-lg border border-gray-200 bg-gray-50 dark:border-gray-800 dark:bg-gray-950 p-4">
+            <div className="relative flex items-center justify-center rounded-lg border border-gray-200 bg-gray-50 dark:border-gray-800 dark:bg-gray-950 p-4">
               {viewMode === 'analysis' && subtitleAnalysisUrl ? (
                 <img
                   src={subtitleAnalysisUrl}
@@ -588,11 +542,21 @@ export default function AnnotateLayout() {
                   className="max-h-full max-w-full object-contain"
                 />
               ) : viewMode === 'frame' && currentFrameBoxes ? (
-                <img
-                  src={currentFrameBoxes.imageUrl}
-                  alt={`Frame ${currentFrameBoxes.frameIndex}`}
-                  className="max-h-full max-w-full object-contain"
-                />
+                <div className="relative inline-block">
+                  <img
+                    ref={imageRef}
+                    src={currentFrameBoxes.imageUrl}
+                    alt={`Frame ${currentFrameBoxes.frameIndex}`}
+                    className="max-h-full max-w-full object-contain"
+                  />
+                  <canvas
+                    ref={canvasRef}
+                    className="absolute left-0 top-0 cursor-crosshair"
+                    onClick={handleCanvasClick}
+                    onContextMenu={handleCanvasContextMenu}
+                    onMouseMove={handleCanvasMouseMove}
+                  />
+                </div>
               ) : (
                 <div className="flex min-h-[400px] items-center justify-center text-gray-500 dark:text-gray-400">
                   {loadingFrame ? 'Loading frame...' : 'Select a frame to annotate'}

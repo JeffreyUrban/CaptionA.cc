@@ -191,17 +191,6 @@ export async function loader({ params }: LoaderFunctionArgs) {
   try {
     const db = getDatabase(videoId)
 
-    // Get frame OCR data
-    const frameOCR = db.prepare('SELECT * FROM frames_ocr WHERE frame_index = ?').get(frameIndex) as FrameOCR | undefined
-
-    if (!frameOCR) {
-      db.close()
-      return new Response(JSON.stringify({ error: 'Frame OCR not found' }), {
-        status: 404,
-        headers: { 'Content-Type': 'application/json' }
-      })
-    }
-
     // Get layout config
     const layoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as VideoLayoutConfig | undefined
 
@@ -213,13 +202,56 @@ export async function loader({ params }: LoaderFunctionArgs) {
       })
     }
 
-    // Parse OCR annotations
-    let ocrAnnotations: any[] = []
-    try {
-      ocrAnnotations = JSON.parse(frameOCR.ocr_annotations || '[]')
-    } catch (e) {
-      console.error(`Failed to parse OCR annotations for frame ${frameIndex}:`, e)
+    // Load frame OCR from caption_layout/OCR.jsonl
+    const captionLayoutPath = resolve(
+      process.cwd(),
+      '..',
+      '..',
+      'local',
+      'data',
+      ...videoId.split('/'),
+      'caption_layout',
+      'OCR.jsonl'
+    )
+
+    if (!existsSync(captionLayoutPath)) {
+      db.close()
+      return new Response(JSON.stringify({
+        error: 'caption_layout OCR.jsonl not found. Run caption_layout analysis first.'
+      }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' }
+      })
     }
+
+    // Find the frame in OCR.jsonl
+    const { readFileSync } = await import('fs')
+    const ocrLines = readFileSync(captionLayoutPath, 'utf-8').trim().split('\n')
+    let frameOCRData: any = null
+
+    for (const line of ocrLines) {
+      const ocrData = JSON.parse(line)
+      const match = ocrData.image_path.match(/frame_(\d+)\.jpg/)
+      const idx = match ? parseInt(match[1], 10) : 0
+
+      if (idx === frameIndex) {
+        frameOCRData = ocrData
+        break
+      }
+    }
+
+    if (!frameOCRData) {
+      db.close()
+      return new Response(JSON.stringify({
+        error: `Frame ${frameIndex} not found in caption_layout OCR data`
+      }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' }
+      })
+    }
+
+    // Get OCR annotations from caption_layout data
+    const ocrAnnotations = frameOCRData.annotations || []
 
     // Get user annotations for this frame
     const userAnnotations = db.prepare(`
@@ -237,13 +269,15 @@ export async function loader({ params }: LoaderFunctionArgs) {
     const boxes: BoxData[] = ocrAnnotations.map((annotation, boxIndex) => {
       // OCR annotation format: [text, confidence, [x, y, width, height]]
       // Coordinates are fractional [0-1]
+      // IMPORTANT: y is measured from BOTTOM of image, not top
       const [text, _conf, [x, y, width, height]] = annotation
 
       // Convert fractional to pixels (original frame coords)
       const boxLeft = Math.floor(x * layoutConfig.frame_width)
-      const boxTop = Math.floor(y * layoutConfig.frame_height)
+      // Convert y from bottom-referenced to top-referenced
+      const boxBottom = Math.floor((1 - y) * layoutConfig.frame_height)
+      const boxTop = boxBottom - Math.floor(height * layoutConfig.frame_height)
       const boxRight = boxLeft + Math.floor(width * layoutConfig.frame_width)
-      const boxBottom = boxTop + Math.floor(height * layoutConfig.frame_height)
 
       const originalBounds = { left: boxLeft, top: boxTop, right: boxRight, bottom: boxBottom }
 
@@ -341,17 +375,6 @@ export async function action({ params, request }: ActionFunctionArgs) {
 
     const db = getDatabase(videoId)
 
-    // Get frame OCR to load box data
-    const frameOCR = db.prepare('SELECT ocr_annotations FROM frames_ocr WHERE frame_index = ?').get(frameIndex) as { ocr_annotations: string } | undefined
-
-    if (!frameOCR) {
-      db.close()
-      return new Response(JSON.stringify({ error: 'Frame OCR not found' }), {
-        status: 404,
-        headers: { 'Content-Type': 'application/json' }
-      })
-    }
-
     // Get layout config for frame dimensions
     const layoutConfig = db.prepare('SELECT frame_width, frame_height FROM video_layout_config WHERE id = 1').get() as { frame_width: number; frame_height: number } | undefined
 
@@ -363,8 +386,56 @@ export async function action({ params, request }: ActionFunctionArgs) {
       })
     }
 
-    // Parse OCR annotations to get box bounds
-    const ocrAnnotations = JSON.parse(frameOCR.ocr_annotations || '[]')
+    // Load frame OCR from caption_layout/OCR.jsonl
+    const captionLayoutPath = resolve(
+      process.cwd(),
+      '..',
+      '..',
+      'local',
+      'data',
+      ...videoId.split('/'),
+      'caption_layout',
+      'OCR.jsonl'
+    )
+
+    if (!existsSync(captionLayoutPath)) {
+      db.close()
+      return new Response(JSON.stringify({
+        error: 'caption_layout OCR.jsonl not found'
+      }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' }
+      })
+    }
+
+    // Find the frame in OCR.jsonl
+    const { readFileSync } = await import('fs')
+    const ocrLines = readFileSync(captionLayoutPath, 'utf-8').trim().split('\n')
+    let frameOCRData: any = null
+
+    for (const line of ocrLines) {
+      const ocrData = JSON.parse(line)
+      const match = ocrData.image_path.match(/frame_(\d+)\.jpg/)
+      const idx = match ? parseInt(match[1], 10) : 0
+
+      if (idx === frameIndex) {
+        frameOCRData = ocrData
+        break
+      }
+    }
+
+    if (!frameOCRData) {
+      db.close()
+      return new Response(JSON.stringify({
+        error: `Frame ${frameIndex} not found in caption_layout OCR data`
+      }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' }
+      })
+    }
+
+    // Get OCR annotations from caption_layout data
+    const ocrAnnotations = frameOCRData.annotations || []
 
     // Prepare insert/update statement
     const upsert = db.prepare(`
@@ -387,13 +458,15 @@ export async function action({ params, request }: ActionFunctionArgs) {
       }
 
       // Get box data from OCR
+      // IMPORTANT: y is measured from BOTTOM of image, not top
       const [text, _conf, [x, y, width, height]] = ocrAnnotations[boxIndex]
 
       // Convert fractional to pixels
       const boxLeft = Math.floor(x * layoutConfig.frame_width)
-      const boxTop = Math.floor(y * layoutConfig.frame_height)
+      // Convert y from bottom-referenced to top-referenced
+      const boxBottom = Math.floor((1 - y) * layoutConfig.frame_height)
+      const boxTop = boxBottom - Math.floor(height * layoutConfig.frame_height)
       const boxRight = boxLeft + Math.floor(width * layoutConfig.frame_width)
-      const boxBottom = boxTop + Math.floor(height * layoutConfig.frame_height)
 
       upsert.run(frameIndex, boxIndex, text, boxLeft, boxTop, boxRight, boxBottom, label)
     }

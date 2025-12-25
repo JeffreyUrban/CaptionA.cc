@@ -22,7 +22,7 @@ from .analysis import (
     save_analysis_text,
 )
 from .frames import extract_frames, get_video_dimensions, get_video_duration
-from .ocr import create_ocr_visualization, process_frames_directory, stream_video_with_ocr
+from .ocr import create_ocr_visualization, process_frames_directory
 
 app = typer.Typer(
     name="caption_layout",
@@ -60,7 +60,7 @@ def analyze(
         0.1,
         "--frame-rate",
         "-r",
-        help="Frame sampling rate in Hz (frames per second)",
+        help="Frame sampling rate in Hz (0.1 = one frame every 10 seconds)",
     ),
     version: Optional[bool] = typer.Option(
         None,
@@ -74,9 +74,17 @@ def analyze(
     """Analyze caption layout from video (full pipeline).
 
     This command runs all pipeline steps in sequence:
-    1. Extract frames from video
+    1. Extract frames from video at specified rate
     2. Run OCR on frames
-    3. Analyze subtitle region characteristics
+    3. Rename frames to match database frame_index (multiply indices by 100)
+    4. Analyze subtitle region characteristics
+
+    Frame Indexing:
+    - Database OCR samples at 10Hz (every 0.1 seconds)
+    - caption_layout samples at 0.1Hz (every 10 seconds) by default
+    - Frames are saved as frame_0000000000.jpg, frame_0000000100.jpg, etc.
+    - Frame filename index = time_in_seconds * 10
+    - This allows 1:1 mapping with database frame_index values
     """
     console.print(f"[bold cyan]Caption Layout Analysis Pipeline[/bold cyan]")
     console.print(f"Video: {video}")
@@ -98,9 +106,51 @@ def analyze(
         console.print(f"  Expected frames: ~{expected_frames}")
         console.print()
 
-        # Step 1+2: Stream frames with OCR (with timeout protection)
-        console.print("[bold]Step 1/2: Streaming extraction + OCR[/bold]")
-        frames_dir = output_dir / "frames" / "0.1Hz_full_frames"
+        # Step 1: Extract frames
+        console.print("[bold]Step 1/3: Extracting frames[/bold]")
+        frames_dir = output_dir / "full_frames"
+
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TaskProgressColumn(),
+            console=console,
+        ) as progress:
+            task = progress.add_task("  Extracting...", total=expected_frames)
+            frames = extract_frames(
+                video,
+                frames_dir,
+                frame_rate,
+                progress_callback=lambda current, total: progress.update(
+                    task, completed=current
+                ),
+            )
+
+        console.print(f"  [green]✓[/green] Extracted {len(frames)} frames")
+
+        # Rename frames to match database frame_index 1:1
+        # Database samples at 10Hz (frame_index 0, 1, 2, ... = times 0.0s, 0.1s, 0.2s, ...)
+        # caption_layout samples at 0.1Hz (frames 0, 1, 2, ... = times 0s, 10s, 20s, ...)
+        # Multiply caption_layout indices by 100 to map: frame 0→0, frame 1→100, frame 2→200
+        # Result: frame_0000000000.jpg, frame_0000000100.jpg, frame_0000000200.jpg, etc.
+        # This creates 1:1 mapping where database frame_index maps directly to frame filename
+        console.print("  Renaming frames to match database frame_index...")
+        frame_files = sorted(frames_dir.glob("frame_*.jpg"), reverse=True)
+        for frame_file in frame_files:
+            # Extract frame number from filename (e.g., "frame_0000000001.jpg" → 1)
+            frame_num = int(frame_file.stem.split('_')[1])
+            # Multiply by 100 to match database indexing (e.g., 1 → 100)
+            new_index = frame_num * 100
+            new_name = f"frame_{new_index:010d}.jpg"
+            new_path = frames_dir / new_name
+            frame_file.rename(new_path)
+
+        console.print(f"  [green]✓[/green] Frames saved: {frames_dir}")
+        console.print()
+
+        # Step 2: Run OCR
+        console.print("[bold]Step 2/3: Running OCR on frames[/bold]")
         ocr_output = output_dir / "OCR.jsonl"
 
         with Progress(
@@ -110,20 +160,18 @@ def analyze(
             TaskProgressColumn(),
             console=console,
         ) as progress:
-            task = progress.add_task("  Processing...", total=expected_frames)
-            stream_video_with_ocr(
-                video,
-                ocr_output,
+            task = progress.add_task("  Processing OCR...", total=len(frames))
+            process_frames_directory(
                 frames_dir,
-                frame_rate,
-                "zh-Hans",  # Default language
+                ocr_output,
+                "zh-Hans",
                 progress_callback=lambda current, total: progress.update(
                     task, completed=current
                 ),
+                keep_frames=True,
             )
 
-        console.print(f"  [green]✓[/green] Processed {expected_frames} frames with OCR")
-        console.print(f"  [green]✓[/green] Results: {ocr_output}")
+        console.print(f"  [green]✓[/green] OCR results: {ocr_output}")
 
         # Create OCR visualization
         console.print("  Creating OCR visualization...")
@@ -132,8 +180,8 @@ def analyze(
         console.print(f"  [green]✓[/green] Visualization: {viz_output}")
         console.print()
 
-        # Step 2/2: Analyze region
-        console.print("[bold]Step 2/2: Analyzing subtitle region[/bold]")
+        # Step 3/3: Analyze region
+        console.print("[bold]Step 3/3: Analyzing subtitle region[/bold]")
         annotations = load_ocr_annotations(ocr_output)
         region = analyze_subtitle_region(annotations, width, height)
 
@@ -147,13 +195,6 @@ def analyze(
         create_analysis_visualization(region, annotations, analysis_viz)
         console.print(f"  [green]✓[/green] Visualization: {analysis_viz}")
         console.print()
-
-        # Clean up frames directory (should be empty after streaming)
-        console.print("[dim]Cleaning up...[/dim]")
-        import shutil
-        frames_parent = output_dir / "frames"
-        if frames_parent.exists():
-            shutil.rmtree(frames_parent)
 
         # Print final summary
         console.print("[bold green]Pipeline Complete![/bold green]")

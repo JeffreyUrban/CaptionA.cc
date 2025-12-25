@@ -134,24 +134,43 @@ export async function loader({ params }: LoaderFunctionArgs) {
       })
     }
 
-    // Get all frames with OCR data
-    const frames = db.prepare(`
-      SELECT frame_index, ocr_text, ocr_annotations, ocr_confidence
-      FROM frames_ocr
-      ORDER BY frame_index
-    `).all() as FrameOCR[]
+    // Load frames from caption_layout OCR.jsonl
+    const captionLayoutPath = resolve(
+      process.cwd(),
+      '..',
+      '..',
+      'local',
+      'data',
+      ...videoId.split('/'),
+      'caption_layout',
+      'OCR.jsonl'
+    )
 
-    console.log(`Found ${frames.length} frames with OCR data`)
+    if (!existsSync(captionLayoutPath)) {
+      db.close()
+      return new Response(JSON.stringify({
+        error: 'caption_layout OCR.jsonl not found. Run caption_layout analysis first.'
+      }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' }
+      })
+    }
+
+    // Parse OCR.jsonl to get frame indices and annotations
+    const { readFileSync } = await import('fs')
+    const ocrLines = readFileSync(captionLayoutPath, 'utf-8').trim().split('\n')
+
+    console.log(`Found ${ocrLines.length} frames in caption_layout OCR.jsonl`)
 
     // Calculate caption box count for each frame
-    const frameInfos: FrameInfo[] = frames.map(frame => {
-      let ocrAnnotations: any[] = []
-      try {
-        ocrAnnotations = JSON.parse(frame.ocr_annotations || '[]')
-      } catch (e) {
-        console.error(`Failed to parse OCR annotations for frame ${frame.frame_index}:`, e)
-      }
+    const frameInfos: FrameInfo[] = ocrLines.map(line => {
+      const ocrData = JSON.parse(line)
 
+      // Extract frame_index from image_path (e.g., "full_frames/frame_0000000100.jpg" → 100)
+      const match = ocrData.image_path.match(/frame_(\d+)\.jpg/)
+      const frameIndex = match ? parseInt(match[1], 10) : 0
+
+      const ocrAnnotations = ocrData.annotations || []
       const totalBoxCount = ocrAnnotations.length
       const captionBoxCount = estimateCaptionBoxCount(
         ocrAnnotations,
@@ -165,19 +184,19 @@ export async function loader({ params }: LoaderFunctionArgs) {
         }
       )
 
-      // Check if frame has any box annotations
+      // Check if frame has any box annotations in database
       const hasAnnotations = db.prepare(`
         SELECT COUNT(*) as count
         FROM ocr_box_annotations
         WHERE frame_index = ? AND annotation_source = 'user'
-      `).get(frame.frame_index) as { count: number }
+      `).get(frameIndex) as { count: number }
 
       return {
-        frameIndex: frame.frame_index,
+        frameIndex,
         totalBoxCount,
         captionBoxCount,
         hasAnnotations: hasAnnotations.count > 0,
-        imageUrl: `/api/full-frames/${encodeURIComponent(videoId)}/${frame.frame_index}.jpg`
+        imageUrl: `/api/full-frames/${encodeURIComponent(videoId)}/${frameIndex}.jpg`
       }
     })
 
