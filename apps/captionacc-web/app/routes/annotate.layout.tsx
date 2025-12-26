@@ -517,28 +517,28 @@ export default function AnnotateLayout() {
           strokeColor = '#dc2626' // Red
           fillColor = 'rgba(220,38,38,0.05)' // Very transparent for additive effect
         } else if (box.predictedLabel === 'in') {
-          // Predicted in - use confidence levels
+          // Predicted in - use confidence levels (blue)
           if (box.predictedConfidence >= 0.75) {
-            strokeColor = '#10b981' // Green (high confidence)
-            fillColor = 'rgba(16,185,129,0.03)'
+            strokeColor = '#3b82f6' // Blue (high confidence)
+            fillColor = 'rgba(59,130,246,0.03)'
           } else if (box.predictedConfidence >= 0.5) {
-            strokeColor = '#34d399' // Light green (medium confidence)
-            fillColor = 'rgba(52,211,153,0.02)'
+            strokeColor = '#60a5fa' // Light blue (medium confidence)
+            fillColor = 'rgba(96,165,250,0.02)'
           } else {
-            strokeColor = '#6ee7b7' // Very light green (low confidence)
-            fillColor = 'rgba(110,231,183,0.015)'
+            strokeColor = '#93c5fd' // Very light blue (low confidence)
+            fillColor = 'rgba(147,197,253,0.015)'
           }
         } else {
-          // Predicted out - use confidence levels
+          // Predicted out - use confidence levels (orange)
           if (box.predictedConfidence >= 0.75) {
-            strokeColor = '#ef4444' // Red (high confidence)
-            fillColor = 'rgba(239,68,68,0.03)'
+            strokeColor = '#f97316' // Orange (high confidence)
+            fillColor = 'rgba(249,115,22,0.03)'
           } else if (box.predictedConfidence >= 0.5) {
-            strokeColor = '#f87171' // Light red (medium confidence)
-            fillColor = 'rgba(248,113,113,0.02)'
+            strokeColor = '#fb923c' // Light orange (medium confidence)
+            fillColor = 'rgba(251,146,60,0.02)'
           } else {
-            strokeColor = '#fca5a5' // Very light red (low confidence)
-            fillColor = 'rgba(252,165,165,0.015)'
+            strokeColor = '#fdba74' // Very light orange (low confidence)
+            fillColor = 'rgba(253,186,116,0.015)'
           }
         }
 
@@ -649,13 +649,12 @@ export default function AnnotateLayout() {
     const colorMap: Record<string, { border: string; background: string }> = {
       annotated_in: { border: '#14b8a6', background: 'rgba(20,184,166,0.25)' },
       annotated_out: { border: '#dc2626', background: 'rgba(220,38,38,0.25)' },
-      predicted_in_high: { border: '#10b981', background: 'rgba(16,185,129,0.15)' },
-      predicted_in_medium: { border: '#34d399', background: 'rgba(52,211,153,0.1)' },
-      predicted_in_low: { border: '#6ee7b7', background: 'rgba(110,231,183,0.08)' },
-      predicted_out_high: { border: '#ef4444', background: 'rgba(239,68,68,0.15)' },
-      predicted_out_medium: { border: '#f87171', background: 'rgba(248,113,113,0.1)' },
-      predicted_out_low: { border: '#fca5a5', background: 'rgba(252,165,165,0.08)' },
-      predicted_uncertain: { border: '#f59e0b', background: 'rgba(245,158,11,0.1)' },
+      predicted_in_high: { border: '#3b82f6', background: 'rgba(59,130,246,0.15)' },
+      predicted_in_medium: { border: '#60a5fa', background: 'rgba(96,165,250,0.1)' },
+      predicted_in_low: { border: '#93c5fd', background: 'rgba(147,197,253,0.08)' },
+      predicted_out_high: { border: '#f97316', background: 'rgba(249,115,22,0.15)' },
+      predicted_out_medium: { border: '#fb923c', background: 'rgba(251,146,60,0.1)' },
+      predicted_out_low: { border: '#fdba74', background: 'rgba(253,186,116,0.08)' },
     }
     return colorMap[colorCode] || { border: '#9ca3af', background: 'rgba(156,163,175,0.1)' }
   }
@@ -1339,36 +1338,24 @@ export default function AnnotateLayout() {
                   <div
                     className="h-4 w-4 rounded border-2"
                     style={{
-                      borderColor: '#10b981',
-                      backgroundColor: 'rgba(16,185,129,0.15)',
+                      borderColor: '#3b82f6',
+                      backgroundColor: 'rgba(59,130,246,0.15)',
                     }}
                   />
                   <span className="text-gray-700 dark:text-gray-300">
-                    Predicted: Caption (high conf)
+                    Predicted: Caption
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div
                     className="h-4 w-4 rounded border-2"
                     style={{
-                      borderColor: '#ef4444',
-                      backgroundColor: 'rgba(239,68,68,0.15)',
+                      borderColor: '#f97316',
+                      backgroundColor: 'rgba(249,115,22,0.15)',
                     }}
                   />
                   <span className="text-gray-700 dark:text-gray-300">
-                    Predicted: Noise (high conf)
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div
-                    className="h-4 w-4 rounded border-2"
-                    style={{
-                      borderColor: '#f59e0b',
-                      backgroundColor: 'rgba(245,158,11,0.1)',
-                    }}
-                  />
-                  <span className="text-gray-700 dark:text-gray-300">
-                    Uncertain
+                    Predicted: Noise
                   </span>
                 </div>
               </div>
