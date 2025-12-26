@@ -165,6 +165,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
       }
 
       // Update layout parameters (Bayesian priors)
+      let layoutParamsChanged = false
       if (layoutParams) {
         db.prepare(`
           UPDATE video_layout_config
@@ -184,6 +185,12 @@ export async function action({ params, request }: ActionFunctionArgs) {
           layoutParams.anchorType,
           layoutParams.anchorPosition
         )
+        layoutParamsChanged = true
+
+        // Clear the trained model since it was trained with different layout parameters
+        // Predictions will fall back to heuristics until model is retrained
+        db.prepare(`DELETE FROM box_classification_model WHERE id = 1`).run()
+        console.log(`[Layout Config] Layout parameters changed, cleared trained model (will use heuristics until retrained)`)
       }
 
       db.prepare('COMMIT').run()
@@ -194,10 +201,27 @@ export async function action({ params, request }: ActionFunctionArgs) {
 
     db.close()
 
+    // Trigger prediction recalculation if layout parameters changed
+    // (predictions depend on these parameters, so they need to be recalculated)
+    if (layoutParamsChanged) {
+      console.log(`[Layout Config] Layout parameters changed, triggering prediction recalculation for ${videoId}`)
+      fetch(`http://localhost:5173/api/annotations/${encodeURIComponent(videoId)}/calculate-predictions`, {
+        method: 'POST'
+      })
+        .then(response => response.json())
+        .then(result => {
+          console.log(`[Layout Config] Predictions recalculated after layout change:`, result)
+        })
+        .catch(err => {
+          console.error(`[Layout Config] Failed to recalculate predictions:`, err.message)
+        })
+    }
+
     return new Response(JSON.stringify({
       success: true,
       boundsChanged: cropBoundsChanged,
       framesInvalidated,
+      layoutParamsChanged,
     }), {
       headers: { 'Content-Type': 'application/json' }
     })
