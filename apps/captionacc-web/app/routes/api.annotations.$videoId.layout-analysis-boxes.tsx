@@ -124,8 +124,8 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
       const bounds = { left, top, right, bottom }
 
-      // Get prediction
-      const prediction = predictBoxLabel(bounds, layoutConfig)
+      // Get prediction (with Bayesian model if available)
+      const prediction = predictBoxLabel(bounds, layoutConfig, db)
 
       // Check for user annotation
       const userLabel = annotationMap.get(`${box.frame_index}-${box.box_index}`) || null

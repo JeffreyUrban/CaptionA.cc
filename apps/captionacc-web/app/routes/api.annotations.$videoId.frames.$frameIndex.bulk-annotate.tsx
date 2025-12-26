@@ -159,6 +159,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
       // Mark boxes as "in" (captions)
       const stmt = db.prepare(`
         INSERT INTO full_frame_box_labels (
+          annotation_source,
           frame_index,
           box_index,
           box_text,
@@ -169,8 +170,8 @@ export async function action({ params, request }: ActionFunctionArgs) {
           label,
           label_source,
           labeled_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, 'in', 'user', datetime('now'))
-        ON CONFLICT(frame_index, box_index)
+        ) VALUES ('full_frame', ?, ?, ?, ?, ?, ?, ?, 'in', 'user', datetime('now'))
+        ON CONFLICT(annotation_source, frame_index, box_index)
         DO UPDATE SET
           label = 'in',
           label_source = 'user',
@@ -214,6 +215,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
       // Insert or update labels for these boxes
       const stmt = db.prepare(`
         INSERT INTO full_frame_box_labels (
+          annotation_source,
           frame_index,
           box_index,
           box_text,
@@ -224,8 +226,8 @@ export async function action({ params, request }: ActionFunctionArgs) {
           label,
           label_source,
           labeled_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, 'out', 'user', datetime('now'))
-        ON CONFLICT(frame_index, box_index)
+        ) VALUES ('full_frame', ?, ?, ?, ?, ?, ?, ?, 'out', 'user', datetime('now'))
+        ON CONFLICT(annotation_source, frame_index, box_index)
         DO UPDATE SET
           label = 'out',
           label_source = 'user',

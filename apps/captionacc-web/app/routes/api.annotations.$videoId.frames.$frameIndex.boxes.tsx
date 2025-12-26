@@ -3,6 +3,7 @@ import Database from 'better-sqlite3'
 import { resolve } from 'path'
 import { existsSync } from 'fs'
 import { predictBoxLabel } from '~/utils/box-prediction'
+import { triggerModelTraining } from '~/services/model-training'
 
 interface FrameOCR {
   frame_index: number
@@ -211,8 +212,8 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
       const originalBounds = { left: boxLeft, top: boxTop, right: boxRight, bottom: boxBottom }
 
-      // Predict label
-      const prediction = predictBoxLabel(originalBounds, layoutConfig)
+      // Predict label (with Bayesian model if available)
+      const prediction = predictBoxLabel(originalBounds, layoutConfig, db)
 
       // Get user annotation (if exists)
       const userLabel = userAnnotationMap.get(boxIndex) || null
@@ -352,10 +353,10 @@ export async function action({ params, request }: ActionFunctionArgs) {
     // Prepare insert/update statement
     const upsert = db.prepare(`
       INSERT INTO full_frame_box_labels (
-        frame_index, box_index, box_text, box_left, box_top, box_right, box_bottom,
+        annotation_source, frame_index, box_index, box_text, box_left, box_top, box_right, box_bottom,
         label, label_source, labeled_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'user', datetime('now'))
-      ON CONFLICT(frame_index, box_index) DO UPDATE SET
+      ) VALUES ('full_frame', ?, ?, ?, ?, ?, ?, ?, ?, 'user', datetime('now'))
+      ON CONFLICT(annotation_source, frame_index, box_index) DO UPDATE SET
         label = excluded.label,
         labeled_at = datetime('now')
     `)
@@ -383,9 +384,24 @@ export async function action({ params, request }: ActionFunctionArgs) {
       upsert.run(frameIndex, boxIndex, text, boxLeft, boxTop, boxRight, boxBottom, label)
     }
 
-    // TODO: Trigger model retrain after N annotations
+    // Check if automatic retraining threshold reached
+    const annotationStats = db.prepare(`
+      SELECT
+        COUNT(*) as total_annotations,
+        COALESCE((SELECT n_training_samples FROM box_classification_model WHERE id = 1), 0) as last_model_count
+      FROM full_frame_box_labels
+      WHERE label_source = 'user'
+    `).get() as { total_annotations: number; last_model_count: number }
+
+    const newAnnotationsSinceLastTrain = annotationStats.total_annotations - annotationStats.last_model_count
 
     db.close()
+
+    // Auto-retrain after every 20 new annotations
+    if (newAnnotationsSinceLastTrain >= 20) {
+      console.log(`[Auto-retrain] Triggering model training: ${newAnnotationsSinceLastTrain} new annotations since last train`)
+      triggerModelTraining(videoId)
+    }
 
     return new Response(JSON.stringify({
       success: true,

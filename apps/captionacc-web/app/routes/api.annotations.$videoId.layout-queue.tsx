@@ -393,8 +393,8 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
         const bounds = { left: boxLeft, top: boxTop, right: boxRight, bottom: boxBottom }
 
-        // Get predicted confidence from Bayesian model
-        const prediction = predictBoxLabel(bounds, layoutConfig!)
+        // Get predicted confidence from Bayesian model (if available, otherwise heuristic)
+        const prediction = predictBoxLabel(bounds, layoutConfig!, db)
         unannotatedPredictions.push(prediction.confidence)
       })
 

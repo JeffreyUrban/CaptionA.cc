@@ -56,14 +56,18 @@ CREATE TABLE IF NOT EXISTS full_frame_ocr (
     UNIQUE(frame_index, box_index)
 );
 
--- User labels for full frame OCR boxes (caption vs noise classification)
--- Links to full_frame_ocr via (frame_index, box_index)
+-- User labels for OCR boxes (caption vs noise classification)
+-- Supports annotations from both full frames and cropped frames
+-- All coordinates stored in full-frame absolute pixels for consistent feature extraction
 CREATE TABLE IF NOT EXISTS full_frame_box_labels (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    frame_index INTEGER NOT NULL,
-    box_index INTEGER NOT NULL,
 
-    -- Box identification (absolute pixel coords for reference)
+    -- Source identification
+    annotation_source TEXT NOT NULL DEFAULT 'full_frame' CHECK(annotation_source IN ('full_frame', 'cropped_frame')),
+    frame_index INTEGER NOT NULL,  -- References full_frame_ocr.frame_index or cropped_frame_ocr.frame_index
+    box_index INTEGER NOT NULL,    -- References box_index in respective OCR table
+
+    -- Box identification (absolute pixel coords in original/full frame)
     box_text TEXT NOT NULL,
     box_left INTEGER NOT NULL,
     box_top INTEGER NOT NULL,
@@ -80,9 +84,10 @@ CREATE TABLE IF NOT EXISTS full_frame_box_labels (
     model_version TEXT,
 
     -- Metadata
+    crop_bounds_version INTEGER,  -- Which crop bounds were active when annotated (for cropped_frame source)
     labeled_at TEXT NOT NULL DEFAULT (datetime('now')),
 
-    UNIQUE(frame_index, box_index)
+    UNIQUE(annotation_source, frame_index, box_index)
 );
 
 -- Video layout configuration (one row per video)
@@ -126,6 +131,54 @@ CREATE TABLE IF NOT EXISTS video_layout_config (
 
 -- Note: video_layout_config initialized when video is first analyzed
 -- (requires frame dimensions from video)
+
+-- Box classification model (Gaussian Naive Bayes parameters)
+-- Stores trained model parameters for predicting caption vs noise boxes
+CREATE TABLE IF NOT EXISTS box_classification_model (
+    id INTEGER PRIMARY KEY CHECK(id = 1),
+    model_version TEXT NOT NULL DEFAULT 'naive_bayes_v1',
+    trained_at TEXT NOT NULL,
+    n_training_samples INTEGER NOT NULL,
+
+    -- Class priors
+    prior_in REAL NOT NULL,
+    prior_out REAL NOT NULL,
+
+    -- Gaussian parameters for each feature (mean, std) per class
+    -- "in" class (caption boxes)
+    in_vertical_alignment_mean REAL,
+    in_vertical_alignment_std REAL,
+    in_height_similarity_mean REAL,
+    in_height_similarity_std REAL,
+    in_anchor_distance_mean REAL,
+    in_anchor_distance_std REAL,
+    in_crop_overlap_mean REAL,
+    in_crop_overlap_std REAL,
+    in_aspect_ratio_mean REAL,
+    in_aspect_ratio_std REAL,
+    in_normalized_y_mean REAL,
+    in_normalized_y_std REAL,
+    in_normalized_area_mean REAL,
+    in_normalized_area_std REAL,
+
+    -- "out" class (noise boxes)
+    out_vertical_alignment_mean REAL,
+    out_vertical_alignment_std REAL,
+    out_height_similarity_mean REAL,
+    out_height_similarity_std REAL,
+    out_anchor_distance_mean REAL,
+    out_anchor_distance_std REAL,
+    out_crop_overlap_mean REAL,
+    out_crop_overlap_std REAL,
+    out_aspect_ratio_mean REAL,
+    out_aspect_ratio_std REAL,
+    out_normalized_y_mean REAL,
+    out_normalized_y_std REAL,
+    out_normalized_area_mean REAL,
+    out_normalized_area_std REAL,
+
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 
 -- Indexes for captions table
 
