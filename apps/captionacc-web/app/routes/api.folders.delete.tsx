@@ -1,10 +1,40 @@
 /**
- * Delete an empty folder from the video library
+ * Delete a folder (and all its contents) from the video library
  */
 import type { ActionFunctionArgs } from 'react-router'
 import { resolve } from 'path'
-import { rmdir, access, readdir } from 'fs/promises'
+import { rm, access, readdir } from 'fs/promises'
 import { constants } from 'fs'
+
+// Recursively count videos in a directory
+async function countVideos(dir: string): Promise<number> {
+  let count = 0
+
+  try {
+    const entries = await readdir(dir, { withFileTypes: true })
+
+    // Check if this directory has an annotations.db file (it's a video)
+    const hasAnnotationsDb = entries.some(
+      entry => entry.isFile() && entry.name === 'annotations.db'
+    )
+
+    if (hasAnnotationsDb) {
+      return 1 // This directory is a video
+    }
+
+    // Recurse into subdirectories
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        const fullPath = resolve(dir, entry.name)
+        count += await countVideos(fullPath)
+      }
+    }
+  } catch (error) {
+    console.error(`Error counting videos in ${dir}:`, error)
+  }
+
+  return count
+}
 
 export async function action({ request }: ActionFunctionArgs) {
   if (request.method !== 'DELETE') {
@@ -13,6 +43,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const url = new URL(request.url)
   const folderPath = url.searchParams.get('path')
+  const confirmed = url.searchParams.get('confirmed') === 'true'
 
   if (!folderPath) {
     return Response.json({ error: 'path parameter is required' }, { status: 400 })
@@ -27,24 +58,26 @@ export async function action({ request }: ActionFunctionArgs) {
     return Response.json({ error: 'Folder does not exist' }, { status: 404 })
   }
 
-  // Check if folder is empty
-  try {
-    const entries = await readdir(fullPath)
-    if (entries.length > 0) {
-      return Response.json({
-        error: `Folder is not empty (contains ${entries.length} items)`,
-        itemCount: entries.length
-      }, { status: 400 })
-    }
-  } catch (error) {
-    console.error('Failed to read directory:', error)
-    return Response.json({ error: 'Failed to read folder' }, { status: 500 })
+  // Count videos that will be deleted
+  const videoCount = await countVideos(fullPath)
+
+  // If not confirmed, return the count for user confirmation
+  if (!confirmed) {
+    return Response.json({
+      requiresConfirmation: true,
+      videoCount,
+      folderPath
+    })
   }
 
-  // Delete the folder
+  // Delete the folder recursively
   try {
-    await rmdir(fullPath)
-    return Response.json({ success: true, folderPath })
+    await rm(fullPath, { recursive: true, force: true })
+    return Response.json({
+      success: true,
+      folderPath,
+      videosDeleted: videoCount
+    })
   } catch (error) {
     console.error('Failed to delete folder:', error)
     return Response.json({ error: 'Failed to delete folder' }, { status: 500 })

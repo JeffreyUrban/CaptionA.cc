@@ -62,11 +62,15 @@ export async function triggerVideoProcessing(options: ProcessingOptions): Promis
     'uv',
     [
       'run',
-      'full-frames',
-      'process',
+      'python',
+      '-m',
+      'full_frames',
+      'analyze',
       videoFile,
+      '--output-dir',
       outputDir,
-      '--frame-rate', '0.1'  // 0.1Hz = 10x sampling
+      '--frame-rate',
+      '0.1'  // 0.1Hz = 10x sampling
     ],
     {
       cwd: resolve(process.cwd(), '..', '..', 'data-pipelines', 'full_frames'),

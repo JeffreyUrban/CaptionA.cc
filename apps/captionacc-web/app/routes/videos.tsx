@@ -164,6 +164,7 @@ interface TreeRowProps {
   onCreateSubfolder: (parentPath: string) => void
   onRenameFolder: (folderPath: string, currentName: string) => void
   onDeleteFolder: (folderPath: string, folderName: string, videoCount: number) => void
+  onRenameVideo: (videoPath: string, currentName: string) => void
 }
 
 // Calculate aggregate stats for a folder from the stats map
@@ -214,7 +215,7 @@ function calculateFolderStatsFromMap(node: FolderNode, statsMap: Map<string, Vid
   return aggregated
 }
 
-function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsUpdate, onCreateSubfolder, onRenameFolder, onDeleteFolder }: TreeRowProps) {
+function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsUpdate, onCreateSubfolder, onRenameFolder, onDeleteFolder, onRenameVideo }: TreeRowProps) {
   const [loading, setLoading] = useState(false)
   const isExpanded = expandedPaths.has(node.path)
 
@@ -339,19 +340,13 @@ function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsU
                       Rename...
                     </button>
                   </MenuItem>
-                  <MenuItem disabled={node.videoCount > 0}>
-                    {({ disabled }) => (
-                      <button
-                        onClick={() => !disabled && onDeleteFolder(node.path, node.name, node.videoCount)}
-                        className={`block w-full text-left px-4 py-2 text-sm ${
-                          disabled
-                            ? 'text-gray-400 dark:text-gray-600 cursor-not-allowed'
-                            : 'text-red-600 dark:text-red-400 data-[focus]:bg-gray-100 dark:data-[focus]:bg-gray-700 data-[focus]:outline-none'
-                        }`}
-                      >
-                        Delete folder {disabled && `(${node.videoCount} videos)`}
-                      </button>
-                    )}
+                  <MenuItem>
+                    <button
+                      onClick={() => onDeleteFolder(node.path, node.name, node.videoCount)}
+                      className="block w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 data-[focus]:bg-gray-100 dark:data-[focus]:bg-gray-700 data-[focus]:outline-none"
+                    >
+                      Delete folder...
+                    </button>
                   </MenuItem>
                 </div>
               </MenuItems>
@@ -372,6 +367,7 @@ function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsU
             onCreateSubfolder={onCreateSubfolder}
             onRenameFolder={onRenameFolder}
             onDeleteFolder={onDeleteFolder}
+            onRenameVideo={onRenameVideo}
           />
         ))}
       </>
@@ -520,6 +516,14 @@ function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsU
                   )
                 )}
               </MenuItem>
+              <MenuItem>
+                <button
+                  onClick={() => onRenameVideo(node.videoId, node.name)}
+                  className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 data-[focus]:bg-gray-100 dark:data-[focus]:bg-gray-700 data-[focus]:text-gray-900 dark:data-[focus]:text-white data-[focus]:outline-none"
+                >
+                  Rename...
+                </button>
+              </MenuItem>
             </div>
           </MenuItems>
         </Menu>
@@ -537,13 +541,17 @@ export default function VideosPage() {
   // Modal states
   const [createFolderModal, setCreateFolderModal] = useState<{ open: boolean; parentPath?: string }>({ open: false })
   const [renameFolderModal, setRenameFolderModal] = useState<{ open: boolean; folderPath?: string; currentName?: string }>({ open: false })
-  const [deleteFolderModal, setDeleteFolderModal] = useState<{ open: boolean; folderPath?: string; folderName?: string }>({ open: false })
+  const [deleteFolderModal, setDeleteFolderModal] = useState<{ open: boolean; folderPath?: string; folderName?: string; videoCount?: number }>({ open: false })
+  const [renameVideoModal, setRenameVideoModal] = useState<{ open: boolean; videoPath?: string; currentName?: string }>({ open: false })
 
   // Form states
   const [newFolderName, setNewFolderName] = useState('')
   const [renamedFolderName, setRenamedFolderName] = useState('')
+  const [renamedVideoName, setRenamedVideoName] = useState('')
   const [folderError, setFolderError] = useState<string | null>(null)
   const [folderLoading, setFolderLoading] = useState(false)
+  const [videoError, setVideoError] = useState<string | null>(null)
+  const [videoLoading, setVideoLoading] = useState(false)
   const [videoStatsMap, setVideoStatsMap] = useState<Map<string, VideoStats>>(() => {
     // Load cached stats from localStorage
     if (typeof window !== 'undefined') {
@@ -751,7 +759,8 @@ export default function VideosPage() {
     setFolderLoading(true)
 
     try {
-      const response = await fetch(`/api/folders/delete?path=${encodeURIComponent(deleteFolderModal.folderPath!)}`, {
+      // Delete with confirmed=true parameter
+      const response = await fetch(`/api/folders/delete?path=${encodeURIComponent(deleteFolderModal.folderPath!)}&confirmed=true`, {
         method: 'DELETE'
       })
 
@@ -770,6 +779,71 @@ export default function VideosPage() {
     } catch (error) {
       setFolderError('Network error')
       setFolderLoading(false)
+    }
+  }
+
+  // Load video count before showing delete modal
+  const handleDeleteFolderClick = async (folderPath: string, folderName: string) => {
+    setFolderError(null)
+    setFolderLoading(true)
+
+    try {
+      // First, get the video count
+      const response = await fetch(`/api/folders/delete?path=${encodeURIComponent(folderPath)}`, {
+        method: 'DELETE'
+      })
+
+      const data = await response.json()
+
+      if (data.requiresConfirmation) {
+        // Show modal with video count
+        setDeleteFolderModal({
+          open: true,
+          folderPath,
+          folderName,
+          videoCount: data.videoCount
+        })
+        setFolderLoading(false)
+      } else if (!response.ok) {
+        setFolderError(data.error || 'Failed to check folder')
+        setFolderLoading(false)
+      }
+    } catch (error) {
+      setFolderError('Network error')
+      setFolderLoading(false)
+    }
+  }
+
+  // Video rename handler
+  const handleRenameVideo = async () => {
+    setVideoError(null)
+    setVideoLoading(true)
+
+    try {
+      const oldPath = renameVideoModal.videoPath!
+
+      const response = await fetch('/api/videos/rename', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ oldPath, newName: renamedVideoName })
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        setVideoError(data.error || 'Failed to rename video')
+        setVideoLoading(false)
+        return
+      }
+
+      // Success - close modal and reload
+      setVideoLoading(false)
+      setRenameVideoModal({ open: false })
+      setRenamedVideoName('')
+      revalidator.revalidate()
+    } catch (error) {
+      setVideoError('Network error')
+      setVideoLoading(false)
     }
   }
 
@@ -969,10 +1043,12 @@ export default function VideosPage() {
                           setFolderError(null)
                           setFolderLoading(false)
                         }}
-                        onDeleteFolder={(folderPath, folderName) => {
-                          setDeleteFolderModal({ open: true, folderPath, folderName })
-                          setFolderError(null)
-                          setFolderLoading(false)
+                        onDeleteFolder={handleDeleteFolderClick}
+                        onRenameVideo={(videoPath, currentName) => {
+                          setRenameVideoModal({ open: true, videoPath, currentName })
+                          setRenamedVideoName(currentName)
+                          setVideoError(null)
+                          setVideoLoading(false)
                         }}
                       />
                     ))}
@@ -1103,9 +1179,37 @@ export default function VideosPage() {
               <p className="text-sm text-gray-600 dark:text-gray-400">
                 Are you sure you want to delete the folder <span className="font-mono font-medium">{deleteFolderModal.folderName}</span>?
               </p>
-              <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+
+              {deleteFolderModal.videoCount !== undefined && deleteFolderModal.videoCount > 0 && (
+                <div className="mt-4 rounded-md bg-red-50 dark:bg-red-900/20 p-4 border border-red-200 dark:border-red-800">
+                  <div className="flex">
+                    <div className="flex-shrink-0">
+                      <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <div className="ml-3">
+                      <h3 className="text-sm font-medium text-red-800 dark:text-red-300">
+                        This will permanently delete {deleteFolderModal.videoCount} {deleteFolderModal.videoCount === 1 ? 'video' : 'videos'}
+                      </h3>
+                      <div className="mt-2 text-sm text-red-700 dark:text-red-400">
+                        <p>All annotation data, frames, and video files in this folder will be lost forever.</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {deleteFolderModal.videoCount === 0 && (
+                <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                  This folder is empty.
+                </p>
+              )}
+
+              <p className="mt-3 text-sm font-medium text-gray-900 dark:text-gray-200">
                 This action cannot be undone.
               </p>
+
               {folderError && (
                 <p className="mt-3 text-sm text-red-600 dark:text-red-400">{folderError}</p>
               )}
@@ -1123,7 +1227,55 @@ export default function VideosPage() {
                 disabled={folderLoading}
                 className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {folderLoading ? 'Deleting...' : 'Delete'}
+                {folderLoading ? 'Deleting...' : deleteFolderModal.videoCount && deleteFolderModal.videoCount > 0 ? `Delete ${deleteFolderModal.videoCount} ${deleteFolderModal.videoCount === 1 ? 'Video' : 'Videos'}` : 'Delete Folder'}
+              </button>
+            </div>
+          </DialogPanel>
+        </div>
+      </Dialog>
+
+      {/* Rename Video Modal */}
+      <Dialog open={renameVideoModal.open} onClose={() => setRenameVideoModal({ open: false })} className="relative z-50">
+        <div className="fixed inset-0 bg-black/30 dark:bg-black/50" aria-hidden="true" />
+        <div className="fixed inset-0 flex items-center justify-center p-4">
+          <DialogPanel className="w-full max-w-md rounded-lg bg-white dark:bg-gray-800 p-6 shadow-xl">
+            <DialogTitle className="text-lg font-medium text-gray-900 dark:text-gray-200">
+              Rename Video
+            </DialogTitle>
+            <div className="mt-4">
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                Video: <span className="font-mono">{renameVideoModal.videoPath}</span>
+              </p>
+              <label htmlFor="renamed-video-name" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                New name
+              </label>
+              <input
+                type="text"
+                id="renamed-video-name"
+                value={renamedVideoName}
+                onChange={(e) => setRenamedVideoName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && !videoLoading && handleRenameVideo()}
+                className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                autoFocus
+              />
+              {videoError && (
+                <p className="mt-2 text-sm text-red-600 dark:text-red-400">{videoError}</p>
+              )}
+            </div>
+            <div className="mt-6 flex gap-3 justify-end">
+              <button
+                onClick={() => setRenameVideoModal({ open: false })}
+                disabled={videoLoading}
+                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleRenameVideo}
+                disabled={!renamedVideoName.trim() || videoLoading}
+                className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {videoLoading ? 'Renaming...' : 'Rename'}
               </button>
             </div>
           </DialogPanel>
