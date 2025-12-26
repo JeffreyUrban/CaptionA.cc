@@ -82,6 +82,10 @@ export default function AnnotateLayout() {
   const [loadingFrame, setLoadingFrame] = useState(false)
   const [currentVisualizationUrl, setCurrentVisualizationUrl] = useState<string | null>(null)
   const [analysisBoxes, setAnalysisBoxes] = useState<BoxData[] | null>(null)
+  const [hasUnsyncedAnnotations, setHasUnsyncedAnnotations] = useState(false)
+
+  // Cache for frame boxes (to avoid re-fetching already loaded frames)
+  const frameBoxesCache = useRef<Map<number, FrameBoxesData>>(new Map())
 
   // Initialize selectedFrameIndex to first frame when frames load
   useEffect(() => {
@@ -193,6 +197,43 @@ export default function AnnotateLayout() {
     loadQueue(true)
   }, [loadQueue])
 
+  // Prefetch frame boxes for all frames in queue
+  useEffect(() => {
+    if (!videoId || frames.length === 0) return
+
+    const prefetchFrames = async () => {
+      console.log(`[Prefetch] Starting prefetch for ${frames.length} frames`)
+
+      // Prefetch all frames in parallel
+      const prefetchPromises = frames.map(async (frame) => {
+        // Skip if already cached
+        if (frameBoxesCache.current.has(frame.frameIndex)) {
+          return
+        }
+
+        try {
+          console.log(`[Prefetch] Fetching frame ${frame.frameIndex}`)
+          const response = await fetch(
+            `/api/annotations/${encodeURIComponent(videoId)}/frames/${frame.frameIndex}/boxes`
+          )
+          if (!response.ok) return
+
+          const data = await response.json()
+          frameBoxesCache.current.set(frame.frameIndex, data)
+          console.log(`[Prefetch] Cached frame ${frame.frameIndex}`)
+        } catch (err) {
+          console.warn(`[Prefetch] Failed to prefetch frame ${frame.frameIndex}:`, err)
+        }
+      })
+
+      await Promise.all(prefetchPromises)
+      console.log(`[Prefetch] Completed`)
+    }
+
+    // Prefetch in background (don't await)
+    void prefetchFrames()
+  }, [videoId, frames])
+
   // Load all OCR boxes for analysis view
   const loadAnalysisBoxes = useCallback(async () => {
     if (!videoId) return
@@ -223,14 +264,27 @@ export default function AnnotateLayout() {
   useEffect(() => {
     if (!videoId || viewMode !== 'frame' || selectedFrameIndex === null) return
 
+    // Check cache first
+    const cached = frameBoxesCache.current.get(selectedFrameIndex)
+    if (cached) {
+      console.log(`[Cache] Using cached boxes for frame ${selectedFrameIndex}`)
+      setCurrentFrameBoxes(cached)
+      setLoadingFrame(false)
+      return
+    }
+
     const loadFrameBoxes = async () => {
       setLoadingFrame(true)
       try {
+        console.log(`[Fetch] Loading boxes for frame ${selectedFrameIndex}`)
         const response = await fetch(
           `/api/annotations/${encodeURIComponent(videoId)}/frames/${selectedFrameIndex}/boxes`
         )
         if (!response.ok) throw new Error('Failed to load frame boxes')
         const data = await response.json()
+
+        // Cache the result
+        frameBoxesCache.current.set(selectedFrameIndex, data)
 
         setCurrentFrameBoxes(data)
         setLoadingFrame(false)
@@ -248,6 +302,11 @@ export default function AnnotateLayout() {
   const handleThumbnailClick = useCallback((frameIndex: number | 'analysis') => {
     console.log(`[Frontend] Thumbnail clicked: ${frameIndex}`)
 
+    // Check if we're actually changing frames/views
+    const isChangingView =
+      (frameIndex === 'analysis' && viewMode !== 'analysis') ||
+      (frameIndex !== 'analysis' && (viewMode !== 'frame' || selectedFrameIndex !== frameIndex))
+
     if (frameIndex === 'analysis') {
       setViewMode('analysis')
       // Keep the current frame selected for annotation, or default to first frame
@@ -257,10 +316,13 @@ export default function AnnotateLayout() {
       setSelectedFrameIndex(frameIndex)
     }
 
-    // Reload queue to update frame priorities based on annotations (background refresh)
-    console.log(`[Frontend] Calling loadQueue(false)`)
-    void loadQueue(false)
-  }, [frames, loadQueue])
+    // Reload queue only when navigating away AND annotations were made (background refresh to update priorities)
+    if (isChangingView && hasUnsyncedAnnotations) {
+      console.log(`[Frontend] Navigating to different frame/view with unsynced annotations, reloading queue in background`)
+      void loadQueue(false)
+      setHasUnsyncedAnnotations(false)
+    }
+  }, [frames, viewMode, selectedFrameIndex, hasUnsyncedAnnotations, loadQueue])
 
   // Handle box annotation (left click = in, right click = out)
   const handleBoxClick = useCallback(async (boxIndex: number, label: 'in' | 'out') => {
@@ -295,6 +357,12 @@ export default function AnnotateLayout() {
       if (!response.ok) {
         throw new Error('Failed to save annotation')
       }
+
+      // Invalidate cache for this frame
+      frameBoxesCache.current.delete(currentFrameBoxes.frameIndex)
+
+      // Mark that we have unsynced annotations
+      setHasUnsyncedAnnotations(true)
     } catch (err) {
       console.error('Failed to save box annotation:', err)
       // Reload frame to revert optimistic update
@@ -614,6 +682,9 @@ export default function AnnotateLayout() {
 
         // Reload analysis boxes to reflect the changes
         await loadAnalysisBoxes()
+
+        // Mark that we have unsynced annotations
+        setHasUnsyncedAnnotations(true)
       } catch (err) {
         console.error('Failed to bulk annotate all frames:', err)
       }
@@ -654,10 +725,21 @@ export default function AnnotateLayout() {
             }
           )
 
-          // Reload frame boxes to get updated colors
+          // Invalidate cache and reload frame boxes to get updated colors
+          if (selectedFrameIndex !== null) {
+            frameBoxesCache.current.delete(selectedFrameIndex)
+          }
           const response = await fetch(`/api/annotations/${encodeURIComponent(videoId)}/frames/${selectedFrameIndex}/boxes`)
           const data = await response.json()
           setCurrentFrameBoxes(data)
+
+          // Cache the fresh data
+          if (selectedFrameIndex !== null) {
+            frameBoxesCache.current.set(selectedFrameIndex, data)
+          }
+
+          // Mark that we have unsynced annotations
+          setHasUnsyncedAnnotations(true)
         } catch (err) {
           console.error('Failed to save annotations:', err)
         }

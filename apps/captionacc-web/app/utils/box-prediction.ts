@@ -44,6 +44,41 @@ interface ModelParams {
   out_features: GaussianParams[]  // 7 features
 }
 
+interface ModelRow {
+  model_version: string
+  n_training_samples: number
+  prior_in: number
+  prior_out: number
+  in_vertical_alignment_mean: number
+  in_vertical_alignment_std: number
+  in_height_similarity_mean: number
+  in_height_similarity_std: number
+  in_anchor_distance_mean: number
+  in_anchor_distance_std: number
+  in_crop_overlap_mean: number
+  in_crop_overlap_std: number
+  in_aspect_ratio_mean: number
+  in_aspect_ratio_std: number
+  in_normalized_y_mean: number
+  in_normalized_y_std: number
+  in_normalized_area_mean: number
+  in_normalized_area_std: number
+  out_vertical_alignment_mean: number
+  out_vertical_alignment_std: number
+  out_height_similarity_mean: number
+  out_height_similarity_std: number
+  out_anchor_distance_mean: number
+  out_anchor_distance_std: number
+  out_crop_overlap_mean: number
+  out_crop_overlap_std: number
+  out_aspect_ratio_mean: number
+  out_aspect_ratio_std: number
+  out_normalized_y_mean: number
+  out_normalized_y_std: number
+  out_normalized_area_mean: number
+  out_normalized_area_std: number
+}
+
 /**
  * Extract 7 features from a box given layout parameters.
  *
@@ -137,7 +172,7 @@ function gaussianPDF(x: number, mean: number, std: number): number {
  * Load model parameters from database.
  */
 function loadModelFromDB(db: Database): ModelParams | null {
-  const row = db.prepare('SELECT * FROM box_classification_model WHERE id = 1').get() as any
+  const row = db.prepare('SELECT * FROM box_classification_model WHERE id = 1').get() as ModelRow | undefined
 
   if (!row || row.n_training_samples < 10) {
     return null
@@ -213,55 +248,67 @@ function predictBayesian(
 
 /**
  * Predict using heuristics (fallback when no trained model available).
+ *
+ * Universal heuristics based on:
+ * - Vertical position (captions typically in bottom portion of frame)
+ * - Box height (relative to frame and consistency with neighbors)
+ * - Horizontal neighbor distance (caption characters cluster horizontally)
+ *
+ * Note: This signature will need to be updated to accept allBoxesInFrame
+ * when we implement the full clustering-based heuristics.
  */
 function predictWithHeuristics(
   boxBounds: BoxBounds,
   layoutConfig: VideoLayoutConfig
 ): { label: 'in' | 'out'; confidence: number } {
-  const { crop_left, crop_top, crop_right, crop_bottom } = layoutConfig
+  const frameHeight = layoutConfig.frame_height
+  const boxCenterY = (boxBounds.top + boxBounds.bottom) / 2
+  const boxHeight = boxBounds.bottom - boxBounds.top
 
-  // Check if box is inside crop bounds
-  const insideCrop = (
-    boxBounds.left >= crop_left &&
-    boxBounds.top >= crop_top &&
-    boxBounds.right <= crop_right &&
-    boxBounds.bottom <= crop_bottom
+  // Expected caption characteristics (initial guesses, tune on dataset later)
+  const EXPECTED_CAPTION_Y = 0.75  // 75% from top (bottom quarter of frame)
+  const EXPECTED_CAPTION_HEIGHT_RATIO = 0.05  // 5% of frame height
+
+  // Score 1: Vertical position penalty
+  const normalizedY = boxCenterY / frameHeight
+  const yDeviation = Math.abs(normalizedY - EXPECTED_CAPTION_Y)
+  const yScore = Math.max(0, 1.0 - yDeviation * 2.5)  // Full penalty at 40% deviation
+
+  // Score 2: Box height penalty
+  const heightRatio = boxHeight / frameHeight
+  const heightDeviation = Math.abs(heightRatio - EXPECTED_CAPTION_HEIGHT_RATIO)
+  const heightScore = Math.max(0, 1.0 - heightDeviation / EXPECTED_CAPTION_HEIGHT_RATIO)
+
+  // Combine scores (weights: tune on dataset later)
+  const captionScore = (
+    yScore * 0.6 +        // Vertical position is strong signal
+    heightScore * 0.4     // Height is secondary signal
   )
 
-  if (!insideCrop) {
-    // Outside crop bounds → definitely "out"
-    return { label: 'out', confidence: 0.95 }
+  // Convert to label and confidence
+  if (captionScore >= 0.6) {
+    return { label: 'in', confidence: 0.5 + captionScore * 0.3 }  // 0.68 - 0.80
+  } else {
+    return { label: 'out', confidence: 0.5 + (1 - captionScore) * 0.3 }  // 0.62 - 0.80
   }
-
-  // Inside crop bounds - check alignment with layout params
-  if (layoutConfig.vertical_position !== null && layoutConfig.box_height !== null) {
-    const boxCenterY = (boxBounds.top + boxBounds.bottom) / 2
-    const boxHeight = boxBounds.bottom - boxBounds.top
-
-    const verticalDistance = Math.abs(boxCenterY - layoutConfig.vertical_position)
-    const heightDifference = Math.abs(boxHeight - layoutConfig.box_height)
-
-    const verticalStd = layoutConfig.vertical_std || 15
-    const heightStd = layoutConfig.box_height_std || 5
-
-    // Z-scores
-    const verticalZScore = verticalDistance / verticalStd
-    const heightZScore = heightDifference / heightStd
-
-    // Good alignment if within ~2 std deviations
-    if (verticalZScore < 2 && heightZScore < 2) {
-      return { label: 'in', confidence: 0.7 + (1 - Math.min(verticalZScore, 2) / 2) * 0.2 }
-    } else if (verticalZScore > 4 || heightZScore > 4) {
-      return { label: 'out', confidence: 0.7 }
-    } else {
-      // Uncertain
-      return { label: 'in', confidence: 0.5 }
-    }
-  }
-
-  // Default: inside crop → probably caption
-  return { label: 'in', confidence: 0.6 }
 }
+
+/**
+ * TODO: Enhanced heuristics with clustering (not yet implemented)
+ *
+ * This will replace predictWithHeuristics once we add support for passing
+ * all boxes in the frame. Will include:
+ * - Height consistency among vertically-aligned boxes
+ * - Horizontal neighbor distance (1-2x box width)
+ * - Cluster size (5+ boxes at similar vertical position)
+ */
+// function predictWithClusteringHeuristics(
+//   boxBounds: BoxBounds,
+//   layoutConfig: VideoLayoutConfig,
+//   allBoxesInFrame: BoxBounds[]
+// ): { label: 'in' | 'out'; confidence: number } {
+//   // Implementation with full clustering logic
+// }
 
 /**
  * Predict label and confidence for an OCR box.
