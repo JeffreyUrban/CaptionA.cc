@@ -23,13 +23,13 @@ async function findVideos(dir: string, baseDir: string): Promise<string[]> {
   try {
     const entries = await readdir(dir, { withFileTypes: true })
 
-    // Check if this directory has a caption_frames subdirectory
-    const hasCaptionFrames = entries.some(
-      entry => entry.isDirectory() && entry.name === 'caption_frames'
+    // Check if this directory has an annotations.db file
+    const hasAnnotationsDb = entries.some(
+      entry => entry.isFile() && entry.name === 'annotations.db'
     )
 
-    if (hasCaptionFrames) {
-      // Found caption_frames - this is a video directory, record it and stop descending
+    if (hasAnnotationsDb) {
+      // Found annotations.db - this is a video directory, record it and stop descending
       const relativePath = dir.substring(baseDir.length + 1) // +1 to remove leading slash
       if (relativePath) {
         videoPaths.push(relativePath)
@@ -37,9 +37,9 @@ async function findVideos(dir: string, baseDir: string): Promise<string[]> {
       return videoPaths // Don't descend into subdirectories
     }
 
-    // No caption_frames here, so continue recursing into subdirectories
+    // No annotations.db here, so continue recursing into subdirectories
     // Skip directories that are known to contain data, not video folders
-    const skipDirs = new Set(['caption_frames', 'caption_layout'])
+    const skipDirs = new Set(['crop_frames', 'full_frames'])
 
     for (const entry of entries) {
       if (entry.isDirectory() && !skipDirs.has(entry.name)) {
@@ -65,7 +65,7 @@ export async function loader() {
     )
   }
 
-  // Find all videos by looking for caption_frames directories
+  // Find all videos by looking for crop_frames directories
   const videoPaths = await findVideos(dataDir, dataDir)
 
   // Convert to VideoInfo objects

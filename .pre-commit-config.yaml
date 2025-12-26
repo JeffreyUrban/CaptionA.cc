@@ -5,9 +5,9 @@ repos:
   - id: ruff
     args:
     - --fix
-    files: ^data-pipelines/caption_frames/
+    files: ^data-pipelines/crop_frames/
   - id: ruff-format
-    files: ^data-pipelines/caption_frames/
+    files: ^data-pipelines/crop_frames/
 - repo: https://github.com/RobertCraigie/pyright-python
   rev: v1.1.390
   hooks:
@@ -20,14 +20,14 @@ repos:
   rev: v4.5.0
   hooks:
   - id: trailing-whitespace
-    files: ^data-pipelines/caption_frames/
+    files: ^data-pipelines/crop_frames/
   - id: end-of-file-fixer
-    files: ^data-pipelines/caption_frames/
+    files: ^data-pipelines/crop_frames/
   - id: check-yaml
-    files: ^data-pipelines/caption_frames/
+    files: ^data-pipelines/crop_frames/
   - id: check-added-large-files
-    files: ^data-pipelines/caption_frames/
+    files: ^data-pipelines/crop_frames/
   - id: check-merge-conflict
-    files: ^data-pipelines/caption_frames/
+    files: ^data-pipelines/crop_frames/
   - id: mixed-line-ending
-    files: ^data-pipelines/caption_frames/
+    files: ^data-pipelines/crop_frames/

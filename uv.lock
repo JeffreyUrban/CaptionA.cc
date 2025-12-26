@@ -5,10 +5,10 @@ requires-python = ">=3.14"
 [manifest]
 members = [
     "box-classification",
-    "caption-frames",
-    "caption-layout",
+    "full-frames",
     "caption-models",
     "captionacc-workspace",
+    "crop-frames",
     "image-utils",
     "ocr-box-model",
     "ocr-utils",
@@ -47,28 +47,8 @@ dev = [
 ]
 
 [[package]]
-name = "caption-frames"
-source = { editable = "data-pipelines/caption_frames" }
-dependencies = [
-    { name = "caption-models" },
-    { name = "image-utils" },
-    { name = "rich" },
-    { name = "typer" },
-    { name = "video-utils" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "caption-models", editable = "packages/caption_models" },
-    { name = "image-utils", editable = "packages/image_utils" },
-    { name = "rich", specifier = ">=13.0.0" },
-    { name = "typer", specifier = ">=0.9.0" },
-    { name = "video-utils", editable = "packages/video_utils" },
-]
-
-[[package]]
-name = "caption-layout"
-source = { editable = "data-pipelines/caption_layout" }
+name = "full-frames"
+source = { editable = "data-pipelines/full_frames" }
 dependencies = [
     { name = "caption-models" },
     { name = "ocr-utils" },
@@ -188,6 +168,26 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/3b/46/f4fb293e4cbe3620e3ac2a3e8fd566ed33affb5861a9b20e3dd6c1896cbc/coverage-7.13.0-cp314-cp314t-win_amd64.whl", hash = "sha256:445badb539005283825959ac9fa4a28f712c214b65af3a2c464f1adc90f5fcbc", size = 222982, upload-time = "2025-12-08T13:14:33.1Z" },
     { url = "https://files.pythonhosted.org/packages/68/62/5b3b9018215ed9733fbd1ae3b2ed75c5de62c3b55377a52cae732e1b7805/coverage-7.13.0-cp314-cp314t-win_arm64.whl", hash = "sha256:de7f6748b890708578fc4b7bb967d810aeb6fcc9bff4bb77dbca77dab2f9df6a", size = 221016, upload-time = "2025-12-08T13:14:34.601Z" },
     { url = "https://files.pythonhosted.org/packages/8d/4c/1968f32fb9a2604645827e11ff84a31e59d532e01995f904723b4f5328b3/coverage-7.13.0-py3-none-any.whl", hash = "sha256:850d2998f380b1e266459ca5b47bc9e7daf9af1d070f66317972f382d46f1904", size = 210068, upload-time = "2025-12-08T13:14:36.236Z" },
+]
+
+[[package]]
+name = "crop-frames"
+source = { editable = "data-pipelines/crop_frames" }
+dependencies = [
+    { name = "caption-models" },
+    { name = "image-utils" },
+    { name = "rich" },
+    { name = "typer" },
+    { name = "video-utils" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "caption-models", editable = "packages/caption_models" },
+    { name = "image-utils", editable = "packages/image_utils" },
+    { name = "rich", specifier = ">=13.0.0" },
+    { name = "typer", specifier = ">=0.9.0" },
+    { name = "video-utils", editable = "packages/video_utils" },
 ]
 
 [[package]]

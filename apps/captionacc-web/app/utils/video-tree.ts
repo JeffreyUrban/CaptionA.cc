@@ -112,7 +112,7 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
     'annotations.db'
   )
 
-  // Get total frames from caption_frames directory
+  // Get total frames from crop_frames directory
   const framesDir = resolve(
     process.cwd(),
     '..',
@@ -120,7 +120,7 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
     'local',
     'data',
     ...videoId.split('/'),
-    'caption_frames'
+    'crop_frames'
   )
 
   let totalFrames = 0

@@ -12,7 +12,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
   const videoId = decodeURIComponent(encodedVideoId)
 
-  // caption_layout frames are at 10Hz, matching database frame_index 1:1
+  // full_frames frames are at 10Hz, matching database frame_index 1:1
   const paddedIndex = frameIndex.padStart(10, '0')
 
   const framePath = resolve(
@@ -22,7 +22,6 @@ export async function loader({ params }: LoaderFunctionArgs) {
     'local',
     'data',
     ...videoId.split('/'),
-    'caption_layout',
     'full_frames',
     `frame_${paddedIndex}.jpg`
   )

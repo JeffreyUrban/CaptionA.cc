@@ -2,7 +2,7 @@
 /**
  * Migration: Remove foreign key constraint from ocr_box_annotations table
  *
- * The foreign key to frames_ocr prevents annotating caption_layout frames
+ * The foreign key to frames_ocr prevents annotating full_frames frames
  * which don't exist in frames_ocr. This migration recreates the table without
  * the constraint.
  */

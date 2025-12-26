@@ -356,7 +356,7 @@ Implement the Text Correction workflow as specified in `apps/captionacc-web/docs
 **Decision:** JPEG at 90-95% quality
 - Fewer annotations than frames → file size less critical
 - High quality preserves detail for OCR
-- Match or exceed caption_frames quality
+- Match or exceed crop_frames quality
 - **Constant:** `COMBINED_IMAGE_QUALITY = 0.95`
 
 ### 4. Character Variant Threshold: Named Constant

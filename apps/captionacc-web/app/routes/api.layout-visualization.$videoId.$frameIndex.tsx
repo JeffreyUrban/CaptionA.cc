@@ -315,7 +315,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
       return new Response('Layout config not found', { status: 404 })
     }
 
-    // Load frame image from caption_layout/full_frames
+    // Load frame image from full_frames/full_frames
     const framePath = resolve(
       process.cwd(),
       '..',
@@ -323,7 +323,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
       'local',
       'data',
       ...videoId.split('/'),
-      'caption_layout',
+      'full_frames',
       'full_frames',
       `frame_${frameIndex.toString().padStart(10, '0')}.jpg`
     )

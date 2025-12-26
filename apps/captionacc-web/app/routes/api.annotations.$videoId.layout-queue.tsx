@@ -2,8 +2,6 @@ import { type LoaderFunctionArgs } from 'react-router'
 import Database from 'better-sqlite3'
 import { resolve } from 'path'
 import { existsSync } from 'fs'
-import { calculateDistributionParams } from '~/utils/layout-distribution'
-import { predictBoxLabel } from '~/utils/box-prediction'
 
 interface FrameOCR {
   frame_index: number
@@ -126,193 +124,17 @@ export async function loader({ params }: LoaderFunctionArgs) {
   try {
     const db = getDatabase(videoId)
 
-    // Get layout config (or auto-initialize from subtitle_analysis.txt)
-    let layoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as VideoLayoutConfig | undefined
+    // Get layout config from database
+    const layoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as VideoLayoutConfig | undefined
 
     if (!layoutConfig) {
-      // Auto-initialize from subtitle_analysis.txt
-      const analysisPath = resolve(
-        process.cwd(),
-        '..',
-        '..',
-        'local',
-        'data',
-        ...videoId.split('/'),
-        'caption_layout',
-        'subtitle_analysis.txt'
-      )
-
-      if (!existsSync(analysisPath)) {
-        db.close()
-        return new Response(JSON.stringify({
-          error: 'subtitle_analysis.txt not found. Run caption_layout analysis first.'
-        }), {
-          status: 404,
-          headers: { 'Content-Type': 'application/json' }
-        })
-      }
-
-      // Parse subtitle_analysis.txt to get layout parameters
-      const analysisContent = readFileSync(analysisPath, 'utf-8')
-      const jsonStart = analysisContent.indexOf('---\n') + 4
-      const jsonContent = analysisContent.slice(jsonStart).trim()
-      const analysisData = JSON.parse(jsonContent)
-
-      // Get frame dimensions from first frame image
-      const framesDir = resolve(
-        process.cwd(),
-        '..',
-        '..',
-        'local',
-        'data',
-        ...videoId.split('/'),
-        'caption_layout',
-        'full_frames'
-      )
-
-      let frameWidth = 1280  // Default
-      let frameHeight = 720  // Default
-
-      // Find first frame to get actual dimensions
-      const { readdirSync } = await import('fs')
-      const frameFiles = readdirSync(framesDir).filter(f => f.startsWith('frame_') && f.endsWith('.jpg'))
-
-      if (frameFiles.length > 0) {
-        const firstFramePath = resolve(framesDir, frameFiles[0])
-
-        // Read image dimensions using sharp
-        try {
-          const sharp = (await import('sharp')).default
-          const metadata = await sharp(firstFramePath).metadata()
-          frameWidth = metadata.width || 1280
-          frameHeight = metadata.height || 720
-          console.log(`Detected frame dimensions: ${frameWidth}x${frameHeight}`)
-        } catch (error) {
-          console.warn('Failed to read frame dimensions, using defaults:', error)
-        }
-      }
-
-      // Calculate distribution parameters from caption boxes inside crop bounds
-      // (using heuristic: boxes inside crop bounds are likely captions)
-      const captionBoxes: Array<{
-        left: number
-        top: number
-        right: number
-        bottom: number
-      }> = []
-
-      // Load OCR boxes from database
-      const ocrBoxes = db.prepare(`
-        SELECT frame_index, box_index, text, confidence, x, y, width, height
-        FROM full_frame_ocr
-        ORDER BY frame_index, box_index
-      `).all() as Array<{
-        frame_index: number
-        box_index: number
-        text: string
-        confidence: number
-        x: number
-        y: number
-        width: number
-        height: number
-      }>
-
-      for (const box of ocrBoxes) {
-        // Coordinates are fractional [0-1], y is bottom-referenced
-        const { x, y, width, height } = box
-
-        // Convert to absolute pixel coords (top-referenced)
-        const boxLeft = Math.floor(x * frameWidth)
-        const boxBottom = Math.floor((1 - y) * frameHeight)
-        const boxTop = boxBottom - Math.floor(height * frameHeight)
-        const boxRight = boxLeft + Math.floor(width * frameWidth)
-
-        // Check if box is inside crop bounds
-        const insideCrop =
-          boxLeft >= analysisData.crop_bounds[0] &&
-          boxTop >= analysisData.crop_bounds[1] &&
-          boxRight <= analysisData.crop_bounds[2] &&
-          boxBottom <= analysisData.crop_bounds[3]
-
-        if (insideCrop) {
-          captionBoxes.push({
-            left: boxLeft,
-            top: boxTop,
-            right: boxRight,
-            bottom: boxBottom,
-          })
-        }
-      }
-
-      console.log(`Found ${captionBoxes.length} caption boxes for distribution calculation`)
-
-      // Calculate distribution parameters
-      const distributionParams = calculateDistributionParams(captionBoxes, {
-        anchor_type: analysisData.anchor_type,
-        anchor_position: analysisData.anchor_position,
-        vertical_position: analysisData.vertical_position_mode,
-        box_height: analysisData.height_mode,
+      db.close()
+      return new Response(JSON.stringify({
+        error: 'Layout config not found. Run full_frames analysis first.'
+      }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' }
       })
-
-      console.log('Distribution params:', distributionParams)
-
-      // Initialize video_layout_config table
-      db.prepare(`
-        INSERT INTO video_layout_config (
-          id,
-          frame_width,
-          frame_height,
-          crop_left,
-          crop_top,
-          crop_right,
-          crop_bottom,
-          selection_left,
-          selection_top,
-          selection_right,
-          selection_bottom,
-          vertical_position,
-          vertical_std,
-          box_height,
-          box_height_std,
-          anchor_type,
-          anchor_position,
-          top_edge_std,
-          bottom_edge_std,
-          horizontal_std_slope,
-          horizontal_std_intercept,
-          crop_bounds_version
-        ) VALUES (
-          1,
-          ?, ?, ?, ?, ?, ?,
-          NULL, NULL, NULL, NULL,
-          ?, ?, ?, ?,
-          ?, ?,
-          ?, ?, ?, ?,
-          1
-        )
-      `).run(
-        frameWidth,
-        frameHeight,
-        analysisData.crop_bounds[0],  // crop_left
-        analysisData.crop_bounds[1],  // crop_top
-        analysisData.crop_bounds[2],  // crop_right
-        analysisData.crop_bounds[3],  // crop_bottom
-        analysisData.vertical_position_mode,
-        analysisData.vertical_position_std,
-        analysisData.height_mode,
-        analysisData.height_std,
-        analysisData.anchor_type,
-        analysisData.anchor_position,
-        distributionParams.top_edge_std,
-        distributionParams.bottom_edge_std,
-        distributionParams.horizontal_std_slope,
-        distributionParams.horizontal_std_intercept
-      )
-
-      console.log('Initialized video_layout_config from subtitle_analysis.txt with distribution params')
-
-      // Reload config
-      layoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as VideoLayoutConfig
     }
 
     // Load frames from full_frame_ocr table
@@ -323,7 +145,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
     if (frames.length === 0) {
       db.close()
       return new Response(JSON.stringify({
-        error: 'No OCR data found in database. Run caption_layout analysis first.'
+        error: 'No OCR data found in database. Run full_frames analysis first.'
       }), {
         status: 404,
         headers: { 'Content-Type': 'application/json' }
@@ -334,19 +156,21 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
     // Calculate caption box count for each frame
     const frameInfos: FrameInfo[] = frames.map(({ frame_index: frameIndex }) => {
-      // Get all OCR boxes for this frame
+      // Get all OCR boxes for this frame with cached predictions
       const ocrAnnotations = db.prepare(`
-        SELECT text, confidence, x, y, width, height
+        SELECT box_index, text, confidence, x, y, width, height, predicted_confidence
         FROM full_frame_ocr
         WHERE frame_index = ?
         ORDER BY box_index
       `).all(frameIndex) as Array<{
+        box_index: number
         text: string
         confidence: number
         x: number
         y: number
         width: number
         height: number
+        predicted_confidence: number | null
       }>
 
       // Convert to annotation format for estimateCaptionBoxCount
@@ -378,31 +202,14 @@ export async function loader({ params }: LoaderFunctionArgs) {
         `).all(frameIndex) as Array<{ box_index: number }>).map(row => row.box_index)
       )
 
-      // Calculate minimum predicted confidence among unannotated boxes
-      const unannotatedPredictions: number[] = []
-
-      ocrAnnotations.forEach((box, idx) => {
-        // Skip annotated boxes
-        if (annotatedBoxIndices.has(idx)) return
-
-        // Convert fractional coordinates to pixel bounds (top-referenced)
-        const boxLeft = Math.floor(box.x * layoutConfig!.frame_width)
-        const boxBottom = Math.floor((1 - box.y) * layoutConfig!.frame_height)
-        const boxTop = boxBottom - Math.floor(box.height * layoutConfig!.frame_height)
-        const boxRight = boxLeft + Math.floor(box.width * layoutConfig!.frame_width)
-
-        const bounds = { left: boxLeft, top: boxTop, right: boxRight, bottom: boxBottom }
-
-        // Get predicted confidence from Bayesian model (if available, otherwise heuristic)
-        const prediction = predictBoxLabel(bounds, layoutConfig!, db)
-        unannotatedPredictions.push(prediction.confidence)
-      })
+      // Get minimum predicted confidence among unannotated boxes (use cached values)
+      const unannotatedPredictions: number[] = ocrAnnotations
+        .filter(box => !annotatedBoxIndices.has(box.box_index))
+        .map(box => box.predicted_confidence ?? 0.5)  // Use cached prediction or default
 
       const minConfidence = unannotatedPredictions.length > 0
         ? Math.min(...unannotatedPredictions)
         : 1.0  // All boxes annotated - push to end of queue
-
-      console.log(`Frame ${frameIndex}: ${totalBoxCount} total boxes, ${annotatedBoxIndices.size} annotated, ${unannotatedPredictions.length} unannotated, minConfidence=${minConfidence.toFixed(3)}`)
 
       // Check if frame has any box annotations in database
       const hasAnnotations = annotatedBoxIndices.size > 0
@@ -412,7 +219,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
         totalBoxCount,
         captionBoxCount,
         minConfidence,
-        hasAnnotations: hasAnnotations.count > 0,
+        hasAnnotations,
         imageUrl: `/api/full-frames/${encodeURIComponent(videoId)}/${frameIndex}.jpg`
       }
     })
@@ -460,8 +267,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
         horizontalStdIntercept: layoutConfig.horizontal_std_intercept,
         cropBoundsVersion: layoutConfig.crop_bounds_version,
       },
-      layoutComplete,
-      subtitleAnalysisUrl: `/api/images/${encodeURIComponent(videoId)}/caption_layout/subtitle_analysis.png`
+      layoutComplete
     }
 
     db.close()

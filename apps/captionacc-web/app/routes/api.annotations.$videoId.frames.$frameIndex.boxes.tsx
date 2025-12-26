@@ -170,7 +170,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
     if (ocrBoxes.length === 0) {
       db.close()
       return new Response(JSON.stringify({
-        error: `Frame ${frameIndex} not found in OCR data. Run caption_layout analysis first.`
+        error: `Frame ${frameIndex} not found in OCR data. Run full_frames analysis first.`
       }), {
         status: 404,
         headers: { 'Content-Type': 'application/json' }
