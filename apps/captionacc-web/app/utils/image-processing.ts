@@ -37,7 +37,7 @@ export async function generateCombinedImage(
     'local',
     'data',
     ...videoPath.split('/'),
-    'caption_frames'
+    'crop_frames'
   )
 
   if (!existsSync(framesDir)) {
@@ -192,7 +192,7 @@ export async function getOrGenerateCombinedImage(
     'local',
     'data',
     ...videoPath.split('/'),
-    'caption_frames'
+    'crop_frames'
   )
 
   if (!existsSync(framesDir)) {

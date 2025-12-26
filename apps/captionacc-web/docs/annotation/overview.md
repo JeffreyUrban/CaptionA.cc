@@ -190,7 +190,7 @@ interface Frame {
 
 ### Frame Storage
 
-Frames stored at: `/local/data/<video_id>/caption_frames/`
+Frames stored at: `/local/data/<video_id>/crop_frames/`
 
 ### Session State
 

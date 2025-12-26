@@ -1,0 +1,75 @@
+import { type ActionFunctionArgs } from 'react-router'
+import Database from 'better-sqlite3'
+import { resolve } from 'path'
+import { existsSync } from 'fs'
+
+function getDatabase(videoId: string) {
+  const dbPath = resolve(
+    process.cwd(),
+    '..',
+    '..',
+    'local',
+    'data',
+    ...videoId.split('/'),
+    'annotations.db'
+  )
+
+  if (!existsSync(dbPath)) {
+    throw new Error(`Database not found for video: ${videoId}`)
+  }
+
+  return new Database(dbPath)
+}
+
+// POST - Mark layout annotation as complete
+export async function action({ params, request }: ActionFunctionArgs) {
+  const { videoId: encodedVideoId } = params
+
+  if (!encodedVideoId) {
+    return new Response(JSON.stringify({ error: 'Missing videoId' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' }
+    })
+  }
+
+  const videoId = decodeURIComponent(encodedVideoId)
+
+  try {
+    const body = await request.json()
+    const { complete } = body as { complete: boolean }
+
+    const db = getDatabase(videoId)
+
+    // Ensure video_preferences row exists
+    db.prepare(`
+      INSERT OR IGNORE INTO video_preferences (id, layout_complete)
+      VALUES (1, 0)
+    `).run()
+
+    // Update layout_complete flag
+    db.prepare(`
+      UPDATE video_preferences
+      SET layout_complete = ?,
+          updated_at = datetime('now')
+      WHERE id = 1
+    `).run(complete ? 1 : 0)
+
+    db.close()
+
+    return new Response(JSON.stringify({
+      success: true,
+      layoutComplete: complete
+    }), {
+      headers: { 'Content-Type': 'application/json' }
+    })
+
+  } catch (error) {
+    console.error('Error updating layout complete status:', error)
+    return new Response(JSON.stringify({
+      error: error instanceof Error ? error.message : 'Unknown error'
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    })
+  }
+}

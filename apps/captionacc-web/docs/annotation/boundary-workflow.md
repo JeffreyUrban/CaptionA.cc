@@ -338,7 +338,7 @@ Response:
   frames: [
     {
       frame_index: 140,
-      image_url: "/local/data/video_001/caption_frames/frame_0140.png",
+      image_url: "/local/data/video_001/crop_frames/frame_0140.png",
       ocr_text: "Hello, how are you?"  // Not used in boundaries workflow
     },
     ...

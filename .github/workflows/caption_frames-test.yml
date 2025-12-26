@@ -3,7 +3,7 @@ name: Test
 on:
   push:
     paths:
-      - 'data-pipelines/caption_frames/**'
+      - 'data-pipelines/crop_frames/**'
     branches: [main]
   pull_request:
     branches: [main]
