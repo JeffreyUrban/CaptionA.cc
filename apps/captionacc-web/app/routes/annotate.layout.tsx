@@ -271,6 +271,24 @@ export default function AnnotateLayout() {
     void loadQueue(true)
   }, [videoId, loadAnalysisBoxes, loadQueue])
 
+  // Auto-poll when processing is in progress
+  useEffect(() => {
+    if (!error || !error.startsWith('Processing:')) return
+
+    console.log('[Polling] Setting up auto-poll for processing status...')
+
+    const pollInterval = setInterval(() => {
+      console.log('[Polling] Checking processing status...')
+      setError(null)
+      loadQueue(true)
+    }, 3000) // Poll every 3 seconds
+
+    return () => {
+      console.log('[Polling] Cleaning up poll interval')
+      clearInterval(pollInterval)
+    }
+  }, [error, loadQueue])
+
   // Load frame boxes when frame selected
   useEffect(() => {
     if (!videoId || viewMode !== 'frame' || selectedFrameIndex === null) return
