@@ -1,11 +1,7 @@
 import { type LoaderFunctionArgs } from 'react-router'
 import { resolve } from 'path'
 import { existsSync } from 'fs'
-import { exec } from 'child_process'
-import { promisify } from 'util'
-import { readFile, writeFile, mkdir } from 'fs/promises'
-
-const execAsync = promisify(exec)
+import { readFile } from 'fs/promises'
 
 export async function loader({ params }: LoaderFunctionArgs) {
   const { videoId: encodedVideoId, frameIndex } = params
