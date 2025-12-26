@@ -165,6 +165,7 @@ interface TreeRowProps {
   onRenameFolder: (folderPath: string, currentName: string) => void
   onDeleteFolder: (folderPath: string, folderName: string, videoCount: number) => void
   onRenameVideo: (videoPath: string, currentName: string) => void
+  isMounted: boolean
 }
 
 // Calculate aggregate stats for a folder from the stats map
@@ -215,7 +216,7 @@ function calculateFolderStatsFromMap(node: FolderNode, statsMap: Map<string, Vid
   return aggregated
 }
 
-function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsUpdate, onCreateSubfolder, onRenameFolder, onDeleteFolder, onRenameVideo }: TreeRowProps) {
+function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsUpdate, onCreateSubfolder, onRenameFolder, onDeleteFolder, onRenameVideo, isMounted }: TreeRowProps) {
   const [loading, setLoading] = useState(false)
   const isExpanded = expandedPaths.has(node.path)
 
@@ -236,9 +237,17 @@ function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsU
     }
   }, [node, videoStatsMap, onStatsUpdate])
 
-  const stats = node.type === 'video'
-    ? videoStatsMap.get(node.videoId) || null
-    : calculateFolderStatsFromMap(node, videoStatsMap)
+  // Only use stats after client-side mount to avoid hydration mismatch
+  const stats = isMounted
+    ? (node.type === 'video'
+        ? videoStatsMap.get(node.videoId) || null
+        : calculateFolderStatsFromMap(node, videoStatsMap))
+    : null
+
+  // Debug logging for video nodes
+  if (node.type === 'video' && isMounted) {
+    console.log(`[TreeRow] Video ${node.videoId}: stats =`, stats)
+  }
 
   if (node.type === 'folder') {
     return (
@@ -322,7 +331,7 @@ function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsU
                 <span className="sr-only">Open folder options</span>
                 <EllipsisVerticalIcon className="h-5 w-5" aria-hidden="true" />
               </MenuButton>
-              <MenuItems className="absolute right-0 z-10 mt-2 w-56 origin-top-right rounded-md bg-white dark:bg-gray-800 shadow-lg ring-1 ring-black/5 dark:ring-white/10 focus:outline-none">
+              <MenuItems anchor="bottom end" className="z-50 mt-2 w-56 rounded-md bg-white dark:bg-gray-800 shadow-lg ring-1 ring-black/5 dark:ring-white/10 focus:outline-none">
                 <div className="py-1">
                   <MenuItem>
                     <button
@@ -365,6 +374,7 @@ function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsU
             videoStatsMap={videoStatsMap}
             onStatsUpdate={onStatsUpdate}
             onCreateSubfolder={onCreateSubfolder}
+            isMounted={isMounted}
             onRenameFolder={onRenameFolder}
             onDeleteFolder={onDeleteFolder}
             onRenameVideo={onRenameVideo}
@@ -474,15 +484,30 @@ function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsU
             <span className="sr-only">Open options</span>
             <EllipsisVerticalIcon className="h-5 w-5" aria-hidden="true" />
           </MenuButton>
-          <MenuItems className="absolute right-0 z-10 mt-2 w-56 origin-top-right rounded-md bg-white dark:bg-gray-800 shadow-lg ring-1 ring-black/5 dark:ring-white/10 focus:outline-none">
+          <MenuItems anchor="bottom end" className="z-50 mt-2 w-56 rounded-md bg-white dark:bg-gray-800 shadow-lg ring-1 ring-black/5 dark:ring-white/10 focus:outline-none">
             <div className="py-1">
-              <MenuItem>
-                <Link
-                  to={`/annotate/layout?videoId=${encodeURIComponent(videoId)}`}
-                  className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 data-[focus]:bg-gray-100 dark:data-[focus]:bg-gray-700 data-[focus]:text-gray-900 dark:data-[focus]:text-white data-[focus]:outline-none"
-                >
-                  Annotate Layout
-                </Link>
+              <MenuItem disabled={
+                !stats?.hasOcrData ||
+                (stats?.processingStatus && stats.processingStatus.status !== 'processing_complete')
+              }>
+                {({ disabled }) => {
+                  const statusText = stats?.processingStatus?.status
+                    ? `(${stats.processingStatus.status.replace(/_/g, ' ')})`
+                    : !stats?.hasOcrData ? '(no OCR data)' : ''
+
+                  return disabled ? (
+                    <span className="block px-4 py-2 text-sm text-gray-400 dark:text-gray-600 cursor-not-allowed">
+                      Annotate Layout {statusText}
+                    </span>
+                  ) : (
+                    <Link
+                      to={`/annotate/layout?videoId=${encodeURIComponent(videoId)}`}
+                      className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 data-[focus]:bg-gray-100 dark:data-[focus]:bg-gray-700 data-[focus]:text-gray-900 dark:data-[focus]:text-white data-[focus]:outline-none"
+                    >
+                      Annotate Layout
+                    </Link>
+                  )
+                }}
               </MenuItem>
               <MenuItem disabled={!stats?.layoutComplete}>
                 {({ disabled }) => (
@@ -536,7 +561,7 @@ export default function VideosPage() {
   const { tree } = useLoaderData<{ tree: TreeNode[] }>()
   const revalidator = useRevalidator()
   const [searchQuery, setSearchQuery] = useState('')
-  const CACHE_VERSION = 'v3' // Increment to invalidate cache when VideoStats structure changes
+  const CACHE_VERSION = 'v4' // Increment to invalidate cache when VideoStats structure changes
 
   // Modal states
   const [createFolderModal, setCreateFolderModal] = useState<{ open: boolean; parentPath?: string }>({ open: false })
@@ -552,6 +577,7 @@ export default function VideosPage() {
   const [folderLoading, setFolderLoading] = useState(false)
   const [videoError, setVideoError] = useState<string | null>(null)
   const [videoLoading, setVideoLoading] = useState(false)
+  const [isMounted, setIsMounted] = useState(false)
   const [videoStatsMap, setVideoStatsMap] = useState<Map<string, VideoStats>>(() => {
     // Load cached stats from localStorage
     if (typeof window !== 'undefined') {
@@ -582,11 +608,22 @@ export default function VideosPage() {
     return new Set()
   })
 
+  // Detect client-side mount to avoid hydration mismatch
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
+
   // Save stats to localStorage whenever they update
   useEffect(() => {
     if (videoStatsMap.size > 0 && typeof window !== 'undefined') {
-      const cacheObj = Object.fromEntries(videoStatsMap.entries())
-      localStorage.setItem(`video-stats-cache-${CACHE_VERSION}`, JSON.stringify(cacheObj))
+      // Filter out any invalid stats objects (those with error property)
+      const validStats = Array.from(videoStatsMap.entries()).filter(
+        ([_, stats]) => !('error' in stats)
+      )
+      if (validStats.length > 0) {
+        const cacheObj = Object.fromEntries(validStats)
+        localStorage.setItem(`video-stats-cache-${CACHE_VERSION}`, JSON.stringify(cacheObj))
+      }
     }
   }, [videoStatsMap])
 
@@ -598,6 +635,41 @@ export default function VideosPage() {
       return next
     })
   }, [])
+
+  // Poll for stats updates for videos that are processing
+  useEffect(() => {
+    if (!isMounted) return
+
+    // Find videos that are currently processing
+    const processingVideos = Array.from(videoStatsMap.entries())
+      .filter(([_, stats]) =>
+        stats.processingStatus &&
+        stats.processingStatus.status !== 'processing_complete' &&
+        stats.processingStatus.status !== 'error'
+      )
+      .map(([videoId]) => videoId)
+
+    if (processingVideos.length === 0) return
+
+    console.log(`[Videos] Polling ${processingVideos.length} processing videos...`)
+
+    // Poll every 5 seconds
+    const interval = setInterval(() => {
+      processingVideos.forEach(videoId => {
+        fetch(`/api/videos/${encodeURIComponent(videoId)}/stats`)
+          .then(res => res.ok ? res.json() : null)
+          .then(data => {
+            if (data && !data.error) {
+              console.log(`[Videos] Polling update for ${videoId}:`, data.processingStatus?.status)
+              updateVideoStats(videoId, data)
+            }
+          })
+          .catch(err => console.error(`Failed to poll stats for ${videoId}:`, err))
+      })
+    }, 5000)
+
+    return () => clearInterval(interval)
+  }, [isMounted, videoStatsMap, updateVideoStats])
 
   // Eagerly load stats for all videos in the tree
   useEffect(() => {
@@ -634,9 +706,23 @@ export default function VideosPage() {
     videoIds.forEach(videoId => {
       const needsRefresh = touchedVideos.has(videoId)
       if (needsRefresh || !videoStatsMap.has(videoId)) {
+        console.log(`[Videos] Loading stats for ${videoId}...`)
         fetch(`/api/videos/${encodeURIComponent(videoId)}/stats`)
-          .then(res => res.json())
-          .then(data => updateVideoStats(videoId, data))
+          .then(res => {
+            if (!res.ok) {
+              console.error(`[Videos] Stats request failed for ${videoId}: ${res.status}`)
+              return null
+            }
+            return res.json()
+          })
+          .then(data => {
+            if (data && !data.error) {
+              console.log(`[Videos] Stats loaded for ${videoId}:`, data)
+              updateVideoStats(videoId, data)
+            } else {
+              console.error(`[Videos] Stats error for ${videoId}:`, data?.error || 'Unknown error')
+            }
+          })
           .catch(err => console.error(`Failed to load stats for ${videoId}:`, err))
       }
     })
@@ -1031,6 +1117,7 @@ export default function VideosPage() {
                         onToggle={toggleExpand}
                         videoStatsMap={videoStatsMap}
                         onStatsUpdate={updateVideoStats}
+                        isMounted={isMounted}
                         onCreateSubfolder={(parentPath) => {
                           setCreateFolderModal({ open: true, parentPath })
                           setNewFolderName('')

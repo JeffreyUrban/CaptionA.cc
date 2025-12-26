@@ -205,8 +205,8 @@ def analyze(
                 width, height,
                 int(region.crop_left), int(region.crop_top),
                 int(region.crop_right), int(region.crop_bottom),
-                region.vertical_position, region.vertical_position_std,
-                region.box_height, region.box_height_std,
+                region.vertical_position, region.vertical_std,
+                region.box_height, region.height_std,
                 region.anchor_type, region.anchor_position
             ))
             conn.commit()
