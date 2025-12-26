@@ -56,7 +56,7 @@ const framesDir = resolve(
   'local',
   'data',
   ...videoPath.split('/'),
-  'caption_frames'
+  'crop_frames'
 )
 
 const frameFiles = readdirSync(framesDir).filter(f => f.startsWith('frame_') && f.endsWith('.jpg'))

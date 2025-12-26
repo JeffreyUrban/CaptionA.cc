@@ -1,0 +1,288 @@
+import { type LoaderFunctionArgs } from 'react-router'
+import Database from 'better-sqlite3'
+import { resolve } from 'path'
+import { existsSync } from 'fs'
+
+interface FrameOCR {
+  frame_index: number
+  ocr_text: string
+  ocr_annotations: string  // JSON: [[text, conf, [x, y, w, h]], ...]
+  ocr_confidence: number
+}
+
+interface VideoLayoutConfig {
+  id: number
+  frame_width: number
+  frame_height: number
+  crop_left: number
+  crop_top: number
+  crop_right: number
+  crop_bottom: number
+  selection_left: number | null
+  selection_top: number | null
+  selection_right: number | null
+  selection_bottom: number | null
+  vertical_position: number | null
+  vertical_std: number | null
+  box_height: number | null
+  box_height_std: number | null
+  anchor_type: 'left' | 'center' | 'right' | null
+  anchor_position: number | null
+  top_edge_std: number | null
+  bottom_edge_std: number | null
+  horizontal_std_slope: number | null
+  horizontal_std_intercept: number | null
+  crop_bounds_version: number
+}
+
+interface FrameInfo {
+  frameIndex: number
+  totalBoxCount: number
+  captionBoxCount: number  // Estimated using simple heuristics
+  minConfidence: number  // Lowest OCR confidence among all boxes in frame
+  hasAnnotations: boolean
+  imageUrl: string
+}
+
+function getDatabase(videoId: string) {
+  const dbPath = resolve(
+    process.cwd(),
+    '..',
+    '..',
+    'local',
+    'data',
+    ...videoId.split('/'),
+    'annotations.db'
+  )
+
+  if (!existsSync(dbPath)) {
+    throw new Error(`Database not found for video: ${videoId}`)
+  }
+
+  return new Database(dbPath)
+}
+
+/**
+ * Simple heuristic to estimate caption box count.
+ * Uses crop bounds to filter boxes - boxes inside crop region are likely captions.
+ */
+function estimateCaptionBoxCount(
+  ocrAnnotations: any[],
+  frameWidth: number,
+  frameHeight: number,
+  cropBounds: { left: number; top: number; right: number; bottom: number }
+): number {
+  if (!ocrAnnotations || ocrAnnotations.length === 0) {
+    return 0
+  }
+
+  let count = 0
+
+  for (const annotation of ocrAnnotations) {
+    // OCR annotation format: [text, confidence, [x, y, width, height]]
+    // Coordinates are fractional [0-1]
+    // IMPORTANT: y is measured from BOTTOM of image, not top
+    const [_text, _conf, [x, y, width, height]] = annotation
+
+    // Convert fractional to pixels
+    const boxLeft = Math.floor(x * frameWidth)
+    // Convert y from bottom-referenced to top-referenced
+    const boxBottom = Math.floor((1 - y) * frameHeight)
+    const boxTop = boxBottom - Math.floor(height * frameHeight)
+    const boxRight = boxLeft + Math.floor(width * frameWidth)
+
+    // Check if box is inside crop bounds
+    const insideCrop = (
+      boxLeft >= cropBounds.left &&
+      boxTop >= cropBounds.top &&
+      boxRight <= cropBounds.right &&
+      boxBottom <= cropBounds.bottom
+    )
+
+    if (insideCrop) {
+      count++
+    }
+  }
+
+  return count
+}
+
+// GET - Fetch layout annotation queue (frames with high caption box counts)
+export async function loader({ params }: LoaderFunctionArgs) {
+  console.log('=== LAYOUT QUEUE API LOADER CALLED ===', new Date().toISOString())
+  const { videoId: encodedVideoId } = params
+
+  if (!encodedVideoId) {
+    return new Response(JSON.stringify({ error: 'Missing videoId' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' }
+    })
+  }
+
+  const videoId = decodeURIComponent(encodedVideoId)
+
+  try {
+    const db = getDatabase(videoId)
+
+    // Get layout config from database
+    const layoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as VideoLayoutConfig | undefined
+
+    if (!layoutConfig) {
+      db.close()
+      return new Response(JSON.stringify({
+        error: 'Layout config not found. Run full_frames analysis first.'
+      }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' }
+      })
+    }
+
+    // Load frames from full_frame_ocr table
+    const frames = db.prepare(`
+      SELECT DISTINCT frame_index FROM full_frame_ocr ORDER BY frame_index
+    `).all() as Array<{ frame_index: number }>
+
+    if (frames.length === 0) {
+      db.close()
+      return new Response(JSON.stringify({
+        error: 'No OCR data found in database. Run full_frames analysis first.'
+      }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' }
+      })
+    }
+
+    console.log(`Found ${frames.length} frames in full_frame_ocr table`)
+
+    // Calculate caption box count for each frame
+    const frameInfos: FrameInfo[] = frames.map(({ frame_index: frameIndex }) => {
+      // Get all OCR boxes for this frame with cached predictions
+      const ocrAnnotations = db.prepare(`
+        SELECT box_index, text, confidence, x, y, width, height, predicted_confidence
+        FROM full_frame_ocr
+        WHERE frame_index = ?
+        ORDER BY box_index
+      `).all(frameIndex) as Array<{
+        box_index: number
+        text: string
+        confidence: number
+        x: number
+        y: number
+        width: number
+        height: number
+        predicted_confidence: number | null
+      }>
+
+      // Convert to annotation format for estimateCaptionBoxCount
+      const annotationsArray = ocrAnnotations.map(box => [
+        box.text,
+        box.confidence,
+        [box.x, box.y, box.width, box.height]
+      ])
+
+      const totalBoxCount = ocrAnnotations.length
+      const captionBoxCount = estimateCaptionBoxCount(
+        annotationsArray,
+        layoutConfig!.frame_width,
+        layoutConfig!.frame_height,
+        {
+          left: layoutConfig!.crop_left,
+          top: layoutConfig!.crop_top,
+          right: layoutConfig!.crop_right,
+          bottom: layoutConfig!.crop_bottom,
+        }
+      )
+
+      // Get annotated box indices for this frame
+      const annotatedBoxIndices = new Set(
+        (db.prepare(`
+          SELECT box_index
+          FROM full_frame_box_labels
+          WHERE frame_index = ? AND label_source = 'user'
+        `).all(frameIndex) as Array<{ box_index: number }>).map(row => row.box_index)
+      )
+
+      // Get minimum predicted confidence among unannotated boxes (use cached values)
+      const unannotatedPredictions: number[] = ocrAnnotations
+        .filter(box => !annotatedBoxIndices.has(box.box_index))
+        .map(box => box.predicted_confidence ?? 0.5)  // Use cached prediction or default
+
+      const minConfidence = unannotatedPredictions.length > 0
+        ? Math.min(...unannotatedPredictions)
+        : 1.0  // All boxes annotated - push to end of queue
+
+      // Check if frame has any box annotations in database
+      const hasAnnotations = annotatedBoxIndices.size > 0
+
+      return {
+        frameIndex,
+        totalBoxCount,
+        captionBoxCount,
+        minConfidence,
+        hasAnnotations,
+        imageUrl: `/api/full-frames/${encodeURIComponent(videoId)}/${frameIndex}.jpg`
+      }
+    })
+
+    // Sort by minimum confidence (ascending - lowest confidence first) and select top 10
+    const topFrames = frameInfos
+      .sort((a, b) => a.minConfidence - b.minConfidence)
+      .slice(0, 10)
+
+    console.log(`Selected ${topFrames.length} top frames by minConfidence:`, topFrames.map(f => `${f.frameIndex}(${f.minConfidence.toFixed(3)})`).join(', '))
+
+    // Check if layout is marked as complete
+    let layoutComplete = false
+    try {
+      const prefs = db.prepare(`SELECT layout_complete FROM video_preferences WHERE id = 1`).get() as { layout_complete: number } | undefined
+      layoutComplete = (prefs?.layout_complete ?? 0) === 1
+    } catch {
+      // Table or column doesn't exist
+      layoutComplete = false
+    }
+
+    // Prepare response
+    const response = {
+      frames: topFrames,
+      layoutConfig: {
+        frameWidth: layoutConfig.frame_width,
+        frameHeight: layoutConfig.frame_height,
+        cropLeft: layoutConfig.crop_left,
+        cropTop: layoutConfig.crop_top,
+        cropRight: layoutConfig.crop_right,
+        cropBottom: layoutConfig.crop_bottom,
+        selectionLeft: layoutConfig.selection_left,
+        selectionTop: layoutConfig.selection_top,
+        selectionRight: layoutConfig.selection_right,
+        selectionBottom: layoutConfig.selection_bottom,
+        verticalPosition: layoutConfig.vertical_position,
+        verticalStd: layoutConfig.vertical_std,
+        boxHeight: layoutConfig.box_height,
+        boxHeightStd: layoutConfig.box_height_std,
+        anchorType: layoutConfig.anchor_type,
+        anchorPosition: layoutConfig.anchor_position,
+        topEdgeStd: layoutConfig.top_edge_std,
+        bottomEdgeStd: layoutConfig.bottom_edge_std,
+        horizontalStdSlope: layoutConfig.horizontal_std_slope,
+        horizontalStdIntercept: layoutConfig.horizontal_std_intercept,
+        cropBoundsVersion: layoutConfig.crop_bounds_version,
+      },
+      layoutComplete
+    }
+
+    db.close()
+
+    return new Response(JSON.stringify(response), {
+      headers: { 'Content-Type': 'application/json' }
+    })
+
+  } catch (error) {
+    console.error('Error in layout queue API:', error)
+    return new Response(JSON.stringify({
+      error: error instanceof Error ? error.message : 'Unknown error'
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    })
+  }
+}

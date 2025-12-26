@@ -227,7 +227,7 @@ export async function runOCROnFramesV2(
     'local',
     'data',
     ...videoPath.split('/'),
-    'caption_frames'
+    'crop_frames'
   )
 
   console.log(`Looking for frames in: ${framesDir}`)

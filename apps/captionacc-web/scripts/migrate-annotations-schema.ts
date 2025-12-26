@@ -47,6 +47,8 @@ function migrateDatabase(dbPath: string, videoPath: string): boolean {
     // Check if frames_ocr and video_preferences tables exist
     const framesOcrExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='frames_ocr'").get()
     const videoPrefsExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='video_preferences'").get()
+    const ocrBoxAnnotationsExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='ocr_box_annotations'").get()
+    const videoLayoutConfigExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='video_layout_config'").get()
 
     // Check if video_preferences has correct schema (REAL text_size and padding_scale, TEXT text_anchor)
     let videoPrefsHasCorrectSchema = false
@@ -58,7 +60,16 @@ function migrateDatabase(dbPath: string, videoPath: string): boolean {
       videoPrefsHasCorrectSchema = hasTextSize && hasPaddingScale && hasTextAnchor
     }
 
-    if (hasNewSchema && framesOcrExists && videoPrefsExists && videoPrefsHasCorrectSchema) {
+    // Check if frames_ocr has crop_bounds_version column
+    let framesOcrHasCropBoundsVersion = false
+    if (framesOcrExists) {
+      const framesOcrTableInfo = db.prepare("PRAGMA table_info(frames_ocr)").all() as Array<{ name: string }>
+      framesOcrHasCropBoundsVersion = framesOcrTableInfo.some(col => col.name === 'crop_bounds_version')
+    }
+
+    if (hasNewSchema && framesOcrExists && framesOcrHasCropBoundsVersion &&
+        videoPrefsExists && videoPrefsHasCorrectSchema &&
+        ocrBoxAnnotationsExists && videoLayoutConfigExists) {
       console.log(`  ✓ Already migrated: ${videoPath}`)
       db.close()
       return true
@@ -137,8 +148,103 @@ function migrateDatabase(dbPath: string, videoPath: string): boolean {
           ocr_text TEXT,
           ocr_annotations TEXT,
           ocr_confidence REAL,
+          crop_bounds_version INTEGER DEFAULT 1,
           created_at TEXT NOT NULL DEFAULT (datetime('now'))
         )
+      `)
+
+      // Add crop_bounds_version column if frames_ocr exists but missing the column
+      if (framesOcrExists && !framesOcrHasCropBoundsVersion) {
+        console.log('    - Adding crop_bounds_version to frames_ocr...')
+        db.exec(`ALTER TABLE frames_ocr ADD COLUMN crop_bounds_version INTEGER DEFAULT 1`)
+      }
+
+      console.log('    - Creating ocr_box_annotations table...')
+
+      // Create ocr_box_annotations table for box-level user annotations
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS ocr_box_annotations (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          frame_index INTEGER NOT NULL,
+          box_index INTEGER NOT NULL,
+
+          box_text TEXT NOT NULL,
+          box_left INTEGER NOT NULL,
+          box_top INTEGER NOT NULL,
+          box_right INTEGER NOT NULL,
+          box_bottom INTEGER NOT NULL,
+
+          label TEXT NOT NULL CHECK(label IN ('in', 'out')),
+          annotation_source TEXT NOT NULL CHECK(annotation_source IN ('user', 'model')),
+
+          predicted_label TEXT CHECK(predicted_label IN ('in', 'out')),
+          predicted_confidence REAL CHECK(predicted_confidence >= 0.0 AND predicted_confidence <= 1.0),
+          model_version TEXT,
+
+          annotated_at TEXT NOT NULL DEFAULT (datetime('now')),
+
+          FOREIGN KEY (frame_index) REFERENCES frames_ocr(frame_index) ON DELETE CASCADE,
+          UNIQUE(frame_index, box_index)
+        )
+      `)
+
+      // Create indexes for ocr_box_annotations
+      db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_ocr_box_annotations_frame
+        ON ocr_box_annotations(frame_index)
+      `)
+
+      db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_ocr_box_annotations_user
+        ON ocr_box_annotations(annotation_source, annotated_at)
+        WHERE annotation_source = 'user'
+      `)
+
+      db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_ocr_box_annotations_model_version
+        ON ocr_box_annotations(model_version, annotation_source)
+      `)
+
+      console.log('    - Creating video_layout_config table...')
+
+      // Create video_layout_config table for layout parameters and crop bounds
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS video_layout_config (
+          id INTEGER PRIMARY KEY CHECK(id = 1),
+
+          frame_width INTEGER NOT NULL,
+          frame_height INTEGER NOT NULL,
+
+          crop_left INTEGER NOT NULL DEFAULT 0,
+          crop_top INTEGER NOT NULL,
+          crop_right INTEGER NOT NULL,
+          crop_bottom INTEGER NOT NULL,
+
+          selection_left INTEGER,
+          selection_top INTEGER,
+          selection_right INTEGER,
+          selection_bottom INTEGER,
+          selection_mode TEXT NOT NULL DEFAULT 'hard' CHECK(selection_mode IN ('hard', 'soft', 'disabled')),
+
+          vertical_position INTEGER,
+          vertical_std REAL,
+          box_height INTEGER,
+          box_height_std REAL,
+          anchor_type TEXT CHECK(anchor_type IN ('left', 'center', 'right')),
+          anchor_position INTEGER,
+
+          crop_bounds_version INTEGER NOT NULL DEFAULT 1,
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+      `)
+
+      // Note: video_layout_config will be initialized when video is first analyzed
+      // (requires frame dimensions from video)
+
+      // Create index for frames_ocr crop_bounds_version
+      db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_frames_ocr_crop_version
+        ON frames_ocr(crop_bounds_version)
       `)
 
       console.log('    - Creating video_preferences table...')

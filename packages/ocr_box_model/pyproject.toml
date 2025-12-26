@@ -1,0 +1,85 @@
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ocr_box_model"
+dynamic = ["version"]
+description = "OCR bounding box classification model with Bayesian learning"
+readme = "README.md"
+authors = [
+    {name = "Jeffrey Urban"}
+]
+requires-python = ">=3.14"
+keywords = [
+    "ocr",
+    "bounding-boxes",
+    "machine-learning",
+    "bayesian"
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Multimedia :: Video",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Utilities",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.14"
+]
+dependencies = [
+    "caption_models",
+    "numpy>=1.26.0"
+]
+
+[tool.uv.sources]
+caption_models = { workspace = true }
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "ruff>=0.1.9",
+    "pyright>=1.1.0"
+]
+ml = [
+    "scikit-learn>=1.3.0",
+    "joblib>=1.3.0"
+]
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.version.raw-options]
+root = "../.."
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ocr_box_model"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+markers = [
+    "unit: Unit tests for individual components",
+    "integration: Integration tests with models"
+]
+
+[tool.coverage.run]
+source = ["src/ocr_box_model"]
+omit = ["*/tests/*"]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:"
+]
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/ocr_box_model/_version.py"
