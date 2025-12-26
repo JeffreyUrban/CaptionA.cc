@@ -242,6 +242,69 @@ CREATE TABLE IF NOT EXISTS video_preferences (
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Video metadata (one row per video)
+CREATE TABLE IF NOT EXISTS video_metadata (
+    id INTEGER PRIMARY KEY CHECK(id = 1),
+
+    -- Original file info
+    original_filename TEXT NOT NULL,
+    file_size_bytes INTEGER NOT NULL,
+    video_path TEXT NOT NULL,  -- Relative path from data directory (e.g., "show_name/video_name")
+
+    -- Upload info
+    uploaded_at TEXT NOT NULL DEFAULT (datetime('now')),
+    upload_method TEXT CHECK(upload_method IN ('web_upload', 'api_upload', 'manual')),
+
+    -- Video properties (populated after upload)
+    duration_seconds REAL,
+    width INTEGER,
+    height INTEGER,
+    fps REAL,
+    codec TEXT,
+
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Processing status tracking (one row per video)
+CREATE TABLE IF NOT EXISTS processing_status (
+    id INTEGER PRIMARY KEY CHECK(id = 1),
+
+    -- Overall status
+    status TEXT NOT NULL DEFAULT 'uploading' CHECK(status IN (
+        'uploading',           -- File upload in progress
+        'upload_complete',     -- Upload done, queued for processing
+        'extracting_frames',   -- Running full_frames extraction
+        'running_ocr',         -- Running OCR on frames
+        'analyzing_layout',    -- Running layout analysis
+        'processing_complete', -- All processing complete
+        'error'                -- Processing failed
+    )),
+
+    -- Processing progress (0.0 to 1.0)
+    upload_progress REAL DEFAULT 0.0,
+    frame_extraction_progress REAL DEFAULT 0.0,
+    ocr_progress REAL DEFAULT 0.0,
+    layout_analysis_progress REAL DEFAULT 0.0,
+
+    -- Error tracking
+    error_message TEXT,
+    error_details TEXT,  -- JSON with detailed error info
+
+    -- Processing job tracking
+    current_job_id TEXT,  -- Reference to background job if applicable
+
+    -- Timestamps
+    upload_started_at TEXT,
+    upload_completed_at TEXT,
+    processing_started_at TEXT,
+    processing_completed_at TEXT,
+    error_occurred_at TEXT,
+
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 -- Triggers
 
 -- Triggers to update timestamp fields on captions

@@ -14,6 +14,20 @@ export interface VideoStats {
   coveredFrames: number
   hasOcrData: boolean  // Whether video has full_frame_ocr data (enables layout annotation)
   layoutComplete: boolean  // Whether layout annotation is marked as complete
+  processingStatus?: ProcessingStatus  // Upload/processing status (null if not uploaded via web)
+}
+
+export interface ProcessingStatus {
+  status: 'uploading' | 'upload_complete' | 'extracting_frames' | 'running_ocr' | 'analyzing_layout' | 'processing_complete' | 'error'
+  uploadProgress: number
+  frameExtractionProgress: number
+  ocrProgress: number
+  layoutAnalysisProgress: number
+  errorMessage?: string
+  uploadStartedAt?: string
+  uploadCompletedAt?: string
+  processingStartedAt?: string
+  processingCompletedAt?: string
 }
 
 export async function getVideoStats(videoId: string): Promise<VideoStats> {
@@ -69,7 +83,7 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
         SUM(CASE WHEN boundary_state = 'confirmed' THEN 1 ELSE 0 END) as confirmed,
         SUM(CASE WHEN boundary_state = 'predicted' THEN 1 ELSE 0 END) as predicted,
         SUM(CASE WHEN boundary_state = 'gap' THEN 1 ELSE 0 END) as gaps
-      FROM annotations
+      FROM captions
     `).get() as {
       total: number
       pending: number
@@ -78,11 +92,11 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
       gaps: number
     }
 
-    // Calculate frame coverage for non-gap, non-pending annotations
+    // Calculate frame coverage for non-gap, non-pending captions
     const frameCoverage = db.prepare(`
       SELECT
         SUM(end_frame_index - start_frame_index + 1) as covered_frames
-      FROM annotations
+      FROM captions
       WHERE boundary_state != 'gap' AND boundary_pending = 0
     `).get() as { covered_frames: number | null }
 
@@ -112,6 +126,29 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
       layoutComplete = false
     }
 
+    // Get processing status if available
+    let processingStatus: ProcessingStatus | undefined
+    try {
+      const status = db.prepare(`SELECT * FROM processing_status WHERE id = 1`).get() as any
+      if (status) {
+        processingStatus = {
+          status: status.status,
+          uploadProgress: status.upload_progress ?? 0,
+          frameExtractionProgress: status.frame_extraction_progress ?? 0,
+          ocrProgress: status.ocr_progress ?? 0,
+          layoutAnalysisProgress: status.layout_analysis_progress ?? 0,
+          errorMessage: status.error_message,
+          uploadStartedAt: status.upload_started_at,
+          uploadCompletedAt: status.upload_completed_at,
+          processingStartedAt: status.processing_started_at,
+          processingCompletedAt: status.processing_completed_at,
+        }
+      }
+    } catch {
+      // Table doesn't exist (video not uploaded via web)
+      processingStatus = undefined
+    }
+
     return {
       totalAnnotations: result.total,
       pendingReview: result.pending,
@@ -122,7 +159,8 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
       totalFrames,
       coveredFrames,
       hasOcrData,
-      layoutComplete
+      layoutComplete,
+      processingStatus
     }
   } finally {
     db.close()
