@@ -2,6 +2,7 @@ import { type LoaderFunctionArgs } from 'react-router'
 import Database from 'better-sqlite3'
 import { resolve } from 'path'
 import { existsSync } from 'fs'
+import { calculateDistributionParams } from '~/utils/layout-distribution'
 
 interface FrameOCR {
   frame_index: number
@@ -22,13 +23,16 @@ interface VideoLayoutConfig {
   selection_top: number | null
   selection_right: number | null
   selection_bottom: number | null
-  selection_mode: 'hard' | 'soft' | 'disabled'
   vertical_position: number | null
   vertical_std: number | null
   box_height: number | null
   box_height_std: number | null
   anchor_type: 'left' | 'center' | 'right' | null
   anchor_position: number | null
+  top_edge_std: number | null
+  bottom_edge_std: number | null
+  horizontal_std_slope: number | null
+  horizontal_std_intercept: number | null
   crop_bounds_version: number
 }
 
@@ -187,6 +191,70 @@ export async function loader({ params }: LoaderFunctionArgs) {
         }
       }
 
+      // Calculate distribution parameters from caption boxes inside crop bounds
+      // (using heuristic: boxes inside crop bounds are likely captions)
+      const captionBoxes: Array<{
+        left: number
+        top: number
+        right: number
+        bottom: number
+      }> = []
+
+      // Load OCR boxes from database
+      const ocrBoxes = db.prepare(`
+        SELECT frame_index, box_index, text, confidence, x, y, width, height
+        FROM full_frame_ocr
+        ORDER BY frame_index, box_index
+      `).all() as Array<{
+        frame_index: number
+        box_index: number
+        text: string
+        confidence: number
+        x: number
+        y: number
+        width: number
+        height: number
+      }>
+
+      for (const box of ocrBoxes) {
+        // Coordinates are fractional [0-1], y is bottom-referenced
+        const { x, y, width, height } = box
+
+        // Convert to absolute pixel coords (top-referenced)
+        const boxLeft = Math.floor(x * frameWidth)
+        const boxBottom = Math.floor((1 - y) * frameHeight)
+        const boxTop = boxBottom - Math.floor(height * frameHeight)
+        const boxRight = boxLeft + Math.floor(width * frameWidth)
+
+        // Check if box is inside crop bounds
+        const insideCrop =
+          boxLeft >= analysisData.crop_bounds[0] &&
+          boxTop >= analysisData.crop_bounds[1] &&
+          boxRight <= analysisData.crop_bounds[2] &&
+          boxBottom <= analysisData.crop_bounds[3]
+
+        if (insideCrop) {
+          captionBoxes.push({
+            left: boxLeft,
+            top: boxTop,
+            right: boxRight,
+            bottom: boxBottom,
+          })
+        }
+      }
+
+      console.log(`Found ${captionBoxes.length} caption boxes for distribution calculation`)
+
+      // Calculate distribution parameters
+      const distributionParams = calculateDistributionParams(captionBoxes, {
+        anchor_type: analysisData.anchor_type,
+        anchor_position: analysisData.anchor_position,
+        vertical_position: analysisData.vertical_position_mode,
+        box_height: analysisData.height_mode,
+      })
+
+      console.log('Distribution params:', distributionParams)
+
       // Initialize video_layout_config table
       db.prepare(`
         INSERT INTO video_layout_config (
@@ -201,21 +269,24 @@ export async function loader({ params }: LoaderFunctionArgs) {
           selection_top,
           selection_right,
           selection_bottom,
-          selection_mode,
           vertical_position,
           vertical_std,
           box_height,
           box_height_std,
           anchor_type,
           anchor_position,
+          top_edge_std,
+          bottom_edge_std,
+          horizontal_std_slope,
+          horizontal_std_intercept,
           crop_bounds_version
         ) VALUES (
           1,
           ?, ?, ?, ?, ?, ?,
           NULL, NULL, NULL, NULL,
-          'hard',
           ?, ?, ?, ?,
           ?, ?,
+          ?, ?, ?, ?,
           1
         )
       `).run(
@@ -230,55 +301,63 @@ export async function loader({ params }: LoaderFunctionArgs) {
         analysisData.height_mode,
         analysisData.height_std,
         analysisData.anchor_type,
-        analysisData.anchor_position
+        analysisData.anchor_position,
+        distributionParams.top_edge_std,
+        distributionParams.bottom_edge_std,
+        distributionParams.horizontal_std_slope,
+        distributionParams.horizontal_std_intercept
       )
 
-      console.log('Initialized video_layout_config from subtitle_analysis.txt')
+      console.log('Initialized video_layout_config from subtitle_analysis.txt with distribution params')
 
       // Reload config
       layoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as VideoLayoutConfig
     }
 
-    // Load frames from caption_layout OCR.jsonl
-    const captionLayoutPath = resolve(
-      process.cwd(),
-      '..',
-      '..',
-      'local',
-      'data',
-      ...videoId.split('/'),
-      'caption_layout',
-      'OCR.jsonl'
-    )
+    // Load frames from full_frame_ocr table
+    const frames = db.prepare(`
+      SELECT DISTINCT frame_index FROM full_frame_ocr ORDER BY frame_index
+    `).all() as Array<{ frame_index: number }>
 
-    if (!existsSync(captionLayoutPath)) {
+    if (frames.length === 0) {
       db.close()
       return new Response(JSON.stringify({
-        error: 'caption_layout OCR.jsonl not found. Run caption_layout analysis first.'
+        error: 'No OCR data found in database. Run caption_layout analysis first.'
       }), {
         status: 404,
         headers: { 'Content-Type': 'application/json' }
       })
     }
 
-    // Parse OCR.jsonl to get frame indices and annotations
-    const { readFileSync } = await import('fs')
-    const ocrLines = readFileSync(captionLayoutPath, 'utf-8').trim().split('\n')
-
-    console.log(`Found ${ocrLines.length} frames in caption_layout OCR.jsonl`)
+    console.log(`Found ${frames.length} frames in full_frame_ocr table`)
 
     // Calculate caption box count for each frame
-    const frameInfos: FrameInfo[] = ocrLines.map(line => {
-      const ocrData = JSON.parse(line)
+    const frameInfos: FrameInfo[] = frames.map(({ frame_index: frameIndex }) => {
+      // Get all OCR boxes for this frame
+      const ocrAnnotations = db.prepare(`
+        SELECT text, confidence, x, y, width, height
+        FROM full_frame_ocr
+        WHERE frame_index = ?
+        ORDER BY box_index
+      `).all(frameIndex) as Array<{
+        text: string
+        confidence: number
+        x: number
+        y: number
+        width: number
+        height: number
+      }>
 
-      // Extract frame_index from image_path (e.g., "full_frames/frame_0000000100.jpg" → 100)
-      const match = ocrData.image_path.match(/frame_(\d+)\.jpg/)
-      const frameIndex = match ? parseInt(match[1], 10) : 0
+      // Convert to annotation format for estimateCaptionBoxCount
+      const annotationsArray = ocrAnnotations.map(box => [
+        box.text,
+        box.confidence,
+        [box.x, box.y, box.width, box.height]
+      ])
 
-      const ocrAnnotations = ocrData.annotations || []
       const totalBoxCount = ocrAnnotations.length
       const captionBoxCount = estimateCaptionBoxCount(
-        ocrAnnotations,
+        annotationsArray,
         layoutConfig!.frame_width,
         layoutConfig!.frame_height,
         {
@@ -292,8 +371,8 @@ export async function loader({ params }: LoaderFunctionArgs) {
       // Check if frame has any box annotations in database
       const hasAnnotations = db.prepare(`
         SELECT COUNT(*) as count
-        FROM ocr_box_annotations
-        WHERE frame_index = ? AND annotation_source = 'user'
+        FROM full_frame_box_labels
+        WHERE frame_index = ? AND label_source = 'user'
       `).get(frameIndex) as { count: number }
 
       return {
@@ -326,13 +405,16 @@ export async function loader({ params }: LoaderFunctionArgs) {
         selectionTop: layoutConfig.selection_top,
         selectionRight: layoutConfig.selection_right,
         selectionBottom: layoutConfig.selection_bottom,
-        selectionMode: layoutConfig.selection_mode,
         verticalPosition: layoutConfig.vertical_position,
         verticalStd: layoutConfig.vertical_std,
         boxHeight: layoutConfig.box_height,
         boxHeightStd: layoutConfig.box_height_std,
         anchorType: layoutConfig.anchor_type,
         anchorPosition: layoutConfig.anchor_position,
+        topEdgeStd: layoutConfig.top_edge_std,
+        bottomEdgeStd: layoutConfig.bottom_edge_std,
+        horizontalStdSlope: layoutConfig.horizontal_std_slope,
+        horizontalStdIntercept: layoutConfig.horizontal_std_intercept,
         cropBoundsVersion: layoutConfig.crop_bounds_version,
       },
       subtitleAnalysisUrl: `/api/images/${encodeURIComponent(videoId)}/caption_layout/subtitle_analysis.png`

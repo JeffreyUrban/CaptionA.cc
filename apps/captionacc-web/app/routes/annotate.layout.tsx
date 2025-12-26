@@ -22,13 +22,16 @@ interface LayoutConfig {
   selectionTop: number | null
   selectionRight: number | null
   selectionBottom: number | null
-  selectionMode: 'hard' | 'soft' | 'disabled'
   verticalPosition: number | null
   verticalStd: number | null
   boxHeight: number | null
   boxHeightStd: number | null
   anchorType: 'left' | 'center' | 'right' | null
   anchorPosition: number | null
+  topEdgeStd: number | null
+  bottomEdgeStd: number | null
+  horizontalStdSlope: number | null
+  horizontalStdIntercept: number | null
   cropBoundsVersion: number
 }
 
@@ -68,7 +71,6 @@ export default function AnnotateLayout() {
   // Core state
   const [frames, setFrames] = useState<FrameInfo[]>([])
   const [layoutConfig, setLayoutConfig] = useState<LayoutConfig | null>(null)
-  const [subtitleAnalysisUrl, setSubtitleAnalysisUrl] = useState<string>('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -77,6 +79,17 @@ export default function AnnotateLayout() {
   const [selectedFrameIndex, setSelectedFrameIndex] = useState<number | null>(null)
   const [currentFrameBoxes, setCurrentFrameBoxes] = useState<FrameBoxesData | null>(null)
   const [loadingFrame, setLoadingFrame] = useState(false)
+  const [currentVisualizationUrl, setCurrentVisualizationUrl] = useState<string | null>(null)
+
+  // Initialize selectedFrameIndex to first frame when frames load
+  useEffect(() => {
+    if (frames.length > 0 && selectedFrameIndex === null) {
+      const firstFrame = frames[0]
+      if (firstFrame) {
+        setSelectedFrameIndex(firstFrame.frameIndex)
+      }
+    }
+  }, [frames, selectedFrameIndex])
 
   // Canvas state
   const imageRef = useRef<HTMLImageElement>(null)
@@ -88,12 +101,11 @@ export default function AnnotateLayout() {
   const [isSelecting, setIsSelecting] = useState(false)
   const [selectionStart, setSelectionStart] = useState<{ x: number; y: number } | null>(null)
   const [selectionCurrent, setSelectionCurrent] = useState<{ x: number; y: number } | null>(null)
-  const [selectionLabel, setSelectionLabel] = useState<'in' | 'out' | null>(null) // Based on which button started selection
+  const [selectionLabel, setSelectionLabel] = useState<'in' | 'out' | 'clear' | null>(null) // Based on which button started selection
 
   // Layout controls state (local modifications before save)
   const [cropBoundsEdit, setCropBoundsEdit] = useState<{ left: number; top: number; right: number; bottom: number } | null>(null)
   const [selectionRectEdit, setSelectionRectEdit] = useState<{ left: number; top: number; right: number; bottom: number } | null>(null)
-  const [selectionMode, setSelectionMode] = useState<'hard' | 'soft' | 'disabled'>('hard')
   const [layoutParamsEdit, setLayoutParamsEdit] = useState<any>(null)
 
   // Mark video as being worked on
@@ -124,7 +136,6 @@ export default function AnnotateLayout() {
 
         setFrames(data.frames || [])
         setLayoutConfig(data.layoutConfig || null)
-        setSubtitleAnalysisUrl(data.subtitleAnalysisUrl || '')
 
         // Initialize edit state from config
         if (data.layoutConfig) {
@@ -144,7 +155,6 @@ export default function AnnotateLayout() {
                 }
               : null
           )
-          setSelectionMode(data.layoutConfig.selectionMode || 'hard')
           setLayoutParamsEdit({
             verticalPosition: data.layoutConfig.verticalPosition,
             verticalStd: data.layoutConfig.verticalStd,
@@ -203,12 +213,13 @@ export default function AnnotateLayout() {
   const handleThumbnailClick = useCallback((frameIndex: number | 'analysis') => {
     if (frameIndex === 'analysis') {
       setViewMode('analysis')
-      setSelectedFrameIndex(null)
+      // Keep the current frame selected for annotation, or default to first frame
+      setSelectedFrameIndex(prev => prev ?? (frames.length > 0 ? frames[0]?.frameIndex ?? null : null))
     } else {
       setViewMode('frame')
       setSelectedFrameIndex(frameIndex)
     }
-  }, [])
+  }, [frames])
 
   // Handle box annotation (left click = in, right click = out)
   const handleBoxClick = useCallback(async (boxIndex: number, label: 'in' | 'out') => {
@@ -281,7 +292,7 @@ export default function AnnotateLayout() {
 
   // Continuous animation loop for smooth drag visualization
   const drawCanvas = useCallback(() => {
-    if (!canvasRef.current || !imageRef.current || viewMode !== 'frame' || !currentFrameBoxes || canvasSize.width === 0) return
+    if (!canvasRef.current || !imageRef.current || canvasSize.width === 0) return
 
     const canvas = canvasRef.current
     const ctx = canvas.getContext('2d')
@@ -294,11 +305,13 @@ export default function AnnotateLayout() {
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height)
 
-    // Calculate scale factor from original frame to displayed image
-    const scale = canvasSize.width / currentFrameBoxes.frameWidth
+    // Only draw boxes in frame mode
+    if (viewMode === 'frame' && currentFrameBoxes) {
+      // Calculate scale factor from original frame to displayed image
+      const scale = canvasSize.width / currentFrameBoxes.frameWidth
 
-    // Draw boxes using original bounds
-    currentFrameBoxes.boxes.forEach((box, index) => {
+      // Draw boxes using original bounds
+      currentFrameBoxes.boxes.forEach((box, index) => {
       // Convert original pixel bounds to canvas coordinates
       const boxX = box.originalBounds.left * scale
       const boxY = box.originalBounds.top * scale
@@ -342,6 +355,7 @@ export default function AnnotateLayout() {
         ctx.textAlign = 'left'
       }
     })
+    }
 
     // Draw selection rectangle (click-to-start, click-to-end)
     if (isSelecting && selectionStart && selectionCurrent && selectionLabel) {
@@ -350,9 +364,21 @@ export default function AnnotateLayout() {
       const selWidth = Math.abs(selectionCurrent.x - selectionStart.x)
       const selHeight = Math.abs(selectionCurrent.y - selectionStart.y)
 
-      // Color based on selection label (in=green, out=red)
-      const selColor = selectionLabel === 'in' ? '#10b981' : '#ef4444'
-      const selBgColor = selectionLabel === 'in' ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)'
+      // Color based on selection label and view mode
+      // Frame mode: in=green, out=red
+      // Analysis mode: clear=gray, out=red
+      let selColor: string
+      let selBgColor: string
+
+      if (viewMode === 'analysis') {
+        // Analysis mode: left=clear (gray), right=out (red)
+        selColor = selectionLabel === 'clear' ? '#6b7280' : '#ef4444'
+        selBgColor = selectionLabel === 'clear' ? 'rgba(107,114,128,0.15)' : 'rgba(239,68,68,0.15)'
+      } else {
+        // Frame mode: left=in (green), right=out (red)
+        selColor = selectionLabel === 'in' ? '#10b981' : '#ef4444'
+        selBgColor = selectionLabel === 'in' ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)'
+      }
 
       ctx.strokeStyle = selColor
       ctx.fillStyle = selBgColor
@@ -364,7 +390,7 @@ export default function AnnotateLayout() {
 
       ctx.setLineDash([])
     }
-  }, [canvasSize, viewMode, currentFrameBoxes, hoveredBoxIndex, isSelecting, selectionStart, selectionCurrent, selectionLabel])
+  }, [canvasSize, viewMode, currentFrameBoxes, hoveredBoxIndex, isSelecting, selectionStart, selectionCurrent, selectionLabel, selectedFrameIndex])
 
   // Call drawCanvas in an effect when dependencies change
   useEffect(() => {
@@ -388,58 +414,96 @@ export default function AnnotateLayout() {
   }
 
   // Complete selection and annotate boxes
-  const completeSelection = useCallback(() => {
-    if (!isSelecting || !selectionStart || !selectionCurrent || !selectionLabel || !currentFrameBoxes) return
+  const completeSelection = useCallback(async () => {
+    if (!isSelecting || !selectionStart || !selectionCurrent || !selectionLabel) return
 
-    // Calculate selection rectangle
-    const selRect = {
+    // Calculate selection rectangle in canvas coordinates
+    const selRectCanvas = {
       left: Math.min(selectionStart.x, selectionCurrent.x),
       top: Math.min(selectionStart.y, selectionCurrent.y),
       right: Math.max(selectionStart.x, selectionCurrent.x),
       bottom: Math.max(selectionStart.y, selectionCurrent.y),
     }
 
-    const scale = canvasSize.width / currentFrameBoxes.frameWidth
+    if (viewMode === 'analysis') {
+      // Analysis mode: Bulk annotate across ALL 0.1Hz frames
+      if (!layoutConfig) return
 
-    // Find all boxes fully enclosed by selection rectangle
-    const enclosedBoxes: number[] = []
-    currentFrameBoxes.boxes.forEach((box) => {
-      const boxX = box.originalBounds.left * scale
-      const boxY = box.originalBounds.top * scale
-      const boxRight = box.originalBounds.right * scale
-      const boxBottom = box.originalBounds.bottom * scale
+      const scaleX = layoutConfig.frameWidth / canvasSize.width
+      const scaleY = layoutConfig.frameHeight / canvasSize.height
 
-      // Check if box is fully enclosed
-      if (
-        boxX >= selRect.left &&
-        boxY >= selRect.top &&
-        boxRight <= selRect.right &&
-        boxBottom <= selRect.bottom
-      ) {
-        enclosedBoxes.push(box.boxIndex)
+      const rectangleFrameCoords = {
+        left: Math.floor(selRectCanvas.left * scaleX),
+        top: Math.floor(selRectCanvas.top * scaleY),
+        right: Math.floor(selRectCanvas.right * scaleX),
+        bottom: Math.floor(selRectCanvas.bottom * scaleY),
       }
-    })
 
-    // Annotate all enclosed boxes
-    if (enclosedBoxes.length > 0) {
-      const annotations = enclosedBoxes.map(boxIndex => ({ boxIndex, label: selectionLabel }))
+      const action = selectionLabel === 'clear' ? 'clear' : 'mark_out'
 
-      // Save annotations
-      fetch(
-        `/api/annotations/${encodeURIComponent(videoId)}/frames/${currentFrameBoxes.frameIndex}/boxes`,
-        {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ annotations }),
-        }
-      ).then(() => {
-        // Reload frame boxes to get updated colors
-        if (selectedFrameIndex !== null) {
-          fetch(`/api/annotations/${encodeURIComponent(videoId)}/frames/${selectedFrameIndex}/boxes`)
-            .then(res => res.json())
-            .then(data => setCurrentFrameBoxes(data))
+      try {
+        const response = await fetch(
+          `/api/annotations/${encodeURIComponent(videoId)}/bulk-annotate-all`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              rectangle: rectangleFrameCoords,
+              action,
+            }),
+          }
+        )
+
+        const result = await response.json()
+        console.log(`Bulk annotation across all frames: ${result.totalAnnotatedBoxes} boxes in ${result.framesProcessed} frames (${action})`)
+      } catch (err) {
+        console.error('Failed to bulk annotate all frames:', err)
+      }
+    } else if (viewMode === 'frame' && currentFrameBoxes) {
+      // Frame mode: Use individual box annotation API
+      const scale = canvasSize.width / currentFrameBoxes.frameWidth
+
+      // Find all boxes fully enclosed by selection rectangle
+      const enclosedBoxes: number[] = []
+      currentFrameBoxes.boxes.forEach((box) => {
+        const boxX = box.originalBounds.left * scale
+        const boxY = box.originalBounds.top * scale
+        const boxRight = box.originalBounds.right * scale
+        const boxBottom = box.originalBounds.bottom * scale
+
+        // Check if box is fully enclosed
+        if (
+          boxX >= selRectCanvas.left &&
+          boxY >= selRectCanvas.top &&
+          boxRight <= selRectCanvas.right &&
+          boxBottom <= selRectCanvas.bottom
+        ) {
+          enclosedBoxes.push(box.boxIndex)
         }
       })
+
+      // Annotate all enclosed boxes
+      if (enclosedBoxes.length > 0 && (selectionLabel === 'in' || selectionLabel === 'out')) {
+        const annotations = enclosedBoxes.map(boxIndex => ({ boxIndex, label: selectionLabel }))
+
+        try {
+          await fetch(
+            `/api/annotations/${encodeURIComponent(videoId)}/frames/${currentFrameBoxes.frameIndex}/boxes`,
+            {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ annotations }),
+            }
+          )
+
+          // Reload frame boxes to get updated colors
+          const response = await fetch(`/api/annotations/${encodeURIComponent(videoId)}/frames/${selectedFrameIndex}/boxes`)
+          const data = await response.json()
+          setCurrentFrameBoxes(data)
+        } catch (err) {
+          console.error('Failed to save annotations:', err)
+        }
+      }
     }
 
     // Reset selection state
@@ -447,11 +511,11 @@ export default function AnnotateLayout() {
     setSelectionStart(null)
     setSelectionCurrent(null)
     setSelectionLabel(null)
-  }, [isSelecting, selectionStart, selectionCurrent, selectionLabel, currentFrameBoxes, canvasSize, videoId, selectedFrameIndex])
+  }, [isSelecting, selectionStart, selectionCurrent, selectionLabel, currentFrameBoxes, canvasSize, videoId, selectedFrameIndex, viewMode, layoutConfig])
 
   // Handle canvas click - individual box annotation, or start/complete selection
   const handleCanvasClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!currentFrameBoxes || !canvasRef.current || canvasSize.width === 0) return
+    if (!canvasRef.current || canvasSize.width === 0) return
 
     // Only handle left and right button
     if (e.button !== 0 && e.button !== 2) return
@@ -469,9 +533,24 @@ export default function AnnotateLayout() {
 
     if (isSelecting) {
       // Already selecting - second click completes selection
-      completeSelection()
+      void completeSelection()
       return
     }
+
+    // In analysis mode, only do area selection (no individual boxes)
+    if (viewMode === 'analysis') {
+      // Start rectangle selection
+      // Left click = 'clear', Right click = 'out'
+      const label = e.button === 0 ? 'clear' : 'out'
+      setIsSelecting(true)
+      setSelectionStart({ x, y })
+      setSelectionCurrent({ x, y })
+      setSelectionLabel(label)
+      return
+    }
+
+    // Frame mode - unchanged from original behavior
+    if (!currentFrameBoxes) return
 
     // Check if clicking on a box
     const scale = canvasSize.width / currentFrameBoxes.frameWidth
@@ -502,11 +581,11 @@ export default function AnnotateLayout() {
       setSelectionCurrent({ x, y })
       setSelectionLabel(label)
     }
-  }, [currentFrameBoxes, canvasSize, isSelecting, completeSelection, handleBoxClick])
+  }, [currentFrameBoxes, canvasSize, isSelecting, completeSelection, handleBoxClick, viewMode])
 
   // Handle mouse move - update selection rectangle or detect hover
   const handleCanvasMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!currentFrameBoxes || !canvasRef.current || canvasSize.width === 0) return
+    if (!canvasRef.current || canvasSize.width === 0) return
 
     const canvas = canvasRef.current
     const rect = canvas.getBoundingClientRect()
@@ -519,26 +598,31 @@ export default function AnnotateLayout() {
       return
     }
 
-    // Calculate scale factor
-    const scale = canvasSize.width / currentFrameBoxes.frameWidth
+    // Box hover detection only in frame mode
+    if (viewMode === 'frame' && currentFrameBoxes) {
+      // Calculate scale factor
+      const scale = canvasSize.width / currentFrameBoxes.frameWidth
 
-    // Find hovered box using original bounds
-    let foundIndex: number | null = null
-    for (let i = currentFrameBoxes.boxes.length - 1; i >= 0; i--) {
-      const box = currentFrameBoxes.boxes[i]
-      const boxX = box.originalBounds.left * scale
-      const boxY = box.originalBounds.top * scale
-      const boxWidth = (box.originalBounds.right - box.originalBounds.left) * scale
-      const boxHeight = (box.originalBounds.bottom - box.originalBounds.top) * scale
+      // Find hovered box using original bounds
+      let foundIndex: number | null = null
+      for (let i = currentFrameBoxes.boxes.length - 1; i >= 0; i--) {
+        const box = currentFrameBoxes.boxes[i]
+        if (!box) continue
 
-      if (x >= boxX && x <= boxX + boxWidth && y >= boxY && y <= boxY + boxHeight) {
-        foundIndex = i
-        break
+        const boxX = box.originalBounds.left * scale
+        const boxY = box.originalBounds.top * scale
+        const boxWidth = (box.originalBounds.right - box.originalBounds.left) * scale
+        const boxHeight = (box.originalBounds.bottom - box.originalBounds.top) * scale
+
+        if (x >= boxX && x <= boxX + boxWidth && y >= boxY && y <= boxY + boxHeight) {
+          foundIndex = i
+          break
+        }
       }
-    }
 
-    setHoveredBoxIndex(foundIndex)
-  }, [currentFrameBoxes, canvasSize, isSelecting])
+      setHoveredBoxIndex(foundIndex)
+    }
+  }, [currentFrameBoxes, canvasSize, isSelecting, viewMode])
 
   const handleCanvasContextMenu = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     e.preventDefault()
@@ -560,7 +644,10 @@ export default function AnnotateLayout() {
           if (viewMode === 'frame' && selectedFrameIndex !== null) {
             const currentIndex = frames.findIndex(f => f.frameIndex === selectedFrameIndex)
             if (currentIndex > 0) {
-              handleThumbnailClick(frames[currentIndex - 1].frameIndex)
+              const prevFrame = frames[currentIndex - 1]
+              if (prevFrame) {
+                handleThumbnailClick(prevFrame.frameIndex)
+              }
             }
           }
           break
@@ -571,10 +658,16 @@ export default function AnnotateLayout() {
           if (viewMode === 'frame' && selectedFrameIndex !== null) {
             const currentIndex = frames.findIndex(f => f.frameIndex === selectedFrameIndex)
             if (currentIndex < frames.length - 1) {
-              handleThumbnailClick(frames[currentIndex + 1].frameIndex)
+              const nextFrame = frames[currentIndex + 1]
+              if (nextFrame) {
+                handleThumbnailClick(nextFrame.frameIndex)
+              }
             }
           } else if (viewMode === 'analysis' && frames.length > 0) {
-            handleThumbnailClick(frames[0].frameIndex)
+            const firstFrame = frames[0]
+            if (firstFrame) {
+              handleThumbnailClick(firstFrame.frameIndex)
+            }
           }
           break
 
@@ -598,7 +691,7 @@ export default function AnnotateLayout() {
           if (hoveredBoxIndex !== null && currentFrameBoxes) {
             const box = currentFrameBoxes.boxes[hoveredBoxIndex]
             if (box) {
-              handleBoxClick(box.boxIndex, 'in')
+              void handleBoxClick(box.boxIndex, 'in')
             }
           }
           break
@@ -610,7 +703,7 @@ export default function AnnotateLayout() {
           if (hoveredBoxIndex !== null && currentFrameBoxes) {
             const box = currentFrameBoxes.boxes[hoveredBoxIndex]
             if (box) {
-              handleBoxClick(box.boxIndex, 'out')
+              void handleBoxClick(box.boxIndex, 'out')
             }
           }
           break
@@ -623,14 +716,18 @@ export default function AnnotateLayout() {
         case '6':
         case '7':
         case '8':
-        case '9':
+        case '9': {
           e.preventDefault()
           // Quick jump to frame (1-based index)
           const frameNum = parseInt(e.key) - 1
           if (frameNum < frames.length) {
-            handleThumbnailClick(frames[frameNum].frameIndex)
+            const targetFrame = frames[frameNum]
+            if (targetFrame) {
+              handleThumbnailClick(targetFrame.frameIndex)
+            }
           }
           break
+        }
 
         case '0':
           e.preventDefault()
@@ -689,13 +786,24 @@ export default function AnnotateLayout() {
           {/* Left: Canvas (2/3 width) */}
           <div className="flex min-h-0 w-2/3 flex-col gap-4">
             {/* Main canvas */}
-            <div className="relative flex flex-shrink-0 items-center justify-center rounded-lg border border-gray-300 bg-gray-200 dark:border-gray-600 dark:bg-gray-700 p-4">
-              {viewMode === 'analysis' && subtitleAnalysisUrl ? (
-                <img
-                  src={subtitleAnalysisUrl}
-                  alt="Subtitle Analysis"
-                  className="max-w-full max-h-full object-contain"
-                />
+            <div className="relative flex flex-shrink-0 items-center justify-center rounded-lg border border-gray-300 bg-gray-900 dark:border-gray-600 dark:bg-gray-800 p-4">
+              {viewMode === 'analysis' && layoutConfig ? (
+                <div className="relative inline-block max-w-full max-h-full">
+                  <img
+                    ref={imageRef}
+                    src={`data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="${layoutConfig.frameWidth}" height="${layoutConfig.frameHeight}"><rect width="100%" height="100%" fill="black"/></svg>`}
+                    alt="Analysis view"
+                    className="max-w-full max-h-full object-contain"
+                  />
+                  <canvas
+                    ref={canvasRef}
+                    className="absolute left-0 top-0 cursor-crosshair"
+                    style={{ touchAction: 'none' }}
+                    onMouseDown={handleCanvasClick}
+                    onMouseMove={handleCanvasMouseMove}
+                    onContextMenu={handleCanvasContextMenu}
+                  />
+                </div>
               ) : viewMode === 'frame' && currentFrameBoxes ? (
                 <div className="relative inline-block max-w-full max-h-full">
                   <img
@@ -739,11 +847,7 @@ export default function AnnotateLayout() {
                 }`}
               >
                 <div className="aspect-video w-full bg-black">
-                  <img
-                    src={subtitleAnalysisUrl}
-                    alt="Analysis"
-                    className="h-full w-full object-contain"
-                  />
+                  {/* Blank thumbnail for analysis view */}
                 </div>
                 <div className="flex h-11 flex-col items-center justify-center bg-gray-100 px-2 py-1 text-xs text-gray-900 dark:bg-gray-800 dark:text-gray-100">
                   Analysis

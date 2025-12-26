@@ -21,6 +21,11 @@ from .analysis import (
     load_ocr_annotations,
     save_analysis_text,
 )
+from .database import (
+    get_database_path,
+    load_ocr_annotations_from_database,
+    process_frames_to_database,
+)
 from .frames import extract_frames, get_video_dimensions, get_video_duration
 from .ocr import create_ocr_visualization, process_frames_directory
 
@@ -75,9 +80,14 @@ def analyze(
 
     This command runs all pipeline steps in sequence:
     1. Extract frames from video at specified rate
-    2. Run OCR on frames
+    2. Run OCR on frames and write to database (full_frame_ocr table)
     3. Rename frames to match database frame_index (multiply indices by 100)
     4. Analyze subtitle region characteristics
+
+    Database Storage:
+    - OCR results are written directly to annotations.db (full_frame_ocr table)
+    - Database location: {output_dir}/../annotations.db
+    - Example: output_dir=local/data/show/ep/caption_layout → db=local/data/show/ep/annotations.db
 
     Frame Indexing:
     - Database OCR samples at 10Hz (every 0.1 seconds)
@@ -149,9 +159,9 @@ def analyze(
         console.print(f"  [green]✓[/green] Frames saved: {frames_dir}")
         console.print()
 
-        # Step 2: Run OCR
+        # Step 2: Run OCR and write to database
         console.print("[bold]Step 2/3: Running OCR on frames[/bold]")
-        ocr_output = output_dir / "OCR.jsonl"
+        db_path = get_database_path(output_dir)
 
         with Progress(
             SpinnerColumn(),
@@ -161,9 +171,9 @@ def analyze(
             console=console,
         ) as progress:
             task = progress.add_task("  Processing OCR...", total=len(frames))
-            process_frames_directory(
+            total_boxes = process_frames_to_database(
                 frames_dir,
-                ocr_output,
+                db_path,
                 "zh-Hans",
                 progress_callback=lambda current, total: progress.update(
                     task, completed=current
@@ -171,18 +181,33 @@ def analyze(
                 keep_frames=True,
             )
 
-        console.print(f"  [green]✓[/green] OCR results: {ocr_output}")
+        console.print(f"  [green]✓[/green] OCR results: {db_path} ({total_boxes} boxes)")
 
-        # Create OCR visualization
+        # Create OCR visualization from database
         console.print("  Creating OCR visualization...")
         viz_output = output_dir / "OCR.png"
-        create_ocr_visualization(ocr_output, viz_output, width, height)
+        annotations = load_ocr_annotations_from_database(db_path)
+
+        # Create temp JSONL for visualization (visualization expects JSONL path)
+        import json
+        import tempfile
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl', delete=False) as f:
+            temp_jsonl = Path(f.name)
+            for annotation in annotations:
+                json.dump(annotation, f, ensure_ascii=False)
+                f.write('\n')
+
+        try:
+            create_ocr_visualization(temp_jsonl, viz_output, width, height)
+        finally:
+            temp_jsonl.unlink()
+
         console.print(f"  [green]✓[/green] Visualization: {viz_output}")
         console.print()
 
-        # Step 3/3: Analyze region
+        # Step 3/3: Analyze region from database
         console.print("[bold]Step 3/3: Analyzing subtitle region[/bold]")
-        annotations = load_ocr_annotations(ocr_output)
+        annotations = load_ocr_annotations_from_database(db_path)
         region = analyze_subtitle_region(annotations, width, height)
 
         # Save analysis

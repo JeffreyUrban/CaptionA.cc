@@ -202,62 +202,44 @@ export async function loader({ params }: LoaderFunctionArgs) {
       })
     }
 
-    // Load frame OCR from caption_layout/OCR.jsonl
-    const captionLayoutPath = resolve(
-      process.cwd(),
-      '..',
-      '..',
-      'local',
-      'data',
-      ...videoId.split('/'),
-      'caption_layout',
-      'OCR.jsonl'
-    )
+    // Load frame OCR from full_frame_ocr table
+    const ocrBoxes = db.prepare(`
+      SELECT box_index, text, confidence, x, y, width, height
+      FROM full_frame_ocr
+      WHERE frame_index = ?
+      ORDER BY box_index
+    `).all(frameIndex) as Array<{
+      box_index: number
+      text: string
+      confidence: number
+      x: number
+      y: number
+      width: number
+      height: number
+    }>
 
-    if (!existsSync(captionLayoutPath)) {
+    if (ocrBoxes.length === 0) {
       db.close()
       return new Response(JSON.stringify({
-        error: 'caption_layout OCR.jsonl not found. Run caption_layout analysis first.'
+        error: `Frame ${frameIndex} not found in OCR data. Run caption_layout analysis first.`
       }), {
         status: 404,
         headers: { 'Content-Type': 'application/json' }
       })
     }
 
-    // Find the frame in OCR.jsonl
-    const { readFileSync } = await import('fs')
-    const ocrLines = readFileSync(captionLayoutPath, 'utf-8').trim().split('\n')
-    let frameOCRData: any = null
-
-    for (const line of ocrLines) {
-      const ocrData = JSON.parse(line)
-      const match = ocrData.image_path.match(/frame_(\d+)\.jpg/)
-      const idx = match ? parseInt(match[1], 10) : 0
-
-      if (idx === frameIndex) {
-        frameOCRData = ocrData
-        break
-      }
-    }
-
-    if (!frameOCRData) {
-      db.close()
-      return new Response(JSON.stringify({
-        error: `Frame ${frameIndex} not found in caption_layout OCR data`
-      }), {
-        status: 404,
-        headers: { 'Content-Type': 'application/json' }
-      })
-    }
-
-    // Get OCR annotations from caption_layout data
-    const ocrAnnotations = frameOCRData.annotations || []
+    // Convert to annotation format: [text, confidence, [x, y, width, height]]
+    const ocrAnnotations = ocrBoxes.map(box => [
+      box.text,
+      box.confidence,
+      [box.x, box.y, box.width, box.height]
+    ])
 
     // Get user annotations for this frame
     const userAnnotations = db.prepare(`
       SELECT box_index, label
-      FROM ocr_box_annotations
-      WHERE frame_index = ? AND annotation_source = 'user'
+      FROM full_frame_box_labels
+      WHERE frame_index = ? AND label_source = 'user'
     `).all(frameIndex) as Array<{ box_index: number; label: 'in' | 'out' }>
 
     const userAnnotationMap = new Map<number, 'in' | 'out'>()
@@ -386,66 +368,48 @@ export async function action({ params, request }: ActionFunctionArgs) {
       })
     }
 
-    // Load frame OCR from caption_layout/OCR.jsonl
-    const captionLayoutPath = resolve(
-      process.cwd(),
-      '..',
-      '..',
-      'local',
-      'data',
-      ...videoId.split('/'),
-      'caption_layout',
-      'OCR.jsonl'
-    )
+    // Load frame OCR from full_frame_ocr table
+    const ocrBoxes = db.prepare(`
+      SELECT box_index, text, confidence, x, y, width, height
+      FROM full_frame_ocr
+      WHERE frame_index = ?
+      ORDER BY box_index
+    `).all(frameIndex) as Array<{
+      box_index: number
+      text: string
+      confidence: number
+      x: number
+      y: number
+      width: number
+      height: number
+    }>
 
-    if (!existsSync(captionLayoutPath)) {
+    if (ocrBoxes.length === 0) {
       db.close()
       return new Response(JSON.stringify({
-        error: 'caption_layout OCR.jsonl not found'
+        error: `Frame ${frameIndex} not found in OCR data`
       }), {
         status: 404,
         headers: { 'Content-Type': 'application/json' }
       })
     }
 
-    // Find the frame in OCR.jsonl
-    const { readFileSync } = await import('fs')
-    const ocrLines = readFileSync(captionLayoutPath, 'utf-8').trim().split('\n')
-    let frameOCRData: any = null
-
-    for (const line of ocrLines) {
-      const ocrData = JSON.parse(line)
-      const match = ocrData.image_path.match(/frame_(\d+)\.jpg/)
-      const idx = match ? parseInt(match[1], 10) : 0
-
-      if (idx === frameIndex) {
-        frameOCRData = ocrData
-        break
-      }
-    }
-
-    if (!frameOCRData) {
-      db.close()
-      return new Response(JSON.stringify({
-        error: `Frame ${frameIndex} not found in caption_layout OCR data`
-      }), {
-        status: 404,
-        headers: { 'Content-Type': 'application/json' }
-      })
-    }
-
-    // Get OCR annotations from caption_layout data
-    const ocrAnnotations = frameOCRData.annotations || []
+    // Convert to annotation format: [text, confidence, [x, y, width, height]]
+    const ocrAnnotations = ocrBoxes.map(box => [
+      box.text,
+      box.confidence,
+      [box.x, box.y, box.width, box.height]
+    ])
 
     // Prepare insert/update statement
     const upsert = db.prepare(`
-      INSERT INTO ocr_box_annotations (
+      INSERT INTO full_frame_box_labels (
         frame_index, box_index, box_text, box_left, box_top, box_right, box_bottom,
-        label, annotation_source
+        label, label_source
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'user')
       ON CONFLICT(frame_index, box_index) DO UPDATE SET
         label = excluded.label,
-        annotated_at = datetime('now')
+        labeled_at = datetime('now')
     `)
 
     // Save each annotation
