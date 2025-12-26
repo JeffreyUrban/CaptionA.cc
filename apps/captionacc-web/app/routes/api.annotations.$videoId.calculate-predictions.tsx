@@ -1,4 +1,4 @@
-import { type LoaderFunctionArgs } from 'react-router'
+import { type ActionFunctionArgs } from 'react-router'
 import Database from 'better-sqlite3'
 import { resolve } from 'path'
 import { existsSync } from 'fs'
@@ -11,23 +11,12 @@ interface VideoLayoutConfig {
   crop_top: number
   crop_right: number
   crop_bottom: number
-  selection_left: number | null
-  selection_top: number | null
-  selection_right: number | null
-  selection_bottom: number | null
   vertical_position: number | null
   vertical_std: number | null
   box_height: number | null
   box_height_std: number | null
   anchor_type: 'left' | 'center' | 'right' | null
   anchor_position: number | null
-}
-
-interface BoxData {
-  bounds: { left: number; top: number; right: number; bottom: number }
-  predictedLabel: 'in' | 'out'
-  predictedConfidence: number
-  userLabel: 'in' | 'out' | null
 }
 
 function getDatabase(videoId: string) {
@@ -48,8 +37,8 @@ function getDatabase(videoId: string) {
   return new Database(dbPath)
 }
 
-// GET - Fetch all OCR boxes for analysis view
-export async function loader({ params }: LoaderFunctionArgs) {
+// POST - Calculate and cache predictions for all boxes
+export async function action({ params }: ActionFunctionArgs) {
   const { videoId: encodedVideoId } = params
 
   if (!encodedVideoId) {
@@ -75,15 +64,17 @@ export async function loader({ params }: LoaderFunctionArgs) {
       })
     }
 
-    // Fetch all OCR boxes from full_frame_ocr table with predictions
+    // Get model version if available
+    const modelRow = db.prepare('SELECT model_version FROM box_classification_model WHERE id = 1').get() as { model_version: string } | undefined
+    const modelVersion = modelRow?.model_version || 'heuristic_v1'
+
+    // Fetch all OCR boxes
     const boxes = db.prepare(`
       SELECT
         id,
         frame_index,
         box_index,
-        x, y, width, height,
-        predicted_label,
-        predicted_confidence
+        x, y, width, height
       FROM full_frame_ocr
       ORDER BY frame_index, box_index
     `).all() as Array<{
@@ -94,43 +85,27 @@ export async function loader({ params }: LoaderFunctionArgs) {
       y: number
       width: number
       height: number
-      predicted_label: 'in' | 'out' | null
-      predicted_confidence: number | null
     }>
 
-    // Fetch user annotations (full_frame_box_labels)
-    const annotations = db.prepare(`
-      SELECT
-        frame_index,
-        box_index,
-        label
-      FROM full_frame_box_labels
-    `).all() as Array<{
-      frame_index: number
-      box_index: number
-      label: 'in' | 'out'
-    }>
+    console.log(`[Calculate Predictions] Processing ${boxes.length} boxes...`)
 
-    // Create annotation map for fast lookup
-    const annotationMap = new Map<string, 'in' | 'out'>()
-    for (const ann of annotations) {
-      annotationMap.set(`${ann.frame_index}-${ann.box_index}`, ann.label)
-    }
-
-    // Prepare statement to update predictions if missing
-    const updatePredictionStmt = db.prepare(`
+    // Prepare update statement
+    const updateStmt = db.prepare(`
       UPDATE full_frame_ocr
       SET
         predicted_label = ?,
         predicted_confidence = ?,
+        model_version = ?,
         predicted_at = datetime('now')
       WHERE id = ?
     `)
 
-    // Convert to box data with predictions (calculate on-the-fly if missing)
-    const boxesData: BoxData[] = boxes.map((box) => {
+    let processedCount = 0
+    const startTime = Date.now()
+
+    // Calculate and store predictions
+    for (const box of boxes) {
       // Convert fractional coordinates to pixel coordinates
-      // Note: y is from bottom in OCR data
       const left = Math.floor(box.x * layoutConfig.frame_width)
       const bottom = Math.floor((1 - box.y) * layoutConfig.frame_height)
       const boxWidth = Math.floor(box.width * layoutConfig.frame_width)
@@ -140,43 +115,45 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
       const bounds = { left, top, right, bottom }
 
-      // Check for user annotation
-      const userLabel = annotationMap.get(`${box.frame_index}-${box.box_index}`) || null
+      // Get prediction
+      const prediction = predictBoxLabel(bounds, layoutConfig, db)
 
-      // Use stored prediction if available, otherwise calculate and store
-      let predictedLabel: 'in' | 'out'
-      let predictedConfidence: number
+      // Update database
+      updateStmt.run(
+        prediction.label,
+        prediction.confidence,
+        modelVersion,
+        box.id
+      )
 
-      if (box.predicted_label && box.predicted_confidence !== null) {
-        // Use stored prediction
-        predictedLabel = box.predicted_label
-        predictedConfidence = box.predicted_confidence
-      } else {
-        // Calculate prediction on-the-fly
-        const prediction = predictBoxLabel(bounds, layoutConfig, db)
-        predictedLabel = prediction.label
-        predictedConfidence = prediction.confidence
+      processedCount++
 
-        // Store for next time
-        updatePredictionStmt.run(predictedLabel, predictedConfidence, box.id)
+      // Log progress every 1000 boxes
+      if (processedCount % 1000 === 0) {
+        const elapsed = ((Date.now() - startTime) / 1000).toFixed(1)
+        console.log(`[Calculate Predictions] Processed ${processedCount}/${boxes.length} boxes (${elapsed}s)`)
       }
+    }
 
-      return {
-        bounds,
-        predictedLabel,
-        predictedConfidence,
-        userLabel,
-      }
-    })
+    const totalTime = ((Date.now() - startTime) / 1000).toFixed(1)
+    console.log(`[Calculate Predictions] Completed ${processedCount} boxes in ${totalTime}s`)
 
     db.close()
 
-    return new Response(JSON.stringify({ boxes: boxesData }), {
+    return new Response(JSON.stringify({
+      success: true,
+      processedCount,
+      totalTime: parseFloat(totalTime),
+      modelVersion
+    }), {
       headers: { 'Content-Type': 'application/json' }
     })
+
   } catch (error) {
-    console.error('Error fetching layout analysis boxes:', error)
-    return new Response(JSON.stringify({ error: String(error) }), {
+    console.error('Error calculating predictions:', error)
+    return new Response(JSON.stringify({
+      error: error instanceof Error ? error.message : 'Unknown error'
+    }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' }
     })

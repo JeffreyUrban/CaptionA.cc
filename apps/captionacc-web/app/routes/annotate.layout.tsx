@@ -131,8 +131,8 @@ export default function AnnotateLayout() {
 
     console.log(`[Frontend] loadQueue called (showLoading=${showLoading})`)
 
+    // Don't block UI with loading screen
     if (showLoading) {
-      setLoading(true)
       setError(null)
     }
 
@@ -178,9 +178,7 @@ export default function AnnotateLayout() {
             anchorPosition: data.layoutConfig.anchorPosition,
           })
         }
-      }
 
-      if (showLoading) {
         setLoading(false)
       }
     } catch (err) {
@@ -192,12 +190,7 @@ export default function AnnotateLayout() {
     }
   }, [videoId])
 
-  // Load queue on mount
-  useEffect(() => {
-    loadQueue(true)
-  }, [loadQueue])
-
-  // Prefetch frame boxes for all frames in queue
+  // Prefetch frame boxes for all frames in queue (after queue loads)
   useEffect(() => {
     if (!videoId || frames.length === 0) return
 
@@ -254,11 +247,16 @@ export default function AnnotateLayout() {
     }
   }, [videoId])
 
+  // Priority loading on mount: Analysis boxes and queue in parallel
   useEffect(() => {
-    if (viewMode === 'analysis') {
-      loadAnalysisBoxes()
-    }
-  }, [viewMode, loadAnalysisBoxes])
+    if (!videoId) return
+
+    console.log('[Priority] Starting parallel load: analysis boxes + queue...')
+
+    // Load both in parallel (don't await - let them race)
+    void loadAnalysisBoxes()
+    void loadQueue(true)
+  }, [videoId, loadAnalysisBoxes, loadQueue])
 
   // Load frame boxes when frame selected
   useEffect(() => {
@@ -981,18 +979,7 @@ export default function AnnotateLayout() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [viewMode, selectedFrameIndex, frames, hoveredBoxIndex, currentFrameBoxes, isSelecting, handleThumbnailClick, handleBoxClick])
 
-  if (loading) {
-    return (
-      <AppLayout>
-        <div className="flex h-screen items-center justify-center">
-          <div className="text-lg text-gray-500 dark:text-gray-400">
-            Loading layout annotation data...
-          </div>
-        </div>
-      </AppLayout>
-    )
-  }
-
+  // Show error prominently, but don't block UI for loading
   if (error) {
     return (
       <AppLayout>
@@ -1043,6 +1030,11 @@ export default function AnnotateLayout() {
                     onMouseMove={handleCanvasMouseMove}
                     onContextMenu={handleCanvasContextMenu}
                   />
+                  {analysisBoxes === null && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50">
+                      <div className="text-white text-lg">Loading analysis boxes...</div>
+                    </div>
+                  )}
                 </div>
               ) : viewMode === 'frame' && currentFrameBoxes ? (
                 <div className="relative inline-block max-w-full max-h-full">
@@ -1093,6 +1085,13 @@ export default function AnnotateLayout() {
                   Analysis
                 </div>
               </button>
+
+              {/* Loading indicator while frames load */}
+              {loading && frames.length === 0 && (
+                <div className="col-span-full flex items-center justify-center py-8 text-gray-500 dark:text-gray-400">
+                  Loading frames...
+                </div>
+              )}
 
               {/* Frame thumbnails */}
               {frames.map((frame) => (

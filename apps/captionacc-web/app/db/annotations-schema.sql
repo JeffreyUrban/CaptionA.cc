@@ -51,6 +51,12 @@ CREATE TABLE IF NOT EXISTS full_frame_ocr (
     width REAL NOT NULL,
     height REAL NOT NULL,
 
+    -- Predictions (NULL = not yet calculated)
+    predicted_label TEXT CHECK(predicted_label IN ('in', 'out')),
+    predicted_confidence REAL CHECK(predicted_confidence >= 0.0 AND predicted_confidence <= 1.0),
+    model_version TEXT,  -- Which model version generated this prediction
+    predicted_at TEXT,   -- When prediction was calculated
+
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
 
     UNIQUE(frame_index, box_index)
