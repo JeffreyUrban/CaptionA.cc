@@ -3,6 +3,7 @@ import Database from 'better-sqlite3'
 import { resolve } from 'path'
 import { existsSync } from 'fs'
 import { calculateDistributionParams } from '~/utils/layout-distribution'
+import { predictBoxLabel } from '~/utils/box-prediction'
 
 interface FrameOCR {
   frame_index: number
@@ -40,6 +41,7 @@ interface FrameInfo {
   frameIndex: number
   totalBoxCount: number
   captionBoxCount: number  // Estimated using simple heuristics
+  minConfidence: number  // Lowest OCR confidence among all boxes in frame
   hasAnnotations: boolean
   imageUrl: string
 }
@@ -65,7 +67,6 @@ function getDatabase(videoId: string) {
 /**
  * Simple heuristic to estimate caption box count.
  * Uses crop bounds to filter boxes - boxes inside crop region are likely captions.
- * This is a simplified version; full prediction will use the Python model.
  */
 function estimateCaptionBoxCount(
   ocrAnnotations: any[],
@@ -368,28 +369,60 @@ export async function loader({ params }: LoaderFunctionArgs) {
         }
       )
 
+      // Get annotated box indices for this frame
+      const annotatedBoxIndices = new Set(
+        (db.prepare(`
+          SELECT box_index
+          FROM full_frame_box_labels
+          WHERE frame_index = ? AND label_source = 'user'
+        `).all(frameIndex) as Array<{ box_index: number }>).map(row => row.box_index)
+      )
+
+      // Calculate minimum predicted confidence among unannotated boxes
+      const unannotatedPredictions: number[] = []
+
+      ocrAnnotations.forEach((box, idx) => {
+        // Skip annotated boxes
+        if (annotatedBoxIndices.has(idx)) return
+
+        // Convert fractional coordinates to pixel bounds (top-referenced)
+        const boxLeft = Math.floor(box.x * layoutConfig!.frame_width)
+        const boxBottom = Math.floor((1 - box.y) * layoutConfig!.frame_height)
+        const boxTop = boxBottom - Math.floor(box.height * layoutConfig!.frame_height)
+        const boxRight = boxLeft + Math.floor(box.width * layoutConfig!.frame_width)
+
+        const bounds = { left: boxLeft, top: boxTop, right: boxRight, bottom: boxBottom }
+
+        // Get predicted confidence from Bayesian model
+        const prediction = predictBoxLabel(bounds, layoutConfig!)
+        unannotatedPredictions.push(prediction.confidence)
+      })
+
+      const minConfidence = unannotatedPredictions.length > 0
+        ? Math.min(...unannotatedPredictions)
+        : 1.0  // All boxes annotated - push to end of queue
+
+      console.log(`Frame ${frameIndex}: ${totalBoxCount} total boxes, ${annotatedBoxIndices.size} annotated, ${unannotatedPredictions.length} unannotated, minConfidence=${minConfidence.toFixed(3)}`)
+
       // Check if frame has any box annotations in database
-      const hasAnnotations = db.prepare(`
-        SELECT COUNT(*) as count
-        FROM full_frame_box_labels
-        WHERE frame_index = ? AND label_source = 'user'
-      `).get(frameIndex) as { count: number }
+      const hasAnnotations = annotatedBoxIndices.size > 0
 
       return {
         frameIndex,
         totalBoxCount,
         captionBoxCount,
+        minConfidence,
         hasAnnotations: hasAnnotations.count > 0,
         imageUrl: `/api/full-frames/${encodeURIComponent(videoId)}/${frameIndex}.jpg`
       }
     })
 
-    // Sort by caption box count (descending) and select top 10
+    // Sort by minimum confidence (ascending - lowest confidence first) and select top 10
     const topFrames = frameInfos
-      .sort((a, b) => b.captionBoxCount - a.captionBoxCount)
+      .sort((a, b) => a.minConfidence - b.minConfidence)
       .slice(0, 10)
 
-    console.log(`Selected ${topFrames.length} top frames`)
+    console.log(`Selected ${topFrames.length} top frames by minConfidence:`, topFrames.map(f => `${f.frameIndex}(${f.minConfidence.toFixed(3)})`).join(', '))
 
     // Prepare response
     const response = {

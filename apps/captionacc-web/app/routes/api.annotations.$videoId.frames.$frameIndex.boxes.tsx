@@ -2,6 +2,7 @@ import { type LoaderFunctionArgs, type ActionFunctionArgs } from 'react-router'
 import Database from 'better-sqlite3'
 import { resolve } from 'path'
 import { existsSync } from 'fs'
+import { predictBoxLabel } from '~/utils/box-prediction'
 
 interface FrameOCR {
   frame_index: number
@@ -67,59 +68,6 @@ function getDatabase(videoId: string) {
   }
 
   return new Database(dbPath)
-}
-
-/**
- * Simple heuristic prediction for box labels.
- * Full prediction will use Python model with Bayesian priors.
- */
-function predictBoxLabel(
-  boxBounds: { left: number; top: number; right: number; bottom: number },
-  layoutConfig: VideoLayoutConfig
-): { label: 'in' | 'out'; confidence: number } {
-  const { crop_left, crop_top, crop_right, crop_bottom } = layoutConfig
-
-  // Check if box is inside crop bounds
-  const insideCrop = (
-    boxBounds.left >= crop_left &&
-    boxBounds.top >= crop_top &&
-    boxBounds.right <= crop_right &&
-    boxBounds.bottom <= crop_bottom
-  )
-
-  if (!insideCrop) {
-    // Outside crop bounds → definitely "out"
-    return { label: 'out', confidence: 0.95 }
-  }
-
-  // Inside crop bounds - check alignment with layout params
-  if (layoutConfig.vertical_position !== null && layoutConfig.box_height !== null) {
-    const boxCenterY = (boxBounds.top + boxBounds.bottom) / 2
-    const boxHeight = boxBounds.bottom - boxBounds.top
-
-    const verticalDistance = Math.abs(boxCenterY - layoutConfig.vertical_position)
-    const heightDifference = Math.abs(boxHeight - layoutConfig.box_height)
-
-    const verticalStd = layoutConfig.vertical_std || 15
-    const heightStd = layoutConfig.box_height_std || 5
-
-    // Z-scores
-    const verticalZScore = verticalDistance / verticalStd
-    const heightZScore = heightDifference / heightStd
-
-    // Good alignment if within ~2 std deviations
-    if (verticalZScore < 2 && heightZScore < 2) {
-      return { label: 'in', confidence: 0.7 + (1 - Math.min(verticalZScore, 2) / 2) * 0.2 }
-    } else if (verticalZScore > 4 || heightZScore > 4) {
-      return { label: 'out', confidence: 0.7 }
-    } else {
-      // Uncertain
-      return { label: 'in', confidence: 0.5 }
-    }
-  }
-
-  // Default: inside crop → probably caption
-  return { label: 'in', confidence: 0.6 }
 }
 
 /**

@@ -7,6 +7,7 @@ interface FrameInfo {
   frameIndex: number
   totalBoxCount: number
   captionBoxCount: number
+  minConfidence: number
   hasAnnotations: boolean
   imageUrl: string
 }
@@ -121,21 +122,29 @@ export default function AnnotateLayout() {
   }, [videoId])
 
   // Load layout queue (top frames + config)
-  useEffect(() => {
+  const loadQueue = useCallback(async (showLoading = true) => {
     if (!videoId) return
 
-    const loadQueue = async () => {
+    console.log(`[Frontend] loadQueue called (showLoading=${showLoading})`)
+
+    if (showLoading) {
       setLoading(true)
       setError(null)
+    }
 
-      try {
-        const response = await fetch(
-          `/api/annotations/${encodeURIComponent(videoId)}/layout-queue`
-        )
-        if (!response.ok) throw new Error('Failed to load layout queue')
-        const data = await response.json()
+    try {
+      const response = await fetch(
+        `/api/annotations/${encodeURIComponent(videoId)}/layout-queue`
+      )
+      if (!response.ok) throw new Error('Failed to load layout queue')
+      const data = await response.json()
 
-        setFrames(data.frames || [])
+      console.log(`[Frontend] Received ${data.frames?.length || 0} frames:`, data.frames?.map((f: any) => f.frameIndex))
+
+      setFrames(data.frames || [])
+
+      // Only update layout config on initial load
+      if (showLoading) {
         setLayoutConfig(data.layoutConfig || null)
 
         // Initialize edit state from config
@@ -165,17 +174,24 @@ export default function AnnotateLayout() {
             anchorPosition: data.layoutConfig.anchorPosition,
           })
         }
+      }
 
+      if (showLoading) {
         setLoading(false)
-      } catch (err) {
-        console.error('Failed to load layout queue:', err)
+      }
+    } catch (err) {
+      console.error('Failed to load layout queue:', err)
+      if (showLoading) {
         setError((err as Error).message)
         setLoading(false)
       }
     }
-
-    loadQueue()
   }, [videoId])
+
+  // Load queue on mount
+  useEffect(() => {
+    loadQueue(true)
+  }, [loadQueue])
 
   // Load all OCR boxes for analysis view
   const loadAnalysisBoxes = useCallback(async () => {
@@ -230,6 +246,8 @@ export default function AnnotateLayout() {
 
   // Handle thumbnail click
   const handleThumbnailClick = useCallback((frameIndex: number | 'analysis') => {
+    console.log(`[Frontend] Thumbnail clicked: ${frameIndex}`)
+
     if (frameIndex === 'analysis') {
       setViewMode('analysis')
       // Keep the current frame selected for annotation, or default to first frame
@@ -238,7 +256,11 @@ export default function AnnotateLayout() {
       setViewMode('frame')
       setSelectedFrameIndex(frameIndex)
     }
-  }, [frames])
+
+    // Reload queue to update frame priorities based on annotations (background refresh)
+    console.log(`[Frontend] Calling loadQueue(false)`)
+    void loadQueue(false)
+  }, [frames, loadQueue])
 
   // Handle box annotation (left click = in, right click = out)
   const handleBoxClick = useCallback(async (boxIndex: number, label: 'in' | 'out') => {
@@ -1011,7 +1033,7 @@ export default function AnnotateLayout() {
                   <div className="flex h-11 flex-col items-center justify-center bg-gray-100 px-2 py-1 text-xs text-gray-900 dark:bg-gray-800 dark:text-gray-100">
                     Frame {frame.frameIndex}
                     <br />
-                    {frame.captionBoxCount}/{frame.totalBoxCount} boxes
+                    Min conf: {frame.minConfidence?.toFixed(2) ?? 'N/A'}
                   </div>
                 </button>
               ))}
