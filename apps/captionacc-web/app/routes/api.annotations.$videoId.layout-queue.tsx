@@ -124,13 +124,40 @@ export async function loader({ params }: LoaderFunctionArgs) {
   try {
     const db = getDatabase(videoId)
 
+    // Check processing status first
+    const processingStatus = db.prepare('SELECT status FROM processing_status WHERE id = 1').get() as { status: string } | undefined
+
+    if (!processingStatus) {
+      db.close()
+      return new Response(JSON.stringify({
+        error: 'Processing status not found',
+        processingStatus: 'unknown'
+      }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' }
+      })
+    }
+
+    // Block access if processing is not complete
+    if (processingStatus.status !== 'processing_complete') {
+      db.close()
+      return new Response(JSON.stringify({
+        error: 'Video is still processing. Please wait for processing to complete.',
+        processingStatus: processingStatus.status
+      }), {
+        status: 425, // Too Early
+        headers: { 'Content-Type': 'application/json' }
+      })
+    }
+
     // Get layout config from database
     const layoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as VideoLayoutConfig | undefined
 
     if (!layoutConfig) {
       db.close()
       return new Response(JSON.stringify({
-        error: 'Layout config not found. Run full_frames analysis first.'
+        error: 'Layout config not found. Run full_frames analysis first.',
+        processingStatus: processingStatus.status
       }), {
         status: 404,
         headers: { 'Content-Type': 'application/json' }
