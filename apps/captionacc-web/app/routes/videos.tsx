@@ -124,7 +124,9 @@ function calculateFolderStatsFromMap(node: FolderNode, statsMap: Map<string, Vid
     gapAnnotations: 0,
     progress: 0,
     totalFrames: 0,
-    coveredFrames: 0
+    coveredFrames: 0,
+    hasOcrData: false,
+    layoutComplete: false
   }
 
   for (const stats of videoStats) {
@@ -135,6 +137,9 @@ function calculateFolderStatsFromMap(node: FolderNode, statsMap: Map<string, Vid
     aggregated.gapAnnotations += stats.gapAnnotations || 0
     aggregated.totalFrames += stats.totalFrames || 0
     aggregated.coveredFrames += stats.coveredFrames || 0
+    // Aggregate hasOcrData and layoutComplete as "any video has it"
+    aggregated.hasOcrData = aggregated.hasOcrData || stats.hasOcrData
+    aggregated.layoutComplete = aggregated.layoutComplete || stats.layoutComplete
   }
 
   aggregated.progress = aggregated.totalFrames > 0
@@ -343,19 +348,43 @@ function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsU
             <div className="py-1">
               <MenuItem>
                 <Link
-                  to={`/annotate/boundaries?videoId=${encodeURIComponent(videoId)}`}
+                  to={`/annotate/layout?videoId=${encodeURIComponent(videoId)}`}
                   className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 data-[focus]:bg-gray-100 dark:data-[focus]:bg-gray-700 data-[focus]:text-gray-900 dark:data-[focus]:text-white data-[focus]:outline-none"
                 >
-                  Mark Boundaries
+                  Annotate Layout
                 </Link>
               </MenuItem>
-              <MenuItem>
-                <Link
-                  to={`/annotate/text?videoId=${encodeURIComponent(videoId)}`}
-                  className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 data-[focus]:bg-gray-100 dark:data-[focus]:bg-gray-700 data-[focus]:text-gray-900 dark:data-[focus]:text-white data-[focus]:outline-none"
-                >
-                  Annotate Text
-                </Link>
+              <MenuItem disabled={!stats?.layoutComplete}>
+                {({ disabled }) => (
+                  disabled ? (
+                    <span className="block px-4 py-2 text-sm text-gray-400 dark:text-gray-600 cursor-not-allowed">
+                      Mark Boundaries
+                    </span>
+                  ) : (
+                    <Link
+                      to={`/annotate/boundaries?videoId=${encodeURIComponent(videoId)}`}
+                      className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 data-[focus]:bg-gray-100 dark:data-[focus]:bg-gray-700 data-[focus]:text-gray-900 dark:data-[focus]:text-white data-[focus]:outline-none"
+                    >
+                      Mark Boundaries
+                    </Link>
+                  )
+                )}
+              </MenuItem>
+              <MenuItem disabled={!stats?.layoutComplete || stats.totalAnnotations === 0}>
+                {({ disabled }) => (
+                  disabled ? (
+                    <span className="block px-4 py-2 text-sm text-gray-400 dark:text-gray-600 cursor-not-allowed">
+                      Annotate Text
+                    </span>
+                  ) : (
+                    <Link
+                      to={`/annotate/text?videoId=${encodeURIComponent(videoId)}`}
+                      className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 data-[focus]:bg-gray-100 dark:data-[focus]:bg-gray-700 data-[focus]:text-gray-900 dark:data-[focus]:text-white data-[focus]:outline-none"
+                    >
+                      Annotate Text
+                    </Link>
+                  )
+                )}
               </MenuItem>
             </div>
           </MenuItems>
@@ -368,7 +397,7 @@ function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsU
 export default function VideosPage() {
   const { tree } = useLoaderData<{ tree: TreeNode[] }>()
   const [searchQuery, setSearchQuery] = useState('')
-  const CACHE_VERSION = 'v2' // Increment to invalidate cache when VideoStats structure changes
+  const CACHE_VERSION = 'v3' // Increment to invalidate cache when VideoStats structure changes
   const [videoStatsMap, setVideoStatsMap] = useState<Map<string, VideoStats>>(() => {
     // Load cached stats from localStorage
     if (typeof window !== 'undefined') {

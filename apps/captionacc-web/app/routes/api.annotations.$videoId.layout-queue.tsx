@@ -424,6 +424,16 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
     console.log(`Selected ${topFrames.length} top frames by minConfidence:`, topFrames.map(f => `${f.frameIndex}(${f.minConfidence.toFixed(3)})`).join(', '))
 
+    // Check if layout is marked as complete
+    let layoutComplete = false
+    try {
+      const prefs = db.prepare(`SELECT layout_complete FROM video_preferences WHERE id = 1`).get() as { layout_complete: number } | undefined
+      layoutComplete = (prefs?.layout_complete ?? 0) === 1
+    } catch {
+      // Table or column doesn't exist
+      layoutComplete = false
+    }
+
     // Prepare response
     const response = {
       frames: topFrames,
@@ -450,6 +460,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
         horizontalStdIntercept: layoutConfig.horizontal_std_intercept,
         cropBoundsVersion: layoutConfig.crop_bounds_version,
       },
+      layoutComplete,
       subtitleAnalysisUrl: `/api/images/${encodeURIComponent(videoId)}/caption_layout/subtitle_analysis.png`
     }
 

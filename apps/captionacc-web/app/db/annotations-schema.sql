@@ -235,6 +235,13 @@ WHERE label_source = 'user';
 CREATE INDEX IF NOT EXISTS idx_full_frame_box_labels_model_version
 ON full_frame_box_labels(model_version, label_source);
 
+-- Video preferences (one row per video)
+CREATE TABLE IF NOT EXISTS video_preferences (
+    id INTEGER PRIMARY KEY CHECK(id = 1),
+    layout_complete INTEGER NOT NULL DEFAULT 0 CHECK(layout_complete IN (0, 1)),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 -- Triggers
 
 -- Triggers to update timestamp fields on captions

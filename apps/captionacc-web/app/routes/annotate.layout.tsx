@@ -72,6 +72,7 @@ export default function AnnotateLayout() {
   // Core state
   const [frames, setFrames] = useState<FrameInfo[]>([])
   const [layoutConfig, setLayoutConfig] = useState<LayoutConfig | null>(null)
+  const [layoutComplete, setLayoutComplete] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -150,6 +151,7 @@ export default function AnnotateLayout() {
       // Only update layout config on initial load
       if (showLoading) {
         setLayoutConfig(data.layoutConfig || null)
+        setLayoutComplete(data.layoutComplete || false)
 
         // Initialize edit state from config
         if (data.layoutConfig) {
@@ -1145,6 +1147,55 @@ export default function AnnotateLayout() {
                 <li>0 → jump to analysis view</li>
               </ul>
             </div>
+
+            {/* Mark Layout Complete Button */}
+            <button
+              onClick={async () => {
+                if (confirm('Mark layout annotation as complete? This will enable boundary annotation for this video and trigger frame re-cropping.')) {
+                  try {
+                    const response = await fetch(`/api/annotations/${encodeURIComponent(videoId)}/layout-complete`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ complete: true })
+                    })
+                    if (!response.ok) throw new Error('Failed to mark layout complete')
+
+                    // Update local state
+                    setLayoutComplete(true)
+
+                    // Trigger frame re-cropping in background
+                    fetch(`/api/annotations/${encodeURIComponent(videoId)}/recrop-frames`, {
+                      method: 'POST'
+                    }).catch(err => console.error('Frame re-cropping failed:', err))
+
+                    alert('Layout marked as complete! Frame re-cropping started in background. You can now annotate boundaries for this video.')
+                  } catch (err) {
+                    console.error('Error marking layout complete:', err)
+                    alert('Failed to mark layout complete')
+                  }
+                }
+              }}
+              disabled={
+                layoutComplete ||
+                (layoutConfig && cropBoundsEdit &&
+                  layoutConfig.cropLeft === cropBoundsEdit.left &&
+                  layoutConfig.cropTop === cropBoundsEdit.top &&
+                  layoutConfig.cropRight === cropBoundsEdit.right &&
+                  layoutConfig.cropBottom === cropBoundsEdit.bottom)
+              }
+              className={`w-full px-4 py-2 text-sm font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                layoutComplete ||
+                (layoutConfig && cropBoundsEdit &&
+                  layoutConfig.cropLeft === cropBoundsEdit.left &&
+                  layoutConfig.cropTop === cropBoundsEdit.top &&
+                  layoutConfig.cropRight === cropBoundsEdit.right &&
+                  layoutConfig.cropBottom === cropBoundsEdit.bottom)
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed dark:bg-gray-700 dark:text-gray-500'
+                  : 'text-white bg-green-600 hover:bg-green-700 dark:bg-green-600 dark:hover:bg-green-700 focus:ring-green-500'
+              }`}
+            >
+              {layoutComplete ? 'Layout Already Complete' : 'Mark Layout Complete'}
+            </button>
 
             {/* Current view info */}
             {viewMode === 'frame' && currentFrameBoxes && (

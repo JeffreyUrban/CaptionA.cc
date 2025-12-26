@@ -12,6 +12,8 @@ export interface VideoStats {
   progress: number
   totalFrames: number
   coveredFrames: number
+  hasOcrData: boolean  // Whether video has full_frame_ocr data (enables layout annotation)
+  layoutComplete: boolean  // Whether layout annotation is marked as complete
 }
 
 export async function getVideoStats(videoId: string): Promise<VideoStats> {
@@ -51,7 +53,9 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
       gapAnnotations: 0,
       progress: 0,
       totalFrames,
-      coveredFrames: 0
+      coveredFrames: 0,
+      hasOcrData: false,
+      layoutComplete: false
     }
   }
 
@@ -88,6 +92,26 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
       ? Math.round((coveredFrames / totalFrames) * 100)
       : 0
 
+    // Check if video has OCR data (full_frame_ocr table with rows)
+    let hasOcrData = false
+    try {
+      const ocrCount = db.prepare(`SELECT COUNT(*) as count FROM full_frame_ocr LIMIT 1`).get() as { count: number } | undefined
+      hasOcrData = (ocrCount?.count ?? 0) > 0
+    } catch {
+      // Table doesn't exist
+      hasOcrData = false
+    }
+
+    // Check if layout annotation is marked as complete
+    let layoutComplete = false
+    try {
+      const prefs = db.prepare(`SELECT layout_complete FROM video_preferences WHERE id = 1`).get() as { layout_complete: number } | undefined
+      layoutComplete = (prefs?.layout_complete ?? 0) === 1
+    } catch {
+      // Table or column doesn't exist
+      layoutComplete = false
+    }
+
     return {
       totalAnnotations: result.total,
       pendingReview: result.pending,
@@ -96,7 +120,9 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
       gapAnnotations: result.gaps,
       progress,
       totalFrames,
-      coveredFrames
+      coveredFrames,
+      hasOcrData,
+      layoutComplete
     }
   } finally {
     db.close()
