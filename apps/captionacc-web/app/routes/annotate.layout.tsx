@@ -451,6 +451,62 @@ export default function AnnotateLayout() {
         ctx.fillStyle = fillColor
         ctx.fillRect(boxX, boxY, boxWidth, boxHeight)
       })
+
+      // Draw layout parameter overlays
+      // Crop bounds (red, dashed)
+      ctx.strokeStyle = '#ef4444'
+      ctx.lineWidth = 2
+      ctx.setLineDash([15, 5])
+      const cropX = layoutConfig.cropLeft * scale
+      const cropY = layoutConfig.cropTop * scale
+      const cropW = (layoutConfig.cropRight - layoutConfig.cropLeft) * scale
+      const cropH = (layoutConfig.cropBottom - layoutConfig.cropTop) * scale
+      ctx.strokeRect(cropX, cropY, cropW, cropH)
+      ctx.setLineDash([])
+
+      // Selection rectangle (blue, dashed)
+      if (
+        layoutConfig.selectionLeft !== null &&
+        layoutConfig.selectionTop !== null &&
+        layoutConfig.selectionRight !== null &&
+        layoutConfig.selectionBottom !== null
+      ) {
+        ctx.strokeStyle = '#3b82f6'
+        ctx.lineWidth = 3
+        ctx.setLineDash([10, 5])
+        const selX = layoutConfig.selectionLeft * scale
+        const selY = layoutConfig.selectionTop * scale
+        const selW = (layoutConfig.selectionRight - layoutConfig.selectionLeft) * scale
+        const selH = (layoutConfig.selectionBottom - layoutConfig.selectionTop) * scale
+        ctx.strokeRect(selX, selY, selW, selH)
+        ctx.setLineDash([])
+      }
+
+      // Vertical center line (purple, dashed)
+      if (layoutConfig.verticalPosition !== null) {
+        ctx.strokeStyle = '#8b5cf6'
+        ctx.lineWidth = 2
+        ctx.setLineDash([5, 3])
+        const lineY = layoutConfig.verticalPosition * scale
+        ctx.beginPath()
+        ctx.moveTo(0, lineY)
+        ctx.lineTo(canvasSize.width, lineY)
+        ctx.stroke()
+        ctx.setLineDash([])
+      }
+
+      // Anchor line (orange, dashed)
+      if (layoutConfig.anchorType !== null && layoutConfig.anchorPosition !== null) {
+        ctx.strokeStyle = '#f59e0b'
+        ctx.lineWidth = 2
+        ctx.setLineDash([5, 3])
+        const lineX = layoutConfig.anchorPosition * scale
+        ctx.beginPath()
+        ctx.moveTo(lineX, 0)
+        ctx.lineTo(lineX, canvasSize.height)
+        ctx.stroke()
+        ctx.setLineDash([])
+      }
     }
 
     // Draw selection rectangle (click-to-start, click-to-end)
