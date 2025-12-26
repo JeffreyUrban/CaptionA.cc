@@ -1186,7 +1186,7 @@ export default function AnnotateLayout() {
                   key={frame.frameIndex}
                   onClick={() => handleThumbnailClick(frame.frameIndex)}
                   className={`flex w-full flex-col overflow-hidden rounded border-2 ${
-                    selectedFrameIndex === frame.frameIndex
+                    viewMode === 'frame' && selectedFrameIndex === frame.frameIndex
                       ? 'border-teal-600'
                       : 'border-gray-300 dark:border-gray-700'
                   }`}
@@ -1261,25 +1261,24 @@ export default function AnnotateLayout() {
                 }
               }}
               disabled={
-                layoutComplete ||
-                (layoutConfig && cropBoundsEdit &&
+                // Only require edits if layout has already been marked complete
+                layoutComplete && layoutConfig && cropBoundsEdit &&
                   layoutConfig.cropLeft === cropBoundsEdit.left &&
                   layoutConfig.cropTop === cropBoundsEdit.top &&
                   layoutConfig.cropRight === cropBoundsEdit.right &&
-                  layoutConfig.cropBottom === cropBoundsEdit.bottom)
+                  layoutConfig.cropBottom === cropBoundsEdit.bottom
               }
               className={`w-full px-4 py-2 text-sm font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 ${
-                layoutComplete ||
-                (layoutConfig && cropBoundsEdit &&
+                layoutComplete && layoutConfig && cropBoundsEdit &&
                   layoutConfig.cropLeft === cropBoundsEdit.left &&
                   layoutConfig.cropTop === cropBoundsEdit.top &&
                   layoutConfig.cropRight === cropBoundsEdit.right &&
-                  layoutConfig.cropBottom === cropBoundsEdit.bottom)
+                  layoutConfig.cropBottom === cropBoundsEdit.bottom
                   ? 'bg-gray-300 text-gray-500 cursor-not-allowed dark:bg-gray-700 dark:text-gray-500'
                   : 'text-white bg-green-600 hover:bg-green-700 dark:bg-green-600 dark:hover:bg-green-700 focus:ring-green-500'
               }`}
             >
-              {layoutComplete ? 'Layout Already Complete' : 'Mark Layout Complete'}
+              {layoutComplete ? 'Update Layout & Re-crop' : 'Mark Layout Complete'}
             </button>
 
             {/* Current view info */}
