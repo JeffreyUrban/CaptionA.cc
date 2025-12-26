@@ -80,6 +80,7 @@ export default function AnnotateLayout() {
   const [currentFrameBoxes, setCurrentFrameBoxes] = useState<FrameBoxesData | null>(null)
   const [loadingFrame, setLoadingFrame] = useState(false)
   const [currentVisualizationUrl, setCurrentVisualizationUrl] = useState<string | null>(null)
+  const [analysisBoxes, setAnalysisBoxes] = useState<BoxData[] | null>(null)
 
   // Initialize selectedFrameIndex to first frame when frames load
   useEffect(() => {
@@ -175,6 +176,32 @@ export default function AnnotateLayout() {
 
     loadQueue()
   }, [videoId])
+
+  // Load all OCR boxes for analysis view
+  useEffect(() => {
+    if (!videoId || viewMode !== 'analysis') return
+
+    const loadAnalysisBoxes = async () => {
+      try {
+        console.log('Fetching analysis boxes for videoId:', videoId)
+        const response = await fetch(
+          `/api/annotations/${encodeURIComponent(videoId)}/layout-analysis-boxes`
+        )
+        if (!response.ok) {
+          const errorText = await response.text()
+          console.error('Failed to load analysis boxes:', response.status, errorText)
+          throw new Error('Failed to load analysis boxes')
+        }
+        const data = await response.json()
+        console.log('Loaded analysis boxes:', data.boxes?.length || 0, 'boxes')
+        setAnalysisBoxes(data.boxes || [])
+      } catch (error) {
+        console.error('Error loading analysis boxes:', error)
+      }
+    }
+
+    loadAnalysisBoxes()
+  }, [videoId, viewMode])
 
   // Load frame boxes when frame selected
   useEffect(() => {
@@ -275,8 +302,8 @@ export default function AnnotateLayout() {
       }
     }
 
-    if (viewMode === 'frame' && imageRef.current) {
-      // Wait for image to load
+    if (imageRef.current) {
+      // Wait for image to load (for both frame and analysis modes)
       const img = imageRef.current
       if (img.complete) {
         updateCanvasSize()
@@ -288,11 +315,18 @@ export default function AnnotateLayout() {
 
     window.addEventListener('resize', updateCanvasSize)
     return () => window.removeEventListener('resize', updateCanvasSize)
-  }, [viewMode, currentFrameBoxes])
+  }, [viewMode, currentFrameBoxes, layoutConfig])
 
   // Continuous animation loop for smooth drag visualization
   const drawCanvas = useCallback(() => {
-    if (!canvasRef.current || !imageRef.current || canvasSize.width === 0) return
+    if (!canvasRef.current || !imageRef.current || canvasSize.width === 0) {
+      console.log('drawCanvas early return:', {
+        hasCanvas: !!canvasRef.current,
+        hasImage: !!imageRef.current,
+        canvasWidth: canvasSize.width
+      })
+      return
+    }
 
     const canvas = canvasRef.current
     const ctx = canvas.getContext('2d')
@@ -304,6 +338,14 @@ export default function AnnotateLayout() {
 
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+    console.log('drawCanvas called:', {
+      viewMode,
+      hasAnalysisBoxes: !!analysisBoxes,
+      analysisBoxesLength: analysisBoxes?.length,
+      hasLayoutConfig: !!layoutConfig,
+      hasCurrentFrameBoxes: !!currentFrameBoxes
+    })
 
     // Only draw boxes in frame mode
     if (viewMode === 'frame' && currentFrameBoxes) {
@@ -355,6 +397,60 @@ export default function AnnotateLayout() {
         ctx.textAlign = 'left'
       }
     })
+    } else if (viewMode === 'analysis' && analysisBoxes && layoutConfig) {
+      // Analysis mode: Draw all OCR boxes from all frames with additive transparency
+      console.log('Drawing analysis boxes:', analysisBoxes.length, 'boxes, scale:', canvasSize.width / layoutConfig.frameWidth)
+      const scale = canvasSize.width / layoutConfig.frameWidth
+
+      // Draw all boxes with transparency for additive effect
+      analysisBoxes.forEach((box) => {
+        const boxX = box.bounds.left * scale
+        const boxY = box.bounds.top * scale
+        const boxWidth = (box.bounds.right - box.bounds.left) * scale
+        const boxHeight = (box.bounds.bottom - box.bounds.top) * scale
+
+        // Determine color based on user label or prediction (matching frame view palette)
+        let strokeColor: string
+        let fillColor: string
+
+        if (box.userLabel === 'in') {
+          // User annotated as in
+          strokeColor = '#14b8a6' // Teal
+          fillColor = 'rgba(20,184,166,0.05)' // Very transparent for additive effect
+        } else if (box.userLabel === 'out') {
+          // User annotated as out
+          strokeColor = '#dc2626' // Red
+          fillColor = 'rgba(220,38,38,0.05)' // Very transparent for additive effect
+        } else if (box.predictedLabel === 'in') {
+          // Predicted in - use confidence levels
+          if (box.predictedConfidence >= 0.75) {
+            strokeColor = '#10b981' // Green (high confidence)
+            fillColor = 'rgba(16,185,129,0.03)'
+          } else if (box.predictedConfidence >= 0.5) {
+            strokeColor = '#34d399' // Light green (medium confidence)
+            fillColor = 'rgba(52,211,153,0.02)'
+          } else {
+            strokeColor = '#6ee7b7' // Very light green (low confidence)
+            fillColor = 'rgba(110,231,183,0.015)'
+          }
+        } else {
+          // Predicted out - use confidence levels
+          if (box.predictedConfidence >= 0.75) {
+            strokeColor = '#ef4444' // Red (high confidence)
+            fillColor = 'rgba(239,68,68,0.03)'
+          } else if (box.predictedConfidence >= 0.5) {
+            strokeColor = '#f87171' // Light red (medium confidence)
+            fillColor = 'rgba(248,113,113,0.02)'
+          } else {
+            strokeColor = '#fca5a5' // Very light red (low confidence)
+            fillColor = 'rgba(252,165,165,0.015)'
+          }
+        }
+
+        // Draw box as solid fill (no outline)
+        ctx.fillStyle = fillColor
+        ctx.fillRect(boxX, boxY, boxWidth, boxHeight)
+      })
     }
 
     // Draw selection rectangle (click-to-start, click-to-end)
@@ -390,7 +486,7 @@ export default function AnnotateLayout() {
 
       ctx.setLineDash([])
     }
-  }, [canvasSize, viewMode, currentFrameBoxes, hoveredBoxIndex, isSelecting, selectionStart, selectionCurrent, selectionLabel, selectedFrameIndex])
+  }, [canvasSize, viewMode, currentFrameBoxes, analysisBoxes, layoutConfig, hoveredBoxIndex, isSelecting, selectionStart, selectionCurrent, selectionLabel, selectedFrameIndex])
 
   // Call drawCanvas in an effect when dependencies change
   useEffect(() => {
