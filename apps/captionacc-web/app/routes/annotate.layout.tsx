@@ -178,30 +178,30 @@ export default function AnnotateLayout() {
   }, [videoId])
 
   // Load all OCR boxes for analysis view
-  useEffect(() => {
-    if (!videoId || viewMode !== 'analysis') return
+  const loadAnalysisBoxes = useCallback(async () => {
+    if (!videoId) return
 
-    const loadAnalysisBoxes = async () => {
-      try {
-        console.log('Fetching analysis boxes for videoId:', videoId)
-        const response = await fetch(
-          `/api/annotations/${encodeURIComponent(videoId)}/layout-analysis-boxes`
-        )
-        if (!response.ok) {
-          const errorText = await response.text()
-          console.error('Failed to load analysis boxes:', response.status, errorText)
-          throw new Error('Failed to load analysis boxes')
-        }
-        const data = await response.json()
-        console.log('Loaded analysis boxes:', data.boxes?.length || 0, 'boxes')
-        setAnalysisBoxes(data.boxes || [])
-      } catch (error) {
-        console.error('Error loading analysis boxes:', error)
+    try {
+      const response = await fetch(
+        `/api/annotations/${encodeURIComponent(videoId)}/layout-analysis-boxes`
+      )
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('Failed to load analysis boxes:', response.status, errorText)
+        throw new Error('Failed to load analysis boxes')
       }
+      const data = await response.json()
+      setAnalysisBoxes(data.boxes || [])
+    } catch (error) {
+      console.error('Error loading analysis boxes:', error)
     }
+  }, [videoId])
 
-    loadAnalysisBoxes()
-  }, [videoId, viewMode])
+  useEffect(() => {
+    if (viewMode === 'analysis') {
+      loadAnalysisBoxes()
+    }
+  }, [viewMode, loadAnalysisBoxes])
 
   // Load frame boxes when frame selected
   useEffect(() => {
@@ -209,20 +209,12 @@ export default function AnnotateLayout() {
 
     const loadFrameBoxes = async () => {
       setLoadingFrame(true)
-      console.log('Loading boxes for frame:', selectedFrameIndex)
       try {
         const response = await fetch(
           `/api/annotations/${encodeURIComponent(videoId)}/frames/${selectedFrameIndex}/boxes`
         )
         if (!response.ok) throw new Error('Failed to load frame boxes')
         const data = await response.json()
-
-        console.log('Loaded frame boxes:', {
-          requestedFrame: selectedFrameIndex,
-          receivedFrame: data.frameIndex,
-          imageUrl: data.imageUrl,
-          boxCount: data.boxes?.length
-        })
 
         setCurrentFrameBoxes(data)
         setLoadingFrame(false)
@@ -281,8 +273,6 @@ export default function AnnotateLayout() {
       if (!response.ok) {
         throw new Error('Failed to save annotation')
       }
-
-      console.log(`Annotated box ${boxIndex} as ${label}`)
     } catch (err) {
       console.error('Failed to save box annotation:', err)
       // Reload frame to revert optimistic update
@@ -320,11 +310,6 @@ export default function AnnotateLayout() {
   // Continuous animation loop for smooth drag visualization
   const drawCanvas = useCallback(() => {
     if (!canvasRef.current || !imageRef.current || canvasSize.width === 0) {
-      console.log('drawCanvas early return:', {
-        hasCanvas: !!canvasRef.current,
-        hasImage: !!imageRef.current,
-        canvasWidth: canvasSize.width
-      })
       return
     }
 
@@ -338,14 +323,6 @@ export default function AnnotateLayout() {
 
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height)
-
-    console.log('drawCanvas called:', {
-      viewMode,
-      hasAnalysisBoxes: !!analysisBoxes,
-      analysisBoxesLength: analysisBoxes?.length,
-      hasLayoutConfig: !!layoutConfig,
-      hasCurrentFrameBoxes: !!currentFrameBoxes
-    })
 
     // Only draw boxes in frame mode
     if (viewMode === 'frame' && currentFrameBoxes) {
@@ -399,7 +376,6 @@ export default function AnnotateLayout() {
     })
     } else if (viewMode === 'analysis' && analysisBoxes && layoutConfig) {
       // Analysis mode: Draw all OCR boxes from all frames with additive transparency
-      console.log('Drawing analysis boxes:', analysisBoxes.length, 'boxes, scale:', canvasSize.width / layoutConfig.frameWidth)
       const scale = canvasSize.width / layoutConfig.frameWidth
 
       // Draw all boxes with transparency for additive effect
@@ -607,7 +583,15 @@ export default function AnnotateLayout() {
         )
 
         const result = await response.json()
-        console.log(`Bulk annotation across all frames: ${result.totalAnnotatedBoxes} boxes in ${result.framesProcessed} frames (${action})`)
+
+        if (!response.ok || result.error) {
+          console.error('Bulk annotate all failed:', result.error || `HTTP ${response.status}`)
+          console.error('Error details:', result)
+          throw new Error(result.error || 'Failed to bulk annotate')
+        }
+
+        // Reload analysis boxes to reflect the changes
+        await loadAnalysisBoxes()
       } catch (err) {
         console.error('Failed to bulk annotate all frames:', err)
       }

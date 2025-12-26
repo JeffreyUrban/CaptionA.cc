@@ -10,7 +10,7 @@ interface BulkAnnotateRequest {
     right: number
     bottom: number
   }
-  action: 'mark_out' | 'clear'
+  action: 'mark_in' | 'mark_out' | 'clear'
 }
 
 function getDatabase(videoId: string) {
@@ -155,6 +155,60 @@ export async function action({ params, request }: ActionFunctionArgs) {
       }), {
         headers: { 'Content-Type': 'application/json' }
       })
+    } else if (action === 'mark_in') {
+      // Mark boxes as "in" (captions)
+      const stmt = db.prepare(`
+        INSERT INTO full_frame_box_labels (
+          frame_index,
+          box_index,
+          box_text,
+          box_left,
+          box_top,
+          box_right,
+          box_bottom,
+          label,
+          label_source,
+          labeled_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, 'in', 'user', datetime('now'))
+        ON CONFLICT(frame_index, box_index)
+        DO UPDATE SET
+          label = 'in',
+          label_source = 'user',
+          labeled_at = datetime('now')
+      `)
+
+      for (const boxIndex of boxesInRectangle) {
+        // Find the box data
+        const box = ocrBoxes.find(b => b.box_index === boxIndex)
+        if (!box) continue
+
+        // Convert fractional to pixels (top-referenced)
+        const boxLeft = Math.floor(box.x * layoutConfig.frame_width)
+        const boxBottom = Math.floor((1 - box.y) * layoutConfig.frame_height)
+        const boxTop = boxBottom - Math.floor(box.height * layoutConfig.frame_height)
+        const boxRight = boxLeft + Math.floor(box.width * layoutConfig.frame_width)
+
+        stmt.run(
+          frameIndex,
+          boxIndex,
+          box.text,
+          boxLeft,
+          boxTop,
+          boxRight,
+          boxBottom
+        )
+      }
+
+      db.close()
+
+      return new Response(JSON.stringify({
+        success: true,
+        action: 'mark_in',
+        annotatedCount: boxesInRectangle.length,
+        boxIndices: boxesInRectangle
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      })
     } else {
       // action === 'mark_out'
       // Insert or update labels for these boxes
@@ -168,8 +222,9 @@ export async function action({ params, request }: ActionFunctionArgs) {
           box_right,
           box_bottom,
           label,
-          label_source
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, 'out', 'user')
+          label_source,
+          labeled_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, 'out', 'user', datetime('now'))
         ON CONFLICT(frame_index, box_index)
         DO UPDATE SET
           label = 'out',
@@ -212,8 +267,12 @@ export async function action({ params, request }: ActionFunctionArgs) {
     }
   } catch (error) {
     console.error('Error in bulk annotate:', error)
+    if (error instanceof Error) {
+      console.error('Error stack:', error.stack)
+    }
     return new Response(JSON.stringify({
-      error: error instanceof Error ? error.message : 'Unknown error'
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined
     }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' }

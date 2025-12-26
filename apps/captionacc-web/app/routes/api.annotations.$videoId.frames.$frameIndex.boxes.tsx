@@ -405,8 +405,8 @@ export async function action({ params, request }: ActionFunctionArgs) {
     const upsert = db.prepare(`
       INSERT INTO full_frame_box_labels (
         frame_index, box_index, box_text, box_left, box_top, box_right, box_bottom,
-        label, label_source
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'user')
+        label, label_source, labeled_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'user', datetime('now'))
       ON CONFLICT(frame_index, box_index) DO UPDATE SET
         label = excluded.label,
         labeled_at = datetime('now')

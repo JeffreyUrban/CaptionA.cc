@@ -145,8 +145,9 @@ export async function action({ params, request }: ActionFunctionArgs) {
               box_right,
               box_bottom,
               label,
-              label_source
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'out', 'user')
+              label_source,
+              labeled_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'out', 'user', datetime('now'))
             ON CONFLICT(frame_index, box_index)
             DO UPDATE SET
               label = 'out',
@@ -197,8 +198,12 @@ export async function action({ params, request }: ActionFunctionArgs) {
     })
   } catch (error) {
     console.error('Error in bulk annotate all:', error)
+    if (error instanceof Error) {
+      console.error('Error stack:', error.stack)
+    }
     return new Response(JSON.stringify({
-      error: error instanceof Error ? error.message : 'Unknown error'
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined
     }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' }
