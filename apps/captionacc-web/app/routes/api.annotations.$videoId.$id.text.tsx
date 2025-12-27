@@ -60,7 +60,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
     const db = getDatabase(videoId)
 
     // Get annotation
-    const annotation = db.prepare('SELECT * FROM annotations WHERE id = ?').get(annotationId) as Annotation | undefined
+    const annotation = db.prepare('SELECT * FROM captions WHERE id = ?').get(annotationId) as Annotation | undefined
 
     if (!annotation) {
       db.close()
@@ -119,7 +119,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
       // Cache OCR result in database
       console.log('  Saving to database...')
       db.prepare(`
-        UPDATE annotations
+        UPDATE captions
         SET text_ocr_combined = ?
         WHERE id = ?
       `).run(combinedOCRText, annotationId)
@@ -174,7 +174,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
     const { text, text_status, text_notes } = body
 
     db.prepare(`
-      UPDATE annotations
+      UPDATE captions
       SET text = ?,
           text_status = ?,
           text_notes = ?,
@@ -188,7 +188,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
     )
 
     // Get updated annotation
-    const annotation = db.prepare('SELECT * FROM annotations WHERE id = ?').get(annotationId)
+    const annotation = db.prepare('SELECT * FROM captions WHERE id = ?').get(annotationId)
 
     db.close()
 

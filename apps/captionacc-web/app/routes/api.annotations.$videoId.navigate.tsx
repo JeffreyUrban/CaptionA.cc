@@ -58,7 +58,7 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
     const db = getDatabase(videoId)
 
     // Get current annotation's boundary_updated_at for comparison
-    const current = db.prepare('SELECT boundary_updated_at FROM annotations WHERE id = ?').get(currentId) as
+    const current = db.prepare('SELECT boundary_updated_at FROM captions WHERE id = ?').get(currentId) as
       { boundary_updated_at: string } | undefined
 
     if (!current) {
@@ -74,7 +74,7 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
     if (direction === 'prev') {
       // Get previous non-gap annotation (earlier boundary_updated_at, or same boundary_updated_at with lower id)
       annotation = db.prepare(`
-        SELECT * FROM annotations
+        SELECT * FROM captions
         WHERE (boundary_updated_at < ? OR (boundary_updated_at = ? AND id < ?))
         AND boundary_state IN ('predicted', 'confirmed')
         ORDER BY boundary_updated_at DESC, id DESC
@@ -83,7 +83,7 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
     } else {
       // Get next non-gap annotation (later boundary_updated_at, or same boundary_updated_at with higher id)
       annotation = db.prepare(`
-        SELECT * FROM annotations
+        SELECT * FROM captions
         WHERE (boundary_updated_at > ? OR (boundary_updated_at = ? AND id > ?))
         AND boundary_state IN ('predicted', 'confirmed')
         ORDER BY boundary_updated_at ASC, id ASC

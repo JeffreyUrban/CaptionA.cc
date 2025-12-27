@@ -71,7 +71,7 @@ function getOrCreateDatabase(videoId: string) {
       CREATE TRIGGER IF NOT EXISTS update_boundary_timestamp
       AFTER UPDATE OF start_frame_index, end_frame_index, boundary_state, boundary_pending ON annotations
       BEGIN
-        UPDATE annotations
+        UPDATE captions
         SET boundary_updated_at = datetime('now')
         WHERE id = NEW.id;
       END;
@@ -79,7 +79,7 @@ function getOrCreateDatabase(videoId: string) {
       CREATE TRIGGER IF NOT EXISTS update_text_timestamp
       AFTER UPDATE OF text, text_status, text_notes ON annotations
       BEGIN
-        UPDATE annotations
+        UPDATE captions
         SET text_updated_at = datetime('now')
         WHERE id = NEW.id;
       END;
@@ -108,7 +108,7 @@ async function regenerateCombinedImageForAnnotation(
 
   // Clear OCR cache and mark text as pending
   db.prepare(`
-    UPDATE annotations
+    UPDATE captions
     SET text_ocr_combined = NULL,
         text_pending = 1
     WHERE id = ?
@@ -135,7 +135,7 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
 
     // Query annotations that overlap with the requested range
     const annotations = db.prepare(`
-      SELECT * FROM annotations
+      SELECT * FROM captions
       WHERE end_frame_index >= ? AND start_frame_index <= ?
       ORDER BY start_frame_index
     `).all(startFrame, endFrame) as Annotation[]
@@ -177,11 +177,11 @@ export async function action({ params, request }: ActionFunctionArgs) {
       const { id, start_frame_index, end_frame_index, boundary_state, boundary_pending } = body
 
       // Get the original annotation to check if range is being reduced
-      const original = db.prepare('SELECT * FROM annotations WHERE id = ?').get(id) as Annotation
+      const original = db.prepare('SELECT * FROM captions WHERE id = ?').get(id) as Annotation
 
       // Find overlapping annotations (excluding the one being updated)
       const overlapping = db.prepare(`
-        SELECT * FROM annotations
+        SELECT * FROM captions
         WHERE id != ?
         AND NOT (end_frame_index < ? OR start_frame_index > ?)
       `).all(id, start_frame_index, end_frame_index) as Annotation[]
@@ -193,12 +193,12 @@ export async function action({ params, request }: ActionFunctionArgs) {
         if (overlap.start_frame_index >= start_frame_index && overlap.end_frame_index <= end_frame_index) {
           // Completely contained - delete it and its combined image
           deleteCombinedImage(videoId, overlap.id)
-          db.prepare('DELETE FROM annotations WHERE id = ?').run(overlap.id)
+          db.prepare('DELETE FROM captions WHERE id = ?').run(overlap.id)
         } else if (overlap.start_frame_index < start_frame_index && overlap.end_frame_index > end_frame_index) {
           // New annotation is contained within existing - split the existing
           // Keep the left part, set to pending
           db.prepare(`
-            UPDATE annotations
+            UPDATE captions
             SET end_frame_index = ?, boundary_pending = 1
             WHERE id = ?
           `).run(start_frame_index - 1, overlap.id)
@@ -206,14 +206,14 @@ export async function action({ params, request }: ActionFunctionArgs) {
 
           // Create right part as pending
           const result = db.prepare(`
-            INSERT INTO annotations (start_frame_index, end_frame_index, boundary_state, boundary_pending, text)
+            INSERT INTO captions (start_frame_index, end_frame_index, boundary_state, boundary_pending, text)
             VALUES (?, ?, ?, 1, ?)
           `).run(end_frame_index + 1, overlap.end_frame_index, overlap.boundary_state, overlap.text)
           modifiedAnnotations.push({ id: result.lastInsertRowid as number, startFrame: end_frame_index + 1, endFrame: overlap.end_frame_index })
         } else if (overlap.start_frame_index < start_frame_index) {
           // Overlaps on the left - trim it
           db.prepare(`
-            UPDATE annotations
+            UPDATE captions
             SET end_frame_index = ?, boundary_pending = 1
             WHERE id = ?
           `).run(start_frame_index - 1, overlap.id)
@@ -221,7 +221,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
         } else {
           // Overlaps on the right - trim it
           db.prepare(`
-            UPDATE annotations
+            UPDATE captions
             SET start_frame_index = ?, boundary_pending = 1
             WHERE id = ?
           `).run(end_frame_index + 1, overlap.id)
@@ -238,7 +238,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
       const createOrMergeGap = (gapStart: number, gapEnd: number) => {
         // Find adjacent gap annotations
         const adjacentGaps = db.prepare(`
-          SELECT * FROM annotations
+          SELECT * FROM captions
           WHERE boundary_state = 'gap'
           AND (
             end_frame_index = ? - 1
@@ -266,12 +266,12 @@ export async function action({ params, request }: ActionFunctionArgs) {
 
         // Delete adjacent gaps that will be merged
         for (const gapId of gapIdsToDelete) {
-          db.prepare('DELETE FROM annotations WHERE id = ?').run(gapId)
+          db.prepare('DELETE FROM captions WHERE id = ?').run(gapId)
         }
 
         // Create merged gap annotation
         db.prepare(`
-          INSERT INTO annotations (start_frame_index, end_frame_index, boundary_state, boundary_pending)
+          INSERT INTO captions (start_frame_index, end_frame_index, boundary_state, boundary_pending)
           VALUES (?, ?, 'gap', 0)
         `).run(mergedStart, mergedEnd)
       }
@@ -289,7 +289,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
 
       // Update the annotation and mark as confirmed
       db.prepare(`
-        UPDATE annotations
+        UPDATE captions
         SET start_frame_index = ?,
             end_frame_index = ?,
             boundary_state = ?,
@@ -302,7 +302,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
         await regenerateCombinedImageForAnnotation(videoId, id, start_frame_index, end_frame_index, db)
       }
 
-      const annotation = db.prepare('SELECT * FROM annotations WHERE id = ?').get(id)
+      const annotation = db.prepare('SELECT * FROM captions WHERE id = ?').get(id)
       db.close()
 
       return new Response(JSON.stringify({ annotation }), {
@@ -313,7 +313,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
       const { start_frame_index, end_frame_index, boundary_state, boundary_pending, text } = body
 
       const result = db.prepare(`
-        INSERT INTO annotations (start_frame_index, end_frame_index, boundary_state, boundary_pending, text)
+        INSERT INTO captions (start_frame_index, end_frame_index, boundary_state, boundary_pending, text)
         VALUES (?, ?, ?, ?, ?)
       `).run(start_frame_index, end_frame_index, boundary_state, boundary_pending ? 1 : 0, text || null)
 
@@ -327,7 +327,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
         await getOrGenerateCombinedImage(videoId, annotationId, start_frame_index, end_frame_index)
       }
 
-      const annotation = db.prepare('SELECT * FROM annotations WHERE id = ?').get(annotationId)
+      const annotation = db.prepare('SELECT * FROM captions WHERE id = ?').get(annotationId)
       db.close()
 
       return new Response(JSON.stringify({ annotation }), {

@@ -40,7 +40,7 @@ export async function action({ params }: ActionFunctionArgs) {
     const db = getDatabase(videoId)
 
     // Get the annotation to delete
-    const annotation = db.prepare('SELECT * FROM annotations WHERE id = ?').get(annotationId) as {
+    const annotation = db.prepare('SELECT * FROM captions WHERE id = ?').get(annotationId) as {
       id: number
       start_frame_index: number
       end_frame_index: number
@@ -58,7 +58,7 @@ export async function action({ params }: ActionFunctionArgs) {
 
     // Find adjacent gap annotations
     const adjacentGaps = db.prepare(`
-      SELECT * FROM annotations
+      SELECT * FROM captions
       WHERE boundary_state = 'gap'
       AND (
         end_frame_index = ? - 1
@@ -91,20 +91,20 @@ export async function action({ params }: ActionFunctionArgs) {
 
     // Delete the annotation and its combined image
     deleteCombinedImage(videoId, annotationId)
-    db.prepare('DELETE FROM annotations WHERE id = ?').run(annotationId)
+    db.prepare('DELETE FROM captions WHERE id = ?').run(annotationId)
 
     // Delete adjacent gaps (gaps don't have combined images, so no cleanup needed)
     for (const gapId of gapIdsToDelete) {
-      db.prepare('DELETE FROM annotations WHERE id = ?').run(gapId)
+      db.prepare('DELETE FROM captions WHERE id = ?').run(gapId)
     }
 
     // Create merged gap annotation
     const result = db.prepare(`
-      INSERT INTO annotations (start_frame_index, end_frame_index, boundary_state, boundary_pending)
+      INSERT INTO captions (start_frame_index, end_frame_index, boundary_state, boundary_pending)
       VALUES (?, ?, 'gap', 0)
     `).run(mergedStart, mergedEnd)
 
-    const mergedGap = db.prepare('SELECT * FROM annotations WHERE id = ?').get(result.lastInsertRowid)
+    const mergedGap = db.prepare('SELECT * FROM captions WHERE id = ?').get(result.lastInsertRowid)
 
     db.close()
 

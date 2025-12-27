@@ -152,7 +152,7 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
         SUM(CASE WHEN boundary_state = 'confirmed' THEN 1 ELSE 0 END) as confirmed,
         SUM(CASE WHEN boundary_state = 'predicted' THEN 1 ELSE 0 END) as predicted,
         SUM(CASE WHEN boundary_state = 'gap' THEN 1 ELSE 0 END) as gaps
-      FROM annotations
+      FROM captions
     `).get() as {
       total: number
       pending: number
@@ -165,7 +165,7 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
     const frameCoverage = db.prepare(`
       SELECT
         SUM(end_frame_index - start_frame_index + 1) as covered_frames
-      FROM annotations
+      FROM captions
       WHERE boundary_state != 'gap' AND boundary_pending = 0
     `).get() as { covered_frames: number | null }
 
