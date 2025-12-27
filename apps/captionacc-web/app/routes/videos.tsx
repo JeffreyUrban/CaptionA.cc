@@ -180,7 +180,7 @@ function calculateFolderStatsFromMap(node: FolderNode, statsMap: Map<string, Vid
   }
 
   const videoIds = collectVideoIds(node)
-  const videoStats = videoIds.map(id => statsMap.get(id)).filter((s): s is VideoStats => s !== undefined)
+  const videoStats = videoIds.map(id => statsMap.get(id)).filter((s): s is VideoStats => s != null)
 
   if (videoStats.length === 0) return null
 
@@ -341,6 +341,14 @@ function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsU
                     >
                       New subfolder...
                     </button>
+                  </MenuItem>
+                  <MenuItem>
+                    <Link
+                      to={`/upload?folder=${encodeURIComponent(node.path)}`}
+                      className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 data-[focus]:bg-gray-100 dark:data-[focus]:bg-gray-700 data-[focus]:text-gray-900 dark:data-[focus]:text-white data-[focus]:outline-none"
+                    >
+                      Upload to folder...
+                    </Link>
                   </MenuItem>
                   <MenuItem>
                     <button
@@ -572,7 +580,7 @@ export default function VideosPage() {
   const { tree } = useLoaderData<{ tree: TreeNode[] }>()
   const revalidator = useRevalidator()
   const [searchQuery, setSearchQuery] = useState('')
-  const CACHE_VERSION = 'v4' // Increment to invalidate cache when VideoStats structure changes
+  const CACHE_VERSION = 'v5' // Increment to invalidate cache when VideoStats structure changes
 
   // Modal states
   const [createFolderModal, setCreateFolderModal] = useState<{ open: boolean; parentPath?: string }>({ open: false })

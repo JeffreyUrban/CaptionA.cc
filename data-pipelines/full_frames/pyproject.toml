@@ -13,6 +13,7 @@ dependencies = [
     "video_utils",
     "ocr_utils",
     "caption_models",
+    "frames_db",
     "opencv-python>=4.10.0",
 ]
 
@@ -101,3 +102,4 @@ version-file = "src/full_frames/_version.py"
 video_utils = { workspace = true }
 ocr_utils = { workspace = true }
 caption_models = { workspace = true }
+frames_db = { workspace = true }
