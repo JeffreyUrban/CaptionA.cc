@@ -1,7 +1,6 @@
 import { type LoaderFunctionArgs } from 'react-router'
 import { resolve } from 'path'
-import { readFile } from 'fs/promises'
-import { existsSync } from 'fs'
+import Database from 'better-sqlite3'
 
 export async function loader({ params }: LoaderFunctionArgs) {
   const { videoId: encodedVideoId, frameIndex } = params
@@ -13,34 +12,46 @@ export async function loader({ params }: LoaderFunctionArgs) {
   // Decode the URL-encoded videoId
   const videoId = decodeURIComponent(encodedVideoId)
 
-  // Convert frameIndex to 10-digit padded string
-  const paddedIndex = frameIndex.padStart(10, '0')
+  // Parse frame index
+  const frameIdx = parseInt(frameIndex, 10)
+  if (isNaN(frameIdx)) {
+    return new Response('Invalid frameIndex', { status: 400 })
+  }
 
-  // Construct path to frame image
-  // Format: /local/data/{content_name}/{video_id}/crop_frames/frame_{index}.jpg
-  const framePath = resolve(
+  // Construct path to annotations.db
+  const dbPath = resolve(
     process.cwd(),
     '..',
     '..',
     'local',
     'data',
     ...videoId.split('/'),
-    'crop_frames',
-    `frame_${paddedIndex}.jpg`
+    'annotations.db'
   )
 
-  // Check if file exists
-  if (!existsSync(framePath)) {
-    return new Response('Frame not found', { status: 404 })
+  // Query database for frame
+  const db = new Database(dbPath, { readonly: true })
+
+  try {
+    const stmt = db.prepare(`
+      SELECT image_data
+      FROM cropped_frames
+      WHERE frame_index = ?
+    `)
+
+    const row = stmt.get(frameIdx) as { image_data: Buffer } | undefined
+
+    if (!row) {
+      return new Response('Frame not found', { status: 404 })
+    }
+
+    return new Response(row.image_data, {
+      headers: {
+        'Content-Type': 'image/jpeg',
+        'Cache-Control': 'public, max-age=31536000, immutable',
+      },
+    })
+  } finally {
+    db.close()
   }
-
-  // Read and return the image file
-  const imageBuffer = await readFile(framePath)
-
-  return new Response(imageBuffer, {
-    headers: {
-      'Content-Type': 'image/jpeg',
-      'Cache-Control': 'public, max-age=31536000, immutable',
-    },
-  })
 }

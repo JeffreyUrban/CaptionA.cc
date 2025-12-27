@@ -96,6 +96,29 @@ CREATE TABLE IF NOT EXISTS full_frame_box_labels (
     UNIQUE(annotation_source, frame_index, box_index)
 );
 
+-- Full frames binary storage (0.1Hz sampling, ~6 frames/min)
+-- Stores JPEG-compressed frame images for full (uncropped) frames
+CREATE TABLE IF NOT EXISTS full_frames (
+    frame_index INTEGER PRIMARY KEY,
+    image_data BLOB NOT NULL,
+    width INTEGER NOT NULL,
+    height INTEGER NOT NULL,
+    file_size INTEGER NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Cropped frames binary storage (10Hz sampling, 600 frames/min)
+-- Stores JPEG-compressed frame images cropped to caption region
+CREATE TABLE IF NOT EXISTS cropped_frames (
+    frame_index INTEGER PRIMARY KEY,
+    image_data BLOB NOT NULL,
+    width INTEGER NOT NULL,
+    height INTEGER NOT NULL,
+    file_size INTEGER NOT NULL,
+    crop_bounds_version INTEGER DEFAULT 1,  -- Invalidation tracking
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 -- Video layout configuration (one row per video)
 CREATE TABLE IF NOT EXISTS video_layout_config (
     id INTEGER PRIMARY KEY CHECK(id = 1),
@@ -234,6 +257,12 @@ WHERE label_source = 'user';
 -- Index for model version tracking
 CREATE INDEX IF NOT EXISTS idx_full_frame_box_labels_model_version
 ON full_frame_box_labels(model_version, label_source);
+
+-- Indexes for cropped_frames table
+
+-- Index for invalidation queries
+CREATE INDEX IF NOT EXISTS idx_cropped_frames_crop_version
+ON cropped_frames(crop_bounds_version);
 
 -- Video preferences (one row per video)
 CREATE TABLE IF NOT EXISTS video_preferences (

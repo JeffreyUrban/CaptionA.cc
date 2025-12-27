@@ -25,6 +25,7 @@ from .database import (
     get_database_path,
     load_ocr_annotations_from_database,
     process_frames_to_database,
+    write_frames_to_database,
 )
 from .frames import extract_frames, get_video_dimensions, get_video_duration
 from .ocr import create_ocr_visualization, process_frames_directory
@@ -180,6 +181,30 @@ def analyze(
             )
 
         console.print(f"  [green]✓[/green] OCR results: {db_path} ({total_boxes} boxes)")
+        console.print()
+
+        # Step 2.5: Write frames to database
+        console.print("[bold]Step 2.5/3: Writing frames to database[/bold]")
+
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TaskProgressColumn(),
+            console=console,
+        ) as progress:
+            task = progress.add_task("  Writing frames...", total=len(frames))
+            frames_written = write_frames_to_database(
+                output_dir,
+                db_path,
+                progress_callback=lambda current, total: progress.update(
+                    task, completed=current
+                ),
+                delete_after_write=True,
+            )
+
+        console.print(f"  [green]✓[/green] Stored {frames_written} frames in database")
+        console.print(f"  [green]✓[/green] Deleted filesystem frames")
         console.print()
 
         # Step 3/3: Analyze region and write to database

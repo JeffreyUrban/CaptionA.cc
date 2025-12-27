@@ -315,20 +315,14 @@ export async function loader({ params }: LoaderFunctionArgs) {
       return new Response('Layout config not found', { status: 404 })
     }
 
-    // Load frame image from full_frames/full_frames
-    const framePath = resolve(
-      process.cwd(),
-      '..',
-      '..',
-      'local',
-      'data',
-      ...videoId.split('/'),
-      'full_frames',
-      'full_frames',
-      `frame_${frameIndex.toString().padStart(10, '0')}.jpg`
-    )
+    // Load frame image from database
+    const frameRow = db.prepare(`
+      SELECT image_data
+      FROM full_frames
+      WHERE frame_index = ?
+    `).get(frameIndex) as { image_data: Buffer } | undefined
 
-    if (!existsSync(framePath)) {
+    if (!frameRow) {
       db.close()
       return new Response('Frame image not found', { status: 404 })
     }
@@ -421,7 +415,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
     )
 
     // Composite SVG overlay on top of frame image using sharp
-    const buffer = await sharp(framePath)
+    const buffer = await sharp(frameRow.image_data)
       .composite([
         {
           input: Buffer.from(svg),

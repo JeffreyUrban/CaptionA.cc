@@ -1,0 +1,79 @@
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[project]
+name = "frames_db"
+dynamic = ["version"]
+description = "Database storage and retrieval for video frames"
+readme = "README.md"
+authors = [
+    {name = "Jeffrey Urban"}
+]
+requires-python = ">=3.14"
+keywords = [
+    "video",
+    "frames",
+    "database",
+    "sqlite",
+    "storage"
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Multimedia :: Video",
+    "Topic :: Database",
+    "Topic :: Utilities",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.14"
+]
+dependencies = [
+    "pillow>=10.0.0",
+    "numpy>=1.26.0",
+    "opencv-python>=4.8.0"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "ruff>=0.1.9",
+    "pyright>=1.1.0"
+]
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.version.raw-options]
+root = "../.."
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/frames_db"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+markers = [
+    "unit: Unit tests for storage/retrieval operations",
+    "integration: Integration tests with real frame data"
+]
+
+[tool.coverage.run]
+source = ["src/frames_db"]
+omit = ["*/tests/*"]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:"
+]
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/frames_db/_version.py"
