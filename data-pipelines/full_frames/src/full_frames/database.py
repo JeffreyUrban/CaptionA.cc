@@ -1,12 +1,15 @@
 """Database operations for full_frames pipeline.
 
 Writes OCR results directly to the full_frame_ocr table in the video's annotations.db.
+Writes frame images to full_frames table for blob storage.
 """
 
 import json
 import sqlite3
 from pathlib import Path
 from typing import Optional
+
+from PIL import Image
 
 
 def get_database_path(output_dir: Path) -> Path:
@@ -183,6 +186,70 @@ def load_ocr_annotations_from_database(db_path: Path) -> list[dict]:
 
     finally:
         conn.close()
+
+
+def write_frames_to_database(
+    frames_dir: Path,
+    db_path: Path,
+    progress_callback: Optional[callable] = None,
+    delete_after_write: bool = True,
+) -> int:
+    """Write all frame images from directory to database.
+
+    Reads JPEG frames from filesystem, stores in full_frames table, and optionally
+    deletes the filesystem frames.
+
+    Args:
+        frames_dir: Directory containing frame images (frame_*.jpg)
+        db_path: Path to annotations.db file
+        progress_callback: Optional callback (current, total) -> None
+        delete_after_write: If True, delete frame files after writing to DB
+
+    Returns:
+        Number of frames written to database
+
+    Example:
+        >>> write_frames_to_database(
+        ...     frames_dir=Path("local/data/show/video/full_frames"),
+        ...     db_path=Path("local/data/show/video/annotations.db"),
+        ...     delete_after_write=True
+        ... )
+        42
+    """
+    from frames_db import write_frames_batch
+
+    # Find all frame images
+    frame_files = sorted(frames_dir.glob("frame_*.jpg"))
+    if not frame_files:
+        return 0
+
+    # Prepare frame data
+    frames = []
+    for frame_file in frame_files:
+        # Extract frame index from filename
+        frame_index = int(frame_file.stem.split("_")[1])
+
+        # Read image data and get dimensions
+        image_data = frame_file.read_bytes()
+        img = Image.open(frame_file)
+        width, height = img.size
+
+        frames.append((frame_index, image_data, width, height))
+
+    # Write to database in batch
+    count = write_frames_batch(
+        db_path=db_path,
+        frames=frames,
+        table="full_frames",
+        progress_callback=progress_callback,
+    )
+
+    # Delete filesystem frames if requested
+    if delete_after_write:
+        for frame_file in frame_files:
+            frame_file.unlink()
+
+    return count
 
 
 def process_frames_to_database(

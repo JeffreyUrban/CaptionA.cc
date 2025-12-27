@@ -662,20 +662,57 @@ export default function BoundaryWorkflow() {
     loadAnnotations(startFrame, endFrame)
   }, [visibleFrameIndices, loadAnnotations])
 
-  // Load frames for visible indices
+  // Load frames for visible indices using batch API
   useEffect(() => {
-    const newFrames = new Map(frames)
-    const encodedVideoId = encodeURIComponent(videoId)
-    visibleFrameIndices.forEach(idx => {
-      if (!newFrames.has(idx)) {
-        newFrames.set(idx, {
-          frame_index: idx,
-          image_url: `/api/frames/${encodedVideoId}/${idx}.jpg`,
-          ocr_text: '' // OCR text not used in boundary workflow
-        })
+    const loadVisibleFrames = async () => {
+      const newFrames = new Map(frames)
+      const encodedVideoId = encodeURIComponent(videoId)
+
+      // Find frames that aren't loaded yet
+      const framesToLoad = visibleFrameIndices.filter(idx => !newFrames.has(idx))
+
+      if (framesToLoad.length === 0) return
+
+      // Load frames in batch
+      try {
+        const indicesParam = framesToLoad.join(',')
+        const response = await fetch(`/api/frames/${encodedVideoId}/batch?indices=${indicesParam}`)
+        const data = await response.json()
+
+        // Convert base64 to blob URLs
+        for (const frame of data.frames) {
+          const binaryData = atob(frame.image_data)
+          const bytes = new Uint8Array(binaryData.length)
+          for (let i = 0; i < binaryData.length; i++) {
+            bytes[i] = binaryData.charCodeAt(i)
+          }
+          const blob = new Blob([bytes], { type: 'image/jpeg' })
+          const imageUrl = URL.createObjectURL(blob)
+
+          newFrames.set(frame.frame_index, {
+            frame_index: frame.frame_index,
+            image_url: imageUrl,
+            ocr_text: '' // OCR text not used in boundary workflow
+          })
+        }
+
+        setFrames(newFrames)
+      } catch (error) {
+        console.error('Failed to load frames:', error)
       }
-    })
-    setFrames(newFrames)
+    }
+
+    loadVisibleFrames()
+
+    // Cleanup: Revoke blob URLs when frames are no longer visible
+    return () => {
+      const visibleSet = new Set(visibleFrameIndices)
+      frames.forEach((frame, idx) => {
+        if (!visibleSet.has(idx) && frame.image_url.startsWith('blob:')) {
+          URL.revokeObjectURL(frame.image_url)
+        }
+      })
+    }
   }, [visibleFrameIndices, videoId])
 
   // Find annotation(s) for a given frame

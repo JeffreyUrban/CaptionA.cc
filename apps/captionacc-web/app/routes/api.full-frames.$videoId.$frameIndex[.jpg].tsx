@@ -1,7 +1,6 @@
 import { type LoaderFunctionArgs } from 'react-router'
 import { resolve } from 'path'
-import { existsSync } from 'fs'
-import { readFile } from 'fs/promises'
+import Database from 'better-sqlite3'
 
 export async function loader({ params }: LoaderFunctionArgs) {
   const { videoId: encodedVideoId, frameIndex } = params
@@ -12,31 +11,46 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
   const videoId = decodeURIComponent(encodedVideoId)
 
-  // full_frames frames are at 10Hz, matching database frame_index 1:1
-  const paddedIndex = frameIndex.padStart(10, '0')
+  // Parse frame index
+  const frameIdx = parseInt(frameIndex, 10)
+  if (isNaN(frameIdx)) {
+    return new Response('Invalid frameIndex', { status: 400 })
+  }
 
-  const framePath = resolve(
+  // Construct path to annotations.db
+  const dbPath = resolve(
     process.cwd(),
     '..',
     '..',
     'local',
     'data',
     ...videoId.split('/'),
-    'full_frames',
-    `frame_${paddedIndex}.jpg`
+    'annotations.db'
   )
 
-  // Check if frame exists
-  if (!existsSync(framePath)) {
-    return new Response(`Frame ${frameIndex} not found`, { status: 404 })
-  }
+  // Query database for frame
+  const db = new Database(dbPath, { readonly: true })
 
-  // Read and return the frame
-  const imageBuffer = await readFile(framePath)
-  return new Response(imageBuffer, {
-    headers: {
-      'Content-Type': 'image/jpeg',
-      'Cache-Control': 'public, max-age=31536000, immutable',
-    },
-  })
+  try {
+    const stmt = db.prepare(`
+      SELECT image_data
+      FROM full_frames
+      WHERE frame_index = ?
+    `)
+
+    const row = stmt.get(frameIdx) as { image_data: Buffer } | undefined
+
+    if (!row) {
+      return new Response(`Frame ${frameIndex} not found`, { status: 404 })
+    }
+
+    return new Response(row.image_data, {
+      headers: {
+        'Content-Type': 'image/jpeg',
+        'Cache-Control': 'public, max-age=31536000, immutable',
+      },
+    })
+  } finally {
+    db.close()
+  }
 }

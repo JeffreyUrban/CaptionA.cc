@@ -5,10 +5,11 @@ requires-python = ">=3.14"
 [manifest]
 members = [
     "box-classification",
-    "full-frames",
     "caption-models",
     "captionacc-workspace",
     "crop-frames",
+    "frames-db",
+    "full-frames",
     "image-utils",
     "ocr-box-model",
     "ocr-utils",
@@ -44,28 +45,6 @@ requires-dist = [
 dev = [
     { name = "pytest", specifier = ">=7.0.0" },
     { name = "pytest-cov", specifier = ">=4.0.0" },
-]
-
-[[package]]
-name = "full-frames"
-source = { editable = "data-pipelines/full_frames" }
-dependencies = [
-    { name = "caption-models" },
-    { name = "ocr-utils" },
-    { name = "opencv-python" },
-    { name = "rich" },
-    { name = "typer" },
-    { name = "video-utils" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "caption-models", editable = "packages/caption_models" },
-    { name = "ocr-utils", editable = "packages/ocr_utils" },
-    { name = "opencv-python", specifier = ">=4.10.0" },
-    { name = "rich", specifier = ">=13.0.0" },
-    { name = "typer", specifier = ">=0.9.0" },
-    { name = "video-utils", editable = "packages/video_utils" },
 ]
 
 [[package]]
@@ -200,6 +179,57 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/dd/5e/d5f9105d59c1325759d838af4e973695081fbbc97182baf73afc78dec266/ffmpeg-python-0.2.0.tar.gz", hash = "sha256:65225db34627c578ef0e11c8b1eb528bb35e024752f6f10b78c011f6f64c4127", size = 21543, upload-time = "2019-07-06T00:19:08.989Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d7/0c/56be52741f75bad4dc6555991fabd2e07b432d333da82c11ad701123888a/ffmpeg_python-0.2.0-py3-none-any.whl", hash = "sha256:ac441a0404e053f8b6a1113a77c0f452f1cfc62f6344a769475ffdc0f56c23c5", size = 25024, upload-time = "2019-07-06T00:19:07.215Z" },
+]
+
+[[package]]
+name = "frames-db"
+source = { editable = "packages/frames_db" }
+dependencies = [
+    { name = "numpy" },
+    { name = "opencv-python" },
+    { name = "pillow" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "pyright" },
+    { name = "pytest" },
+    { name = "pytest-cov" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "numpy", specifier = ">=1.26.0" },
+    { name = "opencv-python", specifier = ">=4.8.0" },
+    { name = "pillow", specifier = ">=10.0.0" },
+    { name = "pyright", marker = "extra == 'dev'", specifier = ">=1.1.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.4.0" },
+    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.1.0" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.9" },
+]
+provides-extras = ["dev"]
+
+[[package]]
+name = "full-frames"
+source = { editable = "data-pipelines/full_frames" }
+dependencies = [
+    { name = "caption-models" },
+    { name = "ocr-utils" },
+    { name = "opencv-python" },
+    { name = "rich" },
+    { name = "typer" },
+    { name = "video-utils" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "caption-models", editable = "packages/caption_models" },
+    { name = "ocr-utils", editable = "packages/ocr_utils" },
+    { name = "opencv-python", specifier = ">=4.10.0" },
+    { name = "rich", specifier = ">=13.0.0" },
+    { name = "typer", specifier = ">=0.9.0" },
+    { name = "video-utils", editable = "packages/video_utils" },
 ]
 
 [[package]]

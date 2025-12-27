@@ -217,75 +217,110 @@ export async function runOCROnFramesV2(
   frameIndices: number[],
   language: string = DEFAULT_LANGUAGE
 ): Promise<Map<number, FrameOCRResult>> {
-  console.log(`=== runOCROnFrames VERSION 2024-12-24 ===`)
+  console.log(`=== runOCROnFrames VERSION 2025-12-26 (DB) ===`)
   console.log(`runOCROnFrames called for ${videoPath}, ${frameIndices.length} frames`)
 
-  const framesDir = path.resolve(
+  const dbPath = path.resolve(
     process.cwd(),
     '..',
     '..',
     'local',
     'data',
     ...videoPath.split('/'),
-    'crop_frames'
+    'annotations.db'
   )
 
-  console.log(`Looking for frames in: ${framesDir}`)
+  console.log(`Loading frames from database: ${dbPath}`)
 
-  // Run OCR on all frames in parallel
-  const results = await Promise.all(
-    frameIndices.map(async (frameIndex) => {
-      const framePath = path.resolve(framesDir, `frame_${frameIndex.toString().padStart(10, '0')}.jpg`)
+  // Import better-sqlite3 dynamically
+  const Database = (await import('better-sqlite3')).default
+  const db = new Database(dbPath, { readonly: true })
 
-      try {
-        console.log(`[runOCROnFrames] Calling runOCR for frame ${frameIndex}`)
-        const ocrResult = await runOCR(framePath, language)
-        console.log(`[runOCROnFrames] Got result for frame ${frameIndex}:`, {
-          hasText: 'text' in ocrResult,
-          textLength: ocrResult.text?.length,
-          debugReqId: (ocrResult as any).__debug_reqId,
-          debugTextLength: (ocrResult as any).__debug_textLength,
-          keys: Object.keys(ocrResult)
-        })
+  try {
+    // Run OCR on all frames in parallel
+    const results = await Promise.all(
+      frameIndices.map(async (frameIndex) => {
+        // Load frame from database
+        const stmt = db.prepare('SELECT image_data FROM cropped_frames WHERE frame_index = ?')
+        const row = stmt.get(frameIndex) as { image_data: Buffer } | undefined
 
-        const text = ocrResult.text || ''
-        console.log(`Frame ${frameIndex}: after extracting, text="${text.substring(0,20)}" len=${text.length}`)
-
-        const resultObj = {
-          frameIndex,
-          ocrText: text,
-          ocrConfidence: calculateAverageConfidence(ocrResult.annotations)
-        }
-
-        console.log(`Frame ${frameIndex} final result:`, JSON.stringify(resultObj))
-
-        return {
-          frameIndex,
-          result: resultObj
-        }
-      } catch (error) {
-        console.error(`OCR failed for frame ${frameIndex}:`, error)
-        return {
-          frameIndex,
-          result: {
+        if (!row) {
+          console.error(`Frame ${frameIndex} not found in database`)
+          return {
             frameIndex,
-            ocrText: '',
-            ocrConfidence: 0
+            result: { frameIndex, ocrText: '', ocrConfidence: 0 }
           }
         }
-      }
+
+        // Write frame to temp file for OCR
+        const { mkdtempSync, writeFileSync, unlinkSync } = await import('fs')
+        const { tmpdir } = await import('os')
+        const tempDir = mkdtempSync(path.join(tmpdir(), 'ocr-'))
+        const framePath = path.join(tempDir, `frame_${frameIndex}.jpg`)
+
+        try {
+          writeFileSync(framePath, row.image_data)
+
+          console.log(`[runOCROnFrames] Calling runOCR for frame ${frameIndex}`)
+          const ocrResult = await runOCR(framePath, language)
+          console.log(`[runOCROnFrames] Got result for frame ${frameIndex}:`, {
+            hasText: 'text' in ocrResult,
+            textLength: ocrResult.text?.length,
+            debugReqId: (ocrResult as any).__debug_reqId,
+            debugTextLength: (ocrResult as any).__debug_textLength,
+            keys: Object.keys(ocrResult)
+          })
+
+          const text = ocrResult.text || ''
+          console.log(`Frame ${frameIndex}: after extracting, text="${text.substring(0,20)}" len=${text.length}`)
+
+          const resultObj = {
+            frameIndex,
+            ocrText: text,
+            ocrConfidence: calculateAverageConfidence(ocrResult.annotations)
+          }
+
+          console.log(`Frame ${frameIndex} final result:`, JSON.stringify(resultObj))
+
+          return {
+            frameIndex,
+            result: resultObj
+          }
+        } catch (error) {
+          console.error(`OCR failed for frame ${frameIndex}:`, error)
+          return {
+            frameIndex,
+            result: {
+              frameIndex,
+              ocrText: '',
+              ocrConfidence: 0
+            }
+          }
+        } finally {
+          // Clean up temp file
+          try {
+            unlinkSync(framePath)
+            const { rmdirSync } = await import('fs')
+            rmdirSync(tempDir)
+          } catch (cleanupError) {
+            console.error(`Failed to clean up temp file for frame ${frameIndex}:`, cleanupError)
+          }
+        }
     })
   )
 
-  // Convert to Map
-  const resultMap = new Map<number, FrameOCRResult>()
-  results.forEach(({ frameIndex, result }) => {
-    console.log(`Adding to map: frame ${frameIndex}, ocrText="${result.ocrText}", length=${result.ocrText?.length}`)
-    resultMap.set(frameIndex, result)
-  })
+    // Convert to Map
+    const resultMap = new Map<number, FrameOCRResult>()
+    results.forEach(({ frameIndex, result }) => {
+      console.log(`Adding to map: frame ${frameIndex}, ocrText="${result.ocrText}", length=${result.ocrText?.length}`)
+      resultMap.set(frameIndex, result)
+    })
 
-  console.log(`Returning map with ${resultMap.size} entries`)
-  return resultMap
+    console.log(`Returning map with ${resultMap.size} entries`)
+    return resultMap
+  } finally {
+    db.close()
+  }
 }
 
 /**
