@@ -12,6 +12,18 @@ interface FrameInfo {
   imageUrl: string
 }
 
+interface PotentialMislabel {
+  frameIndex: number
+  boxIndex: number
+  boxText: string
+  userLabel: 'in' | 'out'
+  predictedLabel: 'in' | 'out' | null
+  predictedConfidence: number | null
+  boxTop: number
+  topDeviation: number
+  issueType: string
+}
+
 interface LayoutConfig {
   frameWidth: number
   frameHeight: number
@@ -65,28 +77,25 @@ export async function loader({ }: LoaderFunctionArgs) {
   }
 }
 
-export default function AnnotateLayout() {
+export default function ReviewLabels() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const videoId = searchParams.get('videoId') || ''
 
   // Core state
+  const [mislabels, setMislabels] = useState<PotentialMislabel[]>([])
   const [frames, setFrames] = useState<FrameInfo[]>([])
   const [layoutConfig, setLayoutConfig] = useState<LayoutConfig | null>(null)
-  const [layoutComplete, setLayoutComplete] = useState(false)
+  const [clusterStats, setClusterStats] = useState<{ avgTop: number; avgBottom: number } | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   // View state
-  const [viewMode, setViewMode] = useState<ViewMode>('analysis')
+  const [viewMode, setViewMode] = useState<ViewMode>('frame')
   const [selectedFrameIndex, setSelectedFrameIndex] = useState<number | null>(null)
   const [currentFrameBoxes, setCurrentFrameBoxes] = useState<FrameBoxesData | null>(null)
   const [loadingFrame, setLoadingFrame] = useState(false)
-  const [currentVisualizationUrl, setCurrentVisualizationUrl] = useState<string | null>(null)
-  const [analysisBoxes, setAnalysisBoxes] = useState<BoxData[] | null>(null)
   const [hasUnsyncedAnnotations, setHasUnsyncedAnnotations] = useState(false)
-  const [annotationsSinceRecalc, setAnnotationsSinceRecalc] = useState(0)
-  const RECALC_THRESHOLD = 50 // Recalculate crop bounds after this many annotations
 
   // Cache for frame boxes (to avoid re-fetching already loaded frames)
   const frameBoxesCache = useRef<Map<number, FrameBoxesData>>(new Map())
@@ -113,11 +122,6 @@ export default function AnnotateLayout() {
   const [selectionCurrent, setSelectionCurrent] = useState<{ x: number; y: number } | null>(null)
   const [selectionLabel, setSelectionLabel] = useState<'in' | 'out' | 'clear' | null>(null) // Based on which button started selection
 
-  // Layout controls state (local modifications before save)
-  const [cropBoundsEdit, setCropBoundsEdit] = useState<{ left: number; top: number; right: number; bottom: number } | null>(null)
-  const [selectionRectEdit, setSelectionRectEdit] = useState<{ left: number; top: number; right: number; bottom: number } | null>(null)
-  const [layoutParamsEdit, setLayoutParamsEdit] = useState<any>(null)
-
   // Mark video as being worked on
   useEffect(() => {
     if (videoId && typeof window !== 'undefined') {
@@ -129,76 +133,55 @@ export default function AnnotateLayout() {
     }
   }, [videoId])
 
-  // Load layout queue (top frames + config)
-  const loadQueue = useCallback(async (showLoading = true) => {
+  // Load mislabel data
+  const loadMislabels = useCallback(async (showLoading = true) => {
     if (!videoId) return
 
-    console.log(`[Frontend] loadQueue called (showLoading=${showLoading})`)
+    console.log(`[Frontend] loadMislabels called (showLoading=${showLoading})`)
 
-    // Don't block UI with loading screen
     if (showLoading) {
       setError(null)
     }
 
     try {
       const response = await fetch(
-        `/api/annotations/${encodeURIComponent(videoId)}/layout-queue`
+        `/api/annotations/${encodeURIComponent(videoId)}/review-labels`
       )
 
       if (!response.ok) {
         const errorData = await response.json()
-
-        // Handle processing status errors specially
-        if (response.status === 425 && errorData.processingStatus) {
-          throw new Error(`Processing: ${errorData.processingStatus}`)
-        }
-
-        throw new Error(errorData.error || 'Failed to load layout queue')
+        throw new Error(errorData.error || 'Failed to load mislabels')
       }
 
       const data = await response.json()
 
-      console.log(`[Frontend] Received ${data.frames?.length || 0} frames:`, data.frames?.map((f: any) => f.frameIndex))
+      console.log(`[Frontend] Received ${data.potentialMislabels?.length || 0} potential mislabels`)
 
-      setFrames(data.frames || [])
+      setMislabels(data.potentialMislabels || [])
+      setClusterStats(data.clusterStats || null)
 
-      // Always update layout config (not just on initial load)
-      setLayoutConfig(data.layoutConfig || null)
-      setLayoutComplete(data.layoutComplete || false)
+      // Get unique frame indices from mislabels
+      const frameIndices = Array.from(new Set(
+        (data.potentialMislabels || []).map((m: PotentialMislabel) => m.frameIndex)
+      )).sort((a, b) => a - b)
 
-      // Update edit state from config
-      if (data.layoutConfig) {
-        setCropBoundsEdit({
-          left: data.layoutConfig.cropLeft,
-          top: data.layoutConfig.cropTop,
-          right: data.layoutConfig.cropRight,
-          bottom: data.layoutConfig.cropBottom,
-        })
-        setSelectionRectEdit(
-          data.layoutConfig.selectionLeft !== null
-            ? {
-                left: data.layoutConfig.selectionLeft,
-                top: data.layoutConfig.selectionTop,
-                right: data.layoutConfig.selectionRight,
-                bottom: data.layoutConfig.selectionBottom,
-              }
-            : null
-        )
-        setLayoutParamsEdit({
-          verticalPosition: data.layoutConfig.verticalPosition,
-          verticalStd: data.layoutConfig.verticalStd,
-          boxHeight: data.layoutConfig.boxHeight,
-          boxHeightStd: data.layoutConfig.boxHeightStd,
-          anchorType: data.layoutConfig.anchorType,
-          anchorPosition: data.layoutConfig.anchorPosition,
-        })
-      }
+      // Create frame info for each unique frame
+      const frameInfos: FrameInfo[] = frameIndices.map(frameIndex => ({
+        frameIndex,
+        totalBoxCount: (data.potentialMislabels || []).filter((m: PotentialMislabel) => m.frameIndex === frameIndex).length,
+        captionBoxCount: (data.potentialMislabels || []).filter((m: PotentialMislabel) => m.frameIndex === frameIndex && m.userLabel === 'in').length,
+        minConfidence: 0,
+        hasAnnotations: true,
+        imageUrl: `/api/full-frames/${encodeURIComponent(videoId)}/${frameIndex}.jpg`
+      }))
+
+      setFrames(frameInfos)
 
       if (showLoading) {
         setLoading(false)
       }
     } catch (err) {
-      console.error('Failed to load layout queue:', err)
+      console.error('Failed to load mislabels:', err)
       if (showLoading) {
         setError((err as Error).message)
         setLoading(false)
@@ -243,80 +226,13 @@ export default function AnnotateLayout() {
     void prefetchFrames()
   }, [videoId, frames])
 
-  // Load all OCR boxes for analysis view
-  const loadAnalysisBoxes = useCallback(async () => {
-    if (!videoId) return
-
-    try {
-      const response = await fetch(
-        `/api/annotations/${encodeURIComponent(videoId)}/layout-analysis-boxes`
-      )
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error('Failed to load analysis boxes:', response.status, errorText)
-        throw new Error('Failed to load analysis boxes')
-      }
-      const data = await response.json()
-      setAnalysisBoxes(data.boxes || [])
-    } catch (error) {
-      console.error('Error loading analysis boxes:', error)
-    }
-  }, [videoId])
-
-  // Recalculate crop bounds based on current annotations
-  const recalculateCropBounds = useCallback(async () => {
-    if (!videoId) return
-
-    console.log('[Layout] Recalculating crop bounds based on annotations...')
-
-    try {
-      // First, recalculate predictions to ensure they're up to date
-      console.log('[Layout] Updating predictions before crop bounds recalculation...')
-      const predResponse = await fetch(
-        `/api/annotations/${encodeURIComponent(videoId)}/calculate-predictions`,
-        { method: 'POST' }
-      )
-
-      if (predResponse.ok) {
-        const predResult = await predResponse.json()
-        console.log('[Layout] Predictions updated:', predResult)
-      } else {
-        console.warn('[Layout] Failed to update predictions, continuing anyway')
-      }
-
-      // Now recalculate crop bounds using updated predictions
-      const response = await fetch(
-        `/api/annotations/${encodeURIComponent(videoId)}/reset-crop-bounds`,
-        { method: 'POST' }
-      )
-
-      if (!response.ok) {
-        throw new Error('Failed to recalculate crop bounds')
-      }
-
-      const result = await response.json()
-      console.log('[Layout] Crop bounds recalculated:', result)
-
-      // Reload layout config to get updated crop bounds
-      await loadQueue(false)
-
-      // Reset the annotation counter
-      setAnnotationsSinceRecalc(0)
-    } catch (error) {
-      console.error('Error recalculating crop bounds:', error)
-    }
-  }, [videoId, loadQueue])
-
-  // Priority loading on mount: Analysis boxes and queue in parallel
+  // Load mislabels on mount
   useEffect(() => {
     if (!videoId) return
 
-    console.log('[Priority] Starting parallel load: analysis boxes + queue...')
-
-    // Load both in parallel (don't await - let them race)
-    void loadAnalysisBoxes()
-    void loadQueue(true)
-  }, [videoId, loadAnalysisBoxes, loadQueue])
+    console.log('[Priority] Loading mislabels...')
+    void loadMislabels(true)
+  }, [videoId, loadMislabels])
 
   // Auto-poll when processing is in progress
   useEffect(() => {
@@ -327,14 +243,14 @@ export default function AnnotateLayout() {
     const pollInterval = setInterval(() => {
       console.log('[Polling] Checking processing status...')
       setError(null)
-      loadQueue(true)
+      loadMislabels(true)
     }, 3000) // Poll every 3 seconds
 
     return () => {
       console.log('[Polling] Cleaning up poll interval')
       clearInterval(pollInterval)
     }
-  }, [error, loadQueue])
+  }, [error, loadMislabels])
 
   // Load frame boxes when frame selected
   useEffect(() => {
@@ -392,13 +308,13 @@ export default function AnnotateLayout() {
       setSelectedFrameIndex(frameIndex)
     }
 
-    // Reload queue only when navigating away AND annotations were made (background refresh to update priorities)
+    // Reload mislabels only when navigating away AND annotations were made (background refresh to update list)
     if (isChangingView && hasUnsyncedAnnotations) {
-      console.log(`[Frontend] Navigating to different frame/view with unsynced annotations, reloading queue in background`)
-      void loadQueue(false)
+      console.log(`[Frontend] Navigating to different frame/view with unsynced annotations, reloading mislabels in background`)
+      void loadMislabels(false)
       setHasUnsyncedAnnotations(false)
     }
-  }, [frames, viewMode, selectedFrameIndex, hasUnsyncedAnnotations, loadQueue])
+  }, [frames, viewMode, selectedFrameIndex, hasUnsyncedAnnotations, loadMislabels])
 
   // Handle box annotation (left click = in, right click = out)
   const handleBoxClick = useCallback(async (boxIndex: number, label: 'in' | 'out') => {
@@ -439,21 +355,12 @@ export default function AnnotateLayout() {
 
       // Mark that we have unsynced annotations
       setHasUnsyncedAnnotations(true)
-
-      // Increment annotation counter and check if we need to recalculate
-      const newCount = annotationsSinceRecalc + 1
-      setAnnotationsSinceRecalc(newCount)
-
-      if (newCount >= RECALC_THRESHOLD) {
-        console.log(`[Layout] Reached ${newCount} annotations, triggering crop bounds recalculation`)
-        void recalculateCropBounds()
-      }
     } catch (err) {
       console.error('Failed to save box annotation:', err)
       // Reload frame to revert optimistic update
       setSelectedFrameIndex(prev => prev)
     }
-  }, [videoId, currentFrameBoxes, annotationsSinceRecalc, RECALC_THRESHOLD, recalculateCropBounds])
+  }, [videoId, currentFrameBoxes])
 
   // Sync canvas size with displayed image
   useEffect(() => {
@@ -549,115 +456,18 @@ export default function AnnotateLayout() {
         ctx.textAlign = 'left'
       }
     })
-    } else if (viewMode === 'analysis' && analysisBoxes && layoutConfig) {
-      // Analysis mode: Draw all OCR boxes from all frames with additive transparency
-      const scale = canvasSize.width / layoutConfig.frameWidth
 
-      // Draw all boxes with transparency for additive effect
-      analysisBoxes.forEach((box) => {
-        const boxX = box.bounds.left * scale
-        const boxY = box.bounds.top * scale
-        const boxWidth = (box.bounds.right - box.bounds.left) * scale
-        const boxHeight = (box.bounds.bottom - box.bounds.top) * scale
+      // Draw crop bounds overlay (yellow dashed)
+      const cropLeft = (currentFrameBoxes.cropBounds.left / currentFrameBoxes.frameWidth) * canvas.width
+      const cropTop = (currentFrameBoxes.cropBounds.top / currentFrameBoxes.frameHeight) * canvas.height
+      const cropRight = (currentFrameBoxes.cropBounds.right / currentFrameBoxes.frameWidth) * canvas.width
+      const cropBottom = (currentFrameBoxes.cropBounds.bottom / currentFrameBoxes.frameHeight) * canvas.height
 
-        // Determine color based on user label or prediction (matching frame view palette)
-        let strokeColor: string
-        let fillColor: string
-
-        if (box.userLabel === 'in') {
-          // User annotated as in
-          strokeColor = '#14b8a6' // Teal
-          fillColor = 'rgba(20,184,166,0.05)' // Very transparent for additive effect
-        } else if (box.userLabel === 'out') {
-          // User annotated as out
-          strokeColor = '#dc2626' // Red
-          fillColor = 'rgba(220,38,38,0.05)' // Very transparent for additive effect
-        } else if (box.predictedLabel === 'in') {
-          // Predicted in - use confidence levels (blue)
-          if (box.predictedConfidence >= 0.75) {
-            strokeColor = '#3b82f6' // Blue (high confidence)
-            fillColor = 'rgba(59,130,246,0.03)'
-          } else if (box.predictedConfidence >= 0.5) {
-            strokeColor = '#60a5fa' // Light blue (medium confidence)
-            fillColor = 'rgba(96,165,250,0.02)'
-          } else {
-            strokeColor = '#93c5fd' // Very light blue (low confidence)
-            fillColor = 'rgba(147,197,253,0.015)'
-          }
-        } else {
-          // Predicted out - use confidence levels (orange)
-          if (box.predictedConfidence >= 0.75) {
-            strokeColor = '#f97316' // Orange (high confidence)
-            fillColor = 'rgba(249,115,22,0.03)'
-          } else if (box.predictedConfidence >= 0.5) {
-            strokeColor = '#fb923c' // Light orange (medium confidence)
-            fillColor = 'rgba(251,146,60,0.02)'
-          } else {
-            strokeColor = '#fdba74' // Very light orange (low confidence)
-            fillColor = 'rgba(253,186,116,0.015)'
-          }
-        }
-
-        // Draw box as solid fill (no outline)
-        ctx.fillStyle = fillColor
-        ctx.fillRect(boxX, boxY, boxWidth, boxHeight)
-      })
-
-      // Draw layout parameter overlays
-      // Crop bounds (red, dashed)
-      ctx.strokeStyle = '#ef4444'
+      ctx.strokeStyle = '#facc15' // Yellow
       ctx.lineWidth = 2
-      ctx.setLineDash([15, 5])
-      const cropX = layoutConfig.cropLeft * scale
-      const cropY = layoutConfig.cropTop * scale
-      const cropW = (layoutConfig.cropRight - layoutConfig.cropLeft) * scale
-      const cropH = (layoutConfig.cropBottom - layoutConfig.cropTop) * scale
-      ctx.strokeRect(cropX, cropY, cropW, cropH)
+      ctx.setLineDash([8, 4])
+      ctx.strokeRect(cropLeft, cropTop, cropRight - cropLeft, cropBottom - cropTop)
       ctx.setLineDash([])
-
-      // Selection rectangle (blue, dashed)
-      if (
-        layoutConfig.selectionLeft !== null &&
-        layoutConfig.selectionTop !== null &&
-        layoutConfig.selectionRight !== null &&
-        layoutConfig.selectionBottom !== null
-      ) {
-        ctx.strokeStyle = '#3b82f6'
-        ctx.lineWidth = 3
-        ctx.setLineDash([10, 5])
-        const selX = layoutConfig.selectionLeft * scale
-        const selY = layoutConfig.selectionTop * scale
-        const selW = (layoutConfig.selectionRight - layoutConfig.selectionLeft) * scale
-        const selH = (layoutConfig.selectionBottom - layoutConfig.selectionTop) * scale
-        ctx.strokeRect(selX, selY, selW, selH)
-        ctx.setLineDash([])
-      }
-
-      // Vertical center line (purple, dashed)
-      if (layoutConfig.verticalPosition !== null) {
-        ctx.strokeStyle = '#8b5cf6'
-        ctx.lineWidth = 2
-        ctx.setLineDash([5, 3])
-        const lineY = layoutConfig.verticalPosition * scale
-        ctx.beginPath()
-        ctx.moveTo(0, lineY)
-        ctx.lineTo(canvasSize.width, lineY)
-        ctx.stroke()
-        ctx.setLineDash([])
-      }
-
-      // Anchor line (orange, dashed)
-      if (layoutConfig.anchorType !== null && layoutConfig.anchorPosition !== null) {
-        ctx.strokeStyle = '#f59e0b'
-        ctx.lineWidth = 2
-        ctx.setLineDash([5, 3])
-        const lineX = layoutConfig.anchorPosition * scale
-        ctx.beginPath()
-        ctx.moveTo(lineX, 0)
-        ctx.lineTo(lineX, canvasSize.height)
-        ctx.stroke()
-        ctx.setLineDash([])
-      }
     }
 
     // Draw selection rectangle (click-to-start, click-to-end)
@@ -667,21 +477,9 @@ export default function AnnotateLayout() {
       const selWidth = Math.abs(selectionCurrent.x - selectionStart.x)
       const selHeight = Math.abs(selectionCurrent.y - selectionStart.y)
 
-      // Color based on selection label and view mode
-      // Frame mode: in=green, out=red
-      // Analysis mode: clear=gray, out=red
-      let selColor: string
-      let selBgColor: string
-
-      if (viewMode === 'analysis') {
-        // Analysis mode: left=clear (gray), right=out (red)
-        selColor = selectionLabel === 'clear' ? '#6b7280' : '#ef4444'
-        selBgColor = selectionLabel === 'clear' ? 'rgba(107,114,128,0.15)' : 'rgba(239,68,68,0.15)'
-      } else {
-        // Frame mode: left=in (green), right=out (red)
-        selColor = selectionLabel === 'in' ? '#10b981' : '#ef4444'
-        selBgColor = selectionLabel === 'in' ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)'
-      }
+      // Frame mode: left=in (green), right=out (red)
+      const selColor = selectionLabel === 'in' ? '#10b981' : '#ef4444'
+      const selBgColor = selectionLabel === 'in' ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)'
 
       ctx.strokeStyle = selColor
       ctx.fillStyle = selBgColor
@@ -693,7 +491,7 @@ export default function AnnotateLayout() {
 
       ctx.setLineDash([])
     }
-  }, [canvasSize, viewMode, currentFrameBoxes, analysisBoxes, layoutConfig, hoveredBoxIndex, isSelecting, selectionStart, selectionCurrent, selectionLabel, selectedFrameIndex])
+  }, [canvasSize, viewMode, currentFrameBoxes, hoveredBoxIndex, isSelecting, selectionStart, selectionCurrent, selectionLabel])
 
   // Call drawCanvas in an effect when dependencies change
   useEffect(() => {
@@ -717,7 +515,7 @@ export default function AnnotateLayout() {
 
   // Complete selection and annotate boxes
   const completeSelection = useCallback(async () => {
-    if (!isSelecting || !selectionStart || !selectionCurrent || !selectionLabel) return
+    if (!isSelecting || !selectionStart || !selectionCurrent || !selectionLabel || !currentFrameBoxes) return
 
     // Calculate selection rectangle in canvas coordinates
     const selRectCanvas = {
@@ -727,61 +525,7 @@ export default function AnnotateLayout() {
       bottom: Math.max(selectionStart.y, selectionCurrent.y),
     }
 
-    if (viewMode === 'analysis') {
-      // Analysis mode: Bulk annotate across ALL 0.1Hz frames
-      if (!layoutConfig) return
-
-      const scaleX = layoutConfig.frameWidth / canvasSize.width
-      const scaleY = layoutConfig.frameHeight / canvasSize.height
-
-      const rectangleFrameCoords = {
-        left: Math.floor(selRectCanvas.left * scaleX),
-        top: Math.floor(selRectCanvas.top * scaleY),
-        right: Math.floor(selRectCanvas.right * scaleX),
-        bottom: Math.floor(selRectCanvas.bottom * scaleY),
-      }
-
-      const action = selectionLabel === 'clear' ? 'clear' : 'mark_out'
-
-      try {
-        const response = await fetch(
-          `/api/annotations/${encodeURIComponent(videoId)}/bulk-annotate-all`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              rectangle: rectangleFrameCoords,
-              action,
-            }),
-          }
-        )
-
-        const result = await response.json()
-
-        if (!response.ok || result.error) {
-          console.error('Bulk annotate all failed:', result.error || `HTTP ${response.status}`)
-          console.error('Error details:', result)
-          throw new Error(result.error || 'Failed to bulk annotate')
-        }
-
-        // Reload analysis boxes to reflect the changes
-        await loadAnalysisBoxes()
-
-        // Mark that we have unsynced annotations
-        setHasUnsyncedAnnotations(true)
-
-        // Increment annotation counter and check if we need to recalculate
-        const newCount = annotationsSinceRecalc + result.boxesAnnotated || 1
-        setAnnotationsSinceRecalc(newCount)
-
-        if (newCount >= RECALC_THRESHOLD) {
-          console.log(`[Layout] Reached ${newCount} annotations, triggering crop bounds recalculation`)
-          await recalculateCropBounds()
-        }
-      } catch (err) {
-        console.error('Failed to bulk annotate all frames:', err)
-      }
-    } else if (viewMode === 'frame' && currentFrameBoxes) {
+    if (viewMode === 'frame') {
       // Frame mode: Use individual box annotation API
       const scale = canvasSize.width / currentFrameBoxes.frameWidth
 
@@ -833,15 +577,6 @@ export default function AnnotateLayout() {
 
           // Mark that we have unsynced annotations
           setHasUnsyncedAnnotations(true)
-
-          // Increment annotation counter and check if we need to recalculate
-          const newCount = annotationsSinceRecalc + enclosedBoxes.length
-          setAnnotationsSinceRecalc(newCount)
-
-          if (newCount >= RECALC_THRESHOLD) {
-            console.log(`[Layout] Reached ${newCount} annotations, triggering crop bounds recalculation`)
-            await recalculateCropBounds()
-          }
         } catch (err) {
           console.error('Failed to save annotations:', err)
         }
@@ -853,7 +588,7 @@ export default function AnnotateLayout() {
     setSelectionStart(null)
     setSelectionCurrent(null)
     setSelectionLabel(null)
-  }, [isSelecting, selectionStart, selectionCurrent, selectionLabel, currentFrameBoxes, canvasSize, videoId, selectedFrameIndex, viewMode, layoutConfig, loadAnalysisBoxes, annotationsSinceRecalc, RECALC_THRESHOLD, recalculateCropBounds])
+  }, [isSelecting, selectionStart, selectionCurrent, selectionLabel, currentFrameBoxes, canvasSize, videoId, selectedFrameIndex, viewMode])
 
   // Handle canvas click - individual box annotation, or start/complete selection
   const handleCanvasClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -879,19 +614,7 @@ export default function AnnotateLayout() {
       return
     }
 
-    // In analysis mode, only do area selection (no individual boxes)
-    if (viewMode === 'analysis') {
-      // Start rectangle selection
-      // Left click = 'clear', Right click = 'out'
-      const label = e.button === 0 ? 'clear' : 'out'
-      setIsSelecting(true)
-      setSelectionStart({ x, y })
-      setSelectionCurrent({ x, y })
-      setSelectionLabel(label)
-      return
-    }
-
-    // Frame mode - unchanged from original behavior
+    // Frame mode only
     if (!currentFrameBoxes) return
 
     // Check if clicking on a box
@@ -1112,7 +835,7 @@ export default function AnnotateLayout() {
                   onClick={() => {
                     setError(null)
                     setLoading(true)
-                    loadQueue(true)
+                    loadMislabels(true)
                   }}
                   className="w-full rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                 >
@@ -1127,7 +850,7 @@ export default function AnnotateLayout() {
                   </svg>
                 </div>
                 <h2 className="mb-2 text-center text-xl font-bold text-gray-900 dark:text-white">
-                  Error Loading Layout
+                  Error Loading Mislabels
                 </h2>
                 <p className="mb-6 text-center text-gray-600 dark:text-gray-400">
                   {error}
@@ -1136,7 +859,7 @@ export default function AnnotateLayout() {
                   onClick={() => {
                     setError(null)
                     setLoading(true)
-                    loadQueue(true)
+                    loadMislabels(true)
                   }}
                   className="w-full rounded-md bg-gray-600 px-4 py-2 text-white hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
                 >
@@ -1160,7 +883,7 @@ export default function AnnotateLayout() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-              Caption Layout Annotation
+              Review Potential Mislabels
             </h1>
             <div className="text-sm text-gray-600 dark:text-gray-400">
               Video: {videoId}
@@ -1174,29 +897,7 @@ export default function AnnotateLayout() {
           <div className="flex min-h-0 w-2/3 flex-col gap-4">
             {/* Main canvas */}
             <div className="relative flex flex-shrink-0 items-center justify-center rounded-lg border border-gray-300 bg-gray-900 dark:border-gray-600 dark:bg-gray-800 p-4">
-              {viewMode === 'analysis' && layoutConfig ? (
-                <div className="relative inline-block max-w-full max-h-full">
-                  <img
-                    ref={imageRef}
-                    src={`data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="${layoutConfig.frameWidth}" height="${layoutConfig.frameHeight}"><rect width="100%" height="100%" fill="black"/></svg>`}
-                    alt="Analysis view"
-                    className="max-w-full max-h-full object-contain"
-                  />
-                  <canvas
-                    ref={canvasRef}
-                    className="absolute left-0 top-0 cursor-crosshair"
-                    style={{ touchAction: 'none' }}
-                    onMouseDown={handleCanvasClick}
-                    onMouseMove={handleCanvasMouseMove}
-                    onContextMenu={handleCanvasContextMenu}
-                  />
-                  {analysisBoxes === null && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50">
-                      <div className="text-white text-lg">Loading analysis boxes...</div>
-                    </div>
-                  )}
-                </div>
-              ) : viewMode === 'frame' && currentFrameBoxes ? (
+              {currentFrameBoxes ? (
                 <div className="relative inline-block max-w-full max-h-full">
                   <img
                     ref={imageRef}
@@ -1217,7 +918,7 @@ export default function AnnotateLayout() {
                 <div className="flex min-h-[400px] items-center justify-center text-gray-500 dark:text-gray-400">
                   {loadingFrame
                     ? 'Loading frame...'
-                    : 'Select a frame to annotate'}
+                    : 'Select a frame to review'}
                 </div>
               )}
             </div>
@@ -1229,23 +930,6 @@ export default function AnnotateLayout() {
                 gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
               }}
             >
-              {/* Subtitle analysis thumbnail */}
-              <button
-                onClick={() => handleThumbnailClick('analysis')}
-                className={`flex w-full flex-col overflow-hidden rounded border-2 ${
-                  viewMode === 'analysis'
-                    ? 'border-teal-600'
-                    : 'border-gray-300 dark:border-gray-700'
-                }`}
-              >
-                <div className="aspect-video w-full bg-black">
-                  {/* Blank thumbnail for analysis view */}
-                </div>
-                <div className="flex h-11 flex-col items-center justify-center bg-gray-100 px-2 py-1 text-xs text-gray-900 dark:bg-gray-800 dark:text-gray-100">
-                  Analysis
-                </div>
-              </button>
-
               {/* Loading indicator while frames load */}
               {loading && frames.length === 0 && (
                 <div className="col-span-full flex items-center justify-center py-8 text-gray-500 dark:text-gray-400">
@@ -1285,19 +969,19 @@ export default function AnnotateLayout() {
           <div className="flex min-h-0 w-1/3 flex-col gap-4 overflow-y-auto rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
             {/* Mode toggle */}
             <div className="flex gap-2 rounded-md border border-gray-200 bg-gray-50 p-1 dark:border-gray-700 dark:bg-gray-950">
-              <button className="flex-1 rounded py-2 text-sm font-semibold bg-teal-600 text-white">
-                Layout
-              </button>
               <button
-                onClick={() => navigate(`/annotate/review-labels?videoId=${encodeURIComponent(videoId)}`)}
+                onClick={() => navigate(`/annotate/layout?videoId=${encodeURIComponent(videoId)}`)}
                 className="flex-1 rounded py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
               >
+                Layout
+              </button>
+              <button className="flex-1 rounded py-2 text-sm font-semibold bg-teal-600 text-white">
                 Review Labels
               </button>
             </div>
 
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-              Layout Controls
+              Mislabel Review
             </h2>
 
             {/* Instructions */}
@@ -1318,73 +1002,6 @@ export default function AnnotateLayout() {
                 <li>0 → jump to analysis view</li>
               </ul>
             </div>
-
-            {/* Annotation Progress Indicator */}
-            <div className="rounded-md border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-950">
-              <div className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                Crop Bounds Auto-Update
-              </div>
-              <div className="mt-1 text-xs text-gray-600 dark:text-gray-400">
-                {annotationsSinceRecalc} / {RECALC_THRESHOLD} annotations
-              </div>
-              <div className="mt-2 h-2 w-full rounded-full bg-gray-200 dark:bg-gray-700">
-                <div
-                  className="h-2 rounded-full bg-blue-500 transition-all duration-300"
-                  style={{ width: `${Math.min(100, (annotationsSinceRecalc / RECALC_THRESHOLD) * 100)}%` }}
-                />
-              </div>
-              <div className="mt-1 text-xs text-gray-500 dark:text-gray-500">
-                Crop bounds will recalculate automatically after {RECALC_THRESHOLD - annotationsSinceRecalc} more annotations
-              </div>
-            </div>
-
-            {/* Mark Layout Complete Button */}
-            <button
-              onClick={async () => {
-                if (confirm('Mark layout annotation as complete? This will enable boundary annotation for this video and trigger frame re-cropping.')) {
-                  try {
-                    const response = await fetch(`/api/annotations/${encodeURIComponent(videoId)}/layout-complete`, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ complete: true })
-                    })
-                    if (!response.ok) throw new Error('Failed to mark layout complete')
-
-                    // Update local state
-                    setLayoutComplete(true)
-
-                    // Trigger frame re-cropping in background
-                    fetch(`/api/annotations/${encodeURIComponent(videoId)}/recrop-frames`, {
-                      method: 'POST'
-                    }).catch(err => console.error('Frame re-cropping failed:', err))
-
-                    alert('Layout marked as complete! Frame re-cropping started in background. You can now annotate boundaries for this video.')
-                  } catch (err) {
-                    console.error('Error marking layout complete:', err)
-                    alert('Failed to mark layout complete')
-                  }
-                }
-              }}
-              disabled={
-                // Only require edits if layout has already been marked complete
-                layoutComplete && layoutConfig && cropBoundsEdit &&
-                  layoutConfig.cropLeft === cropBoundsEdit.left &&
-                  layoutConfig.cropTop === cropBoundsEdit.top &&
-                  layoutConfig.cropRight === cropBoundsEdit.right &&
-                  layoutConfig.cropBottom === cropBoundsEdit.bottom
-              }
-              className={`w-full px-4 py-2 text-sm font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 ${
-                layoutComplete && layoutConfig && cropBoundsEdit &&
-                  layoutConfig.cropLeft === cropBoundsEdit.left &&
-                  layoutConfig.cropTop === cropBoundsEdit.top &&
-                  layoutConfig.cropRight === cropBoundsEdit.right &&
-                  layoutConfig.cropBottom === cropBoundsEdit.bottom
-                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed dark:bg-gray-700 dark:text-gray-500'
-                  : 'text-white bg-green-600 hover:bg-green-700 dark:bg-green-600 dark:hover:bg-green-700 focus:ring-green-500'
-              }`}
-            >
-              {layoutComplete ? 'Update Layout & Re-crop' : 'Mark Layout Complete'}
-            </button>
 
             {/* Current view info */}
             {viewMode === 'frame' && currentFrameBoxes && (
