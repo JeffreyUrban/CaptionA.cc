@@ -205,6 +205,11 @@ def analyze(
 
         console.print(f"  [green]✓[/green] Stored {frames_written} frames in database")
         console.print(f"  [green]✓[/green] Deleted filesystem frames")
+
+        # Remove empty output directory
+        if output_dir.exists() and not any(output_dir.iterdir()):
+            output_dir.rmdir()
+            console.print(f"  [green]✓[/green] Removed empty directory")
         console.print()
 
         # Step 3/3: Analyze region and write to database
