@@ -2,6 +2,7 @@ import { type ActionFunctionArgs } from 'react-router'
 import Database from 'better-sqlite3'
 import { resolve } from 'path'
 import { existsSync } from 'fs'
+import { predictBoxLabel } from '~/utils/box-prediction'
 
 interface BulkAnnotateAllRequest {
   rectangle: {
@@ -57,10 +58,20 @@ export async function action({ params, request }: ActionFunctionArgs) {
 
     const db = getDatabase(videoId)
 
-    // Get layout config for frame dimensions
+    // Get layout config for frame dimensions and predictions
     const layoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as {
       frame_width: number
       frame_height: number
+      crop_left: number
+      crop_top: number
+      crop_right: number
+      crop_bottom: number
+      vertical_position: number | null
+      vertical_std: number | null
+      box_height: number | null
+      box_height_std: number | null
+      anchor_type: 'left' | 'center' | 'right' | null
+      anchor_position: number | null
     } | undefined
 
     if (!layoutConfig) {
@@ -70,6 +81,10 @@ export async function action({ params, request }: ActionFunctionArgs) {
         headers: { 'Content-Type': 'application/json' }
       })
     }
+
+    // Get model version if available
+    const modelInfo = db.prepare('SELECT model_version FROM box_classification_model WHERE id = 1').get() as { model_version: string } | undefined
+    const modelVersion = modelInfo?.model_version || null
 
     // Get all unique frame indices from full_frame_ocr table
     const frames = db.prepare(`
@@ -147,8 +162,11 @@ export async function action({ params, request }: ActionFunctionArgs) {
               box_bottom,
               label,
               label_source,
+              predicted_label,
+              predicted_confidence,
+              model_version,
               labeled_at
-            ) VALUES ('full_frame', ?, ?, ?, ?, ?, ?, ?, 'out', 'user', datetime('now'))
+            ) VALUES ('full_frame', ?, ?, ?, ?, ?, ?, ?, 'out', 'user', ?, ?, ?, datetime('now'))
             ON CONFLICT(annotation_source, frame_index, box_index)
             DO UPDATE SET
               label = 'out',
@@ -167,6 +185,11 @@ export async function action({ params, request }: ActionFunctionArgs) {
             const boxTop = boxBottom - Math.floor(box.height * layoutConfig.frame_height)
             const boxRight = boxLeft + Math.floor(box.width * layoutConfig.frame_width)
 
+            const originalBounds = { left: boxLeft, top: boxTop, right: boxRight, bottom: boxBottom }
+
+            // Get prediction for this box
+            const prediction = predictBoxLabel(originalBounds, layoutConfig, db)
+
             stmt.run(
               frameIndex,
               boxIndex,
@@ -174,7 +197,10 @@ export async function action({ params, request }: ActionFunctionArgs) {
               boxLeft,
               boxTop,
               boxRight,
-              boxBottom
+              boxBottom,
+              prediction.label,
+              prediction.confidence,
+              modelVersion
             )
           }
         }

@@ -350,12 +350,19 @@ export async function action({ params, request }: ActionFunctionArgs) {
       [box.x, box.y, box.width, box.height]
     ])
 
+    // Get layout config for predictions
+    const fullLayoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as VideoLayoutConfig | undefined
+
+    // Get model version if available
+    const modelInfo = db.prepare('SELECT model_version FROM box_classification_model WHERE id = 1').get() as { model_version: string } | undefined
+    const modelVersion = modelInfo?.model_version || null
+
     // Prepare insert/update statement
     const upsert = db.prepare(`
       INSERT INTO full_frame_box_labels (
         annotation_source, frame_index, box_index, box_text, box_left, box_top, box_right, box_bottom,
-        label, label_source, labeled_at
-      ) VALUES ('full_frame', ?, ?, ?, ?, ?, ?, ?, ?, 'user', datetime('now'))
+        label, label_source, predicted_label, predicted_confidence, model_version, labeled_at
+      ) VALUES ('full_frame', ?, ?, ?, ?, ?, ?, ?, ?, 'user', ?, ?, ?, datetime('now'))
       ON CONFLICT(annotation_source, frame_index, box_index) DO UPDATE SET
         label = excluded.label,
         labeled_at = datetime('now')
@@ -381,7 +388,22 @@ export async function action({ params, request }: ActionFunctionArgs) {
       const boxTop = boxBottom - Math.floor(height * layoutConfig.frame_height)
       const boxRight = boxLeft + Math.floor(width * layoutConfig.frame_width)
 
-      upsert.run(frameIndex, boxIndex, text, boxLeft, boxTop, boxRight, boxBottom, label)
+      const originalBounds = { left: boxLeft, top: boxTop, right: boxRight, bottom: boxBottom }
+
+      // Get prediction for this box (to save alongside user label)
+      let predictedLabel: 'in' | 'out' = 'out'
+      let predictedConfidence: number = 0.5
+
+      if (fullLayoutConfig) {
+        const prediction = predictBoxLabel(originalBounds, fullLayoutConfig, db)
+        predictedLabel = prediction.label
+        predictedConfidence = prediction.confidence
+      }
+
+      upsert.run(
+        frameIndex, boxIndex, text, boxLeft, boxTop, boxRight, boxBottom,
+        label, predictedLabel, predictedConfidence, modelVersion
+      )
     }
 
     // Check if automatic retraining threshold reached

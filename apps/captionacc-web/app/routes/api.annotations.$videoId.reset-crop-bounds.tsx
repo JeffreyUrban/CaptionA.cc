@@ -31,6 +31,8 @@ interface BoxStats {
   maxBottom: number
   minLeft: number
   maxRight: number
+  topEdges: number[]  // For calculating top_edge_std
+  bottomEdges: number[]  // For calculating bottom_edge_std
   centerYValues: number[]
   heightValues: number[]
   leftEdges: number[]
@@ -106,6 +108,8 @@ function analyzeOCRBoxes(
     maxBottom: 0,
     minLeft: frameWidth,
     maxRight: 0,
+    topEdges: [],
+    bottomEdges: [],
     centerYValues: [],
     heightValues: [],
     leftEdges: [],
@@ -127,13 +131,14 @@ function analyzeOCRBoxes(
     for (const annotation of ocrAnnotations) {
       // OCR annotation format: [text, confidence, [x, y, width, height]]
       // Coordinates are fractional [0-1]
+      // IMPORTANT: y is bottom-referenced (0 = bottom, 1 = top)
       const [_text, _conf, [x, y, width, height]] = annotation
 
-      // Convert fractional to pixels
+      // Convert fractional to pixels (convert y from bottom-referenced to top-referenced)
       const boxLeft = Math.floor(x * frameWidth)
-      const boxTop = Math.floor(y * frameHeight)
+      const boxBottom = Math.floor((1 - y) * frameHeight)  // Convert from bottom-referenced to top-referenced
+      const boxTop = boxBottom - Math.floor(height * frameHeight)
       const boxRight = boxLeft + Math.floor(width * frameWidth)
-      const boxBottom = boxTop + Math.floor(height * frameHeight)
 
       const boxCenterY = Math.floor((boxTop + boxBottom) / 2)
       const boxCenterX = Math.floor((boxLeft + boxRight) / 2)
@@ -149,7 +154,9 @@ function analyzeOCRBoxes(
       stats.minLeft = Math.min(stats.minLeft, boxLeft)
       stats.maxRight = Math.max(stats.maxRight, boxRight)
 
-      // Collect values for mode calculation
+      // Collect values for mode and std dev calculation
+      stats.topEdges.push(boxTop)
+      stats.bottomEdges.push(boxBottom)
       stats.centerYValues.push(boxCenterY)
       stats.heightValues.push(boxHeight)
       stats.leftEdges.push(boxLeft)
@@ -170,6 +177,16 @@ function analyzeOCRBoxes(
 
   const boxHeight = calculateMode(stats.heightValues, 2)
   const boxHeightStd = calculateStd(stats.heightValues, boxHeight)
+
+  // Calculate edge standard deviations for crop bounds
+  // CRITICAL: Filter outliers before calculating std dev to get tight bounds around main cluster
+  const topMode = calculateMode(stats.topEdges, 5)
+  const topEdgesFiltered = stats.topEdges.filter(val => Math.abs(val - topMode) < 100) // Remove outliers >100px from mode
+  const topEdgeStd = calculateStd(topEdgesFiltered, topMode)
+
+  const bottomMode = calculateMode(stats.bottomEdges, 5)
+  const bottomEdgesFiltered = stats.bottomEdges.filter(val => Math.abs(val - bottomMode) < 100)
+  const bottomEdgeStd = calculateStd(bottomEdgesFiltered, bottomMode)
 
   // Determine anchor type based on distribution of edges
   const leftMode = calculateMode(stats.leftEdges, 10)
@@ -192,14 +209,12 @@ function analyzeOCRBoxes(
     anchorPosition = rightMode
   }
 
-  // Calculate crop bounds with padding
-  const verticalPadding = Math.max(30, Math.ceil(verticalStd * 3))  // 3 std deviations or 30px min
-  const horizontalPadding = 50
-
-  const cropTop = Math.max(0, stats.minTop - verticalPadding)
-  const cropBottom = Math.min(frameHeight, stats.maxBottom + verticalPadding)
-  const cropLeft = Math.max(0, stats.minLeft - horizontalPadding)
-  const cropRight = Math.min(frameWidth, stats.maxRight + horizontalPadding)
+  // Calculate crop bounds using edge-specific standard deviations
+  // Use 3 std deviations for proper Bayesian bounds
+  const cropTop = Math.max(0, topMode - Math.ceil(topEdgeStd * 3))
+  const cropBottom = Math.min(frameHeight, bottomMode + Math.ceil(bottomEdgeStd * 3))
+  const cropLeft = Math.max(0, stats.minLeft - 50)
+  const cropRight = Math.min(frameWidth, stats.maxRight + 50)
 
   // Count caption boxes (those near the vertical mode)
   const captionBoxCount = stats.centerYValues.filter(
@@ -220,12 +235,16 @@ function analyzeOCRBoxes(
       boxHeightStd,
       anchorType,
       anchorPosition,
+      topEdgeStd,
+      bottomEdgeStd,
     },
     stats: {
       totalBoxes,
       captionBoxes: captionBoxCount,
       verticalPosition,
       boxHeight,
+      topEdgeStd,
+      bottomEdgeStd,
     },
   }
 }
@@ -257,16 +276,91 @@ export async function action({ params }: ActionFunctionArgs) {
       })
     }
 
-    // Get all frames with OCR data
-    const frames = db.prepare('SELECT * FROM frames_ocr ORDER BY frame_index').all() as FrameOCR[]
+    // Get unique frame indices
+    const frameIndices = db.prepare(`
+      SELECT DISTINCT frame_index
+      FROM full_frame_ocr
+      ORDER BY frame_index
+    `).all() as Array<{ frame_index: number }>
 
-    if (frames.length === 0) {
+    if (frameIndices.length === 0) {
       db.close()
       return new Response(JSON.stringify({ error: 'No OCR data found' }), {
         status: 404,
         headers: { 'Content-Type': 'application/json' }
       })
     }
+
+    // Get unique frame indices from labeled boxes
+    const labeledFrameIndices = db.prepare(`
+      SELECT DISTINCT frame_index
+      FROM full_frame_box_labels
+      WHERE annotation_source = 'full_frame' AND label = 'in'
+      ORDER BY frame_index
+    `).all() as Array<{ frame_index: number }>
+
+    // Build frames with caption boxes only
+    const frames: FrameOCR[] = labeledFrameIndices.map(({ frame_index }) => {
+      const boxes = db.prepare(`
+        SELECT box_text, box_left, box_top, box_right, box_bottom
+        FROM full_frame_box_labels
+        WHERE frame_index = ? AND annotation_source = 'full_frame' AND label = 'in'
+        ORDER BY box_index
+      `).all(frame_index) as Array<{
+        box_text: string
+        box_left: number
+        box_top: number
+        box_right: number
+        box_bottom: number
+      }>
+
+      // Convert to legacy OCR format: [[text, conf, [x, y, w, h]], ...]
+      // Note: OCR format uses bottom-referenced y coordinate (0 = bottom, 1 = top)
+      const ocrAnnotations = boxes.map(box => [
+        box.box_text,
+        1.0,
+        [
+          box.box_left / layoutConfig.frame_width,
+          (layoutConfig.frame_height - box.box_bottom) / layoutConfig.frame_height,  // Convert from top-referenced to bottom-referenced
+          (box.box_right - box.box_left) / layoutConfig.frame_width,
+          (box.box_bottom - box.box_top) / layoutConfig.frame_height
+        ]
+      ])
+
+      return {
+        frame_index,
+        ocr_text: boxes.map(b => b.box_text).join(' '),
+        ocr_annotations: JSON.stringify(ocrAnnotations),
+        ocr_confidence: 1.0
+      }
+    })
+
+    // Log summary of labeled boxes
+    const totalLabeled = db.prepare(`
+      SELECT COUNT(*) as count FROM full_frame_box_labels
+      WHERE annotation_source = 'full_frame'
+    `).get() as { count: number }
+
+    const totalIn = db.prepare(`
+      SELECT COUNT(*) as count FROM full_frame_box_labels
+      WHERE label = 'in' AND annotation_source = 'full_frame'
+    `).get() as { count: number }
+
+    const totalOut = db.prepare(`
+      SELECT COUNT(*) as count FROM full_frame_box_labels
+      WHERE label = 'out' AND annotation_source = 'full_frame'
+    `).get() as { count: number }
+
+    console.log(`[Reset Crop Bounds] Using ${totalIn.count} boxes labeled as 'in' (out of ${totalLabeled.count} total labeled boxes, ${totalOut.count} marked 'out')`)
+
+    // Show a few sample caption boxes
+    const sampleBoxes = db.prepare(`
+      SELECT frame_index, box_index, box_text, label, box_left, box_top, box_right, box_bottom
+      FROM full_frame_box_labels
+      WHERE annotation_source = 'full_frame' AND label = 'in'
+      LIMIT 10
+    `).all()
+    console.log(`[Reset Crop Bounds] Sample caption boxes:`, sampleBoxes)
 
     console.log(`Analyzing ${frames.length} frames for crop bounds reset`)
 
@@ -302,7 +396,9 @@ export async function action({ params }: ActionFunctionArgs) {
             box_height = ?,
             box_height_std = ?,
             anchor_type = ?,
-            anchor_position = ?
+            anchor_position = ?,
+            top_edge_std = ?,
+            bottom_edge_std = ?
         WHERE id = 1
       `).run(
         analysis.layoutParams.verticalPosition,
@@ -310,20 +406,17 @@ export async function action({ params }: ActionFunctionArgs) {
         analysis.layoutParams.boxHeight,
         analysis.layoutParams.boxHeightStd,
         analysis.layoutParams.anchorType,
-        analysis.layoutParams.anchorPosition
+        analysis.layoutParams.anchorPosition,
+        analysis.layoutParams.topEdgeStd,
+        analysis.layoutParams.bottomEdgeStd
       )
 
-      // Invalidate all frames
-      const result = db.prepare(`
-        UPDATE frames_ocr
-        SET crop_bounds_version = 0
-      `).run()
-
-      const framesInvalidated = result.changes
+      // Note: Frame invalidation not needed for full_frame_ocr workflow
+      // The cropped frames will be regenerated when layout is marked complete
 
       db.prepare('COMMIT').run()
 
-      console.log(`Reset crop bounds: invalidated ${framesInvalidated} frames`)
+      console.log(`Reset crop bounds: updated layout config`)
 
       db.close()
 
@@ -331,7 +424,6 @@ export async function action({ params }: ActionFunctionArgs) {
         success: true,
         newCropBounds: analysis.cropBounds,
         analysisData: analysis.stats,
-        framesInvalidated,
       }), {
         headers: { 'Content-Type': 'application/json' }
       })
