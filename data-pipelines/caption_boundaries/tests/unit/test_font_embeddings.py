@@ -125,11 +125,11 @@ def test_fontclip_fallback_tracking():
                     # Verify fallback was used
                     assert model.used_fallback is True
                     assert model.requested_model == "VecGlypher/fontclip_weight"
-                    assert model.model_name == "sentence-transformers/clip-ViT-B-32"
+                    assert model.model_name == "openai/clip-vit-base-patch32"
 
                     # Verify version string indicates fallback
                     version = model.get_model_version()
-                    assert "sentence-transformers-clip-ViT-B-32" in version
+                    assert "openai-clip-vit-base-patch32" in version
                     assert "-fallback" in version
                     assert "VecGlypher" not in version  # Should use actual model, not requested
 
@@ -184,8 +184,8 @@ def test_fontclip_embedding_normalization(mock_fontclip_model):
 
 
 @pytest.mark.unit
-def test_get_or_create_font_embedding_not_implemented(mock_fontclip_model):
-    """Test that get_or_create raises NotImplementedError (frame loading not done)."""
+def test_get_or_create_font_embedding_missing_frame(mock_fontclip_model):
+    """Test that get_or_create raises error when frame not found in database."""
     from caption_boundaries.data.font_embeddings import get_or_create_font_embedding
 
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -195,6 +195,9 @@ def test_get_or_create_font_embedding_not_implemented(mock_fontclip_model):
         # Initialize training database
         init_training_db(training_db_path)
 
+        # Mock find_video_file to return a fake video path
+        mock_video_path = Path("/test/video.mp4")
+
         # Mock get_video_metadata to avoid file access
         mock_metadata = {"video_hash": "a" * 64, "video_path": "/test/video.mp4", "file_size_bytes": 1000000}
 
@@ -203,14 +206,16 @@ def test_get_or_create_font_embedding_not_implemented(mock_fontclip_model):
             frame_index=50, num_ocr_boxes=25, mean_confidence=0.92, ocr_boxes=[]
         )
 
-        with patch("caption_boundaries.data.font_embeddings.get_video_metadata", return_value=mock_metadata):
-            with patch("caption_boundaries.data.font_embeddings.select_reference_frame", return_value=mock_reference):
-                with patch(
-                    "caption_boundaries.data.font_embeddings.FontCLIPModel", return_value=mock_fontclip_model
-                ):
-                    # Should raise NotImplementedError because frame loading not implemented
-                    with pytest.raises(NotImplementedError, match="Frame loading"):
-                        get_or_create_font_embedding(video_db_path, training_db_path)
+        with patch("caption_boundaries.data.font_embeddings.find_video_file", return_value=mock_video_path):
+            with patch("caption_boundaries.data.font_embeddings.get_video_metadata", return_value=mock_metadata):
+                with patch("caption_boundaries.data.font_embeddings.select_reference_frame", return_value=mock_reference):
+                    with patch(
+                        "caption_boundaries.data.font_embeddings.FontCLIPModel", return_value=mock_fontclip_model
+                    ):
+                        with patch("caption_boundaries.data.font_embeddings.get_frame_from_db", return_value=None):
+                            # Should raise ValueError when frame not found in database
+                            with pytest.raises(ValueError, match="Frame .* not found"):
+                                get_or_create_font_embedding(video_db_path, training_db_path)
 
 
 @pytest.mark.unit

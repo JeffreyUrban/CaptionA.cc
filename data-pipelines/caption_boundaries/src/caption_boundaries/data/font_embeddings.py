@@ -14,12 +14,54 @@ from pathlib import Path
 
 import numpy as np
 import torch
+from frames_db import get_frame_from_db
 from PIL import Image
 from transformers import AutoModel, AutoProcessor
 
 from caption_boundaries.data.reference_selection import ReferenceFrameCandidate, select_reference_frame
-from caption_boundaries.database import FontEmbedding, get_training_db
+from caption_boundaries.database import FontEmbedding, VideoRegistry, get_training_db
 from caption_boundaries.database.video_hash import get_video_metadata
+
+
+def find_video_file(db_path: Path) -> Path | None:
+    """Find video file in the same directory as database.
+
+    Args:
+        db_path: Path to annotations.db file
+
+    Returns:
+        Path to video file if found, None otherwise
+
+    Strategy:
+        1. Look for {directory_name}.{ext} (e.g., "1/1.mp4")
+        2. Look for video.{ext}
+        3. Look for any .mp4/.mkv/.avi/.mov file
+    """
+    directory = db_path.parent
+    directory_name = directory.name
+
+    # Common video extensions
+    video_extensions = [".mp4", ".mkv", ".avi", ".mov"]
+
+    # Strategy 1: Look for file named after directory
+    for ext in video_extensions:
+        video_path = directory / f"{directory_name}{ext}"
+        if video_path.exists():
+            return video_path
+
+    # Strategy 2: Look for "video.{ext}"
+    for ext in video_extensions:
+        video_path = directory / f"video{ext}"
+        if video_path.exists():
+            return video_path
+
+    # Strategy 3: Look for any video file
+    for ext in video_extensions:
+        matching_files = list(directory.glob(f"*{ext}"))
+        if matching_files:
+            return matching_files[0]  # Return first match
+
+    return None
 
 
 class FontCLIPModel:
@@ -36,7 +78,7 @@ class FontCLIPModel:
             model_name: HuggingFace model identifier
                        Default: VecGlypher/fontclip_weight (official FontCLIP weights)
                        Note: Requires HuggingFace authentication and accepting terms
-                       Alternative: sentence-transformers/clip-ViT-B-32 (base CLIP model)
+                       Fallback: openai/clip-vit-base-patch32 (base CLIP model)
             device: Device to run on ('cuda', 'mps', 'cpu', or None for auto-detect)
 
         Note:
@@ -44,9 +86,10 @@ class FontCLIPModel:
             1. Login to HuggingFace: huggingface-cli login
             2. Accept model terms at https://huggingface.co/VecGlypher/fontclip_weight
 
+            If access is denied, automatically falls back to openai/clip-vit-base-patch32.
+
         TODO: Once access is granted to VecGlypher/fontclip_weight, verify loading works
-              and swap in the real FontCLIP model for production use. Currently falls back
-              to base CLIP model if access is denied.
+              and swap in the real FontCLIP model for production use.
         """
         self.model_name = model_name
 
@@ -73,8 +116,8 @@ class FontCLIPModel:
             # If FontCLIP weights not accessible, fall back to base CLIP
             if "VecGlypher/fontclip_weight" in model_name:
                 print(f"Warning: Could not load {model_name}: {e}")
-                print("Falling back to base CLIP model: sentence-transformers/clip-ViT-B-32")
-                fallback_model = "sentence-transformers/clip-ViT-B-32"
+                print("Falling back to base CLIP model: openai/clip-vit-base-patch32")
+                fallback_model = "openai/clip-vit-base-patch32"
 
                 # Update model_name to actual model used (ensures correct metadata tracking)
                 self.model_name = fallback_model
@@ -108,15 +151,21 @@ class FontCLIPModel:
 
         # Extract features (no grad needed)
         with torch.no_grad():
-            outputs = self.model(**inputs)
-
-            # Get pooled representation
-            # For LayoutLM, use pooler_output; for actual FontCLIP, adjust as needed
-            if hasattr(outputs, "pooler_output"):
-                embedding = outputs.pooler_output
+            # For CLIP models, use vision_model directly to avoid needing text inputs
+            if hasattr(self.model, "vision_model"):
+                # CLIP-based models: use vision encoder only
+                vision_outputs = self.model.vision_model(**inputs)
+                # Get pooled output (CLS token representation)
+                embedding = vision_outputs.pooler_output
             else:
-                # Fallback: mean pool last hidden state
-                embedding = outputs.last_hidden_state.mean(dim=1)
+                # For other models (e.g., actual FontCLIP when available)
+                outputs = self.model(**inputs)
+                # Get pooled representation
+                if hasattr(outputs, "pooler_output"):
+                    embedding = outputs.pooler_output
+                else:
+                    # Fallback: mean pool last hidden state
+                    embedding = outputs.last_hidden_state.mean(dim=1)
 
         # Convert to numpy and ensure 512-dim
         embedding_np = embedding.cpu().numpy().flatten().astype(np.float32)
@@ -214,8 +263,16 @@ def get_or_create_font_embedding(
         >>> print(f"Embedding shape: {embedding_array.shape}")
         Embedding shape: (512,)
     """
+    # Find video file in database directory
+    video_path = find_video_file(video_db_path)
+    if video_path is None:
+        raise FileNotFoundError(
+            f"No video file found in {video_db_path.parent}. "
+            f"Expected video file with extensions: .mp4, .mkv, .avi, .mov"
+        )
+
     # Get video metadata for identification
-    metadata = get_video_metadata(video_db_path.parent / "video.mp4")  # TODO: Better video path detection
+    metadata = get_video_metadata(video_path)
     video_hash = metadata["video_hash"]
 
     # Create model if not provided
@@ -245,44 +302,50 @@ def get_or_create_font_embedding(
         if reference_frame is None:
             raise ValueError(f"No suitable reference frames found in {video_db_path}")
 
-        # Load frame image (TODO: Implement frame loading from database)
-        # For now, raise NotImplementedError - this needs frames_db integration
-        raise NotImplementedError(
-            "Frame loading from database not yet implemented. "
-            "Need to integrate with frames_db package to load frame images."
+        # Load frame image from database
+        frame_data = get_frame_from_db(
+            db_path=video_db_path, frame_index=reference_frame.frame_index, table="full_frames"
         )
 
+        if frame_data is None:
+            raise ValueError(
+                f"Frame {reference_frame.frame_index} not found in {video_db_path}. "
+                f"Ensure full_frames pipeline has been run on this video."
+            )
+
+        # Convert to PIL Image for embedding extraction
+        frame_image = frame_data.to_pil_image()
+
         # Extract embedding
-        # frame_image = load_frame_image(video_db_path, reference_frame.frame_index)
-        # embedding, _ = extract_font_embedding(video_db_path, frame_image, reference_frame, model)
+        embedding, _ = extract_font_embedding(video_db_path, frame_image, reference_frame, model)
 
-        # # Create database record
-        # embedding_record = FontEmbedding(
-        #     video_hash=video_hash,
-        #     embedding=embedding.tobytes(),
-        #     embedding_dim=512,
-        #     reference_frame_index=reference_frame.frame_index,
-        #     num_ocr_boxes=reference_frame.num_ocr_boxes,
-        #     mean_ocr_confidence=reference_frame.mean_confidence,
-        #     fontclip_model_version=model_version,
-        # )
+        # Create database record
+        embedding_record = FontEmbedding(
+            video_hash=video_hash,
+            embedding=embedding.tobytes(),
+            embedding_dim=512,
+            reference_frame_index=reference_frame.frame_index,
+            num_ocr_boxes=reference_frame.num_ocr_boxes,
+            mean_ocr_confidence=reference_frame.mean_confidence,
+            fontclip_model_version=model_version,
+        )
 
-        # # Ensure video registry exists
-        # video_registry = db.query(VideoRegistry).filter(VideoRegistry.video_hash == video_hash).first()
-        # if not video_registry:
-        #     video_registry = VideoRegistry(
-        #         video_hash=video_hash,
-        #         video_path=metadata["video_path"],
-        #         file_size_bytes=metadata["file_size_bytes"],
-        #     )
-        #     db.add(video_registry)
+        # Ensure video registry exists
+        video_registry = db.query(VideoRegistry).filter(VideoRegistry.video_hash == video_hash).first()
+        if not video_registry:
+            video_registry = VideoRegistry(
+                video_hash=video_hash,
+                video_path=metadata["video_path"],
+                file_size_bytes=metadata["file_size_bytes"],
+            )
+            db.add(video_registry)
 
-        # # Add embedding
-        # db.add(embedding_record)
-        # db.commit()
-        # db.refresh(embedding_record)
+        # Add embedding
+        db.add(embedding_record)
+        db.commit()
+        db.refresh(embedding_record)
 
-        # return embedding_record
+        return embedding_record
 
 
 def batch_extract_embeddings(
