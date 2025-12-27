@@ -1,5 +1,6 @@
 """Data processing modules for caption boundaries detection."""
 
+from caption_boundaries.data.dataset import CaptionBoundaryDataset
 from caption_boundaries.data.font_embeddings import (
     FontCLIPModel,
     batch_extract_embeddings,
@@ -22,8 +23,15 @@ from caption_boundaries.data.reference_selection import (
     select_reference_frame,
     select_reference_frame_simple,
 )
+from caption_boundaries.data.transforms import (
+    AnchorAwareResize,
+    NormalizeImageNet,
+    ResizeStrategy,
+)
 
 __all__ = [
+    # Dataset
+    "CaptionBoundaryDataset",
     # Font embeddings
     "FontCLIPModel",
     "extract_font_embedding",
@@ -43,4 +51,8 @@ __all__ = [
     "select_reference_frame_simple",
     "get_reference_frame_stats",
     "get_all_frame_candidates",
+    # Transforms
+    "AnchorAwareResize",
+    "NormalizeImageNet",
+    "ResizeStrategy",
 ]
