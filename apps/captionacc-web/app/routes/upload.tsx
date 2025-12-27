@@ -1,8 +1,26 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
+import { useLoaderData, useSearchParams } from 'react-router'
+import type { LoaderFunctionArgs } from 'react-router'
 import { AppLayout } from '~/components/AppLayout'
-import { FolderIcon, DocumentIcon, XMarkIcon } from '@heroicons/react/24/outline'
+import { FolderIcon, DocumentIcon, XMarkIcon, ChevronDownIcon } from '@heroicons/react/24/outline'
 import { CloudArrowUpIcon } from '@heroicons/react/20/solid'
+import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react'
 import * as tus from 'tus-js-client'
+
+interface FolderItem {
+  path: string
+  name: string
+}
+
+export async function loader({ request }: LoaderFunctionArgs) {
+  const url = new URL(request.url)
+  const preselectedFolder = url.searchParams.get('folder')
+
+  return new Response(
+    JSON.stringify({ preselectedFolder }),
+    { headers: { 'Content-Type': 'application/json' } }
+  )
+}
 
 interface VideoFilePreview {
   file: File
@@ -39,7 +57,86 @@ function formatDuration(seconds: number): string {
   return `${secs}s`
 }
 
+/**
+ * Collapse single-video folders to avoid unnecessary nesting
+ * Only collapses if the target folder doesn't already exist in local/data
+ * Stops collapsing when reaching an existing folder
+ * Example: "level1/level2/video.mp4" where level2 only has one video
+ * and doesn't exist → becomes: "show/video.mp4" (if show exists or is root)
+ *
+ * @param videos - Array of video files to process
+ * @param preview - If true, don't modify videos, just check if collapses would happen
+ * @returns Number of collapses that were (or would be) performed
+ */
+async function collapseSingleVideoFolders(videos: VideoFilePreview[], preview: boolean = false): Promise<number> {
+  if (videos.length === 0) return 0
+
+  // Fetch existing folders from the server
+  let existingFolders = new Set<string>()
+  try {
+    const response = await fetch('/api/folders')
+    const data = await response.json()
+    existingFolders = new Set((data.folders || []).map((f: { path: string }) => f.path))
+    console.log(`[collapseSingleVideoFolders] Found ${existingFolders.size} existing folders`)
+  } catch (error) {
+    console.error('[collapseSingleVideoFolders] Failed to fetch existing folders:', error)
+    return 0 // Don't collapse if we can't check existing folders
+  }
+
+  let totalCollapses = 0
+  let changed = true
+
+  while (changed) {
+    changed = false
+
+    // Build a map of folder paths to their video counts
+    const folderCounts = new Map<string, number>()
+
+    for (const video of videos) {
+      const pathParts = video.relativePath.split('/')
+      // Count videos in each folder level
+      for (let i = 1; i < pathParts.length; i++) {
+        const folderPath = pathParts.slice(0, i).join('/')
+        folderCounts.set(folderPath, (folderCounts.get(folderPath) || 0) + 1)
+      }
+    }
+
+    // Check each video for single-video parent folders
+    for (const video of videos) {
+      const pathParts = video.relativePath.split('/')
+
+      // Need at least 2 parts (folder/file) to collapse
+      if (pathParts.length < 2) continue
+
+      // Check if the immediate parent folder only has this one video
+      const parentFolder = pathParts.slice(0, -1).join('/')
+
+      // Collapse if the parent folder:
+      // 1. Would only have this one video (from current upload batch)
+      // 2. Doesn't already exist in local/data
+      if (folderCounts.get(parentFolder) === 1 && !existingFolders.has(parentFolder)) {
+        totalCollapses++
+
+        if (!preview) {
+          const filename = pathParts[pathParts.length - 1]
+          const newPathParts = pathParts.slice(0, -2).concat(filename)
+          const newRelativePath = newPathParts.length > 0 ? newPathParts.join('/') : filename
+
+          console.log(`[collapseSingleVideoFolders] Collapsing: ${video.relativePath} -> ${newRelativePath}`)
+          video.relativePath = newRelativePath
+          changed = true  // Only continue looping if we actually modified paths
+        }
+      }
+    }
+  }
+
+  return totalCollapses
+}
+
 export default function UploadPage() {
+  const loaderData = useLoaderData() as { preselectedFolder: string | null }
+  const [searchParams] = useSearchParams()
+
   const [dragActive, setDragActive] = useState(false)
   const [videoFiles, setVideoFiles] = useState<VideoFilePreview[]>([])
   const [skippedFiles, setSkippedFiles] = useState<File[]>([])
@@ -48,9 +145,31 @@ export default function UploadPage() {
   const [uploading, setUploading] = useState(false)
   const [uploadQueue, setUploadQueue] = useState<string[]>([])
   const [activeUploads, setActiveUploads] = useState<Map<string, tus.Upload>>(new Map())
+  const [selectedFolder, setSelectedFolder] = useState<string>('')
+  const [availableFolders, setAvailableFolders] = useState<FolderItem[]>([])
+  const [collapseEnabled, setCollapseEnabled] = useState(true)
+  const [collapsesAvailable, setCollapsesAvailable] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const folderInputRef = useRef<HTMLInputElement>(null)
+  const dragCounterRef = useRef(0)
+
+  // Load folders and handle preselected folder
+  useEffect(() => {
+    fetch('/api/folders')
+      .then(res => res.json())
+      .then(data => {
+        setAvailableFolders(data.folders || [])
+      })
+      .catch(err => {
+        console.error('Failed to load folders:', err)
+      })
+
+    // Set preselected folder from URL
+    if (loaderData.preselectedFolder) {
+      setSelectedFolder(loaderData.preselectedFolder)
+    }
+  }, [loaderData.preselectedFolder])
 
   const processFiles = useCallback(async (fileList: FileList | null) => {
     if (!fileList || fileList.length === 0) return
@@ -78,6 +197,17 @@ export default function UploadPage() {
     }
 
     console.log(`[processFiles] Result: ${videos.length} videos, ${skipped.length} skipped`)
+
+    // Check if collapses are available (preview mode)
+    const collapseCount = await collapseSingleVideoFolders(videos, true)
+    setCollapsesAvailable(collapseCount > 0)
+    console.log(`[processFiles] ${collapseCount} collapse(s) available`)
+
+    // Apply collapse immediately if available (so preview shows collapsed paths)
+    if (collapseCount > 0) {
+      await collapseSingleVideoFolders(videos, false)
+      console.log('[processFiles] Applied folder collapse to preview')
+    }
 
     // Check for duplicates
     if (videos.length > 0) {
@@ -114,13 +244,19 @@ export default function UploadPage() {
   const handleDragEnter = (e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    setDragActive(true)
+    dragCounterRef.current++
+    if (dragCounterRef.current === 1) {
+      setDragActive(true)
+    }
   }
 
   const handleDragLeave = (e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    setDragActive(false)
+    dragCounterRef.current--
+    if (dragCounterRef.current === 0) {
+      setDragActive(false)
+    }
   }
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -131,6 +267,7 @@ export default function UploadPage() {
   const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
+    dragCounterRef.current = 0
     setDragActive(false)
 
     const items = e.dataTransfer.items
@@ -214,6 +351,24 @@ export default function UploadPage() {
   // Estimate upload time (assuming 10 Mbps = 1.25 MB/s)
   const estimatedSeconds = totalSize / (1.25 * 1024 * 1024)
 
+  const handleCollapseToggle = async (enabled: boolean) => {
+    setCollapseEnabled(enabled)
+
+    if (enabled && collapsesAvailable) {
+      // Re-apply collapse
+      console.log('[handleCollapseToggle] Applying collapse...')
+      await collapseSingleVideoFolders(videoFiles, false)
+      setVideoFiles([...videoFiles])  // Trigger re-render
+    } else {
+      // Restore original paths
+      console.log('[handleCollapseToggle] Restoring original paths...')
+      setVideoFiles(prev => prev.map(v => ({
+        ...v,
+        relativePath: (v.file as any).webkitRelativePath || v.file.name
+      })))
+    }
+  }
+
   const startUpload = async () => {
     setShowConfirmation(false)
     setUploading(true)
@@ -244,7 +399,12 @@ export default function UploadPage() {
       // e.g., "show_name/video_name.mp4" -> videoPath: "show_name/video_name"
       const pathParts = video.relativePath.split('/')
       const filename = pathParts[pathParts.length - 1]
-      const videoPath = pathParts.slice(0, -1).concat(filename.replace(/\.\w+$/, '')).join('/')
+      let videoPath = pathParts.slice(0, -1).concat(filename.replace(/\.\w+$/, '')).join('/')
+
+      // Prepend selected folder if any
+      if (selectedFolder) {
+        videoPath = selectedFolder + '/' + videoPath
+      }
 
       const upload = new tus.Upload(video.file, {
         endpoint: '/api/upload',
@@ -317,10 +477,33 @@ export default function UploadPage() {
     localStorage.setItem('upload-progress', JSON.stringify(progress))
   }
 
-  const completedCount = videoFiles.filter(v => v.uploadStatus === 'complete').length
-  const overallProgress = videoFiles.length > 0
-    ? (completedCount / videoFiles.length) * 100
+  const selectedCount = videoFiles.filter(v => v.selected).length
+  const completedCount = videoFiles.filter(v => v.selected && v.uploadStatus === 'complete').length
+  const overallProgress = selectedCount > 0
+    ? (completedCount / selectedCount) * 100
     : 0
+
+  // Calculate target path for a video (showing preview of collapse if enabled)
+  const getTargetPath = (video: VideoFilePreview) => {
+    // Use current relativePath which may or may not be collapsed yet
+    // When collapse is enabled but not yet applied, we show what it WILL be
+    // When collapse is disabled, we show the uncollapsed path
+    const pathParts = video.relativePath.split('/')
+    const filename = pathParts[pathParts.length - 1]
+    let videoPath = pathParts.slice(0, -1).concat(filename.replace(/\.\w+$/, '')).join('/')
+
+    // Prepend selected folder if any
+    if (selectedFolder) {
+      videoPath = selectedFolder + '/' + videoPath
+    }
+
+    return videoPath
+  }
+
+  // Get original file path (before collapse)
+  const getOriginalPath = (video: VideoFilePreview) => {
+    return (video.file as any).webkitRelativePath || video.file.name
+  }
 
   return (
     <AppLayout>
@@ -338,6 +521,54 @@ export default function UploadPage() {
 
         {!showConfirmation && !uploading && (
           <div className="mt-8">
+            {/* Folder Selection */}
+            <div className="mb-6">
+              <label htmlFor="folder-select" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Upload to folder (optional)
+              </label>
+              <Menu as="div" className="relative w-full sm:w-96">
+                <MenuButton className="relative w-full cursor-pointer rounded-md bg-white dark:bg-gray-800 py-2 pl-3 pr-10 text-left shadow-sm ring-1 ring-inset ring-gray-300 dark:ring-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 sm:text-sm">
+                  <span className="block truncate text-gray-900 dark:text-gray-200">
+                    {selectedFolder || 'Root (no folder)'}
+                  </span>
+                  <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
+                    <ChevronDownIcon className="h-5 w-5 text-gray-400" aria-hidden="true" />
+                  </span>
+                </MenuButton>
+
+                <MenuItems className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md bg-white dark:bg-gray-800 py-1 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm">
+                  <MenuItem>
+                    <button
+                      onClick={() => setSelectedFolder('')}
+                      className="w-full text-left px-3 py-2 text-sm text-gray-900 dark:text-gray-200 data-[focus]:bg-gray-100 dark:data-[focus]:bg-gray-700 data-[focus]:outline-none"
+                    >
+                      Root (no folder)
+                    </button>
+                  </MenuItem>
+                  {availableFolders.map(folder => (
+                    <MenuItem key={folder.path}>
+                      <button
+                        onClick={() => setSelectedFolder(folder.path)}
+                        className="w-full text-left px-3 py-2 text-sm text-gray-900 dark:text-gray-200 data-[focus]:bg-gray-100 dark:data-[focus]:bg-gray-700 data-[focus]:outline-none"
+                      >
+                        {folder.path}
+                      </button>
+                    </MenuItem>
+                  ))}
+                  {availableFolders.length === 0 && (
+                    <div className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400 italic">
+                      No folders available
+                    </div>
+                  )}
+                </MenuItems>
+              </Menu>
+              {selectedFolder && (
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-500">
+                  Videos will be uploaded to: <span className="font-medium">{selectedFolder}/</span>
+                </p>
+              )}
+            </div>
+
             {/* Drop Zone */}
             <div
               className={`
@@ -452,6 +683,26 @@ export default function UploadPage() {
                 </div>
               )}
 
+              {/* Folder Collapse Toggle */}
+              {collapsesAvailable && (
+                <div className="mt-4">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={collapseEnabled}
+                      onChange={(e) => handleCollapseToggle(e.target.checked)}
+                      className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <span className="text-sm text-gray-700 dark:text-gray-300">
+                      Collapse single-video folders
+                    </span>
+                    <span className="text-xs text-gray-500 dark:text-gray-500">
+                      (simplifies folder structure)
+                    </span>
+                  </label>
+                </div>
+              )}
+
               {/* Stats */}
               <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <div className="bg-gray-50 dark:bg-gray-900 px-4 py-3 rounded-md">
@@ -498,7 +749,10 @@ export default function UploadPage() {
                           />
                         </th>
                         <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">
-                          File Path
+                          Original Path
+                        </th>
+                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">
+                          Target Path
                         </th>
                         <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">
                           Size
@@ -519,8 +773,11 @@ export default function UploadPage() {
                               className="h-4 w-4 rounded border-gray-300 text-indigo-600"
                             />
                           </td>
-                          <td className="px-3 py-3 text-sm text-gray-900 dark:text-gray-200">
-                            {video.relativePath}
+                          <td className="px-3 py-3 text-sm text-gray-600 dark:text-gray-400">
+                            {getOriginalPath(video)}
+                          </td>
+                          <td className="px-3 py-3 text-sm text-gray-900 dark:text-gray-200 font-medium">
+                            {getTargetPath(video)}
                           </td>
                           <td className="px-3 py-3 text-sm text-gray-600 dark:text-gray-400">
                             {formatBytes(video.size)}
@@ -602,10 +859,10 @@ export default function UploadPage() {
             <div className="px-4 py-5 sm:p-6">
               <div className="flex items-center justify-between">
                 <h3 className="text-base font-semibold text-gray-900 dark:text-gray-200">
-                  {uploading ? `Uploading ${videoFiles.length} videos...` : 'Upload Complete'}
+                  {uploading ? `Uploading ${selectedCount} video${selectedCount !== 1 ? 's' : ''}...` : 'Upload Complete'}
                 </h3>
                 <div className="text-sm text-gray-600 dark:text-gray-400">
-                  {completedCount} of {videoFiles.length} complete ({Math.round(overallProgress)}%)
+                  {completedCount} of {selectedCount} complete ({Math.round(overallProgress)}%)
                 </div>
               </div>
 
@@ -672,7 +929,7 @@ export default function UploadPage() {
                 ))}
               </div>
 
-              {completedCount === videoFiles.length && completedCount > 0 && (
+              {completedCount === selectedCount && completedCount > 0 && (
                 <div className="mt-6 rounded-lg bg-green-50 dark:bg-green-900/20 p-6 border border-green-200 dark:border-green-800">
                   <div className="flex items-start">
                     <div className="flex-shrink-0">
