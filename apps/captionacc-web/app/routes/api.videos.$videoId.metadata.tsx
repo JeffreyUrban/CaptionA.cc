@@ -63,7 +63,7 @@ function getOrCreateDatabase(videoId: string) {
       CREATE TRIGGER IF NOT EXISTS update_boundary_timestamp
       AFTER UPDATE OF start_frame_index, end_frame_index, boundary_state, boundary_pending ON annotations
       BEGIN
-        UPDATE annotations
+        UPDATE captions
         SET boundary_updated_at = datetime('now')
         WHERE id = NEW.id;
       END;
@@ -71,7 +71,7 @@ function getOrCreateDatabase(videoId: string) {
       CREATE TRIGGER IF NOT EXISTS update_text_timestamp
       AFTER UPDATE OF text, text_pending, text_status, text_notes, text_ocr_combined ON annotations
       BEGIN
-        UPDATE annotations
+        UPDATE captions
         SET text_updated_at = datetime('now')
         WHERE id = NEW.id;
       END;
@@ -88,7 +88,7 @@ function fillAnnotationGaps(db: Database, totalFrames: number): number {
   // Get all existing annotations sorted by start_frame_index
   const annotations = db.prepare(`
     SELECT start_frame_index, end_frame_index
-    FROM annotations
+    FROM captions
     ORDER BY start_frame_index
   `).all() as Array<{ start_frame_index: number; end_frame_index: number }>
 
@@ -100,7 +100,7 @@ function fillAnnotationGaps(db: Database, totalFrames: number): number {
     if (annotation.start_frame_index > expectedFrame) {
       // Create gap annotation for frames [expectedFrame, annotation.start_frame_index - 1]
       db.prepare(`
-        INSERT INTO annotations (start_frame_index, end_frame_index, boundary_state, boundary_pending)
+        INSERT INTO captions (start_frame_index, end_frame_index, boundary_state, boundary_pending)
         VALUES (?, ?, 'gap', 0)
       `).run(expectedFrame, annotation.start_frame_index - 1)
       gapsCreated++
@@ -113,7 +113,7 @@ function fillAnnotationGaps(db: Database, totalFrames: number): number {
   // Check if there's a gap at the end
   if (expectedFrame < totalFrames) {
     db.prepare(`
-      INSERT INTO annotations (start_frame_index, end_frame_index, boundary_state, boundary_pending)
+      INSERT INTO captions (start_frame_index, end_frame_index, boundary_state, boundary_pending)
       VALUES (?, ?, 'gap', 0)
     `).run(expectedFrame, totalFrames - 1)
     gapsCreated++

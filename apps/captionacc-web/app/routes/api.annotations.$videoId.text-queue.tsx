@@ -62,7 +62,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
         text_pending,
         text_status,
         created_at
-      FROM annotations
+      FROM captions
       WHERE (text IS NULL OR text_pending = 1)
         AND boundary_state != 'gap'
       ORDER BY start_frame_index ASC

@@ -50,7 +50,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
     // Find the next pending or gap annotation with lowest start_frame_index
     // Pending annotations take priority over gaps
     const annotation = db.prepare(`
-      SELECT * FROM annotations
+      SELECT * FROM captions
       WHERE boundary_pending = 1 OR boundary_state = 'gap'
       ORDER BY boundary_pending DESC, start_frame_index ASC
       LIMIT 1

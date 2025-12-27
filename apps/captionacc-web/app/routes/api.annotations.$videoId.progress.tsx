@@ -39,14 +39,14 @@ export async function loader({ params }: LoaderFunctionArgs) {
     // Calculate total frames in annotations that are not gaps and not pending
     const result = db.prepare(`
       SELECT SUM(end_frame_index - start_frame_index + 1) as completed_frames
-      FROM annotations
+      FROM captions
       WHERE boundary_state != 'gap' AND boundary_pending = 0
     `).get() as { completed_frames: number | null }
 
     // Get total frames from all annotations (should equal video total)
     const totalResult = db.prepare(`
       SELECT SUM(end_frame_index - start_frame_index + 1) as total_frames
-      FROM annotations
+      FROM captions
     `).get() as { total_frames: number }
 
     db.close()
