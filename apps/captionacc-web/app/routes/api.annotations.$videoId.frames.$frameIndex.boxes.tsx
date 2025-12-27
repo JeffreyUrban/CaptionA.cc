@@ -196,6 +196,16 @@ export async function loader({ params }: LoaderFunctionArgs) {
       userAnnotationMap.set(ann.box_index, ann.label)
     })
 
+    // Convert all boxes to bounds for feature extraction
+    const allBoxBounds = ocrAnnotations.map(annotation => {
+      const [_text, _conf, [x, y, width, height]] = annotation
+      const boxLeft = Math.floor(x * layoutConfig.frame_width)
+      const boxBottom = Math.floor((1 - y) * layoutConfig.frame_height)
+      const boxTop = boxBottom - Math.floor(height * layoutConfig.frame_height)
+      const boxRight = boxLeft + Math.floor(width * layoutConfig.frame_width)
+      return { left: boxLeft, top: boxTop, right: boxRight, bottom: boxBottom }
+    })
+
     // Process boxes
     const boxes: BoxData[] = ocrAnnotations.map((annotation, boxIndex) => {
       // OCR annotation format: [text, confidence, [x, y, width, height]]
@@ -213,7 +223,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
       const originalBounds = { left: boxLeft, top: boxTop, right: boxRight, bottom: boxBottom }
 
       // Predict label (with Bayesian model if available)
-      const prediction = predictBoxLabel(originalBounds, layoutConfig, db)
+      const prediction = predictBoxLabel(originalBounds, layoutConfig, allBoxBounds, db)
 
       // Get user annotation (if exists)
       const userLabel = userAnnotationMap.get(boxIndex) || null
@@ -357,6 +367,16 @@ export async function action({ params, request }: ActionFunctionArgs) {
     const modelInfo = db.prepare('SELECT model_version FROM box_classification_model WHERE id = 1').get() as { model_version: string } | undefined
     const modelVersion = modelInfo?.model_version || null
 
+    // Convert all boxes to bounds for feature extraction
+    const allBoxBounds = ocrAnnotations.map(annotation => {
+      const [_text, _conf, [x, y, width, height]] = annotation
+      const boxLeft = Math.floor(x * layoutConfig.frame_width)
+      const boxBottom = Math.floor((1 - y) * layoutConfig.frame_height)
+      const boxTop = boxBottom - Math.floor(height * layoutConfig.frame_height)
+      const boxRight = boxLeft + Math.floor(width * layoutConfig.frame_width)
+      return { left: boxLeft, top: boxTop, right: boxRight, bottom: boxBottom }
+    })
+
     // Prepare insert/update statement
     const upsert = db.prepare(`
       INSERT INTO full_frame_box_labels (
@@ -395,7 +415,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
       let predictedConfidence: number = 0.5
 
       if (fullLayoutConfig) {
-        const prediction = predictBoxLabel(originalBounds, fullLayoutConfig, db)
+        const prediction = predictBoxLabel(originalBounds, fullLayoutConfig, allBoxBounds, db)
         predictedLabel = prediction.label
         predictedConfidence = prediction.confidence
       }

@@ -112,6 +112,15 @@ export async function action({ params, request }: ActionFunctionArgs) {
         height: number
       }>
 
+      // Convert all boxes to bounds for feature extraction
+      const allBoxBounds = ocrBoxes.map(box => {
+        const boxLeft = Math.floor(box.x * layoutConfig.frame_width)
+        const boxBottom = Math.floor((1 - box.y) * layoutConfig.frame_height)
+        const boxTop = boxBottom - Math.floor(box.height * layoutConfig.frame_height)
+        const boxRight = boxLeft + Math.floor(box.width * layoutConfig.frame_width)
+        return { left: boxLeft, top: boxTop, right: boxRight, bottom: boxBottom }
+      })
+
       const boxesInRectangle: number[] = []
 
       // Find all boxes that intersect with rectangle
@@ -188,7 +197,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
             const originalBounds = { left: boxLeft, top: boxTop, right: boxRight, bottom: boxBottom }
 
             // Get prediction for this box
-            const prediction = predictBoxLabel(originalBounds, layoutConfig, db)
+            const prediction = predictBoxLabel(originalBounds, layoutConfig, allBoxBounds, db)
 
             stmt.run(
               frameIndex,

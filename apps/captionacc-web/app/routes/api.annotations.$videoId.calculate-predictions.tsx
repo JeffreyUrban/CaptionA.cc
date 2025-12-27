@@ -103,35 +103,53 @@ export async function action({ params }: ActionFunctionArgs) {
     let processedCount = 0
     const startTime = Date.now()
 
-    // Calculate and store predictions
+    // Group boxes by frame for local feature extraction
+    const boxesByFrame = new Map<number, typeof boxes>()
     for (const box of boxes) {
-      // Convert fractional coordinates to pixel coordinates
-      const left = Math.floor(box.x * layoutConfig.frame_width)
-      const bottom = Math.floor((1 - box.y) * layoutConfig.frame_height)
-      const boxWidth = Math.floor(box.width * layoutConfig.frame_width)
-      const boxHeight = Math.floor(box.height * layoutConfig.frame_height)
-      const top = bottom - boxHeight
-      const right = left + boxWidth
+      if (!boxesByFrame.has(box.frame_index)) {
+        boxesByFrame.set(box.frame_index, [])
+      }
+      boxesByFrame.get(box.frame_index)!.push(box)
+    }
 
-      const bounds = { left, top, right, bottom }
+    console.log(`[Calculate Predictions] Processing ${boxesByFrame.size} frames...`)
 
-      // Get prediction
-      const prediction = predictBoxLabel(bounds, layoutConfig, db)
+    // Calculate and store predictions frame by frame
+    for (const [frameIndex, frameBoxes] of boxesByFrame) {
+      // Convert all boxes in this frame to BoxBounds for feature extraction
+      const allBoxBounds = frameBoxes.map(b => {
+        const left = Math.floor(b.x * layoutConfig.frame_width)
+        const bottom = Math.floor((1 - b.y) * layoutConfig.frame_height)
+        const boxWidth = Math.floor(b.width * layoutConfig.frame_width)
+        const boxHeight = Math.floor(b.height * layoutConfig.frame_height)
+        const top = bottom - boxHeight
+        const right = left + boxWidth
+        return { left, top, right, bottom }
+      })
 
-      // Update database
-      updateStmt.run(
-        prediction.label,
-        prediction.confidence,
-        modelVersion,
-        box.id
-      )
+      // Process each box in this frame
+      for (let i = 0; i < frameBoxes.length; i++) {
+        const box = frameBoxes[i]!
+        const bounds = allBoxBounds[i]!
 
-      processedCount++
+        // Get prediction with all boxes from this frame
+        const prediction = predictBoxLabel(bounds, layoutConfig, allBoxBounds, db)
 
-      // Log progress every 1000 boxes
-      if (processedCount % 1000 === 0) {
-        const elapsed = ((Date.now() - startTime) / 1000).toFixed(1)
-        console.log(`[Calculate Predictions] Processed ${processedCount}/${boxes.length} boxes (${elapsed}s)`)
+        // Update database
+        updateStmt.run(
+          prediction.label,
+          prediction.confidence,
+          modelVersion,
+          box.id
+        )
+
+        processedCount++
+
+        // Log progress every 1000 boxes
+        if (processedCount % 1000 === 0) {
+          const elapsed = ((Date.now() - startTime) / 1000).toFixed(1)
+          console.log(`[Calculate Predictions] Processed ${processedCount}/${boxes.length} boxes (${elapsed}s)`)
+        }
       }
     }
 
