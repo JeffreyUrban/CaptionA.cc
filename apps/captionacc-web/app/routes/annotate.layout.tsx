@@ -300,12 +300,15 @@ export default function AnnotateLayout() {
       // Reload layout config to get updated crop bounds
       await loadQueue(false)
 
+      // Reload analysis boxes to show updated predictions
+      await loadAnalysisBoxes()
+
       // Reset the annotation counter
       setAnnotationsSinceRecalc(0)
     } catch (error) {
       console.error('Error recalculating crop bounds:', error)
     }
-  }, [videoId, loadQueue])
+  }, [videoId, loadQueue, loadAnalysisBoxes])
 
   // Priority loading on mount: Analysis boxes and queue in parallel
   useEffect(() => {
@@ -1351,7 +1354,7 @@ export default function AnnotateLayout() {
                     if (!response.ok) throw new Error('Failed to mark layout complete')
 
                     // Update local state
-                    setLayoutComplete(true)
+                    setLayoutApproved(true)
 
                     // Trigger frame re-cropping in background
                     fetch(`/api/annotations/${encodeURIComponent(videoId)}/recrop-frames`, {

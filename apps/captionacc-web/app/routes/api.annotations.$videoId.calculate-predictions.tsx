@@ -2,7 +2,7 @@ import { type ActionFunctionArgs } from 'react-router'
 import Database from 'better-sqlite3'
 import { resolve } from 'path'
 import { existsSync } from 'fs'
-import { predictBoxLabel } from '~/utils/box-prediction'
+import { predictBoxLabel, trainModel, initializeSeedModel } from '~/utils/box-prediction'
 
 interface VideoLayoutConfig {
   frame_width: number
@@ -62,6 +62,17 @@ export async function action({ params }: ActionFunctionArgs) {
         status: 404,
         headers: { 'Content-Type': 'application/json' }
       })
+    }
+
+    // Initialize seed model if no model exists yet
+    initializeSeedModel(db)
+
+    // Train model using user annotations (replaces seed model if 10+ annotations available)
+    const trainingCount = trainModel(db, layoutConfig)
+    if (trainingCount) {
+      console.log(`[Calculate Predictions] Model retrained with ${trainingCount} annotations`)
+    } else {
+      console.log('[Calculate Predictions] Using seed model or heuristics (insufficient training data)')
     }
 
     // Get model version if available
