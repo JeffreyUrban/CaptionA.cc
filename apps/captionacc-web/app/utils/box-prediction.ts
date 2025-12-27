@@ -80,11 +80,12 @@ interface ModelRow {
 }
 
 /**
- * Extract 7 features from a box given layout parameters.
+ * Extract 7 features from a box based on local clustering with other boxes.
  *
- * Features match the Python implementation in box_classification package.
+ * All features are independent of pre-computed cluster parameters to avoid
+ * circular dependencies. Uses k-nearest neighbors approach.
  */
-function extractFeatures(box: BoxBounds, layout: VideoLayoutConfig): number[] {
+function extractFeatures(box: BoxBounds, layout: VideoLayoutConfig, allBoxes: BoxBounds[]): number[] {
   const boxWidth = box.right - box.left
   const boxHeight = box.bottom - box.top
   const boxCenterX = (box.left + box.right) / 2
@@ -92,60 +93,110 @@ function extractFeatures(box: BoxBounds, layout: VideoLayoutConfig): number[] {
   const boxArea = boxWidth * boxHeight
   const frameArea = layout.frame_width * layout.frame_height
 
-  // Feature 1: Vertical alignment Z-score
-  let verticalAlignmentZScore = 0.0
-  if (layout.vertical_position !== null && layout.vertical_std !== null) {
-    const verticalDistance = Math.abs(boxCenterY - layout.vertical_position)
-    const verticalStd = layout.vertical_std > 0 ? layout.vertical_std : 1.0
-    verticalAlignmentZScore = verticalDistance / verticalStd
-  }
+  // K-nearest neighbors: use ceiling of 20% of total boxes, minimum 5
+  const k = Math.max(5, Math.ceil(allBoxes.length * 0.2))
 
-  // Feature 2: Height similarity Z-score
-  let heightSimilarityZScore = 0.0
-  if (layout.box_height !== null && layout.box_height_std !== null) {
-    const heightDifference = Math.abs(boxHeight - layout.box_height)
-    const heightStd = layout.box_height_std > 0 ? layout.box_height_std : 1.0
-    heightSimilarityZScore = heightDifference / heightStd
-  }
+  // Filter out the current box from allBoxes
+  const otherBoxes = allBoxes.filter(b =>
+    !(b.left === box.left && b.top === box.top && b.right === box.right && b.bottom === box.bottom)
+  )
 
-  // Feature 3: Anchor distance
-  let anchorDistance = 0.0
-  if (layout.anchor_type && layout.anchor_position !== null) {
-    if (layout.anchor_type === 'left') {
-      anchorDistance = Math.abs(box.left - layout.anchor_position)
-    } else if (layout.anchor_type === 'right') {
-      anchorDistance = Math.abs(box.right - layout.anchor_position)
-    } else {  // 'center'
-      anchorDistance = Math.abs(boxCenterX - layout.anchor_position)
+  // Feature 1a: Top edge vertical alignment
+  // Among k boxes with nearest top positions, measure alignment variance
+  let topAlignmentScore = 0.0
+  if (otherBoxes.length > 0) {
+    const sortedByTop = otherBoxes
+      .map(b => ({ box: b, distance: Math.abs(b.top - box.top) }))
+      .sort((a, b) => a.distance - b.distance)
+      .slice(0, Math.min(k, otherBoxes.length))
+
+    if (sortedByTop.length > 1) {
+      const topPositions = sortedByTop.map(item => item.box.top)
+      const mean = topPositions.reduce((sum, val) => sum + val, 0) / topPositions.length
+      const variance = topPositions.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / topPositions.length
+      const std = Math.sqrt(variance)
+      topAlignmentScore = std > 0 ? Math.abs(box.top - mean) / std : 0
     }
   }
 
-  // Feature 4: Crop overlap
-  const overlapLeft = Math.max(box.left, layout.crop_left)
-  const overlapTop = Math.max(box.top, layout.crop_top)
-  const overlapRight = Math.min(box.right, layout.crop_right)
-  const overlapBottom = Math.min(box.bottom, layout.crop_bottom)
+  // Feature 1b: Bottom edge vertical alignment
+  // Among k boxes with nearest bottom positions, measure alignment variance
+  let bottomAlignmentScore = 0.0
+  if (otherBoxes.length > 0) {
+    const sortedByBottom = otherBoxes
+      .map(b => ({ box: b, distance: Math.abs(b.bottom - box.bottom) }))
+      .sort((a, b) => a.distance - b.distance)
+      .slice(0, Math.min(k, otherBoxes.length))
 
-  let cropOverlap = 0.0
-  if (overlapRight > overlapLeft && overlapBottom > overlapTop) {
-    const overlapArea = (overlapRight - overlapLeft) * (overlapBottom - overlapTop)
-    cropOverlap = boxArea > 0 ? overlapArea / boxArea : 0.0
+    if (sortedByBottom.length > 1) {
+      const bottomPositions = sortedByBottom.map(item => item.box.bottom)
+      const mean = bottomPositions.reduce((sum, val) => sum + val, 0) / bottomPositions.length
+      const variance = bottomPositions.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / bottomPositions.length
+      const std = Math.sqrt(variance)
+      bottomAlignmentScore = std > 0 ? Math.abs(box.bottom - mean) / std : 0
+    }
   }
 
-  // Feature 5: Aspect ratio
+  // Feature 2: Height similarity
+  // Among k boxes with nearest bottom positions, measure height variance
+  let heightSimilarityScore = 0.0
+  if (otherBoxes.length > 0) {
+    const sortedByBottom = otherBoxes
+      .map(b => ({ box: b, distance: Math.abs(b.bottom - box.bottom) }))
+      .sort((a, b) => a.distance - b.distance)
+      .slice(0, Math.min(k, otherBoxes.length))
+
+    if (sortedByBottom.length > 1) {
+      const heights = sortedByBottom.map(item => item.box.bottom - item.box.top)
+      const mean = heights.reduce((sum, val) => sum + val, 0) / heights.length
+      const variance = heights.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / heights.length
+      const std = Math.sqrt(variance)
+      heightSimilarityScore = std > 0 ? Math.abs(boxHeight - mean) / std : 0
+    }
+  }
+
+  // Feature 3: Horizontal clustering
+  // Among k boxes nearest by weighted combination of vertical (bottom) and horizontal (center) distance,
+  // measure horizontal center distance variance
+  let horizontalClusteringScore = 0.0
+  if (otherBoxes.length > 0) {
+    const verticalWeight = 0.7  // Weight for vertical proximity
+    const horizontalWeight = 0.3  // Weight for horizontal proximity
+
+    const sortedByCombined = otherBoxes
+      .map(b => {
+        const bCenterX = (b.left + b.right) / 2
+        const verticalDist = Math.abs(b.bottom - box.bottom)
+        const horizontalDist = Math.abs(bCenterX - boxCenterX)
+        const combinedDist = verticalWeight * verticalDist + horizontalWeight * horizontalDist
+        return { box: b, distance: combinedDist, centerX: bCenterX }
+      })
+      .sort((a, b) => a.distance - b.distance)
+      .slice(0, Math.min(k, otherBoxes.length))
+
+    if (sortedByCombined.length > 1) {
+      const centerXs = sortedByCombined.map(item => item.centerX)
+      const mean = centerXs.reduce((sum, val) => sum + val, 0) / centerXs.length
+      const variance = centerXs.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / centerXs.length
+      const std = Math.sqrt(variance)
+      horizontalClusteringScore = std > 0 ? Math.abs(boxCenterX - mean) / std : 0
+    }
+  }
+
+  // Feature 4: Aspect ratio (unchanged)
   const aspectRatio = boxHeight > 0 ? boxWidth / boxHeight : 0.0
 
-  // Feature 6: Normalized Y position
+  // Feature 5: Normalized Y position (unchanged)
   const normalizedYPosition = layout.frame_height > 0 ? boxCenterY / layout.frame_height : 0.0
 
-  // Feature 7: Normalized area
+  // Feature 6: Normalized area (unchanged)
   const normalizedArea = frameArea > 0 ? boxArea / frameArea : 0.0
 
   return [
-    verticalAlignmentZScore,
-    heightSimilarityZScore,
-    anchorDistance,
-    cropOverlap,
+    topAlignmentScore,
+    bottomAlignmentScore,
+    heightSimilarityScore,
+    horizontalClusteringScore,
     aspectRatio,
     normalizedYPosition,
     normalizedArea,
@@ -215,17 +266,18 @@ function loadModelFromDB(db: Database): ModelParams | null {
 function predictBayesian(
   box: BoxBounds,
   layout: VideoLayoutConfig,
-  model: ModelParams
+  model: ModelParams,
+  allBoxes: BoxBounds[]
 ): { label: 'in' | 'out'; confidence: number } {
-  const features = extractFeatures(box, layout)
+  const features = extractFeatures(box, layout, allBoxes)
 
   // Calculate likelihoods: P(features|class) = ∏ Gaussian_PDF(feature_i)
   let likelihoodIn = 1.0
   let likelihoodOut = 1.0
 
   for (let i = 0; i < 7; i++) {
-    likelihoodIn *= gaussianPDF(features[i], model.in_features[i].mean, model.in_features[i].std)
-    likelihoodOut *= gaussianPDF(features[i], model.out_features[i].mean, model.out_features[i].std)
+    likelihoodIn *= gaussianPDF(features[i]!, model.in_features[i]!.mean, model.in_features[i]!.std)
+    likelihoodOut *= gaussianPDF(features[i]!, model.out_features[i]!.mean, model.out_features[i]!.std)
   }
 
   // Apply Bayes' theorem: P(class|features) ∝ P(features|class) * P(class)
@@ -324,6 +376,7 @@ function predictWithHeuristics(
 export function predictBoxLabel(
   boxBounds: BoxBounds,
   layoutConfig: VideoLayoutConfig,
+  allBoxes: BoxBounds[],
   db?: Database
 ): { label: 'in' | 'out'; confidence: number } {
   // Try to use Bayesian model if database provided
@@ -331,7 +384,7 @@ export function predictBoxLabel(
     try {
       const model = loadModelFromDB(db)
       if (model) {
-        return predictBayesian(boxBounds, layoutConfig, model)
+        return predictBayesian(boxBounds, layoutConfig, model, allBoxes)
       }
     } catch (error) {
       // Log error and fall back to heuristics

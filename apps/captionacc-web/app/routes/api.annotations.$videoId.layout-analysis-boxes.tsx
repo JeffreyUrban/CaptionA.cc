@@ -127,47 +127,64 @@ export async function loader({ params }: LoaderFunctionArgs) {
       WHERE id = ?
     `)
 
+    // Group boxes by frame for local feature extraction
+    const boxesByFrame = new Map<number, typeof boxes>()
+    for (const box of boxes) {
+      if (!boxesByFrame.has(box.frame_index)) {
+        boxesByFrame.set(box.frame_index, [])
+      }
+      boxesByFrame.get(box.frame_index)!.push(box)
+    }
+
     // Convert to box data with predictions (calculate on-the-fly if missing)
-    const boxesData: BoxData[] = boxes.map((box) => {
-      // Convert fractional coordinates to pixel coordinates
-      // Note: y is from bottom in OCR data
-      const left = Math.floor(box.x * layoutConfig.frame_width)
-      const bottom = Math.floor((1 - box.y) * layoutConfig.frame_height)
-      const boxWidth = Math.floor(box.width * layoutConfig.frame_width)
-      const boxHeight = Math.floor(box.height * layoutConfig.frame_height)
-      const top = bottom - boxHeight
-      const right = left + boxWidth
+    const boxesData: BoxData[] = []
 
-      const bounds = { left, top, right, bottom }
+    for (const [frameIndex, frameBoxes] of boxesByFrame) {
+      // Convert all boxes in this frame to BoxBounds for feature extraction
+      const allBoxBounds = frameBoxes.map(b => {
+        const left = Math.floor(b.x * layoutConfig.frame_width)
+        const bottom = Math.floor((1 - b.y) * layoutConfig.frame_height)
+        const boxWidth = Math.floor(b.width * layoutConfig.frame_width)
+        const boxHeight = Math.floor(b.height * layoutConfig.frame_height)
+        const top = bottom - boxHeight
+        const right = left + boxWidth
+        return { left, top, right, bottom }
+      })
 
-      // Check for user annotation
-      const userLabel = annotationMap.get(`${box.frame_index}-${box.box_index}`) || null
+      // Process each box in this frame
+      for (let i = 0; i < frameBoxes.length; i++) {
+        const box = frameBoxes[i]!
+        const bounds = allBoxBounds[i]!
 
-      // Use stored prediction if available, otherwise calculate and store
-      let predictedLabel: 'in' | 'out'
-      let predictedConfidence: number
+        // Check for user annotation
+        const userLabel = annotationMap.get(`${box.frame_index}-${box.box_index}`) || null
 
-      if (box.predicted_label && box.predicted_confidence !== null) {
-        // Use stored prediction
-        predictedLabel = box.predicted_label
-        predictedConfidence = box.predicted_confidence
-      } else {
-        // Calculate prediction on-the-fly
-        const prediction = predictBoxLabel(bounds, layoutConfig, db)
-        predictedLabel = prediction.label
-        predictedConfidence = prediction.confidence
+        // Use stored prediction if available, otherwise calculate and store
+        let predictedLabel: 'in' | 'out'
+        let predictedConfidence: number
 
-        // Store for next time
-        updatePredictionStmt.run(predictedLabel, predictedConfidence, box.id)
+        if (box.predicted_label && box.predicted_confidence !== null) {
+          // Use stored prediction
+          predictedLabel = box.predicted_label
+          predictedConfidence = box.predicted_confidence
+        } else {
+          // Calculate prediction on-the-fly
+          const prediction = predictBoxLabel(bounds, layoutConfig, allBoxBounds, db)
+          predictedLabel = prediction.label
+          predictedConfidence = prediction.confidence
+
+          // Store for next time
+          updatePredictionStmt.run(predictedLabel, predictedConfidence, box.id)
+        }
+
+        boxesData.push({
+          bounds,
+          predictedLabel,
+          predictedConfidence,
+          userLabel,
+        })
       }
-
-      return {
-        bounds,
-        predictedLabel,
-        predictedConfidence,
-        userLabel,
-      }
-    })
+    }
 
     db.close()
 
