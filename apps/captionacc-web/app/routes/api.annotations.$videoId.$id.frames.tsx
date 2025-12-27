@@ -56,7 +56,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
     const db = getDatabase(videoId)
 
     // Get annotation to determine frame range
-    const annotation = db.prepare('SELECT * FROM annotations WHERE id = ?').get(annotationId) as Annotation | undefined
+    const annotation = db.prepare('SELECT * FROM captions WHERE id = ?').get(annotationId) as Annotation | undefined
 
     if (!annotation) {
       db.close()
