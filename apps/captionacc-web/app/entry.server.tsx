@@ -12,11 +12,15 @@ import { ServerRouter } from "react-router";
 import { isbot } from "isbot";
 import { renderToPipeableStream } from "react-dom/server";
 import { startPeriodicCleanup } from "~/services/video-cleanup";
+import { recoverStalledProcessing } from "~/services/video-processing";
 
 const ABORT_DELAY = 5_000;
 
 // Start periodic cleanup on server startup
 startPeriodicCleanup();
+
+// Recover any stalled processing jobs from server restart
+recoverStalledProcessing();
 
 export default function handleRequest(
   request: Request,

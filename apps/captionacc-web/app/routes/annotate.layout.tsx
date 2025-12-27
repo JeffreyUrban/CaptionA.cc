@@ -965,6 +965,9 @@ export default function AnnotateLayout() {
   const handleCanvasClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!canvasRef.current || canvasSize.width === 0) return
 
+    // Disable annotations during recalculation
+    if (annotationsSinceRecalc >= RECALC_THRESHOLD) return
+
     // Only handle left and right button
     if (e.button !== 0 && e.button !== 2) return
 
@@ -1034,6 +1037,9 @@ export default function AnnotateLayout() {
   // Handle mouse move - update selection rectangle or detect hover
   const handleCanvasMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!canvasRef.current || canvasSize.width === 0) return
+
+    // Disable annotations during recalculation
+    if (annotationsSinceRecalc >= RECALC_THRESHOLD) return
 
     const canvas = canvasRef.current
     const rect = canvas.getBoundingClientRect()
@@ -1301,6 +1307,17 @@ export default function AnnotateLayout() {
                       <div className="text-white text-lg">Loading analysis boxes...</div>
                     </div>
                   )}
+                  {annotationsSinceRecalc >= RECALC_THRESHOLD && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-blue-900 bg-opacity-70 pointer-events-none">
+                      <div className="bg-blue-800 px-6 py-4 rounded-lg shadow-lg">
+                        <div className="text-white text-lg font-semibold mb-2">Recalculating Crop Bounds</div>
+                        <div className="text-blue-200 text-sm">Annotations temporarily disabled...</div>
+                        <div className="mt-3 h-1 w-64 rounded-full bg-blue-700">
+                          <div className="h-1 rounded-full bg-blue-300 animate-pulse" style={{ width: '100%' }} />
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : viewMode === 'frame' && currentFrameBoxes ? (
                 <div className="relative inline-block max-w-full max-h-full">
@@ -1318,6 +1335,17 @@ export default function AnnotateLayout() {
                     onMouseMove={handleCanvasMouseMove}
                     onContextMenu={handleCanvasContextMenu}
                   />
+                  {annotationsSinceRecalc >= RECALC_THRESHOLD && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-blue-900 bg-opacity-70 pointer-events-none">
+                      <div className="bg-blue-800 px-6 py-4 rounded-lg shadow-lg">
+                        <div className="text-white text-lg font-semibold mb-2">Recalculating Crop Bounds</div>
+                        <div className="text-blue-200 text-sm">Annotations temporarily disabled...</div>
+                        <div className="mt-3 h-1 w-64 rounded-full bg-blue-700">
+                          <div className="h-1 rounded-full bg-blue-300 animate-pulse" style={{ width: '100%' }} />
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="flex min-h-[400px] items-center justify-center text-gray-500 dark:text-gray-400">

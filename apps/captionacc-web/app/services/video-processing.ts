@@ -7,7 +7,7 @@
 import { spawn } from 'child_process'
 import { resolve } from 'path'
 import Database from 'better-sqlite3'
-import { existsSync } from 'fs'
+import { existsSync, readdirSync } from 'fs'
 
 interface ProcessingOptions {
   videoPath: string  // Relative path like "show_name/video_name"
@@ -38,7 +38,30 @@ export async function triggerVideoProcessing(options: ProcessingOptions): Promis
   }
 
   if (!existsSync(videoFile)) {
-    throw new Error(`Video file not found: ${videoFile}`)
+    // Video file not found - likely renamed or deleted
+    // Mark as failed gracefully instead of throwing
+    console.error(`[VideoProcessing] Video file not found: ${videoFile}`)
+
+    const db = new Database(dbPath)
+    try {
+      db.prepare(`
+        UPDATE processing_status
+        SET status = 'error',
+            error_message = 'Video file not found (may have been renamed or deleted)',
+            error_details = ?,
+            error_occurred_at = datetime('now')
+        WHERE id = 1
+      `).run(JSON.stringify({
+        reason: 'file_not_found',
+        videoFile,
+        videoPath
+      }))
+    } finally {
+      db.close()
+    }
+
+    console.log(`[VideoProcessing] Marked ${videoPath} as failed (file not found)`)
+    return
   }
 
   // Update status to processing
@@ -100,6 +123,24 @@ export async function triggerVideoProcessing(options: ProcessingOptions): Promis
   fullFramesCmd.stdout?.on('data', (data) => {
     stdout += data.toString()
     console.log(`[full_frames] ${data.toString().trim()}`)
+
+    // Update heartbeat on any output to detect stalled processing
+    try {
+      if (existsSync(dbPath)) {
+        const db = new Database(dbPath)
+        try {
+          db.prepare(`
+            UPDATE processing_status
+            SET last_heartbeat_at = datetime('now')
+            WHERE id = 1
+          `).run()
+        } finally {
+          db.close()
+        }
+      }
+    } catch (error) {
+      console.log(`[VideoProcessing] Failed to update heartbeat: ${error}`)
+    }
 
     // Parse progress from output (if available)
     // Example: "Step 2/3: Running OCR (42/100 frames)"
@@ -240,5 +281,104 @@ export function getProcessingStatus(videoPath: string) {
     return status
   } finally {
     db.close()
+  }
+}
+
+/**
+ * Recover stalled processing jobs on server startup
+ * Detects jobs that were interrupted by server restart
+ */
+export function recoverStalledProcessing() {
+  console.log('[VideoProcessing] Checking for stalled processing jobs...')
+
+  const dataDir = resolve(process.cwd(), '..', '..', 'local', 'data')
+  if (!existsSync(dataDir)) {
+    return
+  }
+
+  // Scan all video directories for stalled processing
+  const scanDirectory = (dirPath: string, relativePath: string = '') => {
+    const entries = readdirSync(dirPath, { withFileTypes: true })
+
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        const newRelativePath = relativePath ? `${relativePath}/${entry.name}` : entry.name
+        const subPath = resolve(dirPath, entry.name)
+
+        // Check if this directory has an annotations.db
+        const dbPath = resolve(subPath, 'annotations.db')
+        if (existsSync(dbPath)) {
+          checkAndRecoverVideo(dbPath, newRelativePath)
+        }
+
+        // Recursively scan subdirectories
+        scanDirectory(subPath, newRelativePath)
+      }
+    }
+  }
+
+  scanDirectory(dataDir)
+}
+
+/**
+ * Check a single video for stalled processing and recover if needed
+ */
+function checkAndRecoverVideo(dbPath: string, videoPath: string) {
+  try {
+    const db = new Database(dbPath)
+    try {
+      const status = db.prepare(`
+        SELECT status, current_job_id, processing_started_at, last_heartbeat_at
+        FROM processing_status WHERE id = 1
+      `).get() as {
+        status: string
+        current_job_id: string | null
+        processing_started_at: string | null
+        last_heartbeat_at: string | null
+      } | undefined
+
+      if (!status) return
+
+      // Check if processing is in an active state
+      const activeStates = ['extracting_frames', 'running_ocr', 'analyzing_layout']
+      if (!activeStates.includes(status.status)) return
+
+      // Check if process is still running
+      const pid = status.current_job_id ? parseInt(status.current_job_id) : null
+      let processRunning = false
+
+      if (pid) {
+        try {
+          // Check if process exists (doesn't kill it)
+          process.kill(pid, 0)
+          processRunning = true
+        } catch {
+          processRunning = false
+        }
+      }
+
+      if (!processRunning) {
+        // Process is not running - mark as failed
+        console.log(`[VideoProcessing] Recovering stalled processing for ${videoPath} (PID ${pid} not running)`)
+
+        db.prepare(`
+          UPDATE processing_status
+          SET status = 'error',
+              error_message = 'Processing interrupted (server restart or process crash)',
+              error_details = ?,
+              error_occurred_at = datetime('now')
+          WHERE id = 1
+        `).run(JSON.stringify({
+          reason: 'stalled_process',
+          pid,
+          lastHeartbeat: status.last_heartbeat_at,
+          processingStarted: status.processing_started_at
+        }))
+      }
+    } finally {
+      db.close()
+    }
+  } catch (error) {
+    console.error(`[VideoProcessing] Error checking ${videoPath}:`, error)
   }
 }
