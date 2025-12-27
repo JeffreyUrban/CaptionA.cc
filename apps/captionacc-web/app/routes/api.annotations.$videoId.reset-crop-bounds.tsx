@@ -192,9 +192,10 @@ function analyzeOCRBoxes(
   }
 
   // Filter outliers from horizontal edges to handle occasional mispredictions
-  // Use IQR (Interquartile Range) method: remove values > Q3 + 1.5*IQR or < Q1 - 1.5*IQR
+  // Use IQR (Interquartile Range) method: remove values > Q3 + k*IQR or < Q1 - k*IQR
+  // Use k=3.0 (less aggressive than standard 1.5) to keep more valid boxes
   function filterOutliers(values: number[]): number[] {
-    if (values.length < 4) return values // Need at least 4 values for quartiles
+    if (values.length < 10) return values // Need sufficient values for meaningful filtering
 
     const sorted = [...values].sort((a, b) => a - b)
     const q1Index = Math.floor(sorted.length * 0.25)
@@ -203,10 +204,20 @@ function analyzeOCRBoxes(
     const q3 = sorted[q3Index]!
     const iqr = q3 - q1
 
-    const lowerBound = q1 - 1.5 * iqr
-    const upperBound = q3 + 1.5 * iqr
+    // Use 3.0 * IQR instead of 1.5 to be less aggressive
+    const k = 3.0
+    const lowerBound = q1 - k * iqr
+    const upperBound = q3 + k * iqr
 
-    return values.filter(v => v >= lowerBound && v <= upperBound)
+    const filtered = values.filter(v => v >= lowerBound && v <= upperBound)
+
+    // Safety: if we filter out more than 10% of values, keep original
+    if (filtered.length < values.length * 0.9) {
+      console.log(`[Outlier Filtering] Filtered too many (${values.length - filtered.length}), keeping original`)
+      return values
+    }
+
+    return filtered
   }
 
   const originalLeftCount = stats.leftEdges.length
@@ -516,7 +527,7 @@ function analyzeOCRBoxes(
 
   // Horizontal bounds: Use detected anchor/edge position ± padding
   // Dense edges (anchor): adaptive padding based on sharpness
-  // Sparse far sides (polynomial fit): fixed padding (polynomial already handles variance)
+  // Sparse far sides: use actual filtered box extents with fixed padding
   let cropLeft: number
   let cropRight: number
 
@@ -527,33 +538,32 @@ function analyzeOCRBoxes(
   const baseDensePadding = boxWidth * PADDING_FRACTION  // Base padding for dense edges
   const fixedSparsePadding = Math.ceil(boxWidth * 2)  // Fixed padding for sparse far sides
 
+  // For sparse data, use actual box extents instead of polynomial fitting
+  const minLeft = Math.min(...stats.leftEdges)
+  const maxRight = Math.max(...stats.rightEdges)
+
   if (anchorType === 'center') {
-    // For center anchors: polynomial fit on both sides with fixed padding
-    const leftZero = findZeroCrossing(densityByX, anchorPosition, 0, 'left')
-    const rightZero = findZeroCrossing(densityByX, anchorPosition, frameWidth - 1, 'right')
+    // For center anchors: use filtered box extents with padding
+    cropLeft = Math.max(0, minLeft - fixedSparsePadding)
+    cropRight = Math.min(frameWidth, maxRight + fixedSparsePadding)
 
-    cropLeft = Math.max(0, leftZero - fixedSparsePadding)
-    cropRight = Math.min(frameWidth, rightZero + fixedSparsePadding)
-
-    console.log(`[Crop Bounds] Horizontal - Center anchor at ${anchorPosition}: left zero at ${leftZero} → ${cropLeft} (-${fixedSparsePadding}px fixed), right zero at ${rightZero} → ${cropRight} (+${fixedSparsePadding}px fixed)`)
+    console.log(`[Crop Bounds] Horizontal - Center anchor at ${anchorPosition}: using box extents ${minLeft}-${maxRight} with ±${fixedSparsePadding}px padding`)
   } else if (anchorType === 'left') {
-    // For left anchors: adaptive padding on dense anchor side (left), fixed padding on sparse far side (right)
+    // For left anchors: adaptive padding on dense anchor side (left), box extent on far side (right)
     const leftPadding = Math.ceil(baseDensePadding * leftAnchorPaddingMultiplier)
     cropLeft = Math.max(0, anchorPosition - leftPadding)
 
-    const rightZero = findZeroCrossing(densityByX, anchorPosition, frameWidth - 1, 'right')
-    cropRight = Math.min(frameWidth, rightZero + fixedSparsePadding)
+    cropRight = Math.min(frameWidth, maxRight + fixedSparsePadding)
 
-    console.log(`[Crop Bounds] Horizontal - Left anchor at ${anchorPosition}: left=${cropLeft} (anchor-${leftPadding}px, ×${leftAnchorPaddingMultiplier.toFixed(2)}), right zero at ${rightZero} → ${cropRight} (+${fixedSparsePadding}px fixed)`)
+    console.log(`[Crop Bounds] Horizontal - Left anchor at ${anchorPosition}: left=${cropLeft} (anchor-${leftPadding}px, ×${leftAnchorPaddingMultiplier.toFixed(2)}), right=${cropRight} (extent=${maxRight}+${fixedSparsePadding}px)`)
   } else {
-    // For right anchors: fixed padding on sparse far side (left), adaptive padding on dense anchor side (right)
-    const leftZero = findZeroCrossing(densityByX, anchorPosition, 0, 'left')
-    cropLeft = Math.max(0, leftZero - fixedSparsePadding)
+    // For right anchors: box extent on far side (left), adaptive padding on dense anchor side (right)
+    cropLeft = Math.max(0, minLeft - fixedSparsePadding)
 
     const rightPadding = Math.ceil(baseDensePadding * rightAnchorPaddingMultiplier)
     cropRight = Math.min(frameWidth, anchorPosition + rightPadding)
 
-    console.log(`[Crop Bounds] Horizontal - Right anchor at ${anchorPosition}: left zero at ${leftZero} → ${cropLeft} (-${fixedSparsePadding}px fixed), right=${cropRight} (anchor+${rightPadding}px, ×${rightAnchorPaddingMultiplier.toFixed(2)})`)
+    console.log(`[Crop Bounds] Horizontal - Right anchor at ${anchorPosition}: left=${cropLeft} (extent=${minLeft}-${fixedSparsePadding}px), right=${cropRight} (anchor+${rightPadding}px, ×${rightAnchorPaddingMultiplier.toFixed(2)})`)
   }
 
   console.log(`[Crop Bounds] Final bounds: [${cropLeft}, ${cropTop}] - [${cropRight}, ${cropBottom}] with adaptive padding (sharpness factor=${SHARPNESS_FACTOR})`)
