@@ -298,6 +298,13 @@ function analyzeOCRBoxes(
   console.log(`[Anchor Detection] Horizontal - Center of mass: ${Math.round(meanCenterX)}, frame center: ${frameCenterX}`)
   console.log(`[Anchor Detection] Horizontal - Chosen: ${anchorType} at ${anchorPosition}`)
 
+  // Calculate horizontal edge sharpness for adaptive padding
+  const maxHorizontalDensity = Math.max(...densityByX)
+  const leftEdgeSharpness = maxPositiveDerivative / maxHorizontalDensity
+  const rightEdgeSharpness = Math.abs(maxNegativeDerivative) / maxHorizontalDensity
+
+  console.log(`[Anchor Detection] Horizontal - Left sharpness=${leftEdgeSharpness.toFixed(3)}, Right sharpness=${rightEdgeSharpness.toFixed(3)}`)
+
   // Apply same derivative method for vertical bounds (top/bottom of caption region)
   // Calculate box density at each vertical position
   const densityByY = new Array(frameHeight).fill(0)
@@ -343,12 +350,29 @@ function analyzeOCRBoxes(
   console.log(`[Anchor Detection] Vertical - Top edge at y=${topEdgePos} (derivative=${maxPositiveVerticalDerivative})`)
   console.log(`[Anchor Detection] Vertical - Bottom edge at y=${bottomEdgePos} (derivative=${maxNegativeVerticalDerivative})`)
 
-  // Calculate crop bounds: detected edge position ± padding (fraction of box dimension)
-  const PADDING_FRACTION = 0.1  // Add 1/10 of box dimension as padding
+  // Calculate vertical edge sharpness for adaptive padding
+  const maxVerticalDensity = Math.max(...densityByY)
+  const topEdgeSharpness = maxPositiveVerticalDerivative / maxVerticalDensity
+  const bottomEdgeSharpness = Math.abs(maxNegativeVerticalDerivative) / maxVerticalDensity
 
-  const verticalPadding = Math.ceil(boxHeight * PADDING_FRACTION)
-  const cropTop = Math.max(0, topEdgePos - verticalPadding)
-  const cropBottom = Math.min(frameHeight, bottomEdgePos + verticalPadding)
+  console.log(`[Anchor Detection] Vertical - Top sharpness=${topEdgeSharpness.toFixed(3)}, Bottom sharpness=${bottomEdgeSharpness.toFixed(3)}`)
+
+  // Calculate crop bounds: detected edge position ± adaptive padding
+  // Padding increases when edges are less sharp (less consistent positions)
+  const PADDING_FRACTION = 0.1  // Base padding: 1/10 of box dimension
+  const SHARPNESS_FACTOR = 2.0  // How much to increase padding for gradual edges
+
+  // Adaptive vertical padding: padding × (1 + factor × (1 - sharpness))
+  const topPaddingMultiplier = 1 + SHARPNESS_FACTOR * (1 - Math.min(1, topEdgeSharpness))
+  const bottomPaddingMultiplier = 1 + SHARPNESS_FACTOR * (1 - Math.min(1, bottomEdgeSharpness))
+
+  const topPadding = Math.ceil(boxHeight * PADDING_FRACTION * topPaddingMultiplier)
+  const bottomPadding = Math.ceil(boxHeight * PADDING_FRACTION * bottomPaddingMultiplier)
+
+  const cropTop = Math.max(0, topEdgePos - topPadding)
+  const cropBottom = Math.min(frameHeight, bottomEdgePos + bottomPadding)
+
+  console.log(`[Crop Bounds] Vertical - Top padding=${topPadding}px (×${topPaddingMultiplier.toFixed(2)}), Bottom padding=${bottomPadding}px (×${bottomPaddingMultiplier.toFixed(2)})`)
 
   // Helper function: Fit polynomial to find where density reaches zero
   // Uses simple quadratic fit: y = ax² + bx + c
@@ -463,42 +487,48 @@ function analyzeOCRBoxes(
   }
 
   // Horizontal bounds: Use detected anchor/edge position ± padding
+  // Dense edges (anchor): adaptive padding based on sharpness
+  // Sparse far sides (polynomial fit): fixed padding (polynomial already handles variance)
   let cropLeft: number
   let cropRight: number
 
-  const anchorPadding = Math.ceil(boxWidth * PADDING_FRACTION)  // Small padding for anchor side
-  const farSidePadding = Math.ceil(boxWidth * 2)  // 2 box widths for far side
-  const centerPadding = Math.ceil(boxWidth * 1)  // 1 box width for center anchor
+  // Adaptive padding for dense edges (anchor side)
+  const leftAnchorPaddingMultiplier = 1 + SHARPNESS_FACTOR * (1 - Math.min(1, leftEdgeSharpness))
+  const rightAnchorPaddingMultiplier = 1 + SHARPNESS_FACTOR * (1 - Math.min(1, rightEdgeSharpness))
+
+  const baseDensePadding = boxWidth * PADDING_FRACTION  // Base padding for dense edges
+  const fixedSparsePadding = Math.ceil(boxWidth * 2)  // Fixed padding for sparse far sides
 
   if (anchorType === 'center') {
-    // For center anchors: 1 box width padding on each side
+    // For center anchors: polynomial fit on both sides with fixed padding
     const leftZero = findZeroCrossing(densityByX, anchorPosition, 0, 'left')
     const rightZero = findZeroCrossing(densityByX, anchorPosition, frameWidth - 1, 'right')
 
-    cropLeft = Math.max(0, leftZero - centerPadding)
-    cropRight = Math.min(frameWidth, rightZero + centerPadding)
+    cropLeft = Math.max(0, leftZero - fixedSparsePadding)
+    cropRight = Math.min(frameWidth, rightZero + fixedSparsePadding)
 
-    console.log(`[Crop Bounds] Horizontal - Center anchor at ${anchorPosition}: left zero at ${leftZero}, right zero at ${rightZero}, padding=${centerPadding}px each side`)
+    console.log(`[Crop Bounds] Horizontal - Center anchor at ${anchorPosition}: left zero at ${leftZero} → ${cropLeft} (-${fixedSparsePadding}px fixed), right zero at ${rightZero} → ${cropRight} (+${fixedSparsePadding}px fixed)`)
   } else if (anchorType === 'left') {
-    // For left anchors: small padding on anchor side (left), 2 box widths on far side (right)
-    cropLeft = Math.max(0, anchorPosition - anchorPadding)
+    // For left anchors: adaptive padding on dense anchor side (left), fixed padding on sparse far side (right)
+    const leftPadding = Math.ceil(baseDensePadding * leftAnchorPaddingMultiplier)
+    cropLeft = Math.max(0, anchorPosition - leftPadding)
 
     const rightZero = findZeroCrossing(densityByX, anchorPosition, frameWidth - 1, 'right')
-    cropRight = Math.min(frameWidth, rightZero + farSidePadding)
+    cropRight = Math.min(frameWidth, rightZero + fixedSparsePadding)
 
-    console.log(`[Crop Bounds] Horizontal - Left anchor at ${anchorPosition}: left=${cropLeft} (anchor-${anchorPadding}px), right zero at ${rightZero} → ${cropRight} (+${farSidePadding}px)`)
+    console.log(`[Crop Bounds] Horizontal - Left anchor at ${anchorPosition}: left=${cropLeft} (anchor-${leftPadding}px, ×${leftAnchorPaddingMultiplier.toFixed(2)}), right zero at ${rightZero} → ${cropRight} (+${fixedSparsePadding}px fixed)`)
   } else {
-    // For right anchors: 2 box widths on far side (left), small padding on anchor side (right)
+    // For right anchors: fixed padding on sparse far side (left), adaptive padding on dense anchor side (right)
     const leftZero = findZeroCrossing(densityByX, anchorPosition, 0, 'left')
-    cropLeft = Math.max(0, leftZero - farSidePadding)
+    cropLeft = Math.max(0, leftZero - fixedSparsePadding)
 
-    cropRight = Math.min(frameWidth, anchorPosition + anchorPadding)
+    const rightPadding = Math.ceil(baseDensePadding * rightAnchorPaddingMultiplier)
+    cropRight = Math.min(frameWidth, anchorPosition + rightPadding)
 
-    console.log(`[Crop Bounds] Horizontal - Right anchor at ${anchorPosition}: left zero at ${leftZero} → ${cropLeft} (-${farSidePadding}px), right=${cropRight} (anchor+${anchorPadding}px)`)
+    console.log(`[Crop Bounds] Horizontal - Right anchor at ${anchorPosition}: left zero at ${leftZero} → ${cropLeft} (-${fixedSparsePadding}px fixed), right=${cropRight} (anchor+${rightPadding}px, ×${rightAnchorPaddingMultiplier.toFixed(2)})`)
   }
 
-  console.log(`[Crop Bounds] Vertical - Top=${cropTop} (edge=${topEdgePos}-${verticalPadding}px), Bottom=${cropBottom} (edge=${bottomEdgePos}+${verticalPadding}px)`)
-  console.log(`[Crop Bounds] Final bounds: [${cropLeft}, ${cropTop}] - [${cropRight}, ${cropBottom}] with padding=${PADDING_FRACTION}×box dimensions`)
+  console.log(`[Crop Bounds] Final bounds: [${cropLeft}, ${cropTop}] - [${cropRight}, ${cropBottom}] with adaptive padding (sharpness factor=${SHARPNESS_FACTOR})`)
 
   // Count caption boxes (those near the vertical mode)
   const captionBoxCount = stats.centerYValues.filter(
