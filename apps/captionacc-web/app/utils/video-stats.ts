@@ -13,7 +13,7 @@ export interface VideoStats {
   totalFrames: number
   coveredFrames: number
   hasOcrData: boolean  // Whether video has full_frame_ocr data (enables layout annotation)
-  layoutComplete: boolean  // Whether layout annotation is marked as complete
+  layoutApproved: boolean  // Whether layout annotation has been approved (gate for boundary annotation)
   processingStatus?: ProcessingStatus  // Upload/processing status (null if not uploaded via web)
 }
 
@@ -69,7 +69,7 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
       totalFrames,
       coveredFrames: 0,
       hasOcrData: false,
-      layoutComplete: false
+      layoutApproved: false
     }
   }
 
@@ -116,14 +116,14 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
       hasOcrData = false
     }
 
-    // Check if layout annotation is marked as complete
-    let layoutComplete = false
+    // Check if layout annotation has been approved
+    let layoutApproved = false
     try {
-      const prefs = db.prepare(`SELECT layout_complete FROM video_preferences WHERE id = 1`).get() as { layout_complete: number } | undefined
-      layoutComplete = (prefs?.layout_complete ?? 0) === 1
+      const prefs = db.prepare(`SELECT layout_approved FROM video_preferences WHERE id = 1`).get() as { layout_approved: number } | undefined
+      layoutApproved = (prefs?.layout_approved ?? 0) === 1
     } catch {
       // Table or column doesn't exist
-      layoutComplete = false
+      layoutApproved = false
     }
 
     // Get processing status if available
@@ -159,7 +159,7 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
       totalFrames,
       coveredFrames,
       hasOcrData,
-      layoutComplete,
+      layoutApproved,
       processingStatus
     }
   } finally {

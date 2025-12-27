@@ -21,7 +21,7 @@ function getDatabase(videoId: string) {
   return new Database(dbPath)
 }
 
-// POST - Mark layout annotation as complete
+// POST - Mark layout annotation as approved
 export async function action({ params, request }: ActionFunctionArgs) {
   const { videoId: encodedVideoId } = params
 
@@ -42,14 +42,14 @@ export async function action({ params, request }: ActionFunctionArgs) {
 
     // Ensure video_preferences row exists
     db.prepare(`
-      INSERT OR IGNORE INTO video_preferences (id, layout_complete)
+      INSERT OR IGNORE INTO video_preferences (id, layout_approved)
       VALUES (1, 0)
     `).run()
 
-    // Update layout_complete flag
+    // Update layout_approved flag
     db.prepare(`
       UPDATE video_preferences
-      SET layout_complete = ?,
+      SET layout_approved = ?,
           updated_at = datetime('now')
       WHERE id = 1
     `).run(complete ? 1 : 0)
@@ -58,13 +58,13 @@ export async function action({ params, request }: ActionFunctionArgs) {
 
     return new Response(JSON.stringify({
       success: true,
-      layoutComplete: complete
+      layoutApproved: complete
     }), {
       headers: { 'Content-Type': 'application/json' }
     })
 
   } catch (error) {
-    console.error('Error updating layout complete status:', error)
+    console.error('Error updating layout approved status:', error)
     return new Response(JSON.stringify({
       error: error instanceof Error ? error.message : 'Unknown error'
     }), {

@@ -142,7 +142,7 @@ function addEmptyFolderToTree(tree: TreeNode[], folderPath: string) {
           totalFrames: 0,
           coveredFrames: 0,
           hasOcrData: false,
-          layoutComplete: false
+          layoutApproved: false
         },
         videoCount: 0
       }
@@ -193,7 +193,7 @@ function calculateFolderStatsFromMap(node: FolderNode, statsMap: Map<string, Vid
     totalFrames: 0,
     coveredFrames: 0,
     hasOcrData: false,
-    layoutComplete: false
+    layoutApproved: false
   }
 
   for (const stats of videoStats) {
@@ -204,9 +204,9 @@ function calculateFolderStatsFromMap(node: FolderNode, statsMap: Map<string, Vid
     aggregated.gapAnnotations += stats.gapAnnotations || 0
     aggregated.totalFrames += stats.totalFrames || 0
     aggregated.coveredFrames += stats.coveredFrames || 0
-    // Aggregate hasOcrData and layoutComplete as "any video has it"
+    // Aggregate hasOcrData and layoutApproved as "any video has it"
     aggregated.hasOcrData = aggregated.hasOcrData || stats.hasOcrData
-    aggregated.layoutComplete = aggregated.layoutComplete || stats.layoutComplete
+    aggregated.layoutApproved = aggregated.layoutApproved || stats.layoutApproved
   }
 
   aggregated.progress = aggregated.totalFrames > 0
@@ -395,7 +395,7 @@ function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsU
 
     const statusConfig = {
       uploading: { label: 'Uploading', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' },
-      upload_complete: { label: 'Upload Complete', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' },
+      upload_complete: { label: 'Queued', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' },
       extracting_frames: { label: 'Extracting Frames', color: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400' },
       running_ocr: { label: 'Running OCR', color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400' },
       analyzing_layout: { label: 'Analyzing Layout', color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400' },
@@ -488,7 +488,8 @@ function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsU
             <div className="py-1">
               <MenuItem disabled={
                 !stats?.hasOcrData ||
-                (stats?.processingStatus && stats.processingStatus.status !== 'processing_complete')
+                !stats?.processingStatus ||
+                stats.processingStatus.status !== 'processing_complete'
               }>
                 {({ disabled }) => {
                   const statusText = stats?.processingStatus?.status
@@ -509,7 +510,7 @@ function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsU
                   )
                 }}
               </MenuItem>
-              <MenuItem disabled={!stats?.layoutComplete}>
+              <MenuItem disabled={!stats?.layoutApproved}>
                 {({ disabled }) => (
                   disabled ? (
                     <span className="block px-4 py-2 text-sm text-gray-400 dark:text-gray-600 cursor-not-allowed">
@@ -525,7 +526,7 @@ function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsU
                   )
                 )}
               </MenuItem>
-              <MenuItem disabled={!stats?.layoutComplete || stats.totalAnnotations === 0}>
+              <MenuItem disabled={!stats?.layoutApproved || stats.totalAnnotations === 0}>
                 {({ disabled }) => (
                   disabled ? (
                     <span className="block px-4 py-2 text-sm text-gray-400 dark:text-gray-600 cursor-not-allowed">

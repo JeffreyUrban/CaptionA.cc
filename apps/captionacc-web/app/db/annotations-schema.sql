@@ -267,7 +267,7 @@ ON cropped_frames(crop_bounds_version);
 -- Video preferences (one row per video)
 CREATE TABLE IF NOT EXISTS video_preferences (
     id INTEGER PRIMARY KEY CHECK(id = 1),
-    layout_complete INTEGER NOT NULL DEFAULT 0 CHECK(layout_complete IN (0, 1)),
+    layout_approved INTEGER NOT NULL DEFAULT 0 CHECK(layout_approved IN (0, 1)),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 

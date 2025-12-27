@@ -73,7 +73,7 @@ export default function AnnotateLayout() {
   // Core state
   const [frames, setFrames] = useState<FrameInfo[]>([])
   const [layoutConfig, setLayoutConfig] = useState<LayoutConfig | null>(null)
-  const [layoutComplete, setLayoutComplete] = useState(false)
+  const [layoutApproved, setLayoutApproved] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -164,7 +164,7 @@ export default function AnnotateLayout() {
 
       // Always update layout config (not just on initial load)
       setLayoutConfig(data.layoutConfig || null)
-      setLayoutComplete(data.layoutComplete || false)
+      setLayoutApproved(data.layoutApproved || false)
 
       // Update edit state from config
       if (data.layoutConfig) {
@@ -1366,15 +1366,15 @@ export default function AnnotateLayout() {
                 }
               }}
               disabled={
-                // Only require edits if layout has already been marked complete
-                layoutComplete && layoutConfig && cropBoundsEdit &&
+                // Only require edits if layout has already been approved
+                layoutApproved && layoutConfig && cropBoundsEdit &&
                   layoutConfig.cropLeft === cropBoundsEdit.left &&
                   layoutConfig.cropTop === cropBoundsEdit.top &&
                   layoutConfig.cropRight === cropBoundsEdit.right &&
                   layoutConfig.cropBottom === cropBoundsEdit.bottom
               }
               className={`w-full px-4 py-2 text-sm font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 ${
-                layoutComplete && layoutConfig && cropBoundsEdit &&
+                layoutApproved && layoutConfig && cropBoundsEdit &&
                   layoutConfig.cropLeft === cropBoundsEdit.left &&
                   layoutConfig.cropTop === cropBoundsEdit.top &&
                   layoutConfig.cropRight === cropBoundsEdit.right &&
@@ -1383,7 +1383,7 @@ export default function AnnotateLayout() {
                   : 'text-white bg-green-600 hover:bg-green-700 dark:bg-green-600 dark:hover:bg-green-700 focus:ring-green-500'
               }`}
             >
-              {layoutComplete ? 'Update Layout & Re-crop' : 'Mark Layout Complete'}
+              {layoutApproved ? 'Update Layout & Re-crop' : 'Approve Layout'}
             </button>
 
             {/* Current view info */}
