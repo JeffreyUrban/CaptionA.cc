@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useSearchParams } from 'react-router'
+import { useSearchParams, useNavigate } from 'react-router'
 import type { LoaderFunctionArgs } from 'react-router'
 import { AppLayout } from '~/components/AppLayout'
 
@@ -79,6 +79,7 @@ export async function loader({ }: LoaderFunctionArgs) {
 
 export default function ReviewLabels() {
   const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
   const videoId = searchParams.get('videoId') || ''
 
   // Core state
@@ -966,6 +967,19 @@ export default function ReviewLabels() {
 
           {/* Right: Controls (1/3 width) */}
           <div className="flex min-h-0 w-1/3 flex-col gap-4 overflow-y-auto rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
+            {/* Mode toggle */}
+            <div className="flex gap-2 rounded-md border border-gray-200 bg-gray-50 p-1 dark:border-gray-700 dark:bg-gray-950">
+              <button
+                onClick={() => navigate(`/annotate/layout?videoId=${encodeURIComponent(videoId)}`)}
+                className="flex-1 rounded py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+              >
+                Layout
+              </button>
+              <button className="flex-1 rounded py-2 text-sm font-semibold bg-teal-600 text-white">
+                Review Labels
+              </button>
+            </div>
+
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
               Mislabel Review
             </h2>
