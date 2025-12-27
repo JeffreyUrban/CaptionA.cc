@@ -21,8 +21,8 @@ function getDatabase(videoId: string) {
   return new Database(dbPath)
 }
 
-// POST - Mark layout annotation as approved
-export async function action({ params, request }: ActionFunctionArgs) {
+// POST - Clear all user annotations
+export async function action({ params }: ActionFunctionArgs) {
   const { videoId: encodedVideoId } = params
 
   if (!encodedVideoId) {
@@ -35,36 +35,33 @@ export async function action({ params, request }: ActionFunctionArgs) {
   const videoId = decodeURIComponent(encodedVideoId)
 
   try {
-    const body = await request.json()
-    const { complete } = body as { complete: boolean }
-
     const db = getDatabase(videoId)
 
-    // Ensure video_preferences row exists
-    db.prepare(`
-      INSERT OR IGNORE INTO video_preferences (id, layout_approved)
-      VALUES (1, 0)
-    `).run()
+    // Count annotations before deletion
+    const countResult = db.prepare(`
+      SELECT COUNT(*) as count FROM full_frame_box_labels WHERE label_source = 'user'
+    `).get() as { count: number }
 
-    // Update layout_approved flag
+    const deletedCount = countResult.count
+
+    // Delete all user annotations
     db.prepare(`
-      UPDATE video_preferences
-      SET layout_approved = ?,
-          updated_at = datetime('now')
-      WHERE id = 1
-    `).run(complete ? 1 : 0)
+      DELETE FROM full_frame_box_labels WHERE label_source = 'user'
+    `).run()
 
     db.close()
 
+    console.log(`[Clear All] Deleted ${deletedCount} user annotations for video: ${videoId}`)
+
     return new Response(JSON.stringify({
       success: true,
-      layoutApproved: complete
+      deletedCount
     }), {
       headers: { 'Content-Type': 'application/json' }
     })
 
   } catch (error) {
-    console.error('Error updating layout approved status:', error)
+    console.error('Error clearing all annotations:', error)
     return new Response(JSON.stringify({
       error: error instanceof Error ? error.message : 'Unknown error'
     }), {

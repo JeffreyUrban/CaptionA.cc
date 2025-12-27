@@ -142,7 +142,7 @@ function addEmptyFolderToTree(tree: TreeNode[], folderPath: string) {
           totalFrames: 0,
           coveredFrames: 0,
           hasOcrData: false,
-          layoutComplete: false
+          layoutApproved: false
         },
         videoCount: 0
       }
@@ -165,6 +165,7 @@ interface TreeRowProps {
   onRenameFolder: (folderPath: string, currentName: string) => void
   onDeleteFolder: (folderPath: string, folderName: string, videoCount: number) => void
   onRenameVideo: (videoPath: string, currentName: string) => void
+  onDeleteVideo: (videoPath: string, videoName: string) => void
   isMounted: boolean
 }
 
@@ -179,7 +180,7 @@ function calculateFolderStatsFromMap(node: FolderNode, statsMap: Map<string, Vid
   }
 
   const videoIds = collectVideoIds(node)
-  const videoStats = videoIds.map(id => statsMap.get(id)).filter((s): s is VideoStats => s !== undefined)
+  const videoStats = videoIds.map(id => statsMap.get(id)).filter((s): s is VideoStats => s != null)
 
   if (videoStats.length === 0) return null
 
@@ -193,7 +194,7 @@ function calculateFolderStatsFromMap(node: FolderNode, statsMap: Map<string, Vid
     totalFrames: 0,
     coveredFrames: 0,
     hasOcrData: false,
-    layoutComplete: false
+    layoutApproved: false
   }
 
   for (const stats of videoStats) {
@@ -204,9 +205,9 @@ function calculateFolderStatsFromMap(node: FolderNode, statsMap: Map<string, Vid
     aggregated.gapAnnotations += stats.gapAnnotations || 0
     aggregated.totalFrames += stats.totalFrames || 0
     aggregated.coveredFrames += stats.coveredFrames || 0
-    // Aggregate hasOcrData and layoutComplete as "any video has it"
+    // Aggregate hasOcrData and layoutApproved as "any video has it"
     aggregated.hasOcrData = aggregated.hasOcrData || stats.hasOcrData
-    aggregated.layoutComplete = aggregated.layoutComplete || stats.layoutComplete
+    aggregated.layoutApproved = aggregated.layoutApproved || stats.layoutApproved
   }
 
   aggregated.progress = aggregated.totalFrames > 0
@@ -216,7 +217,7 @@ function calculateFolderStatsFromMap(node: FolderNode, statsMap: Map<string, Vid
   return aggregated
 }
 
-function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsUpdate, onCreateSubfolder, onRenameFolder, onDeleteFolder, onRenameVideo, isMounted }: TreeRowProps) {
+function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsUpdate, onCreateSubfolder, onRenameFolder, onDeleteFolder, onRenameVideo, onDeleteVideo, isMounted }: TreeRowProps) {
   const [loading, setLoading] = useState(false)
   const isExpanded = expandedPaths.has(node.path)
 
@@ -342,6 +343,14 @@ function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsU
                     </button>
                   </MenuItem>
                   <MenuItem>
+                    <Link
+                      to={`/upload?folder=${encodeURIComponent(node.path)}`}
+                      className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 data-[focus]:bg-gray-100 dark:data-[focus]:bg-gray-700 data-[focus]:text-gray-900 dark:data-[focus]:text-white data-[focus]:outline-none"
+                    >
+                      Upload to folder...
+                    </Link>
+                  </MenuItem>
+                  <MenuItem>
                     <button
                       onClick={() => onRenameFolder(node.path, node.name)}
                       className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 data-[focus]:bg-gray-100 dark:data-[focus]:bg-gray-700 data-[focus]:text-gray-900 dark:data-[focus]:text-white data-[focus]:outline-none"
@@ -378,6 +387,7 @@ function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsU
             onRenameFolder={onRenameFolder}
             onDeleteFolder={onDeleteFolder}
             onRenameVideo={onRenameVideo}
+            onDeleteVideo={onDeleteVideo}
           />
         ))}
       </>
@@ -395,7 +405,7 @@ function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsU
 
     const statusConfig = {
       uploading: { label: 'Uploading', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' },
-      upload_complete: { label: 'Upload Complete', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' },
+      upload_complete: { label: 'Queued', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' },
       extracting_frames: { label: 'Extracting Frames', color: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400' },
       running_ocr: { label: 'Running OCR', color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400' },
       analyzing_layout: { label: 'Analyzing Layout', color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400' },
@@ -488,7 +498,8 @@ function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsU
             <div className="py-1">
               <MenuItem disabled={
                 !stats?.hasOcrData ||
-                (stats?.processingStatus && stats.processingStatus.status !== 'processing_complete')
+                !stats?.processingStatus ||
+                stats.processingStatus.status !== 'processing_complete'
               }>
                 {({ disabled }) => {
                   const statusText = stats?.processingStatus?.status
@@ -509,7 +520,7 @@ function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsU
                   )
                 }}
               </MenuItem>
-              <MenuItem disabled={!stats?.layoutComplete}>
+              <MenuItem disabled={!stats?.layoutApproved}>
                 {({ disabled }) => (
                   disabled ? (
                     <span className="block px-4 py-2 text-sm text-gray-400 dark:text-gray-600 cursor-not-allowed">
@@ -525,7 +536,7 @@ function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsU
                   )
                 )}
               </MenuItem>
-              <MenuItem disabled={!stats?.layoutComplete || stats.totalAnnotations === 0}>
+              <MenuItem disabled={!stats?.layoutApproved || stats.totalAnnotations === 0}>
                 {({ disabled }) => (
                   disabled ? (
                     <span className="block px-4 py-2 text-sm text-gray-400 dark:text-gray-600 cursor-not-allowed">
@@ -549,6 +560,14 @@ function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsU
                   Rename...
                 </button>
               </MenuItem>
+              <MenuItem>
+                <button
+                  onClick={() => onDeleteVideo(node.videoId, node.name)}
+                  className="block w-full text-left px-4 py-2 text-sm text-red-700 dark:text-red-400 data-[focus]:bg-red-50 dark:data-[focus]:bg-red-900/20 data-[focus]:text-red-900 dark:data-[focus]:text-red-300 data-[focus]:outline-none"
+                >
+                  Delete...
+                </button>
+              </MenuItem>
             </div>
           </MenuItems>
         </Menu>
@@ -561,13 +580,14 @@ export default function VideosPage() {
   const { tree } = useLoaderData<{ tree: TreeNode[] }>()
   const revalidator = useRevalidator()
   const [searchQuery, setSearchQuery] = useState('')
-  const CACHE_VERSION = 'v4' // Increment to invalidate cache when VideoStats structure changes
+  const CACHE_VERSION = 'v5' // Increment to invalidate cache when VideoStats structure changes
 
   // Modal states
   const [createFolderModal, setCreateFolderModal] = useState<{ open: boolean; parentPath?: string }>({ open: false })
   const [renameFolderModal, setRenameFolderModal] = useState<{ open: boolean; folderPath?: string; currentName?: string }>({ open: false })
   const [deleteFolderModal, setDeleteFolderModal] = useState<{ open: boolean; folderPath?: string; folderName?: string; videoCount?: number }>({ open: false })
   const [renameVideoModal, setRenameVideoModal] = useState<{ open: boolean; videoPath?: string; currentName?: string }>({ open: false })
+  const [deleteVideoModal, setDeleteVideoModal] = useState<{ open: boolean; videoPath?: string; videoName?: string }>({ open: false })
 
   // Form states
   const [newFolderName, setNewFolderName] = useState('')
@@ -933,6 +953,41 @@ export default function VideosPage() {
     }
   }
 
+  const handleDeleteVideo = async () => {
+    setVideoError(null)
+    setVideoLoading(true)
+
+    try {
+      const videoPath = deleteVideoModal.videoPath!
+
+      const response = await fetch(`/api/videos/${encodeURIComponent(videoPath)}/delete`, {
+        method: 'DELETE'
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        setVideoError(data.error || 'Failed to delete video')
+        setVideoLoading(false)
+        return
+      }
+
+      // Success - close modal and reload
+      setVideoLoading(false)
+      setDeleteVideoModal({ open: false })
+
+      // Clear cached stats for this video
+      const newStatsMap = new Map(videoStatsMap)
+      newStatsMap.delete(videoPath)
+      setVideoStatsMap(newStatsMap)
+
+      revalidator.revalidate()
+    } catch (error) {
+      setVideoError('Network error')
+      setVideoLoading(false)
+    }
+  }
+
   const filteredTree = useMemo(() => {
     if (!searchQuery) return tree
 
@@ -1136,6 +1191,9 @@ export default function VideosPage() {
                           setRenamedVideoName(currentName)
                           setVideoError(null)
                           setVideoLoading(false)
+                        }}
+                        onDeleteVideo={(videoPath, videoName) => {
+                          setDeleteVideoModal({ open: true, videoPath, videoName })
                         }}
                       />
                     ))}
@@ -1363,6 +1421,48 @@ export default function VideosPage() {
                 className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {videoLoading ? 'Renaming...' : 'Rename'}
+              </button>
+            </div>
+          </DialogPanel>
+        </div>
+      </Dialog>
+
+      {/* Delete Video Modal */}
+      <Dialog open={deleteVideoModal.open} onClose={() => setDeleteVideoModal({ open: false })} className="relative z-50">
+        <div className="fixed inset-0 bg-black/30 dark:bg-black/50" aria-hidden="true" />
+        <div className="fixed inset-0 flex items-center justify-center p-4">
+          <DialogPanel className="w-full max-w-md rounded-lg bg-white dark:bg-gray-800 p-6 shadow-xl">
+            <DialogTitle className="text-lg font-medium text-red-600 dark:text-red-400">
+              Delete Video
+            </DialogTitle>
+            <div className="mt-4">
+              <p className="text-sm text-gray-900 dark:text-gray-200 mb-2">
+                Are you sure you want to delete this video?
+              </p>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                Video: <span className="font-mono font-semibold">{deleteVideoModal.videoName}</span>
+              </p>
+              <p className="text-sm text-red-600 dark:text-red-400 font-medium">
+                This will permanently delete the video, database, and all annotation data. This action cannot be undone.
+              </p>
+              {videoError && (
+                <p className="mt-2 text-sm text-red-600 dark:text-red-400">{videoError}</p>
+              )}
+            </div>
+            <div className="mt-6 flex gap-3 justify-end">
+              <button
+                onClick={() => setDeleteVideoModal({ open: false })}
+                disabled={videoLoading}
+                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteVideo}
+                disabled={videoLoading}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {videoLoading ? 'Deleting...' : 'Delete Video'}
               </button>
             </div>
           </DialogPanel>

@@ -221,11 +221,21 @@ function gaussianPDF(x: number, mean: number, std: number): number {
 
 /**
  * Load model parameters from database.
+ *
+ * Accepts both seed model (n_training_samples = 0) and trained models (n_training_samples >= 10).
+ * The seed model provides reasonable starting predictions before user annotations are available.
  */
 function loadModelFromDB(db: Database): ModelParams | null {
   const row = db.prepare('SELECT * FROM box_classification_model WHERE id = 1').get() as ModelRow | undefined
 
-  if (!row || row.n_training_samples < 10) {
+  if (!row) {
+    return null
+  }
+
+  // Accept seed model (0 samples) or trained model (10+ samples)
+  // Reject models with 1-9 samples (insufficient for meaningful statistics)
+  if (row.n_training_samples > 0 && row.n_training_samples < 10) {
+    console.warn(`[loadModelFromDB] Model has insufficient samples (${row.n_training_samples}), falling back to heuristics`)
     return null
   }
 
@@ -394,4 +404,307 @@ export function predictBoxLabel(
 
   // Fall back to heuristics
   return predictWithHeuristics(boxBounds, layoutConfig)
+}
+
+/**
+ * Initialize seed model with typical caption layout parameters.
+ *
+ * This provides reasonable starting predictions before user annotations are available.
+ * Based on common caption characteristics:
+ * - Captions: well-aligned, similar heights, horizontally clustered, wide aspect ratio,
+ *   bottom of frame, small area
+ * - Noise: less aligned, varied heights/positions, scattered, varied aspect ratios
+ *
+ * @param db Database connection
+ */
+export function initializeSeedModel(db: Database): void {
+  // Check if model already exists
+  const existing = db.prepare('SELECT id FROM box_classification_model WHERE id = 1').get()
+  if (existing) {
+    console.log('[initializeSeedModel] Model already exists, skipping seed initialization')
+    return
+  }
+
+  console.log('[initializeSeedModel] Initializing seed model with typical caption parameters')
+
+  // Seed parameters based on typical caption characteristics
+  // Features in order: [topAlignment, bottomAlignment, heightSimilarity, horizontalClustering, aspectRatio, normalizedY, normalizedArea]
+
+  // "in" (caption) boxes: well-aligned, similar, clustered, wide, bottom of frame, small
+  const inParams = [
+    { mean: 0.5, std: 0.5 },   // topAlignment: low = well aligned
+    { mean: 0.5, std: 0.5 },   // bottomAlignment: low = well aligned
+    { mean: 0.5, std: 0.5 },   // heightSimilarity: low = similar heights
+    { mean: 0.5, std: 0.5 },   // horizontalClustering: low = clustered
+    { mean: 4.0, std: 2.0 },   // aspectRatio: wide boxes (3-5x wider than tall)
+    { mean: 0.8, std: 0.1 },   // normalizedY: bottom 20% of frame (0.75-0.85)
+    { mean: 0.02, std: 0.015 } // normalizedArea: 1-3% of frame area
+  ]
+
+  // "out" (noise) boxes: less aligned, varied, scattered, more varied
+  const outParams = [
+    { mean: 1.5, std: 1.0 },   // topAlignment: higher = less aligned
+    { mean: 1.5, std: 1.0 },   // bottomAlignment: higher = less aligned
+    { mean: 1.5, std: 1.0 },   // heightSimilarity: higher = varied heights
+    { mean: 1.5, std: 1.0 },   // horizontalClustering: higher = scattered
+    { mean: 2.0, std: 3.0 },   // aspectRatio: more varied
+    { mean: 0.5, std: 0.3 },   // normalizedY: more varied vertical position
+    { mean: 0.03, std: 0.03 }  // normalizedArea: more varied area
+  ]
+
+  // Start with balanced priors (50/50)
+  const priorIn = 0.5
+  const priorOut = 0.5
+
+  // Store seed model in database
+  db.prepare(`
+    INSERT INTO box_classification_model (
+      id,
+      model_version,
+      trained_at,
+      n_training_samples,
+      prior_in,
+      prior_out,
+      in_vertical_alignment_mean, in_vertical_alignment_std,
+      in_height_similarity_mean, in_height_similarity_std,
+      in_anchor_distance_mean, in_anchor_distance_std,
+      in_crop_overlap_mean, in_crop_overlap_std,
+      in_aspect_ratio_mean, in_aspect_ratio_std,
+      in_normalized_y_mean, in_normalized_y_std,
+      in_normalized_area_mean, in_normalized_area_std,
+      out_vertical_alignment_mean, out_vertical_alignment_std,
+      out_height_similarity_mean, out_height_similarity_std,
+      out_anchor_distance_mean, out_anchor_distance_std,
+      out_crop_overlap_mean, out_crop_overlap_std,
+      out_aspect_ratio_mean, out_aspect_ratio_std,
+      out_normalized_y_mean, out_normalized_y_std,
+      out_normalized_area_mean, out_normalized_area_std
+    ) VALUES (
+      1,
+      'seed_v1',
+      datetime('now'),
+      0,
+      ?, ?,
+      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+    )
+  `).run(
+    priorIn, priorOut,
+    inParams[0]!.mean, inParams[0]!.std,
+    inParams[1]!.mean, inParams[1]!.std,
+    inParams[2]!.mean, inParams[2]!.std,
+    inParams[3]!.mean, inParams[3]!.std,
+    inParams[4]!.mean, inParams[4]!.std,
+    inParams[5]!.mean, inParams[5]!.std,
+    inParams[6]!.mean, inParams[6]!.std,
+    outParams[0]!.mean, outParams[0]!.std,
+    outParams[1]!.mean, outParams[1]!.std,
+    outParams[2]!.mean, outParams[2]!.std,
+    outParams[3]!.mean, outParams[3]!.std,
+    outParams[4]!.mean, outParams[4]!.std,
+    outParams[5]!.mean, outParams[5]!.std,
+    outParams[6]!.mean, outParams[6]!.std
+  )
+
+  console.log('[initializeSeedModel] Seed model initialized successfully')
+}
+
+/**
+ * Train Bayesian model using user annotations.
+ *
+ * Fetches all user-labeled boxes, extracts features, calculates Gaussian
+ * parameters for each feature per class, and stores in box_classification_model table.
+ *
+ * Replaces the seed model once 10+ annotations are available.
+ *
+ * @param db Database connection
+ * @param layoutConfig Video layout configuration
+ * @returns Number of training samples used, or null if insufficient data
+ */
+export function trainModel(db: Database, layoutConfig: VideoLayoutConfig): number | null {
+  // Fetch all user annotations
+  const annotations = db.prepare(`
+    SELECT
+      label,
+      box_left,
+      box_top,
+      box_right,
+      box_bottom,
+      frame_index
+    FROM full_frame_box_labels
+    WHERE label_source = 'user'
+    ORDER BY frame_index
+  `).all() as Array<{
+    label: 'in' | 'out'
+    box_left: number
+    box_top: number
+    box_right: number
+    box_bottom: number
+    frame_index: number
+  }>
+
+  if (annotations.length < 10) {
+    console.log(`[trainModel] Insufficient training data: ${annotations.length} samples (need 10+)`)
+
+    // If annotations were cleared, reset to seed model
+    const existingModel = db.prepare('SELECT n_training_samples FROM box_classification_model WHERE id = 1').get() as { n_training_samples: number } | undefined
+
+    if (existingModel && existingModel.n_training_samples >= 10) {
+      console.log(`[trainModel] Resetting to seed model (annotations cleared)`)
+      // Re-initialize seed model to replace trained model
+      db.prepare('DELETE FROM box_classification_model WHERE id = 1').run()
+      // Seed model will be re-initialized on next prediction calculation
+    }
+
+    return null
+  }
+
+  console.log(`[trainModel] Training with ${annotations.length} user annotations`)
+
+  // Group annotations by frame to get all boxes for feature extraction
+  const annotationsByFrame = new Map<number, typeof annotations>()
+  for (const ann of annotations) {
+    if (!annotationsByFrame.has(ann.frame_index)) {
+      annotationsByFrame.set(ann.frame_index, [])
+    }
+    annotationsByFrame.get(ann.frame_index)!.push(ann)
+  }
+
+  // Get all OCR boxes for each frame (needed for feature extraction context)
+  const frameBoxesCache = new Map<number, BoxBounds[]>()
+
+  // Extract features for each annotation
+  const inFeatures: number[][] = []
+  const outFeatures: number[][] = []
+
+  for (const ann of annotations) {
+    // Get all boxes in this frame for context
+    if (!frameBoxesCache.has(ann.frame_index)) {
+      const boxes = db.prepare(`
+        SELECT x, y, width, height
+        FROM full_frame_ocr
+        WHERE frame_index = ?
+        ORDER BY box_index
+      `).all(ann.frame_index) as Array<{
+        x: number
+        y: number
+        width: number
+        height: number
+      }>
+
+      const boxBounds = boxes.map(b => {
+        const left = Math.floor(b.x * layoutConfig.frame_width)
+        const bottom = Math.floor((1 - b.y) * layoutConfig.frame_height)
+        const boxWidth = Math.floor(b.width * layoutConfig.frame_width)
+        const boxHeight = Math.floor(b.height * layoutConfig.frame_height)
+        const top = bottom - boxHeight
+        const right = left + boxWidth
+        return { left, top, right, bottom }
+      })
+
+      frameBoxesCache.set(ann.frame_index, boxBounds)
+    }
+
+    const allBoxes = frameBoxesCache.get(ann.frame_index)!
+    const boxBounds: BoxBounds = {
+      left: ann.box_left,
+      top: ann.box_top,
+      right: ann.box_right,
+      bottom: ann.box_bottom
+    }
+
+    const features = extractFeatures(boxBounds, layoutConfig, allBoxes)
+
+    if (ann.label === 'in') {
+      inFeatures.push(features)
+    } else {
+      outFeatures.push(features)
+    }
+  }
+
+  // Need at least 2 samples per class for meaningful statistics
+  if (inFeatures.length < 2 || outFeatures.length < 2) {
+    console.log(`[trainModel] Insufficient samples per class: in=${inFeatures.length}, out=${outFeatures.length}`)
+    return null
+  }
+
+  // Calculate Gaussian parameters for each feature
+  const calculateGaussian = (values: number[]): { mean: number; std: number } => {
+    const mean = values.reduce((sum, v) => sum + v, 0) / values.length
+    const variance = values.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / values.length
+    const std = Math.sqrt(variance)
+    return { mean, std: std > 0 ? std : 1e-6 }  // Avoid zero std
+  }
+
+  // Extract each feature column and calculate parameters
+  const inParams: Array<{ mean: number; std: number }> = []
+  const outParams: Array<{ mean: number; std: number }> = []
+
+  for (let i = 0; i < 7; i++) {
+    const inFeatureValues = inFeatures.map(f => f[i]!)
+    const outFeatureValues = outFeatures.map(f => f[i]!)
+
+    inParams.push(calculateGaussian(inFeatureValues))
+    outParams.push(calculateGaussian(outFeatureValues))
+  }
+
+  // Calculate priors
+  const total = annotations.length
+  const priorIn = inFeatures.length / total
+  const priorOut = outFeatures.length / total
+
+  // Store model in database
+  db.prepare(`
+    INSERT OR REPLACE INTO box_classification_model (
+      id,
+      model_version,
+      trained_at,
+      n_training_samples,
+      prior_in,
+      prior_out,
+      in_vertical_alignment_mean, in_vertical_alignment_std,
+      in_height_similarity_mean, in_height_similarity_std,
+      in_anchor_distance_mean, in_anchor_distance_std,
+      in_crop_overlap_mean, in_crop_overlap_std,
+      in_aspect_ratio_mean, in_aspect_ratio_std,
+      in_normalized_y_mean, in_normalized_y_std,
+      in_normalized_area_mean, in_normalized_area_std,
+      out_vertical_alignment_mean, out_vertical_alignment_std,
+      out_height_similarity_mean, out_height_similarity_std,
+      out_anchor_distance_mean, out_anchor_distance_std,
+      out_crop_overlap_mean, out_crop_overlap_std,
+      out_aspect_ratio_mean, out_aspect_ratio_std,
+      out_normalized_y_mean, out_normalized_y_std,
+      out_normalized_area_mean, out_normalized_area_std
+    ) VALUES (
+      1,
+      'naive_bayes_v1',
+      datetime('now'),
+      ?,
+      ?, ?,
+      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+    )
+  `).run(
+    total,
+    priorIn, priorOut,
+    inParams[0]!.mean, inParams[0]!.std,
+    inParams[1]!.mean, inParams[1]!.std,
+    inParams[2]!.mean, inParams[2]!.std,
+    inParams[3]!.mean, inParams[3]!.std,
+    inParams[4]!.mean, inParams[4]!.std,
+    inParams[5]!.mean, inParams[5]!.std,
+    inParams[6]!.mean, inParams[6]!.std,
+    outParams[0]!.mean, outParams[0]!.std,
+    outParams[1]!.mean, outParams[1]!.std,
+    outParams[2]!.mean, outParams[2]!.std,
+    outParams[3]!.mean, outParams[3]!.std,
+    outParams[4]!.mean, outParams[4]!.std,
+    outParams[5]!.mean, outParams[5]!.std,
+    outParams[6]!.mean, outParams[6]!.std
+  )
+
+  console.log(`[trainModel] Model trained successfully: ${inFeatures.length} 'in', ${outFeatures.length} 'out'`)
+
+  return total
 }

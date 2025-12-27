@@ -92,6 +92,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
     `).all() as Array<{ frame_index: number }>
 
     let totalAnnotatedBoxes = 0
+    let newlyAnnotatedBoxes = 0
     const framesProcessed: number[] = []
 
     // Process each frame
@@ -158,6 +159,14 @@ export async function action({ params, request }: ActionFunctionArgs) {
           }
         } else {
           // action === 'mark_out'
+          // Check which boxes already have labels
+          const existingLabels = new Set(
+            (db.prepare(`
+              SELECT box_index FROM full_frame_box_labels
+              WHERE frame_index = ? AND box_index IN (${boxesInRectangle.map(() => '?').join(',')})
+            `).all(frameIndex, ...boxesInRectangle) as Array<{ box_index: number }>).map(row => row.box_index)
+          )
+
           // Insert or update labels for these boxes
           const stmt = db.prepare(`
             INSERT INTO full_frame_box_labels (
@@ -187,6 +196,11 @@ export async function action({ params, request }: ActionFunctionArgs) {
             // Find the box data
             const box = ocrBoxes.find(b => b.box_index === boxIndex)
             if (!box) continue
+
+            // Count only if this box didn't already have a label
+            if (!existingLabels.has(boxIndex)) {
+              newlyAnnotatedBoxes++
+            }
 
             // Convert fractional to pixels (top-referenced)
             const boxLeft = Math.floor(box.x * layoutConfig.frame_width)
@@ -221,12 +235,13 @@ export async function action({ params, request }: ActionFunctionArgs) {
 
     db.close()
 
-    console.log(`Bulk annotated ${totalAnnotatedBoxes} boxes across ${framesProcessed.length} frames`)
+    console.log(`Bulk annotated ${totalAnnotatedBoxes} boxes (${newlyAnnotatedBoxes} new) across ${framesProcessed.length} frames`)
 
     return new Response(JSON.stringify({
       success: true,
       action,
       totalAnnotatedBoxes,
+      newlyAnnotatedBoxes,
       framesProcessed: framesProcessed.length,
       frameIndices: framesProcessed
     }), {

@@ -215,6 +215,7 @@ name = "full-frames"
 source = { editable = "data-pipelines/full_frames" }
 dependencies = [
     { name = "caption-models" },
+    { name = "frames-db" },
     { name = "ocr-utils" },
     { name = "opencv-python" },
     { name = "rich" },
@@ -225,6 +226,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "caption-models", editable = "packages/caption_models" },
+    { name = "frames-db", editable = "packages/frames_db" },
     { name = "ocr-utils", editable = "packages/ocr_utils" },
     { name = "opencv-python", specifier = ">=4.10.0" },
     { name = "rich", specifier = ">=13.0.0" },
