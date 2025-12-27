@@ -120,6 +120,12 @@ def analyze(
         # Step 1: Extract frames directly to output directory
         console.print("[bold]Step 1/3: Extracting frames[/bold]")
 
+        # Clear output directory to prevent double-renaming issues
+        if output_dir.exists():
+            console.print("  Clearing existing frames...")
+            for frame_file in output_dir.glob("frame_*.jpg"):
+                frame_file.unlink()
+
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
