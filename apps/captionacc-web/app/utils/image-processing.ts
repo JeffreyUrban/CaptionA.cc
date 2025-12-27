@@ -8,6 +8,7 @@
 import sharp from 'sharp'
 import { resolve } from 'path'
 import { existsSync, mkdirSync } from 'fs'
+import Database from 'better-sqlite3'
 
 // Image quality constant
 const COMBINED_IMAGE_QUALITY = 95
@@ -30,29 +31,39 @@ export async function generateCombinedImage(
   startFrame: number,
   endFrame: number
 ): Promise<string> {
-  const framesDir = resolve(
+  const dbPath = resolve(
     process.cwd(),
     '..',
     '..',
     'local',
     'data',
     ...videoPath.split('/'),
-    'crop_frames'
+    'annotations.db'
   )
 
-  if (!existsSync(framesDir)) {
-    throw new Error(`Frames directory not found: ${framesDir}`)
+  if (!existsSync(dbPath)) {
+    throw new Error(`Database not found: ${dbPath}`)
   }
 
-  // Load all frames in the range
+  // Load all frames in the range from database
+  const db = new Database(dbPath, { readonly: true })
   const frameBuffers: sharp.Sharp[] = []
 
-  for (let i = startFrame; i <= endFrame; i++) {
-    const framePath = resolve(framesDir, `frame_${i.toString().padStart(10, '0')}.jpg`)
+  try {
+    const stmt = db.prepare(`
+      SELECT image_data
+      FROM cropped_frames
+      WHERE frame_index >= ? AND frame_index <= ?
+      ORDER BY frame_index
+    `)
 
-    if (existsSync(framePath)) {
-      frameBuffers.push(sharp(framePath))
+    const rows = stmt.all(startFrame, endFrame) as Array<{ image_data: Buffer }>
+
+    for (const row of rows) {
+      frameBuffers.push(sharp(row.image_data))
     }
+  } finally {
+    db.close()
   }
 
   if (frameBuffers.length === 0) {
@@ -184,30 +195,40 @@ export async function getOrGenerateCombinedImage(
     return outputPath
   }
 
-  // Generate new combined image
-  const framesDir = resolve(
+  // Generate new combined image from database
+  const dbPath = resolve(
     process.cwd(),
     '..',
     '..',
     'local',
     'data',
     ...videoPath.split('/'),
-    'crop_frames'
+    'annotations.db'
   )
 
-  if (!existsSync(framesDir)) {
-    throw new Error(`Frames directory not found: ${framesDir}`)
+  if (!existsSync(dbPath)) {
+    throw new Error(`Database not found: ${dbPath}`)
   }
 
-  // Load all frames in the range
+  // Load all frames in the range from database
+  const db = new Database(dbPath, { readonly: true })
   const frameBuffers: sharp.Sharp[] = []
 
-  for (let i = startFrame; i <= endFrame; i++) {
-    const framePath = resolve(framesDir, `frame_${i.toString().padStart(10, '0')}.jpg`)
+  try {
+    const stmt = db.prepare(`
+      SELECT image_data
+      FROM cropped_frames
+      WHERE frame_index >= ? AND frame_index <= ?
+      ORDER BY frame_index
+    `)
 
-    if (existsSync(framePath)) {
-      frameBuffers.push(sharp(framePath))
+    const rows = stmt.all(startFrame, endFrame) as Array<{ image_data: Buffer }>
+
+    for (const row of rows) {
+      frameBuffers.push(sharp(row.image_data))
     }
+  } finally {
+    db.close()
   }
 
   if (frameBuffers.length === 0) {
