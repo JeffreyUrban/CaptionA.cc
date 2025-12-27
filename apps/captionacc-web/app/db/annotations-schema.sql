@@ -321,7 +321,13 @@ CREATE TABLE IF NOT EXISTS processing_status (
     error_details TEXT,  -- JSON with detailed error info
 
     -- Processing job tracking
-    current_job_id TEXT,  -- Reference to background job if applicable
+    current_job_id TEXT,  -- PID of background processing job
+    processing_attempts INTEGER NOT NULL DEFAULT 0,  -- Number of processing attempts
+    last_heartbeat_at TEXT,  -- Last time processing job checked in
+
+    -- Deletion tracking
+    deleted INTEGER NOT NULL DEFAULT 0 CHECK(deleted IN (0, 1)),  -- Soft delete flag
+    deleted_at TEXT,  -- When deletion was initiated
 
     -- Timestamps
     upload_started_at TEXT,

@@ -131,6 +131,12 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
     try {
       const status = db.prepare(`SELECT * FROM processing_status WHERE id = 1`).get() as any
       if (status) {
+        // Check if video is marked as deleted
+        if (status.deleted === 1) {
+          // Return null stats for deleted videos
+          return null
+        }
+
         processingStatus = {
           status: status.status,
           uploadProgress: status.upload_progress ?? 0,

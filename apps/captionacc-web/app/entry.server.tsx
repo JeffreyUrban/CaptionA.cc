@@ -11,8 +11,12 @@ import { createReadableStreamFromReadable } from "@react-router/node";
 import { ServerRouter } from "react-router";
 import { isbot } from "isbot";
 import { renderToPipeableStream } from "react-dom/server";
+import { startPeriodicCleanup } from "~/services/video-cleanup";
 
 const ABORT_DELAY = 5_000;
+
+// Start periodic cleanup on server startup
+startPeriodicCleanup();
 
 export default function handleRequest(
   request: Request,

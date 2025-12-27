@@ -47,7 +47,8 @@ export async function triggerVideoProcessing(options: ProcessingOptions): Promis
     db.prepare(`
       UPDATE processing_status
       SET status = 'extracting_frames',
-          processing_started_at = datetime('now')
+          processing_started_at = datetime('now'),
+          processing_attempts = processing_attempts + 1
       WHERE id = 1
     `).run()
   } finally {
@@ -77,6 +78,21 @@ export async function triggerVideoProcessing(options: ProcessingOptions): Promis
       stdio: ['ignore', 'pipe', 'pipe']
     }
   )
+
+  // Store PID for potential cancellation
+  const pid = fullFramesCmd.pid
+  if (pid) {
+    const db2 = new Database(dbPath)
+    try {
+      db2.prepare(`
+        UPDATE processing_status
+        SET current_job_id = ?
+        WHERE id = 1
+      `).run(pid.toString())
+    } finally {
+      db2.close()
+    }
+  }
 
   let stdout = ''
   let stderr = ''
