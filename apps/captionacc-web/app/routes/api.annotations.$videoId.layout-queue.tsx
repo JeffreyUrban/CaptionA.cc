@@ -251,10 +251,10 @@ export async function loader({ params }: LoaderFunctionArgs) {
       }
     })
 
-    // Sort by minimum confidence (ascending - lowest confidence first) and select top 10
+    // Sort by minimum confidence (ascending - lowest confidence first) and select top 11
     const topFrames = frameInfos
       .sort((a, b) => a.minConfidence - b.minConfidence)
-      .slice(0, 10)
+      .slice(0, 11)
 
     console.log(`Selected ${topFrames.length} top frames by minConfidence:`, topFrames.map(f => `${f.frameIndex}(${f.minConfidence.toFixed(3)})`).join(', '))
 

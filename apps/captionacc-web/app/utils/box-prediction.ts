@@ -545,6 +545,17 @@ export function trainModel(db: Database, layoutConfig: VideoLayoutConfig): numbe
 
   if (annotations.length < 10) {
     console.log(`[trainModel] Insufficient training data: ${annotations.length} samples (need 10+)`)
+
+    // If annotations were cleared, reset to seed model
+    const existingModel = db.prepare('SELECT n_training_samples FROM box_classification_model WHERE id = 1').get() as { n_training_samples: number } | undefined
+
+    if (existingModel && existingModel.n_training_samples >= 10) {
+      console.log(`[trainModel] Resetting to seed model (annotations cleared)`)
+      // Re-initialize seed model to replace trained model
+      db.prepare('DELETE FROM box_classification_model WHERE id = 1').run()
+      // Seed model will be re-initialized on next prediction calculation
+    }
+
     return null
   }
 

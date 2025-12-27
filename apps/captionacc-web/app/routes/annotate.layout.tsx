@@ -87,6 +87,7 @@ export default function AnnotateLayout() {
   const [hasUnsyncedAnnotations, setHasUnsyncedAnnotations] = useState(false)
   const [annotationsSinceRecalc, setAnnotationsSinceRecalc] = useState(0)
   const RECALC_THRESHOLD = 50 // Recalculate crop bounds after this many annotations
+  const [analysisThumbnailUrl, setAnalysisThumbnailUrl] = useState<string | null>(null)
 
   // Cache for frame boxes (to avoid re-fetching already loaded frames)
   const frameBoxesCache = useRef<Map<number, FrameBoxesData>>(new Map())
@@ -130,10 +131,10 @@ export default function AnnotateLayout() {
   }, [videoId])
 
   // Load layout queue (top frames + config)
-  const loadQueue = useCallback(async (showLoading = true) => {
+  const loadQueue = useCallback(async (showLoading = true, skipEditStateUpdate = false) => {
     if (!videoId) return
 
-    console.log(`[Frontend] loadQueue called (showLoading=${showLoading})`)
+    console.log(`[Frontend] loadQueue called (showLoading=${showLoading}, skipEditStateUpdate=${skipEditStateUpdate})`)
 
     // Don't block UI with loading screen
     if (showLoading) {
@@ -167,7 +168,9 @@ export default function AnnotateLayout() {
       setLayoutApproved(data.layoutApproved || false)
 
       // Update edit state from config
-      if (data.layoutConfig) {
+      // BUT: Skip updating edit state if this is after an auto-recalculation
+      // so user can see the changes and choose to apply them
+      if (data.layoutConfig && !skipEditStateUpdate) {
         setCropBoundsEdit({
           left: data.layoutConfig.cropLeft,
           top: data.layoutConfig.cropTop,
@@ -298,7 +301,8 @@ export default function AnnotateLayout() {
       console.log('[Layout] Crop bounds recalculated:', result)
 
       // Reload layout config to get updated crop bounds
-      await loadQueue(false)
+      // Skip edit state update so user can see the auto-calculated changes
+      await loadQueue(false, true)
 
       // Reload analysis boxes to show updated predictions
       await loadAnalysisBoxes()
@@ -320,6 +324,86 @@ export default function AnnotateLayout() {
     void loadAnalysisBoxes()
     void loadQueue(true)
   }, [videoId, loadAnalysisBoxes, loadQueue])
+
+  // Generate analysis thumbnail by rendering to offscreen canvas (updates even when not in analysis view)
+  useEffect(() => {
+    if (!analysisBoxes || !layoutConfig) {
+      setAnalysisThumbnailUrl(null)
+      return
+    }
+
+    try {
+      // Create offscreen canvas for thumbnail
+      const thumbnailCanvas = document.createElement('canvas')
+      const thumbnailWidth = 320
+      const thumbnailHeight = Math.round((layoutConfig.frameHeight / layoutConfig.frameWidth) * thumbnailWidth)
+
+      thumbnailCanvas.width = thumbnailWidth
+      thumbnailCanvas.height = thumbnailHeight
+      const ctx = thumbnailCanvas.getContext('2d')
+
+      if (!ctx) return
+
+      // Draw black background
+      ctx.fillStyle = '#000000'
+      ctx.fillRect(0, 0, thumbnailWidth, thumbnailHeight)
+
+      // Calculate scale for thumbnail
+      const scale = thumbnailWidth / layoutConfig.frameWidth
+
+      // Draw all analysis boxes (same logic as main canvas)
+      analysisBoxes.forEach((box) => {
+        const boxX = box.bounds.left * scale
+        const boxY = box.bounds.top * scale
+        const boxWidth = (box.bounds.right - box.bounds.left) * scale
+        const boxHeight = (box.bounds.bottom - box.bounds.top) * scale
+
+        let fillColor: string
+
+        if (box.userLabel === 'in') {
+          fillColor = 'rgba(20,184,166,0.05)'
+        } else if (box.userLabel === 'out') {
+          fillColor = 'rgba(220,38,38,0.05)'
+        } else if (box.predictedLabel === 'in') {
+          if (box.predictedConfidence >= 0.75) {
+            fillColor = 'rgba(59,130,246,0.03)'
+          } else if (box.predictedConfidence >= 0.5) {
+            fillColor = 'rgba(96,165,250,0.02)'
+          } else {
+            fillColor = 'rgba(147,197,253,0.015)'
+          }
+        } else {
+          if (box.predictedConfidence >= 0.75) {
+            fillColor = 'rgba(249,115,22,0.03)'
+          } else if (box.predictedConfidence >= 0.5) {
+            fillColor = 'rgba(251,146,60,0.02)'
+          } else {
+            fillColor = 'rgba(253,186,116,0.015)'
+          }
+        }
+
+        ctx.fillStyle = fillColor
+        ctx.fillRect(boxX, boxY, boxWidth, boxHeight)
+      })
+
+      // Draw crop bounds overlay (red, dashed) - scaled for thumbnail
+      ctx.strokeStyle = '#ef4444'
+      ctx.lineWidth = 1
+      ctx.setLineDash([8, 3])
+      const cropX = layoutConfig.cropLeft * scale
+      const cropY = layoutConfig.cropTop * scale
+      const cropW = (layoutConfig.cropRight - layoutConfig.cropLeft) * scale
+      const cropH = (layoutConfig.cropBottom - layoutConfig.cropTop) * scale
+      ctx.strokeRect(cropX, cropY, cropW, cropH)
+      ctx.setLineDash([])
+
+      // Convert to data URL
+      const dataUrl = thumbnailCanvas.toDataURL('image/png')
+      setAnalysisThumbnailUrl(dataUrl)
+    } catch (error) {
+      console.error('Error generating analysis thumbnail:', error)
+    }
+  }, [analysisBoxes, layoutConfig])
 
   // Auto-poll when processing is in progress
   useEffect(() => {
@@ -408,6 +492,10 @@ export default function AnnotateLayout() {
     if (!videoId || !currentFrameBoxes) return
 
     try {
+      // Check if this is a new annotation (not just changing existing one)
+      const box = currentFrameBoxes.boxes.find(b => b.boxIndex === boxIndex)
+      const isNewAnnotation = box && box.userLabel === null
+
       // Update local state optimistically
       setCurrentFrameBoxes(prev => {
         if (!prev) return prev
@@ -443,13 +531,15 @@ export default function AnnotateLayout() {
       // Mark that we have unsynced annotations
       setHasUnsyncedAnnotations(true)
 
-      // Increment annotation counter and check if we need to recalculate
-      const newCount = annotationsSinceRecalc + 1
-      setAnnotationsSinceRecalc(newCount)
+      // Only increment counter for new annotations, not changes to existing ones
+      if (isNewAnnotation) {
+        const newCount = annotationsSinceRecalc + 1
+        setAnnotationsSinceRecalc(newCount)
 
-      if (newCount >= RECALC_THRESHOLD) {
-        console.log(`[Layout] Reached ${newCount} annotations, triggering crop bounds recalculation`)
-        void recalculateCropBounds()
+        if (newCount >= RECALC_THRESHOLD) {
+          console.log(`[Layout] Reached ${newCount} annotations, triggering crop bounds recalculation`)
+          void recalculateCropBounds()
+        }
       }
     } catch (err) {
       console.error('Failed to save box annotation:', err)
@@ -730,6 +820,12 @@ export default function AnnotateLayout() {
       bottom: Math.max(selectionStart.y, selectionCurrent.y),
     }
 
+    // Reset selection state immediately so rectangle disappears
+    setIsSelecting(false)
+    setSelectionStart(null)
+    setSelectionCurrent(null)
+    setSelectionLabel(null)
+
     if (viewMode === 'analysis') {
       // Analysis mode: Bulk annotate across ALL 0.1Hz frames
       if (!layoutConfig) return
@@ -770,16 +866,21 @@ export default function AnnotateLayout() {
         // Reload analysis boxes to reflect the changes
         await loadAnalysisBoxes()
 
+        // Clear frame boxes cache so they reload with updated annotations
+        frameBoxesCache.current.clear()
+
         // Mark that we have unsynced annotations
         setHasUnsyncedAnnotations(true)
 
-        // Increment annotation counter and check if we need to recalculate
-        const newCount = annotationsSinceRecalc + result.boxesAnnotated || 1
-        setAnnotationsSinceRecalc(newCount)
+        // Only increment counter for newly annotated boxes, not changes to existing ones
+        if (result.newlyAnnotatedBoxes && result.newlyAnnotatedBoxes > 0) {
+          const newCount = annotationsSinceRecalc + result.newlyAnnotatedBoxes
+          setAnnotationsSinceRecalc(newCount)
 
-        if (newCount >= RECALC_THRESHOLD) {
-          console.log(`[Layout] Reached ${newCount} annotations, triggering crop bounds recalculation`)
-          await recalculateCropBounds()
+          if (newCount >= RECALC_THRESHOLD) {
+            console.log(`[Layout] Reached ${newCount} annotations, triggering crop bounds recalculation`)
+            await recalculateCropBounds()
+          }
         }
       } catch (err) {
         console.error('Failed to bulk annotate all frames:', err)
@@ -790,6 +891,8 @@ export default function AnnotateLayout() {
 
       // Find all boxes fully enclosed by selection rectangle
       const enclosedBoxes: number[] = []
+      const newlyAnnotatedCount = { count: 0 } // Track only new annotations
+
       currentFrameBoxes.boxes.forEach((box) => {
         const boxX = box.originalBounds.left * scale
         const boxY = box.originalBounds.top * scale
@@ -804,6 +907,10 @@ export default function AnnotateLayout() {
           boxBottom <= selRectCanvas.bottom
         ) {
           enclosedBoxes.push(box.boxIndex)
+          // Count only if this box doesn't already have a user label
+          if (box.userLabel === null) {
+            newlyAnnotatedCount.count++
+          }
         }
       })
 
@@ -837,25 +944,21 @@ export default function AnnotateLayout() {
           // Mark that we have unsynced annotations
           setHasUnsyncedAnnotations(true)
 
-          // Increment annotation counter and check if we need to recalculate
-          const newCount = annotationsSinceRecalc + enclosedBoxes.length
-          setAnnotationsSinceRecalc(newCount)
+          // Only increment counter for newly annotated boxes, not changes to existing ones
+          if (newlyAnnotatedCount.count > 0) {
+            const newCount = annotationsSinceRecalc + newlyAnnotatedCount.count
+            setAnnotationsSinceRecalc(newCount)
 
-          if (newCount >= RECALC_THRESHOLD) {
-            console.log(`[Layout] Reached ${newCount} annotations, triggering crop bounds recalculation`)
-            await recalculateCropBounds()
+            if (newCount >= RECALC_THRESHOLD) {
+              console.log(`[Layout] Reached ${newCount} annotations, triggering crop bounds recalculation`)
+              await recalculateCropBounds()
+            }
           }
         } catch (err) {
           console.error('Failed to save annotations:', err)
         }
       }
     }
-
-    // Reset selection state
-    setIsSelecting(false)
-    setSelectionStart(null)
-    setSelectionCurrent(null)
-    setSelectionLabel(null)
   }, [isSelecting, selectionStart, selectionCurrent, selectionLabel, currentFrameBoxes, canvasSize, videoId, selectedFrameIndex, viewMode, layoutConfig, loadAnalysisBoxes, annotationsSinceRecalc, RECALC_THRESHOLD, recalculateCropBounds])
 
   // Handle canvas click - individual box annotation, or start/complete selection
@@ -1242,7 +1345,17 @@ export default function AnnotateLayout() {
                 }`}
               >
                 <div className="aspect-video w-full bg-black">
-                  {/* Blank thumbnail for analysis view */}
+                  {analysisThumbnailUrl ? (
+                    <img
+                      src={analysisThumbnailUrl}
+                      alt="Analysis view"
+                      className="h-full w-full object-contain"
+                    />
+                  ) : (
+                    <div className="flex h-full items-center justify-center text-xs text-gray-500">
+                      Loading...
+                    </div>
+                  )}
                 </div>
                 <div className="flex h-11 flex-col items-center justify-center bg-gray-100 px-2 py-1 text-xs text-gray-900 dark:bg-gray-800 dark:text-gray-100">
                   Analysis
@@ -1327,18 +1440,34 @@ export default function AnnotateLayout() {
               <div className="text-sm font-semibold text-gray-700 dark:text-gray-300">
                 Crop Bounds Auto-Update
               </div>
-              <div className="mt-1 text-xs text-gray-600 dark:text-gray-400">
-                {annotationsSinceRecalc} / {RECALC_THRESHOLD} annotations
-              </div>
-              <div className="mt-2 h-2 w-full rounded-full bg-gray-200 dark:bg-gray-700">
-                <div
-                  className="h-2 rounded-full bg-blue-500 transition-all duration-300"
-                  style={{ width: `${Math.min(100, (annotationsSinceRecalc / RECALC_THRESHOLD) * 100)}%` }}
-                />
-              </div>
-              <div className="mt-1 text-xs text-gray-500 dark:text-gray-500">
-                Crop bounds will recalculate automatically after {RECALC_THRESHOLD - annotationsSinceRecalc} more annotations
-              </div>
+              {annotationsSinceRecalc >= RECALC_THRESHOLD ? (
+                <>
+                  <div className="mt-1 text-xs text-blue-600 dark:text-blue-400 font-semibold">
+                    Calculating...
+                  </div>
+                  <div className="mt-2 h-2 w-full rounded-full bg-gray-200 dark:bg-gray-700">
+                    <div className="h-2 rounded-full bg-blue-500 animate-pulse" style={{ width: '100%' }} />
+                  </div>
+                  <div className="mt-1 text-xs text-gray-500 dark:text-gray-500">
+                    Recalculating crop bounds and predictions
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="mt-1 text-xs text-gray-600 dark:text-gray-400">
+                    {annotationsSinceRecalc} / {RECALC_THRESHOLD} annotations
+                  </div>
+                  <div className="mt-2 h-2 w-full rounded-full bg-gray-200 dark:bg-gray-700">
+                    <div
+                      className="h-2 rounded-full bg-blue-500 transition-all duration-300"
+                      style={{ width: `${Math.min(100, (annotationsSinceRecalc / RECALC_THRESHOLD) * 100)}%` }}
+                    />
+                  </div>
+                  <div className="mt-1 text-xs text-gray-500 dark:text-gray-500">
+                    Crop bounds will recalculate automatically after {RECALC_THRESHOLD - annotationsSinceRecalc} more annotations
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Mark Layout Complete Button */}
@@ -1369,12 +1498,15 @@ export default function AnnotateLayout() {
                 }
               }}
               disabled={
-                // Only require edits if layout has already been approved
-                layoutApproved && layoutConfig && cropBoundsEdit &&
-                  layoutConfig.cropLeft === cropBoundsEdit.left &&
-                  layoutConfig.cropTop === cropBoundsEdit.top &&
-                  layoutConfig.cropRight === cropBoundsEdit.right &&
-                  layoutConfig.cropBottom === cropBoundsEdit.bottom
+                // If not approved yet: always enabled (allow approval)
+                // If approved: only disabled when bounds haven't changed
+                layoutApproved &&
+                layoutConfig &&
+                cropBoundsEdit &&
+                layoutConfig.cropLeft === cropBoundsEdit.left &&
+                layoutConfig.cropTop === cropBoundsEdit.top &&
+                layoutConfig.cropRight === cropBoundsEdit.right &&
+                layoutConfig.cropBottom === cropBoundsEdit.bottom
               }
               className={`w-full px-4 py-2 text-sm font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 ${
                 layoutApproved && layoutConfig && cropBoundsEdit &&
@@ -1387,6 +1519,74 @@ export default function AnnotateLayout() {
               }`}
             >
               {layoutApproved ? 'Update Layout & Re-crop' : 'Approve Layout'}
+            </button>
+
+            {/* Clear All Annotations Button */}
+            <button
+              onClick={async () => {
+                const confirmMessage = 'Clear all layout annotations? This will:\n\n' +
+                  '• Delete all user annotations\n' +
+                  '• Reset predictions to seed model\n' +
+                  '• Recalculate crop bounds\n\n' +
+                  'This action cannot be undone.'
+
+                if (confirm(confirmMessage)) {
+                  try {
+                    // Clear all annotations
+                    const response = await fetch(`/api/annotations/${encodeURIComponent(videoId)}/clear-all`, {
+                      method: 'POST'
+                    })
+
+                    if (!response.ok) throw new Error('Failed to clear annotations')
+
+                    const result = await response.json()
+                    console.log(`[Clear All] Deleted ${result.deletedCount} annotations`)
+
+                    // Recalculate predictions (will reset to seed model)
+                    await fetch(`/api/annotations/${encodeURIComponent(videoId)}/calculate-predictions`, {
+                      method: 'POST'
+                    })
+
+                    // Recalculate crop bounds
+                    await fetch(`/api/annotations/${encodeURIComponent(videoId)}/reset-crop-bounds`, {
+                      method: 'POST'
+                    })
+
+                    // Reload everything
+                    // Skip edit state update so user can see the recalculated changes
+                    await loadQueue(false, true)
+                    await loadAnalysisBoxes()
+                    frameBoxesCache.current.clear()
+
+                    // Reload current frame if in frame view
+                    if (viewMode === 'frame' && selectedFrameIndex !== null) {
+                      try {
+                        const frameResponse = await fetch(
+                          `/api/annotations/${encodeURIComponent(videoId)}/frames/${selectedFrameIndex}/boxes`
+                        )
+                        if (frameResponse.ok) {
+                          const data = await frameResponse.json()
+                          setCurrentFrameBoxes(data)
+                          frameBoxesCache.current.set(selectedFrameIndex, data)
+                        }
+                      } catch (err) {
+                        console.error('Failed to reload current frame:', err)
+                      }
+                    }
+
+                    // Reset annotation counter
+                    setAnnotationsSinceRecalc(0)
+
+                    alert(`Successfully cleared ${result.deletedCount} annotations and reset to seed model.`)
+                  } catch (err) {
+                    console.error('Error clearing annotations:', err)
+                    alert('Failed to clear annotations')
+                  }
+                }
+              }}
+              className="w-full px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+            >
+              Clear All Annotations
             </button>
 
             {/* Current view info */}

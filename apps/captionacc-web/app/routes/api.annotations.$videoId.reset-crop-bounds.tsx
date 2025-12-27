@@ -60,6 +60,23 @@ function getDatabase(videoId: string) {
 }
 
 /**
+ * Calculate median from array of numbers.
+ * More robust than mode for finding central tendency.
+ */
+function calculateMedian(values: number[]): number {
+  if (values.length === 0) return 0
+
+  const sorted = [...values].sort((a, b) => a - b)
+  const mid = Math.floor(sorted.length / 2)
+
+  if (sorted.length % 2 === 0) {
+    return Math.round((sorted[mid - 1]! + sorted[mid]!) / 2)
+  } else {
+    return sorted[mid]!
+  }
+}
+
+/**
  * Calculate mode (most common value) from array of numbers.
  * Groups values into bins and finds the bin with highest frequency.
  */
@@ -194,133 +211,294 @@ function analyzeOCRBoxes(
   const bottomEdgesFiltered = stats.bottomEdges.filter(val => Math.abs(val - bottomMode) < 100)
   const bottomEdgeStd = calculateStd(bottomEdgesFiltered, bottomMode)
 
-  // Determine anchor type using both peak density and center of mass
-  // - Peak density: for detecting left/right alignment (boxes cluster at one edge)
-  // - Center of mass: for detecting center alignment (distribution balanced around center)
+  // Determine anchor type by finding edges of box clusters using derivative analysis
+  // Left anchor: point with highest positive derivative (boxes start piling up)
+  // Right anchor: point with highest negative derivative (boxes stop piling up)
+  // Center anchor: symmetric density around center
 
-  // ============================================================================
-  // Anchor Detection Parameters
-  // ============================================================================
-  // Sliding window configuration (for peak density analysis)
-  const MIN_WINDOW_SIZE_PX = 30                    // Minimum window size in pixels
-  const DENSITY_SAMPLE_STEP_FRACTION = 0.5         // Sample every N box widths (0.5 = half box width)
-  const MIN_DENSITY_SAMPLE_STEP_PX = 10            // Minimum step size in pixels
+  // Calculate box density at each horizontal position (count boxes at vertical centerline)
+  const densityByX = new Array(frameWidth).fill(0)
 
-  // Peak analysis thresholds (measured in box widths)
-  const PEAK_COLOCATION_THRESHOLD_BOX_WIDTHS = 2.0  // Max distance for peaks to be "colocated"
+  for (let i = 0; i < stats.leftEdges.length; i++) {
+    const left = stats.leftEdges[i]!
+    const right = stats.rightEdges[i]!
+    const centerY = stats.centerYValues[i]!
 
-  // Center of mass thresholds (measured in box widths)
-  const CENTER_OF_MASS_THRESHOLD_BOX_WIDTHS = 1.0   // Max distance from frame center for center alignment
+    // Only count boxes near the vertical center (caption region)
+    if (Math.abs(centerY - verticalPosition) < verticalStd * 2) {
+      for (let x = Math.max(0, left); x <= Math.min(frameWidth - 1, right); x++) {
+        densityByX[x]++
+      }
+    }
+  }
 
-  // Density comparison thresholds
-  const DENSITY_DOMINANCE_RATIO = 1.2              // Minimum ratio for one side to dominate (20% stronger)
-  // ============================================================================
+  // Calculate derivatives (change in density)
+  const derivatives = new Array(frameWidth - 1).fill(0)
+  for (let x = 0; x < frameWidth - 1; x++) {
+    derivatives[x] = densityByX[x + 1]! - densityByX[x]!
+  }
 
-  // Calculate center of mass (mean position) for each metric
-  const meanLeftEdge = stats.leftEdges.reduce((sum, val) => sum + val, 0) / stats.leftEdges.length
-  const meanRightEdge = stats.rightEdges.reduce((sum, val) => sum + val, 0) / stats.rightEdges.length
+  // Find highest positive derivative (left edge where density increases)
+  let maxPositiveDerivative = 0
+  let leftEdgePos = 0
+  for (let x = 0; x < derivatives.length; x++) {
+    if (derivatives[x]! > maxPositiveDerivative) {
+      maxPositiveDerivative = derivatives[x]!
+      leftEdgePos = x
+    }
+  }
+
+  // Find highest negative derivative (right edge where density decreases)
+  let maxNegativeDerivative = 0
+  let rightEdgePos = frameWidth - 1
+  for (let x = 0; x < derivatives.length; x++) {
+    if (derivatives[x]! < maxNegativeDerivative) {
+      maxNegativeDerivative = derivatives[x]!
+      rightEdgePos = x
+    }
+  }
+
+  // Calculate center of mass for center detection
   const meanCenterX = stats.centerXValues.reduce((sum, val) => sum + val, 0) / stats.centerXValues.length
-
-  // Calculate peak density for left/right alignment detection
-  const windowSize = Math.max(boxWidth, MIN_WINDOW_SIZE_PX)
-
-  const calculateDensity = (values: number[], position: number, window: number): number => {
-    return values.filter(v => Math.abs(v - position) <= window / 2).length
-  }
-
-  // Test positions across the frame
-  const step = Math.max(Math.floor(boxWidth * DENSITY_SAMPLE_STEP_FRACTION), MIN_DENSITY_SAMPLE_STEP_PX)
-  const positions: number[] = []
-  for (let pos = 0; pos <= frameWidth; pos += step) {
-    positions.push(pos)
-  }
-
-  let maxLeftDensity = 0
-  let maxRightDensity = 0
-  let leftPeakPos = 0
-  let rightPeakPos = 0
-
-  for (const pos of positions) {
-    const leftDensity = calculateDensity(stats.leftEdges, pos, windowSize)
-    const rightDensity = calculateDensity(stats.rightEdges, pos, windowSize)
-
-    if (leftDensity > maxLeftDensity) {
-      maxLeftDensity = leftDensity
-      leftPeakPos = pos
-    }
-    if (rightDensity > maxRightDensity) {
-      maxRightDensity = rightDensity
-      rightPeakPos = pos
-    }
-  }
-
-  // Determine anchor type using both metrics
   const frameCenterX = frameWidth / 2
-  const centerOfMassNearFrameCenter = Math.abs(meanCenterX - frameCenterX) < boxWidth * CENTER_OF_MASS_THRESHOLD_BOX_WIDTHS
-  const peaksColocated = Math.abs(leftPeakPos - rightPeakPos) < boxWidth * PEAK_COLOCATION_THRESHOLD_BOX_WIDTHS
 
+  // Determine anchor type
   let anchorType: 'left' | 'center' | 'right'
   let anchorPosition: number
 
-  if (centerOfMassNearFrameCenter && peaksColocated) {
-    // Center of mass is at frame center AND peaks are colocated = center alignment
+  const centerOfMassNearFrameCenter = Math.abs(meanCenterX - frameCenterX) < boxWidth * 1.0
+  const leftEdgeStrength = maxPositiveDerivative
+  const rightEdgeStrength = Math.abs(maxNegativeDerivative)
+
+  if (centerOfMassNearFrameCenter && Math.abs(leftEdgeStrength - rightEdgeStrength) < leftEdgeStrength * 0.3) {
+    // Centered and symmetric edges = center anchor
     anchorType = 'center'
     anchorPosition = Math.round(meanCenterX)
-  } else if (maxRightDensity > maxLeftDensity * DENSITY_DOMINANCE_RATIO) {
-    // Right peak is significantly stronger = right alignment
-    anchorType = 'right'
-    anchorPosition = rightPeakPos
-  } else if (maxLeftDensity > maxRightDensity * DENSITY_DOMINANCE_RATIO) {
-    // Left peak is significantly stronger = left alignment
+  } else if (leftEdgeStrength > rightEdgeStrength * 1.2) {
+    // Strong left edge = left anchor
     anchorType = 'left'
-    anchorPosition = leftPeakPos
+    anchorPosition = leftEdgePos
+  } else if (rightEdgeStrength > leftEdgeStrength * 1.2) {
+    // Strong right edge = right anchor
+    anchorType = 'right'
+    anchorPosition = rightEdgePos
   } else {
-    // Similar densities - check center of mass
-    if (centerOfMassNearFrameCenter) {
-      anchorType = 'center'
-      anchorPosition = Math.round(meanCenterX)
+    // Default to stronger edge
+    if (leftEdgeStrength >= rightEdgeStrength) {
+      anchorType = 'left'
+      anchorPosition = leftEdgePos
     } else {
-      // Default to stronger peak
-      anchorType = maxRightDensity > maxLeftDensity ? 'right' : 'left'
-      anchorPosition = maxRightDensity > maxLeftDensity ? rightPeakPos : leftPeakPos
+      anchorType = 'right'
+      anchorPosition = rightEdgePos
     }
   }
 
-  console.log(`[Anchor Detection] boxWidth=${boxWidth}, windowSize=${windowSize}`)
-  console.log(`[Anchor Detection] Center of mass: left=${Math.round(meanLeftEdge)}, right=${Math.round(meanRightEdge)}, center=${Math.round(meanCenterX)}`)
-  console.log(`[Anchor Detection] Frame center: ${Math.round(frameCenterX)}, offset: ${Math.round(meanCenterX - frameCenterX)}px`)
-  console.log(`[Anchor Detection] Peak density: left pos=${leftPeakPos} (density=${maxLeftDensity}), right pos=${rightPeakPos} (density=${maxRightDensity})`)
-  console.log(`[Anchor Detection] Center at frame center: ${centerOfMassNearFrameCenter}, peaks colocated: ${peaksColocated}`)
-  console.log(`[Anchor Detection] Chosen: ${anchorType} at ${anchorPosition}`)
+  console.log(`[Anchor Detection] Horizontal - Left edge at x=${leftEdgePos} (derivative=${maxPositiveDerivative})`)
+  console.log(`[Anchor Detection] Horizontal - Right edge at x=${rightEdgePos} (derivative=${maxNegativeDerivative})`)
+  console.log(`[Anchor Detection] Horizontal - Center of mass: ${Math.round(meanCenterX)}, frame center: ${frameCenterX}`)
+  console.log(`[Anchor Detection] Horizontal - Chosen: ${anchorType} at ${anchorPosition}`)
 
-  // Calculate crop bounds using anchor as a prior
-  // Vertical bounds: Use edge-specific standard deviations (3 sigma)
-  const cropTop = Math.max(0, topMode - Math.ceil(topEdgeStd * 3))
-  const cropBottom = Math.min(frameHeight, bottomMode + Math.ceil(bottomEdgeStd * 3))
+  // Apply same derivative method for vertical bounds (top/bottom of caption region)
+  // Calculate box density at each vertical position
+  const densityByY = new Array(frameHeight).fill(0)
 
-  // Horizontal bounds: Use anchor type to determine strategy
+  for (let i = 0; i < stats.topEdges.length; i++) {
+    const top = stats.topEdges[i]!
+    const bottom = stats.bottomEdges[i]!
+    const centerX = stats.centerXValues[i]!
+
+    // Only count boxes near the horizontal center (caption region)
+    // Use a wide horizontal range to capture all caption boxes
+    for (let y = Math.max(0, top); y <= Math.min(frameHeight - 1, bottom); y++) {
+      densityByY[y]++
+    }
+  }
+
+  // Calculate vertical derivatives (change in density)
+  const verticalDerivatives = new Array(frameHeight - 1).fill(0)
+  for (let y = 0; y < frameHeight - 1; y++) {
+    verticalDerivatives[y] = densityByY[y + 1]! - densityByY[y]!
+  }
+
+  // Find highest positive derivative (top edge where density increases moving down)
+  let maxPositiveVerticalDerivative = 0
+  let topEdgePos = 0
+  for (let y = 0; y < verticalDerivatives.length; y++) {
+    if (verticalDerivatives[y]! > maxPositiveVerticalDerivative) {
+      maxPositiveVerticalDerivative = verticalDerivatives[y]!
+      topEdgePos = y
+    }
+  }
+
+  // Find highest negative derivative (bottom edge where density decreases moving down)
+  let maxNegativeVerticalDerivative = 0
+  let bottomEdgePos = frameHeight - 1
+  for (let y = 0; y < verticalDerivatives.length; y++) {
+    if (verticalDerivatives[y]! < maxNegativeVerticalDerivative) {
+      maxNegativeVerticalDerivative = verticalDerivatives[y]!
+      bottomEdgePos = y
+    }
+  }
+
+  console.log(`[Anchor Detection] Vertical - Top edge at y=${topEdgePos} (derivative=${maxPositiveVerticalDerivative})`)
+  console.log(`[Anchor Detection] Vertical - Bottom edge at y=${bottomEdgePos} (derivative=${maxNegativeVerticalDerivative})`)
+
+  // Calculate crop bounds: detected edge position ± padding (fraction of box dimension)
+  const PADDING_FRACTION = 0.1  // Add 1/10 of box dimension as padding
+
+  const verticalPadding = Math.ceil(boxHeight * PADDING_FRACTION)
+  const cropTop = Math.max(0, topEdgePos - verticalPadding)
+  const cropBottom = Math.min(frameHeight, bottomEdgePos + verticalPadding)
+
+  // Helper function: Fit polynomial to find where density reaches zero
+  // Uses simple quadratic fit: y = ax² + bx + c
+  // Only samples the trailing-off region where density is positive
+  function findZeroCrossing(densities: number[], startX: number, endX: number, searchDirection: 'right' | 'left'): number {
+    const points: Array<{x: number, y: number}> = []
+    const minDensity = 1  // Stop when density drops below this
+
+    if (searchDirection === 'right') {
+      // Sample points from startX to the right until density drops to near-zero
+      for (let x = startX; x <= endX && x < densities.length; x++) {
+        const density = densities[x]!
+        if (density < minDensity && points.length > 5) {
+          // Found the edge of the trailing region
+          break
+        }
+        if (density >= minDensity) {
+          points.push({ x, y: density })
+        }
+      }
+    } else {
+      // Sample points from startX to the left until density drops to near-zero
+      for (let x = startX; x >= endX && x >= 0; x--) {
+        const density = densities[x]!
+        if (density < minDensity && points.length > 5) {
+          // Found the edge of the trailing region
+          break
+        }
+        if (density >= minDensity) {
+          points.push({ x, y: density })
+        }
+      }
+    }
+
+    if (points.length < 10) {
+      // Not enough points to fit, find the last point with density > 0
+      if (searchDirection === 'right') {
+        for (let x = startX; x <= endX && x < densities.length; x++) {
+          if (densities[x]! === 0) return x - 1
+        }
+        return endX
+      } else {
+        for (let x = startX; x >= endX && x >= 0; x--) {
+          if (densities[x]! === 0) return x + 1
+        }
+        return endX
+      }
+    }
+
+    // Fit quadratic using least squares: y = a*x² + b*x + c
+    // Build normal equations for least squares
+    let sumX = 0, sumX2 = 0, sumX3 = 0, sumX4 = 0
+    let sumY = 0, sumXY = 0, sumX2Y = 0
+    const n = points.length
+
+    for (const p of points) {
+      sumX += p.x
+      sumX2 += p.x * p.x
+      sumX3 += p.x * p.x * p.x
+      sumX4 += p.x * p.x * p.x * p.x
+      sumY += p.y
+      sumXY += p.x * p.y
+      sumX2Y += p.x * p.x * p.y
+    }
+
+    // Solve 3x3 system for a, b, c
+    // [sumX4  sumX3  sumX2] [a]   [sumX2Y]
+    // [sumX3  sumX2  sumX ] [b] = [sumXY ]
+    // [sumX2  sumX   n    ] [c]   [sumY  ]
+
+    // Using Cramer's rule (simplified for this case)
+    const det = sumX4 * (sumX2 * n - sumX * sumX) - sumX3 * (sumX3 * n - sumX * sumX2) + sumX2 * (sumX3 * sumX - sumX2 * sumX2)
+
+    if (Math.abs(det) < 1e-10) {
+      // Singular matrix, use linear fit instead
+      const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX)
+      const intercept = (sumY - slope * sumX) / n
+
+      if (Math.abs(slope) < 1e-10) return searchDirection === 'right' ? endX : endX
+
+      const zeroX = -intercept / slope
+      return Math.round(zeroX)
+    }
+
+    const a = ((sumX2 * n - sumX * sumX) * sumX2Y - (sumX3 * n - sumX * sumX2) * sumXY + (sumX3 * sumX - sumX2 * sumX2) * sumY) / det
+    const b = ((sumX4 * sumXY - sumX3 * sumX2Y) * n - (sumX4 * sumY - sumX2 * sumX2Y) * sumX + (sumX3 * sumY - sumX2 * sumXY) * sumX2) / det
+    const c = ((sumX4 * (sumX2 * sumY - sumX * sumXY) - sumX3 * (sumX3 * sumY - sumX * sumX2Y)) + sumX2 * (sumX3 * sumXY - sumX2 * sumX2Y)) / det
+
+    // Find zero crossing of quadratic: ax² + bx + c = 0
+    if (Math.abs(a) > 1e-10) {
+      // Quadratic formula
+      const discriminant = b * b - 4 * a * c
+      if (discriminant < 0) {
+        // No real roots, use endpoint
+        return searchDirection === 'right' ? endX : endX
+      }
+
+      const x1 = (-b + Math.sqrt(discriminant)) / (2 * a)
+      const x2 = (-b - Math.sqrt(discriminant)) / (2 * a)
+
+      // Choose the root in the search direction
+      if (searchDirection === 'right') {
+        return Math.round(Math.max(x1, x2))
+      } else {
+        return Math.round(Math.min(x1, x2))
+      }
+    } else {
+      // Linear case
+      if (Math.abs(b) < 1e-10) return searchDirection === 'right' ? endX : endX
+      return Math.round(-c / b)
+    }
+  }
+
+  // Horizontal bounds: Use detected anchor/edge position ± padding
   let cropLeft: number
   let cropRight: number
 
-  const HORIZONTAL_PADDING_PX = 50  // Padding beyond box edges
+  const anchorPadding = Math.ceil(boxWidth * PADDING_FRACTION)  // Small padding for anchor side
+  const farSidePadding = Math.ceil(boxWidth * 2)  // 2 box widths for far side
+  const centerPadding = Math.ceil(boxWidth * 1)  // 1 box width for center anchor
 
   if (anchorType === 'center') {
-    // For center anchors: make bounds symmetric around anchor position
-    const leftDistance = anchorPosition - stats.minLeft
-    const rightDistance = stats.maxRight - anchorPosition
-    const maxDistance = Math.max(leftDistance, rightDistance)
+    // For center anchors: 1 box width padding on each side
+    const leftZero = findZeroCrossing(densityByX, anchorPosition, 0, 'left')
+    const rightZero = findZeroCrossing(densityByX, anchorPosition, frameWidth - 1, 'right')
 
-    cropLeft = Math.max(0, anchorPosition - maxDistance - HORIZONTAL_PADDING_PX)
-    cropRight = Math.min(frameWidth, anchorPosition + maxDistance + HORIZONTAL_PADDING_PX)
+    cropLeft = Math.max(0, leftZero - centerPadding)
+    cropRight = Math.min(frameWidth, rightZero + centerPadding)
 
-    console.log(`[Crop Bounds] Center anchor: symmetric bounds at ${anchorPosition} ± ${maxDistance + HORIZONTAL_PADDING_PX}px`)
+    console.log(`[Crop Bounds] Horizontal - Center anchor at ${anchorPosition}: left zero at ${leftZero}, right zero at ${rightZero}, padding=${centerPadding}px each side`)
+  } else if (anchorType === 'left') {
+    // For left anchors: small padding on anchor side (left), 2 box widths on far side (right)
+    cropLeft = Math.max(0, anchorPosition - anchorPadding)
+
+    const rightZero = findZeroCrossing(densityByX, anchorPosition, frameWidth - 1, 'right')
+    cropRight = Math.min(frameWidth, rightZero + farSidePadding)
+
+    console.log(`[Crop Bounds] Horizontal - Left anchor at ${anchorPosition}: left=${cropLeft} (anchor-${anchorPadding}px), right zero at ${rightZero} → ${cropRight} (+${farSidePadding}px)`)
   } else {
-    // For left/right anchors: use natural bounds with padding
-    cropLeft = Math.max(0, stats.minLeft - HORIZONTAL_PADDING_PX)
-    cropRight = Math.min(frameWidth, stats.maxRight + HORIZONTAL_PADDING_PX)
+    // For right anchors: 2 box widths on far side (left), small padding on anchor side (right)
+    const leftZero = findZeroCrossing(densityByX, anchorPosition, 0, 'left')
+    cropLeft = Math.max(0, leftZero - farSidePadding)
 
-    console.log(`[Crop Bounds] ${anchorType} anchor: natural bounds [${cropLeft}, ${cropRight}]`)
+    cropRight = Math.min(frameWidth, anchorPosition + anchorPadding)
+
+    console.log(`[Crop Bounds] Horizontal - Right anchor at ${anchorPosition}: left zero at ${leftZero} → ${cropLeft} (-${farSidePadding}px), right=${cropRight} (anchor+${anchorPadding}px)`)
   }
+
+  console.log(`[Crop Bounds] Vertical - Top=${cropTop} (edge=${topEdgePos}-${verticalPadding}px), Bottom=${cropBottom} (edge=${bottomEdgePos}+${verticalPadding}px)`)
+  console.log(`[Crop Bounds] Final bounds: [${cropLeft}, ${cropTop}] - [${cropRight}, ${cropBottom}] with padding=${PADDING_FRACTION}×box dimensions`)
 
   // Count caption boxes (those near the vertical mode)
   const captionBoxCount = stats.centerYValues.filter(
@@ -398,9 +576,7 @@ export async function action({ params }: ActionFunctionArgs) {
     }
 
     // Get unique frame indices with caption boxes
-    // NOTE: Anchor detection uses predicted caption boxes (predicted_label='in'),
-    // with user labels as overrides. This allows automatic anchor detection after
-    // prediction, while respecting manual corrections.
+    // Uses predictions with user label overrides
     const captionFrameIndices = db.prepare(`
       SELECT DISTINCT o.frame_index
       FROM full_frame_ocr o
@@ -409,10 +585,8 @@ export async function action({ params }: ActionFunctionArgs) {
         AND o.box_index = l.box_index
         AND l.annotation_source = 'full_frame'
       WHERE (
-        -- Use prediction if no user label
         (l.label IS NULL AND o.predicted_label = 'in')
         OR
-        -- Or use user label if it's 'in'
         (l.label_source = 'user' AND l.label = 'in')
       )
       ORDER BY o.frame_index
