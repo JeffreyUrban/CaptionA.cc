@@ -580,7 +580,7 @@ export default function VideosPage() {
   const { tree } = useLoaderData<{ tree: TreeNode[] }>()
   const revalidator = useRevalidator()
   const [searchQuery, setSearchQuery] = useState('')
-  const CACHE_VERSION = 'v5' // Increment to invalidate cache when VideoStats structure changes
+  const CACHE_VERSION = 'v6' // Increment to invalidate cache when VideoStats structure changes
 
   // Modal states
   const [createFolderModal, setCreateFolderModal] = useState<{ open: boolean; parentPath?: string }>({ open: false })
@@ -722,10 +722,13 @@ export default function VideosPage() {
       }
     }
 
-    // Load stats for all videos (skip cached ones unless they were recently touched)
+    // Load stats for all videos (skip cached ones unless they were recently touched or database_id changed)
     videoIds.forEach(videoId => {
       const needsRefresh = touchedVideos.has(videoId)
-      if (needsRefresh || !videoStatsMap.has(videoId)) {
+      const cachedStats = videoStatsMap.get(videoId)
+
+      // Always fetch if no cache, or if touched, or to verify database_id hasn't changed
+      if (needsRefresh || !cachedStats) {
         console.log(`[Videos] Loading stats for ${videoId}...`)
         fetch(`/api/videos/${encodeURIComponent(videoId)}/stats`)
           .then(res => {
@@ -744,6 +747,20 @@ export default function VideosPage() {
             }
           })
           .catch(err => console.error(`Failed to load stats for ${videoId}:`, err))
+      } else if (cachedStats.databaseId) {
+        // We have cached stats with a database_id - verify it hasn't changed
+        fetch(`/api/videos/${encodeURIComponent(videoId)}/stats`)
+          .then(res => res.ok ? res.json() : null)
+          .then(data => {
+            if (data && data.databaseId && data.databaseId !== cachedStats.databaseId) {
+              // Database was recreated - invalidate cache and use fresh data
+              console.log(`[Videos] Database recreated for ${videoId}, invalidating cache`)
+              updateVideoStats(videoId, data)
+            }
+          })
+          .catch(() => {
+            /* Ignore errors on background validation */
+          })
       }
     })
   }, [tree, videoStatsMap, updateVideoStats])

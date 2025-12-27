@@ -17,7 +17,7 @@ import { existsSync } from 'fs'
 import { readdir } from 'fs/promises'
 import { rm } from 'fs/promises'
 import Database from 'better-sqlite3'
-import { triggerVideoProcessing } from './video-processing'
+import { queueVideoProcessing } from './video-processing'
 
 const CLEANUP_INTERVAL_MS = 60 * 60 * 1000 // 1 hour
 const MAX_PROCESSING_ATTEMPTS = 3 // Max retries before marking as error
@@ -283,15 +283,15 @@ async function recoverStaleProcessing(video: { videoPath: string; videoDir: stri
     return
   }
 
-  // Restart processing
-  console.log(`[Cleanup] Restarting processing for ${videoPath} (attempt ${attempts + 1}/${MAX_PROCESSING_ATTEMPTS})`)
+  // Restart processing (queue to respect concurrency limits)
+  console.log(`[Cleanup] Queueing ${videoPath} for processing restart (attempt ${attempts + 1}/${MAX_PROCESSING_ATTEMPTS})`)
 
   try {
-    await triggerVideoProcessing({
+    queueVideoProcessing({
       videoPath,
       videoFile
     })
-    console.log(`[Cleanup] Successfully restarted processing for ${videoPath}`)
+    console.log(`[Cleanup] Successfully queued ${videoPath} for processing restart`)
   } catch (error) {
     console.error(`[Cleanup] Failed to restart processing for ${videoPath}:`, error)
 

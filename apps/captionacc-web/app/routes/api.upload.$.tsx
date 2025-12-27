@@ -248,13 +248,11 @@ async function handlePatchRequest(request: Request, uploadId: string): Promise<R
 
     console.log(`[tus] Upload complete: ${videoPath}`)
 
-    // Trigger background processing
-    const { triggerVideoProcessing } = await import('~/services/video-processing')
-    triggerVideoProcessing({
+    // Queue video for background processing (respects concurrency limits)
+    const { queueVideoProcessing } = await import('~/services/video-processing')
+    queueVideoProcessing({
       videoPath,
       videoFile: finalVideoPath,
-    }).catch(error => {
-      console.error(`Failed to trigger processing for ${videoPath}:`, error)
     })
   }
 

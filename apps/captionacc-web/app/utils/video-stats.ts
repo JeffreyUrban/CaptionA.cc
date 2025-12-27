@@ -15,6 +15,7 @@ export interface VideoStats {
   hasOcrData: boolean  // Whether video has full_frame_ocr data (enables layout annotation)
   layoutApproved: boolean  // Whether layout annotation has been approved (gate for boundary annotation)
   processingStatus?: ProcessingStatus  // Upload/processing status (null if not uploaded via web)
+  databaseId?: string  // Unique ID that changes when database is recreated (for cache invalidation)
 }
 
 export interface ProcessingStatus {
@@ -155,6 +156,16 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
       processingStatus = undefined
     }
 
+    // Get database_id for cache invalidation
+    let databaseId: string | undefined
+    try {
+      const metadata = db.prepare(`SELECT database_id FROM video_metadata WHERE id = 1`).get() as { database_id: string } | undefined
+      databaseId = metadata?.database_id
+    } catch {
+      // Column doesn't exist in older databases
+      databaseId = undefined
+    }
+
     return {
       totalAnnotations: result.total,
       pendingReview: result.pending,
@@ -166,7 +177,8 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
       coveredFrames,
       hasOcrData,
       layoutApproved,
-      processingStatus
+      processingStatus,
+      databaseId
     }
   } finally {
     db.close()

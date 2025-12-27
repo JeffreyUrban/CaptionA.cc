@@ -279,6 +279,7 @@ CREATE TABLE IF NOT EXISTS video_metadata (
     original_filename TEXT NOT NULL,
     file_size_bytes INTEGER NOT NULL,
     video_path TEXT NOT NULL,  -- Relative path from data directory (e.g., "show_name/video_name")
+    database_id TEXT NOT NULL DEFAULT (lower(hex(randomblob(16)))),  -- Unique ID for this DB instance (changes on recreate)
 
     -- Upload info
     uploaded_at TEXT NOT NULL DEFAULT (datetime('now')),

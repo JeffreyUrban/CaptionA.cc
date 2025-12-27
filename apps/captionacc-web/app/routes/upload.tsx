@@ -171,8 +171,83 @@ export default function UploadPage() {
     }
   }, [loaderData.preselectedFolder])
 
+  // Restore active uploads from server on mount
+  useEffect(() => {
+    fetch('/api/uploads/active')
+      .then(res => res.json())
+      .then(data => {
+        if (data.uploads && data.uploads.length > 0) {
+          console.log(`[Upload] Found ${data.uploads.length} active upload(s) from server`)
+
+          // Convert server uploads to VideoFilePreview format
+          const restoredVideos: VideoFilePreview[] = data.uploads.map((upload: any) => ({
+            file: new File([], upload.originalFilename), // Placeholder File object
+            relativePath: upload.videoId,
+            size: 0, // Unknown - file is on server
+            type: 'video/*',
+            selected: true,
+            uploadProgress: upload.uploadProgress * 100,
+            uploadStatus: 'uploading' as const,
+            uploadId: upload.videoId,
+          }))
+
+          setVideoFiles(restoredVideos)
+          setUploading(true)
+
+          // Poll for progress updates
+          const pollInterval = setInterval(() => {
+            fetch('/api/uploads/active')
+              .then(res => res.json())
+              .then(pollData => {
+                if (pollData.uploads && pollData.uploads.length > 0) {
+                  // Update progress for each video
+                  setVideoFiles(prev => prev.map(v => {
+                    const serverUpload = pollData.uploads.find((u: any) => u.videoId === v.uploadId)
+                    if (serverUpload) {
+                      return {
+                        ...v,
+                        uploadProgress: serverUpload.uploadProgress * 100,
+                        uploadStatus: serverUpload.uploadProgress >= 1.0 ? 'complete' as const : 'uploading' as const,
+                      }
+                    }
+                    return v
+                  }))
+
+                  // Check if all uploads complete
+                  const allComplete = pollData.uploads.every((u: any) => u.uploadProgress >= 1.0)
+                  if (allComplete) {
+                    clearInterval(pollInterval)
+                    setUploading(false)
+                  }
+                } else {
+                  // No more active uploads - stop polling
+                  clearInterval(pollInterval)
+                  setUploading(false)
+                }
+              })
+              .catch(err => {
+                console.error('[Upload] Failed to poll upload progress:', err)
+              })
+          }, 2000) // Poll every 2 seconds
+
+          // Cleanup on unmount
+          return () => clearInterval(pollInterval)
+        }
+      })
+      .catch(err => {
+        console.error('[Upload] Failed to restore active uploads:', err)
+      })
+  }, [])
+
   const processFiles = useCallback(async (fileList: FileList | null) => {
     if (!fileList || fileList.length === 0) return
+
+    // Prevent starting new upload while one is in progress
+    if (uploading) {
+      console.log('[processFiles] Upload already in progress, ignoring new files')
+      alert('An upload is already in progress. Please wait for it to complete before starting a new upload.')
+      return
+    }
 
     console.log(`[processFiles] Processing ${fileList.length} files`)
     const videos: VideoFilePreview[] = []
@@ -239,7 +314,7 @@ export default function UploadPage() {
     setVideoFiles(videos)
     setSkippedFiles(skipped)
     setShowConfirmation(true)
-  }, [])
+  }, [uploading])
 
   const handleDragEnter = (e: React.DragEvent) => {
     e.preventDefault()
@@ -519,7 +594,7 @@ export default function UploadPage() {
           </div>
         </div>
 
-        {!showConfirmation && !uploading && (
+        {!showConfirmation && !uploading && videoFiles.length === 0 && (
           <div className="mt-8">
             {/* Folder Selection */}
             <div className="mb-6">

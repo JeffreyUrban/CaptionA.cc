@@ -2,6 +2,11 @@
  * Background video processing service
  *
  * Triggers full_frames pipeline after video upload completes
+ *
+ * Processing Queue:
+ * - Limits concurrent processing to avoid overwhelming system resources
+ * - Processes videos in FIFO order
+ * - Auto-processes next video when one completes
  */
 
 import { spawn } from 'child_process'
@@ -12,6 +17,51 @@ import { existsSync, readdirSync } from 'fs'
 interface ProcessingOptions {
   videoPath: string  // Relative path like "show_name/video_name"
   videoFile: string  // Full path to uploaded video file
+}
+
+// Processing queue management
+const MAX_CONCURRENT_PROCESSING = 2  // Process at most 2 videos simultaneously
+const processingQueue: ProcessingOptions[] = []
+let activeProcessingCount = 0
+
+/**
+ * Add video to processing queue and start processing if capacity available
+ */
+export function queueVideoProcessing(options: ProcessingOptions): void {
+  console.log(`[ProcessingQueue] Queuing ${options.videoPath} (queue size: ${processingQueue.length}, active: ${activeProcessingCount})`)
+  processingQueue.push(options)
+  processNextInQueue()
+}
+
+/**
+ * Process next video in queue if under concurrency limit
+ */
+async function processNextInQueue(): Promise<void> {
+  if (activeProcessingCount >= MAX_CONCURRENT_PROCESSING) {
+    console.log(`[ProcessingQueue] At max capacity (${MAX_CONCURRENT_PROCESSING}), waiting...`)
+    return
+  }
+
+  const nextVideo = processingQueue.shift()
+  if (!nextVideo) {
+    console.log(`[ProcessingQueue] Queue empty`)
+    return
+  }
+
+  activeProcessingCount++
+  console.log(`[ProcessingQueue] Starting ${nextVideo.videoPath} (${activeProcessingCount}/${MAX_CONCURRENT_PROCESSING} active, ${processingQueue.length} queued)`)
+
+  try {
+    await triggerVideoProcessing(nextVideo)
+  } catch (error) {
+    console.error(`[ProcessingQueue] Error processing ${nextVideo.videoPath}:`, error)
+  } finally {
+    activeProcessingCount--
+    console.log(`[ProcessingQueue] Completed ${nextVideo.videoPath} (${activeProcessingCount}/${MAX_CONCURRENT_PROCESSING} active, ${processingQueue.length} queued)`)
+
+    // Process next video in queue
+    processNextInQueue()
+  }
 }
 
 /**
