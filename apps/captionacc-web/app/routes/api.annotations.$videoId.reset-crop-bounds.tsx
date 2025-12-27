@@ -191,6 +191,34 @@ function analyzeOCRBoxes(
     throw new Error('No OCR boxes found in video')
   }
 
+  // Filter outliers from horizontal edges to handle occasional mispredictions
+  // Use IQR (Interquartile Range) method: remove values > Q3 + 1.5*IQR or < Q1 - 1.5*IQR
+  function filterOutliers(values: number[]): number[] {
+    if (values.length < 4) return values // Need at least 4 values for quartiles
+
+    const sorted = [...values].sort((a, b) => a - b)
+    const q1Index = Math.floor(sorted.length * 0.25)
+    const q3Index = Math.floor(sorted.length * 0.75)
+    const q1 = sorted[q1Index]!
+    const q3 = sorted[q3Index]!
+    const iqr = q3 - q1
+
+    const lowerBound = q1 - 1.5 * iqr
+    const upperBound = q3 + 1.5 * iqr
+
+    return values.filter(v => v >= lowerBound && v <= upperBound)
+  }
+
+  const originalLeftCount = stats.leftEdges.length
+  const originalRightCount = stats.rightEdges.length
+
+  stats.leftEdges = filterOutliers(stats.leftEdges)
+  stats.rightEdges = filterOutliers(stats.rightEdges)
+  stats.centerXValues = filterOutliers(stats.centerXValues)
+
+  console.log(`[Outlier Filtering] Left edges: ${originalLeftCount} → ${stats.leftEdges.length} (removed ${originalLeftCount - stats.leftEdges.length})`)
+  console.log(`[Outlier Filtering] Right edges: ${originalRightCount} → ${stats.rightEdges.length} (removed ${originalRightCount - stats.rightEdges.length})`)
+
   // Calculate modes and standard deviations
   const verticalPosition = calculateMode(stats.centerYValues, 5)
   const verticalStd = calculateStd(stats.centerYValues, verticalPosition)
