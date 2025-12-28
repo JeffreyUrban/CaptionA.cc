@@ -1,6 +1,6 @@
 import { type LoaderFunctionArgs } from 'react-router'
-import { resolve } from 'path'
 import Database from 'better-sqlite3'
+import { getDbPath } from '~/utils/video-paths'
 
 export async function loader({ params }: LoaderFunctionArgs) {
   const { videoId: encodedVideoId, frameIndex } = params
@@ -18,16 +18,11 @@ export async function loader({ params }: LoaderFunctionArgs) {
     return new Response('Invalid frameIndex', { status: 400 })
   }
 
-  // Construct path to annotations.db
-  const dbPath = resolve(
-    process.cwd(),
-    '..',
-    '..',
-    'local',
-    'data',
-    ...videoId.split('/'),
-    'annotations.db'
-  )
+  // Resolve to database path
+  const dbPath = getDbPath(videoId)
+  if (!dbPath) {
+    return new Response('Video not found', { status: 404 })
+  }
 
   // Query database for frame
   const db = new Database(dbPath, { readonly: true })

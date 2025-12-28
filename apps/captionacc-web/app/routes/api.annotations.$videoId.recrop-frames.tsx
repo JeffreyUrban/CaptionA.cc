@@ -1,19 +1,15 @@
 import { type ActionFunctionArgs } from 'react-router'
+import { getDbPath, getVideoDir } from '~/utils/video-paths'
 import Database from 'better-sqlite3'
 import { resolve } from 'path'
 import { existsSync } from 'fs'
 import { exec } from 'child_process'
 
 function getDatabase(videoId: string) {
-  const dbPath = resolve(
-    process.cwd(),
-    '..',
-    '..',
-    'local',
-    'data',
-    ...videoId.split('/'),
-    'annotations.db'
-  )
+  const dbPath = getDbPath(videoId)
+  if (!dbPath) {
+    return new Response('Video not found', { status: 404 })
+  }
 
   if (!existsSync(dbPath)) {
     throw new Error(`Database not found for video: ${videoId}`)
@@ -62,14 +58,15 @@ export async function action({ params }: ActionFunctionArgs) {
     }
 
     // Get paths
-    const videoDataPath = resolve(
-      process.cwd(),
-      '..',
-      '..',
-      'local',
-      'data',
-      ...videoId.split('/')
-    )
+    const videoDataPath = getVideoDir(videoId)
+    if (!videoDataPath) {
+      return new Response(JSON.stringify({
+        error: 'Video directory not found'
+      }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' }
+      })
+    }
 
     // Find video file in the data directory
     const { readdirSync } = await import('fs')
