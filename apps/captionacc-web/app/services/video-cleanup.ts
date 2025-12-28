@@ -4,6 +4,7 @@
  * Handles:
  * 1. Cleanup of videos marked for deletion
  * 2. Detection and recovery of stale processing jobs
+ * 3. Detection of duplicate video hashes (alerts only, no auto-delete)
  *
  * Runs on server startup and periodically (hourly)
  *
@@ -339,6 +340,66 @@ async function cleanupOrphanedCropFrames(): Promise<number> {
 }
 
 /**
+ * Check for duplicate video hashes (alerts only, does not auto-delete)
+ *
+ * Detects videos with identical video_hash values, which indicates
+ * duplicate uploads or migration issues. Logs warnings for manual review.
+ */
+async function checkDuplicateVideoHashes(): Promise<number> {
+  const hashGroups = new Map<string, Array<{ videoId: string; displayPath: string }>>()
+
+  const allVideos = getAllVideos()
+
+  for (const video of allVideos) {
+    const dbPath = getDbPath(video.videoId)
+    if (!dbPath || !existsSync(dbPath)) continue
+
+    try {
+      const db = new Database(dbPath, { readonly: true })
+      try {
+        // Get video hash
+        const result = db.prepare(`
+          SELECT video_hash, display_path
+          FROM video_metadata
+          WHERE id = 1
+        `).get() as { video_hash: string; display_path: string } | undefined
+
+        if (result && result.video_hash && result.video_hash !== '') {
+          // Group by hash
+          const existing = hashGroups.get(result.video_hash) || []
+          existing.push({
+            videoId: video.videoId,
+            displayPath: result.display_path
+          })
+          hashGroups.set(result.video_hash, existing)
+        }
+      } finally {
+        db.close()
+      }
+    } catch (error) {
+      // Skip videos with old schema or errors
+    }
+  }
+
+  // Find and report duplicates
+  let duplicateCount = 0
+  for (const [hash, videos] of hashGroups.entries()) {
+    if (videos.length > 1) {
+      duplicateCount++
+      console.warn(`[Cleanup] ⚠️  DUPLICATE VIDEO HASH DETECTED:`)
+      console.warn(`  Hash: ${hash}`)
+      console.warn(`  Found in ${videos.length} videos:`)
+      for (const video of videos) {
+        console.warn(`    - ${video.displayPath} (${video.videoId})`)
+      }
+      console.warn(`  Action required: Review and delete duplicates manually or use deduplication script`)
+    }
+  }
+
+  return duplicateCount
+}
+
+/**
  * Run cleanup process - find and cleanup deleted videos, recover stale processing, cleanup orphaned frames
  */
 export async function runCleanup(): Promise<void> {
@@ -369,7 +430,13 @@ export async function runCleanup(): Promise<void> {
       console.log(`[Cleanup] Cleaned up ${cleanedCropFrames} orphaned crop_frames directories`)
     }
 
-    if (deletedVideos.length === 0 && staleVideos.length === 0 && cleanedCropFrames === 0) {
+    // 4. Check for duplicate video hashes
+    const duplicateHashes = await checkDuplicateVideoHashes()
+    if (duplicateHashes > 0) {
+      console.log(`[Cleanup] ⚠️  Found ${duplicateHashes} duplicate video hash group(s) - see warnings above`)
+    }
+
+    if (deletedVideos.length === 0 && staleVideos.length === 0 && cleanedCropFrames === 0 && duplicateHashes === 0) {
       console.log('[Cleanup] No cleanup needed')
     } else {
       console.log('[Cleanup] Cleanup complete')
