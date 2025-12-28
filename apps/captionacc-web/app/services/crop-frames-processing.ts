@@ -388,6 +388,23 @@ export function recoverStalledCropFrames(videoId: string, videoPath: string): vo
         return
       }
 
+      // Re-queue if stuck in queued state (lost from in-memory queue after server restart)
+      if (status.status === 'queued') {
+        console.log(`[CropFrames] Re-queueing ${videoPath} (was queued when server restarted)`)
+
+        queueCropFramesProcessing({
+          videoId,
+          videoPath,
+          cropBounds: {
+            left: layoutConfig.crop_left,
+            top: layoutConfig.crop_top,
+            right: layoutConfig.crop_right,
+            bottom: layoutConfig.crop_bottom
+          }
+        })
+        return
+      }
+
       // Only check for stalled processing if status is 'processing'
       if (status.status !== 'processing') {
         return
