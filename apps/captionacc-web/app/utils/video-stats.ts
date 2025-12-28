@@ -127,32 +127,68 @@ function isVideoReadyForAnnotation(stats: Omit<VideoStats, 'badges'>): boolean {
 function calculateLayoutBadge(stats: Omit<VideoStats, 'badges'>, videoId: string): BadgeState | null {
   const ps = stats.processingStatus
 
-  // Priority 1: System processing or error
-  if (ps) {
-    if (ps.status === 'error') {
-      return { type: 'layout', label: 'Error', color: 'yellow', clickable: false }
-    }
-    if (ps.status === 'uploading') {
-      return { type: 'layout', label: 'Uploading', color: 'blue', clickable: false }
-    }
-    if (ps.status === 'upload_complete') {
-      return { type: 'layout', label: 'Queued', color: 'blue', clickable: false }
-    }
-    if (ps.status === 'extracting_frames') {
-      return { type: 'layout', label: 'Layout: Framing', color: 'indigo', clickable: false }
-    }
-    if (ps.status === 'running_ocr') {
-      return { type: 'layout', label: 'Layout: Running OCR', color: 'purple', clickable: false }
-    }
-    if (ps.status === 'analyzing_layout') {
-      return { type: 'layout', label: 'Layout: Analyzing', color: 'purple', clickable: false }
+  // State 1: Error during processing
+  if (ps?.status === 'error') {
+    return {
+      type: 'error',
+      label: 'Layout: Error',
+      color: 'red',
+      clickable: true,
+      errorDetails: {
+        message: ps.errorMessage || 'Processing failed',
+        context: {
+          videoId,
+          stage: 'layout',
+          processingStatus: ps.status
+        }
+      }
     }
   }
 
-  // Priority 2: Revisit (TODO: need to detect if predicted bounds changed)
-  // For now, skipping this state until we implement predicted bounds tracking
+  // State 2: Uploading
+  if (ps?.status === 'uploading') {
+    return { type: 'layout', label: 'Uploading', color: 'blue', clickable: false }
+  }
 
-  // Priority 3: Annotate (ready for first-time annotation)
+  // State 3: Queued for processing
+  if (ps?.status === 'upload_complete') {
+    return { type: 'layout', label: 'Queued', color: 'blue', clickable: false }
+  }
+
+  // State 4: Extracting frames
+  if (ps?.status === 'extracting_frames') {
+    return { type: 'layout', label: 'Layout: Framing', color: 'indigo', clickable: false }
+  }
+
+  // State 5: Running OCR
+  if (ps?.status === 'running_ocr') {
+    return { type: 'layout', label: 'Layout: Running OCR', color: 'purple', clickable: false }
+  }
+
+  // State 6: Analyzing layout
+  if (ps?.status === 'analyzing_layout') {
+    return { type: 'layout', label: 'Layout: Analyzing', color: 'purple', clickable: false }
+  }
+
+  // State 7: Processing complete but no OCR data (processing failed silently)
+  if (ps?.status === 'processing_complete' && !stats.hasOcrData) {
+    return {
+      type: 'error',
+      label: 'Layout: Error',
+      color: 'red',
+      clickable: true,
+      errorDetails: {
+        message: 'Processing completed but no OCR data was generated',
+        context: {
+          videoId,
+          stage: 'layout',
+          issue: 'empty_ocr_results'
+        }
+      }
+    }
+  }
+
+  // State 8: Ready for annotation (has OCR data, not yet approved)
   if (stats.hasOcrData && !stats.layoutApproved) {
     return {
       type: 'layout',
@@ -163,7 +199,7 @@ function calculateLayoutBadge(stats: Omit<VideoStats, 'badges'>, videoId: string
     }
   }
 
-  // Hide if layout approved and predictions unchanged
+  // Layout stage complete (layoutApproved = true)
   return null
 }
 
@@ -198,19 +234,58 @@ function calculateBoundariesBadge(
 
   const cfs = stats.cropFramesStatus
 
-  // Priority 1: System processing
-  if (cfs) {
-    if (cfs.status === 'processing') {
-      // Determine which step based on whether we have crop frames
-      if (stats.totalFrames === 0) {
-        return { type: 'boundaries', label: 'Boundaries: Framing', color: 'indigo', clickable: false }
-      } else {
-        return { type: 'boundaries', label: 'Boundaries: Running OCR', color: 'purple', clickable: false }
+  // Priority 1: Processing error (failed or interrupted)
+  if (cfs?.status === 'error') {
+    return {
+      type: 'error',
+      label: 'Boundaries: Error',
+      color: 'red',
+      clickable: true,
+      errorDetails: {
+        message: cfs.errorMessage || 'Crop frames processing failed',
+        context: {
+          videoId,
+          stage: 'boundaries',
+          issue: 'crop_frames_failed'
+        }
       }
     }
   }
 
-  // Priority 2: Annotate (has gap annotations that need marking)
+  // Priority 2: Queued for processing
+  if (cfs?.status === 'queued') {
+    return { type: 'boundaries', label: 'Boundaries: Queued', color: 'blue', clickable: false }
+  }
+
+  // Priority 3: Currently processing
+  if (cfs?.status === 'processing') {
+    // Determine which step based on whether we have crop frames
+    if (stats.totalFrames === 0) {
+      return { type: 'boundaries', label: 'Boundaries: Framing', color: 'indigo', clickable: false }
+    } else {
+      return { type: 'boundaries', label: 'Boundaries: Running OCR', color: 'purple', clickable: false }
+    }
+  }
+
+  // Priority 4: Processing completed but no annotations created
+  if (cfs?.status === 'complete' && stats.totalAnnotations === 0) {
+    return {
+      type: 'error',
+      label: 'Boundaries: Error',
+      color: 'red',
+      clickable: true,
+      errorDetails: {
+        message: 'Crop frames processing completed but no annotations were created',
+        context: {
+          videoId,
+          stage: 'boundaries',
+          issue: 'no_annotations_created'
+        }
+      }
+    }
+  }
+
+  // Priority 5: Annotate (has gap annotations that need marking)
   if (stats.gapAnnotations > 0) {
     return {
       type: 'boundaries',
@@ -221,7 +296,7 @@ function calculateBoundariesBadge(
     }
   }
 
-  // Priority 3: Review (no gaps, but has pending review)
+  // Priority 6: Review (no gaps, but has pending review)
   if (stats.boundaryPendingReview > 0) {
     return {
       type: 'boundaries',
@@ -232,7 +307,26 @@ function calculateBoundariesBadge(
     }
   }
 
-  // Hide if no gaps and none pending review
+  // Priority 7: Layout approved but processing never triggered (error condition)
+  // No cropFramesStatus means processing should have started but didn't
+  if (!cfs && stats.totalAnnotations === 0) {
+    return {
+      type: 'error',
+      label: 'Boundaries: Error',
+      color: 'red',
+      clickable: true,
+      errorDetails: {
+        message: 'Layout approved but crop frames processing was never triggered',
+        context: {
+          videoId,
+          stage: 'boundaries',
+          issue: 'processing_not_triggered'
+        }
+      }
+    }
+  }
+
+  // Boundaries complete (all annotations confirmed, no pending)
   return null
 }
 
@@ -286,7 +380,7 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
   const dbPath = getDbPath(videoId)
   console.log(`[getVideoStats] videoId: ${videoId}, dbPath: ${dbPath}`)
   if (!dbPath) {
-    // Video not found - return default stats
+    // Video directory exists but database is missing - this is an error state
     console.log(`[getVideoStats] Database not found for ${videoId}`)
     return {
       totalAnnotations: 0,
@@ -301,7 +395,20 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
       layoutApproved: false,
       boundaryPendingReview: 0,
       textPendingReview: 0,
-      badges: []
+      badges: [{
+        type: 'error',
+        label: 'Layout: Error',
+        color: 'red',
+        clickable: true,
+        errorDetails: {
+          message: 'Database file not found',
+          context: {
+            videoId,
+            stage: 'layout',
+            issue: 'missing_database'
+          }
+        }
+      }]
     }
   }
 
@@ -545,7 +652,7 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
       textPendingReview: 0,
       badges: [{
         type: 'error',
-        label: 'Error',
+        label: 'Layout: Error',
         color: 'red',
         clickable: true,
         errorDetails: {
@@ -553,6 +660,7 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
           stack: errorStack,
           context: {
             videoId,
+            stage: 'layout',
             errorType: error instanceof Error ? error.constructor.name : 'Unknown'
           }
         }

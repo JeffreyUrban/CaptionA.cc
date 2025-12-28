@@ -5,15 +5,21 @@
  */
 
 import type { LoaderFunctionArgs, ActionFunctionArgs } from 'react-router'
-import { resolve } from 'path'
-import { mkdirSync, createWriteStream, existsSync, statSync, unlinkSync } from 'fs'
-import { readFile } from 'fs/promises'
-import Database from 'better-sqlite3'
-import { randomUUID } from 'crypto'
 
-// Upload storage directory
-const uploadDir = resolve(process.cwd(), '..', '..', 'local', 'uploads')
-mkdirSync(uploadDir, { recursive: true })
+// Lazy-load Node.js modules to avoid Vite bundling issues
+let uploadDir: string | null = null
+
+async function getUploadDir(): Promise<string> {
+  if (uploadDir) return uploadDir
+
+  const { resolve } = await import('path')
+  const { mkdirSync } = await import('fs')
+
+  uploadDir = resolve(process.cwd(), '..', '..', 'local', 'uploads')
+  mkdirSync(uploadDir, { recursive: true })
+
+  return uploadDir
+}
 
 interface UploadMetadata {
   videoPath: string  // display_path (user-facing path like "level1/video")
@@ -76,7 +82,15 @@ async function handleCreateUpload(request: Request): Promise<Response> {
     return new Response('videoPath and filename metadata required', { status: 400 })
   }
 
+  // Load Node.js modules
+  const { resolve } = await import('path')
+  const { createWriteStream, mkdirSync } = await import('fs')
+  const { readFile } = await import('fs/promises')
+  const { randomUUID } = await import('crypto')
+  const Database = (await import('better-sqlite3')).default
+
   // Generate upload ID and video UUID
+  const uploadDir = await getUploadDir()
   const uploadId = randomUUID()
   const uploadPath = resolve(uploadDir, uploadId)
   const metadataPath = resolve(uploadDir, `${uploadId}.json`)
@@ -154,6 +168,10 @@ async function handleCreateUpload(request: Request): Promise<Response> {
 }
 
 async function handleHeadRequest(uploadId: string): Promise<Response> {
+  const { resolve } = await import('path')
+  const { existsSync, statSync } = await import('fs')
+
+  const uploadDir = await getUploadDir()
   const metadataPath = resolve(uploadDir, `${uploadId}.json`)
 
   if (!existsSync(metadataPath)) {
@@ -178,6 +196,11 @@ async function handleHeadRequest(uploadId: string): Promise<Response> {
 }
 
 async function handlePatchRequest(request: Request, uploadId: string): Promise<Response> {
+  const { resolve } = await import('path')
+  const { existsSync, statSync, createWriteStream, unlinkSync } = await import('fs')
+  const Database = (await import('better-sqlite3')).default
+
+  const uploadDir = await getUploadDir()
   const metadataPath = resolve(uploadDir, `${uploadId}.json`)
 
   if (!existsSync(metadataPath)) {
@@ -331,7 +354,11 @@ function parseUploadMetadata(metadataHeader: string): UploadMetadata {
   for (const pair of pairs) {
     const [key, value] = pair.trim().split(' ')
     if (key && value) {
-      metadata[key] = Buffer.from(value, 'base64').toString('utf-8')
+      // Use atob for browser compatibility (though this only runs server-side)
+      const decoded = typeof Buffer !== 'undefined'
+        ? Buffer.from(value, 'base64').toString('utf-8')
+        : atob(value)
+      metadata[key] = decoded
     }
   }
 
@@ -339,6 +366,7 @@ function parseUploadMetadata(metadataHeader: string): UploadMetadata {
 }
 
 async function readJSON(path: string): Promise<any> {
+  const { readFile } = await import('fs/promises')
   const content = await readFile(path, 'utf-8')
   return JSON.parse(content)
 }

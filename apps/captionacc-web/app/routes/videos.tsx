@@ -67,6 +67,7 @@ interface TreeRowProps {
   onDeleteFolder: (folderPath: string, folderName: string, videoCount: number) => void
   onRenameVideo: (videoPath: string, currentName: string) => void
   onDeleteVideo: (videoPath: string, videoName: string) => void
+  onErrorBadgeClick: (videoId: string, errorDetails: BadgeState['errorDetails']) => void
   isMounted: boolean
 }
 
@@ -118,7 +119,7 @@ function calculateFolderStatsFromMap(node: FolderNode, statsMap: Map<string, Vid
   return aggregated
 }
 
-function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsUpdate, onCreateSubfolder, onRenameFolder, onDeleteFolder, onRenameVideo, onDeleteVideo, isMounted }: TreeRowProps) {
+function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsUpdate, onCreateSubfolder, onRenameFolder, onDeleteFolder, onRenameVideo, onDeleteVideo, onErrorBadgeClick, isMounted }: TreeRowProps) {
   const [loading, setLoading] = useState(false)
   const isExpanded = expandedPaths.has(node.path)
 
@@ -289,6 +290,7 @@ function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsU
             onDeleteFolder={onDeleteFolder}
             onRenameVideo={onRenameVideo}
             onDeleteVideo={onDeleteVideo}
+            onErrorBadgeClick={onErrorBadgeClick}
           />
         ))}
       </>
@@ -327,11 +329,7 @@ function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsU
             return (
               <button
                 key={index}
-                onClick={() => setErrorModal({
-                  open: true,
-                  errorDetails: badge.errorDetails,
-                  videoId: node.videoId
-                })}
+                onClick={() => onErrorBadgeClick(node.videoId, badge.errorDetails)}
                 className={`${baseClasses} hover:opacity-80 cursor-pointer transition-opacity`}
               >
                 {badge.label}
@@ -522,7 +520,7 @@ export default function VideosPage() {
   const { tree } = useLoaderData<{ tree: TreeNode[] }>()
   const revalidator = useRevalidator()
   const [searchQuery, setSearchQuery] = useState('')
-  const CACHE_VERSION = 'v7' // Increment to invalidate cache when VideoStats structure changes
+  const CACHE_VERSION = 'v9' // Increment to invalidate cache when VideoStats structure changes
 
   // Modal states
   const [createFolderModal, setCreateFolderModal] = useState<{ open: boolean; parentPath?: string }>({ open: false })
@@ -1152,6 +1150,9 @@ export default function VideosPage() {
                         }}
                         onDeleteVideo={(videoPath, videoName) => {
                           setDeleteVideoModal({ open: true, videoPath, videoName })
+                        }}
+                        onErrorBadgeClick={(videoId, errorDetails) => {
+                          setErrorModal({ open: true, errorDetails, videoId })
                         }}
                       />
                     ))}
