@@ -173,7 +173,11 @@ function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsU
           onDragOver={(e) => onDragOver(e, node.path)}
           onDragLeave={onDragLeave}
           onDrop={(e) => onDrop(e, node.path)}
-          className={`bg-gray-50 dark:bg-gray-900 hover:bg-gray-100 dark:hover:bg-gray-800 ${isDragOver ? 'ring-2 ring-indigo-500 bg-indigo-50 dark:bg-indigo-900/20' : ''}`}
+          className={`bg-gray-50 dark:bg-gray-900 hover:bg-gray-100 dark:hover:bg-gray-800 ${
+            isDragOver
+              ? 'outline outline-2 outline-offset-[-2px] outline-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 relative z-20'
+              : ''
+          }`}
           style={{ cursor: 'grab' }}
         >
           <td
