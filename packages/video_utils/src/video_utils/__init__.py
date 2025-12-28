@@ -6,6 +6,11 @@ from video_utils.frames import (
     get_video_dimensions,
     get_video_duration,
 )
+from video_utils.video_hash import (
+    compute_video_hash,
+    get_video_metadata,
+    VideoMetadata,
+)
 
 try:
     from video_utils._version import __version__, __version_tuple__
@@ -20,4 +25,7 @@ __all__ = [
     "extract_frames_streaming",
     "get_video_dimensions",
     "get_video_duration",
+    "compute_video_hash",
+    "get_video_metadata",
+    "VideoMetadata",
 ]

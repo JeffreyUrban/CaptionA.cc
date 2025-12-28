@@ -1,4 +1,5 @@
 import { type LoaderFunctionArgs } from 'react-router'
+import { getDbPath, getVideoDir } from '~/utils/video-paths'
 import Database from 'better-sqlite3'
 import { resolve } from 'path'
 import { existsSync } from 'fs'
@@ -19,15 +20,10 @@ interface FrameOCR {
 }
 
 function getDatabase(videoId: string) {
-  const dbPath = resolve(
-    process.cwd(),
-    '..',
-    '..',
-    'local',
-    'data',
-    ...videoId.split('/'),
-    'annotations.db'
-  )
+  const dbPath = getDbPath(videoId)
+  if (!dbPath) {
+    return new Response('Video not found', { status: 404 })
+  }
 
   if (!existsSync(dbPath)) {
     throw new Error(`Database not found for video: ${videoId}`)
@@ -92,15 +88,16 @@ export async function loader({ params }: LoaderFunctionArgs) {
     console.log(`Annotation ${annotationId}: ${frameIndices.length} frames total, ${existingOCRData.length} cached, ${framesToOCR.length} need OCR`)
 
     // Run OCR on missing frames
-    const framesDir = resolve(
-      process.cwd(),
-      '..',
-      '..',
-      'local',
-      'data',
-      ...videoId.split('/'),
-      'crop_frames'
-    )
+    const videoDir = getVideoDir(videoId)
+    if (!videoDir) {
+      db.close()
+      return new Response(JSON.stringify({ error: 'Video directory not found' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' }
+      })
+    }
+
+    const framesDir = resolve(videoDir, 'crop_frames')
 
     const insertStmt = db.prepare(`
       INSERT OR REPLACE INTO frames_ocr (frame_index, ocr_text, ocr_annotations, ocr_confidence, created_at)

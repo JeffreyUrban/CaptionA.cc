@@ -1,18 +1,13 @@
 import { type ActionFunctionArgs } from 'react-router'
+import { getDbPath } from '~/utils/video-paths'
 import Database from 'better-sqlite3'
-import { resolve } from 'path'
 import { existsSync } from 'fs'
 
 function getDatabase(videoId: string) {
-  const dbPath = resolve(
-    process.cwd(),
-    '..',
-    '..',
-    'local',
-    'data',
-    ...videoId.split('/'),
-    'annotations.db'
-  )
+  const dbPath = getDbPath(videoId)
+  if (!dbPath) {
+    return new Response('Video not found', { status: 404 })
+  }
 
   if (!existsSync(dbPath)) {
     throw new Error(`Database not found for video: ${videoId}`)

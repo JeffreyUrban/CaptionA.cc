@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from caption_boundaries.database.video_hash import compute_video_hash, get_video_metadata
+from video_utils import compute_video_hash, get_video_metadata
 
 
 @pytest.mark.unit
