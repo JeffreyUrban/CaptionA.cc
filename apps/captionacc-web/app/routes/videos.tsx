@@ -64,10 +64,18 @@ interface TreeRowProps {
   onStatsUpdate: (videoId: string, stats: VideoStats) => void
   onCreateSubfolder: (parentPath: string) => void
   onRenameFolder: (folderPath: string, currentName: string) => void
+  onMoveFolder: (folderPath: string, folderName: string) => void
   onDeleteFolder: (folderPath: string, folderName: string, videoCount: number) => void
   onRenameVideo: (videoPath: string, currentName: string) => void
+  onMoveVideo: (videoPath: string, videoName: string) => void
   onDeleteVideo: (videoPath: string, videoName: string) => void
   onErrorBadgeClick: (videoId: string, errorDetails: BadgeState['errorDetails']) => void
+  onDragStart: (path: string, name: string, type: 'video' | 'folder') => void
+  onDragEnd: () => void
+  onDragOver: (e: React.DragEvent, folderPath: string) => void
+  onDragLeave: (e: React.DragEvent) => void
+  onDrop: (e: React.DragEvent, targetFolderPath: string) => void
+  dragOverFolder: string | null
   isMounted: boolean
 }
 
@@ -119,7 +127,7 @@ function calculateFolderStatsFromMap(node: FolderNode, statsMap: Map<string, Vid
   return aggregated
 }
 
-function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsUpdate, onCreateSubfolder, onRenameFolder, onDeleteFolder, onRenameVideo, onDeleteVideo, onErrorBadgeClick, isMounted }: TreeRowProps) {
+function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsUpdate, onCreateSubfolder, onRenameFolder, onMoveFolder, onDeleteFolder, onRenameVideo, onMoveVideo, onDeleteVideo, onErrorBadgeClick, onDragStart, onDragEnd, onDragOver, onDragLeave, onDrop, dragOverFolder, isMounted }: TreeRowProps) {
   const [loading, setLoading] = useState(false)
   const isExpanded = expandedPaths.has(node.path)
 
@@ -153,10 +161,21 @@ function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsU
   }
 
   if (node.type === 'folder') {
+    const isDragOver = dragOverFolder === node.path
+
     return (
       <>
         {/* Folder Row */}
-        <tr className="bg-gray-50 dark:bg-gray-900 hover:bg-gray-100 dark:hover:bg-gray-800">
+        <tr
+          draggable
+          onDragStart={() => onDragStart(node.path, node.name, 'folder')}
+          onDragEnd={onDragEnd}
+          onDragOver={(e) => onDragOver(e, node.path)}
+          onDragLeave={onDragLeave}
+          onDrop={(e) => onDrop(e, node.path)}
+          className={`bg-gray-50 dark:bg-gray-900 hover:bg-gray-100 dark:hover:bg-gray-800 ${isDragOver ? 'ring-2 ring-indigo-500 bg-indigo-50 dark:bg-indigo-900/20' : ''}`}
+          style={{ cursor: 'grab' }}
+        >
           <td
             className="whitespace-nowrap py-3 pl-4 pr-3 text-sm font-medium text-gray-900 dark:text-gray-300 sm:pl-6 cursor-pointer"
             style={{ paddingLeft: `${depth * 1.5 + 1.5}rem` }}
@@ -262,6 +281,14 @@ function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsU
                   </MenuItem>
                   <MenuItem>
                     <button
+                      onClick={() => onMoveFolder(node.path, node.name)}
+                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 data-[focus]:bg-gray-100 dark:data-[focus]:bg-gray-700 data-[focus]:text-gray-900 dark:data-[focus]:text-white data-[focus]:outline-none"
+                    >
+                      Move to...
+                    </button>
+                  </MenuItem>
+                  <MenuItem>
+                    <button
                       onClick={() => onDeleteFolder(node.path, node.name, node.videoCount)}
                       className="block w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 data-[focus]:bg-gray-100 dark:data-[focus]:bg-gray-700 data-[focus]:outline-none"
                     >
@@ -287,10 +314,18 @@ function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsU
             onCreateSubfolder={onCreateSubfolder}
             isMounted={isMounted}
             onRenameFolder={onRenameFolder}
+            onMoveFolder={onMoveFolder}
             onDeleteFolder={onDeleteFolder}
             onRenameVideo={onRenameVideo}
+            onMoveVideo={onMoveVideo}
             onDeleteVideo={onDeleteVideo}
             onErrorBadgeClick={onErrorBadgeClick}
+            onDragStart={onDragStart}
+            onDragEnd={onDragEnd}
+            onDragOver={onDragOver}
+            onDragLeave={onDragLeave}
+            onDrop={onDrop}
+            dragOverFolder={dragOverFolder}
           />
         ))}
       </>
@@ -373,7 +408,13 @@ function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsU
   }
 
   return (
-    <tr className="hover:bg-gray-100 dark:hover:bg-gray-800">
+    <tr
+      draggable
+      onDragStart={() => onDragStart(node.videoId, node.name, 'video')}
+      onDragEnd={onDragEnd}
+      className="hover:bg-gray-100 dark:hover:bg-gray-800"
+      style={{ cursor: 'grab' }}
+    >
       <td
         className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 dark:text-gray-300 sm:pl-6"
         style={{ paddingLeft: `${depth * 1.5 + 1.5}rem` }}
@@ -513,6 +554,14 @@ function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsU
               </MenuItem>
               <MenuItem>
                 <button
+                  onClick={() => onMoveVideo(node.videoId, node.name)}
+                  className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 data-[focus]:bg-gray-100 dark:data-[focus]:bg-gray-700 data-[focus]:text-gray-900 dark:data-[focus]:text-white data-[focus]:outline-none"
+                >
+                  Move to...
+                </button>
+              </MenuItem>
+              <MenuItem>
+                <button
                   onClick={() => onDeleteVideo(node.videoId, node.name)}
                   className="block w-full text-left px-4 py-2 text-sm text-red-700 dark:text-red-400 data-[focus]:bg-red-50 dark:data-[focus]:bg-red-900/20 data-[focus]:text-red-900 dark:data-[focus]:text-red-300 data-[focus]:outline-none"
                 >
@@ -540,15 +589,21 @@ export default function VideosPage() {
   const [renameVideoModal, setRenameVideoModal] = useState<{ open: boolean; videoPath?: string; currentName?: string }>({ open: false })
   const [deleteVideoModal, setDeleteVideoModal] = useState<{ open: boolean; videoPath?: string; videoName?: string }>({ open: false })
   const [errorModal, setErrorModal] = useState<{ open: boolean; errorDetails?: BadgeState['errorDetails']; videoId?: string }>({ open: false })
+  const [moveModal, setMoveModal] = useState<{ open: boolean; itemPath?: string; itemName?: string; itemType?: 'video' | 'folder' }>({ open: false })
 
   // Form states
   const [newFolderName, setNewFolderName] = useState('')
   const [renamedFolderName, setRenamedFolderName] = useState('')
   const [renamedVideoName, setRenamedVideoName] = useState('')
+  const [selectedTargetFolder, setSelectedTargetFolder] = useState('')
   const [folderError, setFolderError] = useState<string | null>(null)
   const [folderLoading, setFolderLoading] = useState(false)
   const [videoError, setVideoError] = useState<string | null>(null)
   const [videoLoading, setVideoLoading] = useState(false)
+  const [moveError, setMoveError] = useState<string | null>(null)
+  const [moveLoading, setMoveLoading] = useState(false)
+  const [draggedItem, setDraggedItem] = useState<{ path: string; name: string; type: 'video' | 'folder' } | null>(null)
+  const [dragOverFolder, setDragOverFolder] = useState<string | null>(null)
   const [isMounted, setIsMounted] = useState(false)
   const [videoStatsMap, setVideoStatsMap] = useState<Map<string, VideoStats>>(() => {
     // Load cached stats from localStorage
@@ -955,6 +1010,263 @@ export default function VideosPage() {
     }
   }
 
+  const handleMove = async () => {
+    setMoveError(null)
+    setMoveLoading(true)
+
+    try {
+      const { itemPath, itemType } = moveModal
+
+      if (!itemPath || !itemType) {
+        setMoveError('Invalid move operation')
+        setMoveLoading(false)
+        return
+      }
+
+      const endpoint = itemType === 'video' ? '/api/videos/move' : '/api/folders/move'
+      const bodyKey = itemType === 'video' ? 'videoPath' : 'folderPath'
+
+      const response = await fetch(endpoint, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          [bodyKey]: itemPath,
+          targetFolder: selectedTargetFolder
+        })
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        setMoveError(data.error || `Failed to move ${itemType}`)
+        setMoveLoading(false)
+        return
+      }
+
+      // Success - close modal and reload
+      setMoveLoading(false)
+      setMoveModal({ open: false })
+      setSelectedTargetFolder('')
+
+      // Clear cached stats for the moved video
+      if (itemType === 'video') {
+        const newStatsMap = new Map(videoStatsMap)
+        newStatsMap.delete(itemPath)
+        setVideoStatsMap(newStatsMap)
+      }
+
+      revalidator.revalidate()
+    } catch (error) {
+      setMoveError('Network error')
+      setMoveLoading(false)
+    }
+  }
+
+  // Drag and drop handlers
+  const handleDragStart = (path: string, name: string, type: 'video' | 'folder') => {
+    console.log('[DnD] Drag start:', { path, name, type })
+    setDraggedItem({ path, name, type })
+  }
+
+  const handleDragEnd = () => {
+    console.log('[DnD] Drag end')
+    setDraggedItem(null)
+    setDragOverFolder(null)
+  }
+
+  const handleDragOver = (e: React.DragEvent, folderPath: string) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    // Don't allow dropping on itself or its descendants
+    if (draggedItem) {
+      if (draggedItem.type === 'folder') {
+        // Can't drop folder on itself or its descendants
+        if (folderPath === draggedItem.path || folderPath.startsWith(`${draggedItem.path}/`)) {
+          console.log('[DnD] Drag over BLOCKED: cannot drop folder on itself or descendant')
+          return
+        }
+      }
+
+      // Can't drop item on its current parent
+      const itemPathParts = draggedItem.path.split('/')
+      const currentParent = itemPathParts.length > 1 ? itemPathParts.slice(0, -1).join('/') : ''
+      if (folderPath === currentParent) {
+        console.log('[DnD] Drag over BLOCKED: already in this folder')
+        return
+      }
+
+      setDragOverFolder(folderPath)
+    }
+  }
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setDragOverFolder(null)
+  }
+
+  const handleRootDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    if (draggedItem) {
+      // Check if item is already at root
+      const itemPathParts = draggedItem.path.split('/')
+      const currentParent = itemPathParts.length > 1 ? itemPathParts.slice(0, -1).join('/') : ''
+
+      if (currentParent === '') {
+        // Already at root, don't highlight
+        setDragOverFolder(null)
+        return
+      }
+
+      // Set special marker for root drop zone
+      setDragOverFolder('__ROOT__')
+    }
+  }
+
+  const handleRootDragLeave = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (dragOverFolder === '__ROOT__') {
+      setDragOverFolder(null)
+    }
+  }
+
+  const handleRootDrop = async (e: React.DragEvent) => {
+    console.log('[DnD] Root drop triggered')
+    e.preventDefault()
+    e.stopPropagation()
+    setDragOverFolder(null)
+
+    if (!draggedItem) {
+      console.log('[DnD] Root drop cancelled: no dragged item')
+      return
+    }
+
+    // Check if already at root
+    const itemPathParts = draggedItem.path.split('/')
+    const currentParent = itemPathParts.length > 1 ? itemPathParts.slice(0, -1).join('/') : ''
+
+    if (currentParent === '') {
+      console.log('[DnD] Root drop cancelled: already at root')
+      return
+    }
+
+    // Perform the move to root (empty string as target folder)
+    console.log('[DnD] Performing move to root...')
+    try {
+      const endpoint = draggedItem.type === 'video' ? '/api/videos/move' : '/api/folders/move'
+      const bodyKey = draggedItem.type === 'video' ? 'videoPath' : 'folderPath'
+
+      console.log('[DnD] API call:', { endpoint, [bodyKey]: draggedItem.path, targetFolder: '' })
+
+      const response = await fetch(endpoint, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          [bodyKey]: draggedItem.path,
+          targetFolder: ''  // Empty string = root
+        })
+      })
+
+      const data = await response.json()
+      console.log('[DnD] API response:', { ok: response.ok, status: response.status, data })
+
+      if (!response.ok) {
+        console.error(`[DnD] Failed to move ${draggedItem.type} to root:`, data.error)
+        return
+      }
+
+      console.log('[DnD] Move to root successful, reloading tree...')
+
+      // Clear cached stats for moved video
+      if (draggedItem.type === 'video') {
+        const newStatsMap = new Map(videoStatsMap)
+        newStatsMap.delete(draggedItem.path)
+        setVideoStatsMap(newStatsMap)
+      }
+
+      // Success - reload tree
+      revalidator.revalidate()
+    } catch (error) {
+      console.error('Network error during root drop:', error)
+    } finally {
+      setDraggedItem(null)
+    }
+  }
+
+  const handleDrop = async (e: React.DragEvent, targetFolderPath: string) => {
+    console.log('[DnD] Drop triggered:', { targetFolderPath, draggedItem })
+    e.preventDefault()
+    e.stopPropagation()
+    setDragOverFolder(null)
+
+    if (!draggedItem) {
+      console.log('[DnD] Drop cancelled: no dragged item')
+      return
+    }
+
+    // Don't allow dropping on itself or its descendants
+    if (draggedItem.type === 'folder') {
+      if (targetFolderPath === draggedItem.path || targetFolderPath.startsWith(`${draggedItem.path}/`)) {
+        console.log('[DnD] Drop cancelled: cannot drop folder on itself or descendant')
+        return
+      }
+    }
+
+    // Don't allow dropping on current parent
+    const itemPathParts = draggedItem.path.split('/')
+    const currentParent = itemPathParts.length > 1 ? itemPathParts.slice(0, -1).join('/') : ''
+    if (targetFolderPath === currentParent) {
+      console.log('[DnD] Drop cancelled: already in this folder')
+      return
+    }
+
+    // Perform the move
+    console.log('[DnD] Performing move...')
+    try {
+      const endpoint = draggedItem.type === 'video' ? '/api/videos/move' : '/api/folders/move'
+      const bodyKey = draggedItem.type === 'video' ? 'videoPath' : 'folderPath'
+
+      console.log('[DnD] API call:', { endpoint, [bodyKey]: draggedItem.path, targetFolder: targetFolderPath })
+
+      const response = await fetch(endpoint, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          [bodyKey]: draggedItem.path,
+          targetFolder: targetFolderPath
+        })
+      })
+
+      const data = await response.json()
+      console.log('[DnD] API response:', { ok: response.ok, status: response.status, data })
+
+      if (!response.ok) {
+        console.error(`[DnD] Failed to move ${draggedItem.type}:`, data.error)
+        return
+      }
+
+      console.log('[DnD] Move successful, reloading tree...')
+
+      // Clear cached stats for moved video
+      if (draggedItem.type === 'video') {
+        const newStatsMap = new Map(videoStatsMap)
+        newStatsMap.delete(draggedItem.path)
+        setVideoStatsMap(newStatsMap)
+      }
+
+      // Success - reload tree
+      revalidator.revalidate()
+    } catch (error) {
+      console.error('Network error during drop:', error)
+    } finally {
+      setDraggedItem(null)
+    }
+  }
+
   const filteredTree = useMemo(() => {
     if (!searchQuery) return tree
 
@@ -986,6 +1298,23 @@ export default function VideosPage() {
 
     return tree.map(filterNode).filter((n): n is TreeNode => n !== null)
   }, [tree, searchQuery])
+
+  // Collect all folders from tree for folder picker
+  const allFolders = useMemo(() => {
+    const folders: Array<{ path: string; name: string }> = []
+
+    const collectFolders = (nodes: TreeNode[], prefix = '') => {
+      for (const node of nodes) {
+        if (node.type === 'folder') {
+          folders.push({ path: node.path, name: node.path })
+          collectFolders(node.children, node.path + '/')
+        }
+      }
+    }
+
+    collectFolders(tree)
+    return folders
+  }, [tree])
 
   return (
     <AppLayout>
@@ -1074,62 +1403,98 @@ export default function VideosPage() {
             <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 dark:ring-white dark:ring-opacity-10 sm:rounded-lg">
               <div className="overflow-auto" style={{ maxHeight: 'calc(100vh - 25rem)' }}>
                 <table className="min-w-full divide-y divide-gray-300 dark:divide-gray-700">
-                  <thead className="bg-gray-50 dark:bg-gray-800 sticky top-0 z-10">
-                    <tr className="border-b border-gray-200 dark:border-gray-700">
-                      <th
-                        scope="col"
-                        className="py-2 pl-4 pr-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 sm:pl-6 bg-gray-50 dark:bg-gray-800"
-                      >
-                        {/* Video column - no group header */}
-                      </th>
-                      <th
-                        scope="colgroup"
-                        colSpan={4}
-                        className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800"
-                      >
-                        Boundary Annotation
-                      </th>
-                      <th scope="col" className="relative py-2 pl-3 pr-4 sm:pr-6 bg-gray-50 dark:bg-gray-800">
-                        {/* Actions column - no group header */}
-                      </th>
-                    </tr>
-                    <tr>
-                      <th
-                        scope="col"
-                        className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-200 sm:pl-6 bg-gray-50 dark:bg-gray-800"
-                      >
-                        Video
-                      </th>
-                      <th
-                        scope="col"
-                        className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-gray-200 bg-gray-50 dark:bg-gray-800"
-                      >
-                        Total
-                      </th>
-                      <th
-                        scope="col"
-                        className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-gray-200 bg-gray-50 dark:bg-gray-800"
-                      >
-                        Distribution
-                      </th>
-                      <th
-                        scope="col"
-                        className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-gray-200 bg-gray-50 dark:bg-gray-800"
-                      >
-                        Pending
-                      </th>
-                      <th
-                        scope="col"
-                        className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-gray-200 bg-gray-50 dark:bg-gray-800"
-                      >
-                        Progress
-                      </th>
-                      <th scope="col" className="relative py-3.5 pl-3 pr-4 sm:pr-6 bg-gray-50 dark:bg-gray-800">
-                        <span className="sr-only">Actions</span>
-                      </th>
-                    </tr>
+                  <thead
+                    className="bg-gray-50 dark:bg-gray-800 sticky top-0 z-10"
+                    onDragOver={draggedItem ? handleRootDragOver : undefined}
+                    onDragLeave={draggedItem ? handleRootDragLeave : undefined}
+                    onDrop={draggedItem ? handleRootDrop : undefined}
+                  >
+                    {draggedItem ? (
+                      <tr>
+                        <th
+                          colSpan={6}
+                          className={`py-6 px-6 text-center transition-colors ${
+                            dragOverFolder === '__ROOT__'
+                              ? 'bg-indigo-50 dark:bg-indigo-900/20 border-b-2 border-indigo-500'
+                              : 'bg-gray-50 dark:bg-gray-800 border-b-2 border-gray-300 dark:border-gray-600'
+                          }`}
+                        >
+                          <div className={`text-sm font-semibold ${
+                            dragOverFolder === '__ROOT__'
+                              ? 'text-indigo-700 dark:text-indigo-300'
+                              : 'text-gray-600 dark:text-gray-400'
+                          }`}>
+                            {(() => {
+                              const itemPathParts = draggedItem.path.split('/')
+                              const currentParent = itemPathParts.length > 1 ? itemPathParts.slice(0, -1).join('/') : ''
+
+                              if (currentParent === '') {
+                                return `"${draggedItem.name}" is already at Root`
+                              }
+                              return `Drop here to move "${draggedItem.name}" to Root`
+                            })()}
+                          </div>
+                        </th>
+                      </tr>
+                    ) : (
+                      <>
+                        <tr className="border-b border-gray-200 dark:border-gray-700">
+                          <th
+                            scope="col"
+                            className="py-2 pl-4 pr-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 sm:pl-6 bg-gray-50 dark:bg-gray-800"
+                          >
+                            {/* Video column - no group header */}
+                          </th>
+                          <th
+                            scope="colgroup"
+                            colSpan={4}
+                            className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800"
+                          >
+                            Boundary Annotation
+                          </th>
+                          <th scope="col" className="relative py-2 pl-3 pr-4 sm:pr-6 bg-gray-50 dark:bg-gray-800">
+                            {/* Actions column - no group header */}
+                          </th>
+                        </tr>
+                        <tr>
+                          <th
+                            scope="col"
+                            className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-200 sm:pl-6 bg-gray-50 dark:bg-gray-800"
+                          >
+                            Video
+                          </th>
+                          <th
+                            scope="col"
+                            className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-gray-200 bg-gray-50 dark:bg-gray-800"
+                          >
+                            Total
+                          </th>
+                          <th
+                            scope="col"
+                            className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-gray-200 bg-gray-50 dark:bg-gray-800"
+                          >
+                            Distribution
+                          </th>
+                          <th
+                            scope="col"
+                            className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-gray-200 bg-gray-50 dark:bg-gray-800"
+                          >
+                            Pending
+                          </th>
+                          <th
+                            scope="col"
+                            className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-gray-200 bg-gray-50 dark:bg-gray-800"
+                          >
+                            Progress
+                          </th>
+                          <th scope="col" className="relative py-3.5 pl-3 pr-4 sm:pr-6 bg-gray-50 dark:bg-gray-800">
+                            <span className="sr-only">Actions</span>
+                          </th>
+                        </tr>
+                      </>
+                    )}
                   </thead>
-                  <tbody className="divide-y divide-gray-200 dark:divide-gray-800 bg-white dark:bg-gray-950">
+                  <tbody className="divide-y divide-y-gray-200 dark:divide-gray-800 bg-white dark:bg-gray-950">
                     {filteredTree.map((node) => (
                       <TreeRow
                         key={node.path}
@@ -1152,6 +1517,12 @@ export default function VideosPage() {
                           setFolderError(null)
                           setFolderLoading(false)
                         }}
+                        onMoveFolder={(folderPath, folderName) => {
+                          setMoveModal({ open: true, itemPath: folderPath, itemName: folderName, itemType: 'folder' })
+                          setSelectedTargetFolder('')
+                          setMoveError(null)
+                          setMoveLoading(false)
+                        }}
                         onDeleteFolder={handleDeleteFolderClick}
                         onRenameVideo={(videoPath, currentName) => {
                           setRenameVideoModal({ open: true, videoPath, currentName })
@@ -1159,12 +1530,24 @@ export default function VideosPage() {
                           setVideoError(null)
                           setVideoLoading(false)
                         }}
+                        onMoveVideo={(videoPath, videoName) => {
+                          setMoveModal({ open: true, itemPath: videoPath, itemName: videoName, itemType: 'video' })
+                          setSelectedTargetFolder('')
+                          setMoveError(null)
+                          setMoveLoading(false)
+                        }}
                         onDeleteVideo={(videoPath, videoName) => {
                           setDeleteVideoModal({ open: true, videoPath, videoName })
                         }}
                         onErrorBadgeClick={(videoId, errorDetails) => {
                           setErrorModal({ open: true, errorDetails, videoId })
                         }}
+                        onDragStart={handleDragStart}
+                        onDragEnd={handleDragEnd}
+                        onDragOver={handleDragOver}
+                        onDragLeave={handleDragLeave}
+                        onDrop={handleDrop}
+                        dragOverFolder={dragOverFolder}
                       />
                     ))}
                   </tbody>
@@ -1525,6 +1908,82 @@ export default function VideosPage() {
                 className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
               >
                 Close
+              </button>
+            </div>
+          </DialogPanel>
+        </div>
+      </Dialog>
+
+      {/* Move Modal (Videos and Folders) */}
+      <Dialog open={moveModal.open} onClose={() => setMoveModal({ open: false })} className="relative z-50">
+        <div className="fixed inset-0 bg-black/30 dark:bg-black/50" aria-hidden="true" />
+        <div className="fixed inset-0 flex items-center justify-center p-4">
+          <DialogPanel className="w-full max-w-md rounded-lg bg-white dark:bg-gray-800 p-6 shadow-xl">
+            <DialogTitle className="text-lg font-medium text-gray-900 dark:text-gray-200">
+              Move {moveModal.itemType === 'video' ? 'Video' : 'Folder'}
+            </DialogTitle>
+            <div className="mt-4">
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                {moveModal.itemType === 'video' ? 'Video' : 'Folder'}: <span className="font-mono font-semibold">{moveModal.itemName}</span>
+              </p>
+              <label htmlFor="target-folder" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Move to folder
+              </label>
+              <select
+                id="target-folder"
+                value={selectedTargetFolder}
+                onChange={(e) => setSelectedTargetFolder(e.target.value)}
+                className="block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+              >
+                <option value="">Root (no folder)</option>
+                {allFolders
+                  .filter(f => {
+                    // Exclude current folder (for folders being moved)
+                    if (moveModal.itemType === 'folder' && f.path === moveModal.itemPath) {
+                      return false
+                    }
+                    // Exclude descendants of the folder being moved
+                    if (moveModal.itemType === 'folder' && f.path.startsWith(`${moveModal.itemPath}/`)) {
+                      return false
+                    }
+                    // Exclude current parent folder (for both videos and folders)
+                    const itemPathParts = moveModal.itemPath?.split('/') || []
+                    const currentParent = itemPathParts.length > 1
+                      ? itemPathParts.slice(0, -1).join('/')
+                      : ''
+                    if (f.path === currentParent) {
+                      return false
+                    }
+                    return true
+                  })
+                  .map(folder => (
+                    <option key={folder.path} value={folder.path}>
+                      {folder.name}
+                    </option>
+                  ))
+                }
+              </select>
+              <p className="mt-2 text-xs text-gray-500 dark:text-gray-500">
+                Select a destination folder or choose "Root" to move to the top level.
+              </p>
+              {moveError && (
+                <p className="mt-3 text-sm text-red-600 dark:text-red-400">{moveError}</p>
+              )}
+            </div>
+            <div className="mt-6 flex gap-3 justify-end">
+              <button
+                onClick={() => setMoveModal({ open: false })}
+                disabled={moveLoading}
+                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleMove}
+                disabled={moveLoading}
+                className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {moveLoading ? 'Moving...' : 'Move'}
               </button>
             </div>
           </DialogPanel>
