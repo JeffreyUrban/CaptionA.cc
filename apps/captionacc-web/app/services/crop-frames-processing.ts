@@ -133,11 +133,26 @@ async function processCropFramesJob(job: CropFramesJob): Promise<void> {
   // Format crop bounds as "left,top,right,bottom"
   const cropBoundsStr = `${cropBounds.left},${cropBounds.top},${cropBounds.right},${cropBounds.bottom}`
 
-  // Update database: mark as processing
+  // Get crop_bounds_version from database
+  let cropBoundsVersion = 1
   const db = new Database(dbPath)
   try {
+    const layoutConfig = db.prepare(`
+      SELECT crop_bounds_version FROM video_layout_config WHERE id = 1
+    `).get() as { crop_bounds_version?: number } | undefined
+
+    if (layoutConfig?.crop_bounds_version) {
+      cropBoundsVersion = layoutConfig.crop_bounds_version
+    }
+  } finally {
+    db.close()
+  }
+
+  // Update database: mark as processing
+  const db2 = new Database(dbPath)
+  try {
     // Ensure crop_frames_status table exists (if not already created by schema)
-    db.prepare(`
+    db2.prepare(`
       CREATE TABLE IF NOT EXISTS crop_frames_status (
         id INTEGER PRIMARY KEY CHECK (id = 1),
         status TEXT NOT NULL DEFAULT 'queued',
@@ -150,12 +165,12 @@ async function processCropFramesJob(job: CropFramesJob): Promise<void> {
       )
     `).run()
 
-    db.prepare(`
+    db2.prepare(`
       INSERT OR REPLACE INTO crop_frames_status (id, status, processing_started_at)
       VALUES (1, 'processing', datetime('now'))
     `).run()
   } finally {
-    db.close()
+    db2.close()
   }
 
   // Run crop_frames pipeline
@@ -172,7 +187,10 @@ async function processCropFramesJob(job: CropFramesJob): Promise<void> {
       '--crop',
       cropBoundsStr,
       '--rate',
-      '10.0'
+      '10.0',
+      '--write-to-db',
+      '--crop-bounds-version',
+      cropBoundsVersion.toString()
     ],
     {
       cwd: pipelinePath,

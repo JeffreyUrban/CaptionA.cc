@@ -18,7 +18,5 @@ def test_mkdocs_build():
     )
 
     assert result.returncode == 0, (
-        f"mkdocs build failed with exit code {result.returncode}\n"
-        f"STDOUT:\n{result.stdout}\n"
-        f"STDERR:\n{result.stderr}"
+        f"mkdocs build failed with exit code {result.returncode}\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
     )

@@ -8,7 +8,6 @@ import os
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Optional
 
 from image_utils import resize_directory, resize_image
 from PIL import Image
@@ -20,9 +19,9 @@ def extract_frames(
     output_dir: Path,
     crop_box: tuple[int, int, int, int],
     rate_hz: float = 10.0,
-    resize_to: Optional[tuple[int, int]] = None,
+    resize_to: tuple[int, int] | None = None,
     preserve_aspect: bool = False,
-    progress_callback: Optional[callable] = None,
+    progress_callback: callable | None = None,
 ) -> tuple[Path, int]:
     """Extract frames from video with cropping and optional resizing.
 
@@ -95,9 +94,7 @@ def extract_frames(
 
         # Check for FFmpeg errors
         if ffmpeg_process.returncode != 0:
-            raise RuntimeError(
-                f"FFmpeg failed with return code {ffmpeg_process.returncode}"
-            )
+            raise RuntimeError(f"FFmpeg failed with return code {ffmpeg_process.returncode}")
 
         return output_dir, len(seen_frames)
 
@@ -132,9 +129,7 @@ def extract_frames(
             while True:
                 # Check for new frames
                 frame_files = sorted(cropped_dir.glob("frame_*.jpg"))
-                new_frames = [
-                    frame for frame in frame_files if frame not in submitted_frames
-                ]
+                new_frames = [frame for frame in frame_files if frame not in submitted_frames]
 
                 # Submit new frames to worker pool
                 for frame_path in new_frames:
@@ -177,9 +172,7 @@ def extract_frames(
 
         # Check for FFmpeg errors
         if ffmpeg_process.returncode != 0:
-            raise RuntimeError(
-                f"FFmpeg failed with return code {ffmpeg_process.returncode}"
-            )
+            raise RuntimeError(f"FFmpeg failed with return code {ffmpeg_process.returncode}")
 
         return resized_dir, current_count
 
@@ -190,7 +183,7 @@ def resize_frames(
     target_width: int,
     target_height: int,
     preserve_aspect: bool = False,
-    progress_callback: Optional[callable] = None,
+    progress_callback: callable | None = None,
 ) -> tuple[Path, int]:
     """Resize all frames in a directory to fixed dimensions.
 

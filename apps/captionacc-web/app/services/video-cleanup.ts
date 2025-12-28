@@ -13,7 +13,7 @@
  */
 
 import { resolve } from 'path'
-import { existsSync } from 'fs'
+import { existsSync, readdirSync } from 'fs'
 import { rm } from 'fs/promises'
 import Database from 'better-sqlite3'
 import { queueVideoProcessing } from './video-processing'
@@ -274,7 +274,72 @@ async function recoverStaleProcessing(video: { displayPath: string; videoDir: st
 }
 
 /**
- * Run cleanup process - find and cleanup deleted videos, recover stale processing
+ * Clean up orphaned crop_frames directories
+ * Removes crop_frames directories that contain files when processing is complete/error
+ */
+async function cleanupOrphanedCropFrames(): Promise<number> {
+  let cleanedCount = 0
+  const allVideos = getAllVideos()
+
+  for (const video of allVideos) {
+    const videoDir = getVideoDir(video.videoId)
+    const dbPath = getDbPath(video.videoId)
+
+    if (!videoDir || !dbPath) continue
+
+    const cropFramesDir = resolve(videoDir, 'crop_frames')
+
+    // Skip if crop_frames directory doesn't exist
+    if (!existsSync(cropFramesDir)) continue
+
+    // Check if there are any frame files in the directory
+    const frameFiles = readdirSync(cropFramesDir).filter(f => f.endsWith('.jpg'))
+    if (frameFiles.length === 0) continue
+
+    try {
+      const db = new Database(dbPath, { readonly: true })
+      try {
+        // Check crop_frames_status
+        const status = db.prepare(`
+          SELECT status FROM crop_frames_status WHERE id = 1
+        `).get() as { status: string } | undefined
+
+        // Clean up frames if processing is complete or error
+        // (frames should have been written to database and deleted)
+        if (status && (status.status === 'complete' || status.status === 'error')) {
+          console.log(`[Cleanup] Found ${frameFiles.length} orphaned frames in ${video.displayPath}/crop_frames`)
+
+          // Delete all frame files
+          for (const frameFile of frameFiles) {
+            const framePath = resolve(cropFramesDir, frameFile)
+            try {
+              await rm(framePath)
+            } catch (error) {
+              console.error(`[Cleanup] Failed to delete ${framePath}:`, error)
+            }
+          }
+
+          // Try to remove empty directory
+          if (readdirSync(cropFramesDir).length === 0) {
+            await rm(cropFramesDir, { recursive: true, force: true })
+            console.log(`[Cleanup] Removed empty crop_frames directory for ${video.displayPath}`)
+          }
+
+          cleanedCount++
+        }
+      } finally {
+        db.close()
+      }
+    } catch (error) {
+      console.error(`[Cleanup] Error cleaning crop_frames for ${video.displayPath}:`, error)
+    }
+  }
+
+  return cleanedCount
+}
+
+/**
+ * Run cleanup process - find and cleanup deleted videos, recover stale processing, cleanup orphaned frames
  */
 export async function runCleanup(): Promise<void> {
   console.log('[Cleanup] Starting cleanup scan...')
@@ -298,7 +363,13 @@ export async function runCleanup(): Promise<void> {
       }
     }
 
-    if (deletedVideos.length === 0 && staleVideos.length === 0) {
+    // 3. Cleanup orphaned crop_frames directories
+    const cleanedCropFrames = await cleanupOrphanedCropFrames()
+    if (cleanedCropFrames > 0) {
+      console.log(`[Cleanup] Cleaned up ${cleanedCropFrames} orphaned crop_frames directories`)
+    }
+
+    if (deletedVideos.length === 0 && staleVideos.length === 0 && cleanedCropFrames === 0) {
       console.log('[Cleanup] No cleanup needed')
     } else {
       console.log('[Cleanup] Cleanup complete')

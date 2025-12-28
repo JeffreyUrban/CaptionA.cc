@@ -12,6 +12,7 @@ dependencies = [
     "typer>=0.9.0",
     "rich>=13.0.0",
     "caption_models",
+    "frames_db",
     "image_utils",
     "video_utils",
 ]
@@ -98,6 +99,7 @@ exclude_lines = [
 version-file = "src/crop_frames/_version.py"
 
 [tool.uv.sources]
+frames_db = { workspace = true }
 image_utils = { workspace = true }
 video_utils = { workspace = true }
 ocr_utils = { workspace = true }

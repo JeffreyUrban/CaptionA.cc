@@ -257,6 +257,7 @@ name = "crop-frames"
 source = { editable = "data-pipelines/crop_frames" }
 dependencies = [
     { name = "caption-models" },
+    { name = "frames-db" },
     { name = "image-utils" },
     { name = "rich" },
     { name = "typer" },
@@ -266,6 +267,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "caption-models", editable = "packages/caption_models" },
+    { name = "frames-db", editable = "packages/frames_db" },
     { name = "image-utils", editable = "packages/image_utils" },
     { name = "rich", specifier = ">=13.0.0" },
     { name = "typer", specifier = ">=0.9.0" },
