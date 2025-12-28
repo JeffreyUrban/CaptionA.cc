@@ -16,6 +16,7 @@ import { existsSync, readdirSync } from 'fs'
 import { getDbPath, getVideoDir, getAllVideos } from '~/utils/video-paths'
 import { tryStartProcessing, finishProcessing, registerQueueProcessor } from './processing-coordinator'
 import { recoverStalledCropFrames } from './crop-frames-processing'
+import { migrateDatabase } from '~/db/migrate'
 
 interface ProcessingOptions {
   videoPath: string  // Display path (user-facing) like "show_name/video_name"
@@ -346,6 +347,13 @@ export function recoverStalledProcessing() {
   for (const video of allVideos) {
     const dbPath = getDbPath(video.videoId)
     if (dbPath) {
+      // Run migrations (idempotent - safe to run multiple times)
+      try {
+        migrateDatabase(dbPath)
+      } catch (error) {
+        console.error(`[VideoProcessing] Failed to migrate ${video.displayPath}:`, error)
+      }
+
       // Check both full_frames and crop_frames processing
       checkAndRecoverVideo(dbPath, video.displayPath, video.videoId)
       recoverStalledCropFrames(video.videoId, video.displayPath)
