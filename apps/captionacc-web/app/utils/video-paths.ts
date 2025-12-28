@@ -8,7 +8,7 @@
  */
 
 import { resolve } from 'path'
-import { existsSync } from 'fs'
+import { existsSync, readdirSync } from 'fs'
 import Database from 'better-sqlite3'
 
 const dataDir = resolve(process.cwd(), '..', '..', 'local', 'data')
@@ -31,7 +31,6 @@ export function resolveDisplayPath(displayPath: string): string | null {
   const scanDir = (dir: string): string | null => {
     if (!existsSync(dir)) return null
 
-    const { readdirSync, statSync } = require('fs')
     const entries = readdirSync(dir, { withFileTypes: true })
 
     for (const entry of entries) {
@@ -163,7 +162,6 @@ export function getAllVideos(): VideoMetadata[] {
   const scanDir = (dir: string) => {
     if (!existsSync(dir)) return
 
-    const { readdirSync } = require('fs')
     const entries = readdirSync(dir, { withFileTypes: true })
 
     for (const entry of entries) {

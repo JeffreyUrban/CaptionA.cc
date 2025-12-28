@@ -209,15 +209,15 @@ async function handlePatchRequest(request: Request, uploadId: string): Promise<R
   const newSize = currentSize + chunk.length
   const complete = newSize >= metadata.uploadLength
 
-  // Update progress in database
-  const videoPath = metadata.metadata.videoPath
+  // Update progress in database (use storagePath, not displayPath)
+  const storagePath = metadata.metadata.storagePath
   const dbPath = resolve(
     process.cwd(),
     '..',
     '..',
     'local',
     'data',
-    ...videoPath.split('/'),
+    ...storagePath.split('/'),
     'annotations.db'
   )
 

@@ -2,10 +2,10 @@ import { useLoaderData, Link, useRevalidator } from 'react-router'
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import { MagnifyingGlassIcon, ChevronRightIcon, ChevronDownIcon, EllipsisVerticalIcon, PlusIcon } from '@heroicons/react/20/solid'
 import { Menu, MenuButton, MenuItem, MenuItems, Dialog, DialogPanel, DialogTitle } from '@headlessui/react'
-import { readdir } from 'fs/promises'
 import { resolve } from 'path'
 import { existsSync } from 'fs'
 import { AppLayout } from '~/components/AppLayout'
+import { getAllVideos } from '~/utils/video-paths'
 import {
   buildVideoTree,
   calculateVideoCounts,
@@ -17,59 +17,6 @@ import {
   type VideoStats
 } from '~/utils/video-tree'
 
-interface DiscoveredItem {
-  path: string
-  type: 'video' | 'folder'
-}
-
-async function findVideosAndFolders(dir: string, baseDir: string): Promise<DiscoveredItem[]> {
-  const items: DiscoveredItem[] = []
-
-  try {
-    const entries = await readdir(dir, { withFileTypes: true })
-
-    // Check if this directory has an annotations.db file
-    const hasAnnotationsDb = entries.some(
-      entry => entry.isFile() && entry.name === 'annotations.db'
-    )
-
-    if (hasAnnotationsDb) {
-      // Found annotations.db - this is a video directory, record it and stop descending
-      const relativePath = dir.substring(baseDir.length + 1) // +1 to remove leading slash
-      if (relativePath) {
-        items.push({ path: relativePath, type: 'video' })
-      }
-      return items // Don't descend into subdirectories
-    }
-
-    // No annotations.db here, so continue recursing into subdirectories
-    // Skip directories that are known to contain data, not video folders
-    const skipDirs = new Set(['crop_frames', 'full_frames'])
-
-    const subdirs = entries.filter(entry => entry.isDirectory() && !skipDirs.has(entry.name))
-
-    if (subdirs.length > 0) {
-      // This directory has subdirectories - recurse into them
-      for (const entry of subdirs) {
-        const fullPath = resolve(dir, entry.name)
-        const subItems = await findVideosAndFolders(fullPath, baseDir)
-        items.push(...subItems)
-      }
-    } else {
-      // This is a leaf directory with no subdirectories and no annotations.db
-      // It's an empty folder - include it
-      const relativePath = dir.substring(baseDir.length + 1)
-      if (relativePath) {
-        items.push({ path: relativePath, type: 'folder' })
-      }
-    }
-  } catch (error) {
-    console.error(`Error scanning directory ${dir}:`, error)
-  }
-
-  return items
-}
-
 export async function loader() {
   const dataDir = resolve(process.cwd(), '..', '..', 'local', 'data')
 
@@ -80,22 +27,16 @@ export async function loader() {
     )
   }
 
-  // Find all videos and empty folders
-  const items = await findVideosAndFolders(dataDir, dataDir)
+  // Get all videos with their metadata (uses display_path)
+  const allVideos = getAllVideos()
 
-  // Convert to VideoInfo objects (only videos need stats)
-  const videos: VideoInfo[] = items
-    .filter(item => item.type === 'video')
-    .map(item => ({ videoId: item.path }))
+  // Convert to VideoInfo objects using display_path
+  const videos: VideoInfo[] = allVideos.map(video => ({
+    videoId: video.displayPath
+  }))
 
   // Build tree structure (without stats - will be loaded client-side)
   const tree = buildVideoTree(videos)
-
-  // Add empty folders to the tree
-  const emptyFolders = items.filter(item => item.type === 'folder')
-  for (const folder of emptyFolders) {
-    addEmptyFolderToTree(tree, folder.path)
-  }
 
   // Calculate video counts for each folder
   tree.forEach(node => {
@@ -111,47 +52,6 @@ export async function loader() {
     JSON.stringify({ tree: sortedTree }),
     { headers: { 'Content-Type': 'application/json' } }
   )
-}
-
-// Add an empty folder to the tree structure
-function addEmptyFolderToTree(tree: TreeNode[], folderPath: string) {
-  const parts = folderPath.split('/')
-  let currentLevel = tree
-
-  for (let i = 0; i < parts.length; i++) {
-    const part = parts[i]!
-    const pathSegments = parts.slice(0, i + 1)
-    const newPath: string = pathSegments.join('/')
-
-    let node = currentLevel.find(n => n.type === 'folder' && n.name === part) as FolderNode | undefined
-
-    if (!node) {
-      // Create new folder node with default stats
-      const newNode: FolderNode = {
-        type: 'folder',
-        name: part,
-        path: newPath,
-        children: [],
-        stats: {
-          totalAnnotations: 0,
-          pendingReview: 0,
-          confirmedAnnotations: 0,
-          predictedAnnotations: 0,
-          gapAnnotations: 0,
-          progress: 0,
-          totalFrames: 0,
-          coveredFrames: 0,
-          hasOcrData: false,
-          layoutApproved: false
-        },
-        videoCount: 0
-      }
-      currentLevel.push(newNode)
-      node = newNode
-    }
-
-    currentLevel = node.children
-  }
 }
 
 interface TreeRowProps {
@@ -580,7 +480,7 @@ export default function VideosPage() {
   const { tree } = useLoaderData<{ tree: TreeNode[] }>()
   const revalidator = useRevalidator()
   const [searchQuery, setSearchQuery] = useState('')
-  const CACHE_VERSION = 'v6' // Increment to invalidate cache when VideoStats structure changes
+  const CACHE_VERSION = 'v7' // Increment to invalidate cache when VideoStats structure changes
 
   // Modal states
   const [createFolderModal, setCreateFolderModal] = useState<{ open: boolean; parentPath?: string }>({ open: false })
@@ -613,24 +513,22 @@ export default function VideosPage() {
     }
     return new Map()
   })
-  const [expandedPaths, setExpandedPaths] = useState<Set<string>>(() => {
-    // Load expansion state from localStorage
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('video-tree-expanded')
-      if (saved) {
-        try {
-          return new Set(JSON.parse(saved))
-        } catch {
-          return new Set()
-        }
-      }
-    }
-    return new Set()
-  })
+  // Initialize with empty Set to avoid hydration mismatch
+  const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set())
 
-  // Detect client-side mount to avoid hydration mismatch
+  // Detect client-side mount and load expansion state from localStorage
   useEffect(() => {
     setIsMounted(true)
+
+    // Load expansion state from localStorage after mount
+    const saved = localStorage.getItem('video-tree-expanded')
+    if (saved) {
+      try {
+        setExpandedPaths(new Set(JSON.parse(saved)))
+      } catch {
+        // Invalid JSON, ignore
+      }
+    }
   }, [])
 
   // Save stats to localStorage whenever they update

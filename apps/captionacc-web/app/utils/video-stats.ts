@@ -35,8 +35,10 @@ export interface ProcessingStatus {
 export async function getVideoStats(videoId: string): Promise<VideoStats> {
   // Resolve videoId (can be display_path or UUID) to database path
   const dbPath = getDbPath(videoId)
+  console.log(`[getVideoStats] videoId: ${videoId}, dbPath: ${dbPath}`)
   if (!dbPath) {
     // Video not found - return default stats
+    console.log(`[getVideoStats] Database not found for ${videoId}`)
     return {
       totalAnnotations: 0,
       pendingReview: 0,
@@ -118,11 +120,24 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
     let processingStatus: ProcessingStatus | undefined
     try {
       const status = db.prepare(`SELECT * FROM processing_status WHERE id = 1`).get() as any
+      console.log(`[getVideoStats] Processing status for ${videoId}:`, status)
       if (status) {
         // Check if video is marked as deleted
         if (status.deleted === 1) {
-          // Return null stats for deleted videos
-          return null
+          // Return default stats for deleted videos (not null)
+          console.log(`[getVideoStats] Video ${videoId} is marked as deleted`)
+          return {
+            totalAnnotations: 0,
+            pendingReview: 0,
+            confirmedAnnotations: 0,
+            predictedAnnotations: 0,
+            gapAnnotations: 0,
+            progress: 0,
+            totalFrames: 0,
+            coveredFrames: 0,
+            hasOcrData: false,
+            layoutApproved: false
+          }
         }
 
         processingStatus = {
@@ -138,8 +153,9 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
           processingCompletedAt: status.processing_completed_at,
         }
       }
-    } catch {
+    } catch (error) {
       // Table doesn't exist (video not uploaded via web)
+      console.log(`[getVideoStats] No processing_status table for ${videoId}:`, error)
       processingStatus = undefined
     }
 
@@ -153,7 +169,7 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
       databaseId = undefined
     }
 
-    return {
+    const stats = {
       totalAnnotations: result.total,
       pendingReview: result.pending,
       confirmedAnnotations: result.confirmed,
@@ -167,6 +183,8 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
       processingStatus,
       databaseId
     }
+    console.log(`[getVideoStats] Returning stats for ${videoId}:`, JSON.stringify(stats, null, 2))
+    return stats
   } finally {
     db.close()
   }

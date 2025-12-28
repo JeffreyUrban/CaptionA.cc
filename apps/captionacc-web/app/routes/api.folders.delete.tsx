@@ -1,40 +1,15 @@
 /**
  * Delete a folder (and all its contents) from the video library
+ *
+ * With UUID-based storage, folders are virtual (based on display_path prefixes).
+ * This endpoint finds all videos with display_path starting with the folder path
+ * and deletes their UUID directories.
  */
 import type { ActionFunctionArgs } from 'react-router'
 import { resolve } from 'path'
-import { rm, access, readdir } from 'fs/promises'
-import { constants } from 'fs'
-
-// Recursively count videos in a directory
-async function countVideos(dir: string): Promise<number> {
-  let count = 0
-
-  try {
-    const entries = await readdir(dir, { withFileTypes: true })
-
-    // Check if this directory has an annotations.db file (it's a video)
-    const hasAnnotationsDb = entries.some(
-      entry => entry.isFile() && entry.name === 'annotations.db'
-    )
-
-    if (hasAnnotationsDb) {
-      return 1 // This directory is a video
-    }
-
-    // Recurse into subdirectories
-    for (const entry of entries) {
-      if (entry.isDirectory()) {
-        const fullPath = resolve(dir, entry.name)
-        count += await countVideos(fullPath)
-      }
-    }
-  } catch (error) {
-    console.error(`Error counting videos in ${dir}:`, error)
-  }
-
-  return count
-}
+import { rm } from 'fs/promises'
+import { getAllVideos, getDbPath } from '~/utils/video-paths'
+import Database from 'better-sqlite3'
 
 export async function action({ request }: ActionFunctionArgs) {
   if (request.method !== 'DELETE') {
@@ -49,17 +24,21 @@ export async function action({ request }: ActionFunctionArgs) {
     return Response.json({ error: 'path parameter is required' }, { status: 400 })
   }
 
-  const fullPath = resolve(process.cwd(), '..', '..', 'local', 'data', folderPath)
+  // Find all videos in this folder (videos whose display_path starts with folderPath)
+  const allVideos = getAllVideos()
+  const normalizedFolderPath = folderPath.replace(/\/$/, '') // Remove trailing slash
+  const videosToDelete = allVideos.filter(video => {
+    // Match exact folder or videos in subfolders
+    return video.displayPath === normalizedFolderPath ||
+           video.displayPath.startsWith(normalizedFolderPath + '/')
+  })
 
-  // Check if folder exists
-  try {
-    await access(fullPath, constants.F_OK)
-  } catch {
-    return Response.json({ error: 'Folder does not exist' }, { status: 404 })
+  const videoCount = videosToDelete.length
+
+  // If folder doesn't exist (no videos found), return 404
+  if (videoCount === 0) {
+    return Response.json({ error: 'Folder does not exist or is empty' }, { status: 404 })
   }
-
-  // Count videos that will be deleted
-  const videoCount = await countVideos(fullPath)
 
   // If not confirmed, return the count for user confirmation
   if (!confirmed) {
@@ -70,16 +49,54 @@ export async function action({ request }: ActionFunctionArgs) {
     })
   }
 
-  // Delete the folder recursively
-  try {
-    await rm(fullPath, { recursive: true, force: true })
-    return Response.json({
-      success: true,
-      folderPath,
-      videosDeleted: videoCount
-    })
-  } catch (error) {
-    console.error('Failed to delete folder:', error)
-    return Response.json({ error: 'Failed to delete folder' }, { status: 500 })
+  // Delete each video's UUID directory
+  let deletedCount = 0
+  const errors: string[] = []
+
+  for (const video of videosToDelete) {
+    try {
+      // Get database path
+      const dbPath = getDbPath(video.videoId)
+
+      if (dbPath) {
+        // Mark as deleted in database first
+        const db = new Database(dbPath)
+        try {
+          db.prepare(`
+            UPDATE processing_status
+            SET deleted = 1,
+                deleted_at = datetime('now')
+            WHERE id = 1
+          `).run()
+        } finally {
+          db.close()
+        }
+      }
+
+      // Delete the UUID directory
+      const videoDir = resolve(process.cwd(), '..', '..', 'local', 'data', ...video.storagePath.split('/'))
+      await rm(videoDir, { recursive: true, force: true })
+      deletedCount++
+
+      console.log(`[FolderDelete] Deleted video: ${video.displayPath} (${video.storagePath})`)
+    } catch (error) {
+      console.error(`[FolderDelete] Failed to delete ${video.displayPath}:`, error)
+      errors.push(`${video.displayPath}: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
   }
+
+  if (errors.length > 0) {
+    return Response.json({
+      success: false,
+      error: 'Some videos failed to delete',
+      deletedCount,
+      errors
+    }, { status: 500 })
+  }
+
+  return Response.json({
+    success: true,
+    folderPath,
+    videosDeleted: deletedCount
+  })
 }

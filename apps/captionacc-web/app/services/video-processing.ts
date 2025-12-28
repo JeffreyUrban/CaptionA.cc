@@ -228,31 +228,71 @@ export async function triggerVideoProcessing(options: ProcessingOptions): Promis
     console.error(`[full_frames] ${data.toString().trim()}`)
   })
 
-  fullFramesCmd.on('close', (code) => {
-    // Skip status update if video was deleted during processing
-    if (!existsSync(dbPath)) {
-      console.log(`[VideoProcessing] Video ${videoPath} was deleted during processing, skipping status update`)
-      return
-    }
+  // Return a Promise that resolves when the process completes
+  return new Promise<void>((resolve) => {
+    fullFramesCmd.on('close', (code) => {
+      // Skip status update if video was deleted during processing
+      if (!existsSync(dbPath)) {
+        console.log(`[VideoProcessing] Video ${videoPath} was deleted during processing, skipping status update`)
+        resolve()
+        return
+      }
 
-    try {
-      const db = new Database(dbPath)
       try {
-        if (code === 0) {
-          // Success - mark as complete
-          db.prepare(`
-            UPDATE processing_status
-            SET status = 'processing_complete',
-                processing_completed_at = datetime('now'),
-                frame_extraction_progress = 1.0,
-                ocr_progress = 1.0,
-                layout_analysis_progress = 1.0
-            WHERE id = 1
-          `).run()
+        const db = new Database(dbPath)
+        try {
+          if (code === 0) {
+            // Success - mark as complete
+            db.prepare(`
+              UPDATE processing_status
+              SET status = 'processing_complete',
+                  processing_completed_at = datetime('now'),
+                  frame_extraction_progress = 1.0,
+                  ocr_progress = 1.0,
+                  layout_analysis_progress = 1.0
+              WHERE id = 1
+            `).run()
 
-          console.log(`[VideoProcessing] Processing complete: ${videoPath}`)
-        } else {
-          // Error - mark as failed
+            console.log(`[VideoProcessing] Processing complete: ${videoPath}`)
+          } else {
+            // Error - mark as failed
+            db.prepare(`
+              UPDATE processing_status
+              SET status = 'error',
+                  error_message = ?,
+                  error_details = ?,
+                  error_occurred_at = datetime('now')
+              WHERE id = 1
+            `).run(
+              `full_frames pipeline failed with code ${code}`,
+              JSON.stringify({ code, stdout, stderr })
+            )
+
+            console.error(`[VideoProcessing] Processing failed: ${videoPath} (exit code: ${code})`)
+          }
+        } finally {
+          db.close()
+        }
+      } catch (error) {
+        console.error(`[VideoProcessing] Failed to update status for ${videoPath}:`, error)
+      }
+
+      resolve()
+    })
+
+    fullFramesCmd.on('error', (error) => {
+      console.error(`[VideoProcessing] Failed to start processing: ${error.message}`)
+
+      // Skip status update if video was deleted
+      if (!existsSync(dbPath)) {
+        console.log(`[VideoProcessing] Video ${videoPath} was deleted, skipping error status update`)
+        resolve()
+        return
+      }
+
+      try {
+        const db = new Database(dbPath)
+        try {
           db.prepare(`
             UPDATE processing_status
             SET status = 'error',
@@ -261,49 +301,18 @@ export async function triggerVideoProcessing(options: ProcessingOptions): Promis
                 error_occurred_at = datetime('now')
             WHERE id = 1
           `).run(
-            `full_frames pipeline failed with code ${code}`,
-            JSON.stringify({ code, stdout, stderr })
+            `Failed to start processing: ${error.message}`,
+            JSON.stringify({ error: error.message, stack: error.stack })
           )
-
-          console.error(`[VideoProcessing] Processing failed: ${videoPath} (exit code: ${code})`)
+        } finally {
+          db.close()
         }
-      } finally {
-        db.close()
+      } catch (dbError) {
+        console.error(`[VideoProcessing] Failed to update error status for ${videoPath}:`, dbError)
       }
-    } catch (error) {
-      console.error(`[VideoProcessing] Failed to update status for ${videoPath}:`, error)
-    }
-  })
 
-  fullFramesCmd.on('error', (error) => {
-    console.error(`[VideoProcessing] Failed to start processing: ${error.message}`)
-
-    // Skip status update if video was deleted
-    if (!existsSync(dbPath)) {
-      console.log(`[VideoProcessing] Video ${videoPath} was deleted, skipping error status update`)
-      return
-    }
-
-    try {
-      const db = new Database(dbPath)
-      try {
-        db.prepare(`
-          UPDATE processing_status
-          SET status = 'error',
-              error_message = ?,
-              error_details = ?,
-              error_occurred_at = datetime('now')
-          WHERE id = 1
-        `).run(
-          `Failed to start processing: ${error.message}`,
-          JSON.stringify({ error: error.message, stack: error.stack })
-        )
-      } finally {
-        db.close()
-      }
-    } catch (dbError) {
-      console.error(`[VideoProcessing] Failed to update error status for ${videoPath}:`, dbError)
-    }
+      resolve()
+    })
   })
 }
 
