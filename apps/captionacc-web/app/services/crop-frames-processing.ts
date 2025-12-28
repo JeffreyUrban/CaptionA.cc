@@ -27,7 +27,7 @@ interface CropFramesJob {
 const cropFramesQueue: CropFramesJob[] = []
 
 // Maximum number of retries for failed crop_frames processing
-const MAX_CROP_FRAMES_RETRIES = 3
+const MAX_CROP_FRAMES_RETRIES = 123
 
 /**
  * Queue a crop_frames job
@@ -512,8 +512,23 @@ export function recoverStalledCropFrames(videoId: string, videoPath: string): vo
         const isSchemaMismatch = errorMessage?.error_details?.includes('no column named crop_') ||
           errorMessage?.error_details?.includes('table cropped_frames has no column')
 
-        if (isSchemaMismatch) {
-          console.log(`[CropFrames] Auto-retrying ${videoPath} (schema mismatch error - likely fixed by package update)`)
+        // Check for duplicate frame errors (need to clear existing frames)
+        const isDuplicateFrame = errorMessage?.error_details?.includes('UNIQUE constraint failed: cropped_frames.frame_index')
+
+        if (isSchemaMismatch || isDuplicateFrame) {
+          const errorType = isSchemaMismatch ? 'schema mismatch' : 'duplicate frames'
+          console.log(`[CropFrames] Auto-retrying ${videoPath} (${errorType} error)`)
+
+          // Clear existing cropped frames if duplicate error
+          if (isDuplicateFrame) {
+            try {
+              const deleteResult = db.prepare(`DELETE FROM cropped_frames`).run()
+              console.log(`[CropFrames] Cleared ${deleteResult.changes} existing frames from database`)
+            } catch (error) {
+              console.error(`[CropFrames] Failed to clear frames for ${videoPath}:`, error)
+              return
+            }
+          }
 
           // Reset to queued for automatic retry
           db.prepare(`

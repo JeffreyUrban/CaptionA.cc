@@ -420,6 +420,66 @@ function checkAndRecoverVideo(dbPath: string, videoPath: string, videoId: string
         return
       }
 
+      // Auto-retry recoverable errors
+      if (status.status === 'error') {
+        const errorInfo = db.prepare(`
+          SELECT error_message, error_details FROM processing_status WHERE id = 1
+        `).get() as { error_message: string; error_details: string } | undefined
+
+        // Check for recoverable errors
+        const isNoValidBoxes = errorInfo?.error_details?.includes('No valid boxes found')
+        const isOcrFailure = errorInfo?.error_details?.includes('OCR') && errorInfo?.error_details?.includes('failed')
+        const isInterrupted = errorInfo?.error_message?.includes('Processing interrupted')
+        const isDuplicateFrame = errorInfo?.error_details?.includes('UNIQUE constraint failed: full_frames.frame_index')
+
+        if (isNoValidBoxes || isOcrFailure || isInterrupted || isDuplicateFrame) {
+          const errorType = isDuplicateFrame ? 'duplicate frames' : 'recoverable error'
+          console.log(`[VideoProcessing] Auto-retrying ${videoPath} (${errorType}: ${errorInfo?.error_message})`)
+
+          // Clear existing full_frames if duplicate error
+          if (isDuplicateFrame) {
+            try {
+              const deleteResult = db.prepare(`DELETE FROM full_frames`).run()
+              console.log(`[VideoProcessing] Cleared ${deleteResult.changes} existing frames from database`)
+            } catch (error) {
+              console.error(`[VideoProcessing] Failed to clear frames for ${videoPath}:`, error)
+              return
+            }
+          }
+
+          // Find the video file
+          const videoDir = getVideoDir(videoId)
+          if (videoDir) {
+            const videoFiles = readdirSync(videoDir).filter(f =>
+              f.endsWith('.mp4') || f.endsWith('.mkv') || f.endsWith('.avi') || f.endsWith('.mov')
+            )
+
+            if (videoFiles.length > 0) {
+              const videoFile = resolve(videoDir, videoFiles[0])
+
+              // Reset to upload_complete
+              db.prepare(`
+                UPDATE processing_status
+                SET status = 'upload_complete',
+                    error_message = NULL,
+                    error_details = NULL,
+                    error_occurred_at = NULL
+                WHERE id = 1
+              `).run()
+
+              // Queue for reprocessing
+              queueVideoProcessing({
+                videoPath,
+                videoFile,
+                videoId
+              })
+            }
+          }
+        }
+
+        return
+      }
+
       // Check if processing is in an active state
       const activeStates = ['extracting_frames', 'running_ocr', 'analyzing_layout']
       if (!activeStates.includes(status.status)) return
