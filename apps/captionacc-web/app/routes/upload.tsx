@@ -4,7 +4,7 @@ import type { LoaderFunctionArgs } from 'react-router'
 import { AppLayout } from '~/components/AppLayout'
 import { FolderIcon, DocumentIcon, XMarkIcon, ChevronDownIcon } from '@heroicons/react/24/outline'
 import { CloudArrowUpIcon } from '@heroicons/react/20/solid'
-import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react'
+import { Menu, MenuButton, MenuItem, MenuItems, Dialog, DialogPanel, DialogTitle } from '@headlessui/react'
 import * as tus from 'tus-js-client'
 
 interface FolderItem {
@@ -158,6 +158,8 @@ export default function UploadPage() {
   const [collapsesAvailable, setCollapsesAvailable] = useState(false)
   const [incompleteUploads, setIncompleteUploads] = useState<any[]>([])
   const [showIncompletePrompt, setShowIncompletePrompt] = useState(false)
+  const [showStopQueuedModal, setShowStopQueuedModal] = useState(false)
+  const [showAbortAllModal, setShowAbortAllModal] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const folderInputRef = useRef<HTMLInputElement>(null)
@@ -573,6 +575,40 @@ export default function UploadPage() {
            message.includes('timeout') ||
            message.includes('aborted') ||
            message.includes('5')  // 5xx status codes
+  }
+
+  // Cancel handlers for smart cancel options
+  const handleStopQueued = () => {
+    console.log('[Upload] Stopping queued uploads...')
+
+    // Mark all pending uploads as cancelled
+    setVideoFiles(prev => prev.map(v =>
+      v.uploadStatus === 'pending' || v.uploadStatus === 'stalled'
+        ? { ...v, uploadStatus: 'error' as const, error: 'Cancelled by user' }
+        : v
+    ))
+
+    setShowStopQueuedModal(false)
+  }
+
+  const handleAbortAll = () => {
+    console.log('[Upload] Aborting all uploads...')
+
+    // Abort active uploads
+    activeUploads.forEach((upload) => {
+      upload.abort()
+    })
+    activeUploads.clear()
+
+    // Mark all non-complete uploads as cancelled
+    setVideoFiles(prev => prev.map(v =>
+      v.uploadStatus !== 'complete'
+        ? { ...v, uploadStatus: 'error' as const, error: 'Cancelled by user' }
+        : v
+    ))
+
+    setUploading(false)
+    setShowAbortAllModal(false)
   }
 
   // Stall detection - check for uploads with no progress
@@ -1087,74 +1123,156 @@ export default function UploadPage() {
                 </div>
               )}
 
-              {/* File List */}
-              <div className="mt-6 space-y-4 max-h-96 overflow-y-auto">
-                {videoFiles.filter(v => v.selected).map((video, index) => (
-                  <div key={index} className="border border-gray-200 dark:border-gray-700 rounded-md p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900 dark:text-gray-200 truncate">
-                          {video.relativePath}
-                        </p>
-                        <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                          {formatBytes(video.size)} • {video.type}
-                        </p>
-                      </div>
-                      <div className="ml-4">
-                        {video.uploadStatus === 'complete' && (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
-                            ✓ Complete
-                          </span>
-                        )}
-                        {video.uploadStatus === 'uploading' && (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
-                            Uploading {Math.round(video.uploadProgress)}%
-                          </span>
-                        )}
-                        {video.uploadStatus === 'retrying' && (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
-                            Retrying...
-                          </span>
-                        )}
-                        {video.uploadStatus === 'stalled' && (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400">
-                            Stalled
-                          </span>
-                        )}
-                        {video.uploadStatus === 'pending' && (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400">
-                            Pending
-                          </span>
-                        )}
-                        {video.uploadStatus === 'queued' && (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-400">
-                            Queued
-                          </span>
-                        )}
-                        {video.uploadStatus === 'error' && (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">
-                            Error
-                          </span>
-                        )}
-                      </div>
-                    </div>
+              {/* Cancel buttons */}
+              {uploading && (uploadingCount > 0 || retryingCount > 0 || pendingCount > 0 || stalledCount > 0) && (
+                <div className="mt-4 flex flex-wrap gap-3">
+                  {(pendingCount > 0 || stalledCount > 0) && (
+                    <button
+                      onClick={() => setShowStopQueuedModal(true)}
+                      className="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
+                    >
+                      Stop Queued ({pendingCount + stalledCount})
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setShowAbortAllModal(true)}
+                    className="px-3 py-1.5 text-sm font-medium text-red-700 dark:text-red-300 bg-white dark:bg-gray-800 border border-red-300 dark:border-red-600 rounded-md hover:bg-red-50 dark:hover:bg-red-900/30"
+                  >
+                    Abort All Uploads
+                  </button>
+                </div>
+              )}
 
-                    {video.uploadStatus === 'uploading' && (
-                      <div className="mt-2 w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
-                        <div
-                          className="bg-indigo-600 h-1.5 rounded-full transition-all"
-                          style={{ width: `${video.uploadProgress}%` }}
-                        />
-                      </div>
-                    )}
+              {/* File List - Two Section Layout */}
+              <div className="mt-6 space-y-6">
+                {(() => {
+                  const selectedVideos = videoFiles.filter(v => v.selected)
+                  const inProgressVideos = selectedVideos.filter(v =>
+                    v.uploadStatus === 'uploading' ||
+                    v.uploadStatus === 'retrying' ||
+                    v.uploadStatus === 'pending' ||
+                    v.uploadStatus === 'stalled'
+                  )
+                  const finishedVideos = selectedVideos.filter(v =>
+                    v.uploadStatus === 'complete' ||
+                    v.uploadStatus === 'error'
+                  )
 
-                    {video.error && (
-                      <p className="mt-2 text-xs text-red-600 dark:text-red-400">
-                        {video.error}
-                      </p>
-                    )}
-                  </div>
-                ))}
+                  return (
+                    <>
+                      {/* In Progress Section */}
+                      {inProgressVideos.length > 0 && (
+                        <div>
+                          <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-200 mb-3">
+                            In Progress ({inProgressVideos.length})
+                          </h4>
+                          <div className="space-y-4 max-h-96 overflow-y-auto">
+                            {inProgressVideos.map((video, idx) => {
+                              const originalIndex = videoFiles.indexOf(video)
+                              return (
+                                <div key={originalIndex} className="border border-gray-200 dark:border-gray-700 rounded-md p-4">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-sm font-medium text-gray-900 dark:text-gray-200 truncate">
+                                        {video.relativePath}
+                                      </p>
+                                      <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                                        {formatBytes(video.size)} • {video.type}
+                                      </p>
+                                    </div>
+                                    <div className="ml-4">
+                                      {video.uploadStatus === 'uploading' && (
+                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
+                                          Uploading {Math.round(video.uploadProgress)}%
+                                        </span>
+                                      )}
+                                      {video.uploadStatus === 'retrying' && (
+                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
+                                          Retrying...
+                                        </span>
+                                      )}
+                                      {video.uploadStatus === 'stalled' && (
+                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400">
+                                          Stalled
+                                        </span>
+                                      )}
+                                      {video.uploadStatus === 'pending' && (
+                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400">
+                                          Pending
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {video.uploadStatus === 'uploading' && (
+                                    <div className="mt-2 w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
+                                      <div
+                                        className="bg-indigo-600 h-1.5 rounded-full transition-all"
+                                        style={{ width: `${video.uploadProgress}%` }}
+                                      />
+                                    </div>
+                                  )}
+
+                                  {video.error && video.uploadStatus !== 'error' && (
+                                    <p className="mt-2 text-xs text-red-600 dark:text-red-400">
+                                      {video.error}
+                                    </p>
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Finished Section */}
+                      {finishedVideos.length > 0 && (
+                        <div>
+                          <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-200 mb-3">
+                            Finished ({finishedVideos.length})
+                          </h4>
+                          <div className="space-y-4 max-h-96 overflow-y-auto">
+                            {finishedVideos.map((video, idx) => {
+                              const originalIndex = videoFiles.indexOf(video)
+                              return (
+                                <div key={originalIndex} className="border border-gray-200 dark:border-gray-700 rounded-md p-4">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-sm font-medium text-gray-900 dark:text-gray-200 truncate">
+                                        {video.relativePath}
+                                      </p>
+                                      <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                                        {formatBytes(video.size)} • {video.type}
+                                      </p>
+                                    </div>
+                                    <div className="ml-4">
+                                      {video.uploadStatus === 'complete' && (
+                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                                          ✓ Complete
+                                        </span>
+                                      )}
+                                      {video.uploadStatus === 'error' && (
+                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">
+                                          {video.error === 'Cancelled by user' ? 'Cancelled' : 'Error'}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {video.error && (
+                                    <p className="mt-2 text-xs text-red-600 dark:text-red-400">
+                                      {video.error}
+                                    </p>
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )
+                })()}
               </div>
 
               {completedCount === selectedCount && completedCount > 0 && (
@@ -1201,6 +1319,94 @@ export default function UploadPage() {
             </div>
           </div>
         )}
+
+        {/* Stop Queued Modal */}
+        <Dialog open={showStopQueuedModal} onClose={() => setShowStopQueuedModal(false)} className="relative z-50">
+          <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
+          <div className="fixed inset-0 flex items-center justify-center p-4">
+            <DialogPanel className="max-w-md rounded-lg bg-white dark:bg-gray-800 p-6 shadow-xl">
+              <DialogTitle className="text-lg font-semibold text-gray-900 dark:text-gray-200">
+                Stop Queued Uploads?
+              </DialogTitle>
+              <div className="mt-4 text-sm text-gray-600 dark:text-gray-400">
+                <p>
+                  This will cancel {(() => {
+                    const currentPending = videoFiles.filter(v => v.uploadStatus === 'pending').length
+                    const currentStalled = videoFiles.filter(v => v.uploadStatus === 'stalled').length
+                    const total = currentPending + currentStalled
+                    return total
+                  })()} queued upload{(() => {
+                    const total = videoFiles.filter(v =>
+                      v.uploadStatus === 'pending' || v.uploadStatus === 'stalled'
+                    ).length
+                    return total !== 1 ? 's' : ''
+                  })()}.
+                </p>
+                <p className="mt-2">
+                  Uploads currently in progress ({videoFiles.filter(v =>
+                    v.uploadStatus === 'uploading' || v.uploadStatus === 'retrying'
+                  ).length}) will continue.
+                </p>
+              </div>
+              <div className="mt-6 flex gap-3 justify-end">
+                <button
+                  onClick={() => setShowStopQueuedModal(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleStopQueued}
+                  className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-500"
+                >
+                  Stop Queued
+                </button>
+              </div>
+            </DialogPanel>
+          </div>
+        </Dialog>
+
+        {/* Abort All Modal */}
+        <Dialog open={showAbortAllModal} onClose={() => setShowAbortAllModal(false)} className="relative z-50">
+          <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
+          <div className="fixed inset-0 flex items-center justify-center p-4">
+            <DialogPanel className="max-w-md rounded-lg bg-white dark:bg-gray-800 p-6 shadow-xl">
+              <DialogTitle className="text-lg font-semibold text-gray-900 dark:text-gray-200">
+                Abort All Uploads?
+              </DialogTitle>
+              <div className="mt-4 text-sm text-gray-600 dark:text-gray-400">
+                <p>
+                  This will immediately stop all uploads in progress and cancel all queued uploads.
+                </p>
+                <div className="mt-3 space-y-1 text-xs">
+                  <p>• Currently uploading/retrying: {videoFiles.filter(v =>
+                    v.uploadStatus === 'uploading' || v.uploadStatus === 'retrying'
+                  ).length}</p>
+                  <p>• Queued: {videoFiles.filter(v =>
+                    v.uploadStatus === 'pending' || v.uploadStatus === 'stalled'
+                  ).length}</p>
+                  <p>• Already completed: {videoFiles.filter(v =>
+                    v.uploadStatus === 'complete'
+                  ).length} (will be kept)</p>
+                </div>
+              </div>
+              <div className="mt-6 flex gap-3 justify-end">
+                <button
+                  onClick={() => setShowAbortAllModal(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAbortAll}
+                  className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-500"
+                >
+                  Abort All
+                </button>
+              </div>
+            </DialogPanel>
+          </div>
+        </Dialog>
       </div>
     </AppLayout>
   )
