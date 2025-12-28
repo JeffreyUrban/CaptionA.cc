@@ -127,6 +127,24 @@ function isVideoReadyForAnnotation(stats: Omit<VideoStats, 'badges'>): boolean {
 function calculateLayoutBadge(stats: Omit<VideoStats, 'badges'>, videoId: string): BadgeState | null {
   const ps = stats.processingStatus
 
+  // State 0: No processing status (video created outside upload flow or database incomplete)
+  if (!ps && !stats.hasOcrData) {
+    return {
+      type: 'error',
+      label: 'Layout: Error',
+      color: 'red',
+      clickable: true,
+      errorDetails: {
+        message: 'Video has no processing status. May need to be processed manually or re-uploaded.',
+        context: {
+          videoId,
+          stage: 'layout',
+          issue: 'no_processing_status'
+        }
+      }
+    }
+  }
+
   // State 1: Error during processing
   if (ps?.status === 'error') {
     return {

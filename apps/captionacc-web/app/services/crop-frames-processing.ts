@@ -305,10 +305,10 @@ export function recoverStalledCropFrames(videoId: string, videoPath: string): vo
   try {
     const db = new Database(dbPath)
     try {
-      // Check if layout is approved by checking for layout_config
+      // Check if layout is approved by checking for video_layout_config
       const layoutConfig = db.prepare(`
         SELECT crop_left, crop_top, crop_right, crop_bottom
-        FROM layout_config WHERE id = 1
+        FROM video_layout_config WHERE id = 1
       `).get() as {
         crop_left: number
         crop_top: number

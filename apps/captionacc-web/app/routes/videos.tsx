@@ -316,6 +316,17 @@ function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsU
 
   // Render badges (three-track system or fully-annotated)
   const renderBadges = () => {
+    // Show loading badge while fetching stats
+    if (loading && (!stats?.badges || stats.badges.length === 0)) {
+      return (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="inline-flex items-center rounded-md px-2 py-1 text-xs font-medium bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400 animate-pulse">
+            Loading...
+          </span>
+        </div>
+      )
+    }
+
     if (!stats?.badges || stats.badges.length === 0) return null
 
     return (
@@ -520,7 +531,7 @@ export default function VideosPage() {
   const { tree } = useLoaderData<{ tree: TreeNode[] }>()
   const revalidator = useRevalidator()
   const [searchQuery, setSearchQuery] = useState('')
-  const CACHE_VERSION = 'v10' // Increment to invalidate cache when VideoStats structure changes
+  const CACHE_VERSION = 'v11' // Increment to invalidate cache when VideoStats structure changes
 
   // Modal states
   const [createFolderModal, setCreateFolderModal] = useState<{ open: boolean; parentPath?: string }>({ open: false })
