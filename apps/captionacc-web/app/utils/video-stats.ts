@@ -529,26 +529,12 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
     }
 
     // Check if layout annotation has been approved
-    // Match recovery logic: check for video_layout_config with valid crop bounds
     let layoutApproved = false
     try {
-      const layoutConfig = db.prepare(`
-        SELECT crop_left, crop_top, crop_right, crop_bottom
-        FROM video_layout_config WHERE id = 1
-      `).get() as {
-        crop_left: number
-        crop_top: number
-        crop_right: number
-        crop_bottom: number
-      } | undefined
-      // Layout is approved if config exists with all crop bounds defined
-      layoutApproved = layoutConfig !== undefined &&
-        typeof layoutConfig.crop_left === 'number' &&
-        typeof layoutConfig.crop_top === 'number' &&
-        typeof layoutConfig.crop_right === 'number' &&
-        typeof layoutConfig.crop_bottom === 'number'
+      const prefs = db.prepare(`SELECT layout_approved FROM video_preferences WHERE id = 1`).get() as { layout_approved: number } | undefined
+      layoutApproved = (prefs?.layout_approved ?? 0) === 1
     } catch {
-      // Table doesn't exist - layout not approved
+      // Table or column doesn't exist
       layoutApproved = false
     }
 

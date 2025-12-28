@@ -669,13 +669,20 @@ export default function VideosPage() {
   useEffect(() => {
     if (!isMounted) return
 
-    // Find videos that are currently processing
+    // Find videos that are currently processing (upload/processing OR crop_frames)
     const processingVideos = Array.from(videoStatsMap.entries())
-      .filter(([_, stats]) =>
-        stats.processingStatus &&
-        stats.processingStatus.status !== 'processing_complete' &&
-        stats.processingStatus.status !== 'error'
-      )
+      .filter(([_, stats]) => {
+        // Poll if upload/processing is in progress
+        const hasProcessingStatus = stats.processingStatus &&
+          stats.processingStatus.status !== 'processing_complete' &&
+          stats.processingStatus.status !== 'error'
+
+        // Poll if crop_frames is queued or processing
+        const hasCropFramesProcessing = stats.cropFramesStatus &&
+          (stats.cropFramesStatus.status === 'queued' || stats.cropFramesStatus.status === 'processing')
+
+        return hasProcessingStatus || hasCropFramesProcessing
+      })
       .map(([videoId]) => videoId)
 
     if (processingVideos.length === 0) return
@@ -689,7 +696,10 @@ export default function VideosPage() {
           .then(res => res.ok ? res.json() : null)
           .then(data => {
             if (data && !data.error) {
-              console.log(`[Videos] Polling update for ${videoId}:`, data.processingStatus?.status)
+              console.log(`[Videos] Polling update for ${videoId}:`, {
+                processingStatus: data.processingStatus?.status,
+                cropFramesStatus: data.cropFramesStatus?.status
+              })
               updateVideoStats(videoId, data)
             }
           })
@@ -699,6 +709,35 @@ export default function VideosPage() {
 
     return () => clearInterval(interval)
   }, [isMounted, videoStatsMap, updateVideoStats])
+
+  // One-time validation of error badges on mount
+  const [errorBadgesValidated, setErrorBadgesValidated] = useState(false)
+
+  useEffect(() => {
+    if (!isMounted || errorBadgesValidated) return
+
+    // Find videos with error badges in cache and refetch them to validate
+    const videosWithErrors = Array.from(videoStatsMap.entries())
+      .filter(([_, stats]) => stats.badges?.some(badge => badge.type === 'error'))
+      .map(([videoId]) => videoId)
+
+    if (videosWithErrors.length > 0) {
+      console.log(`[Videos] Validating ${videosWithErrors.length} videos with error badges...`)
+      videosWithErrors.forEach(videoId => {
+        fetch(`/api/videos/${encodeURIComponent(videoId)}/stats`)
+          .then(res => res.ok ? res.json() : null)
+          .then(data => {
+            if (data && !data.error) {
+              console.log(`[Videos] Validated error badge for ${videoId}`)
+              updateVideoStats(videoId, data)
+            }
+          })
+          .catch(err => console.error(`Failed to validate error badge for ${videoId}:`, err))
+      })
+    }
+
+    setErrorBadgesValidated(true)
+  }, [isMounted, errorBadgesValidated, videoStatsMap, updateVideoStats])
 
   // Eagerly load stats for all videos in the tree
   useEffect(() => {
@@ -733,10 +772,10 @@ export default function VideosPage() {
 
     // Load stats for all videos (skip cached ones unless they were recently touched or database_id changed)
     videoIds.forEach(videoId => {
-      const needsRefresh = touchedVideos.has(videoId)
       const cachedStats = videoStatsMap.get(videoId)
+      const needsRefresh = touchedVideos.has(videoId)
 
-      // Always fetch if no cache, or if touched, or to verify database_id hasn't changed
+      // Always fetch if no cache, or if touched
       if (needsRefresh || !cachedStats) {
         console.log(`[Videos] Loading stats for ${videoId}...`)
         fetch(`/api/videos/${encodeURIComponent(videoId)}/stats`)
