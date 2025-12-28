@@ -405,6 +405,39 @@ export function recoverStalledCropFrames(videoId: string, videoPath: string): vo
         return
       }
 
+      // Re-queue if marked complete but no frames exist (false complete from migration timing)
+      if (status.status === 'complete') {
+        const frameCount = db.prepare(`
+          SELECT COUNT(*) as count FROM cropped_frames
+        `).get() as { count: number }
+
+        if (frameCount.count === 0) {
+          console.log(`[CropFrames] Re-queueing ${videoPath} (marked complete but no frames exist - likely migration timing issue)`)
+
+          // Reset status to allow re-processing
+          db.prepare(`
+            UPDATE crop_frames_status
+            SET status = 'queued',
+                error_message = NULL,
+                error_details = NULL,
+                error_occurred_at = NULL
+            WHERE id = 1
+          `).run()
+
+          queueCropFramesProcessing({
+            videoId,
+            videoPath,
+            cropBounds: {
+              left: layoutConfig.crop_left,
+              top: layoutConfig.crop_top,
+              right: layoutConfig.crop_right,
+              bottom: layoutConfig.crop_bottom
+            }
+          })
+          return
+        }
+      }
+
       // Only check for stalled processing if status is 'processing'
       if (status.status !== 'processing') {
         return
