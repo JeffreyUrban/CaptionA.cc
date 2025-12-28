@@ -439,22 +439,41 @@ function checkAndRecoverVideo(dbPath: string, videoPath: string, videoId: string
       }
 
       if (!processRunning) {
-        // Process is not running - mark as failed
-        console.log(`[VideoProcessing] Recovering stalled processing for ${videoPath} (PID ${pid} not running)`)
+        // Process is not running - auto-retry
+        console.log(`[VideoProcessing] Auto-retrying interrupted processing for ${videoPath} (PID ${pid} not running)`)
 
+        // Reset to upload_complete to allow reprocessing
         db.prepare(`
           UPDATE processing_status
-          SET status = 'error',
-              error_message = 'Processing interrupted (server restart or process crash)',
-              error_details = ?,
-              error_occurred_at = datetime('now')
+          SET status = 'upload_complete',
+              error_message = NULL,
+              error_details = NULL,
+              error_occurred_at = NULL
           WHERE id = 1
-        `).run(JSON.stringify({
-          reason: 'stalled_process',
-          pid,
-          lastHeartbeat: status.last_heartbeat_at,
-          processingStarted: status.processing_started_at
-        }))
+        `).run()
+
+        // Get video file path for reprocessing
+        const videoDir = getVideoDir(videoId)
+        if (videoDir) {
+          const videoFiles = readdirSync(videoDir).filter(f =>
+            f.endsWith('.mp4') || f.endsWith('.mkv') || f.endsWith('.avi') || f.endsWith('.mov')
+          )
+
+          if (videoFiles.length > 0) {
+            const videoFile = resolve(videoDir, videoFiles[0])
+
+            // Queue for reprocessing after DB is closed
+            setTimeout(() => {
+              queueVideoProcessing({
+                videoPath,
+                videoFile,
+                videoId
+              })
+            }, 0)
+          } else {
+            console.error(`[VideoProcessing] Cannot retry ${videoPath}: video file not found`)
+          }
+        }
       }
     } finally {
       db.close()

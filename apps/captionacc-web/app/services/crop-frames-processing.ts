@@ -502,6 +502,46 @@ export function recoverStalledCropFrames(videoId: string, videoPath: string): vo
         }
       }
 
+      // Auto-retry recoverable errors (errors caused by package version issues)
+      if (status.status === 'error') {
+        const errorMessage = db.prepare(`
+          SELECT error_message, error_details FROM crop_frames_status WHERE id = 1
+        `).get() as { error_message: string; error_details: string } | undefined
+
+        // Check for schema mismatch errors (fixed by package updates)
+        const isSchemaMismatch = errorMessage?.error_details?.includes('no column named crop_') ||
+          errorMessage?.error_details?.includes('table cropped_frames has no column')
+
+        if (isSchemaMismatch) {
+          console.log(`[CropFrames] Auto-retrying ${videoPath} (schema mismatch error - likely fixed by package update)`)
+
+          // Reset to queued for automatic retry
+          db.prepare(`
+            UPDATE crop_frames_status
+            SET status = 'queued',
+                error_message = NULL,
+                error_details = NULL,
+                error_occurred_at = NULL,
+                retry_count = 0
+            WHERE id = 1
+          `).run()
+
+          // Queue for reprocessing
+          queueCropFramesProcessing({
+            videoId,
+            videoPath,
+            cropBounds: {
+              left: layoutConfig.crop_left,
+              top: layoutConfig.crop_top,
+              right: layoutConfig.crop_right,
+              bottom: layoutConfig.crop_bottom
+            }
+          })
+        }
+
+        return
+      }
+
       // Only check for stalled processing if status is 'processing'
       if (status.status !== 'processing') {
         return
