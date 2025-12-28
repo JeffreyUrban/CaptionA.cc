@@ -1,7 +1,8 @@
 import { useLoaderData, Link, useRevalidator } from 'react-router'
 import { useState, useMemo, useEffect, useCallback } from 'react'
-import { MagnifyingGlassIcon, ChevronRightIcon, ChevronDownIcon, EllipsisVerticalIcon, PlusIcon } from '@heroicons/react/20/solid'
+import { MagnifyingGlassIcon, ChevronRightIcon, ChevronDownIcon, EllipsisVerticalIcon, PlusIcon, XMarkIcon } from '@heroicons/react/20/solid'
 import { Menu, MenuButton, MenuItem, MenuItems, Dialog, DialogPanel, DialogTitle } from '@headlessui/react'
+import type { BadgeState } from '~/utils/video-stats'
 import { resolve } from 'path'
 import { existsSync } from 'fs'
 import { AppLayout } from '~/components/AppLayout'
@@ -306,6 +307,7 @@ function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsU
       yellow: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
       green: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
       teal: 'bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-400',
+      red: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
     }
     return colorMap[color as keyof typeof colorMap] || colorMap.blue
   }
@@ -320,6 +322,24 @@ function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsU
           const colorClasses = getBadgeColorClasses(badge.color)
           const baseClasses = `inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ${colorClasses}`
 
+          // Error badges - clickable, opens modal
+          if (badge.type === 'error' && badge.clickable && badge.errorDetails) {
+            return (
+              <button
+                key={index}
+                onClick={() => setErrorModal({
+                  open: true,
+                  errorDetails: badge.errorDetails,
+                  videoId: node.videoId
+                })}
+                className={`${baseClasses} hover:opacity-80 cursor-pointer transition-opacity`}
+              >
+                {badge.label}
+              </button>
+            )
+          }
+
+          // Navigation badges - clickable, opens link
           if (badge.clickable && badge.url) {
             return (
               <Link
@@ -332,6 +352,7 @@ function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsU
             )
           }
 
+          // Status badges - non-clickable
           return (
             <span key={index} className={baseClasses}>
               {badge.label}
@@ -509,6 +530,7 @@ export default function VideosPage() {
   const [deleteFolderModal, setDeleteFolderModal] = useState<{ open: boolean; folderPath?: string; folderName?: string; videoCount?: number }>({ open: false })
   const [renameVideoModal, setRenameVideoModal] = useState<{ open: boolean; videoPath?: string; currentName?: string }>({ open: false })
   const [deleteVideoModal, setDeleteVideoModal] = useState<{ open: boolean; videoPath?: string; videoName?: string }>({ open: false })
+  const [errorModal, setErrorModal] = useState<{ open: boolean; errorDetails?: BadgeState['errorDetails']; videoId?: string }>({ open: false })
 
   // Form states
   const [newFolderName, setNewFolderName] = useState('')
@@ -1399,6 +1421,98 @@ export default function VideosPage() {
                 className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {videoLoading ? 'Deleting...' : 'Delete Video'}
+              </button>
+            </div>
+          </DialogPanel>
+        </div>
+      </Dialog>
+
+      {/* Error Details Modal */}
+      <Dialog open={errorModal.open} onClose={() => setErrorModal({ open: false })} className="relative z-50">
+        <div className="fixed inset-0 bg-black/30 dark:bg-black/50" aria-hidden="true" />
+        <div className="fixed inset-0 flex items-center justify-center p-4">
+          <DialogPanel className="w-full max-w-2xl rounded-lg bg-white dark:bg-gray-800 p-6 shadow-xl">
+            <div className="flex items-start justify-between">
+              <DialogTitle className="text-lg font-medium text-red-600 dark:text-red-400">
+                Error Details
+              </DialogTitle>
+              <button
+                onClick={() => setErrorModal({ open: false })}
+                className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
+              >
+                <XMarkIcon className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="mt-4">
+              {errorModal.videoId && (
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                  Video: <span className="font-mono font-semibold">{errorModal.videoId}</span>
+                </p>
+              )}
+
+              {errorModal.errorDetails && (
+                <div className="space-y-4">
+                  {/* Error Message */}
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-900 dark:text-gray-200 mb-1">
+                      Message
+                    </h3>
+                    <p className="text-sm text-red-600 dark:text-red-400 font-mono bg-red-50 dark:bg-red-900/20 p-3 rounded-md border border-red-200 dark:border-red-800">
+                      {errorModal.errorDetails.message}
+                    </p>
+                  </div>
+
+                  {/* Context */}
+                  {errorModal.errorDetails.context && Object.keys(errorModal.errorDetails.context).length > 0 && (
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-900 dark:text-gray-200 mb-1">
+                        Context
+                      </h3>
+                      <pre className="text-xs text-gray-700 dark:text-gray-300 font-mono bg-gray-50 dark:bg-gray-900 p-3 rounded-md border border-gray-200 dark:border-gray-700 overflow-x-auto">
+                        {JSON.stringify(errorModal.errorDetails.context, null, 2)}
+                      </pre>
+                    </div>
+                  )}
+
+                  {/* Stack Trace */}
+                  {errorModal.errorDetails.stack && (
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-900 dark:text-gray-200 mb-1">
+                        Stack Trace
+                      </h3>
+                      <pre className="text-xs text-gray-700 dark:text-gray-300 font-mono bg-gray-50 dark:bg-gray-900 p-3 rounded-md border border-gray-200 dark:border-gray-700 overflow-x-auto max-h-64 overflow-y-auto">
+                        {errorModal.errorDetails.stack}
+                      </pre>
+                    </div>
+                  )}
+
+                  {/* Help Text */}
+                  <div className="rounded-md bg-blue-50 dark:bg-blue-900/20 p-4 border border-blue-200 dark:border-blue-800">
+                    <div className="flex">
+                      <div className="flex-shrink-0">
+                        <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                      <div className="ml-3">
+                        <h3 className="text-sm font-medium text-blue-800 dark:text-blue-300">
+                          Development Error
+                        </h3>
+                        <div className="mt-2 text-sm text-blue-700 dark:text-blue-400">
+                          <p>This error typically indicates a schema mismatch or missing database migration. Check the error message and context for details about which column or table is missing.</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={() => setErrorModal({ open: false })}
+                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
+              >
+                Close
               </button>
             </div>
           </DialogPanel>

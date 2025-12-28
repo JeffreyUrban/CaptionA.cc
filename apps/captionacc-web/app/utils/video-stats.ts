@@ -5,11 +5,16 @@ import Database from 'better-sqlite3'
 import { getDbPath, getVideoDir } from './video-paths'
 
 export type BadgeState = {
-  type: 'layout' | 'boundaries' | 'text' | 'fully-annotated'
+  type: 'layout' | 'boundaries' | 'text' | 'fully-annotated' | 'error'
   label: string
-  color: 'blue' | 'indigo' | 'purple' | 'yellow' | 'green' | 'teal'
+  color: 'blue' | 'indigo' | 'purple' | 'yellow' | 'green' | 'teal' | 'red'
   clickable: boolean
   url?: string
+  errorDetails?: {
+    message: string
+    stack?: string
+    context?: Record<string, any>
+  }
 }
 
 export interface CropFramesStatus {
@@ -52,10 +57,22 @@ export interface ProcessingStatus {
 }
 
 /**
- * Calculate badge states based on video stats
- * Returns array of badges to display (empty if fully annotated)
+ * Stage-specific error information
  */
-function calculateBadges(stats: Omit<VideoStats, 'badges'>, videoId: string): BadgeState[] {
+interface StageErrors {
+  boundaries?: { message: string; stack?: string }
+  text?: { message: string; stack?: string }
+}
+
+/**
+ * Calculate badge states based on video stats
+ * Returns array of badges to display
+ */
+function calculateBadges(
+  stats: Omit<VideoStats, 'badges'>,
+  videoId: string,
+  stageErrors: StageErrors = {}
+): BadgeState[] {
   const badges: BadgeState[] = []
 
   // Layout Track
@@ -63,31 +80,58 @@ function calculateBadges(stats: Omit<VideoStats, 'badges'>, videoId: string): Ba
   if (layoutBadge) badges.push(layoutBadge)
 
   // Boundaries Track
-  const boundariesBadge = calculateBoundariesBadge(stats, videoId)
+  const boundariesBadge = calculateBoundariesBadge(stats, videoId, stageErrors.boundaries)
   if (boundariesBadge) badges.push(boundariesBadge)
 
   // Text Track
-  const textBadge = calculateTextBadge(stats, videoId)
+  const textBadge = calculateTextBadge(stats, videoId, stageErrors.text)
   if (textBadge) badges.push(textBadge)
 
-  // If all tracks complete, show Fully Annotated badge
+  // If all tracks complete (and video is actually ready for annotation), show Fully Annotated
   if (badges.length === 0) {
-    badges.push({
-      type: 'fully-annotated',
-      label: 'Fully Annotated',
-      color: 'teal',
-      clickable: false
-    })
+    const isReady = isVideoReadyForAnnotation(stats)
+    console.log(`[calculateBadges] ${videoId}: No badges, isReady=${isReady}, hasOcrData=${stats.hasOcrData}, layoutApproved=${stats.layoutApproved}, totalAnnotations=${stats.totalAnnotations}`)
+
+    if (isReady) {
+      badges.push({
+        type: 'fully-annotated',
+        label: 'Fully Annotated',
+        color: 'teal',
+        clickable: false
+      })
+    }
+  } else {
+    console.log(`[calculateBadges] ${videoId}: ${badges.length} badges:`, badges.map(b => b.label).join(', '))
   }
 
   return badges
 }
 
+/**
+ * Check if video is in a state where annotation could have happened
+ * (as opposed to just not having any badges because it's not ready yet)
+ */
+function isVideoReadyForAnnotation(stats: Omit<VideoStats, 'badges'>): boolean {
+  // Must have OCR data (layout phase complete)
+  if (!stats.hasOcrData) return false
+
+  // Must have layout approved (boundaries phase unlocked)
+  if (!stats.layoutApproved) return false
+
+  // Must have some annotations (not just empty)
+  if (stats.totalAnnotations === 0) return false
+
+  return true
+}
+
 function calculateLayoutBadge(stats: Omit<VideoStats, 'badges'>, videoId: string): BadgeState | null {
   const ps = stats.processingStatus
 
-  // Priority 1: System processing
+  // Priority 1: System processing or error
   if (ps) {
+    if (ps.status === 'error') {
+      return { type: 'layout', label: 'Error', color: 'yellow', clickable: false }
+    }
     if (ps.status === 'uploading') {
       return { type: 'layout', label: 'Uploading', color: 'blue', clickable: false }
     }
@@ -123,7 +167,30 @@ function calculateLayoutBadge(stats: Omit<VideoStats, 'badges'>, videoId: string
   return null
 }
 
-function calculateBoundariesBadge(stats: Omit<VideoStats, 'badges'>, videoId: string): BadgeState | null {
+function calculateBoundariesBadge(
+  stats: Omit<VideoStats, 'badges'>,
+  videoId: string,
+  error?: { message: string; stack?: string }
+): BadgeState | null {
+  // Priority 0: Error (show if this stage has a data error)
+  if (error) {
+    return {
+      type: 'error',
+      label: 'Boundaries: Error',
+      color: 'red',
+      clickable: true,
+      errorDetails: {
+        message: error.message,
+        stack: error.stack,
+        context: {
+          videoId,
+          stage: 'boundaries',
+          errorType: 'SqliteError'
+        }
+      }
+    }
+  }
+
   // Hide if waiting for layout approval
   if (!stats.layoutApproved) {
     return null
@@ -169,7 +236,30 @@ function calculateBoundariesBadge(stats: Omit<VideoStats, 'badges'>, videoId: st
   return null
 }
 
-function calculateTextBadge(stats: Omit<VideoStats, 'badges'>, videoId: string): BadgeState | null {
+function calculateTextBadge(
+  stats: Omit<VideoStats, 'badges'>,
+  videoId: string,
+  error?: { message: string; stack?: string }
+): BadgeState | null {
+  // Priority 0: Error (show if this stage has a data error)
+  if (error) {
+    return {
+      type: 'error',
+      label: 'Text: Error',
+      color: 'red',
+      clickable: true,
+      errorDetails: {
+        message: error.message,
+        stack: error.stack,
+        context: {
+          videoId,
+          stage: 'text',
+          errorType: 'SqliteError'
+        }
+      }
+    }
+  }
+
   // Hide if waiting for boundaries (no annotations yet, or all are gaps)
   const nonGapAnnotations = stats.totalAnnotations - stats.gapAnnotations
   if (nonGapAnnotations === 0) {
@@ -228,34 +318,78 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
   const db = new Database(dbPath, { readonly: true })
 
   try {
-    const result = db.prepare(`
+    // Track stage-specific errors
+    const stageErrors: StageErrors = {}
+
+    // Query basic stats (always works - uses columns that exist in all schemas)
+    const basicResult = db.prepare(`
       SELECT
         COUNT(*) as total,
-        SUM(CASE WHEN boundary_pending = 1 THEN 1 ELSE 0 END) as boundary_pending,
-        SUM(CASE WHEN text_pending = 1 THEN 1 ELSE 0 END) as text_pending,
         SUM(CASE WHEN boundary_state = 'confirmed' THEN 1 ELSE 0 END) as confirmed,
         SUM(CASE WHEN boundary_state = 'predicted' THEN 1 ELSE 0 END) as predicted,
         SUM(CASE WHEN boundary_state = 'gap' THEN 1 ELSE 0 END) as gaps
       FROM captions
     `).get() as {
       total: number
-      boundary_pending: number
-      text_pending: number
       confirmed: number
       predicted: number
       gaps: number
     }
 
+    // Query boundary-specific data (might fail if boundary_pending column missing)
+    let boundaryPendingReview = 0
+    try {
+      const boundaryResult = db.prepare(`
+        SELECT SUM(CASE WHEN boundary_pending = 1 THEN 1 ELSE 0 END) as boundary_pending
+        FROM captions
+      `).get() as { boundary_pending: number }
+      boundaryPendingReview = boundaryResult.boundary_pending || 0
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      const errorStack = error instanceof Error ? error.stack : undefined
+      console.error(`[getVideoStats] Error querying boundary_pending for ${videoId}:`, error)
+      stageErrors.boundaries = {
+        message: errorMessage,
+        stack: errorStack
+      }
+    }
+
+    // Query text-specific data (might fail if text_pending column missing)
+    let textPendingReview = 0
+    try {
+      const textResult = db.prepare(`
+        SELECT SUM(CASE WHEN text_pending = 1 THEN 1 ELSE 0 END) as text_pending
+        FROM captions
+      `).get() as { text_pending: number }
+      textPendingReview = textResult.text_pending || 0
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      const errorStack = error instanceof Error ? error.stack : undefined
+      console.error(`[getVideoStats] Error querying text_pending for ${videoId}:`, error)
+      stageErrors.text = {
+        message: errorMessage,
+        stack: errorStack
+      }
+    }
+
     // Calculate frame coverage for non-gap, non-pending captions
-    const frameCoverage = db.prepare(`
-      SELECT
-        SUM(end_frame_index - start_frame_index + 1) as covered_frames
-      FROM captions
-      WHERE boundary_state != 'gap' AND boundary_pending = 0
-    `).get() as { covered_frames: number | null }
+    // This might fail if boundary_pending is missing, but that's okay - we already tracked the error
+    let coveredFrames = 0
+    try {
+      const frameCoverage = db.prepare(`
+        SELECT
+          SUM(end_frame_index - start_frame_index + 1) as covered_frames
+        FROM captions
+        WHERE boundary_state != 'gap' AND boundary_pending = 0
+      `).get() as { covered_frames: number | null }
+      coveredFrames = frameCoverage.covered_frames || 0
+    } catch {
+      // If this fails, it's likely due to missing boundary_pending column
+      // We already tracked that error above, so just use 0 for coveredFrames
+      coveredFrames = 0
+    }
 
     // Calculate progress as percentage of frames that are not gap or pending
-    const coveredFrames = frameCoverage.covered_frames || 0
     const progress = totalFrames > 0
       ? Math.round((coveredFrames / totalFrames) * 100)
       : 0
@@ -354,11 +488,11 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
     }
 
     const stats: VideoStats = {
-      totalAnnotations: result.total,
-      pendingReview: result.boundary_pending + result.text_pending,
-      confirmedAnnotations: result.confirmed,
-      predictedAnnotations: result.predicted,
-      gapAnnotations: result.gaps,
+      totalAnnotations: basicResult.total,
+      pendingReview: boundaryPendingReview + textPendingReview,
+      confirmedAnnotations: basicResult.confirmed,
+      predictedAnnotations: basicResult.predicted,
+      gapAnnotations: basicResult.gaps,
       progress,
       totalFrames,
       coveredFrames,
@@ -366,15 +500,15 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
       layoutApproved,
       processingStatus,
       cropFramesStatus,
-      boundaryPendingReview: result.boundary_pending,
-      textPendingReview: result.text_pending,
+      boundaryPendingReview,
+      textPendingReview,
       databaseId,
       badges: calculateBadges({
-        totalAnnotations: result.total,
-        pendingReview: result.boundary_pending + result.text_pending,
-        confirmedAnnotations: result.confirmed,
-        predictedAnnotations: result.predicted,
-        gapAnnotations: result.gaps,
+        totalAnnotations: basicResult.total,
+        pendingReview: boundaryPendingReview + textPendingReview,
+        confirmedAnnotations: basicResult.confirmed,
+        predictedAnnotations: basicResult.predicted,
+        gapAnnotations: basicResult.gaps,
         progress,
         totalFrames,
         coveredFrames,
@@ -382,13 +516,48 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
         layoutApproved,
         processingStatus,
         cropFramesStatus,
-        boundaryPendingReview: result.boundary_pending,
-        textPendingReview: result.text_pending,
+        boundaryPendingReview,
+        textPendingReview,
         databaseId
-      }, videoId)
+      }, videoId, stageErrors)
     }
     console.log(`[getVideoStats] Returning stats for ${videoId}:`, JSON.stringify(stats, null, 2))
     return stats
+  } catch (error) {
+    // Return error badge when stats calculation fails
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    const errorStack = error instanceof Error ? error.stack : undefined
+
+    console.error(`[getVideoStats] Error for ${videoId}:`, error)
+
+    return {
+      totalAnnotations: 0,
+      pendingReview: 0,
+      confirmedAnnotations: 0,
+      predictedAnnotations: 0,
+      gapAnnotations: 0,
+      progress: 0,
+      totalFrames: 0,
+      coveredFrames: 0,
+      hasOcrData: false,
+      layoutApproved: false,
+      boundaryPendingReview: 0,
+      textPendingReview: 0,
+      badges: [{
+        type: 'error',
+        label: 'Error',
+        color: 'red',
+        clickable: true,
+        errorDetails: {
+          message: errorMessage,
+          stack: errorStack,
+          context: {
+            videoId,
+            errorType: error instanceof Error ? error.constructor.name : 'Unknown'
+          }
+        }
+      }]
+    }
   } finally {
     db.close()
   }
