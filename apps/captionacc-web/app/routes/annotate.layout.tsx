@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useSearchParams, useNavigate } from 'react-router'
 import type { LoaderFunctionArgs } from 'react-router'
 import { AppLayout } from '~/components/AppLayout'
@@ -87,6 +87,21 @@ export default function AnnotateLayout() {
   const [hasUnsyncedAnnotations, setHasUnsyncedAnnotations] = useState(false)
   const [annotationsSinceRecalc, setAnnotationsSinceRecalc] = useState(0)
   const RECALC_THRESHOLD = 50 // Recalculate crop bounds after this many annotations
+
+  // Calculate caption box statistics
+  const boxStats = useMemo(() => {
+    if (!analysisBoxes) return null
+
+    const totalBoxes = analysisBoxes.length
+    const captionBoxes = analysisBoxes.filter(box =>
+      box.userLabel === 'in' || (box.userLabel === null && box.predictedLabel === 'in')
+    ).length
+    const noiseBoxes = analysisBoxes.filter(box =>
+      box.userLabel === 'out' || (box.userLabel === null && box.predictedLabel === 'out')
+    ).length
+
+    return { totalBoxes, captionBoxes, noiseBoxes }
+  }, [analysisBoxes])
   const [analysisThumbnailUrl, setAnalysisThumbnailUrl] = useState<string | null>(null)
 
   // Cache for frame boxes (to avoid re-fetching already loaded frames)
@@ -293,11 +308,19 @@ export default function AnnotateLayout() {
         { method: 'POST' }
       )
 
+      const result = await response.json()
+
       if (!response.ok) {
-        throw new Error('Failed to recalculate crop bounds')
+        // Show user-friendly error message
+        const errorMessage = result.message || result.error || 'Failed to recalculate crop bounds'
+        alert(errorMessage)
+        setError(errorMessage)
+
+        // Reset counter so overlay goes away
+        setAnnotationsSinceRecalc(0)
+        return
       }
 
-      const result = await response.json()
       console.log('[Layout] Crop bounds recalculated:', result)
 
       // Reload layout config to get updated crop bounds
@@ -1464,39 +1487,60 @@ export default function AnnotateLayout() {
             </div>
 
             {/* Annotation Progress Indicator */}
-            <div className="rounded-md border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-950">
-              <div className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                Crop Bounds Auto-Update
+            {boxStats && boxStats.captionBoxes === 0 ? (
+              // Alert when no caption boxes
+              <div className="rounded-md border-2 border-yellow-500 bg-yellow-50 p-3 dark:border-yellow-600 dark:bg-yellow-900/20">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">⚠️</span>
+                  <div className="text-sm font-semibold text-yellow-800 dark:text-yellow-300">
+                    All Boxes Labeled as Noise
+                  </div>
+                </div>
+                <div className="mt-2 text-xs text-yellow-700 dark:text-yellow-400">
+                  {boxStats.totalBoxes} boxes total, all labeled as noise/out
+                </div>
+                <div className="mt-2 text-xs text-yellow-800 dark:text-yellow-300 font-medium">
+                  Cannot calculate crop bounds without caption boxes.
+                  <br />
+                  Left-click boxes or press &apos;I&apos; while hovering to mark as captions.
+                </div>
               </div>
-              {annotationsSinceRecalc >= RECALC_THRESHOLD ? (
-                <>
-                  <div className="mt-1 text-xs text-blue-600 dark:text-blue-400 font-semibold">
-                    Calculating...
-                  </div>
-                  <div className="mt-2 h-2 w-full rounded-full bg-gray-200 dark:bg-gray-700">
-                    <div className="h-2 rounded-full bg-blue-500 animate-pulse" style={{ width: '100%' }} />
-                  </div>
-                  <div className="mt-1 text-xs text-gray-500 dark:text-gray-500">
-                    Recalculating crop bounds and predictions
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="mt-1 text-xs text-gray-600 dark:text-gray-400">
-                    {annotationsSinceRecalc} / {RECALC_THRESHOLD} annotations
-                  </div>
-                  <div className="mt-2 h-2 w-full rounded-full bg-gray-200 dark:bg-gray-700">
-                    <div
-                      className="h-2 rounded-full bg-blue-500 transition-all duration-300"
-                      style={{ width: `${Math.min(100, (annotationsSinceRecalc / RECALC_THRESHOLD) * 100)}%` }}
-                    />
-                  </div>
-                  <div className="mt-1 text-xs text-gray-500 dark:text-gray-500">
-                    Crop bounds will recalculate automatically after {RECALC_THRESHOLD - annotationsSinceRecalc} more annotations
-                  </div>
-                </>
-              )}
-            </div>
+            ) : (
+              <div className="rounded-md border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-950">
+                <div className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                  Crop Bounds Auto-Update
+                </div>
+                {annotationsSinceRecalc >= RECALC_THRESHOLD ? (
+                  <>
+                    <div className="mt-1 text-xs text-blue-600 dark:text-blue-400 font-semibold">
+                      Calculating...
+                    </div>
+                    <div className="mt-2 h-2 w-full rounded-full bg-gray-200 dark:bg-gray-700">
+                      <div className="h-2 rounded-full bg-blue-500 animate-pulse" style={{ width: '100%' }} />
+                    </div>
+                    <div className="mt-1 text-xs text-gray-500 dark:text-gray-500">
+                      Recalculating crop bounds and predictions
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="mt-1 text-xs text-gray-600 dark:text-gray-400">
+                      {annotationsSinceRecalc} / {RECALC_THRESHOLD} annotations
+                      {boxStats && <span className="ml-2">({boxStats.captionBoxes} caption boxes)</span>}
+                    </div>
+                    <div className="mt-2 h-2 w-full rounded-full bg-gray-200 dark:bg-gray-700">
+                      <div
+                        className="h-2 rounded-full bg-blue-500 transition-all duration-300"
+                        style={{ width: `${Math.min(100, (annotationsSinceRecalc / RECALC_THRESHOLD) * 100)}%` }}
+                      />
+                    </div>
+                    <div className="mt-1 text-xs text-gray-500 dark:text-gray-500">
+                      Crop bounds will recalculate automatically after {RECALC_THRESHOLD - annotationsSinceRecalc} more annotations
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
 
             {/* Mark Layout Complete Button */}
             <button
@@ -1575,10 +1619,16 @@ export default function AnnotateLayout() {
                       method: 'POST'
                     })
 
-                    // Recalculate crop bounds
-                    await fetch(`/api/annotations/${encodeURIComponent(videoId)}/reset-crop-bounds`, {
+                    // Recalculate crop bounds (may fail if no caption boxes after clear)
+                    const cropBoundsResponse = await fetch(`/api/annotations/${encodeURIComponent(videoId)}/reset-crop-bounds`, {
                       method: 'POST'
                     })
+
+                    if (!cropBoundsResponse.ok) {
+                      const cropBoundsResult = await cropBoundsResponse.json()
+                      console.warn('[Clear All] Could not recalculate crop bounds:', cropBoundsResult.message)
+                      // This is expected if all boxes were cleared - not an error
+                    }
 
                     // Reload everything
                     // Skip edit state update so user can see the recalculated changes

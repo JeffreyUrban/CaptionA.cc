@@ -745,6 +745,24 @@ export async function action({ params }: ActionFunctionArgs) {
     console.log(`[Reset Crop Bounds] User labeled IN: ${totalBoxStats.user_labeled_in}, OUT: ${totalBoxStats.user_labeled_out}`)
     console.log(`[Reset Crop Bounds] Using ${captionBoxCount.count} caption boxes for anchor detection (predicted + user overrides)`)
 
+    // Check if there are any caption boxes to analyze
+    if (captionBoxCount.count === 0) {
+      db.close()
+      return new Response(JSON.stringify({
+        error: 'No caption boxes found',
+        message: 'Cannot recalculate crop bounds because no OCR boxes are labeled as captions. Please label some boxes as "in" (captions) first.',
+        stats: {
+          totalBoxes: totalBoxStats.total_boxes,
+          userLabeledOut: totalBoxStats.user_labeled_out,
+          userLabeledIn: totalBoxStats.user_labeled_in,
+          predictedIn: totalBoxStats.predicted_in
+        }
+      }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      })
+    }
+
     console.log(`Analyzing ${frames.length} frames for crop bounds reset`)
 
     // Analyze OCR boxes to determine optimal bounds
