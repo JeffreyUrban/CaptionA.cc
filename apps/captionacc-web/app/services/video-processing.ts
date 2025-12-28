@@ -14,6 +14,8 @@ import { resolve } from 'path'
 import Database from 'better-sqlite3'
 import { existsSync, readdirSync } from 'fs'
 import { getDbPath, getVideoDir, getAllVideos } from '~/utils/video-paths'
+import { tryStartProcessing, finishProcessing, registerQueueProcessor } from './processing-coordinator'
+import { recoverStalledCropFrames } from './crop-frames-processing'
 
 interface ProcessingOptions {
   videoPath: string  // Display path (user-facing) like "show_name/video_name"
@@ -22,48 +24,42 @@ interface ProcessingOptions {
 }
 
 // Processing queue management
-const MAX_CONCURRENT_PROCESSING = 2  // Process at most 2 videos simultaneously
 const processingQueue: ProcessingOptions[] = []
-let activeProcessingCount = 0
 
 /**
  * Add video to processing queue and start processing if capacity available
  */
 export function queueVideoProcessing(options: ProcessingOptions): void {
-  console.log(`[ProcessingQueue] Queuing ${options.videoPath} (queue size: ${processingQueue.length}, active: ${activeProcessingCount})`)
+  console.log(`[FullFramesQueue] Queuing ${options.videoPath} (queue size: ${processingQueue.length})`)
   processingQueue.push(options)
   processNextInQueue()
 }
 
 /**
  * Process next video in queue if under concurrency limit
+ * Called by processing coordinator when capacity becomes available
  */
-async function processNextInQueue(): Promise<void> {
-  if (activeProcessingCount >= MAX_CONCURRENT_PROCESSING) {
-    console.log(`[ProcessingQueue] At max capacity (${MAX_CONCURRENT_PROCESSING}), waiting...`)
+function processNextInQueue(): void {
+  if (processingQueue.length === 0) {
     return
   }
 
-  const nextVideo = processingQueue.shift()
-  if (!nextVideo) {
-    console.log(`[ProcessingQueue] Queue empty`)
+  // Check if we have capacity (coordinator manages global limit)
+  if (!tryStartProcessing()) {
+    console.log(`[FullFramesQueue] At capacity, waiting... (${processingQueue.length} queued)`)
     return
   }
 
-  activeProcessingCount++
-  console.log(`[ProcessingQueue] Starting ${nextVideo.videoPath} (${activeProcessingCount}/${MAX_CONCURRENT_PROCESSING} active, ${processingQueue.length} queued)`)
+  const nextVideo = processingQueue.shift()!
+  console.log(`[FullFramesQueue] Starting ${nextVideo.videoPath} (${processingQueue.length} remaining)`)
 
-  try {
-    await triggerVideoProcessing(nextVideo)
-  } catch (error) {
-    console.error(`[ProcessingQueue] Error processing ${nextVideo.videoPath}:`, error)
-  } finally {
-    activeProcessingCount--
-    console.log(`[ProcessingQueue] Completed ${nextVideo.videoPath} (${activeProcessingCount}/${MAX_CONCURRENT_PROCESSING} active, ${processingQueue.length} queued)`)
-
-    // Process next video in queue
-    processNextInQueue()
-  }
+  triggerVideoProcessing(nextVideo)
+    .catch(error => {
+      console.error(`[FullFramesQueue] Error processing ${nextVideo.videoPath}:`, error)
+    })
+    .finally(() => {
+      finishProcessing() // This will trigger processNextInQueue for all queues
+    })
 }
 
 /**
@@ -350,7 +346,9 @@ export function recoverStalledProcessing() {
   for (const video of allVideos) {
     const dbPath = getDbPath(video.videoId)
     if (dbPath) {
+      // Check both full_frames and crop_frames processing
       checkAndRecoverVideo(dbPath, video.displayPath, video.videoId)
+      recoverStalledCropFrames(video.videoId, video.displayPath)
     }
   }
 }
@@ -457,3 +455,6 @@ function checkAndRecoverVideo(dbPath: string, videoPath: string, videoId: string
     console.error(`[VideoProcessing] Error checking ${videoPath}:`, error)
   }
 }
+
+// Register with coordinator (crop_frames has priority, so register full_frames second)
+registerQueueProcessor(processNextInQueue)

@@ -1,9 +1,8 @@
 import { type ActionFunctionArgs } from 'react-router'
 import { getDbPath, getVideoDir } from '~/utils/video-paths'
 import Database from 'better-sqlite3'
-import { resolve } from 'path'
 import { existsSync } from 'fs'
-import { exec } from 'child_process'
+import { queueCropFramesProcessing } from '~/services/crop-frames-processing'
 
 function getDatabase(videoId: string) {
   const dbPath = getDbPath(videoId)
@@ -57,70 +56,21 @@ export async function action({ params }: ActionFunctionArgs) {
       })
     }
 
-    // Get paths
-    const videoDataPath = getVideoDir(videoId)
-    if (!videoDataPath) {
-      return new Response(JSON.stringify({
-        error: 'Video directory not found'
-      }), {
-        status: 404,
-        headers: { 'Content-Type': 'application/json' }
-      })
-    }
-
-    // Find video file in the data directory
-    const { readdirSync } = await import('fs')
-    const videoFiles = readdirSync(videoDataPath).filter(f =>
-      f.endsWith('.mp4') || f.endsWith('.mkv') || f.endsWith('.avi') || f.endsWith('.mov')
-    )
-
-    if (videoFiles.length === 0) {
-      return new Response(JSON.stringify({
-        error: 'No video file found in data directory'
-      }), {
-        status: 404,
-        headers: { 'Content-Type': 'application/json' }
-      })
-    }
-
-    const videoPath = resolve(videoDataPath, videoFiles[0])
-    const outputDir = resolve(videoDataPath, 'crop_frames')
-
-    // Get path to crop_frames pipeline
-    const pipelinePath = resolve(
-      process.cwd(),
-      '..',
-      '..',
-      'data-pipelines',
-      'crop_frames'
-    )
-
-    // Format crop bounds as "left,top,right,bottom"
-    const cropBounds = `${layoutConfig.crop_left},${layoutConfig.crop_top},${layoutConfig.crop_right},${layoutConfig.crop_bottom}`
-
-    // Trigger frame re-cropping using crop_frames CLI
-    // Run in background - don't wait for completion
-    const command = `uv run crop_frames extract-frames "${videoPath}" "${outputDir}" --crop "${cropBounds}" --rate 10.0`
-
-    console.log(`[Recrop Frames] Starting background frame re-cropping for ${videoId}`)
-    console.log(`[Recrop Frames] Video: ${videoPath}`)
-    console.log(`[Recrop Frames] Output: ${outputDir}`)
-    console.log(`[Recrop Frames] Crop bounds: ${cropBounds}`)
-    console.log(`[Recrop Frames] Command: ${command}`)
-
-    exec(command, { cwd: pipelinePath }, (error, stdout, stderr) => {
-      if (error) {
-        console.error(`[Recrop Frames] Failed for ${videoId}:`, error)
-        console.error(`[Recrop Frames] stderr:`, stderr)
-      } else {
-        console.log(`[Recrop Frames] Completed for ${videoId}`)
-        console.log(`[Recrop Frames] stdout:`, stdout)
+    // Queue the crop_frames job (managed by processing coordinator)
+    queueCropFramesProcessing({
+      videoId,
+      videoPath: videoId, // Use videoId as display path
+      cropBounds: {
+        left: layoutConfig.crop_left,
+        top: layoutConfig.crop_top,
+        right: layoutConfig.crop_right,
+        bottom: layoutConfig.crop_bottom
       }
     })
 
     return new Response(JSON.stringify({
       success: true,
-      message: 'Frame re-cropping started in background',
+      message: 'Frame cropping queued for processing',
       cropBounds: {
         left: layoutConfig.crop_left,
         top: layoutConfig.crop_top,

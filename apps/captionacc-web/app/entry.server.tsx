@@ -13,6 +13,8 @@ import { isbot } from "isbot";
 import { renderToPipeableStream } from "react-dom/server";
 import { startPeriodicCleanup } from "~/services/video-cleanup";
 import { recoverStalledProcessing } from "~/services/video-processing";
+// Import to register queue processors with coordinator
+import "~/services/crop-frames-processing";
 
 const ABORT_DELAY = 5_000;
 
