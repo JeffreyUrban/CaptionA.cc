@@ -20,7 +20,7 @@ from transformers import AutoModel, AutoProcessor
 
 from caption_boundaries.data.reference_selection import ReferenceFrameCandidate, select_reference_frame
 from caption_boundaries.database import FontEmbedding, VideoRegistry, get_training_db
-from caption_boundaries.database.video_hash import get_video_metadata
+from video_utils import get_video_metadata
 
 
 def find_video_file(db_path: Path) -> Path | None:

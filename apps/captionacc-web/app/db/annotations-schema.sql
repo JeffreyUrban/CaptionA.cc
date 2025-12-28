@@ -272,14 +272,22 @@ CREATE TABLE IF NOT EXISTS video_preferences (
 );
 
 -- Video metadata (one row per video)
+-- Storage uses UUID-based hash-bucketed paths (local/data/{uuid[:2]}/{uuid}/)
+-- User-facing paths (display_path) are abstraction for folder management
 CREATE TABLE IF NOT EXISTS video_metadata (
     id INTEGER PRIMARY KEY CHECK(id = 1),
+
+    -- Video identity
+    video_id TEXT NOT NULL,  -- UUID v4 for this video (stable identifier)
+    video_hash TEXT NOT NULL,  -- SHA256 hash for deduplication detection
+    storage_path TEXT NOT NULL,  -- Hash-bucketed path (e.g., "a4/a4f2b8c3-1234-5678-90ab-cdef12345678")
+
+    -- User-facing organization
+    display_path TEXT NOT NULL,  -- User-facing path (e.g., "level1/video_name")
 
     -- Original file info
     original_filename TEXT NOT NULL,
     file_size_bytes INTEGER NOT NULL,
-    video_path TEXT NOT NULL,  -- Relative path from data directory (e.g., "show_name/video_name")
-    database_id TEXT NOT NULL DEFAULT (lower(hex(randomblob(16)))),  -- Unique ID for this DB instance (changes on recreate)
 
     -- Upload info
     uploaded_at TEXT NOT NULL DEFAULT (datetime('now')),
