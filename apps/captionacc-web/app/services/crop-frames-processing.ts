@@ -375,6 +375,13 @@ export function recoverStalledCropFrames(videoId: string, videoPath: string): vo
         return
       }
 
+      // Ensure retry_count column exists (migration for existing tables)
+      try {
+        db.prepare(`ALTER TABLE crop_frames_status ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0`).run()
+      } catch {
+        // Column already exists, ignore
+      }
+
       const status = db.prepare(`
         SELECT status, current_job_id, retry_count
         FROM crop_frames_status WHERE id = 1
