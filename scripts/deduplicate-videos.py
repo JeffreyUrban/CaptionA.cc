@@ -23,65 +23,92 @@ DECISIONS_FILE = Path("scripts/deduplication-decisions.json")
 
 def get_video_info(db_path: Path) -> dict:
     """Extract video information and work progress from database."""
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
 
-    # Get video metadata
-    result = cursor.execute("""
-        SELECT display_path, video_id, storage_path
-        FROM video_metadata WHERE id = 1
-    """).fetchone()
+        # Check if video_metadata table exists
+        table_check = cursor.execute("""
+            SELECT name FROM sqlite_master
+            WHERE type='table' AND name='video_metadata'
+        """).fetchone()
 
-    if not result:
-        conn.close()
+        if not table_check:
+            conn.close()
+            return None
+
+        # Get video metadata
+        result = cursor.execute("""
+            SELECT display_path, video_id, storage_path
+            FROM video_metadata WHERE id = 1
+        """).fetchone()
+
+        if not result:
+            conn.close()
+            return None
+
+        display_path, video_id, storage_path = result
+    except Exception as e:
+        # Skip databases that can't be read or don't have expected schema
+        try:
+            conn.close()
+        except:
+            pass
         return None
 
-    display_path, video_id, storage_path = result
-
-    # Get database modification time
-    db_mtime = db_path.stat().st_mtime
-
-    # Count annotations
-    captions_count = cursor.execute("SELECT COUNT(*) FROM captions").fetchone()[0]
-
-    # Count box labels
-    box_labels_count = 0
     try:
-        box_labels_count = cursor.execute("SELECT COUNT(*) FROM full_frame_box_labels").fetchone()[0]
-    except:
-        pass
+        # Get database modification time
+        db_mtime = db_path.stat().st_mtime
 
-    # Check layout config
-    layout_config = None
-    try:
-        layout_config = cursor.execute("SELECT * FROM video_layout_config WHERE id = 1").fetchone()
-    except:
-        pass
+        # Count annotations
+        captions_count = 0
+        try:
+            captions_count = cursor.execute("SELECT COUNT(*) FROM captions").fetchone()[0]
+        except:
+            pass
 
-    # Count cropped frames
-    cropped_frames_count = 0
-    try:
-        cropped_frames_count = cursor.execute("SELECT COUNT(*) FROM cropped_frames").fetchone()[0]
-    except:
-        pass
+        # Count box labels
+        box_labels_count = 0
+        try:
+            box_labels_count = cursor.execute("SELECT COUNT(*) FROM full_frame_box_labels").fetchone()[0]
+        except:
+            pass
 
-    # Count full frames
-    full_frames_count = cursor.execute("SELECT COUNT(*) FROM full_frames").fetchone()[0]
+        # Check layout config
+        layout_config = None
+        try:
+            layout_config = cursor.execute("SELECT * FROM video_layout_config WHERE id = 1").fetchone()
+        except:
+            pass
 
-    conn.close()
+        # Count cropped frames
+        cropped_frames_count = 0
+        try:
+            cropped_frames_count = cursor.execute("SELECT COUNT(*) FROM cropped_frames").fetchone()[0]
+        except:
+            pass
 
-    return {
-        'display_path': display_path,
-        'video_id': video_id,
-        'storage_path': storage_path,
-        'db_path': db_path,
-        'db_mtime': db_mtime,
-        'captions': captions_count,
-        'box_labels': box_labels_count,
-        'layout_config': layout_config is not None,
-        'cropped_frames': cropped_frames_count,
-        'full_frames': full_frames_count,
-    }
+        # Count full frames
+        full_frames_count = 0
+        try:
+            full_frames_count = cursor.execute("SELECT COUNT(*) FROM full_frames").fetchone()[0]
+        except:
+            pass
+
+        return {
+            'display_path': display_path,
+            'video_id': video_id,
+            'storage_path': storage_path,
+            'db_path': db_path,
+            'db_mtime': db_mtime,
+            'captions': captions_count,
+            'box_labels': box_labels_count,
+            'layout_config': layout_config is not None,
+            'cropped_frames': cropped_frames_count,
+            'full_frames': full_frames_count,
+        }
+    finally:
+        conn.close()
 
 
 def calculate_work_score(info: dict) -> int:
