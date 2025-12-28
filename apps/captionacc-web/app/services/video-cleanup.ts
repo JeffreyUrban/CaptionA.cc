@@ -14,10 +14,10 @@
 
 import { resolve } from 'path'
 import { existsSync } from 'fs'
-import { readdir } from 'fs/promises'
 import { rm } from 'fs/promises'
 import Database from 'better-sqlite3'
 import { queueVideoProcessing } from './video-processing'
+import { getAllVideos, getDbPath, getVideoDir } from '~/utils/video-paths'
 
 const CLEANUP_INTERVAL_MS = 60 * 60 * 1000 // 1 hour
 const MAX_PROCESSING_ATTEMPTS = 3 // Max retries before marking as error
@@ -26,83 +26,59 @@ const PROCESSING_STATES = ['extracting_frames', 'running_ocr', 'analyzing_layout
 let cleanupTimer: NodeJS.Timeout | null = null
 
 interface DeletedVideo {
-  videoPath: string
+  displayPath: string
   videoDir: string
   pid: string | null
+  videoId: string
 }
 
 /**
  * Find all videos marked for deletion
  */
 async function findDeletedVideos(): Promise<DeletedVideo[]> {
-  const dataDir = resolve(process.cwd(), '..', '..', 'local', 'data')
-
-  if (!existsSync(dataDir)) {
-    return []
-  }
-
   const deletedVideos: DeletedVideo[] = []
 
-  // Recursively scan for video directories
-  async function scanDir(dir: string, relativePath: string = ''): Promise<void> {
+  // Get all videos and check for deletion flag
+  const allVideos = getAllVideos()
+
+  for (const video of allVideos) {
+    const dbPath = getDbPath(video.videoId)
+    const videoDir = getVideoDir(video.videoId)
+
+    if (!dbPath || !videoDir) continue
+
     try {
-      const entries = await readdir(dir, { withFileTypes: true })
+      const db = new Database(dbPath, { readonly: true })
+      try {
+        // Check if deleted column exists (newer databases only)
+        const tableInfo = db.prepare(`PRAGMA table_info(processing_status)`).all() as Array<{ name: string }>
+        const hasDeletedColumn = tableInfo.some(col => col.name === 'deleted')
 
-      // Check if this directory has an annotations.db
-      const hasDb = entries.some(e => e.isFile() && e.name === 'annotations.db')
+        if (hasDeletedColumn) {
+          const status = db.prepare(`
+            SELECT deleted, current_job_id
+            FROM processing_status
+            WHERE id = 1 AND deleted = 1
+          `).get() as { deleted: number; current_job_id: string | null } | undefined
 
-      if (hasDb) {
-        // This is a video directory - check if deleted
-        const dbPath = resolve(dir, 'annotations.db')
-        try {
-          const db = new Database(dbPath, { readonly: true })
-          try {
-            // Check if deleted column exists (newer databases only)
-            const tableInfo = db.prepare(`PRAGMA table_info(processing_status)`).all() as Array<{ name: string }>
-            const hasDeletedColumn = tableInfo.some(col => col.name === 'deleted')
-
-            if (hasDeletedColumn) {
-              const status = db.prepare(`
-                SELECT deleted, current_job_id
-                FROM processing_status
-                WHERE id = 1 AND deleted = 1
-              `).get() as { deleted: number; current_job_id: string | null } | undefined
-
-              if (status?.deleted === 1) {
-                deletedVideos.push({
-                  videoPath: relativePath,
-                  videoDir: dir,
-                  pid: status.current_job_id
-                })
-                console.log(`[Cleanup] Found deleted video: ${relativePath}`)
-              }
-            }
-            // If column doesn't exist, skip (old database, can't be deleted)
-          } finally {
-            db.close()
+          if (status?.deleted === 1) {
+            deletedVideos.push({
+              displayPath: video.displayPath,
+              videoDir,
+              pid: status.current_job_id,
+              videoId: video.videoId
+            })
+            console.log(`[Cleanup] Found deleted video: ${video.displayPath}`)
           }
-        } catch (error) {
-          console.error(`[Cleanup] Error checking ${relativePath}:`, error)
         }
-
-        // Don't recurse into video directories
-        return
-      }
-
-      // Recurse into subdirectories
-      const skipDirs = new Set(['crop_frames', 'full_frames'])
-      for (const entry of entries) {
-        if (entry.isDirectory() && !skipDirs.has(entry.name)) {
-          const subPath = relativePath ? `${relativePath}/${entry.name}` : entry.name
-          await scanDir(resolve(dir, entry.name), subPath)
-        }
+      } finally {
+        db.close()
       }
     } catch (error) {
-      console.error(`[Cleanup] Error scanning ${dir}:`, error)
+      console.error(`[Cleanup] Error checking ${video.displayPath}:`, error)
     }
   }
 
-  await scanDir(dataDir)
   return deletedVideos
 }
 
@@ -110,9 +86,9 @@ async function findDeletedVideos(): Promise<DeletedVideo[]> {
  * Cleanup a single deleted video
  */
 async function cleanupDeletedVideo(video: DeletedVideo): Promise<void> {
-  const { videoPath, videoDir, pid } = video
+  const { displayPath, videoDir, pid } = video
 
-  console.log(`[Cleanup] Processing: ${videoPath}`)
+  console.log(`[Cleanup] Processing: ${displayPath}`)
 
   // Kill processing job if running
   if (pid) {
@@ -139,10 +115,10 @@ async function cleanupDeletedVideo(video: DeletedVideo): Promise<void> {
   try {
     if (existsSync(videoDir)) {
       await rm(videoDir, { recursive: true, force: true })
-      console.log(`[Cleanup] Deleted files for: ${videoPath}`)
+      console.log(`[Cleanup] Deleted files for: ${displayPath}`)
     }
   } catch (error) {
-    console.error(`[Cleanup] Failed to delete ${videoPath}:`, error)
+    console.error(`[Cleanup] Failed to delete ${displayPath}:`, error)
   }
 }
 
@@ -163,104 +139,83 @@ function isProcessRunning(pid: string): boolean {
 /**
  * Find videos stuck in processing states
  */
-async function findStaleProcessing(): Promise<Array<{ videoPath: string; videoDir: string; videoFile: string; pid: string | null; attempts: number }>> {
-  const dataDir = resolve(process.cwd(), '..', '..', 'local', 'data')
+async function findStaleProcessing(): Promise<Array<{ displayPath: string; videoDir: string; videoFile: string; pid: string | null; attempts: number; videoId: string }>> {
+  const staleVideos: Array<{ displayPath: string; videoDir: string; videoFile: string; pid: string | null; attempts: number; videoId: string }> = []
 
-  if (!existsSync(dataDir)) {
-    return []
-  }
+  // Get all videos and check for stale processing
+  const allVideos = getAllVideos()
 
-  const staleVideos: Array<{ videoPath: string; videoDir: string; videoFile: string; pid: string | null; attempts: number }> = []
+  for (const video of allVideos) {
+    const dbPath = getDbPath(video.videoId)
+    const videoDir = getVideoDir(video.videoId)
 
-  async function scanDir(dir: string, relativePath: string = ''): Promise<void> {
+    if (!dbPath || !videoDir) continue
+
     try {
-      const entries = await readdir(dir, { withFileTypes: true })
-      const hasDb = entries.some(e => e.isFile() && e.name === 'annotations.db')
+      const db = new Database(dbPath, { readonly: true })
+      try {
+        // Check if required columns exist (newer databases only)
+        const tableInfo = db.prepare(`PRAGMA table_info(processing_status)`).all() as Array<{ name: string }>
+        const hasProcessingAttemptsColumn = tableInfo.some(col => col.name === 'processing_attempts')
+        const hasDeletedColumn = tableInfo.some(col => col.name === 'deleted')
 
-      if (hasDb) {
-        const dbPath = resolve(dir, 'annotations.db')
-        try {
-          const db = new Database(dbPath, { readonly: true })
-          try {
-            // Check if required columns exist (newer databases only)
-            const tableInfo = db.prepare(`PRAGMA table_info(processing_status)`).all() as Array<{ name: string }>
-            const hasProcessingAttemptsColumn = tableInfo.some(col => col.name === 'processing_attempts')
-            const hasDeletedColumn = tableInfo.some(col => col.name === 'deleted')
+        if (!hasProcessingAttemptsColumn) {
+          // Old database schema - skip stale processing check
+          continue
+        }
 
-            if (!hasProcessingAttemptsColumn) {
-              // Old database schema - skip stale processing check
-              return
+        const status = db.prepare(`
+          SELECT status, current_job_id, processing_attempts${hasDeletedColumn ? ', deleted' : ''}
+          FROM processing_status
+          WHERE id = 1
+        `).get() as { status: string; current_job_id: string | null; processing_attempts: number; deleted?: number } | undefined
+
+        // Skip if deleted or not in processing state
+        if (!status || status.deleted === 1) {
+          continue
+        }
+
+        // Check if stuck in processing state
+        if (PROCESSING_STATES.includes(status.status as any)) {
+          const pid = status.current_job_id
+          const isRunning = pid ? isProcessRunning(pid) : false
+
+          if (!isRunning) {
+            // Process is not running but status says processing - this is stale
+            const videoFile = resolve(videoDir, video.originalFilename)
+            if (existsSync(videoFile)) {
+              staleVideos.push({
+                displayPath: video.displayPath,
+                videoDir,
+                videoFile,
+                pid,
+                attempts: status.processing_attempts,
+                videoId: video.videoId
+              })
+              console.log(`[Cleanup] Found stale processing: ${video.displayPath} (PID: ${pid || 'none'}, attempts: ${status.processing_attempts})`)
             }
-
-            const status = db.prepare(`
-              SELECT status, current_job_id, processing_attempts${hasDeletedColumn ? ', deleted' : ''}
-              FROM processing_status
-              WHERE id = 1
-            `).get() as { status: string; current_job_id: string | null; processing_attempts: number; deleted?: number } | undefined
-
-            // Skip if deleted or not in processing state
-            if (!status || status.deleted === 1) {
-              return
-            }
-
-            // Check if stuck in processing state
-            if (PROCESSING_STATES.includes(status.status as any)) {
-              const pid = status.current_job_id
-              const isRunning = pid ? isProcessRunning(pid) : false
-
-              if (!isRunning) {
-                // Process is not running but status says processing - this is stale
-                const videoMetadata = db.prepare(`SELECT original_filename FROM video_metadata WHERE id = 1`).get() as { original_filename: string } | undefined
-
-                if (videoMetadata) {
-                  const videoFile = resolve(dir, videoMetadata.original_filename)
-                  if (existsSync(videoFile)) {
-                    staleVideos.push({
-                      videoPath: relativePath,
-                      videoDir: dir,
-                      videoFile,
-                      pid,
-                      attempts: status.processing_attempts
-                    })
-                    console.log(`[Cleanup] Found stale processing: ${relativePath} (PID: ${pid || 'none'}, attempts: ${status.processing_attempts})`)
-                  }
-                }
-              }
-            }
-          } finally {
-            db.close()
           }
-        } catch (error) {
-          console.error(`[Cleanup] Error checking ${relativePath}:`, error)
         }
-        return
-      }
-
-      const skipDirs = new Set(['crop_frames', 'full_frames'])
-      for (const entry of entries) {
-        if (entry.isDirectory() && !skipDirs.has(entry.name)) {
-          const subPath = relativePath ? `${relativePath}/${entry.name}` : entry.name
-          await scanDir(resolve(dir, entry.name), subPath)
-        }
+      } finally {
+        db.close()
       }
     } catch (error) {
-      console.error(`[Cleanup] Error scanning ${dir}:`, error)
+      console.error(`[Cleanup] Error checking ${video.displayPath}:`, error)
     }
   }
 
-  await scanDir(dataDir)
   return staleVideos
 }
 
 /**
  * Recover a stale processing job
  */
-async function recoverStaleProcessing(video: { videoPath: string; videoDir: string; videoFile: string; attempts: number }): Promise<void> {
-  const { videoPath, videoDir, videoFile, attempts } = video
+async function recoverStaleProcessing(video: { displayPath: string; videoDir: string; videoFile: string; attempts: number; videoId: string }): Promise<void> {
+  const { displayPath, videoDir, videoFile, attempts, videoId } = video
 
   // Check if exceeded max attempts
   if (attempts >= MAX_PROCESSING_ATTEMPTS) {
-    console.log(`[Cleanup] Max attempts reached for ${videoPath}, marking as error`)
+    console.log(`[Cleanup] Max attempts reached for ${displayPath}, marking as error`)
 
     const dbPath = resolve(videoDir, 'annotations.db')
     const db = new Database(dbPath)
@@ -284,16 +239,17 @@ async function recoverStaleProcessing(video: { videoPath: string; videoDir: stri
   }
 
   // Restart processing (queue to respect concurrency limits)
-  console.log(`[Cleanup] Queueing ${videoPath} for processing restart (attempt ${attempts + 1}/${MAX_PROCESSING_ATTEMPTS})`)
+  console.log(`[Cleanup] Queueing ${displayPath} for processing restart (attempt ${attempts + 1}/${MAX_PROCESSING_ATTEMPTS})`)
 
   try {
     queueVideoProcessing({
-      videoPath,
-      videoFile
+      videoPath: displayPath,
+      videoFile,
+      videoId
     })
-    console.log(`[Cleanup] Successfully queued ${videoPath} for processing restart`)
+    console.log(`[Cleanup] Successfully queued ${displayPath} for processing restart`)
   } catch (error) {
-    console.error(`[Cleanup] Failed to restart processing for ${videoPath}:`, error)
+    console.error(`[Cleanup] Failed to restart processing for ${displayPath}:`, error)
 
     // Mark as error
     const dbPath = resolve(videoDir, 'annotations.db')

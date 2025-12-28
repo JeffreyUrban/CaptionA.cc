@@ -2,6 +2,7 @@ import { resolve } from 'path'
 import { existsSync } from 'fs'
 import { readdir } from 'fs/promises'
 import Database from 'better-sqlite3'
+import { getDbPath, getVideoDir } from './video-paths'
 
 export interface VideoStats {
   totalAnnotations: number
@@ -32,34 +33,10 @@ export interface ProcessingStatus {
 }
 
 export async function getVideoStats(videoId: string): Promise<VideoStats> {
-  const dbPath = resolve(
-    process.cwd(),
-    '..',
-    '..',
-    'local',
-    'data',
-    ...videoId.split('/'),
-    'annotations.db'
-  )
-
-  // Get total frames from crop_frames directory
-  const framesDir = resolve(
-    process.cwd(),
-    '..',
-    '..',
-    'local',
-    'data',
-    ...videoId.split('/'),
-    'crop_frames'
-  )
-
-  let totalFrames = 0
-  if (existsSync(framesDir)) {
-    const files = await readdir(framesDir)
-    totalFrames = files.filter(f => f.startsWith('frame_') && f.endsWith('.jpg')).length
-  }
-
-  if (!existsSync(dbPath)) {
+  // Resolve videoId (can be display_path or UUID) to database path
+  const dbPath = getDbPath(videoId)
+  if (!dbPath) {
+    // Video not found - return default stats
     return {
       totalAnnotations: 0,
       pendingReview: 0,
@@ -67,11 +44,21 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
       predictedAnnotations: 0,
       gapAnnotations: 0,
       progress: 0,
-      totalFrames,
+      totalFrames: 0,
       coveredFrames: 0,
       hasOcrData: false,
       layoutApproved: false
     }
+  }
+
+  // Get video directory for accessing crop_frames
+  const videoDir = getVideoDir(videoId)
+  const framesDir = videoDir ? resolve(videoDir, 'crop_frames') : null
+
+  let totalFrames = 0
+  if (framesDir && existsSync(framesDir)) {
+    const files = await readdir(framesDir)
+    totalFrames = files.filter(f => f.startsWith('frame_') && f.endsWith('.jpg')).length
   }
 
   const db = new Database(dbPath, { readonly: true })

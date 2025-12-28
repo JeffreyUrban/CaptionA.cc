@@ -12,11 +12,13 @@
 import { spawn } from 'child_process'
 import { resolve } from 'path'
 import Database from 'better-sqlite3'
-import { existsSync, readdirSync } from 'fs'
+import { existsSync } from 'fs'
+import { getDbPath, getVideoDir, getAllVideos } from '~/utils/video-paths'
 
 interface ProcessingOptions {
-  videoPath: string  // Relative path like "show_name/video_name"
+  videoPath: string  // Display path (user-facing) like "show_name/video_name"
   videoFile: string  // Full path to uploaded video file
+  videoId?: string   // UUID for this video (optional for backward compat)
 }
 
 // Processing queue management
@@ -74,17 +76,17 @@ async function processNextInQueue(): Promise<void> {
  * 4. Writes results to annotations.db
  */
 export async function triggerVideoProcessing(options: ProcessingOptions): Promise<void> {
-  const { videoPath, videoFile } = options
+  const { videoPath, videoFile, videoId } = options
 
   console.log(`[VideoProcessing] Starting processing for: ${videoPath}`)
 
-  // Get database path
-  const dataDir = resolve(process.cwd(), '..', '..', 'local', 'data')
-  const videoDir = resolve(dataDir, ...videoPath.split('/'))
-  const dbPath = resolve(videoDir, 'annotations.db')
+  // Resolve to actual storage paths (prefer videoId if available)
+  const pathOrId = videoId || videoPath
+  const dbPath = getDbPath(pathOrId)
+  const videoDir = getVideoDir(pathOrId)
 
-  if (!existsSync(dbPath)) {
-    throw new Error(`Database not found: ${dbPath}`)
+  if (!dbPath || !videoDir) {
+    throw new Error(`Video not found: ${videoPath} (videoId: ${videoId})`)
   }
 
   if (!existsSync(videoFile)) {
@@ -309,21 +311,13 @@ export async function triggerVideoProcessing(options: ProcessingOptions): Promis
  * Get processing status for a video
  */
 export function getProcessingStatus(videoPath: string) {
-  const dbPath = resolve(
-    process.cwd(),
-    '..',
-    '..',
-    'local',
-    'data',
-    ...videoPath.split('/'),
-    'annotations.db'
-  )
+  const dbPath = getDbPath(videoPath)
 
-  if (!existsSync(dbPath)) {
+  if (!dbPath) {
     return null
   }
 
-  const db = new Database(dbPath)
+  const db = new Database(dbPath, { readonly: true })
   try {
     const status = db.prepare(`
       SELECT * FROM processing_status WHERE id = 1
@@ -341,39 +335,21 @@ export function getProcessingStatus(videoPath: string) {
 export function recoverStalledProcessing() {
   console.log('[VideoProcessing] Checking for stalled processing jobs...')
 
-  const dataDir = resolve(process.cwd(), '..', '..', 'local', 'data')
-  if (!existsSync(dataDir)) {
-    return
-  }
+  // Get all videos and check for stalled processing
+  const allVideos = getAllVideos()
 
-  // Scan all video directories for stalled processing
-  const scanDirectory = (dirPath: string, relativePath: string = '') => {
-    const entries = readdirSync(dirPath, { withFileTypes: true })
-
-    for (const entry of entries) {
-      if (entry.isDirectory()) {
-        const newRelativePath = relativePath ? `${relativePath}/${entry.name}` : entry.name
-        const subPath = resolve(dirPath, entry.name)
-
-        // Check if this directory has an annotations.db
-        const dbPath = resolve(subPath, 'annotations.db')
-        if (existsSync(dbPath)) {
-          checkAndRecoverVideo(dbPath, newRelativePath)
-        }
-
-        // Recursively scan subdirectories
-        scanDirectory(subPath, newRelativePath)
-      }
+  for (const video of allVideos) {
+    const dbPath = getDbPath(video.videoId)
+    if (dbPath) {
+      checkAndRecoverVideo(dbPath, video.displayPath, video.videoId)
     }
   }
-
-  scanDirectory(dataDir)
 }
 
 /**
  * Check a single video for stalled processing and recover if needed
  */
-function checkAndRecoverVideo(dbPath: string, videoPath: string) {
+function checkAndRecoverVideo(dbPath: string, videoPath: string, videoId: string) {
   try {
     const db = new Database(dbPath)
     try {
