@@ -1,8 +1,5 @@
-import { resolve } from 'path'
-import { existsSync } from 'fs'
-import { readdir } from 'fs/promises'
 import Database from 'better-sqlite3'
-import { getDbPath, getVideoDir } from './video-paths'
+import { getDbPath } from './video-paths'
 
 export type BadgeState = {
   type: 'layout' | 'boundaries' | 'text' | 'fully-annotated' | 'error'
@@ -285,25 +282,43 @@ function calculateBoundariesBadge(
     }
   }
 
-  // Priority 4: Processing completed but no annotations created
-  if (cfs?.status === 'complete' && stats.totalAnnotations === 0) {
+  // Priority 4: Processing completed but no cropped frames created (processing failed)
+  // Note: Having 0 captions is expected initially - that's not an error
+  if (cfs?.status === 'complete' && stats.totalFrames === 0) {
     return {
       type: 'error',
       label: 'Boundaries: Error',
       color: 'red',
       clickable: true,
       errorDetails: {
-        message: 'Crop frames processing completed but no annotations were created',
+        message: 'Crop frames processing completed but no frames were created',
         context: {
           videoId,
           stage: 'boundaries',
-          issue: 'no_annotations_created'
+          issue: 'no_frames_created'
         }
       }
     }
   }
 
-  // Priority 5: Annotate (has gap annotations that need marking)
+  // Priority 5: Ready to annotate (crop frames complete with frames, but no captions yet)
+  if (cfs?.status === 'complete' && stats.totalFrames > 0 && stats.totalAnnotations === 0) {
+    console.log(`[calculateBoundariesBadge] ${videoId}: Showing Boundaries: Annotate (frames=${stats.totalFrames}, annotations=${stats.totalAnnotations})`)
+    return {
+      type: 'boundaries',
+      label: 'Boundaries: Annotate',
+      color: 'green',
+      clickable: true,
+      url: `/annotate/boundaries?videoId=${encodeURIComponent(videoId)}`
+    }
+  }
+
+  // Debug: Log why we're not showing the annotate badge
+  if (cfs?.status === 'complete') {
+    console.log(`[calculateBoundariesBadge] ${videoId}: crop_frames complete but not showing badge - frames=${stats.totalFrames}, annotations=${stats.totalAnnotations}, cfs=${JSON.stringify(cfs)}`)
+  }
+
+  // Priority 6: Annotate (has gap annotations that need marking)
   if (stats.gapAnnotations > 0) {
     return {
       type: 'boundaries',
@@ -314,7 +329,7 @@ function calculateBoundariesBadge(
     }
   }
 
-  // Priority 6: Review (no gaps, but has pending review)
+  // Priority 7: Review (no gaps, but has pending review)
   if (stats.boundaryPendingReview > 0) {
     return {
       type: 'boundaries',
@@ -324,11 +339,6 @@ function calculateBoundariesBadge(
       url: `/annotate/boundaries?videoId=${encodeURIComponent(videoId)}`
     }
   }
-
-  // No explicit state needed for "layout approved but not started":
-  // - Auto-recovery triggers on server startup (recoverStalledCropFrames)
-  // - Recovery creates crop_frames_status with status='queued'
-  // - Badge logic above handles 'queued' state correctly
 
   // Boundaries complete (all annotations confirmed, no pending)
   return null
@@ -380,6 +390,8 @@ function calculateTextBadge(
 }
 
 export async function getVideoStats(videoId: string): Promise<VideoStats> {
+  console.log(`[getVideoStats] CALLED for videoId: ${videoId}`)
+
   // Resolve videoId (can be display_path or UUID) to database path
   const dbPath = getDbPath(videoId)
   console.log(`[getVideoStats] videoId: ${videoId}, dbPath: ${dbPath}`)
@@ -416,17 +428,18 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
     }
   }
 
-  // Get video directory for accessing crop_frames
-  const videoDir = getVideoDir(videoId)
-  const framesDir = videoDir ? resolve(videoDir, 'crop_frames') : null
-
-  let totalFrames = 0
-  if (framesDir && existsSync(framesDir)) {
-    const files = await readdir(framesDir)
-    totalFrames = files.filter(f => f.startsWith('frame_') && f.endsWith('.jpg')).length
-  }
-
   const db = new Database(dbPath, { readonly: true })
+
+  // Count cropped frames from database (not filesystem)
+  // Frames are written to DB and filesystem is cleaned up after processing
+  let totalFrames = 0
+  try {
+    const frameCount = db.prepare(`SELECT COUNT(*) as count FROM cropped_frames`).get() as { count: number } | undefined
+    totalFrames = frameCount?.count ?? 0
+  } catch {
+    // Table doesn't exist yet
+    totalFrames = 0
+  }
 
   try {
     // Track stage-specific errors
@@ -516,12 +529,26 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
     }
 
     // Check if layout annotation has been approved
+    // Match recovery logic: check for video_layout_config with valid crop bounds
     let layoutApproved = false
     try {
-      const prefs = db.prepare(`SELECT layout_approved FROM video_preferences WHERE id = 1`).get() as { layout_approved: number } | undefined
-      layoutApproved = (prefs?.layout_approved ?? 0) === 1
+      const layoutConfig = db.prepare(`
+        SELECT crop_left, crop_top, crop_right, crop_bottom
+        FROM video_layout_config WHERE id = 1
+      `).get() as {
+        crop_left: number
+        crop_top: number
+        crop_right: number
+        crop_bottom: number
+      } | undefined
+      // Layout is approved if config exists with all crop bounds defined
+      layoutApproved = layoutConfig !== undefined &&
+        typeof layoutConfig.crop_left === 'number' &&
+        typeof layoutConfig.crop_top === 'number' &&
+        typeof layoutConfig.crop_right === 'number' &&
+        typeof layoutConfig.crop_bottom === 'number'
     } catch {
-      // Table or column doesn't exist
+      // Table doesn't exist - layout not approved
       layoutApproved = false
     }
 

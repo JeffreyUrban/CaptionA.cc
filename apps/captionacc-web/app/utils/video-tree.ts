@@ -112,23 +112,6 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
     'annotations.db'
   )
 
-  // Get total frames from crop_frames directory
-  const framesDir = resolve(
-    process.cwd(),
-    '..',
-    '..',
-    'local',
-    'data',
-    ...videoId.split('/'),
-    'crop_frames'
-  )
-
-  let totalFrames = 0
-  if (existsSync(framesDir)) {
-    const files = await readdir(framesDir)
-    totalFrames = files.filter(f => f.startsWith('frame_') && f.endsWith('.jpg')).length
-  }
-
   if (!existsSync(dbPath)) {
     return {
       totalAnnotations: 0,
@@ -137,12 +120,23 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
       predictedAnnotations: 0,
       gapAnnotations: 0,
       progress: 0,
-      totalFrames,
+      totalFrames: 0,
       coveredFrames: 0
     }
   }
 
   const db = new Database(dbPath, { readonly: true })
+
+  // Count cropped frames from database (not filesystem)
+  // Frames are written to DB and filesystem is cleaned up after processing
+  let totalFrames = 0
+  try {
+    const frameCount = db.prepare(`SELECT COUNT(*) as count FROM cropped_frames`).get() as { count: number } | undefined
+    totalFrames = frameCount?.count ?? 0
+  } catch {
+    // Table doesn't exist yet
+    totalFrames = 0
+  }
 
   try {
     const result = db.prepare(`
