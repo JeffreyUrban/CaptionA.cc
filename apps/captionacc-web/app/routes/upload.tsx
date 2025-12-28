@@ -600,9 +600,9 @@ export default function UploadPage() {
     return () => clearInterval(interval)
   }, [uploading, videoFiles])
 
-  // Warn user before closing/navigating during uploads
+  // Warn user before closing/navigating during uploads (only if uploads are actually in progress)
   useEffect(() => {
-    if (!uploading) return
+    if (!hasActiveUploads) return
 
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       e.preventDefault()
@@ -612,7 +612,7 @@ export default function UploadPage() {
 
     window.addEventListener('beforeunload', handleBeforeUnload)
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
-  }, [uploading])
+  }, [hasActiveUploads])
 
   const saveUploadProgress = () => {
     const progress = videoFiles.map(v => ({
@@ -631,6 +631,9 @@ export default function UploadPage() {
   const retryingCount = videoFiles.filter(v => v.selected && v.uploadStatus === 'retrying').length
   const pendingCount = videoFiles.filter(v => v.selected && v.uploadStatus === 'pending').length
   const stalledCount = videoFiles.filter(v => v.selected && v.uploadStatus === 'stalled').length
+
+  // Check if any uploads are in progress (not just the uploading flag)
+  const hasActiveUploads = uploadingCount > 0 || retryingCount > 0 || pendingCount > 0 || stalledCount > 0
 
   const overallProgress = selectedCount > 0
     ? (completedCount / selectedCount) * 100
