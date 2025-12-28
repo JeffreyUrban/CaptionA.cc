@@ -1,8 +1,8 @@
 import { type ActionFunctionArgs } from 'react-router'
-import { resolve } from 'path'
 import { existsSync } from 'fs'
 import { rm } from 'fs/promises'
 import Database from 'better-sqlite3'
+import { getDbPath, getVideoDir } from '~/utils/video-paths'
 
 /**
  * Background cleanup function - kills process and deletes files
@@ -65,19 +65,11 @@ export async function action({ params }: ActionFunctionArgs) {
   const videoId = decodeURIComponent(encodedVideoId)
 
   try {
-    // Get the video directory path
-    const videoDir = resolve(
-      process.cwd(),
-      '..',
-      '..',
-      'local',
-      'data',
-      ...videoId.split('/')
-    )
+    // Resolve video paths (videoId can be display_path or UUID)
+    const dbPath = getDbPath(videoId)
+    const videoDir = getVideoDir(videoId)
 
-    const dbPath = resolve(videoDir, 'annotations.db')
-
-    if (!existsSync(dbPath)) {
+    if (!dbPath || !videoDir) {
       return new Response(JSON.stringify({
         error: 'Video not found',
         videoId

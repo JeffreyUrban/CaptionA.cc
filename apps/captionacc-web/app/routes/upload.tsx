@@ -4,7 +4,7 @@ import type { LoaderFunctionArgs } from 'react-router'
 import { AppLayout } from '~/components/AppLayout'
 import { FolderIcon, DocumentIcon, XMarkIcon, ChevronDownIcon } from '@heroicons/react/24/outline'
 import { CloudArrowUpIcon } from '@heroicons/react/20/solid'
-import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react'
+import { Menu, MenuButton, MenuItem, MenuItems, Dialog, DialogPanel, DialogTitle } from '@headlessui/react'
 import * as tus from 'tus-js-client'
 
 interface FolderItem {
@@ -29,15 +29,22 @@ interface VideoFilePreview {
   type: string
   selected: boolean
   uploadProgress: number
-  uploadStatus: 'queued' | 'uploading' | 'complete' | 'error' | 'paused'
+  uploadStatus: 'pending' | 'queued' | 'uploading' | 'complete' | 'error' | 'paused' | 'stalled' | 'retrying'
   uploadId?: string
+  uploadUrl?: string  // TUS upload URL for resumability
   error?: string
   isDuplicate?: boolean
   existingUploadedAt?: string
+  retryCount?: number
+  lastActivityAt?: number  // Timestamp for stall detection
 }
 
 const CONCURRENT_UPLOADS = 3
 const CHUNK_SIZE = 8 * 1024 * 1024 // 8MB chunks
+const RETRY_DELAYS = [0, 3000, 5000, 10000, 20000, 60000] // Exponential backoff (ms)
+const MAX_RETRIES = 5
+const STALL_TIMEOUT = 60000 // 60s without progress = stalled
+const SESSION_BUFFER = 6 // Create sessions for active + next batch (2x concurrent limit)
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B'
@@ -149,6 +156,10 @@ export default function UploadPage() {
   const [availableFolders, setAvailableFolders] = useState<FolderItem[]>([])
   const [collapseEnabled, setCollapseEnabled] = useState(true)
   const [collapsesAvailable, setCollapsesAvailable] = useState(false)
+  const [incompleteUploads, setIncompleteUploads] = useState<any[]>([])
+  const [showIncompletePrompt, setShowIncompletePrompt] = useState(false)
+  const [showStopQueuedModal, setShowStopQueuedModal] = useState(false)
+  const [showAbortAllModal, setShowAbortAllModal] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const folderInputRef = useRef<HTMLInputElement>(null)
@@ -171,8 +182,38 @@ export default function UploadPage() {
     }
   }, [loaderData.preselectedFolder])
 
+  // Detect and auto-clear incomplete uploads from previous session
+  useEffect(() => {
+    fetch('/api/uploads/incomplete')
+      .then(res => res.json())
+      .then(async data => {
+        if (data.uploads && data.uploads.length > 0) {
+          console.log(`[Upload] Found ${data.uploads.length} incomplete upload(s) from previous session - auto-clearing`)
+
+          // Store the list before clearing
+          setIncompleteUploads(data.uploads)
+
+          // Auto-clear stalled uploads
+          await fetch('/api/uploads/clear-incomplete', { method: 'POST' })
+
+          // Show notification
+          setShowIncompletePrompt(true)
+        }
+      })
+      .catch(err => {
+        console.error('[Upload] Failed to check for incomplete uploads:', err)
+      })
+  }, [])
+
   const processFiles = useCallback(async (fileList: FileList | null) => {
     if (!fileList || fileList.length === 0) return
+
+    // Prevent starting new upload while one is in progress
+    if (uploading) {
+      console.log('[processFiles] Upload already in progress, ignoring new files')
+      alert('An upload is already in progress. Please wait for it to complete before starting a new upload.')
+      return
+    }
 
     console.log(`[processFiles] Processing ${fileList.length} files`)
     const videos: VideoFilePreview[] = []
@@ -239,7 +280,7 @@ export default function UploadPage() {
     setVideoFiles(videos)
     setSkippedFiles(skipped)
     setShowConfirmation(true)
-  }, [])
+  }, [uploading])
 
   const handleDragEnter = (e: React.DragEvent) => {
     e.preventDefault()
@@ -375,97 +416,239 @@ export default function UploadPage() {
 
     const selected = videoFiles.filter(f => f.selected)
     console.log(`[startUpload] Starting upload for ${selected.length} videos`)
-    console.log(`[startUpload] Video files:`, selected.map(v => v.relativePath))
-    const queue = selected.map((_, idx) => `video-${idx}`)
-    console.log(`[startUpload] Queue:`, queue)
-    setUploadQueue(queue)
 
-    // Start first batch of concurrent uploads
-    processUploadQueue(selected, queue)
+    // Mark all as pending (not queued yet)
+    setVideoFiles(prev => prev.map(v =>
+      v.selected ? { ...v, uploadStatus: 'pending' as const, retryCount: 0 } : v
+    ))
+
+    // Start processing queue
+    processUploadQueue()
   }
 
-  const processUploadQueue = (videos: VideoFilePreview[], queue: string[]) => {
-    console.log(`[processUploadQueue] Called with ${videos.length} videos, queue length: ${queue.length}`)
-    console.log(`[processUploadQueue] Active uploads: ${activeUploads.size}`)
-    const newActiveUploads = new Map(activeUploads)
+  const processUploadQueue = () => {
+    setVideoFiles(prev => {
+      const newFiles = [...prev]
 
-    while (newActiveUploads.size < CONCURRENT_UPLOADS && queue.length > 0) {
-      const videoId = queue.shift()!
-      const index = parseInt(videoId.split('-')[1])
-      const video = videos[index]
-      console.log(`[processUploadQueue] Starting upload ${videoId} (index ${index}): ${video.relativePath}`)
+      // Count active uploads
+      const activeCount = newFiles.filter(v =>
+        v.uploadStatus === 'uploading' || v.uploadStatus === 'retrying'
+      ).length
 
-      // Extract video path from relative path
-      // e.g., "show_name/video_name.mp4" -> videoPath: "show_name/video_name"
-      const pathParts = video.relativePath.split('/')
-      const filename = pathParts[pathParts.length - 1]
-      let videoPath = pathParts.slice(0, -1).concat(filename.replace(/\.\w+$/, '')).join('/')
+      // Calculate available slots
+      const availableSlots = CONCURRENT_UPLOADS - activeCount
+      if (availableSlots <= 0) return prev
 
-      // Prepend selected folder if any
-      if (selectedFolder) {
-        videoPath = selectedFolder + '/' + videoPath
-      }
+      // Find videos ready to upload
+      const readyToUpload = newFiles
+        .map((v, idx) => ({ video: v, index: idx }))
+        .filter(({ video }) =>
+          video.selected &&
+          (video.uploadStatus === 'pending' || video.uploadStatus === 'stalled')
+        )
+        .slice(0, availableSlots)
 
-      const upload = new tus.Upload(video.file, {
-        endpoint: '/api/upload',
-        retryDelays: [0, 3000, 5000, 10000, 20000],
-        chunkSize: CHUNK_SIZE,
-        metadata: {
-          filename,
-          filetype: video.file.type,
-          videoPath,
-        },
-        onError: (error) => {
-          console.error(`Upload failed for ${video.relativePath}:`, error)
-          setVideoFiles(prev => prev.map((v, i) =>
-            i === index ? { ...v, uploadStatus: 'error', error: error.message } : v
-          ))
-          newActiveUploads.delete(videoId)
-          setActiveUploads(new Map(newActiveUploads))
-
-          // Continue with next in queue
-          if (queue.length > 0) {
-            processUploadQueue(videos, queue)
-          }
-        },
-        onProgress: (bytesUploaded, bytesTotal) => {
-          const progress = (bytesUploaded / bytesTotal) * 100
-          setVideoFiles(prev => prev.map((v, i) =>
-            i === index ? { ...v, uploadProgress: progress } : v
-          ))
-        },
-        onSuccess: () => {
-          console.log(`Upload complete for ${video.relativePath}`)
-          setVideoFiles(prev => prev.map((v, i) =>
-            i === index ? { ...v, uploadStatus: 'complete', uploadProgress: 100 } : v
-          ))
-          newActiveUploads.delete(videoId)
-          setActiveUploads(new Map(newActiveUploads))
-
-          // Save progress to localStorage
-          saveUploadProgress()
-
-          // Continue with next in queue
-          if (queue.length > 0) {
-            processUploadQueue(videos, queue)
-          } else if (newActiveUploads.size === 0) {
-            // All uploads complete
-            setUploading(false)
-          }
-        },
+      // Start uploads for available slots
+      readyToUpload.forEach(({ video, index }) => {
+        startSingleUpload(index, video.retryCount || 0)
+        newFiles[index] = { ...video, uploadStatus: 'uploading' as const, lastActivityAt: Date.now() }
       })
 
-      upload.start()
-      newActiveUploads.set(videoId, upload)
+      return newFiles
+    })
+  }
 
-      setVideoFiles(prev => prev.map((v, i) =>
-        i === index ? { ...v, uploadStatus: 'uploading', uploadId: videoId } : v
-      ))
+  const startSingleUpload = (index: number, retryCount: number = 0) => {
+    const video = videoFiles[index]
+    if (!video) return
+
+    // Extract video path from relative path
+    const pathParts = video.relativePath.split('/')
+    const filename = pathParts[pathParts.length - 1]
+    let videoPath = pathParts.slice(0, -1).concat(filename.replace(/\.\w+$/, '')).join('/')
+
+    // Prepend selected folder if any
+    if (selectedFolder) {
+      videoPath = selectedFolder + '/' + videoPath
     }
 
-    setActiveUploads(new Map(newActiveUploads))
-    setUploadQueue(queue)
+    const videoId = `video-${index}`
+    console.log(`[Upload] Starting ${video.relativePath} (attempt ${retryCount + 1}/${MAX_RETRIES + 1})`)
+
+    const upload = new tus.Upload(video.file, {
+      endpoint: '/api/upload',
+      retryDelays: RETRY_DELAYS,
+      chunkSize: CHUNK_SIZE,
+      uploadUrl: video.uploadUrl, // Resume from previous attempt if available (automatic in v2)
+      metadata: {
+        filename,
+        filetype: video.file.type,
+        videoPath,
+      },
+      onError: (error) => {
+        console.error(`[Upload] Failed ${video.relativePath}:`, error)
+
+        // Check if we should retry
+        if (retryCount < MAX_RETRIES && isRetryableError(error)) {
+          const delay = RETRY_DELAYS[Math.min(retryCount, RETRY_DELAYS.length - 1)]
+          console.log(`[Upload] Will retry ${video.relativePath} in ${delay}ms (attempt ${retryCount + 1})`)
+
+          setVideoFiles(prev => prev.map((v, i) =>
+            i === index ? {
+              ...v,
+              uploadStatus: 'retrying',
+              error: `Retrying... (attempt ${retryCount + 1}/${MAX_RETRIES})`,
+              retryCount: retryCount + 1
+            } : v
+          ))
+
+          // Schedule retry
+          setTimeout(() => {
+            startSingleUpload(index, retryCount + 1)
+          }, delay)
+        } else {
+          // Max retries exceeded or non-retryable error
+          setVideoFiles(prev => prev.map((v, i) =>
+            i === index ? {
+              ...v,
+              uploadStatus: 'error',
+              error: error.message,
+              retryCount: retryCount + 1
+            } : v
+          ))
+          activeUploads.delete(videoId)
+
+          // Process next in queue
+          setTimeout(() => processUploadQueue(), 100)
+        }
+      },
+      onProgress: (bytesUploaded, bytesTotal) => {
+        const progress = (bytesUploaded / bytesTotal) * 100
+        setVideoFiles(prev => prev.map((v, i) =>
+          i === index ? {
+            ...v,
+            uploadProgress: progress,
+            lastActivityAt: Date.now()
+          } : v
+        ))
+      },
+      onSuccess: () => {
+        console.log(`[Upload] Complete ${video.relativePath}`)
+        setVideoFiles(prev => prev.map((v, i) =>
+          i === index ? { ...v, uploadStatus: 'complete', uploadProgress: 100 } : v
+        ))
+        activeUploads.delete(videoId)
+        saveUploadProgress()
+
+        // Process next in queue
+        setTimeout(() => processUploadQueue(), 100)
+
+        // Check if all done
+        const allSelected = videoFiles.filter(v => v.selected)
+        const allComplete = allSelected.every(v =>
+          v.uploadStatus === 'complete' || v.uploadStatus === 'error'
+        )
+        if (allComplete) {
+          setUploading(false)
+        }
+      },
+      onAfterResponse: (req, res) => {
+        // Store upload URL for resumability
+        const uploadUrl = res.getHeader('Location')
+        if (uploadUrl) {
+          setVideoFiles(prev => prev.map((v, i) =>
+            i === index ? { ...v, uploadUrl } : v
+          ))
+        }
+      }
+    })
+
+    upload.start()
+    activeUploads.set(videoId, upload)
   }
+
+  // Helper to determine if error is retryable
+  const isRetryableError = (error: Error): boolean => {
+    const message = error.message.toLowerCase()
+    // Retry on network errors, timeouts, 5xx errors
+    return message.includes('network') ||
+           message.includes('timeout') ||
+           message.includes('aborted') ||
+           message.includes('5')  // 5xx status codes
+  }
+
+  // Cancel handlers for smart cancel options
+  const handleStopQueued = () => {
+    console.log('[Upload] Stopping queued uploads...')
+
+    // Mark all pending uploads as cancelled
+    setVideoFiles(prev => prev.map(v =>
+      v.uploadStatus === 'pending' || v.uploadStatus === 'stalled'
+        ? { ...v, uploadStatus: 'error' as const, error: 'Cancelled by user' }
+        : v
+    ))
+
+    setShowStopQueuedModal(false)
+  }
+
+  const handleAbortAll = () => {
+    console.log('[Upload] Aborting all uploads...')
+
+    // Abort active uploads
+    activeUploads.forEach((upload) => {
+      upload.abort()
+    })
+    activeUploads.clear()
+
+    // Mark all non-complete uploads as cancelled
+    setVideoFiles(prev => prev.map(v =>
+      v.uploadStatus !== 'complete'
+        ? { ...v, uploadStatus: 'error' as const, error: 'Cancelled by user' }
+        : v
+    ))
+
+    setUploading(false)
+    setShowAbortAllModal(false)
+  }
+
+  // Stall detection - check for uploads with no progress
+  useEffect(() => {
+    if (!uploading) return
+
+    const interval = setInterval(() => {
+      const now = Date.now()
+      setVideoFiles(prev => prev.map(v => {
+        if (v.uploadStatus === 'uploading' && v.lastActivityAt) {
+          const timeSinceActivity = now - v.lastActivityAt
+          if (timeSinceActivity > STALL_TIMEOUT) {
+            console.warn(`[Upload] Stalled ${v.relativePath} (no activity for ${timeSinceActivity}ms)`)
+            // Mark as stalled so it can be retried
+            return { ...v, uploadStatus: 'stalled' as const, error: 'Upload stalled' }
+          }
+        }
+        return v
+      }))
+
+      // Trigger queue processing to pick up stalled uploads
+      processUploadQueue()
+    }, 10000) // Check every 10 seconds
+
+    return () => clearInterval(interval)
+  }, [uploading, videoFiles])
+
+  // Warn user before closing/navigating during uploads (only if uploads are actually in progress)
+  useEffect(() => {
+    if (!hasActiveUploads) return
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = ''
+      return ''
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [hasActiveUploads])
 
   const saveUploadProgress = () => {
     const progress = videoFiles.map(v => ({
@@ -479,6 +662,15 @@ export default function UploadPage() {
 
   const selectedCount = videoFiles.filter(v => v.selected).length
   const completedCount = videoFiles.filter(v => v.selected && v.uploadStatus === 'complete').length
+  const errorCount = videoFiles.filter(v => v.selected && v.uploadStatus === 'error').length
+  const uploadingCount = videoFiles.filter(v => v.selected && v.uploadStatus === 'uploading').length
+  const retryingCount = videoFiles.filter(v => v.selected && v.uploadStatus === 'retrying').length
+  const pendingCount = videoFiles.filter(v => v.selected && v.uploadStatus === 'pending').length
+  const stalledCount = videoFiles.filter(v => v.selected && v.uploadStatus === 'stalled').length
+
+  // Check if any uploads are in progress (not just the uploading flag)
+  const hasActiveUploads = uploadingCount > 0 || retryingCount > 0 || pendingCount > 0 || stalledCount > 0
+
   const overallProgress = selectedCount > 0
     ? (completedCount / selectedCount) * 100
     : 0
@@ -519,7 +711,53 @@ export default function UploadPage() {
           </div>
         </div>
 
-        {!showConfirmation && !uploading && (
+        {/* Interrupted uploads notification */}
+        {showIncompletePrompt && incompleteUploads.length > 0 && (
+          <div className="mt-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md p-4">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3 flex-1">
+                <h3 className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                  Cleared {incompleteUploads.length} interrupted upload{incompleteUploads.length !== 1 ? 's' : ''}
+                </h3>
+                <div className="mt-2 text-sm text-blue-700 dark:text-blue-300">
+                  <p className="mb-2">
+                    These uploads were interrupted when the page was closed and have been automatically cleared:
+                  </p>
+                  <details className="mt-2">
+                    <summary className="cursor-pointer font-medium hover:text-blue-800 dark:hover:text-blue-200">
+                      View list ({incompleteUploads.length} videos)
+                    </summary>
+                    <ul className="mt-2 space-y-1 ml-4 text-xs max-h-48 overflow-y-auto">
+                      {incompleteUploads.map((upload: any) => (
+                        <li key={upload.uploadId} className="flex justify-between">
+                          <span className="font-mono">{upload.videoPath}</span>
+                          <span className="text-blue-600 dark:text-blue-400 ml-2">
+                            {Math.round(upload.progress * 100)}% complete
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                </div>
+                <div className="mt-4">
+                  <button
+                    onClick={() => setShowIncompletePrompt(false)}
+                    className="text-sm font-semibold text-blue-800 dark:text-blue-200 hover:text-blue-900 dark:hover:text-blue-100"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {!showConfirmation && !uploading && videoFiles.length === 0 && (
           <div className="mt-8">
             {/* Folder Selection */}
             <div className="mb-6">
@@ -846,8 +1084,8 @@ export default function UploadPage() {
               </div>
 
               {/* Info */}
-              <div className="mt-4 text-xs text-gray-500 dark:text-gray-500">
-                ⚡ Uploads are resumable - you can close this page and continue later
+              <div className="mt-4 text-sm text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 p-3 rounded-md border border-amber-200 dark:border-amber-800">
+                ⚠️ <strong>Keep this page open during uploads.</strong> Closing or navigating away will stop uploads. They cannot resume automatically.
               </div>
             </div>
           </div>
@@ -874,59 +1112,167 @@ export default function UploadPage() {
                 />
               </div>
 
-              {/* File List */}
-              <div className="mt-6 space-y-4 max-h-96 overflow-y-auto">
-                {videoFiles.filter(v => v.selected).map((video, index) => (
-                  <div key={index} className="border border-gray-200 dark:border-gray-700 rounded-md p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900 dark:text-gray-200 truncate">
-                          {video.relativePath}
-                        </p>
-                        <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                          {formatBytes(video.size)} • {video.type}
-                        </p>
-                      </div>
-                      <div className="ml-4">
-                        {video.uploadStatus === 'complete' && (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
-                            ✓ Complete
-                          </span>
-                        )}
-                        {video.uploadStatus === 'uploading' && (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
-                            Uploading {Math.round(video.uploadProgress)}%
-                          </span>
-                        )}
-                        {video.uploadStatus === 'queued' && (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-400">
-                            Queued
-                          </span>
-                        )}
-                        {video.uploadStatus === 'error' && (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">
-                            Error
-                          </span>
-                        )}
-                      </div>
-                    </div>
+              {/* Status breakdown */}
+              {uploading && (uploadingCount > 0 || retryingCount > 0 || pendingCount > 0 || stalledCount > 0 || errorCount > 0) && (
+                <div className="mt-3 flex flex-wrap gap-3 text-xs">
+                  {uploadingCount > 0 && <span className="text-blue-600 dark:text-blue-400">↑ {uploadingCount} uploading</span>}
+                  {retryingCount > 0 && <span className="text-yellow-600 dark:text-yellow-400">⟳ {retryingCount} retrying</span>}
+                  {pendingCount > 0 && <span className="text-gray-500 dark:text-gray-400">⋯ {pendingCount} pending</span>}
+                  {stalledCount > 0 && <span className="text-orange-600 dark:text-orange-400">⏸ {stalledCount} stalled</span>}
+                  {errorCount > 0 && <span className="text-red-600 dark:text-red-400">✗ {errorCount} failed</span>}
+                </div>
+              )}
 
-                    {video.uploadStatus === 'uploading' && (
-                      <div className="mt-2 w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
-                        <div
-                          className="bg-indigo-600 h-1.5 rounded-full transition-all"
-                          style={{ width: `${video.uploadProgress}%` }}
-                        />
-                      </div>
-                    )}
+              {/* Cancel buttons */}
+              {uploading && (uploadingCount > 0 || retryingCount > 0 || pendingCount > 0 || stalledCount > 0) && (
+                <div className="mt-4 flex flex-wrap gap-3">
+                  {(pendingCount > 0 || stalledCount > 0) && (
+                    <button
+                      onClick={() => setShowStopQueuedModal(true)}
+                      className="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
+                    >
+                      Stop Queued ({pendingCount + stalledCount})
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setShowAbortAllModal(true)}
+                    className="px-3 py-1.5 text-sm font-medium text-red-700 dark:text-red-300 bg-white dark:bg-gray-800 border border-red-300 dark:border-red-600 rounded-md hover:bg-red-50 dark:hover:bg-red-900/30"
+                  >
+                    Abort All Uploads
+                  </button>
+                </div>
+              )}
 
-                    {video.error && (
-                      <p className="mt-2 text-xs text-red-600 dark:text-red-400">
-                        {video.error}
-                      </p>
-                    )}
-                  </div>
-                ))}
+              {/* File List - Two Section Layout */}
+              <div className="mt-6 space-y-6">
+                {(() => {
+                  const selectedVideos = videoFiles.filter(v => v.selected)
+                  const inProgressVideos = selectedVideos.filter(v =>
+                    v.uploadStatus === 'uploading' ||
+                    v.uploadStatus === 'retrying' ||
+                    v.uploadStatus === 'pending' ||
+                    v.uploadStatus === 'stalled'
+                  )
+                  const finishedVideos = selectedVideos.filter(v =>
+                    v.uploadStatus === 'complete' ||
+                    v.uploadStatus === 'error'
+                  )
+
+                  return (
+                    <>
+                      {/* In Progress Section */}
+                      {inProgressVideos.length > 0 && (
+                        <div>
+                          <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-200 mb-3">
+                            In Progress ({inProgressVideos.length})
+                          </h4>
+                          <div className="space-y-4 max-h-96 overflow-y-auto">
+                            {inProgressVideos.map((video, idx) => {
+                              const originalIndex = videoFiles.indexOf(video)
+                              return (
+                                <div key={originalIndex} className="border border-gray-200 dark:border-gray-700 rounded-md p-4">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-sm font-medium text-gray-900 dark:text-gray-200 truncate">
+                                        {video.relativePath}
+                                      </p>
+                                      <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                                        {formatBytes(video.size)} • {video.type}
+                                      </p>
+                                    </div>
+                                    <div className="ml-4">
+                                      {video.uploadStatus === 'uploading' && (
+                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
+                                          Uploading {Math.round(video.uploadProgress)}%
+                                        </span>
+                                      )}
+                                      {video.uploadStatus === 'retrying' && (
+                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
+                                          Retrying...
+                                        </span>
+                                      )}
+                                      {video.uploadStatus === 'stalled' && (
+                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400">
+                                          Stalled
+                                        </span>
+                                      )}
+                                      {video.uploadStatus === 'pending' && (
+                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400">
+                                          Pending
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {video.uploadStatus === 'uploading' && (
+                                    <div className="mt-2 w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
+                                      <div
+                                        className="bg-indigo-600 h-1.5 rounded-full transition-all"
+                                        style={{ width: `${video.uploadProgress}%` }}
+                                      />
+                                    </div>
+                                  )}
+
+                                  {video.error && video.uploadStatus !== 'error' && (
+                                    <p className="mt-2 text-xs text-red-600 dark:text-red-400">
+                                      {video.error}
+                                    </p>
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Finished Section */}
+                      {finishedVideos.length > 0 && (
+                        <div>
+                          <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-200 mb-3">
+                            Finished ({finishedVideos.length})
+                          </h4>
+                          <div className="space-y-4 max-h-96 overflow-y-auto">
+                            {finishedVideos.map((video, idx) => {
+                              const originalIndex = videoFiles.indexOf(video)
+                              return (
+                                <div key={originalIndex} className="border border-gray-200 dark:border-gray-700 rounded-md p-4">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-sm font-medium text-gray-900 dark:text-gray-200 truncate">
+                                        {video.relativePath}
+                                      </p>
+                                      <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                                        {formatBytes(video.size)} • {video.type}
+                                      </p>
+                                    </div>
+                                    <div className="ml-4">
+                                      {video.uploadStatus === 'complete' && (
+                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                                          ✓ Complete
+                                        </span>
+                                      )}
+                                      {video.uploadStatus === 'error' && (
+                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">
+                                          {video.error === 'Cancelled by user' ? 'Cancelled' : 'Error'}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {video.error && (
+                                    <p className="mt-2 text-xs text-red-600 dark:text-red-400">
+                                      {video.error}
+                                    </p>
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )
+                })()}
               </div>
 
               {completedCount === selectedCount && completedCount > 0 && (
@@ -973,6 +1319,94 @@ export default function UploadPage() {
             </div>
           </div>
         )}
+
+        {/* Stop Queued Modal */}
+        <Dialog open={showStopQueuedModal} onClose={() => setShowStopQueuedModal(false)} className="relative z-50">
+          <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
+          <div className="fixed inset-0 flex items-center justify-center p-4">
+            <DialogPanel className="max-w-md rounded-lg bg-white dark:bg-gray-800 p-6 shadow-xl">
+              <DialogTitle className="text-lg font-semibold text-gray-900 dark:text-gray-200">
+                Stop Queued Uploads?
+              </DialogTitle>
+              <div className="mt-4 text-sm text-gray-600 dark:text-gray-400">
+                <p>
+                  This will cancel {(() => {
+                    const currentPending = videoFiles.filter(v => v.uploadStatus === 'pending').length
+                    const currentStalled = videoFiles.filter(v => v.uploadStatus === 'stalled').length
+                    const total = currentPending + currentStalled
+                    return total
+                  })()} queued upload{(() => {
+                    const total = videoFiles.filter(v =>
+                      v.uploadStatus === 'pending' || v.uploadStatus === 'stalled'
+                    ).length
+                    return total !== 1 ? 's' : ''
+                  })()}.
+                </p>
+                <p className="mt-2">
+                  Uploads currently in progress ({videoFiles.filter(v =>
+                    v.uploadStatus === 'uploading' || v.uploadStatus === 'retrying'
+                  ).length}) will continue.
+                </p>
+              </div>
+              <div className="mt-6 flex gap-3 justify-end">
+                <button
+                  onClick={() => setShowStopQueuedModal(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleStopQueued}
+                  className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-500"
+                >
+                  Stop Queued
+                </button>
+              </div>
+            </DialogPanel>
+          </div>
+        </Dialog>
+
+        {/* Abort All Modal */}
+        <Dialog open={showAbortAllModal} onClose={() => setShowAbortAllModal(false)} className="relative z-50">
+          <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
+          <div className="fixed inset-0 flex items-center justify-center p-4">
+            <DialogPanel className="max-w-md rounded-lg bg-white dark:bg-gray-800 p-6 shadow-xl">
+              <DialogTitle className="text-lg font-semibold text-gray-900 dark:text-gray-200">
+                Abort All Uploads?
+              </DialogTitle>
+              <div className="mt-4 text-sm text-gray-600 dark:text-gray-400">
+                <p>
+                  This will immediately stop all uploads in progress and cancel all queued uploads.
+                </p>
+                <div className="mt-3 space-y-1 text-xs">
+                  <p>• Currently uploading/retrying: {videoFiles.filter(v =>
+                    v.uploadStatus === 'uploading' || v.uploadStatus === 'retrying'
+                  ).length}</p>
+                  <p>• Queued: {videoFiles.filter(v =>
+                    v.uploadStatus === 'pending' || v.uploadStatus === 'stalled'
+                  ).length}</p>
+                  <p>• Already completed: {videoFiles.filter(v =>
+                    v.uploadStatus === 'complete'
+                  ).length} (will be kept)</p>
+                </div>
+              </div>
+              <div className="mt-6 flex gap-3 justify-end">
+                <button
+                  onClick={() => setShowAbortAllModal(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAbortAll}
+                  className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-500"
+                >
+                  Abort All
+                </button>
+              </div>
+            </DialogPanel>
+          </div>
+        </Dialog>
       </div>
     </AppLayout>
   )

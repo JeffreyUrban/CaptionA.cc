@@ -1,4 +1,5 @@
 import { type LoaderFunctionArgs } from 'react-router'
+import { getVideoDir } from '~/utils/video-paths'
 import { resolve } from 'path'
 import { readFile } from 'fs/promises'
 import { existsSync } from 'fs'
@@ -18,18 +19,14 @@ export async function loader({ params }: LoaderFunctionArgs) {
     return new Response('Invalid filename', { status: 400 })
   }
 
+  // Get video directory
+  const videoDir = getVideoDir(videoId)
+  if (!videoDir) {
+    return new Response('Video not found', { status: 404 })
+  }
+
   // Construct path to full_frames image
-  // Format: /local/data/{content_name}/{video_id}/full_frames/{filename}
-  const imagePath = resolve(
-    process.cwd(),
-    '..',
-    '..',
-    'local',
-    'data',
-    ...videoId.split('/'),
-    'full_frames',
-    filename
-  )
+  const imagePath = resolve(videoDir, 'full_frames', filename)
 
   // Check if file exists
   if (!existsSync(imagePath)) {

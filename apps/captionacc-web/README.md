@@ -605,6 +605,22 @@ This project requires Node.js >= 24.0.0
 - Use `nvm use` to switch versions
 - Automatically checked before dev/build
 
+## Maintenance
+
+### Clean Stale Uploads
+
+Incomplete uploads are automatically cleared when users return to the Upload page. For long-running servers, run this script periodically to clean uploads older than 24 hours:
+
+```bash
+cd apps/captionacc-web
+npx tsx scripts/cleanup-stale-uploads.ts
+```
+
+**Recommended cron schedule** (daily at 2am):
+```cron
+0 2 * * * cd /path/to/CaptionA.cc/apps/captionacc-web && npx tsx scripts/cleanup-stale-uploads.ts
+```
+
 ## Clean Up
 
 This template includes infrastructure from the original project. You may want to remove:

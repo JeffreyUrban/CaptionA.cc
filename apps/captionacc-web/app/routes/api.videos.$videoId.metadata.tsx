@@ -1,4 +1,5 @@
 import { type LoaderFunctionArgs } from 'react-router'
+import { getDbPath, getVideoDir } from '~/utils/video-paths'
 import { resolve } from 'path'
 import { readdir } from 'fs/promises'
 import { existsSync } from 'fs'
@@ -13,15 +14,10 @@ interface Annotation {
 }
 
 function getOrCreateDatabase(videoId: string) {
-  const dbPath = resolve(
-    process.cwd(),
-    '..',
-    '..',
-    'local',
-    'data',
-    ...videoId.split('/'),
-    'annotations.db'
-  )
+  const dbPath = getDbPath(videoId)
+  if (!dbPath) {
+    return new Response('Video not found', { status: 404 })
+  }
 
   const dbExists = existsSync(dbPath)
   const db = new Database(dbPath)
@@ -138,21 +134,25 @@ export async function loader({ params }: LoaderFunctionArgs) {
   // Decode the URL-encoded videoId
   const videoId = decodeURIComponent(encodedVideoId)
 
+  // Get video directory
+  const videoDir = getVideoDir(videoId)
+  if (!videoDir) {
+    return new Response(
+      JSON.stringify({ error: 'Video not found' }),
+      {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    )
+  }
+
   // Construct path to cropped frames directory
-  const croppedDir = resolve(
-    process.cwd(),
-    '..',
-    '..',
-    'local',
-    'data',
-    ...videoId.split('/'),
-    'crop_frames'
-  )
+  const croppedDir = resolve(videoDir, 'crop_frames')
 
   // Check if directory exists
   if (!existsSync(croppedDir)) {
     return new Response(
-      JSON.stringify({ error: 'Video not found' }),
+      JSON.stringify({ error: 'Cropped frames not found' }),
       {
         status: 404,
         headers: { 'Content-Type': 'application/json' }

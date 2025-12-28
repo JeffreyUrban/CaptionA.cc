@@ -5,20 +5,28 @@
  */
 
 import type { LoaderFunctionArgs, ActionFunctionArgs } from 'react-router'
-import { resolve } from 'path'
-import { mkdirSync, createWriteStream, existsSync, statSync, unlinkSync } from 'fs'
-import { readFile } from 'fs/promises'
-import Database from 'better-sqlite3'
-import { randomUUID } from 'crypto'
 
-// Upload storage directory
-const uploadDir = resolve(process.cwd(), '..', '..', 'local', 'uploads')
-mkdirSync(uploadDir, { recursive: true })
+// Lazy-load Node.js modules to avoid Vite bundling issues
+let uploadDir: string | null = null
+
+async function getUploadDir(): Promise<string> {
+  if (uploadDir) return uploadDir
+
+  const { resolve } = await import('path')
+  const { mkdirSync } = await import('fs')
+
+  uploadDir = resolve(process.cwd(), '..', '..', 'local', 'uploads')
+  mkdirSync(uploadDir, { recursive: true })
+
+  return uploadDir
+}
 
 interface UploadMetadata {
-  videoPath: string
+  videoPath: string  // display_path (user-facing path like "level1/video")
   filename: string
   filetype?: string
+  videoId?: string  // UUID for this video
+  storagePath?: string  // hash-bucketed path like "a4/a4f2b8c3-..."
 }
 
 // Simple tus protocol implementation without tus-node-server
@@ -74,16 +82,32 @@ async function handleCreateUpload(request: Request): Promise<Response> {
     return new Response('videoPath and filename metadata required', { status: 400 })
   }
 
-  // Generate upload ID
+  // Load Node.js modules
+  const { resolve } = await import('path')
+  const { createWriteStream, mkdirSync } = await import('fs')
+  const { readFile } = await import('fs/promises')
+  const { randomUUID } = await import('crypto')
+  const Database = (await import('better-sqlite3')).default
+
+  // Generate upload ID and video UUID
+  const uploadDir = await getUploadDir()
   const uploadId = randomUUID()
   const uploadPath = resolve(uploadDir, uploadId)
   const metadataPath = resolve(uploadDir, `${uploadId}.json`)
 
-  // Save metadata
+  // Generate UUID for video storage (stable identifier)
+  const videoId = randomUUID()
+  const storagePath = `${videoId.slice(0, 2)}/${videoId}`  // Hash-bucketed path
+
+  // Save metadata (including videoId and storagePath)
   await writeJSON(metadataPath, {
     uploadId,
     uploadLength: parseInt(uploadLength),
-    metadata,
+    metadata: {
+      ...metadata,
+      videoId,
+      storagePath,
+    },
     createdAt: new Date().toISOString(),
     offset: 0,
   })
@@ -91,9 +115,9 @@ async function handleCreateUpload(request: Request): Promise<Response> {
   // Create empty file
   createWriteStream(uploadPath).end()
 
-  // Initialize database
-  const videoPath = metadata.videoPath
-  const videoDir = resolve(process.cwd(), '..', '..', 'local', 'data', ...videoPath.split('/'))
+  // Initialize database at storage path (not display path)
+  const displayPath = metadata.videoPath  // User-facing path
+  const videoDir = resolve(process.cwd(), '..', '..', 'local', 'data', ...storagePath.split('/'))
   mkdirSync(videoDir, { recursive: true })
 
   const dbPath = resolve(videoDir, 'annotations.db')
@@ -105,12 +129,19 @@ async function handleCreateUpload(request: Request): Promise<Response> {
     const schema = await readFile(schemaPath, 'utf-8')
     db.exec(schema)
 
-    // Insert video metadata
+    // Insert video metadata with UUID-based storage
     db.prepare(`
       INSERT OR REPLACE INTO video_metadata (
-        id, original_filename, file_size_bytes, video_path, upload_method
-      ) VALUES (1, ?, ?, ?, 'web_upload')
-    `).run(metadata.filename, parseInt(uploadLength), videoPath)
+        id, video_id, video_hash, storage_path, display_path,
+        original_filename, file_size_bytes, upload_method
+      ) VALUES (1, ?, '', ?, ?, ?, ?, 'web_upload')
+    `).run(
+      videoId,
+      storagePath,
+      displayPath,
+      metadata.filename,
+      parseInt(uploadLength)
+    )
 
     // Insert initial processing status
     db.prepare(`
@@ -137,6 +168,10 @@ async function handleCreateUpload(request: Request): Promise<Response> {
 }
 
 async function handleHeadRequest(uploadId: string): Promise<Response> {
+  const { resolve } = await import('path')
+  const { existsSync, statSync } = await import('fs')
+
+  const uploadDir = await getUploadDir()
   const metadataPath = resolve(uploadDir, `${uploadId}.json`)
 
   if (!existsSync(metadataPath)) {
@@ -161,6 +196,11 @@ async function handleHeadRequest(uploadId: string): Promise<Response> {
 }
 
 async function handlePatchRequest(request: Request, uploadId: string): Promise<Response> {
+  const { resolve } = await import('path')
+  const { existsSync, statSync, createWriteStream, unlinkSync } = await import('fs')
+  const Database = (await import('better-sqlite3')).default
+
+  const uploadDir = await getUploadDir()
   const metadataPath = resolve(uploadDir, `${uploadId}.json`)
 
   if (!existsSync(metadataPath)) {
@@ -192,15 +232,15 @@ async function handlePatchRequest(request: Request, uploadId: string): Promise<R
   const newSize = currentSize + chunk.length
   const complete = newSize >= metadata.uploadLength
 
-  // Update progress in database
-  const videoPath = metadata.metadata.videoPath
+  // Update progress in database (use storagePath, not displayPath)
+  const storagePath = metadata.metadata.storagePath
   const dbPath = resolve(
     process.cwd(),
     '..',
     '..',
     'local',
     'data',
-    ...videoPath.split('/'),
+    ...storagePath.split('/'),
     'annotations.db'
   )
 
@@ -217,14 +257,17 @@ async function handlePatchRequest(request: Request, uploadId: string): Promise<R
   }
 
   if (complete) {
-    // Upload complete - move file and trigger processing
+    // Upload complete - move file to UUID-based storage and compute hash
+    const storagePath = metadata.metadata.storagePath
+    const displayPath = metadata.metadata.videoPath
+
     const finalVideoPath = resolve(
       process.cwd(),
       '..',
       '..',
       'local',
       'data',
-      ...videoPath.split('/'),
+      ...storagePath.split('/'),
       metadata.metadata.filename
     )
 
@@ -232,7 +275,34 @@ async function handlePatchRequest(request: Request, uploadId: string): Promise<R
     await fs.rename(uploadPath, finalVideoPath)
     unlinkSync(metadataPath)
 
-    // Update status
+    // Compute video hash for deduplication detection
+    const { spawn } = await import('child_process')
+    const computeHashProcess = spawn(
+      'uv',
+      [
+        'run',
+        'python',
+        '-c',
+        `from video_utils import compute_video_hash; from pathlib import Path; print(compute_video_hash(Path("${finalVideoPath.replace(/"/g, '\\"')}")))`
+      ],
+      {
+        cwd: resolve(process.cwd(), '..', '..', 'packages', 'video_utils'),
+        stdio: ['ignore', 'pipe', 'pipe']
+      }
+    )
+
+    let videoHash = ''
+    computeHashProcess.stdout?.on('data', (data) => {
+      videoHash += data.toString().trim()
+    })
+
+    await new Promise<void>((resolve) => {
+      computeHashProcess.on('close', () => resolve())
+    })
+
+    console.log(`[tus] Computed video hash: ${videoHash.slice(0, 16)}...`)
+
+    // Update status and video hash
     const db = new Database(dbPath)
     try {
       db.prepare(`
@@ -242,19 +312,27 @@ async function handlePatchRequest(request: Request, uploadId: string): Promise<R
             upload_completed_at = datetime('now')
         WHERE id = 1
       `).run()
+
+      // Update video hash
+      if (videoHash) {
+        db.prepare(`
+          UPDATE video_metadata
+          SET video_hash = ?
+          WHERE id = 1
+        `).run(videoHash)
+      }
     } finally {
       db.close()
     }
 
-    console.log(`[tus] Upload complete: ${videoPath}`)
+    console.log(`[tus] Upload complete: ${displayPath} (storage: ${storagePath})`)
 
-    // Trigger background processing
-    const { triggerVideoProcessing } = await import('~/services/video-processing')
-    triggerVideoProcessing({
-      videoPath,
+    // Queue video for background processing (respects concurrency limits)
+    const { queueVideoProcessing } = await import('~/services/video-processing')
+    queueVideoProcessing({
+      videoPath: displayPath,  // Pass display path for logging
       videoFile: finalVideoPath,
-    }).catch(error => {
-      console.error(`Failed to trigger processing for ${videoPath}:`, error)
+      videoId: metadata.metadata.videoId,  // Pass UUID for tracking
     })
   }
 
@@ -276,7 +354,11 @@ function parseUploadMetadata(metadataHeader: string): UploadMetadata {
   for (const pair of pairs) {
     const [key, value] = pair.trim().split(' ')
     if (key && value) {
-      metadata[key] = Buffer.from(value, 'base64').toString('utf-8')
+      // Use atob for browser compatibility (though this only runs server-side)
+      const decoded = typeof Buffer !== 'undefined'
+        ? Buffer.from(value, 'base64').toString('utf-8')
+        : atob(value)
+      metadata[key] = decoded
     }
   }
 
@@ -284,6 +366,7 @@ function parseUploadMetadata(metadataHeader: string): UploadMetadata {
 }
 
 async function readJSON(path: string): Promise<any> {
+  const { readFile } = await import('fs/promises')
   const content = await readFile(path, 'utf-8')
   return JSON.parse(content)
 }
