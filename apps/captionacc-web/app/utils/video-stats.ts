@@ -4,6 +4,21 @@ import { readdir } from 'fs/promises'
 import Database from 'better-sqlite3'
 import { getDbPath, getVideoDir } from './video-paths'
 
+export type BadgeState = {
+  type: 'layout' | 'boundaries' | 'text' | 'fully-annotated'
+  label: string
+  color: 'blue' | 'indigo' | 'purple' | 'yellow' | 'green' | 'teal'
+  clickable: boolean
+  url?: string
+}
+
+export interface CropFramesStatus {
+  status: 'queued' | 'processing' | 'complete' | 'error'
+  processingStartedAt?: string
+  processingCompletedAt?: string
+  errorMessage?: string
+}
+
 export interface VideoStats {
   totalAnnotations: number
   pendingReview: number
@@ -16,7 +31,11 @@ export interface VideoStats {
   hasOcrData: boolean  // Whether video has full_frame_ocr data (enables layout annotation)
   layoutApproved: boolean  // Whether layout annotation has been approved (gate for boundary annotation)
   processingStatus?: ProcessingStatus  // Upload/processing status (null if not uploaded via web)
+  cropFramesStatus?: CropFramesStatus  // Crop frames processing status
+  boundaryPendingReview: number  // Boundaries pending review
+  textPendingReview: number  // Text annotations pending review
   databaseId?: string  // Unique ID that changes when database is recreated (for cache invalidation)
+  badges: BadgeState[]  // Calculated badge states for display
 }
 
 export interface ProcessingStatus {
@@ -30,6 +49,146 @@ export interface ProcessingStatus {
   uploadCompletedAt?: string
   processingStartedAt?: string
   processingCompletedAt?: string
+}
+
+/**
+ * Calculate badge states based on video stats
+ * Returns array of badges to display (empty if fully annotated)
+ */
+function calculateBadges(stats: Omit<VideoStats, 'badges'>, videoId: string): BadgeState[] {
+  const badges: BadgeState[] = []
+
+  // Layout Track
+  const layoutBadge = calculateLayoutBadge(stats, videoId)
+  if (layoutBadge) badges.push(layoutBadge)
+
+  // Boundaries Track
+  const boundariesBadge = calculateBoundariesBadge(stats, videoId)
+  if (boundariesBadge) badges.push(boundariesBadge)
+
+  // Text Track
+  const textBadge = calculateTextBadge(stats, videoId)
+  if (textBadge) badges.push(textBadge)
+
+  // If all tracks complete, show Fully Annotated badge
+  if (badges.length === 0) {
+    badges.push({
+      type: 'fully-annotated',
+      label: 'Fully Annotated',
+      color: 'teal',
+      clickable: false
+    })
+  }
+
+  return badges
+}
+
+function calculateLayoutBadge(stats: Omit<VideoStats, 'badges'>, videoId: string): BadgeState | null {
+  const ps = stats.processingStatus
+
+  // Priority 1: System processing
+  if (ps) {
+    if (ps.status === 'uploading') {
+      return { type: 'layout', label: 'Uploading', color: 'blue', clickable: false }
+    }
+    if (ps.status === 'upload_complete') {
+      return { type: 'layout', label: 'Queued', color: 'blue', clickable: false }
+    }
+    if (ps.status === 'extracting_frames') {
+      return { type: 'layout', label: 'Layout: Framing', color: 'indigo', clickable: false }
+    }
+    if (ps.status === 'running_ocr') {
+      return { type: 'layout', label: 'Layout: Running OCR', color: 'purple', clickable: false }
+    }
+    if (ps.status === 'analyzing_layout') {
+      return { type: 'layout', label: 'Layout: Analyzing', color: 'purple', clickable: false }
+    }
+  }
+
+  // Priority 2: Revisit (TODO: need to detect if predicted bounds changed)
+  // For now, skipping this state until we implement predicted bounds tracking
+
+  // Priority 3: Annotate (ready for first-time annotation)
+  if (stats.hasOcrData && !stats.layoutApproved) {
+    return {
+      type: 'layout',
+      label: 'Layout: Annotate',
+      color: 'green',
+      clickable: true,
+      url: `/annotate/layout?videoId=${encodeURIComponent(videoId)}`
+    }
+  }
+
+  // Hide if layout approved and predictions unchanged
+  return null
+}
+
+function calculateBoundariesBadge(stats: Omit<VideoStats, 'badges'>, videoId: string): BadgeState | null {
+  // Hide if waiting for layout approval
+  if (!stats.layoutApproved) {
+    return null
+  }
+
+  const cfs = stats.cropFramesStatus
+
+  // Priority 1: System processing
+  if (cfs) {
+    if (cfs.status === 'processing') {
+      // Determine which step based on whether we have crop frames
+      if (stats.totalFrames === 0) {
+        return { type: 'boundaries', label: 'Boundaries: Framing', color: 'indigo', clickable: false }
+      } else {
+        return { type: 'boundaries', label: 'Boundaries: Running OCR', color: 'purple', clickable: false }
+      }
+    }
+  }
+
+  // Priority 2: Annotate (has gap annotations that need marking)
+  if (stats.gapAnnotations > 0) {
+    return {
+      type: 'boundaries',
+      label: 'Boundaries: Annotate',
+      color: 'green',
+      clickable: true,
+      url: `/annotate/boundaries?videoId=${encodeURIComponent(videoId)}`
+    }
+  }
+
+  // Priority 3: Review (no gaps, but has pending review)
+  if (stats.boundaryPendingReview > 0) {
+    return {
+      type: 'boundaries',
+      label: 'Boundaries: Review',
+      color: 'yellow',
+      clickable: true,
+      url: `/annotate/boundaries?videoId=${encodeURIComponent(videoId)}`
+    }
+  }
+
+  // Hide if no gaps and none pending review
+  return null
+}
+
+function calculateTextBadge(stats: Omit<VideoStats, 'badges'>, videoId: string): BadgeState | null {
+  // Hide if waiting for boundaries (no annotations yet, or all are gaps)
+  const nonGapAnnotations = stats.totalAnnotations - stats.gapAnnotations
+  if (nonGapAnnotations === 0) {
+    return null
+  }
+
+  // Priority 1: Review (has text pending review)
+  if (stats.textPendingReview > 0) {
+    return {
+      type: 'text',
+      label: 'Text: Review',
+      color: 'yellow',
+      clickable: true,
+      url: `/annotate/text?videoId=${encodeURIComponent(videoId)}`
+    }
+  }
+
+  // Hide if none pending review (all text complete)
+  return null
 }
 
 export async function getVideoStats(videoId: string): Promise<VideoStats> {
@@ -49,7 +208,10 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
       totalFrames: 0,
       coveredFrames: 0,
       hasOcrData: false,
-      layoutApproved: false
+      layoutApproved: false,
+      boundaryPendingReview: 0,
+      textPendingReview: 0,
+      badges: []
     }
   }
 
@@ -69,14 +231,16 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
     const result = db.prepare(`
       SELECT
         COUNT(*) as total,
-        SUM(CASE WHEN boundary_pending = 1 THEN 1 ELSE 0 END) as pending,
+        SUM(CASE WHEN boundary_pending = 1 THEN 1 ELSE 0 END) as boundary_pending,
+        SUM(CASE WHEN text_pending = 1 THEN 1 ELSE 0 END) as text_pending,
         SUM(CASE WHEN boundary_state = 'confirmed' THEN 1 ELSE 0 END) as confirmed,
         SUM(CASE WHEN boundary_state = 'predicted' THEN 1 ELSE 0 END) as predicted,
         SUM(CASE WHEN boundary_state = 'gap' THEN 1 ELSE 0 END) as gaps
       FROM captions
     `).get() as {
       total: number
-      pending: number
+      boundary_pending: number
+      text_pending: number
       confirmed: number
       predicted: number
       gaps: number
@@ -136,7 +300,10 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
             totalFrames: 0,
             coveredFrames: 0,
             hasOcrData: false,
-            layoutApproved: false
+            layoutApproved: false,
+            boundaryPendingReview: 0,
+            textPendingReview: 0,
+            badges: []
           }
         }
 
@@ -159,6 +326,23 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
       processingStatus = undefined
     }
 
+    // Get crop_frames processing status
+    let cropFramesStatus: CropFramesStatus | undefined
+    try {
+      const status = db.prepare(`SELECT * FROM crop_frames_status WHERE id = 1`).get() as any
+      if (status) {
+        cropFramesStatus = {
+          status: status.status,
+          processingStartedAt: status.processing_started_at,
+          processingCompletedAt: status.processing_completed_at,
+          errorMessage: status.error_message
+        }
+      }
+    } catch {
+      // Table doesn't exist
+      cropFramesStatus = undefined
+    }
+
     // Get database_id for cache invalidation
     let databaseId: string | undefined
     try {
@@ -169,9 +353,9 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
       databaseId = undefined
     }
 
-    const stats = {
+    const stats: VideoStats = {
       totalAnnotations: result.total,
-      pendingReview: result.pending,
+      pendingReview: result.boundary_pending + result.text_pending,
       confirmedAnnotations: result.confirmed,
       predictedAnnotations: result.predicted,
       gapAnnotations: result.gaps,
@@ -181,7 +365,27 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
       hasOcrData,
       layoutApproved,
       processingStatus,
-      databaseId
+      cropFramesStatus,
+      boundaryPendingReview: result.boundary_pending,
+      textPendingReview: result.text_pending,
+      databaseId,
+      badges: calculateBadges({
+        totalAnnotations: result.total,
+        pendingReview: result.boundary_pending + result.text_pending,
+        confirmedAnnotations: result.confirmed,
+        predictedAnnotations: result.predicted,
+        gapAnnotations: result.gaps,
+        progress,
+        totalFrames,
+        coveredFrames,
+        hasOcrData,
+        layoutApproved,
+        processingStatus,
+        cropFramesStatus,
+        boundaryPendingReview: result.boundary_pending,
+        textPendingReview: result.text_pending,
+        databaseId
+      }, videoId)
     }
     console.log(`[getVideoStats] Returning stats for ${videoId}:`, JSON.stringify(stats, null, 2))
     return stats

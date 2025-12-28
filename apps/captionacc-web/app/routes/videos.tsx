@@ -297,27 +297,48 @@ function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsU
   // Video Row
   const videoId = node.videoId
 
-  // Processing status badge
-  const getProcessingStatusBadge = () => {
-    if (!stats?.processingStatus) return null
-
-    const { status } = stats.processingStatus
-
-    const statusConfig = {
-      uploading: { label: 'Uploading', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' },
-      upload_complete: { label: 'Queued', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' },
-      extracting_frames: { label: 'Extracting Frames', color: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400' },
-      running_ocr: { label: 'Running OCR', color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400' },
-      analyzing_layout: { label: 'Analyzing Layout', color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400' },
-      processing_complete: { label: 'Ready', color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' },
-      error: { label: 'Error', color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' },
+  // Badge color mapping
+  const getBadgeColorClasses = (color: string) => {
+    const colorMap = {
+      blue: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
+      indigo: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400',
+      purple: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400',
+      yellow: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
+      green: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+      teal: 'bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-400',
     }
+    return colorMap[color as keyof typeof colorMap] || colorMap.blue
+  }
 
-    const config = statusConfig[status]
+  // Render badges (three-track system or fully-annotated)
+  const renderBadges = () => {
+    if (!stats?.badges || stats.badges.length === 0) return null
+
     return (
-      <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ${config.color}`}>
-        {config.label}
-      </span>
+      <div className="flex items-center gap-2 flex-wrap">
+        {stats.badges.map((badge, index) => {
+          const colorClasses = getBadgeColorClasses(badge.color)
+          const baseClasses = `inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ${colorClasses}`
+
+          if (badge.clickable && badge.url) {
+            return (
+              <Link
+                key={index}
+                to={badge.url}
+                className={`${baseClasses} hover:opacity-80 cursor-pointer transition-opacity`}
+              >
+                {badge.label}
+              </Link>
+            )
+          }
+
+          return (
+            <span key={index} className={baseClasses}>
+              {badge.label}
+            </span>
+          )
+        })}
+      </div>
     )
   }
 
@@ -327,9 +348,9 @@ function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsU
         className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 dark:text-gray-300 sm:pl-6"
         style={{ paddingLeft: `${depth * 1.5 + 1.5}rem` }}
       >
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <span>{node.name}</span>
-          {getProcessingStatusBadge()}
+          {renderBadges()}
         </div>
       </td>
       <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-600 dark:text-gray-400">
