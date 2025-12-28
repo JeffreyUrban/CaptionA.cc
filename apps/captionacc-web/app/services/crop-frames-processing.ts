@@ -28,10 +28,44 @@ const cropFramesQueue: CropFramesJob[] = []
 
 /**
  * Queue a crop_frames job
- * Called when user approves layout annotation
+ * Called when user approves layout annotation or during auto-recovery
  */
 export function queueCropFramesProcessing(job: CropFramesJob): void {
   console.log(`[CropFramesQueue] Queuing ${job.videoPath} (queue size: ${cropFramesQueue.length})`)
+
+  // Immediately create status record so badge system shows "Queued" state
+  const dbPath = getDbPath(job.videoId)
+  if (dbPath && existsSync(dbPath)) {
+    try {
+      const db = new Database(dbPath)
+      try {
+        // Ensure crop_frames_status table exists
+        db.prepare(`
+          CREATE TABLE IF NOT EXISTS crop_frames_status (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            status TEXT NOT NULL DEFAULT 'queued',
+            processing_started_at TEXT,
+            processing_completed_at TEXT,
+            current_job_id TEXT,
+            error_message TEXT,
+            error_details TEXT,
+            error_occurred_at TEXT
+          )
+        `).run()
+
+        // Set status to 'queued' (don't overwrite if already exists with different status)
+        db.prepare(`
+          INSERT OR IGNORE INTO crop_frames_status (id, status)
+          VALUES (1, 'queued')
+        `).run()
+      } finally {
+        db.close()
+      }
+    } catch (error) {
+      console.error(`[CropFramesQueue] Failed to create status record for ${job.videoPath}:`, error)
+    }
+  }
+
   cropFramesQueue.push(job)
   tryProcessNext()
 }
@@ -260,6 +294,7 @@ async function processCropFramesJob(job: CropFramesJob): Promise<void> {
 
 /**
  * Recover stalled crop_frames jobs on server startup
+ * Also auto-triggers processing if layout approved but crop_frames never started
  */
 export function recoverStalledCropFrames(videoId: string, videoPath: string): void {
   const dbPath = getDbPath(videoId)
@@ -270,13 +305,43 @@ export function recoverStalledCropFrames(videoId: string, videoPath: string): vo
   try {
     const db = new Database(dbPath)
     try {
+      // Check if layout is approved by checking for layout_config
+      const layoutConfig = db.prepare(`
+        SELECT crop_left, crop_top, crop_right, crop_bottom
+        FROM layout_config WHERE id = 1
+      `).get() as {
+        crop_left: number
+        crop_top: number
+        crop_right: number
+        crop_bottom: number
+      } | undefined
+
+      // If no layout config, layout not approved yet
+      if (!layoutConfig) {
+        return
+      }
+
       // Check if crop_frames_status table exists
       const tableExists = db.prepare(`
         SELECT name FROM sqlite_master
         WHERE type='table' AND name='crop_frames_status'
       `).get()
 
+      // Auto-trigger processing if layout approved but crop_frames never started
       if (!tableExists) {
+        console.log(`[CropFrames] Auto-triggering crop_frames for ${videoPath} (layout approved but processing never started)`)
+
+        // Queue the processing
+        queueCropFramesProcessing({
+          videoId,
+          videoPath,
+          cropBounds: {
+            left: layoutConfig.crop_left,
+            top: layoutConfig.crop_top,
+            right: layoutConfig.crop_right,
+            bottom: layoutConfig.crop_bottom
+          }
+        })
         return
       }
 
@@ -288,7 +353,25 @@ export function recoverStalledCropFrames(videoId: string, videoPath: string): vo
         current_job_id: string | null
       } | undefined
 
-      if (!status || status.status !== 'processing') {
+      // Auto-trigger if layout approved but no status record
+      if (!status) {
+        console.log(`[CropFrames] Auto-triggering crop_frames for ${videoPath} (layout approved but no status record)`)
+
+        queueCropFramesProcessing({
+          videoId,
+          videoPath,
+          cropBounds: {
+            left: layoutConfig.crop_left,
+            top: layoutConfig.crop_top,
+            right: layoutConfig.crop_right,
+            bottom: layoutConfig.crop_bottom
+          }
+        })
+        return
+      }
+
+      // Only check for stalled processing if status is 'processing'
+      if (status.status !== 'processing') {
         return
       }
 

@@ -307,24 +307,10 @@ function calculateBoundariesBadge(
     }
   }
 
-  // Priority 7: Layout approved but processing never triggered (error condition)
-  // No cropFramesStatus means processing should have started but didn't
-  if (!cfs && stats.totalAnnotations === 0) {
-    return {
-      type: 'error',
-      label: 'Boundaries: Error',
-      color: 'red',
-      clickable: true,
-      errorDetails: {
-        message: 'Layout approved but crop frames processing was never triggered',
-        context: {
-          videoId,
-          stage: 'boundaries',
-          issue: 'processing_not_triggered'
-        }
-      }
-    }
-  }
+  // No explicit state needed for "layout approved but not started":
+  // - Auto-recovery triggers on server startup (recoverStalledCropFrames)
+  // - Recovery creates crop_frames_status with status='queued'
+  // - Badge logic above handles 'queued' state correctly
 
   // Boundaries complete (all annotations confirmed, no pending)
   return null
