@@ -12,7 +12,7 @@
 import { spawn } from 'child_process'
 import { resolve } from 'path'
 import Database from 'better-sqlite3'
-import { existsSync } from 'fs'
+import { existsSync, readdirSync } from 'fs'
 import { getDbPath, getVideoDir, getAllVideos } from '~/utils/video-paths'
 
 interface ProcessingOptions {
@@ -373,6 +373,46 @@ function checkAndRecoverVideo(dbPath: string, videoPath: string, videoId: string
       } | undefined
 
       if (!status) return
+
+      // Handle videos queued for processing (lost from in-memory queue)
+      if (status.status === 'upload_complete') {
+        console.log(`[VideoProcessing] Requeuing ${videoPath} (was queued when server restarted)`)
+
+        // Find the video file
+        const videoDir = getVideoDir(videoId)
+        if (!videoDir) {
+          console.error(`[VideoProcessing] Video directory not found for ${videoPath}`)
+          return
+        }
+
+        const videoFiles = readdirSync(videoDir).filter(f =>
+          f.endsWith('.mp4') || f.endsWith('.mkv') || f.endsWith('.avi') || f.endsWith('.mov')
+        )
+
+        if (videoFiles.length === 0) {
+          console.error(`[VideoProcessing] Video file not found in ${videoDir}`)
+
+          // Mark as error since we can't requeue without a video file
+          db.prepare(`
+            UPDATE processing_status
+            SET status = 'error',
+                error_message = 'Video file not found (cannot requeue)',
+                error_occurred_at = datetime('now')
+            WHERE id = 1
+          `).run()
+          return
+        }
+
+        const videoFile = resolve(videoDir, videoFiles[0])
+
+        // Requeue for processing
+        queueVideoProcessing({
+          videoPath: videoPath,
+          videoFile,
+          videoId
+        })
+        return
+      }
 
       // Check if processing is in an active state
       const activeStates = ['extracting_frames', 'running_ocr', 'analyzing_layout']
