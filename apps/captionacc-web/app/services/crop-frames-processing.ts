@@ -26,6 +26,9 @@ interface CropFramesJob {
 // Processing queue
 const cropFramesQueue: CropFramesJob[] = []
 
+// Maximum number of retries for failed crop_frames processing
+const MAX_CROP_FRAMES_RETRIES = 3
+
 /**
  * Queue a crop_frames job
  * Called when user approves layout annotation or during auto-recovery
@@ -161,9 +164,17 @@ async function processCropFramesJob(job: CropFramesJob): Promise<void> {
         current_job_id TEXT,
         error_message TEXT,
         error_details TEXT,
-        error_occurred_at TEXT
+        error_occurred_at TEXT,
+        retry_count INTEGER NOT NULL DEFAULT 0
       )
     `).run()
+
+    // Add retry_count column if it doesn't exist (migration for existing tables)
+    try {
+      db2.prepare(`ALTER TABLE crop_frames_status ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0`).run()
+    } catch {
+      // Column already exists, ignore
+    }
 
     db2.prepare(`
       INSERT OR REPLACE INTO crop_frames_status (id, status, processing_started_at)
@@ -240,11 +251,12 @@ async function processCropFramesJob(job: CropFramesJob): Promise<void> {
         const db = new Database(dbPath)
         try {
           if (code === 0) {
-            // Success
+            // Success - reset retry count
             db.prepare(`
               UPDATE crop_frames_status
               SET status = 'complete',
-                  processing_completed_at = datetime('now')
+                  processing_completed_at = datetime('now'),
+                  retry_count = 0
               WHERE id = 1
             `).run()
 
@@ -364,11 +376,12 @@ export function recoverStalledCropFrames(videoId: string, videoPath: string): vo
       }
 
       const status = db.prepare(`
-        SELECT status, current_job_id
+        SELECT status, current_job_id, retry_count
         FROM crop_frames_status WHERE id = 1
       `).get() as {
         status: string
         current_job_id: string | null
+        retry_count: number
       } | undefined
 
       // Auto-trigger if layout approved but no status record
@@ -390,7 +403,32 @@ export function recoverStalledCropFrames(videoId: string, videoPath: string): vo
 
       // Re-queue if stuck in queued state (lost from in-memory queue after server restart)
       if (status.status === 'queued') {
-        console.log(`[CropFrames] Re-queueing ${videoPath} (was queued when server restarted)`)
+        // Check if max retries exceeded
+        if (status.retry_count >= MAX_CROP_FRAMES_RETRIES) {
+          console.log(`[CropFrames] Max retries (${MAX_CROP_FRAMES_RETRIES}) exceeded for ${videoPath}, marking as error`)
+
+          db.prepare(`
+            UPDATE crop_frames_status
+            SET status = 'error',
+                error_message = ?,
+                error_details = ?,
+                error_occurred_at = datetime('now')
+            WHERE id = 1
+          `).run(
+            `Crop frames processing failed after ${status.retry_count} attempts`,
+            JSON.stringify({ reason: 'max_retries_exceeded', retry_count: status.retry_count })
+          )
+          return
+        }
+
+        console.log(`[CropFrames] Re-queueing ${videoPath} (was queued when server restarted, attempt ${status.retry_count + 1}/${MAX_CROP_FRAMES_RETRIES})`)
+
+        // Increment retry count
+        db.prepare(`
+          UPDATE crop_frames_status
+          SET retry_count = retry_count + 1
+          WHERE id = 1
+        `).run()
 
         queueCropFramesProcessing({
           videoId,
@@ -412,12 +450,31 @@ export function recoverStalledCropFrames(videoId: string, videoPath: string): vo
         `).get() as { count: number }
 
         if (frameCount.count === 0) {
-          console.log(`[CropFrames] Re-queueing ${videoPath} (marked complete but no frames exist - likely migration timing issue)`)
+          // Check if max retries exceeded
+          if (status.retry_count >= MAX_CROP_FRAMES_RETRIES) {
+            console.log(`[CropFrames] Max retries (${MAX_CROP_FRAMES_RETRIES}) exceeded for ${videoPath}, marking as permanent error`)
 
-          // Reset status to allow re-processing
+            db.prepare(`
+              UPDATE crop_frames_status
+              SET status = 'error',
+                  error_message = ?,
+                  error_details = ?,
+                  error_occurred_at = datetime('now')
+              WHERE id = 1
+            `).run(
+              `Crop frames processing failed after ${status.retry_count} attempts (marked complete but no frames created)`,
+              JSON.stringify({ reason: 'max_retries_exceeded_false_complete', retry_count: status.retry_count })
+            )
+            return
+          }
+
+          console.log(`[CropFrames] Re-queueing ${videoPath} (marked complete but no frames exist - likely migration timing issue, attempt ${status.retry_count + 1}/${MAX_CROP_FRAMES_RETRIES})`)
+
+          // Reset status to allow re-processing and increment retry count
           db.prepare(`
             UPDATE crop_frames_status
             SET status = 'queued',
+                retry_count = retry_count + 1,
                 error_message = NULL,
                 error_details = NULL,
                 error_occurred_at = NULL
