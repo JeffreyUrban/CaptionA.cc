@@ -1456,7 +1456,7 @@ export default function AnnotateLayout() {
           {/* Left: Canvas (2/3 width) */}
           <div className="flex min-h-0 w-2/3 flex-col gap-4">
             {/* Main canvas */}
-            <div className="relative flex flex-shrink-0 items-center justify-center rounded-lg border border-gray-300 bg-gray-900 dark:border-gray-600 dark:bg-gray-800 p-4">
+            <div className="relative flex flex-shrink-0 items-center justify-center rounded-lg border border-gray-300 bg-gray-900 dark:border-gray-600 dark:bg-gray-800">
               {viewMode === 'analysis' && layoutConfig ? (
                 <div
                   ref={interactionAreaRef}
