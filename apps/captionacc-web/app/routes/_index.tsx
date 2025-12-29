@@ -5,7 +5,7 @@ import { AppLayout } from '~/components/AppLayout'
 // Loader function to expose default video ID from environment
 export async function loader() {
   return {
-    defaultVideoId: process.env['DEFAULT_VIDEO_ID'] || '',
+    defaultVideoId: process.env['DEFAULT_VIDEO_ID'] ?? '',
   }
 }
 

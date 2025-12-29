@@ -23,7 +23,7 @@ repos:
   hooks:
   - id: typescript-check
     name: TypeScript Type Check
-    entry: bash -c 'cd apps/captionacc-web && npx tsc --noEmit'
+    entry: bash -c 'cd apps/captionacc-web && npx tsc --noEmit --incremental false'
     language: system
     files: ^apps/captionacc-web/.*\.(ts|tsx)$
     pass_filenames: false

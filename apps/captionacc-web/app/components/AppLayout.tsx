@@ -85,7 +85,7 @@ function ThemeSwitcher() {
     { id: 'system' as Theme, name: 'System', icon: ComputerIcon },
   ] as const
 
-  const currentThemeData = themes.find(t => t.id === theme) || themes[2]
+  const currentThemeData = themes.find(t => t.id === theme) ?? themes[2]
   const CurrentIcon = currentThemeData.icon
   const currentName = currentThemeData.name
 

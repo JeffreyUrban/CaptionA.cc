@@ -42,7 +42,7 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
   const videoId = decodeURIComponent(encodedVideoId)
   const url = new URL(request.url)
   const direction = url.searchParams.get('direction') // 'prev' or 'next'
-  const currentId = parseInt(url.searchParams.get('currentId') || '0')
+  const currentId = parseInt(url.searchParams.get('currentId') ?? '0')
 
   if (!direction || !['prev', 'next'].includes(direction)) {
     return new Response(JSON.stringify({ error: 'Invalid direction' }), {

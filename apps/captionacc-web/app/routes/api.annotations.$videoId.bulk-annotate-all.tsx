@@ -86,7 +86,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
     const modelInfo = db
       .prepare('SELECT model_version FROM box_classification_model WHERE id = 1')
       .get() as { model_version: string } | undefined
-    const modelVersion = modelInfo?.model_version || null
+    const modelVersion = modelInfo?.model_version ?? null
 
     // Get all unique frame indices from full_frame_ocr table
     const frames = db

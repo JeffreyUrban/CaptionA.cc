@@ -180,12 +180,15 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
     // Convert to expected format with camelCase, ordered by frame index
     const frameResults = frameIndices.map(idx => {
-      const row = existingOCRMap.get(idx)!
+      const row = existingOCRMap.get(idx)
+      if (!row) {
+        throw new Error(`Frame ${idx} not found in OCR map`)
+      }
       return {
         frameIndex: row.frame_index,
-        ocrText: row.ocr_text || '',
+        ocrText: row.ocr_text ?? '',
         ocrAnnotations: row.ocr_annotations ? JSON.parse(row.ocr_annotations) : [],
-        ocrConfidence: row.ocr_confidence || 0,
+        ocrConfidence: row.ocr_confidence ?? 0,
       }
     })
 
