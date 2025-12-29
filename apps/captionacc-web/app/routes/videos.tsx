@@ -104,7 +104,10 @@ function calculateFolderStatsFromMap(node: FolderNode, statsMap: Map<string, Vid
     totalFrames: 0,
     coveredFrames: 0,
     hasOcrData: false,
-    layoutApproved: false
+    layoutApproved: false,
+    boundaryPendingReview: 0,
+    textPendingReview: 0,
+    badges: []
   }
 
   for (const stats of videoStats) {
@@ -349,6 +352,7 @@ function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsU
       green: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
       teal: 'bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-400',
       red: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+      gray: 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400',
     }
     return colorMap[color as keyof typeof colorMap] || colorMap.blue
   }

@@ -31,7 +31,7 @@ export async function action({ request }: ActionFunctionArgs) {
       return Response.json({ error: 'Target folder should not start or end with /' }, { status: 400 })
     }
 
-    if (!/^[a-zA-Z0-9_\-\/\s]+$/.test(trimmedTargetFolder)) {
+    if (!/^[a-zA-Z0-9_\-/\s]+$/.test(trimmedTargetFolder)) {
       return Response.json({ error: 'Target folder contains invalid characters' }, { status: 400 })
     }
   }

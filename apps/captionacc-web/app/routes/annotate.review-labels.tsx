@@ -71,9 +71,9 @@ interface FrameBoxesData {
 type ViewMode = 'analysis' | 'frame'
 
 // Loader function to expose environment variables
-export async function loader({ }: LoaderFunctionArgs) {
+export async function loader() {
   return {
-    defaultVideoId: process.env.DEFAULT_VIDEO_ID || ''
+    defaultVideoId: process.env['DEFAULT_VIDEO_ID'] || ''
   }
 }
 
@@ -161,12 +161,12 @@ export default function ReviewLabels() {
       setClusterStats(data.clusterStats || null)
 
       // Get unique frame indices from mislabels
-      const frameIndices = Array.from(new Set(
+      const frameIndices = (Array.from(new Set(
         (data.potentialMislabels || []).map((m: PotentialMislabel) => m.frameIndex)
-      )).sort((a, b) => a - b)
+      )) as number[]).sort((a: number, b: number) => a - b)
 
       // Create frame info for each unique frame
-      const frameInfos: FrameInfo[] = frameIndices.map(frameIndex => ({
+      const frameInfos: FrameInfo[] = frameIndices.map((frameIndex: number) => ({
         frameIndex,
         totalBoxCount: (data.potentialMislabels || []).filter((m: PotentialMislabel) => m.frameIndex === frameIndex).length,
         captionBoxCount: (data.potentialMislabels || []).filter((m: PotentialMislabel) => m.frameIndex === frameIndex && m.userLabel === 'in').length,
@@ -623,6 +623,8 @@ export default function ReviewLabels() {
 
     for (let i = currentFrameBoxes.boxes.length - 1; i >= 0; i--) {
       const box = currentFrameBoxes.boxes[i]
+      if (!box) continue
+
       const boxX = box.originalBounds.left * scale
       const boxY = box.originalBounds.top * scale
       const boxWidth = (box.originalBounds.right - box.originalBounds.left) * scale

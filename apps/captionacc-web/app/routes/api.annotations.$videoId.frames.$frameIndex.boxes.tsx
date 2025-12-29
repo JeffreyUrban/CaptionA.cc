@@ -5,6 +5,8 @@ import { existsSync } from 'fs'
 import { predictBoxLabel } from '~/utils/box-prediction'
 import { triggerModelTraining } from '~/services/model-training'
 
+type PythonOCRAnnotation = [string, number, [number, number, number, number]]
+
 interface FrameOCR {
   frame_index: number
   ocr_text: string
@@ -53,7 +55,7 @@ interface BoxData {
   colorCode: string
 }
 
-function getDatabase(videoId: string) {
+function getDatabase(videoId: string): Database.Database | Response {
   const dbPath = getDbPath(videoId)
   if (!dbPath) {
     return new Response('Video not found', { status: 404 })
@@ -134,6 +136,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
   try {
     const db = getDatabase(videoId)
+    if (db instanceof Response) return db
 
     // Get layout config
     const layoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as VideoLayoutConfig | undefined
@@ -173,7 +176,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
     }
 
     // Convert to annotation format: [text, confidence, [x, y, width, height]]
-    const ocrAnnotations = ocrBoxes.map(box => [
+    const ocrAnnotations: PythonOCRAnnotation[] = ocrBoxes.map(box => [
       box.text,
       box.confidence,
       [box.x, box.y, box.width, box.height]
@@ -310,6 +313,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
     }
 
     const db = getDatabase(videoId)
+    if (db instanceof Response) return db
 
     // Get layout config for frame dimensions
     const layoutConfig = db.prepare('SELECT frame_width, frame_height FROM video_layout_config WHERE id = 1').get() as { frame_width: number; frame_height: number } | undefined
@@ -349,7 +353,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
     }
 
     // Convert to annotation format: [text, confidence, [x, y, width, height]]
-    const ocrAnnotations = ocrBoxes.map(box => [
+    const ocrAnnotations: PythonOCRAnnotation[] = ocrBoxes.map(box => [
       box.text,
       box.confidence,
       [box.x, box.y, box.width, box.height]
@@ -394,7 +398,12 @@ export async function action({ params, request }: ActionFunctionArgs) {
 
       // Get box data from OCR
       // IMPORTANT: y is measured from BOTTOM of image, not top
-      const [text, _conf, [x, y, width, height]] = ocrAnnotations[boxIndex]
+      const ocrAnnotation = ocrAnnotations[boxIndex]
+      if (!ocrAnnotation) {
+        console.warn(`Annotation not found at index ${boxIndex}`)
+        continue
+      }
+      const [text, _conf, [x, y, width, height]] = ocrAnnotation
 
       // Convert fractional to pixels
       const boxLeft = Math.floor(x * layoutConfig.frame_width)

@@ -96,14 +96,15 @@ export async function action({ params }: ActionFunctionArgs) {
       f.endsWith('.mp4') || f.endsWith('.mkv') || f.endsWith('.avi') || f.endsWith('.mov')
     )
 
-    if (videoFiles.length === 0) {
+    const firstVideoFile = videoFiles[0]
+    if (!firstVideoFile) {
       return new Response(JSON.stringify({ error: 'Video file not found' }), {
         status: 404,
         headers: { 'Content-Type': 'application/json' }
       })
     }
 
-    const videoFile = resolve(videoDir, videoFiles[0])
+    const videoFile = resolve(videoDir, firstVideoFile)
 
     // Queue for processing
     queueVideoProcessing({

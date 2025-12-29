@@ -40,6 +40,12 @@ export interface OCRAnnotation {
 }
 
 /**
+ * OCR annotation input - handles both TypeScript object format and Python array format
+ * Python format: [text, confidence, bbox]
+ */
+export type OCRAnnotationInput = OCRAnnotation | unknown[]
+
+/**
  * Per-frame OCR result
  */
 export interface FrameOCRResult {
@@ -138,7 +144,7 @@ print(json.dumps(result, ensure_ascii=False))
         // Extract clean text from annotations
         const text = extractTextFromAnnotations(result.annotations || [])
 
-        const resolvedObj: any = {
+        const resolvedObj: OCRResult & { __debug_reqId?: string; __debug_textLength?: number } = {
           imagePath: result.image_path,
           framework: result.framework,
           languagePreference: result.language_preference,
@@ -174,7 +180,7 @@ print(json.dumps(result, ensure_ascii=False))
  * @param annotations - Array of OCR annotations from ocr_utils
  * @returns Concatenated text from all annotations
  */
-export function extractTextFromAnnotations(annotations: any[]): string {
+export function extractTextFromAnnotations(annotations: OCRAnnotationInput[]): string {
   if (!annotations || annotations.length === 0) {
     console.log('extractTextFromAnnotations: no annotations')
     return ''
@@ -190,12 +196,14 @@ export function extractTextFromAnnotations(annotations: any[]): string {
       if (Array.isArray(ann)) {
         // Array format: [text, confidence, bbox]
         return ann[0] || ''
-      } else {
+      } else if (typeof ann === 'object' && ann !== null && 'text' in ann) {
         // Object format: {text: "..."}
-        return ann.text || ''
+        return (ann as { text?: string }).text || ''
+      } else {
+        return ''
       }
     })
-    .filter(text => text.trim().length > 0)
+    .filter((text): text is string => typeof text === 'string' && text.trim().length > 0)
 
   console.log(`extractTextFromAnnotations: extracted ${texts.length} text items`)
   const result = texts.join('\n')
@@ -266,8 +274,8 @@ export async function runOCROnFramesV2(
           console.log(`[runOCROnFrames] Got result for frame ${frameIndex}:`, {
             hasText: 'text' in ocrResult,
             textLength: ocrResult.text?.length,
-            debugReqId: (ocrResult as any).__debug_reqId,
-            debugTextLength: (ocrResult as any).__debug_textLength,
+            debugReqId: '__debug_reqId' in ocrResult ? (ocrResult as Record<string, unknown>)['__debug_reqId'] : undefined,
+            debugTextLength: '__debug_textLength' in ocrResult ? (ocrResult as Record<string, unknown>)['__debug_textLength'] : undefined,
             keys: Object.keys(ocrResult)
           })
 
@@ -329,7 +337,7 @@ export async function runOCROnFramesV2(
  * @param annotations - Array of OCR annotations
  * @returns Average confidence (0-1), or 1 if no confidence data
  */
-function calculateAverageConfidence(annotations: any[]): number {
+function calculateAverageConfidence(annotations: OCRAnnotationInput[]): number {
   if (!annotations || annotations.length === 0) {
     return 0
   }

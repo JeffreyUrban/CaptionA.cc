@@ -14,7 +14,7 @@ interface Annotation {
   created_at: string
 }
 
-function getDatabase(videoId: string) {
+function getDatabase(videoId: string): Database.Database | Response {
   const dbPath = getDbPath(videoId)
   if (!dbPath) {
     return new Response('Video not found', { status: 404 })
@@ -41,6 +41,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
   try {
     const db = getDatabase(videoId)
+    if (db instanceof Response) return db
 
     // Find the next pending or gap annotation with lowest start_frame_index
     // Pending annotations take priority over gaps

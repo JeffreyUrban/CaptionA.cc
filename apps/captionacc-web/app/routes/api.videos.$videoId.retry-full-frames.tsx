@@ -79,7 +79,8 @@ export async function action({ params }: ActionFunctionArgs) {
         f.endsWith('.mp4') || f.endsWith('.mkv') || f.endsWith('.avi') || f.endsWith('.mov')
       )
 
-      if (videoFiles.length === 0) {
+      const firstVideoFile = videoFiles[0]
+      if (!firstVideoFile) {
         return new Response(JSON.stringify({
           error: 'Video file not found'
         }), {
@@ -88,14 +89,14 @@ export async function action({ params }: ActionFunctionArgs) {
         })
       }
 
-      videoFile = resolve(videoDir, videoFiles[0])
+      videoFile = resolve(videoDir, firstVideoFile)
 
       // Check if this is a duplicate frame error and clear if needed
       const errorInfo = db.prepare(`
         SELECT error_details FROM processing_status WHERE id = 1
-      `).get() as { error_details: string } | undefined
+      `).get() as { error_details: string | undefined } | undefined
 
-      const isDuplicateFrame = errorInfo?.error_details?.includes('UNIQUE constraint failed: full_frames.frame_index')
+      const isDuplicateFrame = errorInfo?.error_details?.includes('UNIQUE constraint failed: full_frames.frame_index') || false
 
       if (isDuplicateFrame) {
         try {

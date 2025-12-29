@@ -9,7 +9,7 @@ interface VideoPreferences {
   text_anchor: 'left' | 'center' | 'right'
 }
 
-function getDatabase(videoId: string) {
+function getDatabase(videoId: string): Database.Database | Response {
   const dbPath = getDbPath(videoId)
   if (!dbPath) {
     return new Response('Video not found', { status: 404 })
@@ -37,6 +37,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
   try {
     const db = getDatabase(videoId)
+    if (db instanceof Response) return db
     const prefs = db.prepare('SELECT text_size, padding_scale, text_anchor FROM video_preferences WHERE id = 1').get() as VideoPreferences | undefined
 
     db.close()
@@ -100,6 +101,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
     }
 
     const db = getDatabase(videoId)
+    if (db instanceof Response) return db
 
     // Build update query dynamically based on which fields are provided
     const updates: string[] = []

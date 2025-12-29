@@ -3,7 +3,7 @@ import { getDbPath } from '~/utils/video-paths'
 import Database from 'better-sqlite3'
 import { existsSync } from 'fs'
 
-function getDatabase(videoId: string) {
+function getDatabase(videoId: string): Database.Database | Response {
   const dbPath = getDbPath(videoId)
   if (!dbPath) {
     return new Response('Video not found', { status: 404 })
@@ -30,6 +30,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
   try {
     const db = getDatabase(videoId)
+    if (db instanceof Response) return db
 
     // Calculate total frames in annotations that are not gaps and not pending
     const result = db.prepare(`

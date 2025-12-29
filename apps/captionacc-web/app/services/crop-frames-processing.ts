@@ -126,11 +126,12 @@ async function processCropFramesJob(job: CropFramesJob): Promise<void> {
     f.endsWith('.mp4') || f.endsWith('.mkv') || f.endsWith('.avi') || f.endsWith('.mov')
   )
 
-  if (videoFiles.length === 0) {
+  const firstVideoFile = videoFiles[0]
+  if (!firstVideoFile) {
     throw new Error(`No video file found in ${videoDir}`)
   }
 
-  const videoFile = resolve(videoDir, videoFiles[0])
+  const videoFile = resolve(videoDir, firstVideoFile)
   const outputDir = resolve(videoDir, 'crop_frames')
 
   // Format crop bounds as "left,top,right,bottom"

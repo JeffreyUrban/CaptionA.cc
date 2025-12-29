@@ -7,6 +7,20 @@ import { readdirSync, unlinkSync, existsSync, readFileSync } from 'fs'
 import { resolve } from 'path'
 import Database from 'better-sqlite3'
 
+interface UploadMetadata {
+  videoPath: string
+  filename: string
+  storagePath?: string
+}
+
+interface UploadMetadataFile {
+  uploadId: string
+  uploadLength: number
+  metadata: UploadMetadata
+  createdAt: string
+  offset: number
+}
+
 export async function action() {
   try {
     const uploadsDir = resolve(process.cwd(), '..', '..', 'local', 'uploads')
@@ -22,9 +36,9 @@ export async function action() {
 
       try {
         // Read metadata first before deleting
-        let metadata: any = null
+        let metadata: UploadMetadataFile | null = null
         if (existsSync(metadataPath)) {
-          metadata = JSON.parse(readFileSync(metadataPath, 'utf-8'))
+          metadata = JSON.parse(readFileSync(metadataPath, 'utf-8')) as UploadMetadataFile
         }
 
         // Delete partial upload file

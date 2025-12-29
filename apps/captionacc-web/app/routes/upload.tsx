@@ -7,9 +7,48 @@ import { CloudArrowUpIcon } from '@heroicons/react/20/solid'
 import { Menu, MenuButton, MenuItem, MenuItems, Dialog, DialogPanel, DialogTitle } from '@headlessui/react'
 import * as tus from 'tus-js-client'
 
+// Extend File to include webkitRelativePath (non-standard but widely supported)
+interface FileWithPath extends Omit<File, 'webkitRelativePath'> {
+  webkitRelativePath?: string
+}
+
 interface FolderItem {
   path: string
   name: string
+}
+
+// Incomplete upload metadata from /api/uploads/incomplete
+interface IncompleteUpload {
+  uploadId: string
+  videoId: string
+  videoPath: string
+  filename: string
+  uploadLength: number
+  currentSize: number
+  progress: number
+  createdAt: string
+}
+
+// FileSystem API types (non-standard but widely supported)
+interface FileSystemEntry {
+  isFile: boolean
+  isDirectory: boolean
+  name: string
+  fullPath: string
+}
+
+interface FileSystemFileEntry extends FileSystemEntry {
+  isFile: true
+  file(callback: (file: File) => void): void
+}
+
+interface FileSystemDirectoryEntry extends FileSystemEntry {
+  isDirectory: true
+  createReader(): FileSystemDirectoryReader
+}
+
+interface FileSystemDirectoryReader {
+  readEntries(callback: (entries: FileSystemEntry[]) => void): void
 }
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -126,6 +165,7 @@ async function collapseSingleVideoFolders(videos: VideoFilePreview[], preview: b
 
         if (!preview) {
           const filename = pathParts[pathParts.length - 1]
+          if (!filename) continue
           const newPathParts = pathParts.slice(0, -2).concat(filename)
           const newRelativePath = newPathParts.length > 0 ? newPathParts.join('/') : filename
 
@@ -156,7 +196,7 @@ export default function UploadPage() {
   const [availableFolders, setAvailableFolders] = useState<FolderItem[]>([])
   const [collapseEnabled, setCollapseEnabled] = useState(true)
   const [collapsesAvailable, setCollapsesAvailable] = useState(false)
-  const [incompleteUploads, setIncompleteUploads] = useState<any[]>([])
+  const [incompleteUploads, setIncompleteUploads] = useState<IncompleteUpload[]>([])
   const [showIncompletePrompt, setShowIncompletePrompt] = useState(false)
   const [showStopQueuedModal, setShowStopQueuedModal] = useState(false)
   const [showAbortAllModal, setShowAbortAllModal] = useState(false)
@@ -221,7 +261,7 @@ export default function UploadPage() {
 
     for (const file of Array.from(fileList)) {
       if (file.type.startsWith('video/')) {
-        const relativePath = (file as any).webkitRelativePath || file.name
+        const relativePath = (file as FileWithPath).webkitRelativePath || file.name
         console.log(`[processFiles] Found video: ${relativePath} (${file.type})`)
         videos.push({
           file,
@@ -255,6 +295,7 @@ export default function UploadPage() {
       const videoPaths = videos.map(v => {
         const pathParts = v.relativePath.split('/')
         const filename = pathParts[pathParts.length - 1]
+        if (!filename) return ''
         return pathParts.slice(0, -1).concat(filename.replace(/\.\w+$/, '')).join('/')
       })
 
@@ -266,10 +307,13 @@ export default function UploadPage() {
 
         for (let i = 0; i < videos.length; i++) {
           const videoPath = videoPaths[i]
+          if (!videoPath) continue
           if (duplicates[videoPath]?.exists) {
             console.log(`[processFiles] Found duplicate: ${videoPath}`)
-            videos[i].isDuplicate = true
-            videos[i].existingUploadedAt = duplicates[videoPath].uploadedAt
+            const video = videos[i]
+            if (!video) continue
+            video.isDuplicate = true
+            video.existingUploadedAt = duplicates[videoPath].uploadedAt
           }
         }
       } catch (error) {
@@ -318,9 +362,10 @@ export default function UploadPage() {
 
     // CRITICAL: Collect all entries synchronously BEFORE any async operations
     // DataTransferItemList becomes invalid after the event handler yields
-    const entries: any[] = []
+    const entries: (FileSystemEntry | null)[] = []
     for (let i = 0; i < items.length; i++) {
       const item = items[i]
+      if (!item) continue
       console.log(`[handleDrop] Item ${i}: kind="${item.kind}", type="${item.type}"`)
       if (item.kind === 'file') {
         const entry = item.webkitGetAsEntry()
@@ -339,6 +384,7 @@ export default function UploadPage() {
     // Now process all entries asynchronously
     const files: File[] = []
     for (const entry of entries) {
+      if (!entry) continue
       await traverseFileTree(entry, '', files)
     }
 
@@ -349,12 +395,13 @@ export default function UploadPage() {
     processFiles(dt.files)
   }
 
-  async function traverseFileTree(item: any, path: string, files: File[]) {
+  async function traverseFileTree(item: FileSystemEntry, path: string, files: File[]) {
     console.log(`[traverseFileTree] Processing: ${path}${item.name}, isFile=${item.isFile}, isDirectory=${item.isDirectory}`)
     if (item.isFile) {
       console.log(`[traverseFileTree] Getting file for: ${item.name}`)
+      const fileEntry = item as FileSystemFileEntry
       const file = await new Promise<File>((resolve) => {
-        item.file((f: File) => {
+        fileEntry.file((f: File) => {
           console.log(`[traverseFileTree] Got file: ${f.name}, size=${f.size}, type=${f.type}`)
           Object.defineProperty(f, 'webkitRelativePath', {
             value: path + f.name,
@@ -366,9 +413,10 @@ export default function UploadPage() {
       files.push(file)
       console.log(`[traverseFileTree] Pushed file, files.length now = ${files.length}`)
     } else if (item.isDirectory) {
-      const dirReader = item.createReader()
-      const entries = await new Promise<any[]>((resolve) => {
-        dirReader.readEntries((entries: any[]) => resolve(entries))
+      const dirEntry = item as FileSystemDirectoryEntry
+      const dirReader = dirEntry.createReader()
+      const entries = await new Promise<FileSystemEntry[]>((resolve) => {
+        dirReader.readEntries((entries: FileSystemEntry[]) => resolve(entries))
       })
       for (const entry of entries) {
         await traverseFileTree(entry, path + item.name + '/', files)
@@ -405,7 +453,7 @@ export default function UploadPage() {
       console.log('[handleCollapseToggle] Restoring original paths...')
       setVideoFiles(prev => prev.map(v => ({
         ...v,
-        relativePath: (v.file as any).webkitRelativePath || v.file.name
+        relativePath: (v.file as FileWithPath).webkitRelativePath || v.file.name
       })))
     }
   }
@@ -465,6 +513,10 @@ export default function UploadPage() {
     // Extract video path from relative path
     const pathParts = video.relativePath.split('/')
     const filename = pathParts[pathParts.length - 1]
+    if (!filename) {
+      console.error(`[Upload] Invalid filename for ${video.relativePath}`)
+      return
+    }
     let videoPath = pathParts.slice(0, -1).concat(filename.replace(/\.\w+$/, '')).join('/')
 
     // Prepend selected folder if any
@@ -481,9 +533,9 @@ export default function UploadPage() {
       chunkSize: CHUNK_SIZE,
       uploadUrl: video.uploadUrl, // Resume from previous attempt if available (automatic in v2)
       metadata: {
-        filename,
+        filename: filename,
         filetype: video.file.type,
-        videoPath,
+        videoPath: videoPath,
       },
       onError: (error) => {
         console.error(`[Upload] Failed ${video.relativePath}:`, error)
@@ -636,20 +688,6 @@ export default function UploadPage() {
     return () => clearInterval(interval)
   }, [uploading, videoFiles])
 
-  // Warn user before closing/navigating during uploads (only if uploads are actually in progress)
-  useEffect(() => {
-    if (!hasActiveUploads) return
-
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      e.preventDefault()
-      e.returnValue = ''
-      return ''
-    }
-
-    window.addEventListener('beforeunload', handleBeforeUnload)
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
-  }, [hasActiveUploads])
-
   const saveUploadProgress = () => {
     const progress = videoFiles.map(v => ({
       relativePath: v.relativePath,
@@ -671,6 +709,20 @@ export default function UploadPage() {
   // Check if any uploads are in progress (not just the uploading flag)
   const hasActiveUploads = uploadingCount > 0 || retryingCount > 0 || pendingCount > 0 || stalledCount > 0
 
+  // Warn user before closing/navigating during uploads (only if uploads are actually in progress)
+  useEffect(() => {
+    if (!hasActiveUploads) return
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = ''
+      return ''
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [hasActiveUploads])
+
   const overallProgress = selectedCount > 0
     ? (completedCount / selectedCount) * 100
     : 0
@@ -682,6 +734,7 @@ export default function UploadPage() {
     // When collapse is disabled, we show the uncollapsed path
     const pathParts = video.relativePath.split('/')
     const filename = pathParts[pathParts.length - 1]
+    if (!filename) return ''
     let videoPath = pathParts.slice(0, -1).concat(filename.replace(/\.\w+$/, '')).join('/')
 
     // Prepend selected folder if any
@@ -694,7 +747,7 @@ export default function UploadPage() {
 
   // Get original file path (before collapse)
   const getOriginalPath = (video: VideoFilePreview) => {
-    return (video.file as any).webkitRelativePath || video.file.name
+    return (video.file as FileWithPath).webkitRelativePath || video.file.name
   }
 
   return (
@@ -733,7 +786,7 @@ export default function UploadPage() {
                       View list ({incompleteUploads.length} videos)
                     </summary>
                     <ul className="mt-2 space-y-1 ml-4 text-xs max-h-48 overflow-y-auto">
-                      {incompleteUploads.map((upload: any) => (
+                      {incompleteUploads.map((upload: IncompleteUpload) => (
                         <li key={upload.uploadId} className="flex justify-between">
                           <span className="font-mono">{upload.videoPath}</span>
                           <span className="text-blue-600 dark:text-blue-400 ml-2">
@@ -847,7 +900,7 @@ export default function UploadPage() {
               <input
                 ref={folderInputRef}
                 type="file"
-                {...({ webkitdirectory: '', directory: '' } as any)}
+                {...({ webkitdirectory: '', directory: '' } as React.InputHTMLAttributes<HTMLInputElement>)}
                 onChange={handleFileSelect}
                 className="hidden"
               />
@@ -1055,7 +1108,7 @@ export default function UploadPage() {
                     {skippedFiles.map((file, index) => (
                       <li key={index} className="flex items-center gap-2">
                         <XMarkIcon className="h-4 w-4 text-gray-400" />
-                        {(file as any).webkitRelativePath || file.name} ({file.type || 'unknown'})
+                        {(file as FileWithPath).webkitRelativePath || file.name} ({file.type || 'unknown'})
                       </li>
                     ))}
                   </ul>

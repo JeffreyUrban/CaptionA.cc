@@ -10,6 +10,9 @@ interface FrameOCR {
   ocr_confidence: number
 }
 
+// Python OCR annotation format: [text, confidence, [x, y, width, height]]
+type PythonOCRAnnotation = [string, number, [number, number, number, number]]
+
 interface VideoLayoutConfig {
   frame_width: number
   frame_height: number
@@ -41,7 +44,33 @@ interface BoxStats {
   centerXValues: number[]
 }
 
-function getDatabase(videoId: string) {
+interface LayoutParams {
+  verticalPosition: number
+  verticalStd: number
+  boxHeight: number
+  boxHeightStd: number
+  anchorType: 'left' | 'center' | 'right'
+  anchorPosition: number
+  topEdgeStd: number
+  bottomEdgeStd: number
+}
+
+interface AnalysisStats {
+  totalBoxes: number
+  captionBoxes: number
+  verticalPosition: number
+  boxHeight: number
+  topEdgeStd: number
+  bottomEdgeStd: number
+}
+
+interface OCRAnalysisResult {
+  cropBounds: { left: number; top: number; right: number; bottom: number }
+  layoutParams: LayoutParams
+  stats: AnalysisStats
+}
+
+function getDatabase(videoId: string): Database.Database | Response {
   const dbPath = getDbPath(videoId)
   if (!dbPath) {
     return new Response('Video not found', { status: 404 })
@@ -115,7 +144,7 @@ function analyzeOCRBoxes(
   frames: FrameOCR[],
   frameWidth: number,
   frameHeight: number
-): { cropBounds: { left: number; top: number; right: number; bottom: number }; layoutParams: any; stats: any } {
+): OCRAnalysisResult {
   const stats: BoxStats = {
     minTop: frameHeight,
     maxBottom: 0,
@@ -135,7 +164,7 @@ function analyzeOCRBoxes(
 
   // Collect all box statistics
   for (const frame of frames) {
-    let ocrAnnotations: any[] = []
+    let ocrAnnotations: PythonOCRAnnotation[] = []
     try {
       ocrAnnotations = JSON.parse(frame.ocr_annotations || '[]')
     } catch (e) {
@@ -611,6 +640,7 @@ export async function action({ params }: ActionFunctionArgs) {
 
   try {
     const db = getDatabase(videoId)
+    if (db instanceof Response) return db
 
     // Get current layout config for frame dimensions
     const layoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as VideoLayoutConfig | undefined

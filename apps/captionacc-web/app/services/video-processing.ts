@@ -395,7 +395,8 @@ function checkAndRecoverVideo(dbPath: string, videoPath: string, videoId: string
           f.endsWith('.mp4') || f.endsWith('.mkv') || f.endsWith('.avi') || f.endsWith('.mov')
         )
 
-        if (videoFiles.length === 0) {
+        const firstVideoFile = videoFiles[0]
+        if (!firstVideoFile) {
           console.error(`[VideoProcessing] Video file not found in ${videoDir}`)
 
           // Mark as error since we can't requeue without a video file
@@ -409,7 +410,7 @@ function checkAndRecoverVideo(dbPath: string, videoPath: string, videoId: string
           return
         }
 
-        const videoFile = resolve(videoDir, videoFiles[0])
+        const videoFile = resolve(videoDir, firstVideoFile)
 
         // Requeue for processing
         queueVideoProcessing({
@@ -427,12 +428,11 @@ function checkAndRecoverVideo(dbPath: string, videoPath: string, videoId: string
         `).get() as { error_message: string; error_details: string } | undefined
 
         // Check for recoverable errors
-        const isNoValidBoxes = errorInfo?.error_details?.includes('No valid boxes found')
         const isOcrFailure = errorInfo?.error_details?.includes('OCR') && errorInfo?.error_details?.includes('failed')
         const isInterrupted = errorInfo?.error_message?.includes('Processing interrupted')
         const isDuplicateFrame = errorInfo?.error_details?.includes('UNIQUE constraint failed: full_frames.frame_index')
 
-        if (isNoValidBoxes || isOcrFailure || isInterrupted || isDuplicateFrame) {
+        if (isOcrFailure || isInterrupted || isDuplicateFrame) {
           const errorType = isDuplicateFrame ? 'duplicate frames' : 'recoverable error'
           console.log(`[VideoProcessing] Auto-retrying ${videoPath} (${errorType}: ${errorInfo?.error_message})`)
 
@@ -454,8 +454,9 @@ function checkAndRecoverVideo(dbPath: string, videoPath: string, videoId: string
               f.endsWith('.mp4') || f.endsWith('.mkv') || f.endsWith('.avi') || f.endsWith('.mov')
             )
 
-            if (videoFiles.length > 0) {
-              const videoFile = resolve(videoDir, videoFiles[0])
+            const firstVideoFile = videoFiles[0]
+            if (firstVideoFile) {
+              const videoFile = resolve(videoDir, firstVideoFile)
 
               // Reset to upload_complete
               db.prepare(`
@@ -519,8 +520,9 @@ function checkAndRecoverVideo(dbPath: string, videoPath: string, videoId: string
             f.endsWith('.mp4') || f.endsWith('.mkv') || f.endsWith('.avi') || f.endsWith('.mov')
           )
 
-          if (videoFiles.length > 0) {
-            const videoFile = resolve(videoDir, videoFiles[0])
+          const firstVideoFile = videoFiles[0]
+          if (firstVideoFile) {
+            const videoFile = resolve(videoDir, firstVideoFile)
 
             // Queue for reprocessing after DB is closed
             setTimeout(() => {

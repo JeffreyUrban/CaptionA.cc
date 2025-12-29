@@ -71,9 +71,11 @@ function ThemeSwitcher() {
     { id: 'light' as Theme, name: 'Light', icon: SunIcon },
     { id: 'dark' as Theme, name: 'Dark', icon: MoonIcon },
     { id: 'system' as Theme, name: 'System', icon: ComputerIcon },
-  ]
+  ] as const
 
   const currentThemeData = themes.find(t => t.id === theme) || themes[2]
+  const CurrentIcon = currentThemeData.icon
+  const currentName = currentThemeData.name
 
   return (
     <div className="relative">
@@ -81,8 +83,8 @@ function ThemeSwitcher() {
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
       >
-        <currentThemeData.icon className="h-5 w-5" />
-        <span className="hidden sm:inline">{currentThemeData.name}</span>
+        <CurrentIcon className="h-5 w-5" />
+        <span className="hidden sm:inline">{currentName}</span>
       </button>
 
       {isOpen && (

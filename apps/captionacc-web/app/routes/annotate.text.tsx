@@ -38,7 +38,7 @@ interface AnnotationData {
 // Loader function to expose environment variables
 export async function loader() {
   return {
-    defaultVideoId: process.env.DEFAULT_VIDEO_ID || ''
+    defaultVideoId: process.env['DEFAULT_VIDEO_ID'] || ''
   }
 }
 
@@ -186,7 +186,9 @@ export default function AnnotateText() {
     if (!videoId || queue.length === 0 || queueIndex >= queue.length) return
 
     const loadAnnotation = async () => {
-      const annotationId = queue[queueIndex].id
+      const currentItem = queue[queueIndex]
+      if (!currentItem) return
+      const annotationId = currentItem.id
       setLoading(true)
       setError(null)
 

@@ -10,6 +10,9 @@ interface FrameOCR {
   ocr_confidence: number
 }
 
+// Python OCR annotation format: [text, confidence, [x, y, width, height]]
+type PythonOCRAnnotation = [string, number, [number, number, number, number]]
+
 interface VideoLayoutConfig {
   id: number
   frame_width: number
@@ -44,7 +47,7 @@ interface FrameInfo {
   imageUrl: string
 }
 
-function getDatabase(videoId: string) {
+function getDatabase(videoId: string): Database.Database | Response {
   const dbPath = getDbPath(videoId)
   if (!dbPath) {
     return new Response('Video not found', { status: 404 })
@@ -62,7 +65,7 @@ function getDatabase(videoId: string) {
  * Uses crop bounds to filter boxes - boxes inside crop region are likely captions.
  */
 function estimateCaptionBoxCount(
-  ocrAnnotations: any[],
+  ocrAnnotations: PythonOCRAnnotation[],
   frameWidth: number,
   frameHeight: number,
   cropBounds: { left: number; top: number; right: number; bottom: number }
@@ -118,6 +121,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
   try {
     const db = getDatabase(videoId)
+    if (db instanceof Response) return db
 
     // Check processing status first
     const processingStatus = db.prepare('SELECT status FROM processing_status WHERE id = 1').get() as { status: string } | undefined
@@ -196,7 +200,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
       }>
 
       // Convert to annotation format for estimateCaptionBoxCount
-      const annotationsArray = ocrAnnotations.map(box => [
+      const annotationsArray: PythonOCRAnnotation[] = ocrAnnotations.map(box => [
         box.text,
         box.confidence,
         [box.x, box.y, box.width, box.height]

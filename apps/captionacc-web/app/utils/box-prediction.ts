@@ -225,7 +225,7 @@ function gaussianPDF(x: number, mean: number, std: number): number {
  * Accepts both seed model (n_training_samples = 0) and trained models (n_training_samples >= 10).
  * The seed model provides reasonable starting predictions before user annotations are available.
  */
-function loadModelFromDB(db: Database): ModelParams | null {
+function loadModelFromDB(db: Database.Database): ModelParams | null {
   const row = db.prepare('SELECT * FROM box_classification_model WHERE id = 1').get() as ModelRow | undefined
 
   if (!row) {
@@ -387,7 +387,7 @@ export function predictBoxLabel(
   boxBounds: BoxBounds,
   layoutConfig: VideoLayoutConfig,
   allBoxes: BoxBounds[],
-  db?: Database
+  db?: Database.Database
 ): { label: 'in' | 'out'; confidence: number } {
   // Try to use Bayesian model if database provided
   if (db) {
@@ -417,7 +417,7 @@ export function predictBoxLabel(
  *
  * @param db Database connection
  */
-export function initializeSeedModel(db: Database): void {
+export function initializeSeedModel(db: Database.Database): void {
   // Check if model already exists
   const existing = db.prepare('SELECT id FROM box_classification_model WHERE id = 1').get()
   if (existing) {
@@ -521,7 +521,7 @@ export function initializeSeedModel(db: Database): void {
  * @param layoutConfig Video layout configuration
  * @returns Number of training samples used, or null if insufficient data
  */
-export function trainModel(db: Database, layoutConfig: VideoLayoutConfig): number | null {
+export function trainModel(db: Database.Database, layoutConfig: VideoLayoutConfig): number | null {
   // Fetch all user annotations
   const annotations = db.prepare(`
     SELECT

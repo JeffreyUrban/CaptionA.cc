@@ -2,15 +2,15 @@ import Database from 'better-sqlite3'
 import { getDbPath } from './video-paths'
 
 export type BadgeState = {
-  type: 'layout' | 'boundaries' | 'text' | 'fully-annotated' | 'error'
+  type: 'layout' | 'boundaries' | 'text' | 'fully-annotated' | 'error' | 'info' | 'warning'
   label: string
-  color: 'blue' | 'indigo' | 'purple' | 'yellow' | 'green' | 'teal' | 'red'
+  color: 'blue' | 'indigo' | 'purple' | 'yellow' | 'green' | 'teal' | 'red' | 'gray'
   clickable: boolean
   url?: string
   errorDetails?: {
     message: string
     stack?: string
-    context?: Record<string, any>
+    context?: Record<string, unknown>
   }
 }
 
@@ -47,6 +47,7 @@ export interface ProcessingStatus {
   ocrProgress: number
   layoutAnalysisProgress: number
   errorMessage?: string
+  errorDetails?: string
   uploadStartedAt?: string
   uploadCompletedAt?: string
   processingStartedAt?: string
@@ -68,12 +69,13 @@ interface StageErrors {
 function calculateBadges(
   stats: Omit<VideoStats, 'badges'>,
   videoId: string,
+  db: Database.Database,
   stageErrors: StageErrors = {}
 ): BadgeState[] {
   const badges: BadgeState[] = []
 
   // Layout Track
-  const layoutBadge = calculateLayoutBadge(stats, videoId)
+  const layoutBadge = calculateLayoutBadge(stats, videoId, db)
   if (layoutBadge) badges.push(layoutBadge)
 
   // Boundaries Track
@@ -121,7 +123,7 @@ function isVideoReadyForAnnotation(stats: Omit<VideoStats, 'badges'>): boolean {
   return true
 }
 
-function calculateLayoutBadge(stats: Omit<VideoStats, 'badges'>, videoId: string): BadgeState | null {
+function calculateLayoutBadge(stats: Omit<VideoStats, 'badges'>, videoId: string, db: Database.Database): BadgeState | null {
   const ps = stats.processingStatus
 
   // State 0: No processing status (video created outside upload flow or database incomplete)
@@ -144,6 +146,33 @@ function calculateLayoutBadge(stats: Omit<VideoStats, 'badges'>, videoId: string
 
   // State 1: Error during processing
   if (ps?.status === 'error') {
+    // Special handling for "No valid boxes found" - not a real error
+    if (ps.errorDetails && ps.errorDetails.includes('No valid boxes found')) {
+      // Check if there are any OCR boxes at all
+      const boxCount = db.prepare(`SELECT COUNT(*) as count FROM full_frame_ocr`).get() as { count: number } | undefined
+      const totalBoxes = boxCount?.count || 0
+
+      if (totalBoxes === 0) {
+        // Zero boxes - informational, not an error
+        return {
+          type: 'info',
+          label: 'No Text Detected',
+          color: 'gray',
+          clickable: false
+        }
+      } else {
+        // Some boxes but insufficient for layout analysis - needs review
+        return {
+          type: 'warning',
+          label: 'Layout: Review',
+          color: 'yellow',
+          clickable: true,
+          url: `/annotate/layout/review?videoId=${encodeURIComponent(videoId)}`
+        }
+      }
+    }
+
+    // Other errors - actual processing failures
     return {
       type: 'error',
       label: 'Layout: Error',
@@ -541,7 +570,20 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
     // Get processing status if available
     let processingStatus: ProcessingStatus | undefined
     try {
-      const status = db.prepare(`SELECT * FROM processing_status WHERE id = 1`).get() as any
+      const status = db.prepare(`SELECT * FROM processing_status WHERE id = 1`).get() as {
+        status: string
+        upload_progress?: number
+        frame_extraction_progress?: number
+        ocr_progress?: number
+        layout_analysis_progress?: number
+        error_message?: string
+        error_details?: string
+        upload_started_at?: string
+        upload_completed_at?: string
+        processing_started_at?: string
+        processing_completed_at?: string
+        deleted?: number
+      } | undefined
       console.log(`[getVideoStats] Processing status for ${videoId}:`, status)
       if (status) {
         // Check if video is marked as deleted
@@ -566,12 +608,13 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
         }
 
         processingStatus = {
-          status: status.status,
+          status: status.status as ProcessingStatus['status'],
           uploadProgress: status.upload_progress ?? 0,
           frameExtractionProgress: status.frame_extraction_progress ?? 0,
           ocrProgress: status.ocr_progress ?? 0,
           layoutAnalysisProgress: status.layout_analysis_progress ?? 0,
           errorMessage: status.error_message,
+          errorDetails: status.error_details,
           uploadStartedAt: status.upload_started_at,
           uploadCompletedAt: status.upload_completed_at,
           processingStartedAt: status.processing_started_at,
@@ -587,10 +630,15 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
     // Get crop_frames processing status
     let cropFramesStatus: CropFramesStatus | undefined
     try {
-      const status = db.prepare(`SELECT * FROM crop_frames_status WHERE id = 1`).get() as any
+      const status = db.prepare(`SELECT * FROM crop_frames_status WHERE id = 1`).get() as {
+        status: string
+        processing_started_at?: string
+        processing_completed_at?: string
+        error_message?: string
+      } | undefined
       if (status) {
         cropFramesStatus = {
-          status: status.status,
+          status: status.status as CropFramesStatus['status'],
           processingStartedAt: status.processing_started_at,
           processingCompletedAt: status.processing_completed_at,
           errorMessage: status.error_message
@@ -643,7 +691,7 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
         boundaryPendingReview,
         textPendingReview,
         databaseId
-      }, videoId, stageErrors)
+      }, videoId, db, stageErrors)
     }
     console.log(`[getVideoStats] Returning stats for ${videoId}:`, JSON.stringify(stats, null, 2))
     return stats

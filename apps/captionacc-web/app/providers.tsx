@@ -9,7 +9,6 @@ function usePrevious<T>(value: T) {
   useEffect(() => {
     ref.current = value;
   }, [value]);
-  // eslint-disable-next-line react-hooks/refs
   return ref.current;
 }
 
@@ -35,7 +34,6 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             const systemPreference = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
             const initialTheme: Theme = (storedTheme === 'dark' || storedTheme === 'light') ? storedTheme : systemPreference;
 
-            // eslint-disable-next-line react-hooks/set-state-in-effect
             setTheme(initialTheme);
             document.documentElement.classList.toggle('dark', initialTheme === 'dark');
         }

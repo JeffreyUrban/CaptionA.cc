@@ -51,7 +51,7 @@ const OPACITY_MAP: Record<number, number> = {
 // Loader function to expose environment variables
 export async function loader() {
   return {
-    defaultVideoId: process.env.DEFAULT_VIDEO_ID || ''
+    defaultVideoId: process.env['DEFAULT_VIDEO_ID'] || ''
   }
 }
 
@@ -243,7 +243,7 @@ export default function BoundaryWorkflow() {
     const baseOffsets = FRAME_OFFSETS[frameSpacing]
 
     // Extend offsets to fill the available height
-    let adjustedOffsets = [...baseOffsets]
+    const adjustedOffsets = [...baseOffsets]
     const maxBaseOffset = Math.max(...baseOffsets.map(Math.abs))
 
     // Add more frames until we have enough to fill the height

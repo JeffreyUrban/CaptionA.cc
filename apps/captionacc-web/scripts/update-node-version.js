@@ -13,8 +13,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import semver from 'semver';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const rootDir = path.join(__dirname, '..');
+const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+const rootDir = path.join(scriptDir, '..');
 
 // Get the version from command line arguments
 const newVersion = process.argv[2];

@@ -43,6 +43,7 @@ export function buildVideoTree(videos: VideoInfo[]): TreeNode[] {
     // Build intermediate folder nodes
     for (let i = 0; i < segments.length - 1; i++) {
       const segment = segments[i]
+      if (!segment) continue
       const path = segments.slice(0, i + 1).join('/')
 
       if (!currentLevel.has(segment)) {
@@ -59,7 +60,12 @@ export function buildVideoTree(videos: VideoInfo[]): TreeNode[] {
             gapAnnotations: 0,
             progress: 0,
             totalFrames: 0,
-            coveredFrames: 0
+            coveredFrames: 0,
+            hasOcrData: false,
+            layoutApproved: false,
+            boundaryPendingReview: 0,
+            textPendingReview: 0,
+            badges: []
           },
           videoCount: 0
         }
@@ -79,6 +85,7 @@ export function buildVideoTree(videos: VideoInfo[]): TreeNode[] {
 
     // Add video node as leaf
     const videoName = segments[segments.length - 1]
+    if (!videoName) continue
     const videoNode: VideoNode = {
       type: 'video',
       name: videoName,
@@ -121,7 +128,12 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
       gapAnnotations: 0,
       progress: 0,
       totalFrames: 0,
-      coveredFrames: 0
+      coveredFrames: 0,
+      hasOcrData: false,
+      layoutApproved: false,
+      boundaryPendingReview: 0,
+      textPendingReview: 0,
+      badges: []
     }
   }
 
@@ -176,7 +188,12 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
       gapAnnotations: result.gaps,
       progress,
       totalFrames,
-      coveredFrames
+      coveredFrames,
+      hasOcrData: false,
+      layoutApproved: false,
+      boundaryPendingReview: 0,
+      textPendingReview: 0,
+      badges: []
     }
   } finally {
     db.close()
@@ -235,7 +252,12 @@ export function calculateFolderStats(node: FolderNode): void {
     gapAnnotations,
     progress,
     totalFrames,
-    coveredFrames
+    coveredFrames,
+    hasOcrData: false,
+    layoutApproved: false,
+    boundaryPendingReview: 0,
+    textPendingReview: 0,
+    badges: []
   }
   node.videoCount = videoCount
 }

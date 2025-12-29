@@ -25,7 +25,7 @@ interface VideoLayoutConfig {
   crop_bounds_version: number
 }
 
-function getDatabase(videoId: string) {
+function getDatabase(videoId: string): Database.Database | Response {
   const dbPath = getDbPath(videoId)
   if (!dbPath) {
     return new Response('Video not found', { status: 404 })
@@ -73,6 +73,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
     }
 
     const db = getDatabase(videoId)
+    if (db instanceof Response) return db
 
     // Get current config
     const currentConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as VideoLayoutConfig | undefined
@@ -138,7 +139,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
       // Update selection bounds and mode
       if (selectionBounds !== undefined || selectionMode !== undefined) {
         const updates: string[] = []
-        const values: any[] = []
+        const values: (number | string)[] = []
 
         if (selectionBounds !== undefined) {
           updates.push('selection_left = ?', 'selection_top = ?', 'selection_right = ?', 'selection_bottom = ?')
@@ -160,7 +161,6 @@ export async function action({ params, request }: ActionFunctionArgs) {
       }
 
       // Update layout parameters (Bayesian priors)
-      let layoutParamsChanged = false
       if (layoutParams) {
         db.prepare(`
           UPDATE video_layout_config
@@ -180,7 +180,6 @@ export async function action({ params, request }: ActionFunctionArgs) {
           layoutParams.anchorType,
           layoutParams.anchorPosition
         )
-        layoutParamsChanged = true
 
         // Clear the trained model since it was trained with different layout parameters
         // Predictions will fall back to heuristics until model is retrained
@@ -198,7 +197,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
 
     // Trigger prediction recalculation if layout parameters changed
     // (predictions depend on these parameters, so they need to be recalculated)
-    if (layoutParamsChanged) {
+    if (layoutParams) {
       console.log(`[Layout Config] Layout parameters changed, triggering prediction recalculation for ${videoId}`)
       fetch(`http://localhost:5173/api/annotations/${encodeURIComponent(videoId)}/calculate-predictions`, {
         method: 'POST'
@@ -216,7 +215,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
       success: true,
       boundsChanged: cropBoundsChanged,
       framesInvalidated,
-      layoutParamsChanged,
+      layoutParamsChanged: !!layoutParams,
     }), {
       headers: { 'Content-Type': 'application/json' }
     })

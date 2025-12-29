@@ -20,7 +20,7 @@ interface Annotation {
   created_at: string
 }
 
-function getOrCreateDatabase(videoId: string) {
+function getOrCreateDatabase(videoId: string): Database.Database | Response {
   const dbPath = getDbPath(videoId)
   if (!dbPath) {
     return new Response('Video not found', { status: 404 })
@@ -127,6 +127,7 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
 
   try {
     const db = getOrCreateDatabase(videoId)
+    if (db instanceof Response) return db
 
     // Query annotations that overlap with the requested range
     const annotations = db.prepare(`
@@ -166,6 +167,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
 
   try {
     const db = getOrCreateDatabase(videoId)
+    if (db instanceof Response) return db
 
     if (request.method === 'PUT') {
       // Update existing annotation with overlap resolution

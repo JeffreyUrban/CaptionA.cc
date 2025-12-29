@@ -14,7 +14,7 @@ interface Annotation {
   created_at: string
 }
 
-function getDatabase(videoId: string) {
+function getDatabase(videoId: string): Database.Database | Response {
   const dbPath = getDbPath(videoId)
   if (!dbPath) {
     return new Response('Video not found', { status: 404 })
@@ -51,6 +51,7 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
 
   try {
     const db = getDatabase(videoId)
+    if (db instanceof Response) return db
 
     // Get current annotation's boundary_updated_at for comparison
     const current = db.prepare('SELECT boundary_updated_at FROM captions WHERE id = ?').get(currentId) as

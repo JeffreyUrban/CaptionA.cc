@@ -77,7 +77,7 @@ function getOrCreateDatabase(videoId: string) {
   return db
 }
 
-function fillAnnotationGaps(db: Database, totalFrames: number): number {
+function fillAnnotationGaps(db: Database.Database, totalFrames: number): number {
   // Find all gaps in annotation coverage and create gap annotations for them
   // Returns the number of gap annotations created
 
@@ -170,6 +170,9 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
   try {
     const db = getOrCreateDatabase(videoId)
+    if (db instanceof Response) {
+      return db
+    }
     gapsCreated = fillAnnotationGaps(db, totalFrames)
     db.close()
   } catch (error) {

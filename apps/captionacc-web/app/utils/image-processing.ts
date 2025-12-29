@@ -7,7 +7,7 @@
 
 import sharp from 'sharp'
 import { resolve } from 'path'
-import { existsSync, mkdirSync } from 'fs'
+import { existsSync, mkdirSync, unlinkSync } from 'fs'
 import Database from 'better-sqlite3'
 
 // Image quality constant
@@ -71,10 +71,17 @@ export async function generateCombinedImage(
   }
 
   // Get metadata from first frame to determine dimensions
-  const metadata = await frameBuffers[0].metadata()
-  const width = metadata.width!
-  const height = metadata.height!
-  const channels = metadata.channels!
+  const firstFrame = frameBuffers[0]
+  if (!firstFrame) {
+    throw new Error('First frame buffer is unexpectedly undefined')
+  }
+  const metadata = await firstFrame.metadata()
+  const width = metadata.width
+  const height = metadata.height
+  const channels = metadata.channels
+  if (!width || !height || !channels) {
+    throw new Error('Frame metadata is missing required dimensions')
+  }
 
   // Convert all frames to raw pixel data
   const pixelArrays: Buffer[] = await Promise.all(
@@ -91,13 +98,19 @@ export async function generateCombinedImage(
     // Collect values for this pixel position across all frames
     const values: number[] = []
     for (let j = 0; j < pixelCount; j++) {
-      values.push(pixelArrays[j][i])
+      const pixelValue = pixelArrays[j]?.[i]
+      if (pixelValue !== undefined) {
+        values.push(pixelValue)
+      }
     }
 
     // Sort and take median
     values.sort((a, b) => a - b)
     const medianIndex = Math.floor(values.length / 2)
-    medianBuffer[i] = values[medianIndex]
+    const medianValue = values[medianIndex]
+    if (medianValue !== undefined) {
+      medianBuffer[i] = medianValue
+    }
   }
 
   // Create output directory if it doesn't exist
@@ -236,10 +249,17 @@ export async function getOrGenerateCombinedImage(
   }
 
   // Get metadata from first frame
-  const metadata = await frameBuffers[0].metadata()
-  const width = metadata.width!
-  const height = metadata.height!
-  const channels = metadata.channels!
+  const firstCropFrame = frameBuffers[0]
+  if (!firstCropFrame) {
+    throw new Error('First frame buffer is unexpectedly undefined')
+  }
+  const metadata = await firstCropFrame.metadata()
+  const width = metadata.width
+  const height = metadata.height
+  const channels = metadata.channels
+  if (!width || !height || !channels) {
+    throw new Error('Frame metadata is missing required dimensions')
+  }
 
   // Convert all frames to raw pixel data
   const pixelArrays: Buffer[] = await Promise.all(
@@ -255,11 +275,17 @@ export async function getOrGenerateCombinedImage(
   for (let i = 0; i < medianBuffer.length; i++) {
     const values: number[] = []
     for (let j = 0; j < pixelCount; j++) {
-      values.push(pixelArrays[j][i])
+      const pixelValue = pixelArrays[j]?.[i]
+      if (pixelValue !== undefined) {
+        values.push(pixelValue)
+      }
     }
     values.sort((a, b) => a - b)
     const medianIndex = Math.floor(values.length / 2)
-    medianBuffer[i] = values[medianIndex]
+    const medianValue = values[medianIndex]
+    if (medianValue !== undefined) {
+      medianBuffer[i] = medianValue
+    }
   }
 
   // Save combined image
@@ -299,7 +325,6 @@ export function deleteCombinedImage(
   )
 
   if (existsSync(imagePath)) {
-    const { unlinkSync } = require('fs')
     unlinkSync(imagePath)
   }
 }

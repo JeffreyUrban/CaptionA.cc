@@ -59,9 +59,9 @@ interface FrameBoxesData {
 type ViewMode = 'analysis' | 'frame'
 
 // Loader function to expose environment variables
-export async function loader({ }: LoaderFunctionArgs) {
+export async function loader() {
   return {
-    defaultVideoId: process.env.DEFAULT_VIDEO_ID || ''
+    defaultVideoId: process.env['DEFAULT_VIDEO_ID'] || ''
   }
 }
 
@@ -132,7 +132,14 @@ export default function AnnotateLayout() {
   // Layout controls state (local modifications before save)
   const [cropBoundsEdit, setCropBoundsEdit] = useState<{ left: number; top: number; right: number; bottom: number } | null>(null)
   const [selectionRectEdit, setSelectionRectEdit] = useState<{ left: number; top: number; right: number; bottom: number } | null>(null)
-  const [layoutParamsEdit, setLayoutParamsEdit] = useState<any>(null)
+  const [layoutParamsEdit, setLayoutParamsEdit] = useState<{
+    verticalPosition: number | null
+    verticalStd: number | null
+    boxHeight: number | null
+    boxHeightStd: number | null
+    anchorType: 'left' | 'center' | 'right' | null
+    anchorPosition: number | null
+  } | null>(null)
 
   // Mark video as being worked on
   useEffect(() => {
@@ -174,7 +181,7 @@ export default function AnnotateLayout() {
 
       const data = await response.json()
 
-      console.log(`[Frontend] Received ${data.frames?.length || 0} frames:`, data.frames?.map((f: any) => f.frameIndex))
+      console.log(`[Frontend] Received ${data.frames?.length || 0} frames:`, data.frames?.map((f: FrameInfo) => f.frameIndex))
 
       setFrames(data.frames || [])
 
@@ -376,10 +383,10 @@ export default function AnnotateLayout() {
 
       // Draw all analysis boxes (same logic as main canvas)
       analysisBoxes.forEach((box) => {
-        const boxX = box.bounds.left * scale
-        const boxY = box.bounds.top * scale
-        const boxWidth = (box.bounds.right - box.bounds.left) * scale
-        const boxHeight = (box.bounds.bottom - box.bounds.top) * scale
+        const boxX = box.originalBounds.left * scale
+        const boxY = box.originalBounds.top * scale
+        const boxWidth = (box.originalBounds.right - box.originalBounds.left) * scale
+        const boxHeight = (box.originalBounds.bottom - box.originalBounds.top) * scale
 
         let fillColor: string
 
@@ -517,7 +524,8 @@ export default function AnnotateLayout() {
     try {
       // Check if this is a new annotation (not just changing existing one)
       const box = currentFrameBoxes.boxes.find(b => b.boxIndex === boxIndex)
-      const isNewAnnotation = box && box.userLabel === null
+      if (!box) return
+      const isNewAnnotation = box.userLabel === null
 
       // Update local state optimistically
       setCurrentFrameBoxes(prev => {
@@ -671,10 +679,10 @@ export default function AnnotateLayout() {
 
       // Draw all boxes with transparency for additive effect
       analysisBoxes.forEach((box) => {
-        const boxX = box.bounds.left * scale
-        const boxY = box.bounds.top * scale
-        const boxWidth = (box.bounds.right - box.bounds.left) * scale
-        const boxHeight = (box.bounds.bottom - box.bounds.top) * scale
+        const boxX = box.originalBounds.left * scale
+        const boxY = box.originalBounds.top * scale
+        const boxWidth = (box.originalBounds.right - box.originalBounds.left) * scale
+        const boxHeight = (box.originalBounds.bottom - box.originalBounds.top) * scale
 
         // Determine color based on user label or prediction (matching frame view palette)
         let strokeColor: string
@@ -1032,6 +1040,8 @@ export default function AnnotateLayout() {
 
     for (let i = currentFrameBoxes.boxes.length - 1; i >= 0; i--) {
       const box = currentFrameBoxes.boxes[i]
+      if (!box) continue
+
       const boxX = box.originalBounds.left * scale
       const boxY = box.originalBounds.top * scale
       const boxWidth = (box.originalBounds.right - box.originalBounds.left) * scale
@@ -1572,13 +1582,13 @@ export default function AnnotateLayout() {
               disabled={
                 // If not approved yet: always enabled (allow approval)
                 // If approved: only disabled when bounds haven't changed
-                layoutApproved &&
+                !!(layoutApproved &&
                 layoutConfig &&
                 cropBoundsEdit &&
                 layoutConfig.cropLeft === cropBoundsEdit.left &&
                 layoutConfig.cropTop === cropBoundsEdit.top &&
                 layoutConfig.cropRight === cropBoundsEdit.right &&
-                layoutConfig.cropBottom === cropBoundsEdit.bottom
+                layoutConfig.cropBottom === cropBoundsEdit.bottom)
               }
               className={`w-full px-4 py-2 text-sm font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 ${
                 layoutApproved && layoutConfig && cropBoundsEdit &&

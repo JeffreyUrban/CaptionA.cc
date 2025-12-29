@@ -49,14 +49,15 @@ function cleanupStaleUploads() {
 
       if (ageMs > staleThreshold) {
         // Read metadata before deleting
-        let metadata: any = null
+        let metadata: unknown = null
         if (existsSync(metadataPath)) {
-          metadata = JSON.parse(readFileSync(metadataPath, 'utf-8'))
+          metadata = JSON.parse(readFileSync(metadataPath, 'utf-8')) as unknown
         }
 
-        const videoPath = metadata?.metadata?.videoPath || uploadId
-        const progress = metadata && existsSync(uploadPath)
-          ? Math.round((statSync(uploadPath).size / metadata.uploadLength) * 100)
+        const metadataObj = metadata as { metadata?: { videoPath?: string; storagePath?: string }; uploadLength?: number } | null
+        const videoPath = metadataObj?.metadata?.videoPath || uploadId
+        const progress = metadataObj && existsSync(uploadPath) && metadataObj.uploadLength
+          ? Math.round((statSync(uploadPath).size / metadataObj.uploadLength) * 100)
           : 0
 
         console.log(`[Cleanup] Clearing stale upload: ${videoPath} (${progress}% complete, ${Math.round(ageMs / (60 * 60 * 1000))}h old)`)
@@ -72,14 +73,14 @@ function cleanupStaleUploads() {
         }
 
         // Mark database as error if it exists
-        if (metadata?.metadata?.storagePath) {
+        if (metadataObj?.metadata?.storagePath) {
           const dbPath = resolve(
             process.cwd(),
             '..',
             '..',
             'local',
             'data',
-            ...metadata.metadata.storagePath.split('/'),
+            ...metadataObj.metadata.storagePath.split('/'),
             'annotations.db'
           )
 

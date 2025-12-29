@@ -14,7 +14,7 @@ interface BulkAnnotateAllRequest {
   action: 'mark_out' | 'clear'
 }
 
-function getDatabase(videoId: string) {
+function getDatabase(videoId: string): Database.Database | Response {
   const dbPath = getDbPath(videoId)
   if (!dbPath) {
     return new Response('Video not found', { status: 404 })
@@ -52,6 +52,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
     }
 
     const db = getDatabase(videoId)
+    if (db instanceof Response) return db
 
     // Get layout config for frame dimensions and predictions
     const layoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as {

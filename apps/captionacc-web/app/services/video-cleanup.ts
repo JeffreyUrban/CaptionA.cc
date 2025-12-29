@@ -177,7 +177,7 @@ async function findStaleProcessing(): Promise<Array<{ displayPath: string; video
         }
 
         // Check if stuck in processing state
-        if (PROCESSING_STATES.includes(status.status as any)) {
+        if (PROCESSING_STATES.includes(status.status as typeof PROCESSING_STATES[number])) {
           const pid = status.current_job_id
           const isRunning = pid ? isProcessRunning(pid) : false
 

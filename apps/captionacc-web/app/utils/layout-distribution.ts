@@ -63,13 +63,17 @@ function linearRegression(
   }
 
   if (x.length === 1) {
-    return { slope: 0, intercept: y[0] }
+    const yFirst = y[0]
+    return { slope: 0, intercept: yFirst ?? 0 }
   }
 
   const n = x.length
   const sumX = x.reduce((sum, v) => sum + v, 0)
   const sumY = y.reduce((sum, v) => sum + v, 0)
-  const sumXY = x.reduce((sum, xi, i) => sum + xi * y[i], 0)
+  const sumXY = x.reduce((sum, xi, i) => {
+    const yi = y[i]
+    return sum + (yi !== undefined ? xi * yi : 0)
+  }, 0)
   const sumX2 = x.reduce((sum, v) => sum + v * v, 0)
 
   const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX)

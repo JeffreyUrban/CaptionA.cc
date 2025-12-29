@@ -234,6 +234,9 @@ async function handlePatchRequest(request: Request, uploadId: string): Promise<R
 
   // Update progress in database (use storagePath, not displayPath)
   const storagePath = metadata.metadata.storagePath
+  if (!storagePath) {
+    throw new Error('Storage path missing from metadata')
+  }
   const dbPath = resolve(
     process.cwd(),
     '..',
@@ -258,8 +261,11 @@ async function handlePatchRequest(request: Request, uploadId: string): Promise<R
 
   if (complete) {
     // Upload complete - move file to UUID-based storage and compute hash
-    const storagePath = metadata.metadata.storagePath
+    const completeStoragePath = metadata.metadata.storagePath
     const displayPath = metadata.metadata.videoPath
+    if (!completeStoragePath) {
+      throw new Error('Storage path missing from metadata')
+    }
 
     const finalVideoPath = resolve(
       process.cwd(),
@@ -267,7 +273,7 @@ async function handlePatchRequest(request: Request, uploadId: string): Promise<R
       '..',
       'local',
       'data',
-      ...storagePath.split('/'),
+      ...completeStoragePath.split('/'),
       metadata.metadata.filename
     )
 
@@ -325,7 +331,7 @@ async function handlePatchRequest(request: Request, uploadId: string): Promise<R
       db.close()
     }
 
-    console.log(`[tus] Upload complete: ${displayPath} (storage: ${storagePath})`)
+    console.log(`[tus] Upload complete: ${displayPath} (storage: ${completeStoragePath})`)
 
     // Queue video for background processing (respects concurrency limits)
     const { queueVideoProcessing } = await import('~/services/video-processing')
@@ -348,7 +354,7 @@ async function handlePatchRequest(request: Request, uploadId: string): Promise<R
 }
 
 function parseUploadMetadata(metadataHeader: string): UploadMetadata {
-  const metadata: any = {}
+  const metadata: Record<string, string> = {}
   const pairs = metadataHeader.split(',')
 
   for (const pair of pairs) {
@@ -362,16 +368,24 @@ function parseUploadMetadata(metadataHeader: string): UploadMetadata {
     }
   }
 
-  return metadata
+  return metadata as unknown as UploadMetadata
 }
 
-async function readJSON(path: string): Promise<any> {
+interface UploadMetadataFile {
+  uploadId: string
+  uploadLength: number
+  metadata: UploadMetadata
+  createdAt: string
+  offset: number
+}
+
+async function readJSON(path: string): Promise<UploadMetadataFile> {
   const { readFile } = await import('fs/promises')
   const content = await readFile(path, 'utf-8')
-  return JSON.parse(content)
+  return JSON.parse(content) as UploadMetadataFile
 }
 
-async function writeJSON(path: string, data: any): Promise<void> {
+async function writeJSON(path: string, data: unknown): Promise<void> {
   const fs = await import('fs/promises')
   await fs.writeFile(path, JSON.stringify(data, null, 2), 'utf-8')
 }

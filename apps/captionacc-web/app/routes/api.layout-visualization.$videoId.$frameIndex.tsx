@@ -43,7 +43,7 @@ interface OCRBox {
   userLabel: 'in' | 'out' | null
 }
 
-function getDatabase(videoId: string) {
+function getDatabase(videoId: string): Database.Database | Response {
   const dbPath = getDbPath(videoId)
   if (!dbPath) {
     return new Response('Video not found', { status: 404 })
@@ -299,6 +299,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
   try {
     const db = getDatabase(videoId)
+    if (db instanceof Response) return db
 
     // Get layout config
     const layoutConfig = db
@@ -423,7 +424,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
     db.close()
 
-    return new Response(buffer, {
+    return new Response(buffer as unknown as BodyInit, {
       headers: {
         'Content-Type': 'image/png',
         'Cache-Control': 'public, max-age=3600',
