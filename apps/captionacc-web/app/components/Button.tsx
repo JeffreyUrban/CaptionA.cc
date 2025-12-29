@@ -1,6 +1,6 @@
-import { Link } from 'react-router'
 import clsx from 'clsx'
 import type React from 'react'
+import { Link } from 'react-router'
 
 type ButtonPropsBase = {
   variant?: 'primary' | 'secondary'
@@ -19,16 +19,14 @@ type ButtonAsLink = ButtonPropsBase &
 
 type ButtonProps = ButtonAsButton | ButtonAsLink
 
-export function Button({
-  variant = 'primary',
-  className,
-  ...props
-}: ButtonProps) {
-  const baseStyles = 'inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-offset-2'
+export function Button({ variant = 'primary', className, ...props }: ButtonProps) {
+  const baseStyles =
+    'inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-offset-2'
 
   const variantStyles = {
     primary: 'bg-teal-500 text-white hover:bg-teal-600 focus:ring-teal-500',
-    secondary: 'bg-zinc-100 text-zinc-900 hover:bg-zinc-200 focus:ring-zinc-500 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700',
+    secondary:
+      'bg-zinc-100 text-zinc-900 hover:bg-zinc-200 focus:ring-zinc-500 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700',
   }
 
   const combinedClassName = clsx(baseStyles, variantStyles[variant], className)
@@ -38,5 +36,10 @@ export function Button({
     return <Link to={to} {...linkProps} className={combinedClassName} />
   }
 
-  return <button {...(props as React.ButtonHTMLAttributes<HTMLButtonElement>)} className={combinedClassName} />
+  return (
+    <button
+      {...(props as React.ButtonHTMLAttributes<HTMLButtonElement>)}
+      className={combinedClassName}
+    />
+  )
 }

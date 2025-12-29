@@ -1,5 +1,6 @@
-import { type LoaderFunctionArgs } from 'react-router'
 import Database from 'better-sqlite3'
+import { type LoaderFunctionArgs } from 'react-router'
+
 import { getDbPath } from '~/utils/video-paths'
 
 export async function loader({ params }: LoaderFunctionArgs) {

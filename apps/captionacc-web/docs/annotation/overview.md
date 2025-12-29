@@ -16,11 +16,13 @@ For each video, we generate cropped caption frames at 10Hz (~25,000 frames per v
 2. **Text correction**: Correct OCR-extracted text for caption sequences
 
 **Caption sequences:**
+
 - Typically 2-50 frames, but unlimited
 - Must include ALL frames with that caption
 - Need accurate text transcription
 
 **Non-caption sequences:**
+
 - 1 to hundreds of frames
 - Need not include all frames between captions
 - No text required
@@ -32,6 +34,7 @@ For each video, we generate cropped caption frames at 10Hz (~25,000 frames per v
 **Key Insight:** Separate boundary marking from text correction into distinct workflows.
 
 **Rationale:**
+
 - Different cognitive tasks (visual comparison vs text editing)
 - More efficient to batch similar tasks
 - Allows marking boundaries without determining text immediately
@@ -50,6 +53,7 @@ For each video, we generate cropped caption frames at 10Hz (~25,000 frames per v
 **Key Insight:** Caption frames are wide and short.
 
 **Design implications:**
+
 - Stack frames vertically, not horizontally
 - Tight vertical spacing enables character-by-character comparison
 - Frames should occupy ~2/3 of window width
@@ -60,6 +64,7 @@ For each video, we generate cropped caption frames at 10Hz (~25,000 frames per v
 **Pain point:** Advancing one frame at a time through 50+ frame sequences is tedious.
 
 **Solutions:**
+
 - Vertical "deck of cards" scroll view
 - Mouse wheel navigation
 - Configurable frame spacing (linear/exponential/hybrid)
@@ -70,6 +75,7 @@ For each video, we generate cropped caption frames at 10Hz (~25,000 frames per v
 **Key Insight:** Align OCR/Caption text fields with actual text position in frames.
 
 **Implementation:**
+
 - Per-video calibration: anchor position, font size
 - Manual slider controls with memory
 - Enables direct visual comparison between frames and text
@@ -82,6 +88,7 @@ For each video, we generate cropped caption frames at 10Hz (~25,000 frames per v
 **Purpose:** Efficiently identify caption/non-caption sequences
 
 **Interface:**
+
 - Vertical deck of frames (no text)
 - Mark start/end frames visually
 - Classify as "Caption" (text TBD) or "Non-caption"
@@ -94,6 +101,7 @@ For each video, we generate cropped caption frames at 10Hz (~25,000 frames per v
 **Purpose:** Determine and correct caption text
 
 **Interface:**
+
 - Single frame view
 - OCR text and Caption text stacked below frame
 - Character-level diff highlighting
@@ -108,10 +116,12 @@ For each video, we generate cropped caption frames at 10Hz (~25,000 frames per v
 ### Character-Level Correction Assistance
 
 **Two types of OCR inconsistencies:**
+
 1. Oscillating characters at same position (e.g., 'a' vs 'o')
 2. Extra errant text before/after caption
 
 **Solution:**
+
 - Color highlighting for inconsistent characters
 - Click character to cycle through options (with frequency counts)
 - Visual feedback for consistent vs inconsistent text
@@ -126,6 +136,7 @@ For each video, we generate cropped caption frames at 10Hz (~25,000 frames per v
 ### Configurable Frame Spacing
 
 **Options:**
+
 - Linear: N-5, N-4, N-3, N-2, N-1, N, N+1, N+2, N+3, N+4, N+5
 - Exponential: N-8, N-4, N-2, N-1, N, N+1, N+2, N+4, N+8
 - Hybrid: N-10, N-5, N-3, N-2, N-1, N, N+1, N+2, N+3, N+5, N+10
@@ -137,6 +148,7 @@ For each video, we generate cropped caption frames at 10Hz (~25,000 frames per v
 **Philosophy:** Keyboard operation is more pleasant than mouse for repetitive tasks.
 
 **Shortcuts:**
+
 - Arrow keys: ±1 frame
 - Shift+Arrow: ±10 frames
 - Ctrl+Arrow: ±50 frames
@@ -156,16 +168,16 @@ interface Annotation {
   // null for non-caption
   // 'NOT_YET_DETERMINED' for caption without text
   // actual text when determined
-  status: string  // 'Valid Caption', 'OCR Error', 'No Caption', etc.
+  status: string // 'Valid Caption', 'OCR Error', 'No Caption', etc.
   notes?: string
 }
 
 interface VideoSettings {
   video_id: string
   text_alignment: {
-    anchor_x: number  // 0-100 (percentage)
-    anchor_y: number  // 0-100 (percentage)
-    font_size: number  // 12-48px
+    anchor_x: number // 0-100 (percentage)
+    anchor_y: number // 0-100 (percentage)
+    font_size: number // 12-48px
   }
   frame_spacing: 'linear' | 'exponential' | 'hybrid'
 }
@@ -175,7 +187,7 @@ interface Frame {
   frame_index: number
   video_id: string
   ocr_text: string
-  image_url: string  // Path to cropped frame
+  image_url: string // Path to cropped frame
 }
 ```
 

@@ -1,7 +1,9 @@
-import { type LoaderFunctionArgs, type ActionFunctionArgs } from 'react-router'
-import { getDbPath } from '~/utils/video-paths'
-import Database from 'better-sqlite3'
 import { existsSync } from 'fs'
+
+import Database from 'better-sqlite3'
+import { type LoaderFunctionArgs, type ActionFunctionArgs } from 'react-router'
+
+import { getDbPath } from '~/utils/video-paths'
 
 interface VideoPreferences {
   text_size: number
@@ -29,7 +31,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
   if (!encodedVideoId) {
     return new Response(JSON.stringify({ error: 'Missing videoId' }), {
       status: 400,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
     })
   }
 
@@ -38,7 +40,9 @@ export async function loader({ params }: LoaderFunctionArgs) {
   try {
     const db = getDatabase(videoId)
     if (db instanceof Response) return db
-    const prefs = db.prepare('SELECT text_size, padding_scale, text_anchor FROM video_preferences WHERE id = 1').get() as VideoPreferences | undefined
+    const prefs = db
+      .prepare('SELECT text_size, padding_scale, text_anchor FROM video_preferences WHERE id = 1')
+      .get() as VideoPreferences | undefined
 
     db.close()
 
@@ -49,13 +53,10 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
     return Response.json(prefs)
   } catch (error) {
-    return new Response(
-      JSON.stringify({ error: (error as Error).message }),
-      {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      }
-    )
+    return new Response(JSON.stringify({ error: (error as Error).message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    })
   }
 }
 
@@ -66,7 +67,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
   if (!encodedVideoId) {
     return new Response(JSON.stringify({ error: 'Missing videoId' }), {
       status: 400,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
     })
   }
 
@@ -77,27 +78,42 @@ export async function action({ params, request }: ActionFunctionArgs) {
     const { text_size, padding_scale, text_anchor } = body
 
     // Validate text_size is a number between 1.0 and 10.0 (percentage of image width)
-    if (text_size !== undefined && (typeof text_size !== 'number' || text_size < 1.0 || text_size > 10.0)) {
-      return new Response(JSON.stringify({ error: 'Invalid text_size (must be number between 1.0 and 10.0)' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      })
+    if (
+      text_size !== undefined &&
+      (typeof text_size !== 'number' || text_size < 1.0 || text_size > 10.0)
+    ) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid text_size (must be number between 1.0 and 10.0)' }),
+        {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
     }
 
     // Validate padding_scale is a number between 0.0 and 2.0
-    if (padding_scale !== undefined && (typeof padding_scale !== 'number' || padding_scale < 0.0 || padding_scale > 2.0)) {
-      return new Response(JSON.stringify({ error: 'Invalid padding_scale (must be number between 0.0 and 2.0)' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      })
+    if (
+      padding_scale !== undefined &&
+      (typeof padding_scale !== 'number' || padding_scale < 0.0 || padding_scale > 2.0)
+    ) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid padding_scale (must be number between 0.0 and 2.0)' }),
+        {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
     }
 
     // Validate text_anchor is one of the allowed values
     if (text_anchor !== undefined && !['left', 'center', 'right'].includes(text_anchor)) {
-      return new Response(JSON.stringify({ error: 'Invalid text_anchor (must be "left", "center", or "right")' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      })
+      return new Response(
+        JSON.stringify({ error: 'Invalid text_anchor (must be "left", "center", or "right")' }),
+        {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
     }
 
     const db = getDatabase(videoId)
@@ -123,24 +139,23 @@ export async function action({ params, request }: ActionFunctionArgs) {
     }
 
     if (updates.length > 0) {
-      updates.push('updated_at = datetime(\'now\')')
-      db.prepare(`
+      updates.push("updated_at = datetime('now')")
+      db.prepare(
+        `
         UPDATE video_preferences
         SET ${updates.join(', ')}
         WHERE id = 1
-      `).run(...values)
+      `
+      ).run(...values)
     }
 
     db.close()
 
     return Response.json({ success: true })
   } catch (error) {
-    return new Response(
-      JSON.stringify({ error: (error as Error).message }),
-      {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      }
-    )
+    return new Response(JSON.stringify({ error: (error as Error).message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    })
   }
 }

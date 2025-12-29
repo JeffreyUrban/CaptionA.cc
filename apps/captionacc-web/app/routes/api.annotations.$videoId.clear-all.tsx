@@ -1,7 +1,9 @@
-import { type ActionFunctionArgs } from 'react-router'
-import { getDbPath } from '~/utils/video-paths'
-import Database from 'better-sqlite3'
 import { existsSync } from 'fs'
+
+import Database from 'better-sqlite3'
+import { type ActionFunctionArgs } from 'react-router'
+
+import { getDbPath } from '~/utils/video-paths'
 
 function getDatabase(videoId: string): Database.Database | Response {
   const dbPath = getDbPath(videoId)
@@ -23,7 +25,7 @@ export async function action({ params }: ActionFunctionArgs) {
   if (!encodedVideoId) {
     return new Response(JSON.stringify({ error: 'Missing videoId' }), {
       status: 400,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
     })
   }
 
@@ -34,35 +36,46 @@ export async function action({ params }: ActionFunctionArgs) {
     if (db instanceof Response) return db
 
     // Count annotations before deletion
-    const countResult = db.prepare(`
+    const countResult = db
+      .prepare(
+        `
       SELECT COUNT(*) as count FROM full_frame_box_labels WHERE label_source = 'user'
-    `).get() as { count: number }
+    `
+      )
+      .get() as { count: number }
 
     const deletedCount = countResult.count
 
     // Delete all user annotations
-    db.prepare(`
+    db.prepare(
+      `
       DELETE FROM full_frame_box_labels WHERE label_source = 'user'
-    `).run()
+    `
+    ).run()
 
     db.close()
 
     console.log(`[Clear All] Deleted ${deletedCount} user annotations for video: ${videoId}`)
 
-    return new Response(JSON.stringify({
-      success: true,
-      deletedCount
-    }), {
-      headers: { 'Content-Type': 'application/json' }
-    })
-
+    return new Response(
+      JSON.stringify({
+        success: true,
+        deletedCount,
+      }),
+      {
+        headers: { 'Content-Type': 'application/json' },
+      }
+    )
   } catch (error) {
     console.error('Error clearing all annotations:', error)
-    return new Response(JSON.stringify({
-      error: error instanceof Error ? error.message : 'Unknown error'
-    }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
-    })
+    return new Response(
+      JSON.stringify({
+        error: error instanceof Error ? error.message : 'Unknown error',
+      }),
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    )
   }
 }

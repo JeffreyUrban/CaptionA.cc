@@ -1,6 +1,7 @@
-import { describe, it, expect } from 'vitest'
 import { readFileSync, readdirSync, statSync } from 'fs'
 import { join } from 'path'
+
+import { describe, it, expect } from 'vitest'
 
 // Regular expression to find anchor tags with href attributes
 const ANCHOR_TAG_REGEX = /<a\s+([^>]*?)>/gi
@@ -17,28 +18,19 @@ interface LinkIssue {
 }
 
 function isExternalLink(href: string): boolean {
-  return (
-    href.startsWith('http://') ||
-    href.startsWith('https://') ||
-    href.startsWith('//')
-  )
+  return href.startsWith('http://') || href.startsWith('https://') || href.startsWith('//')
 }
 
 function getAllFiles(dir: string, fileList: string[] = []): string[] {
   const files = readdirSync(dir)
 
-  files.forEach((file) => {
+  files.forEach(file => {
     const filePath = join(dir, file)
     const stat = statSync(filePath)
 
     if (stat.isDirectory()) {
       // Skip node_modules, build directories, and hidden directories
-      if (
-        !file.startsWith('.') &&
-        file !== 'node_modules' &&
-        file !== 'build' &&
-        file !== 'dist'
-      ) {
+      if (!file.startsWith('.') && file !== 'node_modules' && file !== 'build' && file !== 'dist') {
         getAllFiles(filePath, fileList)
       }
     } else if (file.endsWith('.tsx') || file.endsWith('.jsx')) {
@@ -65,8 +57,7 @@ function checkExternalLinks(filePath: string): LinkIssue[] {
 
     // Find the line number
     const position = match.index
-    const lineNumber =
-      content.substring(0, position).split('\n').length
+    const lineNumber = content.substring(0, position).split('\n').length
 
     const hasTarget = TARGET_REGEX.test(attributes || '')
     const relMatch = attributes?.match(REL_REGEX)
@@ -81,8 +72,7 @@ function checkExternalLinks(filePath: string): LinkIssue[] {
         line: lineNumber,
         href,
         issue: 'Missing target="_blank"',
-        suggestion:
-          'External links should open in a new tab: add target="_blank"',
+        suggestion: 'External links should open in a new tab: add target="_blank"',
       })
     }
 
@@ -110,7 +100,7 @@ describe('External Link Validation', () => {
     const files = getAllFiles(appDir)
     const allIssues: LinkIssue[] = []
 
-    files.forEach((file) => {
+    files.forEach(file => {
       const issues = checkExternalLinks(file)
       allIssues.push(...issues)
     })
@@ -118,7 +108,7 @@ describe('External Link Validation', () => {
     if (allIssues.length > 0) {
       const errorMessage = [
         '\n❌ External link validation failed:\n',
-        ...allIssues.map((issue) => {
+        ...allIssues.map(issue => {
           const relativePath = issue.file.replace(process.cwd(), '.')
           return [
             `\n  File: ${relativePath}:${issue.line}`,

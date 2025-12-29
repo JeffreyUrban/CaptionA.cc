@@ -1,8 +1,10 @@
-import { type LoaderFunctionArgs } from 'react-router'
-import { getDbPath } from '~/utils/video-paths'
-import Database from 'better-sqlite3'
 import { existsSync } from 'fs'
+
+import Database from 'better-sqlite3'
+import { type LoaderFunctionArgs } from 'react-router'
 import sharp from 'sharp'
+
+import { getDbPath } from '~/utils/video-paths'
 
 interface VideoLayoutConfig {
   id: number
@@ -165,11 +167,7 @@ function generateLayoutVisualizationSVG(
 
   // Draw OCR boxes
   for (const box of boxes) {
-    const color = getBoxColor(
-      box.predictedLabel,
-      box.predictedConfidence,
-      box.userLabel
-    )
+    const color = getBoxColor(box.predictedLabel, box.predictedConfidence, box.userLabel)
 
     const boxWidth = box.bounds.right - box.bounds.left
     const boxHeight = box.bounds.bottom - box.bounds.top
@@ -244,10 +242,7 @@ function generateLayoutVisualizationSVG(
   }
 
   // Draw anchor line (if exists)
-  if (
-    layoutConfig.anchor_type !== null &&
-    layoutConfig.anchor_position !== null
-  ) {
+  if (layoutConfig.anchor_type !== null && layoutConfig.anchor_position !== null) {
     elements.push(`
       <line
         x1="${layoutConfig.anchor_position}"
@@ -302,9 +297,9 @@ export async function loader({ params }: LoaderFunctionArgs) {
     if (db instanceof Response) return db
 
     // Get layout config
-    const layoutConfig = db
-      .prepare('SELECT * FROM video_layout_config WHERE id = 1')
-      .get() as VideoLayoutConfig | undefined
+    const layoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as
+      | VideoLayoutConfig
+      | undefined
 
     if (!layoutConfig) {
       db.close()
@@ -312,11 +307,15 @@ export async function loader({ params }: LoaderFunctionArgs) {
     }
 
     // Load frame image from database
-    const frameRow = db.prepare(`
+    const frameRow = db
+      .prepare(
+        `
       SELECT image_data
       FROM full_frames
       WHERE frame_index = ?
-    `).get(frameIndex) as { image_data: Buffer } | undefined
+    `
+      )
+      .get(frameIndex) as { image_data: Buffer } | undefined
 
     if (!frameRow) {
       db.close()
@@ -324,12 +323,16 @@ export async function loader({ params }: LoaderFunctionArgs) {
     }
 
     // Load OCR data for this frame from full_frame_ocr table
-    const ocrBoxes = db.prepare(`
+    const ocrBoxes = db
+      .prepare(
+        `
       SELECT box_index, text, confidence, x, y, width, height
       FROM full_frame_ocr
       WHERE frame_index = ?
       ORDER BY box_index
-    `).all(frameIndex) as Array<{
+    `
+      )
+      .all(frameIndex) as Array<{
       box_index: number
       text: string
       confidence: number
@@ -354,9 +357,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
       )
       .all(frameIndex) as Array<{ box_index: number; label: 'in' | 'out' }>
 
-    const userAnnotationMap = new Map(
-      userAnnotations.map((a) => [a.box_index, a.label])
-    )
+    const userAnnotationMap = new Map(userAnnotations.map(a => [a.box_index, a.label]))
 
     // Convert OCR boxes to box format
     const boxes: OCRBox[] = ocrBoxes.map((box, index) => {

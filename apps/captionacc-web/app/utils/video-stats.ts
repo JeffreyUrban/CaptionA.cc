@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3'
+
 import { getDbPath } from './video-paths'
 
 export type BadgeState = {
@@ -30,18 +31,25 @@ export interface VideoStats {
   progress: number
   totalFrames: number
   coveredFrames: number
-  hasOcrData: boolean  // Whether video has full_frame_ocr data (enables layout annotation)
-  layoutApproved: boolean  // Whether layout annotation has been approved (gate for boundary annotation)
-  processingStatus?: ProcessingStatus  // Upload/processing status (null if not uploaded via web)
-  cropFramesStatus?: CropFramesStatus  // Crop frames processing status
-  boundaryPendingReview: number  // Boundaries pending review
-  textPendingReview: number  // Text annotations pending review
-  databaseId?: string  // Unique ID that changes when database is recreated (for cache invalidation)
-  badges: BadgeState[]  // Calculated badge states for display
+  hasOcrData: boolean // Whether video has full_frame_ocr data (enables layout annotation)
+  layoutApproved: boolean // Whether layout annotation has been approved (gate for boundary annotation)
+  processingStatus?: ProcessingStatus // Upload/processing status (null if not uploaded via web)
+  cropFramesStatus?: CropFramesStatus // Crop frames processing status
+  boundaryPendingReview: number // Boundaries pending review
+  textPendingReview: number // Text annotations pending review
+  databaseId?: string // Unique ID that changes when database is recreated (for cache invalidation)
+  badges: BadgeState[] // Calculated badge states for display
 }
 
 export interface ProcessingStatus {
-  status: 'uploading' | 'upload_complete' | 'extracting_frames' | 'running_ocr' | 'analyzing_layout' | 'processing_complete' | 'error'
+  status:
+    | 'uploading'
+    | 'upload_complete'
+    | 'extracting_frames'
+    | 'running_ocr'
+    | 'analyzing_layout'
+    | 'processing_complete'
+    | 'error'
   uploadProgress: number
   frameExtractionProgress: number
   ocrProgress: number
@@ -89,18 +97,23 @@ function calculateBadges(
   // If all tracks complete (and video is actually ready for annotation), show Fully Annotated
   if (badges.length === 0) {
     const isReady = isVideoReadyForAnnotation(stats)
-    console.log(`[calculateBadges] ${videoId}: No badges, isReady=${isReady}, hasOcrData=${stats.hasOcrData}, layoutApproved=${stats.layoutApproved}, totalAnnotations=${stats.totalAnnotations}`)
+    console.log(
+      `[calculateBadges] ${videoId}: No badges, isReady=${isReady}, hasOcrData=${stats.hasOcrData}, layoutApproved=${stats.layoutApproved}, totalAnnotations=${stats.totalAnnotations}`
+    )
 
     if (isReady) {
       badges.push({
         type: 'fully-annotated',
         label: 'Fully Annotated',
         color: 'teal',
-        clickable: false
+        clickable: false,
       })
     }
   } else {
-    console.log(`[calculateBadges] ${videoId}: ${badges.length} badges:`, badges.map(b => b.label).join(', '))
+    console.log(
+      `[calculateBadges] ${videoId}: ${badges.length} badges:`,
+      badges.map(b => b.label).join(', ')
+    )
   }
 
   return badges
@@ -123,7 +136,11 @@ function isVideoReadyForAnnotation(stats: Omit<VideoStats, 'badges'>): boolean {
   return true
 }
 
-function calculateLayoutBadge(stats: Omit<VideoStats, 'badges'>, videoId: string, db: Database.Database): BadgeState | null {
+function calculateLayoutBadge(
+  stats: Omit<VideoStats, 'badges'>,
+  videoId: string,
+  db: Database.Database
+): BadgeState | null {
   const ps = stats.processingStatus
 
   // State 0: No processing status (video created outside upload flow or database incomplete)
@@ -134,22 +151,25 @@ function calculateLayoutBadge(stats: Omit<VideoStats, 'badges'>, videoId: string
       color: 'red',
       clickable: true,
       errorDetails: {
-        message: 'Video has no processing status. May need to be processed manually or re-uploaded.',
+        message:
+          'Video has no processing status. May need to be processed manually or re-uploaded.',
         context: {
           videoId,
           stage: 'layout',
-          issue: 'no_processing_status'
-        }
-      }
+          issue: 'no_processing_status',
+        },
+      },
     }
   }
 
   // State 1: Error during processing
   if (ps?.status === 'error') {
     // Special handling for "No valid boxes found" - not a real error
-    if (ps.errorDetails && ps.errorDetails.includes('No valid boxes found')) {
+    if (ps.errorDetails?.includes('No valid boxes found')) {
       // Check if there are any OCR boxes at all
-      const boxCount = db.prepare(`SELECT COUNT(*) as count FROM full_frame_ocr`).get() as { count: number } | undefined
+      const boxCount = db.prepare(`SELECT COUNT(*) as count FROM full_frame_ocr`).get() as
+        | { count: number }
+        | undefined
       const totalBoxes = boxCount?.count || 0
 
       if (totalBoxes === 0) {
@@ -158,7 +178,7 @@ function calculateLayoutBadge(stats: Omit<VideoStats, 'badges'>, videoId: string
           type: 'info',
           label: 'No Text Detected',
           color: 'gray',
-          clickable: false
+          clickable: false,
         }
       } else {
         // Some boxes but insufficient for layout analysis - needs review
@@ -167,7 +187,7 @@ function calculateLayoutBadge(stats: Omit<VideoStats, 'badges'>, videoId: string
           label: 'Layout: Review',
           color: 'yellow',
           clickable: true,
-          url: `/annotate/layout/review?videoId=${encodeURIComponent(videoId)}`
+          url: `/annotate/layout/review?videoId=${encodeURIComponent(videoId)}`,
         }
       }
     }
@@ -183,9 +203,9 @@ function calculateLayoutBadge(stats: Omit<VideoStats, 'badges'>, videoId: string
         context: {
           videoId,
           stage: 'layout',
-          processingStatus: ps.status
-        }
-      }
+          processingStatus: ps.status,
+        },
+      },
     }
   }
 
@@ -226,9 +246,9 @@ function calculateLayoutBadge(stats: Omit<VideoStats, 'badges'>, videoId: string
         context: {
           videoId,
           stage: 'layout',
-          issue: 'empty_ocr_results'
-        }
-      }
+          issue: 'empty_ocr_results',
+        },
+      },
     }
   }
 
@@ -239,7 +259,7 @@ function calculateLayoutBadge(stats: Omit<VideoStats, 'badges'>, videoId: string
       label: 'Layout: Annotate',
       color: 'green',
       clickable: true,
-      url: `/annotate/layout?videoId=${encodeURIComponent(videoId)}`
+      url: `/annotate/layout?videoId=${encodeURIComponent(videoId)}`,
     }
   }
 
@@ -265,9 +285,9 @@ function calculateBoundariesBadge(
         context: {
           videoId,
           stage: 'boundaries',
-          errorType: 'SqliteError'
-        }
-      }
+          errorType: 'SqliteError',
+        },
+      },
     }
   }
 
@@ -290,9 +310,9 @@ function calculateBoundariesBadge(
         context: {
           videoId,
           stage: 'boundaries',
-          issue: 'crop_frames_failed'
-        }
-      }
+          issue: 'crop_frames_failed',
+        },
+      },
     }
   }
 
@@ -307,7 +327,12 @@ function calculateBoundariesBadge(
     if (stats.totalFrames === 0) {
       return { type: 'boundaries', label: 'Boundaries: Framing', color: 'indigo', clickable: false }
     } else {
-      return { type: 'boundaries', label: 'Boundaries: Running OCR', color: 'purple', clickable: false }
+      return {
+        type: 'boundaries',
+        label: 'Boundaries: Running OCR',
+        color: 'purple',
+        clickable: false,
+      }
     }
   }
 
@@ -324,27 +349,31 @@ function calculateBoundariesBadge(
         context: {
           videoId,
           stage: 'boundaries',
-          issue: 'no_frames_created'
-        }
-      }
+          issue: 'no_frames_created',
+        },
+      },
     }
   }
 
   // Priority 5: Ready to annotate (crop frames complete with frames, but no captions yet)
   if (cfs?.status === 'complete' && stats.totalFrames > 0 && stats.totalAnnotations === 0) {
-    console.log(`[calculateBoundariesBadge] ${videoId}: Showing Boundaries: Annotate (frames=${stats.totalFrames}, annotations=${stats.totalAnnotations})`)
+    console.log(
+      `[calculateBoundariesBadge] ${videoId}: Showing Boundaries: Annotate (frames=${stats.totalFrames}, annotations=${stats.totalAnnotations})`
+    )
     return {
       type: 'boundaries',
       label: 'Boundaries: Annotate',
       color: 'green',
       clickable: true,
-      url: `/annotate/boundaries?videoId=${encodeURIComponent(videoId)}`
+      url: `/annotate/boundaries?videoId=${encodeURIComponent(videoId)}`,
     }
   }
 
   // Debug: Log why we're not showing the annotate badge
   if (cfs?.status === 'complete') {
-    console.log(`[calculateBoundariesBadge] ${videoId}: crop_frames complete but not showing badge - frames=${stats.totalFrames}, annotations=${stats.totalAnnotations}, cfs=${JSON.stringify(cfs)}`)
+    console.log(
+      `[calculateBoundariesBadge] ${videoId}: crop_frames complete but not showing badge - frames=${stats.totalFrames}, annotations=${stats.totalAnnotations}, cfs=${JSON.stringify(cfs)}`
+    )
   }
 
   // Priority 6: Annotate (has gap annotations that need marking)
@@ -354,7 +383,7 @@ function calculateBoundariesBadge(
       label: 'Boundaries: Annotate',
       color: 'green',
       clickable: true,
-      url: `/annotate/boundaries?videoId=${encodeURIComponent(videoId)}`
+      url: `/annotate/boundaries?videoId=${encodeURIComponent(videoId)}`,
     }
   }
 
@@ -365,7 +394,7 @@ function calculateBoundariesBadge(
       label: 'Boundaries: Review',
       color: 'yellow',
       clickable: true,
-      url: `/annotate/boundaries?videoId=${encodeURIComponent(videoId)}`
+      url: `/annotate/boundaries?videoId=${encodeURIComponent(videoId)}`,
     }
   }
 
@@ -391,9 +420,9 @@ function calculateTextBadge(
         context: {
           videoId,
           stage: 'text',
-          errorType: 'SqliteError'
-        }
-      }
+          errorType: 'SqliteError',
+        },
+      },
     }
   }
 
@@ -410,7 +439,7 @@ function calculateTextBadge(
       label: 'Text: Review',
       color: 'yellow',
       clickable: true,
-      url: `/annotate/text?videoId=${encodeURIComponent(videoId)}`
+      url: `/annotate/text?videoId=${encodeURIComponent(videoId)}`,
     }
   }
 
@@ -440,20 +469,22 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
       layoutApproved: false,
       boundaryPendingReview: 0,
       textPendingReview: 0,
-      badges: [{
-        type: 'error',
-        label: 'Layout: Error',
-        color: 'red',
-        clickable: true,
-        errorDetails: {
-          message: 'Database file not found',
-          context: {
-            videoId,
-            stage: 'layout',
-            issue: 'missing_database'
-          }
-        }
-      }]
+      badges: [
+        {
+          type: 'error',
+          label: 'Layout: Error',
+          color: 'red',
+          clickable: true,
+          errorDetails: {
+            message: 'Database file not found',
+            context: {
+              videoId,
+              stage: 'layout',
+              issue: 'missing_database',
+            },
+          },
+        },
+      ],
     }
   }
 
@@ -463,7 +494,9 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
   // Frames are written to DB and filesystem is cleaned up after processing
   let totalFrames = 0
   try {
-    const frameCount = db.prepare(`SELECT COUNT(*) as count FROM cropped_frames`).get() as { count: number } | undefined
+    const frameCount = db.prepare(`SELECT COUNT(*) as count FROM cropped_frames`).get() as
+      | { count: number }
+      | undefined
     totalFrames = frameCount?.count ?? 0
   } catch {
     // Table doesn't exist yet
@@ -475,14 +508,18 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
     const stageErrors: StageErrors = {}
 
     // Query basic stats (always works - uses columns that exist in all schemas)
-    const basicResult = db.prepare(`
+    const basicResult = db
+      .prepare(
+        `
       SELECT
         COUNT(*) as total,
         SUM(CASE WHEN boundary_state = 'confirmed' THEN 1 ELSE 0 END) as confirmed,
         SUM(CASE WHEN boundary_state = 'predicted' THEN 1 ELSE 0 END) as predicted,
         SUM(CASE WHEN boundary_state = 'gap' THEN 1 ELSE 0 END) as gaps
       FROM captions
-    `).get() as {
+    `
+      )
+      .get() as {
       total: number
       confirmed: number
       predicted: number
@@ -492,10 +529,14 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
     // Query boundary-specific data (might fail if boundary_pending column missing)
     let boundaryPendingReview = 0
     try {
-      const boundaryResult = db.prepare(`
+      const boundaryResult = db
+        .prepare(
+          `
         SELECT SUM(CASE WHEN boundary_pending = 1 THEN 1 ELSE 0 END) as boundary_pending
         FROM captions
-      `).get() as { boundary_pending: number }
+      `
+        )
+        .get() as { boundary_pending: number }
       boundaryPendingReview = boundaryResult.boundary_pending || 0
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
@@ -503,17 +544,21 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
       console.error(`[getVideoStats] Error querying boundary_pending for ${videoId}:`, error)
       stageErrors.boundaries = {
         message: errorMessage,
-        stack: errorStack
+        stack: errorStack,
       }
     }
 
     // Query text-specific data (might fail if text_pending column missing)
     let textPendingReview = 0
     try {
-      const textResult = db.prepare(`
+      const textResult = db
+        .prepare(
+          `
         SELECT SUM(CASE WHEN text_pending = 1 THEN 1 ELSE 0 END) as text_pending
         FROM captions
-      `).get() as { text_pending: number }
+      `
+        )
+        .get() as { text_pending: number }
       textPendingReview = textResult.text_pending || 0
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
@@ -521,7 +566,7 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
       console.error(`[getVideoStats] Error querying text_pending for ${videoId}:`, error)
       stageErrors.text = {
         message: errorMessage,
-        stack: errorStack
+        stack: errorStack,
       }
     }
 
@@ -529,12 +574,16 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
     // This might fail if boundary_pending is missing, but that's okay - we already tracked the error
     let coveredFrames = 0
     try {
-      const frameCoverage = db.prepare(`
+      const frameCoverage = db
+        .prepare(
+          `
         SELECT
           SUM(end_frame_index - start_frame_index + 1) as covered_frames
         FROM captions
         WHERE boundary_state != 'gap' AND boundary_pending = 0
-      `).get() as { covered_frames: number | null }
+      `
+        )
+        .get() as { covered_frames: number | null }
       coveredFrames = frameCoverage.covered_frames || 0
     } catch {
       // If this fails, it's likely due to missing boundary_pending column
@@ -543,14 +592,14 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
     }
 
     // Calculate progress as percentage of frames that are not gap or pending
-    const progress = totalFrames > 0
-      ? Math.round((coveredFrames / totalFrames) * 100)
-      : 0
+    const progress = totalFrames > 0 ? Math.round((coveredFrames / totalFrames) * 100) : 0
 
     // Check if video has OCR data (full_frame_ocr table with rows)
     let hasOcrData = false
     try {
-      const ocrCount = db.prepare(`SELECT COUNT(*) as count FROM full_frame_ocr LIMIT 1`).get() as { count: number } | undefined
+      const ocrCount = db.prepare(`SELECT COUNT(*) as count FROM full_frame_ocr LIMIT 1`).get() as
+        | { count: number }
+        | undefined
       hasOcrData = (ocrCount?.count ?? 0) > 0
     } catch {
       // Table doesn't exist
@@ -560,7 +609,9 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
     // Check if layout annotation has been approved
     let layoutApproved = false
     try {
-      const prefs = db.prepare(`SELECT layout_approved FROM video_preferences WHERE id = 1`).get() as { layout_approved: number } | undefined
+      const prefs = db
+        .prepare(`SELECT layout_approved FROM video_preferences WHERE id = 1`)
+        .get() as { layout_approved: number } | undefined
       layoutApproved = (prefs?.layout_approved ?? 0) === 1
     } catch {
       // Table or column doesn't exist
@@ -570,20 +621,22 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
     // Get processing status if available
     let processingStatus: ProcessingStatus | undefined
     try {
-      const status = db.prepare(`SELECT * FROM processing_status WHERE id = 1`).get() as {
-        status: string
-        upload_progress?: number
-        frame_extraction_progress?: number
-        ocr_progress?: number
-        layout_analysis_progress?: number
-        error_message?: string
-        error_details?: string
-        upload_started_at?: string
-        upload_completed_at?: string
-        processing_started_at?: string
-        processing_completed_at?: string
-        deleted?: number
-      } | undefined
+      const status = db.prepare(`SELECT * FROM processing_status WHERE id = 1`).get() as
+        | {
+            status: string
+            upload_progress?: number
+            frame_extraction_progress?: number
+            ocr_progress?: number
+            layout_analysis_progress?: number
+            error_message?: string
+            error_details?: string
+            upload_started_at?: string
+            upload_completed_at?: string
+            processing_started_at?: string
+            processing_completed_at?: string
+            deleted?: number
+          }
+        | undefined
       console.log(`[getVideoStats] Processing status for ${videoId}:`, status)
       if (status) {
         // Check if video is marked as deleted
@@ -603,7 +656,7 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
             layoutApproved: false,
             boundaryPendingReview: 0,
             textPendingReview: 0,
-            badges: []
+            badges: [],
           }
         }
 
@@ -630,18 +683,20 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
     // Get crop_frames processing status
     let cropFramesStatus: CropFramesStatus | undefined
     try {
-      const status = db.prepare(`SELECT * FROM crop_frames_status WHERE id = 1`).get() as {
-        status: string
-        processing_started_at?: string
-        processing_completed_at?: string
-        error_message?: string
-      } | undefined
+      const status = db.prepare(`SELECT * FROM crop_frames_status WHERE id = 1`).get() as
+        | {
+            status: string
+            processing_started_at?: string
+            processing_completed_at?: string
+            error_message?: string
+          }
+        | undefined
       if (status) {
         cropFramesStatus = {
           status: status.status as CropFramesStatus['status'],
           processingStartedAt: status.processing_started_at,
           processingCompletedAt: status.processing_completed_at,
-          errorMessage: status.error_message
+          errorMessage: status.error_message,
         }
       }
     } catch {
@@ -652,7 +707,9 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
     // Get database_id for cache invalidation
     let databaseId: string | undefined
     try {
-      const metadata = db.prepare(`SELECT database_id FROM video_metadata WHERE id = 1`).get() as { database_id: string } | undefined
+      const metadata = db.prepare(`SELECT database_id FROM video_metadata WHERE id = 1`).get() as
+        | { database_id: string }
+        | undefined
       databaseId = metadata?.database_id
     } catch {
       // Column doesn't exist in older databases
@@ -675,23 +732,28 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
       boundaryPendingReview,
       textPendingReview,
       databaseId,
-      badges: calculateBadges({
-        totalAnnotations: basicResult.total,
-        pendingReview: boundaryPendingReview + textPendingReview,
-        confirmedAnnotations: basicResult.confirmed,
-        predictedAnnotations: basicResult.predicted,
-        gapAnnotations: basicResult.gaps,
-        progress,
-        totalFrames,
-        coveredFrames,
-        hasOcrData,
-        layoutApproved,
-        processingStatus,
-        cropFramesStatus,
-        boundaryPendingReview,
-        textPendingReview,
-        databaseId
-      }, videoId, db, stageErrors)
+      badges: calculateBadges(
+        {
+          totalAnnotations: basicResult.total,
+          pendingReview: boundaryPendingReview + textPendingReview,
+          confirmedAnnotations: basicResult.confirmed,
+          predictedAnnotations: basicResult.predicted,
+          gapAnnotations: basicResult.gaps,
+          progress,
+          totalFrames,
+          coveredFrames,
+          hasOcrData,
+          layoutApproved,
+          processingStatus,
+          cropFramesStatus,
+          boundaryPendingReview,
+          textPendingReview,
+          databaseId,
+        },
+        videoId,
+        db,
+        stageErrors
+      ),
     }
     console.log(`[getVideoStats] Returning stats for ${videoId}:`, JSON.stringify(stats, null, 2))
     return stats
@@ -715,21 +777,23 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
       layoutApproved: false,
       boundaryPendingReview: 0,
       textPendingReview: 0,
-      badges: [{
-        type: 'error',
-        label: 'Layout: Error',
-        color: 'red',
-        clickable: true,
-        errorDetails: {
-          message: errorMessage,
-          stack: errorStack,
-          context: {
-            videoId,
-            stage: 'layout',
-            errorType: error instanceof Error ? error.constructor.name : 'Unknown'
-          }
-        }
-      }]
+      badges: [
+        {
+          type: 'error',
+          label: 'Layout: Error',
+          color: 'red',
+          clickable: true,
+          errorDetails: {
+            message: errorMessage,
+            stack: errorStack,
+            context: {
+              videoId,
+              stage: 'layout',
+              errorType: error instanceof Error ? error.constructor.name : 'Unknown',
+            },
+          },
+        },
+      ],
     }
   } finally {
     db.close()

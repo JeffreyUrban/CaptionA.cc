@@ -1,7 +1,9 @@
-import { type LoaderFunctionArgs } from 'react-router'
-import { getDbPath } from '~/utils/video-paths'
-import Database from 'better-sqlite3'
 import { existsSync } from 'fs'
+
+import Database from 'better-sqlite3'
+import { type LoaderFunctionArgs } from 'react-router'
+
+import { getDbPath } from '~/utils/video-paths'
 
 interface TextQueueAnnotation {
   id: number
@@ -33,7 +35,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
   if (!encodedVideoId) {
     return new Response(JSON.stringify({ error: 'Missing videoId' }), {
       status: 400,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
     })
   }
 
@@ -48,7 +50,9 @@ export async function loader({ params }: LoaderFunctionArgs) {
     // - text_pending = 1 (boundaries changed, needs re-annotation)
     // Exclude gaps
     // Order by start_frame_index
-    const annotations = db.prepare(`
+    const annotations = db
+      .prepare(
+        `
       SELECT
         id,
         start_frame_index,
@@ -62,23 +66,25 @@ export async function loader({ params }: LoaderFunctionArgs) {
       WHERE (text IS NULL OR text_pending = 1)
         AND boundary_state != 'gap'
       ORDER BY start_frame_index ASC
-    `).all() as TextQueueAnnotation[]
+    `
+      )
+      .all() as TextQueueAnnotation[]
 
     db.close()
 
-    return new Response(JSON.stringify({
-      annotations,
-      count: annotations.length
-    }), {
-      headers: { 'Content-Type': 'application/json' }
-    })
-  } catch (error) {
     return new Response(
-      JSON.stringify({ error: (error as Error).message }),
+      JSON.stringify({
+        annotations,
+        count: annotations.length,
+      }),
       {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
       }
     )
+  } catch (error) {
+    return new Response(JSON.stringify({ error: (error as Error).message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    })
   }
 }

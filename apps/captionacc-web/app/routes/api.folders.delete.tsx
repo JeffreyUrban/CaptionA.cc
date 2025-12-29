@@ -5,11 +5,13 @@
  * This endpoint finds all videos with display_path starting with the folder path
  * and deletes their UUID directories.
  */
-import type { ActionFunctionArgs } from 'react-router'
-import { resolve } from 'path'
 import { rm } from 'fs/promises'
-import { getAllVideos, getDbPath } from '~/utils/video-paths'
+import { resolve } from 'path'
+
 import Database from 'better-sqlite3'
+import type { ActionFunctionArgs } from 'react-router'
+
+import { getAllVideos, getDbPath } from '~/utils/video-paths'
 
 export async function action({ request }: ActionFunctionArgs) {
   if (request.method !== 'DELETE') {
@@ -29,8 +31,10 @@ export async function action({ request }: ActionFunctionArgs) {
   const normalizedFolderPath = folderPath.replace(/\/$/, '') // Remove trailing slash
   const videosToDelete = allVideos.filter(video => {
     // Match exact folder or videos in subfolders
-    return video.displayPath === normalizedFolderPath ||
-           video.displayPath.startsWith(normalizedFolderPath + '/')
+    return (
+      video.displayPath === normalizedFolderPath ||
+      video.displayPath.startsWith(normalizedFolderPath + '/')
+    )
   })
 
   const videoCount = videosToDelete.length
@@ -45,7 +49,7 @@ export async function action({ request }: ActionFunctionArgs) {
     return Response.json({
       requiresConfirmation: true,
       videoCount,
-      folderPath
+      folderPath,
     })
   }
 
@@ -62,41 +66,55 @@ export async function action({ request }: ActionFunctionArgs) {
         // Mark as deleted in database first
         const db = new Database(dbPath)
         try {
-          db.prepare(`
+          db.prepare(
+            `
             UPDATE processing_status
             SET deleted = 1,
                 deleted_at = datetime('now')
             WHERE id = 1
-          `).run()
+          `
+          ).run()
         } finally {
           db.close()
         }
       }
 
       // Delete the UUID directory
-      const videoDir = resolve(process.cwd(), '..', '..', 'local', 'data', ...video.storagePath.split('/'))
+      const videoDir = resolve(
+        process.cwd(),
+        '..',
+        '..',
+        'local',
+        'data',
+        ...video.storagePath.split('/')
+      )
       await rm(videoDir, { recursive: true, force: true })
       deletedCount++
 
       console.log(`[FolderDelete] Deleted video: ${video.displayPath} (${video.storagePath})`)
     } catch (error) {
       console.error(`[FolderDelete] Failed to delete ${video.displayPath}:`, error)
-      errors.push(`${video.displayPath}: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      errors.push(
+        `${video.displayPath}: ${error instanceof Error ? error.message : 'Unknown error'}`
+      )
     }
   }
 
   if (errors.length > 0) {
-    return Response.json({
-      success: false,
-      error: 'Some videos failed to delete',
-      deletedCount,
-      errors
-    }, { status: 500 })
+    return Response.json(
+      {
+        success: false,
+        error: 'Some videos failed to delete',
+        deletedCount,
+        errors,
+      },
+      { status: 500 }
+    )
   }
 
   return Response.json({
     success: true,
     folderPath,
-    videosDeleted: deletedCount
+    videosDeleted: deletedCount,
   })
 }

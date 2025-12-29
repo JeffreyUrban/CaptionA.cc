@@ -1,7 +1,9 @@
-import { type LoaderFunctionArgs } from 'react-router'
-import { getDbPath } from '~/utils/video-paths'
-import Database from 'better-sqlite3'
 import { existsSync } from 'fs'
+
+import Database from 'better-sqlite3'
+import { type LoaderFunctionArgs } from 'react-router'
+
+import { getDbPath } from '~/utils/video-paths'
 
 interface Annotation {
   id: number
@@ -33,7 +35,7 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
   if (!encodedVideoId) {
     return new Response(JSON.stringify({ error: 'Missing videoId' }), {
       status: 400,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
     })
   }
 
@@ -45,7 +47,7 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
   if (!direction || !['prev', 'next'].includes(direction)) {
     return new Response(JSON.stringify({ error: 'Invalid direction' }), {
       status: 400,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
     })
   }
 
@@ -54,14 +56,15 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
     if (db instanceof Response) return db
 
     // Get current annotation's boundary_updated_at for comparison
-    const current = db.prepare('SELECT boundary_updated_at FROM captions WHERE id = ?').get(currentId) as
-      { boundary_updated_at: string } | undefined
+    const current = db
+      .prepare('SELECT boundary_updated_at FROM captions WHERE id = ?')
+      .get(currentId) as { boundary_updated_at: string } | undefined
 
     if (!current) {
       db.close()
       return new Response(JSON.stringify({ error: 'Current annotation not found' }), {
         status: 404,
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
       })
     }
 
@@ -69,42 +72,51 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
 
     if (direction === 'prev') {
       // Get previous non-gap annotation (earlier boundary_updated_at, or same boundary_updated_at with lower id)
-      annotation = db.prepare(`
+      annotation = db
+        .prepare(
+          `
         SELECT * FROM captions
         WHERE (boundary_updated_at < ? OR (boundary_updated_at = ? AND id < ?))
         AND boundary_state IN ('predicted', 'confirmed')
         ORDER BY boundary_updated_at DESC, id DESC
         LIMIT 1
-      `).get(current.boundary_updated_at, current.boundary_updated_at, currentId) as Annotation | undefined
+      `
+        )
+        .get(current.boundary_updated_at, current.boundary_updated_at, currentId) as
+        | Annotation
+        | undefined
     } else {
       // Get next non-gap annotation (later boundary_updated_at, or same boundary_updated_at with higher id)
-      annotation = db.prepare(`
+      annotation = db
+        .prepare(
+          `
         SELECT * FROM captions
         WHERE (boundary_updated_at > ? OR (boundary_updated_at = ? AND id > ?))
         AND boundary_state IN ('predicted', 'confirmed')
         ORDER BY boundary_updated_at ASC, id ASC
         LIMIT 1
-      `).get(current.boundary_updated_at, current.boundary_updated_at, currentId) as Annotation | undefined
+      `
+        )
+        .get(current.boundary_updated_at, current.boundary_updated_at, currentId) as
+        | Annotation
+        | undefined
     }
 
     db.close()
 
     if (!annotation) {
       return new Response(JSON.stringify({ annotation: null }), {
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
       })
     }
 
     return new Response(JSON.stringify({ annotation }), {
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
     })
   } catch (error) {
-    return new Response(
-      JSON.stringify({ error: (error as Error).message }),
-      {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      }
-    )
+    return new Response(JSON.stringify({ error: (error as Error).message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    })
   }
 }

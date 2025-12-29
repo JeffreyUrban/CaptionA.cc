@@ -27,6 +27,12 @@ repos:
     language: system
     files: ^apps/captionacc-web/.*\.(ts|tsx)$
     pass_filenames: false
+  - id: prettier
+    name: Prettier Format
+    entry: npx --prefix apps/captionacc-web prettier --write --ignore-unknown
+    language: system
+    files: ^apps/captionacc-web/.*\.(ts|tsx|js|jsx|json|css|md)$
+    pass_filenames: true
   - id: eslint
     name: ESLint
     entry: bash -c 'cd apps/captionacc-web && npx eslint'

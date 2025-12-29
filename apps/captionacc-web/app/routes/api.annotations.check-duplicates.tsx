@@ -3,6 +3,7 @@
  * Checks by display_path in video_metadata table
  */
 import type { LoaderFunctionArgs } from 'react-router'
+
 import { getAllVideos } from '~/utils/video-paths'
 
 export async function loader({ request }: LoaderFunctionArgs) {

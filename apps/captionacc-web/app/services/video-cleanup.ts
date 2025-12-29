@@ -13,11 +13,14 @@
  *       Old databases don't have: deleted, processing_attempts, last_heartbeat_at columns.
  */
 
-import { resolve } from 'path'
 import { existsSync, readdirSync } from 'fs'
 import { rm } from 'fs/promises'
+import { resolve } from 'path'
+
 import Database from 'better-sqlite3'
+
 import { queueVideoProcessing } from './video-processing'
+
 import { getAllVideos, getDbPath, getVideoDir } from '~/utils/video-paths'
 
 const CLEANUP_INTERVAL_MS = 60 * 60 * 1000 // 1 hour
@@ -52,22 +55,28 @@ async function findDeletedVideos(): Promise<DeletedVideo[]> {
       const db = new Database(dbPath, { readonly: true })
       try {
         // Check if deleted column exists (newer databases only)
-        const tableInfo = db.prepare(`PRAGMA table_info(processing_status)`).all() as Array<{ name: string }>
+        const tableInfo = db.prepare(`PRAGMA table_info(processing_status)`).all() as Array<{
+          name: string
+        }>
         const hasDeletedColumn = tableInfo.some(col => col.name === 'deleted')
 
         if (hasDeletedColumn) {
-          const status = db.prepare(`
+          const status = db
+            .prepare(
+              `
             SELECT deleted, current_job_id
             FROM processing_status
             WHERE id = 1 AND deleted = 1
-          `).get() as { deleted: number; current_job_id: string | null } | undefined
+          `
+            )
+            .get() as { deleted: number; current_job_id: string | null } | undefined
 
           if (status?.deleted === 1) {
             deletedVideos.push({
               displayPath: video.displayPath,
               videoDir,
               pid: status.current_job_id,
-              videoId: video.videoId
+              videoId: video.videoId,
             })
             console.log(`[Cleanup] Found deleted video: ${video.displayPath}`)
           }
@@ -140,8 +149,24 @@ function isProcessRunning(pid: string): boolean {
 /**
  * Find videos stuck in processing states
  */
-async function findStaleProcessing(): Promise<Array<{ displayPath: string; videoDir: string; videoFile: string; pid: string | null; attempts: number; videoId: string }>> {
-  const staleVideos: Array<{ displayPath: string; videoDir: string; videoFile: string; pid: string | null; attempts: number; videoId: string }> = []
+async function findStaleProcessing(): Promise<
+  Array<{
+    displayPath: string
+    videoDir: string
+    videoFile: string
+    pid: string | null
+    attempts: number
+    videoId: string
+  }>
+> {
+  const staleVideos: Array<{
+    displayPath: string
+    videoDir: string
+    videoFile: string
+    pid: string | null
+    attempts: number
+    videoId: string
+  }> = []
 
   // Get all videos and check for stale processing
   const allVideos = getAllVideos()
@@ -156,8 +181,12 @@ async function findStaleProcessing(): Promise<Array<{ displayPath: string; video
       const db = new Database(dbPath, { readonly: true })
       try {
         // Check if required columns exist (newer databases only)
-        const tableInfo = db.prepare(`PRAGMA table_info(processing_status)`).all() as Array<{ name: string }>
-        const hasProcessingAttemptsColumn = tableInfo.some(col => col.name === 'processing_attempts')
+        const tableInfo = db.prepare(`PRAGMA table_info(processing_status)`).all() as Array<{
+          name: string
+        }>
+        const hasProcessingAttemptsColumn = tableInfo.some(
+          col => col.name === 'processing_attempts'
+        )
         const hasDeletedColumn = tableInfo.some(col => col.name === 'deleted')
 
         if (!hasProcessingAttemptsColumn) {
@@ -165,11 +194,22 @@ async function findStaleProcessing(): Promise<Array<{ displayPath: string; video
           continue
         }
 
-        const status = db.prepare(`
+        const status = db
+          .prepare(
+            `
           SELECT status, current_job_id, processing_attempts${hasDeletedColumn ? ', deleted' : ''}
           FROM processing_status
           WHERE id = 1
-        `).get() as { status: string; current_job_id: string | null; processing_attempts: number; deleted?: number } | undefined
+        `
+          )
+          .get() as
+          | {
+              status: string
+              current_job_id: string | null
+              processing_attempts: number
+              deleted?: number
+            }
+          | undefined
 
         // Skip if deleted or not in processing state
         if (!status || status.deleted === 1) {
@@ -177,7 +217,7 @@ async function findStaleProcessing(): Promise<Array<{ displayPath: string; video
         }
 
         // Check if stuck in processing state
-        if (PROCESSING_STATES.includes(status.status as typeof PROCESSING_STATES[number])) {
+        if (PROCESSING_STATES.includes(status.status as (typeof PROCESSING_STATES)[number])) {
           const pid = status.current_job_id
           const isRunning = pid ? isProcessRunning(pid) : false
 
@@ -191,9 +231,11 @@ async function findStaleProcessing(): Promise<Array<{ displayPath: string; video
                 videoFile,
                 pid,
                 attempts: status.processing_attempts,
-                videoId: video.videoId
+                videoId: video.videoId,
               })
-              console.log(`[Cleanup] Found stale processing: ${video.displayPath} (PID: ${pid || 'none'}, attempts: ${status.processing_attempts})`)
+              console.log(
+                `[Cleanup] Found stale processing: ${video.displayPath} (PID: ${pid || 'none'}, attempts: ${status.processing_attempts})`
+              )
             }
           }
         }
@@ -211,7 +253,13 @@ async function findStaleProcessing(): Promise<Array<{ displayPath: string; video
 /**
  * Recover a stale processing job
  */
-async function recoverStaleProcessing(video: { displayPath: string; videoDir: string; videoFile: string; attempts: number; videoId: string }): Promise<void> {
+async function recoverStaleProcessing(video: {
+  displayPath: string
+  videoDir: string
+  videoFile: string
+  attempts: number
+  videoId: string
+}): Promise<void> {
   const { displayPath, videoDir, videoFile, attempts, videoId } = video
 
   // Check if exceeded max attempts
@@ -221,7 +269,8 @@ async function recoverStaleProcessing(video: { displayPath: string; videoDir: st
     const dbPath = resolve(videoDir, 'annotations.db')
     const db = new Database(dbPath)
     try {
-      db.prepare(`
+      db.prepare(
+        `
         UPDATE processing_status
         SET status = 'error',
             error_message = ?,
@@ -229,7 +278,8 @@ async function recoverStaleProcessing(video: { displayPath: string; videoDir: st
             error_occurred_at = datetime('now'),
             current_job_id = NULL
         WHERE id = 1
-      `).run(
+      `
+      ).run(
         `Processing failed after ${attempts} attempts (server restarts or crashes)`,
         JSON.stringify({ reason: 'max_attempts_exceeded', attempts })
       )
@@ -240,13 +290,15 @@ async function recoverStaleProcessing(video: { displayPath: string; videoDir: st
   }
 
   // Restart processing (queue to respect concurrency limits)
-  console.log(`[Cleanup] Queueing ${displayPath} for processing restart (attempt ${attempts + 1}/${MAX_PROCESSING_ATTEMPTS})`)
+  console.log(
+    `[Cleanup] Queueing ${displayPath} for processing restart (attempt ${attempts + 1}/${MAX_PROCESSING_ATTEMPTS})`
+  )
 
   try {
     queueVideoProcessing({
       videoPath: displayPath,
       videoFile,
-      videoId
+      videoId,
     })
     console.log(`[Cleanup] Successfully queued ${displayPath} for processing restart`)
   } catch (error) {
@@ -256,7 +308,8 @@ async function recoverStaleProcessing(video: { displayPath: string; videoDir: st
     const dbPath = resolve(videoDir, 'annotations.db')
     const db = new Database(dbPath)
     try {
-      db.prepare(`
+      db.prepare(
+        `
         UPDATE processing_status
         SET status = 'error',
             error_message = ?,
@@ -264,9 +317,13 @@ async function recoverStaleProcessing(video: { displayPath: string; videoDir: st
             error_occurred_at = datetime('now'),
             current_job_id = NULL
         WHERE id = 1
-      `).run(
+      `
+      ).run(
         `Failed to restart processing: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown', attempts: attempts + 1 })
+        JSON.stringify({
+          error: error instanceof Error ? error.message : 'Unknown',
+          attempts: attempts + 1,
+        })
       )
     } finally {
       db.close()
@@ -301,14 +358,20 @@ async function cleanupOrphanedCropFrames(): Promise<number> {
       const db = new Database(dbPath, { readonly: true })
       try {
         // Check crop_frames_status
-        const status = db.prepare(`
+        const status = db
+          .prepare(
+            `
           SELECT status FROM crop_frames_status WHERE id = 1
-        `).get() as { status: string } | undefined
+        `
+          )
+          .get() as { status: string } | undefined
 
         // Clean up frames if processing is complete or error
         // (frames should have been written to database and deleted)
         if (status && (status.status === 'complete' || status.status === 'error')) {
-          console.log(`[Cleanup] Found ${frameFiles.length} orphaned frames in ${video.displayPath}/crop_frames`)
+          console.log(
+            `[Cleanup] Found ${frameFiles.length} orphaned frames in ${video.displayPath}/crop_frames`
+          )
 
           // Delete all frame files
           for (const frameFile of frameFiles) {
@@ -358,18 +421,22 @@ async function checkDuplicateVideoHashes(): Promise<number> {
       const db = new Database(dbPath, { readonly: true })
       try {
         // Get video hash
-        const result = db.prepare(`
+        const result = db
+          .prepare(
+            `
           SELECT video_hash, display_path
           FROM video_metadata
           WHERE id = 1
-        `).get() as { video_hash: string; display_path: string } | undefined
+        `
+          )
+          .get() as { video_hash: string; display_path: string } | undefined
 
-        if (result && result.video_hash && result.video_hash !== '') {
+        if (result?.video_hash && result.video_hash !== '') {
           // Group by hash
           const existing = hashGroups.get(result.video_hash) || []
           existing.push({
             videoId: video.videoId,
-            displayPath: result.display_path
+            displayPath: result.display_path,
           })
           hashGroups.set(result.video_hash, existing)
         }
@@ -392,7 +459,9 @@ async function checkDuplicateVideoHashes(): Promise<number> {
       for (const video of videos) {
         console.warn(`    - ${video.displayPath} (${video.videoId})`)
       }
-      console.warn(`  Action required: Review and delete duplicates manually or use deduplication script`)
+      console.warn(
+        `  Action required: Review and delete duplicates manually or use deduplication script`
+      )
     }
   }
 
@@ -433,10 +502,17 @@ export async function runCleanup(): Promise<void> {
     // 4. Check for duplicate video hashes
     const duplicateHashes = await checkDuplicateVideoHashes()
     if (duplicateHashes > 0) {
-      console.log(`[Cleanup] ⚠️  Found ${duplicateHashes} duplicate video hash group(s) - see warnings above`)
+      console.log(
+        `[Cleanup] ⚠️  Found ${duplicateHashes} duplicate video hash group(s) - see warnings above`
+      )
     }
 
-    if (deletedVideos.length === 0 && staleVideos.length === 0 && cleanedCropFrames === 0 && duplicateHashes === 0) {
+    if (
+      deletedVideos.length === 0 &&
+      staleVideos.length === 0 &&
+      cleanedCropFrames === 0 &&
+      duplicateHashes === 0
+    ) {
       console.log('[Cleanup] No cleanup needed')
     } else {
       console.log('[Cleanup] Cleanup complete')
@@ -455,7 +531,9 @@ export function startPeriodicCleanup(): void {
     return
   }
 
-  console.log(`[Cleanup] Starting periodic cleanup (every ${CLEANUP_INTERVAL_MS / 1000 / 60} minutes)`)
+  console.log(
+    `[Cleanup] Starting periodic cleanup (every ${CLEANUP_INTERVAL_MS / 1000 / 60} minutes)`
+  )
 
   // Run immediately on start
   runCleanup().catch(console.error)

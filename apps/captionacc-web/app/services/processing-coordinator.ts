@@ -36,7 +36,9 @@ export function tryStartProcessing(): boolean {
   }
 
   activeTotalProcessing++
-  console.log(`[ProcessingCoordinator] Job started (${activeTotalProcessing}/${MAX_TOTAL_CONCURRENT_PROCESSING} active)`)
+  console.log(
+    `[ProcessingCoordinator] Job started (${activeTotalProcessing}/${MAX_TOTAL_CONCURRENT_PROCESSING} active)`
+  )
   return true
 }
 
@@ -49,7 +51,9 @@ export function finishProcessing(): void {
     activeTotalProcessing--
   }
 
-  console.log(`[ProcessingCoordinator] Job finished (${activeTotalProcessing}/${MAX_TOTAL_CONCURRENT_PROCESSING} active)`)
+  console.log(
+    `[ProcessingCoordinator] Job finished (${activeTotalProcessing}/${MAX_TOTAL_CONCURRENT_PROCESSING} active)`
+  )
 
   // Try to start next job in priority order
   processNext()
@@ -81,6 +85,6 @@ export function getProcessingStats() {
   return {
     active: activeTotalProcessing,
     capacity: MAX_TOTAL_CONCURRENT_PROCESSING,
-    available: MAX_TOTAL_CONCURRENT_PROCESSING - activeTotalProcessing
+    available: MAX_TOTAL_CONCURRENT_PROCESSING - activeTotalProcessing,
   }
 }

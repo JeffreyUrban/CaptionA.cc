@@ -1,10 +1,11 @@
 /**
  * Rename a video in the video library
  */
-import type { ActionFunctionArgs } from 'react-router'
-import { resolve } from 'path'
-import { rename, access, readdir } from 'fs/promises'
 import { constants } from 'fs'
+import { rename, access, readdir } from 'fs/promises'
+import { resolve } from 'path'
+
+import type { ActionFunctionArgs } from 'react-router'
 
 export async function action({ request }: ActionFunctionArgs) {
   if (request.method !== 'PATCH') {
@@ -44,9 +45,12 @@ export async function action({ request }: ActionFunctionArgs) {
   try {
     const entries = await readdir(oldFullPath)
     if (!entries.includes('annotations.db')) {
-      return Response.json({
-        error: 'Not a video directory. This appears to be a folder.'
-      }, { status: 400 })
+      return Response.json(
+        {
+          error: 'Not a video directory. This appears to be a folder.',
+        },
+        { status: 400 }
+      )
     }
   } catch (error) {
     console.error('Failed to read directory:', error)
@@ -56,7 +60,10 @@ export async function action({ request }: ActionFunctionArgs) {
   // Check if new path already exists
   try {
     await access(newFullPath, constants.F_OK)
-    return Response.json({ error: 'A video or folder with this name already exists' }, { status: 409 })
+    return Response.json(
+      { error: 'A video or folder with this name already exists' },
+      { status: 409 }
+    )
   } catch {
     // Good - target doesn't exist
   }

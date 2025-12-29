@@ -1,7 +1,9 @@
-import { type ActionFunctionArgs } from 'react-router'
-import { getDbPath } from '~/utils/video-paths'
-import Database from 'better-sqlite3'
 import { existsSync } from 'fs'
+
+import Database from 'better-sqlite3'
+import { type ActionFunctionArgs } from 'react-router'
+
+import { getDbPath } from '~/utils/video-paths'
 
 function getDatabase(videoId: string): Database.Database | Response {
   const dbPath = getDbPath(videoId)
@@ -23,7 +25,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
   if (!encodedVideoId) {
     return new Response(JSON.stringify({ error: 'Missing videoId' }), {
       status: 400,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
     })
   }
 
@@ -37,35 +39,44 @@ export async function action({ params, request }: ActionFunctionArgs) {
     if (db instanceof Response) return db
 
     // Ensure video_preferences row exists
-    db.prepare(`
+    db.prepare(
+      `
       INSERT OR IGNORE INTO video_preferences (id, layout_approved)
       VALUES (1, 0)
-    `).run()
+    `
+    ).run()
 
     // Update layout_approved flag
-    db.prepare(`
+    db.prepare(
+      `
       UPDATE video_preferences
       SET layout_approved = ?,
           updated_at = datetime('now')
       WHERE id = 1
-    `).run(complete ? 1 : 0)
+    `
+    ).run(complete ? 1 : 0)
 
     db.close()
 
-    return new Response(JSON.stringify({
-      success: true,
-      layoutApproved: complete
-    }), {
-      headers: { 'Content-Type': 'application/json' }
-    })
-
+    return new Response(
+      JSON.stringify({
+        success: true,
+        layoutApproved: complete,
+      }),
+      {
+        headers: { 'Content-Type': 'application/json' },
+      }
+    )
   } catch (error) {
     console.error('Error updating layout approved status:', error)
-    return new Response(JSON.stringify({
-      error: error instanceof Error ? error.message : 'Unknown error'
-    }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
-    })
+    return new Response(
+      JSON.stringify({
+        error: error instanceof Error ? error.message : 'Unknown error',
+      }),
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    )
   }
 }

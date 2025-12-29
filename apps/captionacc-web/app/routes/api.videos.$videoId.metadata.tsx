@@ -1,9 +1,11 @@
-import { type LoaderFunctionArgs } from 'react-router'
-import { getDbPath, getVideoDir } from '~/utils/video-paths'
-import { resolve } from 'path'
-import { readdir } from 'fs/promises'
 import { existsSync } from 'fs'
+import { readdir } from 'fs/promises'
+import { resolve } from 'path'
+
 import Database from 'better-sqlite3'
+import { type LoaderFunctionArgs } from 'react-router'
+
+import { getDbPath, getVideoDir } from '~/utils/video-paths'
 
 interface Annotation {
   id: number
@@ -82,11 +84,15 @@ function fillAnnotationGaps(db: Database.Database, totalFrames: number): number 
   // Returns the number of gap annotations created
 
   // Get all existing annotations sorted by start_frame_index
-  const annotations = db.prepare(`
+  const annotations = db
+    .prepare(
+      `
     SELECT start_frame_index, end_frame_index
     FROM captions
     ORDER BY start_frame_index
-  `).all() as Array<{ start_frame_index: number; end_frame_index: number }>
+  `
+    )
+    .all() as Array<{ start_frame_index: number; end_frame_index: number }>
 
   let gapsCreated = 0
   let expectedFrame = 0
@@ -95,10 +101,12 @@ function fillAnnotationGaps(db: Database.Database, totalFrames: number): number 
     // Check if there's a gap before this annotation
     if (annotation.start_frame_index > expectedFrame) {
       // Create gap annotation for frames [expectedFrame, annotation.start_frame_index - 1]
-      db.prepare(`
+      db.prepare(
+        `
         INSERT INTO captions (start_frame_index, end_frame_index, boundary_state, boundary_pending)
         VALUES (?, ?, 'gap', 0)
-      `).run(expectedFrame, annotation.start_frame_index - 1)
+      `
+      ).run(expectedFrame, annotation.start_frame_index - 1)
       gapsCreated++
     }
 
@@ -108,10 +116,12 @@ function fillAnnotationGaps(db: Database.Database, totalFrames: number): number 
 
   // Check if there's a gap at the end
   if (expectedFrame < totalFrames) {
-    db.prepare(`
+    db.prepare(
+      `
       INSERT INTO captions (start_frame_index, end_frame_index, boundary_state, boundary_pending)
       VALUES (?, ?, 'gap', 0)
-    `).run(expectedFrame, totalFrames - 1)
+    `
+    ).run(expectedFrame, totalFrames - 1)
     gapsCreated++
   }
 
@@ -122,13 +132,10 @@ export async function loader({ params }: LoaderFunctionArgs) {
   const { videoId: encodedVideoId } = params
 
   if (!encodedVideoId) {
-    return new Response(
-      JSON.stringify({ error: 'Missing videoId' }),
-      {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      }
-    )
+    return new Response(JSON.stringify({ error: 'Missing videoId' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    })
   }
 
   // Decode the URL-encoded videoId
@@ -137,13 +144,10 @@ export async function loader({ params }: LoaderFunctionArgs) {
   // Get video directory
   const videoDir = getVideoDir(videoId)
   if (!videoDir) {
-    return new Response(
-      JSON.stringify({ error: 'Video not found' }),
-      {
-        status: 404,
-        headers: { 'Content-Type': 'application/json' }
-      }
-    )
+    return new Response(JSON.stringify({ error: 'Video not found' }), {
+      status: 404,
+      headers: { 'Content-Type': 'application/json' },
+    })
   }
 
   // Construct path to cropped frames directory
@@ -151,13 +155,10 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
   // Check if directory exists
   if (!existsSync(croppedDir)) {
-    return new Response(
-      JSON.stringify({ error: 'Cropped frames not found' }),
-      {
-        status: 404,
-        headers: { 'Content-Type': 'application/json' }
-      }
-    )
+    return new Response(JSON.stringify({ error: 'Cropped frames not found' }), {
+      status: 404,
+      headers: { 'Content-Type': 'application/json' },
+    })
   }
 
   // Count frame files
@@ -188,7 +189,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
       gapsCreated, // Include info about gaps that were filled
     }),
     {
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
     }
   )
 }

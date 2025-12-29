@@ -6,15 +6,22 @@
  */
 
 import { spawn } from 'child_process'
-import { resolve } from 'path'
-import Database from 'better-sqlite3'
 import { existsSync, readdirSync } from 'fs'
+import { resolve } from 'path'
+
+import Database from 'better-sqlite3'
+
+import {
+  tryStartProcessing,
+  finishProcessing,
+  registerQueueProcessor,
+} from './processing-coordinator'
+
 import { getDbPath, getVideoDir } from '~/utils/video-paths'
-import { tryStartProcessing, finishProcessing, registerQueueProcessor } from './processing-coordinator'
 
 interface CropFramesJob {
-  videoId: string         // UUID or display path
-  videoPath: string       // Display path for logging
+  videoId: string // UUID or display path
+  videoPath: string // Display path for logging
   cropBounds: {
     left: number
     top: number
@@ -43,7 +50,8 @@ export function queueCropFramesProcessing(job: CropFramesJob): void {
       const db = new Database(dbPath)
       try {
         // Ensure crop_frames_status table exists
-        db.prepare(`
+        db.prepare(
+          `
           CREATE TABLE IF NOT EXISTS crop_frames_status (
             id INTEGER PRIMARY KEY CHECK (id = 1),
             status TEXT NOT NULL DEFAULT 'queued',
@@ -54,13 +62,16 @@ export function queueCropFramesProcessing(job: CropFramesJob): void {
             error_details TEXT,
             error_occurred_at TEXT
           )
-        `).run()
+        `
+        ).run()
 
         // Set status to 'queued' (don't overwrite if already exists with different status)
-        db.prepare(`
+        db.prepare(
+          `
           INSERT OR IGNORE INTO crop_frames_status (id, status)
           VALUES (1, 'queued')
-        `).run()
+        `
+        ).run()
       } finally {
         db.close()
       }
@@ -122,8 +133,8 @@ async function processCropFramesJob(job: CropFramesJob): Promise<void> {
   }
 
   // Find video file
-  const videoFiles = readdirSync(videoDir).filter(f =>
-    f.endsWith('.mp4') || f.endsWith('.mkv') || f.endsWith('.avi') || f.endsWith('.mov')
+  const videoFiles = readdirSync(videoDir).filter(
+    f => f.endsWith('.mp4') || f.endsWith('.mkv') || f.endsWith('.avi') || f.endsWith('.mov')
   )
 
   const firstVideoFile = videoFiles[0]
@@ -141,9 +152,13 @@ async function processCropFramesJob(job: CropFramesJob): Promise<void> {
   let cropBoundsVersion = 1
   const db = new Database(dbPath)
   try {
-    const layoutConfig = db.prepare(`
+    const layoutConfig = db
+      .prepare(
+        `
       SELECT crop_bounds_version FROM video_layout_config WHERE id = 1
-    `).get() as { crop_bounds_version?: number } | undefined
+    `
+      )
+      .get() as { crop_bounds_version?: number } | undefined
 
     if (layoutConfig?.crop_bounds_version) {
       cropBoundsVersion = layoutConfig.crop_bounds_version
@@ -156,7 +171,9 @@ async function processCropFramesJob(job: CropFramesJob): Promise<void> {
   const db2 = new Database(dbPath)
   try {
     // Ensure crop_frames_status table exists (if not already created by schema)
-    db2.prepare(`
+    db2
+      .prepare(
+        `
       CREATE TABLE IF NOT EXISTS crop_frames_status (
         id INTEGER PRIMARY KEY CHECK (id = 1),
         status TEXT NOT NULL DEFAULT 'queued',
@@ -168,19 +185,27 @@ async function processCropFramesJob(job: CropFramesJob): Promise<void> {
         error_occurred_at TEXT,
         retry_count INTEGER NOT NULL DEFAULT 0
       )
-    `).run()
+    `
+      )
+      .run()
 
     // Add retry_count column if it doesn't exist (migration for existing tables)
     try {
-      db2.prepare(`ALTER TABLE crop_frames_status ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0`).run()
+      db2
+        .prepare(`ALTER TABLE crop_frames_status ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0`)
+        .run()
     } catch {
       // Column already exists, ignore
     }
 
-    db2.prepare(`
+    db2
+      .prepare(
+        `
       INSERT OR REPLACE INTO crop_frames_status (id, status, processing_started_at)
       VALUES (1, 'processing', datetime('now'))
-    `).run()
+    `
+      )
+      .run()
   } finally {
     db2.close()
   }
@@ -202,11 +227,11 @@ async function processCropFramesJob(job: CropFramesJob): Promise<void> {
       '10.0',
       '--write-to-db',
       '--crop-bounds-version',
-      cropBoundsVersion.toString()
+      cropBoundsVersion.toString(),
     ],
     {
       cwd: pipelinePath,
-      stdio: ['ignore', 'pipe', 'pipe']
+      stdio: ['ignore', 'pipe', 'pipe'],
     }
   )
 
@@ -215,11 +240,15 @@ async function processCropFramesJob(job: CropFramesJob): Promise<void> {
   if (pid) {
     const db2 = new Database(dbPath)
     try {
-      db2.prepare(`
+      db2
+        .prepare(
+          `
         UPDATE crop_frames_status
         SET current_job_id = ?
         WHERE id = 1
-      `).run(pid.toString())
+      `
+        )
+        .run(pid.toString())
     } finally {
       db2.close()
     }
@@ -228,22 +257,24 @@ async function processCropFramesJob(job: CropFramesJob): Promise<void> {
   let stdout = ''
   let stderr = ''
 
-  cropFramesCmd.stdout?.on('data', (data) => {
+  cropFramesCmd.stdout?.on('data', data => {
     stdout += data.toString()
     console.log(`[crop_frames] ${data.toString().trim()}`)
   })
 
-  cropFramesCmd.stderr?.on('data', (data) => {
+  cropFramesCmd.stderr?.on('data', data => {
     stderr += data.toString()
     console.error(`[crop_frames] ${data.toString().trim()}`)
   })
 
   // Return a Promise that resolves when the process completes
-  return new Promise<void>((resolve) => {
-    cropFramesCmd.on('close', (code) => {
+  return new Promise<void>(resolve => {
+    cropFramesCmd.on('close', code => {
       // Skip status update if video was deleted during processing
       if (!existsSync(dbPath)) {
-        console.log(`[CropFrames] Video ${videoPath} was deleted during processing, skipping status update`)
+        console.log(
+          `[CropFrames] Video ${videoPath} was deleted during processing, skipping status update`
+        )
         resolve()
         return
       }
@@ -253,25 +284,29 @@ async function processCropFramesJob(job: CropFramesJob): Promise<void> {
         try {
           if (code === 0) {
             // Success - reset retry count
-            db.prepare(`
+            db.prepare(
+              `
               UPDATE crop_frames_status
               SET status = 'complete',
                   processing_completed_at = datetime('now'),
                   retry_count = 0
               WHERE id = 1
-            `).run()
+            `
+            ).run()
 
             console.log(`[CropFrames] Processing complete: ${videoPath}`)
           } else {
             // Error
-            db.prepare(`
+            db.prepare(
+              `
               UPDATE crop_frames_status
               SET status = 'error',
                   error_message = ?,
                   error_details = ?,
                   error_occurred_at = datetime('now')
               WHERE id = 1
-            `).run(
+            `
+            ).run(
               `crop_frames pipeline failed with code ${code}`,
               JSON.stringify({ code, stdout, stderr })
             )
@@ -288,7 +323,7 @@ async function processCropFramesJob(job: CropFramesJob): Promise<void> {
       resolve()
     })
 
-    cropFramesCmd.on('error', (error) => {
+    cropFramesCmd.on('error', error => {
       console.error(`[CropFrames] Failed to start processing: ${error.message}`)
 
       if (!existsSync(dbPath)) {
@@ -300,14 +335,16 @@ async function processCropFramesJob(job: CropFramesJob): Promise<void> {
       try {
         const db = new Database(dbPath)
         try {
-          db.prepare(`
+          db.prepare(
+            `
             UPDATE crop_frames_status
             SET status = 'error',
                 error_message = ?,
                 error_details = ?,
                 error_occurred_at = datetime('now')
             WHERE id = 1
-          `).run(
+          `
+          ).run(
             `Failed to start processing: ${error.message}`,
             JSON.stringify({ error: error.message, stack: error.stack })
           )
@@ -337,15 +374,21 @@ export function recoverStalledCropFrames(videoId: string, videoPath: string): vo
     const db = new Database(dbPath)
     try {
       // Check if layout is approved by checking for video_layout_config
-      const layoutConfig = db.prepare(`
+      const layoutConfig = db
+        .prepare(
+          `
         SELECT crop_left, crop_top, crop_right, crop_bottom
         FROM video_layout_config WHERE id = 1
-      `).get() as {
-        crop_left: number
-        crop_top: number
-        crop_right: number
-        crop_bottom: number
-      } | undefined
+      `
+        )
+        .get() as
+        | {
+            crop_left: number
+            crop_top: number
+            crop_right: number
+            crop_bottom: number
+          }
+        | undefined
 
       // If no layout config, layout not approved yet
       if (!layoutConfig) {
@@ -353,14 +396,20 @@ export function recoverStalledCropFrames(videoId: string, videoPath: string): vo
       }
 
       // Check if crop_frames_status table exists
-      const tableExists = db.prepare(`
+      const tableExists = db
+        .prepare(
+          `
         SELECT name FROM sqlite_master
         WHERE type='table' AND name='crop_frames_status'
-      `).get()
+      `
+        )
+        .get()
 
       // Auto-trigger processing if layout approved but crop_frames never started
       if (!tableExists) {
-        console.log(`[CropFrames] Auto-triggering crop_frames for ${videoPath} (layout approved but processing never started)`)
+        console.log(
+          `[CropFrames] Auto-triggering crop_frames for ${videoPath} (layout approved but processing never started)`
+        )
 
         // Queue the processing
         queueCropFramesProcessing({
@@ -370,31 +419,41 @@ export function recoverStalledCropFrames(videoId: string, videoPath: string): vo
             left: layoutConfig.crop_left,
             top: layoutConfig.crop_top,
             right: layoutConfig.crop_right,
-            bottom: layoutConfig.crop_bottom
-          }
+            bottom: layoutConfig.crop_bottom,
+          },
         })
         return
       }
 
       // Ensure retry_count column exists (migration for existing tables)
       try {
-        db.prepare(`ALTER TABLE crop_frames_status ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0`).run()
+        db.prepare(
+          `ALTER TABLE crop_frames_status ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0`
+        ).run()
       } catch {
         // Column already exists, ignore
       }
 
-      const status = db.prepare(`
+      const status = db
+        .prepare(
+          `
         SELECT status, current_job_id, retry_count
         FROM crop_frames_status WHERE id = 1
-      `).get() as {
-        status: string
-        current_job_id: string | null
-        retry_count: number
-      } | undefined
+      `
+        )
+        .get() as
+        | {
+            status: string
+            current_job_id: string | null
+            retry_count: number
+          }
+        | undefined
 
       // Auto-trigger if layout approved but no status record
       if (!status) {
-        console.log(`[CropFrames] Auto-triggering crop_frames for ${videoPath} (layout approved but no status record)`)
+        console.log(
+          `[CropFrames] Auto-triggering crop_frames for ${videoPath} (layout approved but no status record)`
+        )
 
         queueCropFramesProcessing({
           videoId,
@@ -403,8 +462,8 @@ export function recoverStalledCropFrames(videoId: string, videoPath: string): vo
             left: layoutConfig.crop_left,
             top: layoutConfig.crop_top,
             right: layoutConfig.crop_right,
-            bottom: layoutConfig.crop_bottom
-          }
+            bottom: layoutConfig.crop_bottom,
+          },
         })
         return
       }
@@ -413,30 +472,38 @@ export function recoverStalledCropFrames(videoId: string, videoPath: string): vo
       if (status.status === 'queued') {
         // Check if max retries exceeded
         if (status.retry_count >= MAX_CROP_FRAMES_RETRIES) {
-          console.log(`[CropFrames] Max retries (${MAX_CROP_FRAMES_RETRIES}) exceeded for ${videoPath}, marking as error`)
+          console.log(
+            `[CropFrames] Max retries (${MAX_CROP_FRAMES_RETRIES}) exceeded for ${videoPath}, marking as error`
+          )
 
-          db.prepare(`
+          db.prepare(
+            `
             UPDATE crop_frames_status
             SET status = 'error',
                 error_message = ?,
                 error_details = ?,
                 error_occurred_at = datetime('now')
             WHERE id = 1
-          `).run(
+          `
+          ).run(
             `Crop frames processing failed after ${status.retry_count} attempts`,
             JSON.stringify({ reason: 'max_retries_exceeded', retry_count: status.retry_count })
           )
           return
         }
 
-        console.log(`[CropFrames] Re-queueing ${videoPath} (was queued when server restarted, attempt ${status.retry_count + 1}/${MAX_CROP_FRAMES_RETRIES})`)
+        console.log(
+          `[CropFrames] Re-queueing ${videoPath} (was queued when server restarted, attempt ${status.retry_count + 1}/${MAX_CROP_FRAMES_RETRIES})`
+        )
 
         // Increment retry count
-        db.prepare(`
+        db.prepare(
+          `
           UPDATE crop_frames_status
           SET retry_count = retry_count + 1
           WHERE id = 1
-        `).run()
+        `
+        ).run()
 
         queueCropFramesProcessing({
           videoId,
@@ -445,41 +512,55 @@ export function recoverStalledCropFrames(videoId: string, videoPath: string): vo
             left: layoutConfig.crop_left,
             top: layoutConfig.crop_top,
             right: layoutConfig.crop_right,
-            bottom: layoutConfig.crop_bottom
-          }
+            bottom: layoutConfig.crop_bottom,
+          },
         })
         return
       }
 
       // Re-queue if marked complete but no frames exist (false complete from migration timing)
       if (status.status === 'complete') {
-        const frameCount = db.prepare(`
+        const frameCount = db
+          .prepare(
+            `
           SELECT COUNT(*) as count FROM cropped_frames
-        `).get() as { count: number }
+        `
+          )
+          .get() as { count: number }
 
         if (frameCount.count === 0) {
           // Check if max retries exceeded
           if (status.retry_count >= MAX_CROP_FRAMES_RETRIES) {
-            console.log(`[CropFrames] Max retries (${MAX_CROP_FRAMES_RETRIES}) exceeded for ${videoPath}, marking as permanent error`)
+            console.log(
+              `[CropFrames] Max retries (${MAX_CROP_FRAMES_RETRIES}) exceeded for ${videoPath}, marking as permanent error`
+            )
 
-            db.prepare(`
+            db.prepare(
+              `
               UPDATE crop_frames_status
               SET status = 'error',
                   error_message = ?,
                   error_details = ?,
                   error_occurred_at = datetime('now')
               WHERE id = 1
-            `).run(
+            `
+            ).run(
               `Crop frames processing failed after ${status.retry_count} attempts (marked complete but no frames created)`,
-              JSON.stringify({ reason: 'max_retries_exceeded_false_complete', retry_count: status.retry_count })
+              JSON.stringify({
+                reason: 'max_retries_exceeded_false_complete',
+                retry_count: status.retry_count,
+              })
             )
             return
           }
 
-          console.log(`[CropFrames] Re-queueing ${videoPath} (marked complete but no frames exist - likely migration timing issue, attempt ${status.retry_count + 1}/${MAX_CROP_FRAMES_RETRIES})`)
+          console.log(
+            `[CropFrames] Re-queueing ${videoPath} (marked complete but no frames exist - likely migration timing issue, attempt ${status.retry_count + 1}/${MAX_CROP_FRAMES_RETRIES})`
+          )
 
           // Reset status to allow re-processing and increment retry count
-          db.prepare(`
+          db.prepare(
+            `
             UPDATE crop_frames_status
             SET status = 'queued',
                 retry_count = retry_count + 1,
@@ -487,7 +568,8 @@ export function recoverStalledCropFrames(videoId: string, videoPath: string): vo
                 error_details = NULL,
                 error_occurred_at = NULL
             WHERE id = 1
-          `).run()
+          `
+          ).run()
 
           queueCropFramesProcessing({
             videoId,
@@ -496,8 +578,8 @@ export function recoverStalledCropFrames(videoId: string, videoPath: string): vo
               left: layoutConfig.crop_left,
               top: layoutConfig.crop_top,
               right: layoutConfig.crop_right,
-              bottom: layoutConfig.crop_bottom
-            }
+              bottom: layoutConfig.crop_bottom,
+            },
           })
           return
         }
@@ -505,16 +587,23 @@ export function recoverStalledCropFrames(videoId: string, videoPath: string): vo
 
       // Auto-retry recoverable errors (errors caused by package version issues)
       if (status.status === 'error') {
-        const errorMessage = db.prepare(`
+        const errorMessage = db
+          .prepare(
+            `
           SELECT error_message, error_details FROM crop_frames_status WHERE id = 1
-        `).get() as { error_message: string; error_details: string } | undefined
+        `
+          )
+          .get() as { error_message: string; error_details: string } | undefined
 
         // Check for schema mismatch errors (fixed by package updates)
-        const isSchemaMismatch = errorMessage?.error_details?.includes('no column named crop_') ||
+        const isSchemaMismatch =
+          errorMessage?.error_details?.includes('no column named crop_') ||
           errorMessage?.error_details?.includes('table cropped_frames has no column')
 
         // Check for duplicate frame errors (need to clear existing frames)
-        const isDuplicateFrame = errorMessage?.error_details?.includes('UNIQUE constraint failed: cropped_frames.frame_index')
+        const isDuplicateFrame = errorMessage?.error_details?.includes(
+          'UNIQUE constraint failed: cropped_frames.frame_index'
+        )
 
         if (isSchemaMismatch || isDuplicateFrame) {
           const errorType = isSchemaMismatch ? 'schema mismatch' : 'duplicate frames'
@@ -524,7 +613,9 @@ export function recoverStalledCropFrames(videoId: string, videoPath: string): vo
           if (isDuplicateFrame) {
             try {
               const deleteResult = db.prepare(`DELETE FROM cropped_frames`).run()
-              console.log(`[CropFrames] Cleared ${deleteResult.changes} existing frames from database`)
+              console.log(
+                `[CropFrames] Cleared ${deleteResult.changes} existing frames from database`
+              )
             } catch (error) {
               console.error(`[CropFrames] Failed to clear frames for ${videoPath}:`, error)
               return
@@ -532,7 +623,8 @@ export function recoverStalledCropFrames(videoId: string, videoPath: string): vo
           }
 
           // Reset to queued for automatic retry
-          db.prepare(`
+          db.prepare(
+            `
             UPDATE crop_frames_status
             SET status = 'queued',
                 error_message = NULL,
@@ -540,7 +632,8 @@ export function recoverStalledCropFrames(videoId: string, videoPath: string): vo
                 error_occurred_at = NULL,
                 retry_count = 0
             WHERE id = 1
-          `).run()
+          `
+          ).run()
 
           // Queue for reprocessing
           queueCropFramesProcessing({
@@ -550,8 +643,8 @@ export function recoverStalledCropFrames(videoId: string, videoPath: string): vo
               left: layoutConfig.crop_left,
               top: layoutConfig.crop_top,
               right: layoutConfig.crop_right,
-              bottom: layoutConfig.crop_bottom
-            }
+              bottom: layoutConfig.crop_bottom,
+            },
           })
         }
 
@@ -580,17 +673,21 @@ export function recoverStalledCropFrames(videoId: string, videoPath: string): vo
         // Mark as error - user can retry from UI
         console.log(`[CropFrames] Recovering stalled job for ${videoPath} (PID ${pid} not running)`)
 
-        db.prepare(`
+        db.prepare(
+          `
           UPDATE crop_frames_status
           SET status = 'error',
               error_message = 'Processing interrupted (server restart or process crash)',
               error_details = ?,
               error_occurred_at = datetime('now')
           WHERE id = 1
-        `).run(JSON.stringify({
-          reason: 'stalled_process',
-          pid
-        }))
+        `
+        ).run(
+          JSON.stringify({
+            reason: 'stalled_process',
+            pid,
+          })
+        )
       }
     } finally {
       db.close()

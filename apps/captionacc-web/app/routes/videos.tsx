@@ -1,12 +1,29 @@
-import { useLoaderData, Link, useRevalidator } from 'react-router'
-import { useState, useMemo, useEffect, useCallback } from 'react'
-import { MagnifyingGlassIcon, ChevronRightIcon, ChevronDownIcon, EllipsisVerticalIcon, PlusIcon, XMarkIcon } from '@heroicons/react/20/solid'
-import { Menu, MenuButton, MenuItem, MenuItems, Dialog, DialogPanel, DialogTitle } from '@headlessui/react'
-import type { BadgeState } from '~/utils/video-stats'
-import { resolve } from 'path'
 import { existsSync } from 'fs'
+import { resolve } from 'path'
+
+import {
+  Menu,
+  MenuButton,
+  MenuItem,
+  MenuItems,
+  Dialog,
+  DialogPanel,
+  DialogTitle,
+} from '@headlessui/react'
+import {
+  MagnifyingGlassIcon,
+  ChevronRightIcon,
+  ChevronDownIcon,
+  EllipsisVerticalIcon,
+  PlusIcon,
+  XMarkIcon,
+} from '@heroicons/react/20/solid'
+import { useState, useMemo, useEffect, useCallback } from 'react'
+import { useLoaderData, Link, useRevalidator } from 'react-router'
+
 import { AppLayout } from '~/components/AppLayout'
 import { getAllVideos } from '~/utils/video-paths'
+import type { BadgeState } from '~/utils/video-stats'
 import {
   buildVideoTree,
   calculateVideoCounts,
@@ -15,17 +32,16 @@ import {
   type FolderNode,
   type VideoNode,
   type VideoInfo,
-  type VideoStats
+  type VideoStats,
 } from '~/utils/video-tree'
 
 export async function loader() {
   const dataDir = resolve(process.cwd(), '..', '..', 'local', 'data')
 
   if (!existsSync(dataDir)) {
-    return new Response(
-      JSON.stringify({ tree: [] }),
-      { headers: { 'Content-Type': 'application/json' } }
-    )
+    return new Response(JSON.stringify({ tree: [] }), {
+      headers: { 'Content-Type': 'application/json' },
+    })
   }
 
   // Get all videos with their metadata (uses display_path)
@@ -33,7 +49,7 @@ export async function loader() {
 
   // Convert to VideoInfo objects using display_path
   const videos: VideoInfo[] = allVideos.map(video => ({
-    videoId: video.displayPath
+    videoId: video.displayPath,
   }))
 
   // Build tree structure (without stats - will be loaded client-side)
@@ -49,10 +65,9 @@ export async function loader() {
   // Sort tree: folders first, then videos
   const sortedTree = sortTreeNodes(tree)
 
-  return new Response(
-    JSON.stringify({ tree: sortedTree }),
-    { headers: { 'Content-Type': 'application/json' } }
-  )
+  return new Response(JSON.stringify({ tree: sortedTree }), {
+    headers: { 'Content-Type': 'application/json' },
+  })
 }
 
 interface TreeRowProps {
@@ -80,7 +95,10 @@ interface TreeRowProps {
 }
 
 // Calculate aggregate stats for a folder from the stats map
-function calculateFolderStatsFromMap(node: FolderNode, statsMap: Map<string, VideoStats>): VideoStats | null {
+function calculateFolderStatsFromMap(
+  node: FolderNode,
+  statsMap: Map<string, VideoStats>
+): VideoStats | null {
   const collectVideoIds = (n: TreeNode): string[] => {
     if (n.type === 'video') {
       return [n.videoId]
@@ -107,7 +125,7 @@ function calculateFolderStatsFromMap(node: FolderNode, statsMap: Map<string, Vid
     layoutApproved: false,
     boundaryPendingReview: 0,
     textPendingReview: 0,
-    badges: []
+    badges: [],
   }
 
   for (const stats of videoStats) {
@@ -123,14 +141,37 @@ function calculateFolderStatsFromMap(node: FolderNode, statsMap: Map<string, Vid
     aggregated.layoutApproved = aggregated.layoutApproved || stats.layoutApproved
   }
 
-  aggregated.progress = aggregated.totalFrames > 0
-    ? Math.round((aggregated.coveredFrames / aggregated.totalFrames) * 100)
-    : 0
+  aggregated.progress =
+    aggregated.totalFrames > 0
+      ? Math.round((aggregated.coveredFrames / aggregated.totalFrames) * 100)
+      : 0
 
   return aggregated
 }
 
-function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsUpdate, onCreateSubfolder, onRenameFolder, onMoveFolder, onDeleteFolder, onRenameVideo, onMoveVideo, onDeleteVideo, onErrorBadgeClick, onDragStart, onDragEnd, onDragOver, onDragLeave, onDrop, dragOverFolder, isMounted }: TreeRowProps) {
+function TreeRow({
+  node,
+  depth,
+  expandedPaths,
+  onToggle,
+  videoStatsMap,
+  onStatsUpdate,
+  onCreateSubfolder,
+  onRenameFolder,
+  onMoveFolder,
+  onDeleteFolder,
+  onRenameVideo,
+  onMoveVideo,
+  onDeleteVideo,
+  onErrorBadgeClick,
+  onDragStart,
+  onDragEnd,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+  dragOverFolder,
+  isMounted,
+}: TreeRowProps) {
   const [loading, setLoading] = useState(false)
   const isExpanded = expandedPaths.has(node.path)
 
@@ -153,9 +194,9 @@ function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsU
 
   // Only use stats after client-side mount to avoid hydration mismatch
   const stats = isMounted
-    ? (node.type === 'video'
-        ? videoStatsMap.get(node.videoId) || null
-        : calculateFolderStatsFromMap(node, videoStatsMap))
+    ? node.type === 'video'
+      ? videoStatsMap.get(node.videoId) || null
+      : calculateFolderStatsFromMap(node, videoStatsMap)
     : null
 
   // Debug logging for video nodes
@@ -173,9 +214,9 @@ function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsU
           draggable
           onDragStart={() => onDragStart(node.path, node.name, 'folder')}
           onDragEnd={onDragEnd}
-          onDragOver={(e) => onDragOver(e, node.path)}
+          onDragOver={e => onDragOver(e, node.path)}
           onDragLeave={onDragLeave}
-          onDrop={(e) => onDrop(e, node.path)}
+          onDrop={e => onDrop(e, node.path)}
           className={`bg-gray-50 dark:bg-gray-900 hover:bg-gray-100 dark:hover:bg-gray-800 ${
             isDragOver
               ? 'outline outline-2 outline-offset-[-2px] outline-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 relative z-20'
@@ -195,7 +236,9 @@ function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsU
                 <ChevronRightIcon className="h-4 w-4 text-gray-500 dark:text-gray-500 flex-shrink-0" />
               )}
               <span className="font-semibold">{node.name}/</span>
-              <span className="text-xs text-gray-500 dark:text-gray-500">({node.videoCount} {node.videoCount === 1 ? 'video' : 'videos'})</span>
+              <span className="text-xs text-gray-500 dark:text-gray-500">
+                ({node.videoCount} {node.videoCount === 1 ? 'video' : 'videos'})
+              </span>
             </div>
           </td>
           <td className="whitespace-nowrap px-3 py-3 text-sm text-gray-600 dark:text-gray-400">
@@ -207,21 +250,27 @@ function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsU
                 {stats.confirmedAnnotations > 0 && (
                   <div
                     className="bg-teal-500"
-                    style={{ width: `${(stats.confirmedAnnotations / (stats.totalAnnotations - stats.gapAnnotations)) * 100}%` }}
+                    style={{
+                      width: `${(stats.confirmedAnnotations / (stats.totalAnnotations - stats.gapAnnotations)) * 100}%`,
+                    }}
                     title={`${stats.confirmedAnnotations} confirmed`}
                   />
                 )}
                 {stats.predictedAnnotations > 0 && (
                   <div
                     className="bg-indigo-500"
-                    style={{ width: `${(stats.predictedAnnotations / (stats.totalAnnotations - stats.gapAnnotations)) * 100}%` }}
+                    style={{
+                      width: `${(stats.predictedAnnotations / (stats.totalAnnotations - stats.gapAnnotations)) * 100}%`,
+                    }}
                     title={`${stats.predictedAnnotations} predicted`}
                   />
                 )}
                 {stats.pendingReview > 0 && (
                   <div
                     className="bg-pink-500"
-                    style={{ width: `${(stats.pendingReview / (stats.totalAnnotations - stats.gapAnnotations)) * 100}%` }}
+                    style={{
+                      width: `${(stats.pendingReview / (stats.totalAnnotations - stats.gapAnnotations)) * 100}%`,
+                    }}
                     title={`${stats.pendingReview} pending`}
                   />
                 )}
@@ -260,7 +309,10 @@ function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsU
                 <span className="sr-only">Open folder options</span>
                 <EllipsisVerticalIcon className="h-5 w-5" aria-hidden="true" />
               </MenuButton>
-              <MenuItems anchor="bottom end" className="z-50 mt-2 w-56 rounded-md bg-white dark:bg-gray-800 shadow-lg ring-1 ring-black/5 dark:ring-white/10 focus:outline-none">
+              <MenuItems
+                anchor="bottom end"
+                className="z-50 mt-2 w-56 rounded-md bg-white dark:bg-gray-800 shadow-lg ring-1 ring-black/5 dark:ring-white/10 focus:outline-none"
+              >
                 <div className="py-1">
                   <MenuItem>
                     <button
@@ -309,32 +361,33 @@ function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsU
         </tr>
 
         {/* Render children if expanded */}
-        {isExpanded && node.children.map(child => (
-          <TreeRow
-            key={child.path}
-            node={child}
-            depth={depth + 1}
-            expandedPaths={expandedPaths}
-            onToggle={onToggle}
-            videoStatsMap={videoStatsMap}
-            onStatsUpdate={onStatsUpdate}
-            onCreateSubfolder={onCreateSubfolder}
-            isMounted={isMounted}
-            onRenameFolder={onRenameFolder}
-            onMoveFolder={onMoveFolder}
-            onDeleteFolder={onDeleteFolder}
-            onRenameVideo={onRenameVideo}
-            onMoveVideo={onMoveVideo}
-            onDeleteVideo={onDeleteVideo}
-            onErrorBadgeClick={onErrorBadgeClick}
-            onDragStart={onDragStart}
-            onDragEnd={onDragEnd}
-            onDragOver={onDragOver}
-            onDragLeave={onDragLeave}
-            onDrop={onDrop}
-            dragOverFolder={dragOverFolder}
-          />
-        ))}
+        {isExpanded &&
+          node.children.map(child => (
+            <TreeRow
+              key={child.path}
+              node={child}
+              depth={depth + 1}
+              expandedPaths={expandedPaths}
+              onToggle={onToggle}
+              videoStatsMap={videoStatsMap}
+              onStatsUpdate={onStatsUpdate}
+              onCreateSubfolder={onCreateSubfolder}
+              isMounted={isMounted}
+              onRenameFolder={onRenameFolder}
+              onMoveFolder={onMoveFolder}
+              onDeleteFolder={onDeleteFolder}
+              onRenameVideo={onRenameVideo}
+              onMoveVideo={onMoveVideo}
+              onDeleteVideo={onDeleteVideo}
+              onErrorBadgeClick={onErrorBadgeClick}
+              onDragStart={onDragStart}
+              onDragEnd={onDragEnd}
+              onDragOver={onDragOver}
+              onDragLeave={onDragLeave}
+              onDrop={onDrop}
+              dragOverFolder={dragOverFolder}
+            />
+          ))}
       </>
     )
   }
@@ -441,21 +494,27 @@ function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsU
             {stats.confirmedAnnotations > 0 && (
               <div
                 className="bg-teal-500"
-                style={{ width: `${(stats.confirmedAnnotations / (stats.totalAnnotations - stats.gapAnnotations)) * 100}%` }}
+                style={{
+                  width: `${(stats.confirmedAnnotations / (stats.totalAnnotations - stats.gapAnnotations)) * 100}%`,
+                }}
                 title={`${stats.confirmedAnnotations} confirmed`}
               />
             )}
             {stats.predictedAnnotations > 0 && (
               <div
                 className="bg-indigo-500"
-                style={{ width: `${(stats.predictedAnnotations / (stats.totalAnnotations - stats.gapAnnotations)) * 100}%` }}
+                style={{
+                  width: `${(stats.predictedAnnotations / (stats.totalAnnotations - stats.gapAnnotations)) * 100}%`,
+                }}
                 title={`${stats.predictedAnnotations} predicted`}
               />
             )}
             {stats.pendingReview > 0 && (
               <div
                 className="bg-pink-500"
-                style={{ width: `${(stats.pendingReview / (stats.totalAnnotations - stats.gapAnnotations)) * 100}%` }}
+                style={{
+                  width: `${(stats.pendingReview / (stats.totalAnnotations - stats.gapAnnotations)) * 100}%`,
+                }}
                 title={`${stats.pendingReview} pending`}
               />
             )}
@@ -494,17 +553,22 @@ function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsU
             <span className="sr-only">Open options</span>
             <EllipsisVerticalIcon className="h-5 w-5" aria-hidden="true" />
           </MenuButton>
-          <MenuItems anchor="bottom end" className="z-50 mt-2 w-56 rounded-md bg-white dark:bg-gray-800 shadow-lg ring-1 ring-black/5 dark:ring-white/10 focus:outline-none">
+          <MenuItems
+            anchor="bottom end"
+            className="z-50 mt-2 w-56 rounded-md bg-white dark:bg-gray-800 shadow-lg ring-1 ring-black/5 dark:ring-white/10 focus:outline-none"
+          >
             <div className="py-1">
-              <MenuItem disabled={
-                !stats?.hasOcrData ||
-                !stats?.processingStatus ||
-                stats.processingStatus.status !== 'processing_complete'
-              }>
+              <MenuItem
+                disabled={
+                  !stats?.hasOcrData || stats?.processingStatus?.status !== 'processing_complete'
+                }
+              >
                 {({ disabled }) => {
                   const statusText = stats?.processingStatus?.status
                     ? `(${stats.processingStatus.status.replace(/_/g, ' ')})`
-                    : !stats?.hasOcrData ? '(no OCR data)' : ''
+                    : !stats?.hasOcrData
+                      ? '(no OCR data)'
+                      : ''
 
                   return disabled ? (
                     <span className="block px-4 py-2 text-sm text-gray-400 dark:text-gray-600 cursor-not-allowed">
@@ -521,7 +585,7 @@ function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsU
                 }}
               </MenuItem>
               <MenuItem disabled={!stats?.layoutApproved}>
-                {({ disabled }) => (
+                {({ disabled }) =>
                   disabled ? (
                     <span className="block px-4 py-2 text-sm text-gray-400 dark:text-gray-600 cursor-not-allowed">
                       Mark Boundaries
@@ -534,10 +598,10 @@ function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsU
                       Mark Boundaries
                     </Link>
                   )
-                )}
+                }
               </MenuItem>
               <MenuItem disabled={!stats?.layoutApproved || stats.totalAnnotations === 0}>
-                {({ disabled }) => (
+                {({ disabled }) =>
                   disabled ? (
                     <span className="block px-4 py-2 text-sm text-gray-400 dark:text-gray-600 cursor-not-allowed">
                       Annotate Text
@@ -550,7 +614,7 @@ function TreeRow({ node, depth, expandedPaths, onToggle, videoStatsMap, onStatsU
                       Annotate Text
                     </Link>
                   )
-                )}
+                }
               </MenuItem>
               <MenuItem>
                 <button
@@ -591,13 +655,42 @@ export default function VideosPage() {
   const CACHE_VERSION = 'v11' // Increment to invalidate cache when VideoStats structure changes
 
   // Modal states
-  const [createFolderModal, setCreateFolderModal] = useState<{ open: boolean; parentPath?: string }>({ open: false })
-  const [renameFolderModal, setRenameFolderModal] = useState<{ open: boolean; folderPath?: string; currentName?: string }>({ open: false })
-  const [deleteFolderModal, setDeleteFolderModal] = useState<{ open: boolean; folderPath?: string; folderName?: string; videoCount?: number }>({ open: false })
-  const [renameVideoModal, setRenameVideoModal] = useState<{ open: boolean; videoPath?: string; currentName?: string }>({ open: false })
-  const [deleteVideoModal, setDeleteVideoModal] = useState<{ open: boolean; videoPath?: string; videoName?: string }>({ open: false })
-  const [errorModal, setErrorModal] = useState<{ open: boolean; errorDetails?: BadgeState['errorDetails']; videoId?: string }>({ open: false })
-  const [moveModal, setMoveModal] = useState<{ open: boolean; itemPath?: string; itemName?: string; itemType?: 'video' | 'folder' }>({ open: false })
+  const [createFolderModal, setCreateFolderModal] = useState<{
+    open: boolean
+    parentPath?: string
+  }>({ open: false })
+  const [renameFolderModal, setRenameFolderModal] = useState<{
+    open: boolean
+    folderPath?: string
+    currentName?: string
+  }>({ open: false })
+  const [deleteFolderModal, setDeleteFolderModal] = useState<{
+    open: boolean
+    folderPath?: string
+    folderName?: string
+    videoCount?: number
+  }>({ open: false })
+  const [renameVideoModal, setRenameVideoModal] = useState<{
+    open: boolean
+    videoPath?: string
+    currentName?: string
+  }>({ open: false })
+  const [deleteVideoModal, setDeleteVideoModal] = useState<{
+    open: boolean
+    videoPath?: string
+    videoName?: string
+  }>({ open: false })
+  const [errorModal, setErrorModal] = useState<{
+    open: boolean
+    errorDetails?: BadgeState['errorDetails']
+    videoId?: string
+  }>({ open: false })
+  const [moveModal, setMoveModal] = useState<{
+    open: boolean
+    itemPath?: string
+    itemName?: string
+    itemType?: 'video' | 'folder'
+  }>({ open: false })
 
   // Form states
   const [newFolderName, setNewFolderName] = useState('')
@@ -610,7 +703,11 @@ export default function VideosPage() {
   const [videoLoading, setVideoLoading] = useState(false)
   const [moveError, setMoveError] = useState<string | null>(null)
   const [moveLoading, setMoveLoading] = useState(false)
-  const [draggedItem, setDraggedItem] = useState<{ path: string; name: string; type: 'video' | 'folder' } | null>(null)
+  const [draggedItem, setDraggedItem] = useState<{
+    path: string
+    name: string
+    type: 'video' | 'folder'
+  } | null>(null)
   const [dragOverFolder, setDragOverFolder] = useState<string | null>(null)
   const [isMounted, setIsMounted] = useState(false)
   const [videoStatsMap, setVideoStatsMap] = useState<Map<string, VideoStats>>(() => {
@@ -677,13 +774,16 @@ export default function VideosPage() {
     const processingVideos = Array.from(videoStatsMap.entries())
       .filter(([_, stats]) => {
         // Poll if upload/processing is in progress
-        const hasProcessingStatus = stats.processingStatus &&
+        const hasProcessingStatus =
+          stats.processingStatus &&
           stats.processingStatus.status !== 'processing_complete' &&
           stats.processingStatus.status !== 'error'
 
         // Poll if crop_frames is queued or processing
-        const hasCropFramesProcessing = stats.cropFramesStatus &&
-          (stats.cropFramesStatus.status === 'queued' || stats.cropFramesStatus.status === 'processing')
+        const hasCropFramesProcessing =
+          stats.cropFramesStatus &&
+          (stats.cropFramesStatus.status === 'queued' ||
+            stats.cropFramesStatus.status === 'processing')
 
         return hasProcessingStatus || hasCropFramesProcessing
       })
@@ -697,12 +797,12 @@ export default function VideosPage() {
     const interval = setInterval(() => {
       processingVideos.forEach(videoId => {
         fetch(`/api/videos/${encodeURIComponent(videoId)}/stats`)
-          .then(res => res.ok ? res.json() : null)
+          .then(res => (res.ok ? res.json() : null))
           .then(data => {
             if (data && !data.error) {
               console.log(`[Videos] Polling update for ${videoId}:`, {
                 processingStatus: data.processingStatus?.status,
-                cropFramesStatus: data.cropFramesStatus?.status
+                cropFramesStatus: data.cropFramesStatus?.status,
               })
               updateVideoStats(videoId, data)
             }
@@ -729,7 +829,7 @@ export default function VideosPage() {
       console.log(`[Videos] Validating ${videosWithErrors.length} videos with error badges...`)
       videosWithErrors.forEach(videoId => {
         fetch(`/api/videos/${encodeURIComponent(videoId)}/stats`)
-          .then(res => res.ok ? res.json() : null)
+          .then(res => (res.ok ? res.json() : null))
           .then(data => {
             if (data && !data.error) {
               console.log(`[Videos] Validated error badge for ${videoId}`)
@@ -802,9 +902,9 @@ export default function VideosPage() {
       } else if (cachedStats.databaseId) {
         // We have cached stats with a database_id - verify it hasn't changed
         fetch(`/api/videos/${encodeURIComponent(videoId)}/stats`)
-          .then(res => res.ok ? res.json() : null)
+          .then(res => (res.ok ? res.json() : null))
           .then(data => {
-            if (data && data.databaseId && data.databaseId !== cachedStats.databaseId) {
+            if (data?.databaseId && data.databaseId !== cachedStats.databaseId) {
               // Database was recreated - invalidate cache and use fresh data
               console.log(`[Videos] Database recreated for ${videoId}, invalidating cache`)
               updateVideoStats(videoId, data)
@@ -872,7 +972,7 @@ export default function VideosPage() {
       const response = await fetch('/api/folders/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ folderPath })
+        body: JSON.stringify({ folderPath }),
       })
 
       const data = await response.json()
@@ -907,7 +1007,7 @@ export default function VideosPage() {
       const response = await fetch('/api/folders/rename', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ oldPath, newPath })
+        body: JSON.stringify({ oldPath, newPath }),
       })
 
       const data = await response.json()
@@ -935,9 +1035,12 @@ export default function VideosPage() {
 
     try {
       // Delete with confirmed=true parameter
-      const response = await fetch(`/api/folders/delete?path=${encodeURIComponent(deleteFolderModal.folderPath!)}&confirmed=true`, {
-        method: 'DELETE'
-      })
+      const response = await fetch(
+        `/api/folders/delete?path=${encodeURIComponent(deleteFolderModal.folderPath!)}&confirmed=true`,
+        {
+          method: 'DELETE',
+        }
+      )
 
       const data = await response.json()
 
@@ -965,7 +1068,7 @@ export default function VideosPage() {
     try {
       // First, get the video count
       const response = await fetch(`/api/folders/delete?path=${encodeURIComponent(folderPath)}`, {
-        method: 'DELETE'
+        method: 'DELETE',
       })
 
       const data = await response.json()
@@ -976,7 +1079,7 @@ export default function VideosPage() {
           open: true,
           folderPath,
           folderName,
-          videoCount: data.videoCount
+          videoCount: data.videoCount,
         })
         setFolderLoading(false)
       } else if (!response.ok) {
@@ -1000,7 +1103,7 @@ export default function VideosPage() {
       const response = await fetch('/api/videos/rename', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ oldPath, newName: renamedVideoName })
+        body: JSON.stringify({ oldPath, newName: renamedVideoName }),
       })
 
       const data = await response.json()
@@ -1030,7 +1133,7 @@ export default function VideosPage() {
       const videoPath = deleteVideoModal.videoPath!
 
       const response = await fetch(`/api/videos/${encodeURIComponent(videoPath)}/delete`, {
-        method: 'DELETE'
+        method: 'DELETE',
       })
 
       const data = await response.json()
@@ -1078,8 +1181,8 @@ export default function VideosPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           [bodyKey]: itemPath,
-          targetFolder: selectedTargetFolder
-        })
+          targetFolder: selectedTargetFolder,
+        }),
       })
 
       const data = await response.json()
@@ -1214,8 +1317,8 @@ export default function VideosPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           [bodyKey]: draggedItem.path,
-          targetFolder: ''  // Empty string = root
-        })
+          targetFolder: '', // Empty string = root
+        }),
       })
 
       const data = await response.json()
@@ -1257,7 +1360,10 @@ export default function VideosPage() {
 
     // Don't allow dropping on itself or its descendants
     if (draggedItem.type === 'folder') {
-      if (targetFolderPath === draggedItem.path || targetFolderPath.startsWith(`${draggedItem.path}/`)) {
+      if (
+        targetFolderPath === draggedItem.path ||
+        targetFolderPath.startsWith(`${draggedItem.path}/`)
+      ) {
         console.log('[DnD] Drop cancelled: cannot drop folder on itself or descendant')
         return
       }
@@ -1277,15 +1383,19 @@ export default function VideosPage() {
       const endpoint = draggedItem.type === 'video' ? '/api/videos/move' : '/api/folders/move'
       const bodyKey = draggedItem.type === 'video' ? 'videoPath' : 'folderPath'
 
-      console.log('[DnD] API call:', { endpoint, [bodyKey]: draggedItem.path, targetFolder: targetFolderPath })
+      console.log('[DnD] API call:', {
+        endpoint,
+        [bodyKey]: draggedItem.path,
+        targetFolder: targetFolderPath,
+      })
 
       const response = await fetch(endpoint, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           [bodyKey]: draggedItem.path,
-          targetFolder: targetFolderPath
-        })
+          targetFolder: targetFolderPath,
+        }),
       })
 
       const data = await response.json()
@@ -1322,7 +1432,8 @@ export default function VideosPage() {
     const filterNode = (node: TreeNode): TreeNode | null => {
       if (node.type === 'video') {
         // Check if video name or path matches
-        const matches = node.name.toLowerCase().includes(query) || node.path.toLowerCase().includes(query)
+        const matches =
+          node.name.toLowerCase().includes(query) || node.path.toLowerCase().includes(query)
         return matches ? node : null
       } else {
         // For folders, filter children and keep folder if any children match
@@ -1333,7 +1444,7 @@ export default function VideosPage() {
         if (filteredChildren.length > 0) {
           return {
             ...node,
-            children: filteredChildren
+            children: filteredChildren,
           }
         }
 
@@ -1413,629 +1524,729 @@ export default function VideosPage() {
           </div>
         </div>
 
-      {/* Search and Controls */}
-      <div className="mt-8 flex gap-3">
-        <div className="relative flex-1 rounded-md shadow-sm">
-          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-            <MagnifyingGlassIcon className="h-5 w-5 text-gray-500 dark:text-gray-500" aria-hidden="true" />
+        {/* Search and Controls */}
+        <div className="mt-8 flex gap-3">
+          <div className="relative flex-1 rounded-md shadow-sm">
+            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+              <MagnifyingGlassIcon
+                className="h-5 w-5 text-gray-500 dark:text-gray-500"
+                aria-hidden="true"
+              />
+            </div>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="block w-full rounded-md border-0 py-1.5 pl-10 text-gray-900 dark:text-white dark:bg-gray-800 ring-1 ring-inset ring-gray-300 dark:ring-gray-700 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:ring-2 focus:ring-inset focus:ring-indigo-600 dark:focus:ring-indigo-500 sm:text-sm"
+              placeholder="Search videos..."
+            />
           </div>
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="block w-full rounded-md border-0 py-1.5 pl-10 text-gray-900 dark:text-white dark:bg-gray-800 ring-1 ring-inset ring-gray-300 dark:ring-gray-700 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:ring-2 focus:ring-inset focus:ring-indigo-600 dark:focus:ring-indigo-500 sm:text-sm"
-            placeholder="Search videos..."
-          />
+          <div className="flex gap-2">
+            <button
+              onClick={expandAll}
+              className="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            >
+              Expand All
+            </button>
+            <button
+              onClick={collapseAll}
+              className="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            >
+              Collapse All
+            </button>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={expandAll}
-            className="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-          >
-            Expand All
-          </button>
-          <button
-            onClick={collapseAll}
-            className="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-          >
-            Collapse All
-          </button>
-        </div>
-      </div>
 
-      {/* Table */}
-      <div className="mt-8 flow-root">
-        <div className="-mx-4 -my-2 sm:-mx-6 lg:-mx-8">
-          <div className="inline-block min-w-full align-middle sm:px-6 lg:px-8">
-            <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 dark:ring-white dark:ring-opacity-10 sm:rounded-lg">
-              <div className="overflow-auto" style={{ maxHeight: 'calc(100vh - 25rem)' }}>
-                <table className="min-w-full divide-y divide-gray-300 dark:divide-gray-700">
-                  <thead
-                    className="bg-gray-50 dark:bg-gray-800 sticky top-0 z-10"
-                    onDragOver={draggedItem ? handleRootDragOver : undefined}
-                    onDragLeave={draggedItem ? handleRootDragLeave : undefined}
-                    onDrop={draggedItem ? handleRootDrop : undefined}
-                  >
-                    {draggedItem ? (
-                      <tr>
-                        <th
-                          colSpan={6}
-                          className={`py-6 px-6 text-center transition-colors ${
-                            dragOverFolder === '__ROOT__'
-                              ? 'bg-indigo-50 dark:bg-indigo-900/20 border-b-2 border-indigo-500'
-                              : 'bg-gray-50 dark:bg-gray-800 border-b-2 border-gray-300 dark:border-gray-600'
-                          }`}
-                        >
-                          <div className={`text-sm font-semibold ${
-                            dragOverFolder === '__ROOT__'
-                              ? 'text-indigo-700 dark:text-indigo-300'
-                              : 'text-gray-600 dark:text-gray-400'
-                          }`}>
-                            {(() => {
-                              const itemPathParts = draggedItem.path.split('/')
-                              const currentParent = itemPathParts.length > 1 ? itemPathParts.slice(0, -1).join('/') : ''
-
-                              if (currentParent === '') {
-                                return `"${draggedItem.name}" is already at Root`
-                              }
-                              return `Drop here to move "${draggedItem.name}" to Root`
-                            })()}
-                          </div>
-                        </th>
-                      </tr>
-                    ) : (
-                      <>
-                        <tr className="border-b border-gray-200 dark:border-gray-700">
-                          <th
-                            scope="col"
-                            className="py-2 pl-4 pr-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 sm:pl-6 bg-gray-50 dark:bg-gray-800"
-                          >
-                            {/* Video column - no group header */}
-                          </th>
-                          <th
-                            scope="colgroup"
-                            colSpan={4}
-                            className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800"
-                          >
-                            Boundary Annotation
-                          </th>
-                          <th scope="col" className="relative py-2 pl-3 pr-4 sm:pr-6 bg-gray-50 dark:bg-gray-800">
-                            {/* Actions column - no group header */}
-                          </th>
-                        </tr>
+        {/* Table */}
+        <div className="mt-8 flow-root">
+          <div className="-mx-4 -my-2 sm:-mx-6 lg:-mx-8">
+            <div className="inline-block min-w-full align-middle sm:px-6 lg:px-8">
+              <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 dark:ring-white dark:ring-opacity-10 sm:rounded-lg">
+                <div className="overflow-auto" style={{ maxHeight: 'calc(100vh - 25rem)' }}>
+                  <table className="min-w-full divide-y divide-gray-300 dark:divide-gray-700">
+                    <thead
+                      className="bg-gray-50 dark:bg-gray-800 sticky top-0 z-10"
+                      onDragOver={draggedItem ? handleRootDragOver : undefined}
+                      onDragLeave={draggedItem ? handleRootDragLeave : undefined}
+                      onDrop={draggedItem ? handleRootDrop : undefined}
+                    >
+                      {draggedItem ? (
                         <tr>
                           <th
-                            scope="col"
-                            className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-200 sm:pl-6 bg-gray-50 dark:bg-gray-800"
+                            colSpan={6}
+                            className={`py-6 px-6 text-center transition-colors ${
+                              dragOverFolder === '__ROOT__'
+                                ? 'bg-indigo-50 dark:bg-indigo-900/20 border-b-2 border-indigo-500'
+                                : 'bg-gray-50 dark:bg-gray-800 border-b-2 border-gray-300 dark:border-gray-600'
+                            }`}
                           >
-                            Video
-                          </th>
-                          <th
-                            scope="col"
-                            className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-gray-200 bg-gray-50 dark:bg-gray-800"
-                          >
-                            Total
-                          </th>
-                          <th
-                            scope="col"
-                            className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-gray-200 bg-gray-50 dark:bg-gray-800"
-                          >
-                            Distribution
-                          </th>
-                          <th
-                            scope="col"
-                            className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-gray-200 bg-gray-50 dark:bg-gray-800"
-                          >
-                            Pending
-                          </th>
-                          <th
-                            scope="col"
-                            className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-gray-200 bg-gray-50 dark:bg-gray-800"
-                          >
-                            Progress
-                          </th>
-                          <th scope="col" className="relative py-3.5 pl-3 pr-4 sm:pr-6 bg-gray-50 dark:bg-gray-800">
-                            <span className="sr-only">Actions</span>
+                            <div
+                              className={`text-sm font-semibold ${
+                                dragOverFolder === '__ROOT__'
+                                  ? 'text-indigo-700 dark:text-indigo-300'
+                                  : 'text-gray-600 dark:text-gray-400'
+                              }`}
+                            >
+                              {(() => {
+                                const itemPathParts = draggedItem.path.split('/')
+                                const currentParent =
+                                  itemPathParts.length > 1
+                                    ? itemPathParts.slice(0, -1).join('/')
+                                    : ''
+
+                                if (currentParent === '') {
+                                  return `"${draggedItem.name}" is already at Root`
+                                }
+                                return `Drop here to move "${draggedItem.name}" to Root`
+                              })()}
+                            </div>
                           </th>
                         </tr>
-                      </>
-                    )}
-                  </thead>
-                  <tbody className="divide-y divide-y-gray-200 dark:divide-gray-800 bg-white dark:bg-gray-950">
-                    {filteredTree.map((node) => (
-                      <TreeRow
-                        key={node.path}
-                        node={node}
-                        depth={0}
-                        expandedPaths={expandedPaths}
-                        onToggle={toggleExpand}
-                        videoStatsMap={videoStatsMap}
-                        onStatsUpdate={updateVideoStats}
-                        isMounted={isMounted}
-                        onCreateSubfolder={(parentPath) => {
-                          setCreateFolderModal({ open: true, parentPath })
-                          setNewFolderName('')
-                          setFolderError(null)
-                          setFolderLoading(false)
-                        }}
-                        onRenameFolder={(folderPath, currentName) => {
-                          setRenameFolderModal({ open: true, folderPath, currentName })
-                          setRenamedFolderName(currentName)
-                          setFolderError(null)
-                          setFolderLoading(false)
-                        }}
-                        onMoveFolder={(folderPath, folderName) => {
-                          setMoveModal({ open: true, itemPath: folderPath, itemName: folderName, itemType: 'folder' })
-                          setSelectedTargetFolder('')
-                          setMoveError(null)
-                          setMoveLoading(false)
-                        }}
-                        onDeleteFolder={handleDeleteFolderClick}
-                        onRenameVideo={(videoPath, currentName) => {
-                          setRenameVideoModal({ open: true, videoPath, currentName })
-                          setRenamedVideoName(currentName)
-                          setVideoError(null)
-                          setVideoLoading(false)
-                        }}
-                        onMoveVideo={(videoPath, videoName) => {
-                          setMoveModal({ open: true, itemPath: videoPath, itemName: videoName, itemType: 'video' })
-                          setSelectedTargetFolder('')
-                          setMoveError(null)
-                          setMoveLoading(false)
-                        }}
-                        onDeleteVideo={(videoPath, videoName) => {
-                          setDeleteVideoModal({ open: true, videoPath, videoName })
-                        }}
-                        onErrorBadgeClick={(videoId, errorDetails) => {
-                          setErrorModal({ open: true, errorDetails, videoId })
-                        }}
-                        onDragStart={handleDragStart}
-                        onDragEnd={handleDragEnd}
-                        onDragOver={handleDragOver}
-                        onDragLeave={handleDragLeave}
-                        onDrop={handleDrop}
-                        dragOverFolder={dragOverFolder}
-                      />
-                    ))}
-                  </tbody>
-                </table>
+                      ) : (
+                        <>
+                          <tr className="border-b border-gray-200 dark:border-gray-700">
+                            <th
+                              scope="col"
+                              className="py-2 pl-4 pr-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 sm:pl-6 bg-gray-50 dark:bg-gray-800"
+                            >
+                              {/* Video column - no group header */}
+                            </th>
+                            <th
+                              scope="colgroup"
+                              colSpan={4}
+                              className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800"
+                            >
+                              Boundary Annotation
+                            </th>
+                            <th
+                              scope="col"
+                              className="relative py-2 pl-3 pr-4 sm:pr-6 bg-gray-50 dark:bg-gray-800"
+                            >
+                              {/* Actions column - no group header */}
+                            </th>
+                          </tr>
+                          <tr>
+                            <th
+                              scope="col"
+                              className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-200 sm:pl-6 bg-gray-50 dark:bg-gray-800"
+                            >
+                              Video
+                            </th>
+                            <th
+                              scope="col"
+                              className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-gray-200 bg-gray-50 dark:bg-gray-800"
+                            >
+                              Total
+                            </th>
+                            <th
+                              scope="col"
+                              className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-gray-200 bg-gray-50 dark:bg-gray-800"
+                            >
+                              Distribution
+                            </th>
+                            <th
+                              scope="col"
+                              className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-gray-200 bg-gray-50 dark:bg-gray-800"
+                            >
+                              Pending
+                            </th>
+                            <th
+                              scope="col"
+                              className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-gray-200 bg-gray-50 dark:bg-gray-800"
+                            >
+                              Progress
+                            </th>
+                            <th
+                              scope="col"
+                              className="relative py-3.5 pl-3 pr-4 sm:pr-6 bg-gray-50 dark:bg-gray-800"
+                            >
+                              <span className="sr-only">Actions</span>
+                            </th>
+                          </tr>
+                        </>
+                      )}
+                    </thead>
+                    <tbody className="divide-y divide-y-gray-200 dark:divide-gray-800 bg-white dark:bg-gray-950">
+                      {filteredTree.map(node => (
+                        <TreeRow
+                          key={node.path}
+                          node={node}
+                          depth={0}
+                          expandedPaths={expandedPaths}
+                          onToggle={toggleExpand}
+                          videoStatsMap={videoStatsMap}
+                          onStatsUpdate={updateVideoStats}
+                          isMounted={isMounted}
+                          onCreateSubfolder={parentPath => {
+                            setCreateFolderModal({ open: true, parentPath })
+                            setNewFolderName('')
+                            setFolderError(null)
+                            setFolderLoading(false)
+                          }}
+                          onRenameFolder={(folderPath, currentName) => {
+                            setRenameFolderModal({ open: true, folderPath, currentName })
+                            setRenamedFolderName(currentName)
+                            setFolderError(null)
+                            setFolderLoading(false)
+                          }}
+                          onMoveFolder={(folderPath, folderName) => {
+                            setMoveModal({
+                              open: true,
+                              itemPath: folderPath,
+                              itemName: folderName,
+                              itemType: 'folder',
+                            })
+                            setSelectedTargetFolder('')
+                            setMoveError(null)
+                            setMoveLoading(false)
+                          }}
+                          onDeleteFolder={handleDeleteFolderClick}
+                          onRenameVideo={(videoPath, currentName) => {
+                            setRenameVideoModal({ open: true, videoPath, currentName })
+                            setRenamedVideoName(currentName)
+                            setVideoError(null)
+                            setVideoLoading(false)
+                          }}
+                          onMoveVideo={(videoPath, videoName) => {
+                            setMoveModal({
+                              open: true,
+                              itemPath: videoPath,
+                              itemName: videoName,
+                              itemType: 'video',
+                            })
+                            setSelectedTargetFolder('')
+                            setMoveError(null)
+                            setMoveLoading(false)
+                          }}
+                          onDeleteVideo={(videoPath, videoName) => {
+                            setDeleteVideoModal({ open: true, videoPath, videoName })
+                          }}
+                          onErrorBadgeClick={(videoId, errorDetails) => {
+                            setErrorModal({ open: true, errorDetails, videoId })
+                          }}
+                          onDragStart={handleDragStart}
+                          onDragEnd={handleDragEnd}
+                          onDragOver={handleDragOver}
+                          onDragLeave={handleDragLeave}
+                          onDrop={handleDrop}
+                          dragOverFolder={dragOverFolder}
+                        />
+                      ))}
+                    </tbody>
+                  </table>
 
-                {filteredTree.length === 0 && (
-                  <div className="bg-white dark:bg-gray-950 text-center py-12">
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                      {searchQuery ? 'No videos found matching your search.' : 'No videos available.'}
-                    </p>
-                  </div>
-                )}
+                  {filteredTree.length === 0 && (
+                    <div className="bg-white dark:bg-gray-950 text-center py-12">
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        {searchQuery
+                          ? 'No videos found matching your search.'
+                          : 'No videos available.'}
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Create Folder Modal */}
-      <Dialog open={createFolderModal.open} onClose={() => setCreateFolderModal({ open: false })} className="relative z-50">
-        <div className="fixed inset-0 bg-black/30 dark:bg-black/50" aria-hidden="true" />
-        <div className="fixed inset-0 flex items-center justify-center p-4">
-          <DialogPanel className="w-full max-w-md rounded-lg bg-white dark:bg-gray-800 p-6 shadow-xl">
-            <DialogTitle className="text-lg font-medium text-gray-900 dark:text-gray-200">
-              {createFolderModal.parentPath ? 'Create Subfolder' : 'Create New Folder'}
-            </DialogTitle>
-            <div className="mt-4">
-              {createFolderModal.parentPath && (
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                  Parent: <span className="font-mono">{createFolderModal.parentPath}/</span>
-                </p>
-              )}
-              <label htmlFor="folder-name" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Folder name
-              </label>
-              <input
-                type="text"
-                id="folder-name"
-                value={newFolderName}
-                onChange={(e) => setNewFolderName(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && !folderLoading && handleCreateFolder()}
-                placeholder="e.g., season_1"
-                className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                autoFocus
-              />
-              {folderError && (
-                <p className="mt-2 text-sm text-red-600 dark:text-red-400">{folderError}</p>
-              )}
-            </div>
-            <div className="mt-6 flex gap-3 justify-end">
-              <button
-                onClick={() => setCreateFolderModal({ open: false })}
-                disabled={folderLoading}
-                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleCreateFolder}
-                disabled={!newFolderName.trim() || folderLoading}
-                className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {folderLoading ? 'Creating...' : 'Create'}
-              </button>
-            </div>
-          </DialogPanel>
-        </div>
-      </Dialog>
-
-      {/* Rename Folder Modal */}
-      <Dialog open={renameFolderModal.open} onClose={() => setRenameFolderModal({ open: false })} className="relative z-50">
-        <div className="fixed inset-0 bg-black/30 dark:bg-black/50" aria-hidden="true" />
-        <div className="fixed inset-0 flex items-center justify-center p-4">
-          <DialogPanel className="w-full max-w-md rounded-lg bg-white dark:bg-gray-800 p-6 shadow-xl">
-            <DialogTitle className="text-lg font-medium text-gray-900 dark:text-gray-200">
-              Rename Folder
-            </DialogTitle>
-            <div className="mt-4">
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                Folder: <span className="font-mono">{renameFolderModal.folderPath}</span>
-              </p>
-              <label htmlFor="renamed-folder-name" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                New name
-              </label>
-              <input
-                type="text"
-                id="renamed-folder-name"
-                value={renamedFolderName}
-                onChange={(e) => setRenamedFolderName(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && !folderLoading && handleRenameFolder()}
-                className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                autoFocus
-              />
-              {folderError && (
-                <p className="mt-2 text-sm text-red-600 dark:text-red-400">{folderError}</p>
-              )}
-            </div>
-            <div className="mt-6 flex gap-3 justify-end">
-              <button
-                onClick={() => setRenameFolderModal({ open: false })}
-                disabled={folderLoading}
-                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleRenameFolder}
-                disabled={!renamedFolderName.trim() || folderLoading}
-                className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {folderLoading ? 'Renaming...' : 'Rename'}
-              </button>
-            </div>
-          </DialogPanel>
-        </div>
-      </Dialog>
-
-      {/* Delete Folder Modal */}
-      <Dialog open={deleteFolderModal.open} onClose={() => setDeleteFolderModal({ open: false })} className="relative z-50">
-        <div className="fixed inset-0 bg-black/30 dark:bg-black/50" aria-hidden="true" />
-        <div className="fixed inset-0 flex items-center justify-center p-4">
-          <DialogPanel className="w-full max-w-md rounded-lg bg-white dark:bg-gray-800 p-6 shadow-xl">
-            <DialogTitle className="text-lg font-medium text-gray-900 dark:text-gray-200">
-              Delete Folder
-            </DialogTitle>
-            <div className="mt-4">
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                Are you sure you want to delete the folder <span className="font-mono font-medium">{deleteFolderModal.folderName}</span>?
-              </p>
-
-              {deleteFolderModal.videoCount !== undefined && deleteFolderModal.videoCount > 0 && (
-                <div className="mt-4 rounded-md bg-red-50 dark:bg-red-900/20 p-4 border border-red-200 dark:border-red-800">
-                  <div className="flex">
-                    <div className="flex-shrink-0">
-                      <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-                      </svg>
-                    </div>
-                    <div className="ml-3">
-                      <h3 className="text-sm font-medium text-red-800 dark:text-red-300">
-                        This will permanently delete {deleteFolderModal.videoCount} {deleteFolderModal.videoCount === 1 ? 'video' : 'videos'}
-                      </h3>
-                      <div className="mt-2 text-sm text-red-700 dark:text-red-400">
-                        <p>All annotation data, frames, and video files in this folder will be lost forever.</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {deleteFolderModal.videoCount === 0 && (
-                <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                  This folder is empty.
-                </p>
-              )}
-
-              <p className="mt-3 text-sm font-medium text-gray-900 dark:text-gray-200">
-                This action cannot be undone.
-              </p>
-
-              {folderError && (
-                <p className="mt-3 text-sm text-red-600 dark:text-red-400">{folderError}</p>
-              )}
-            </div>
-            <div className="mt-6 flex gap-3 justify-end">
-              <button
-                onClick={() => setDeleteFolderModal({ open: false })}
-                disabled={folderLoading}
-                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleDeleteFolder}
-                disabled={folderLoading}
-                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {folderLoading ? 'Deleting...' : deleteFolderModal.videoCount && deleteFolderModal.videoCount > 0 ? `Delete ${deleteFolderModal.videoCount} ${deleteFolderModal.videoCount === 1 ? 'Video' : 'Videos'}` : 'Delete Folder'}
-              </button>
-            </div>
-          </DialogPanel>
-        </div>
-      </Dialog>
-
-      {/* Rename Video Modal */}
-      <Dialog open={renameVideoModal.open} onClose={() => setRenameVideoModal({ open: false })} className="relative z-50">
-        <div className="fixed inset-0 bg-black/30 dark:bg-black/50" aria-hidden="true" />
-        <div className="fixed inset-0 flex items-center justify-center p-4">
-          <DialogPanel className="w-full max-w-md rounded-lg bg-white dark:bg-gray-800 p-6 shadow-xl">
-            <DialogTitle className="text-lg font-medium text-gray-900 dark:text-gray-200">
-              Rename Video
-            </DialogTitle>
-            <div className="mt-4">
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                Video: <span className="font-mono">{renameVideoModal.videoPath}</span>
-              </p>
-              <label htmlFor="renamed-video-name" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                New name
-              </label>
-              <input
-                type="text"
-                id="renamed-video-name"
-                value={renamedVideoName}
-                onChange={(e) => setRenamedVideoName(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && !videoLoading && handleRenameVideo()}
-                className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                autoFocus
-              />
-              {videoError && (
-                <p className="mt-2 text-sm text-red-600 dark:text-red-400">{videoError}</p>
-              )}
-            </div>
-            <div className="mt-6 flex gap-3 justify-end">
-              <button
-                onClick={() => setRenameVideoModal({ open: false })}
-                disabled={videoLoading}
-                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleRenameVideo}
-                disabled={!renamedVideoName.trim() || videoLoading}
-                className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {videoLoading ? 'Renaming...' : 'Rename'}
-              </button>
-            </div>
-          </DialogPanel>
-        </div>
-      </Dialog>
-
-      {/* Delete Video Modal */}
-      <Dialog open={deleteVideoModal.open} onClose={() => setDeleteVideoModal({ open: false })} className="relative z-50">
-        <div className="fixed inset-0 bg-black/30 dark:bg-black/50" aria-hidden="true" />
-        <div className="fixed inset-0 flex items-center justify-center p-4">
-          <DialogPanel className="w-full max-w-md rounded-lg bg-white dark:bg-gray-800 p-6 shadow-xl">
-            <DialogTitle className="text-lg font-medium text-red-600 dark:text-red-400">
-              Delete Video
-            </DialogTitle>
-            <div className="mt-4">
-              <p className="text-sm text-gray-900 dark:text-gray-200 mb-2">
-                Are you sure you want to delete this video?
-              </p>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                Video: <span className="font-mono font-semibold">{deleteVideoModal.videoName}</span>
-              </p>
-              <p className="text-sm text-red-600 dark:text-red-400 font-medium">
-                This will permanently delete the video, database, and all annotation data. This action cannot be undone.
-              </p>
-              {videoError && (
-                <p className="mt-2 text-sm text-red-600 dark:text-red-400">{videoError}</p>
-              )}
-            </div>
-            <div className="mt-6 flex gap-3 justify-end">
-              <button
-                onClick={() => setDeleteVideoModal({ open: false })}
-                disabled={videoLoading}
-                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleDeleteVideo}
-                disabled={videoLoading}
-                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {videoLoading ? 'Deleting...' : 'Delete Video'}
-              </button>
-            </div>
-          </DialogPanel>
-        </div>
-      </Dialog>
-
-      {/* Error Details Modal */}
-      <Dialog open={errorModal.open} onClose={() => setErrorModal({ open: false })} className="relative z-50">
-        <div className="fixed inset-0 bg-black/30 dark:bg-black/50" aria-hidden="true" />
-        <div className="fixed inset-0 flex items-center justify-center p-4">
-          <DialogPanel className="w-full max-w-2xl rounded-lg bg-white dark:bg-gray-800 p-6 shadow-xl">
-            <div className="flex items-start justify-between">
-              <DialogTitle className="text-lg font-medium text-red-600 dark:text-red-400">
-                Error Details
+        {/* Create Folder Modal */}
+        <Dialog
+          open={createFolderModal.open}
+          onClose={() => setCreateFolderModal({ open: false })}
+          className="relative z-50"
+        >
+          <div className="fixed inset-0 bg-black/30 dark:bg-black/50" aria-hidden="true" />
+          <div className="fixed inset-0 flex items-center justify-center p-4">
+            <DialogPanel className="w-full max-w-md rounded-lg bg-white dark:bg-gray-800 p-6 shadow-xl">
+              <DialogTitle className="text-lg font-medium text-gray-900 dark:text-gray-200">
+                {createFolderModal.parentPath ? 'Create Subfolder' : 'Create New Folder'}
               </DialogTitle>
-              <button
-                onClick={() => setErrorModal({ open: false })}
-                className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
-              >
-                <XMarkIcon className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="mt-4">
-              {errorModal.videoId && (
+              <div className="mt-4">
+                {createFolderModal.parentPath && (
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                    Parent: <span className="font-mono">{createFolderModal.parentPath}/</span>
+                  </p>
+                )}
+                <label
+                  htmlFor="folder-name"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                >
+                  Folder name
+                </label>
+                <input
+                  type="text"
+                  id="folder-name"
+                  value={newFolderName}
+                  onChange={e => setNewFolderName(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && !folderLoading && handleCreateFolder()}
+                  placeholder="e.g., season_1"
+                  className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  autoFocus
+                />
+                {folderError && (
+                  <p className="mt-2 text-sm text-red-600 dark:text-red-400">{folderError}</p>
+                )}
+              </div>
+              <div className="mt-6 flex gap-3 justify-end">
+                <button
+                  onClick={() => setCreateFolderModal({ open: false })}
+                  disabled={folderLoading}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCreateFolder}
+                  disabled={!newFolderName.trim() || folderLoading}
+                  className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {folderLoading ? 'Creating...' : 'Create'}
+                </button>
+              </div>
+            </DialogPanel>
+          </div>
+        </Dialog>
+
+        {/* Rename Folder Modal */}
+        <Dialog
+          open={renameFolderModal.open}
+          onClose={() => setRenameFolderModal({ open: false })}
+          className="relative z-50"
+        >
+          <div className="fixed inset-0 bg-black/30 dark:bg-black/50" aria-hidden="true" />
+          <div className="fixed inset-0 flex items-center justify-center p-4">
+            <DialogPanel className="w-full max-w-md rounded-lg bg-white dark:bg-gray-800 p-6 shadow-xl">
+              <DialogTitle className="text-lg font-medium text-gray-900 dark:text-gray-200">
+                Rename Folder
+              </DialogTitle>
+              <div className="mt-4">
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                  Video: <span className="font-mono font-semibold">{errorModal.videoId}</span>
+                  Folder: <span className="font-mono">{renameFolderModal.folderPath}</span>
                 </p>
-              )}
+                <label
+                  htmlFor="renamed-folder-name"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                >
+                  New name
+                </label>
+                <input
+                  type="text"
+                  id="renamed-folder-name"
+                  value={renamedFolderName}
+                  onChange={e => setRenamedFolderName(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && !folderLoading && handleRenameFolder()}
+                  className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  autoFocus
+                />
+                {folderError && (
+                  <p className="mt-2 text-sm text-red-600 dark:text-red-400">{folderError}</p>
+                )}
+              </div>
+              <div className="mt-6 flex gap-3 justify-end">
+                <button
+                  onClick={() => setRenameFolderModal({ open: false })}
+                  disabled={folderLoading}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleRenameFolder}
+                  disabled={!renamedFolderName.trim() || folderLoading}
+                  className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {folderLoading ? 'Renaming...' : 'Rename'}
+                </button>
+              </div>
+            </DialogPanel>
+          </div>
+        </Dialog>
 
-              {errorModal.errorDetails && (
-                <div className="space-y-4">
-                  {/* Error Message */}
-                  <div>
-                    <h3 className="text-sm font-medium text-gray-900 dark:text-gray-200 mb-1">
-                      Message
-                    </h3>
-                    <p className="text-sm text-red-600 dark:text-red-400 font-mono bg-red-50 dark:bg-red-900/20 p-3 rounded-md border border-red-200 dark:border-red-800">
-                      {errorModal.errorDetails.message}
-                    </p>
-                  </div>
+        {/* Delete Folder Modal */}
+        <Dialog
+          open={deleteFolderModal.open}
+          onClose={() => setDeleteFolderModal({ open: false })}
+          className="relative z-50"
+        >
+          <div className="fixed inset-0 bg-black/30 dark:bg-black/50" aria-hidden="true" />
+          <div className="fixed inset-0 flex items-center justify-center p-4">
+            <DialogPanel className="w-full max-w-md rounded-lg bg-white dark:bg-gray-800 p-6 shadow-xl">
+              <DialogTitle className="text-lg font-medium text-gray-900 dark:text-gray-200">
+                Delete Folder
+              </DialogTitle>
+              <div className="mt-4">
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Are you sure you want to delete the folder{' '}
+                  <span className="font-mono font-medium">{deleteFolderModal.folderName}</span>?
+                </p>
 
-                  {/* Context */}
-                  {errorModal.errorDetails.context && Object.keys(errorModal.errorDetails.context).length > 0 && (
-                    <div>
-                      <h3 className="text-sm font-medium text-gray-900 dark:text-gray-200 mb-1">
-                        Context
-                      </h3>
-                      <pre className="text-xs text-gray-700 dark:text-gray-300 font-mono bg-gray-50 dark:bg-gray-900 p-3 rounded-md border border-gray-200 dark:border-gray-700 overflow-x-auto">
-                        {JSON.stringify(errorModal.errorDetails.context, null, 2)}
-                      </pre>
-                    </div>
-                  )}
-
-                  {/* Stack Trace */}
-                  {errorModal.errorDetails.stack && (
-                    <div>
-                      <h3 className="text-sm font-medium text-gray-900 dark:text-gray-200 mb-1">
-                        Stack Trace
-                      </h3>
-                      <pre className="text-xs text-gray-700 dark:text-gray-300 font-mono bg-gray-50 dark:bg-gray-900 p-3 rounded-md border border-gray-200 dark:border-gray-700 overflow-x-auto max-h-64 overflow-y-auto">
-                        {errorModal.errorDetails.stack}
-                      </pre>
-                    </div>
-                  )}
-
-                  {/* Help Text */}
-                  <div className="rounded-md bg-blue-50 dark:bg-blue-900/20 p-4 border border-blue-200 dark:border-blue-800">
+                {deleteFolderModal.videoCount !== undefined && deleteFolderModal.videoCount > 0 && (
+                  <div className="mt-4 rounded-md bg-red-50 dark:bg-red-900/20 p-4 border border-red-200 dark:border-red-800">
                     <div className="flex">
                       <div className="flex-shrink-0">
-                        <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clipRule="evenodd" />
+                        <svg
+                          className="h-5 w-5 text-red-400"
+                          viewBox="0 0 20 20"
+                          fill="currentColor"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z"
+                            clipRule="evenodd"
+                          />
                         </svg>
                       </div>
                       <div className="ml-3">
-                        <h3 className="text-sm font-medium text-blue-800 dark:text-blue-300">
-                          Development Error
+                        <h3 className="text-sm font-medium text-red-800 dark:text-red-300">
+                          This will permanently delete {deleteFolderModal.videoCount}{' '}
+                          {deleteFolderModal.videoCount === 1 ? 'video' : 'videos'}
                         </h3>
-                        <div className="mt-2 text-sm text-blue-700 dark:text-blue-400">
-                          <p>This error typically indicates a schema mismatch or missing database migration. Check the error message and context for details about which column or table is missing.</p>
+                        <div className="mt-2 text-sm text-red-700 dark:text-red-400">
+                          <p>
+                            All annotation data, frames, and video files in this folder will be lost
+                            forever.
+                          </p>
                         </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              )}
-            </div>
-            <div className="mt-6 flex justify-end">
-              <button
-                onClick={() => setErrorModal({ open: false })}
-                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
-              >
-                Close
-              </button>
-            </div>
-          </DialogPanel>
-        </div>
-      </Dialog>
+                )}
 
-      {/* Move Modal (Videos and Folders) */}
-      <Dialog open={moveModal.open} onClose={() => setMoveModal({ open: false })} className="relative z-50">
-        <div className="fixed inset-0 bg-black/30 dark:bg-black/50" aria-hidden="true" />
-        <div className="fixed inset-0 flex items-center justify-center p-4">
-          <DialogPanel className="w-full max-w-md rounded-lg bg-white dark:bg-gray-800 p-6 shadow-xl">
-            <DialogTitle className="text-lg font-medium text-gray-900 dark:text-gray-200">
-              Move {moveModal.itemType === 'video' ? 'Video' : 'Folder'}
-            </DialogTitle>
-            <div className="mt-4">
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                {moveModal.itemType === 'video' ? 'Video' : 'Folder'}: <span className="font-mono font-semibold">{moveModal.itemName}</span>
-              </p>
-              <label htmlFor="target-folder" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Move to folder
-              </label>
-              <select
-                id="target-folder"
-                value={selectedTargetFolder}
-                onChange={(e) => setSelectedTargetFolder(e.target.value)}
-                className="block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-              >
-                <option value="">Root (no folder)</option>
-                {allFolders
-                  .filter(f => {
-                    // Exclude current folder (for folders being moved)
-                    if (moveModal.itemType === 'folder' && f.path === moveModal.itemPath) {
-                      return false
-                    }
-                    // Exclude descendants of the folder being moved
-                    if (moveModal.itemType === 'folder' && f.path.startsWith(`${moveModal.itemPath}/`)) {
-                      return false
-                    }
-                    // Exclude current parent folder (for both videos and folders)
-                    const itemPathParts = moveModal.itemPath?.split('/') || []
-                    const currentParent = itemPathParts.length > 1
-                      ? itemPathParts.slice(0, -1).join('/')
-                      : ''
-                    if (f.path === currentParent) {
-                      return false
-                    }
-                    return true
-                  })
-                  .map(folder => (
-                    <option key={folder.path} value={folder.path}>
-                      {folder.name}
-                    </option>
-                  ))
-                }
-              </select>
-              <p className="mt-2 text-xs text-gray-500 dark:text-gray-500">
-                Select a destination folder or choose "Root" to move to the top level.
-              </p>
-              {moveError && (
-                <p className="mt-3 text-sm text-red-600 dark:text-red-400">{moveError}</p>
-              )}
-            </div>
-            <div className="mt-6 flex gap-3 justify-end">
-              <button
-                onClick={() => setMoveModal({ open: false })}
-                disabled={moveLoading}
-                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleMove}
-                disabled={moveLoading}
-                className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {moveLoading ? 'Moving...' : 'Move'}
-              </button>
-            </div>
-          </DialogPanel>
-        </div>
-      </Dialog>
+                {deleteFolderModal.videoCount === 0 && (
+                  <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                    This folder is empty.
+                  </p>
+                )}
+
+                <p className="mt-3 text-sm font-medium text-gray-900 dark:text-gray-200">
+                  This action cannot be undone.
+                </p>
+
+                {folderError && (
+                  <p className="mt-3 text-sm text-red-600 dark:text-red-400">{folderError}</p>
+                )}
+              </div>
+              <div className="mt-6 flex gap-3 justify-end">
+                <button
+                  onClick={() => setDeleteFolderModal({ open: false })}
+                  disabled={folderLoading}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteFolder}
+                  disabled={folderLoading}
+                  className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {folderLoading
+                    ? 'Deleting...'
+                    : deleteFolderModal.videoCount && deleteFolderModal.videoCount > 0
+                      ? `Delete ${deleteFolderModal.videoCount} ${deleteFolderModal.videoCount === 1 ? 'Video' : 'Videos'}`
+                      : 'Delete Folder'}
+                </button>
+              </div>
+            </DialogPanel>
+          </div>
+        </Dialog>
+
+        {/* Rename Video Modal */}
+        <Dialog
+          open={renameVideoModal.open}
+          onClose={() => setRenameVideoModal({ open: false })}
+          className="relative z-50"
+        >
+          <div className="fixed inset-0 bg-black/30 dark:bg-black/50" aria-hidden="true" />
+          <div className="fixed inset-0 flex items-center justify-center p-4">
+            <DialogPanel className="w-full max-w-md rounded-lg bg-white dark:bg-gray-800 p-6 shadow-xl">
+              <DialogTitle className="text-lg font-medium text-gray-900 dark:text-gray-200">
+                Rename Video
+              </DialogTitle>
+              <div className="mt-4">
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                  Video: <span className="font-mono">{renameVideoModal.videoPath}</span>
+                </p>
+                <label
+                  htmlFor="renamed-video-name"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                >
+                  New name
+                </label>
+                <input
+                  type="text"
+                  id="renamed-video-name"
+                  value={renamedVideoName}
+                  onChange={e => setRenamedVideoName(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && !videoLoading && handleRenameVideo()}
+                  className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  autoFocus
+                />
+                {videoError && (
+                  <p className="mt-2 text-sm text-red-600 dark:text-red-400">{videoError}</p>
+                )}
+              </div>
+              <div className="mt-6 flex gap-3 justify-end">
+                <button
+                  onClick={() => setRenameVideoModal({ open: false })}
+                  disabled={videoLoading}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleRenameVideo}
+                  disabled={!renamedVideoName.trim() || videoLoading}
+                  className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {videoLoading ? 'Renaming...' : 'Rename'}
+                </button>
+              </div>
+            </DialogPanel>
+          </div>
+        </Dialog>
+
+        {/* Delete Video Modal */}
+        <Dialog
+          open={deleteVideoModal.open}
+          onClose={() => setDeleteVideoModal({ open: false })}
+          className="relative z-50"
+        >
+          <div className="fixed inset-0 bg-black/30 dark:bg-black/50" aria-hidden="true" />
+          <div className="fixed inset-0 flex items-center justify-center p-4">
+            <DialogPanel className="w-full max-w-md rounded-lg bg-white dark:bg-gray-800 p-6 shadow-xl">
+              <DialogTitle className="text-lg font-medium text-red-600 dark:text-red-400">
+                Delete Video
+              </DialogTitle>
+              <div className="mt-4">
+                <p className="text-sm text-gray-900 dark:text-gray-200 mb-2">
+                  Are you sure you want to delete this video?
+                </p>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                  Video:{' '}
+                  <span className="font-mono font-semibold">{deleteVideoModal.videoName}</span>
+                </p>
+                <p className="text-sm text-red-600 dark:text-red-400 font-medium">
+                  This will permanently delete the video, database, and all annotation data. This
+                  action cannot be undone.
+                </p>
+                {videoError && (
+                  <p className="mt-2 text-sm text-red-600 dark:text-red-400">{videoError}</p>
+                )}
+              </div>
+              <div className="mt-6 flex gap-3 justify-end">
+                <button
+                  onClick={() => setDeleteVideoModal({ open: false })}
+                  disabled={videoLoading}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteVideo}
+                  disabled={videoLoading}
+                  className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {videoLoading ? 'Deleting...' : 'Delete Video'}
+                </button>
+              </div>
+            </DialogPanel>
+          </div>
+        </Dialog>
+
+        {/* Error Details Modal */}
+        <Dialog
+          open={errorModal.open}
+          onClose={() => setErrorModal({ open: false })}
+          className="relative z-50"
+        >
+          <div className="fixed inset-0 bg-black/30 dark:bg-black/50" aria-hidden="true" />
+          <div className="fixed inset-0 flex items-center justify-center p-4">
+            <DialogPanel className="w-full max-w-2xl rounded-lg bg-white dark:bg-gray-800 p-6 shadow-xl">
+              <div className="flex items-start justify-between">
+                <DialogTitle className="text-lg font-medium text-red-600 dark:text-red-400">
+                  Error Details
+                </DialogTitle>
+                <button
+                  onClick={() => setErrorModal({ open: false })}
+                  className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
+                >
+                  <XMarkIcon className="h-5 w-5" />
+                </button>
+              </div>
+              <div className="mt-4">
+                {errorModal.videoId && (
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                    Video: <span className="font-mono font-semibold">{errorModal.videoId}</span>
+                  </p>
+                )}
+
+                {errorModal.errorDetails && (
+                  <div className="space-y-4">
+                    {/* Error Message */}
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-900 dark:text-gray-200 mb-1">
+                        Message
+                      </h3>
+                      <p className="text-sm text-red-600 dark:text-red-400 font-mono bg-red-50 dark:bg-red-900/20 p-3 rounded-md border border-red-200 dark:border-red-800">
+                        {errorModal.errorDetails.message}
+                      </p>
+                    </div>
+
+                    {/* Context */}
+                    {errorModal.errorDetails.context &&
+                      Object.keys(errorModal.errorDetails.context).length > 0 && (
+                        <div>
+                          <h3 className="text-sm font-medium text-gray-900 dark:text-gray-200 mb-1">
+                            Context
+                          </h3>
+                          <pre className="text-xs text-gray-700 dark:text-gray-300 font-mono bg-gray-50 dark:bg-gray-900 p-3 rounded-md border border-gray-200 dark:border-gray-700 overflow-x-auto">
+                            {JSON.stringify(errorModal.errorDetails.context, null, 2)}
+                          </pre>
+                        </div>
+                      )}
+
+                    {/* Stack Trace */}
+                    {errorModal.errorDetails.stack && (
+                      <div>
+                        <h3 className="text-sm font-medium text-gray-900 dark:text-gray-200 mb-1">
+                          Stack Trace
+                        </h3>
+                        <pre className="text-xs text-gray-700 dark:text-gray-300 font-mono bg-gray-50 dark:bg-gray-900 p-3 rounded-md border border-gray-200 dark:border-gray-700 overflow-x-auto max-h-64 overflow-y-auto">
+                          {errorModal.errorDetails.stack}
+                        </pre>
+                      </div>
+                    )}
+
+                    {/* Help Text */}
+                    <div className="rounded-md bg-blue-50 dark:bg-blue-900/20 p-4 border border-blue-200 dark:border-blue-800">
+                      <div className="flex">
+                        <div className="flex-shrink-0">
+                          <svg
+                            className="h-5 w-5 text-blue-400"
+                            viewBox="0 0 20 20"
+                            fill="currentColor"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                        </div>
+                        <div className="ml-3">
+                          <h3 className="text-sm font-medium text-blue-800 dark:text-blue-300">
+                            Development Error
+                          </h3>
+                          <div className="mt-2 text-sm text-blue-700 dark:text-blue-400">
+                            <p>
+                              This error typically indicates a schema mismatch or missing database
+                              migration. Check the error message and context for details about which
+                              column or table is missing.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="mt-6 flex justify-end">
+                <button
+                  onClick={() => setErrorModal({ open: false })}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
+                >
+                  Close
+                </button>
+              </div>
+            </DialogPanel>
+          </div>
+        </Dialog>
+
+        {/* Move Modal (Videos and Folders) */}
+        <Dialog
+          open={moveModal.open}
+          onClose={() => setMoveModal({ open: false })}
+          className="relative z-50"
+        >
+          <div className="fixed inset-0 bg-black/30 dark:bg-black/50" aria-hidden="true" />
+          <div className="fixed inset-0 flex items-center justify-center p-4">
+            <DialogPanel className="w-full max-w-md rounded-lg bg-white dark:bg-gray-800 p-6 shadow-xl">
+              <DialogTitle className="text-lg font-medium text-gray-900 dark:text-gray-200">
+                Move {moveModal.itemType === 'video' ? 'Video' : 'Folder'}
+              </DialogTitle>
+              <div className="mt-4">
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                  {moveModal.itemType === 'video' ? 'Video' : 'Folder'}:{' '}
+                  <span className="font-mono font-semibold">{moveModal.itemName}</span>
+                </p>
+                <label
+                  htmlFor="target-folder"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+                >
+                  Move to folder
+                </label>
+                <select
+                  id="target-folder"
+                  value={selectedTargetFolder}
+                  onChange={e => setSelectedTargetFolder(e.target.value)}
+                  className="block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                >
+                  <option value="">Root (no folder)</option>
+                  {allFolders
+                    .filter(f => {
+                      // Exclude current folder (for folders being moved)
+                      if (moveModal.itemType === 'folder' && f.path === moveModal.itemPath) {
+                        return false
+                      }
+                      // Exclude descendants of the folder being moved
+                      if (
+                        moveModal.itemType === 'folder' &&
+                        f.path.startsWith(`${moveModal.itemPath}/`)
+                      ) {
+                        return false
+                      }
+                      // Exclude current parent folder (for both videos and folders)
+                      const itemPathParts = moveModal.itemPath?.split('/') || []
+                      const currentParent =
+                        itemPathParts.length > 1 ? itemPathParts.slice(0, -1).join('/') : ''
+                      if (f.path === currentParent) {
+                        return false
+                      }
+                      return true
+                    })
+                    .map(folder => (
+                      <option key={folder.path} value={folder.path}>
+                        {folder.name}
+                      </option>
+                    ))}
+                </select>
+                <p className="mt-2 text-xs text-gray-500 dark:text-gray-500">
+                  Select a destination folder or choose "Root" to move to the top level.
+                </p>
+                {moveError && (
+                  <p className="mt-3 text-sm text-red-600 dark:text-red-400">{moveError}</p>
+                )}
+              </div>
+              <div className="mt-6 flex gap-3 justify-end">
+                <button
+                  onClick={() => setMoveModal({ open: false })}
+                  disabled={moveLoading}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleMove}
+                  disabled={moveLoading}
+                  className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {moveLoading ? 'Moving...' : 'Move'}
+                </button>
+              </div>
+            </DialogPanel>
+          </div>
+        </Dialog>
       </div>
     </AppLayout>
   )

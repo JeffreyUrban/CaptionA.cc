@@ -1,10 +1,11 @@
 /**
  * Create a new folder in the video library
  */
-import type { ActionFunctionArgs } from 'react-router'
-import { resolve } from 'path'
-import { mkdir, access } from 'fs/promises'
 import { constants } from 'fs'
+import { mkdir, access } from 'fs/promises'
+import { resolve } from 'path'
+
+import type { ActionFunctionArgs } from 'react-router'
 
 export async function action({ request }: ActionFunctionArgs) {
   if (request.method !== 'POST') {

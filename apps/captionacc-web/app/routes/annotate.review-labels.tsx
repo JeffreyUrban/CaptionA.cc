@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useSearchParams, useNavigate } from 'react-router'
 import type { LoaderFunctionArgs } from 'react-router'
+
 import { AppLayout } from '~/components/AppLayout'
 
 interface FrameInfo {
@@ -73,7 +74,7 @@ type ViewMode = 'analysis' | 'frame'
 // Loader function to expose environment variables
 export async function loader() {
   return {
-    defaultVideoId: process.env['DEFAULT_VIDEO_ID'] || ''
+    defaultVideoId: process.env['DEFAULT_VIDEO_ID'] || '',
   }
 }
 
@@ -86,7 +87,9 @@ export default function ReviewLabels() {
   const [mislabels, setMislabels] = useState<PotentialMislabel[]>([])
   const [frames, setFrames] = useState<FrameInfo[]>([])
   const [layoutConfig, setLayoutConfig] = useState<LayoutConfig | null>(null)
-  const [clusterStats, setClusterStats] = useState<{ avgTop: number; avgBottom: number } | null>(null)
+  const [clusterStats, setClusterStats] = useState<{ avgTop: number; avgBottom: number } | null>(
+    null
+  )
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -125,69 +128,78 @@ export default function ReviewLabels() {
   // Mark video as being worked on
   useEffect(() => {
     if (videoId && typeof window !== 'undefined') {
-      const touchedVideos = new Set(
-        JSON.parse(localStorage.getItem('touched-videos') || '[]')
-      )
+      const touchedVideos = new Set(JSON.parse(localStorage.getItem('touched-videos') || '[]'))
       touchedVideos.add(videoId)
       localStorage.setItem('touched-videos', JSON.stringify(Array.from(touchedVideos)))
     }
   }, [videoId])
 
   // Load mislabel data
-  const loadMislabels = useCallback(async (showLoading = true) => {
-    if (!videoId) return
+  const loadMislabels = useCallback(
+    async (showLoading = true) => {
+      if (!videoId) return
 
-    console.log(`[Frontend] loadMislabels called (showLoading=${showLoading})`)
-
-    if (showLoading) {
-      setError(null)
-    }
-
-    try {
-      const response = await fetch(
-        `/api/annotations/${encodeURIComponent(videoId)}/review-labels`
-      )
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to load mislabels')
-      }
-
-      const data = await response.json()
-
-      console.log(`[Frontend] Received ${data.potentialMislabels?.length || 0} potential mislabels`)
-
-      setMislabels(data.potentialMislabels || [])
-      setClusterStats(data.clusterStats || null)
-
-      // Get unique frame indices from mislabels
-      const frameIndices = (Array.from(new Set(
-        (data.potentialMislabels || []).map((m: PotentialMislabel) => m.frameIndex)
-      )) as number[]).sort((a: number, b: number) => a - b)
-
-      // Create frame info for each unique frame
-      const frameInfos: FrameInfo[] = frameIndices.map((frameIndex: number) => ({
-        frameIndex,
-        totalBoxCount: (data.potentialMislabels || []).filter((m: PotentialMislabel) => m.frameIndex === frameIndex).length,
-        captionBoxCount: (data.potentialMislabels || []).filter((m: PotentialMislabel) => m.frameIndex === frameIndex && m.userLabel === 'in').length,
-        minConfidence: 0,
-        hasAnnotations: true,
-        imageUrl: `/api/full-frames/${encodeURIComponent(videoId)}/${frameIndex}.jpg`
-      }))
-
-      setFrames(frameInfos)
+      console.log(`[Frontend] loadMislabels called (showLoading=${showLoading})`)
 
       if (showLoading) {
-        setLoading(false)
+        setError(null)
       }
-    } catch (err) {
-      console.error('Failed to load mislabels:', err)
-      if (showLoading) {
-        setError((err as Error).message)
-        setLoading(false)
+
+      try {
+        const response = await fetch(
+          `/api/annotations/${encodeURIComponent(videoId)}/review-labels`
+        )
+
+        if (!response.ok) {
+          const errorData = await response.json()
+          throw new Error(errorData.error || 'Failed to load mislabels')
+        }
+
+        const data = await response.json()
+
+        console.log(
+          `[Frontend] Received ${data.potentialMislabels?.length || 0} potential mislabels`
+        )
+
+        setMislabels(data.potentialMislabels || [])
+        setClusterStats(data.clusterStats || null)
+
+        // Get unique frame indices from mislabels
+        const frameIndices = (
+          Array.from(
+            new Set((data.potentialMislabels || []).map((m: PotentialMislabel) => m.frameIndex))
+          ) as number[]
+        ).sort((a: number, b: number) => a - b)
+
+        // Create frame info for each unique frame
+        const frameInfos: FrameInfo[] = frameIndices.map((frameIndex: number) => ({
+          frameIndex,
+          totalBoxCount: (data.potentialMislabels || []).filter(
+            (m: PotentialMislabel) => m.frameIndex === frameIndex
+          ).length,
+          captionBoxCount: (data.potentialMislabels || []).filter(
+            (m: PotentialMislabel) => m.frameIndex === frameIndex && m.userLabel === 'in'
+          ).length,
+          minConfidence: 0,
+          hasAnnotations: true,
+          imageUrl: `/api/full-frames/${encodeURIComponent(videoId)}/${frameIndex}.jpg`,
+        }))
+
+        setFrames(frameInfos)
+
+        if (showLoading) {
+          setLoading(false)
+        }
+      } catch (err) {
+        console.error('Failed to load mislabels:', err)
+        if (showLoading) {
+          setError((err as Error).message)
+          setLoading(false)
+        }
       }
-    }
-  }, [videoId])
+    },
+    [videoId]
+  )
 
   // Prefetch frame boxes for all frames in queue (after queue loads)
   useEffect(() => {
@@ -197,7 +209,7 @@ export default function ReviewLabels() {
       console.log(`[Prefetch] Starting prefetch for ${frames.length} frames`)
 
       // Prefetch all frames in parallel
-      const prefetchPromises = frames.map(async (frame) => {
+      const prefetchPromises = frames.map(async frame => {
         // Skip if already cached
         if (frameBoxesCache.current.has(frame.frameIndex)) {
           return
@@ -236,7 +248,7 @@ export default function ReviewLabels() {
 
   // Auto-poll when processing is in progress
   useEffect(() => {
-    if (!error || !error.startsWith('Processing:')) return
+    if (!error?.startsWith('Processing:')) return
 
     console.log('[Polling] Setting up auto-poll for processing status...')
 
@@ -291,76 +303,90 @@ export default function ReviewLabels() {
   }, [videoId, viewMode, selectedFrameIndex])
 
   // Handle thumbnail click
-  const handleThumbnailClick = useCallback((frameIndex: number | 'analysis') => {
-    console.log(`[Frontend] Thumbnail clicked: ${frameIndex}`)
+  const handleThumbnailClick = useCallback(
+    (frameIndex: number | 'analysis') => {
+      console.log(`[Frontend] Thumbnail clicked: ${frameIndex}`)
 
-    // Check if we're actually changing frames/views
-    const isChangingView =
-      (frameIndex === 'analysis' && viewMode !== 'analysis') ||
-      (frameIndex !== 'analysis' && (viewMode !== 'frame' || selectedFrameIndex !== frameIndex))
+      // Check if we're actually changing frames/views
+      const isChangingView =
+        (frameIndex === 'analysis' && viewMode !== 'analysis') ||
+        (frameIndex !== 'analysis' && (viewMode !== 'frame' || selectedFrameIndex !== frameIndex))
 
-    if (frameIndex === 'analysis') {
-      setViewMode('analysis')
-      // Keep the current frame selected for annotation, or default to first frame
-      setSelectedFrameIndex(prev => prev ?? (frames.length > 0 ? frames[0]?.frameIndex ?? null : null))
-    } else {
-      setViewMode('frame')
-      setSelectedFrameIndex(frameIndex)
-    }
-
-    // Reload mislabels only when navigating away AND annotations were made (background refresh to update list)
-    if (isChangingView && hasUnsyncedAnnotations) {
-      console.log(`[Frontend] Navigating to different frame/view with unsynced annotations, reloading mislabels in background`)
-      void loadMislabels(false)
-      setHasUnsyncedAnnotations(false)
-    }
-  }, [frames, viewMode, selectedFrameIndex, hasUnsyncedAnnotations, loadMislabels])
-
-  // Handle box annotation (left click = in, right click = out)
-  const handleBoxClick = useCallback(async (boxIndex: number, label: 'in' | 'out') => {
-    if (!videoId || !currentFrameBoxes) return
-
-    try {
-      // Update local state optimistically
-      setCurrentFrameBoxes(prev => {
-        if (!prev) return prev
-        return {
-          ...prev,
-          boxes: prev.boxes.map(box =>
-            box.boxIndex === boxIndex
-              ? { ...box, userLabel: label, colorCode: label === 'in' ? 'annotated_in' : 'annotated_out' }
-              : box
-          )
-        }
-      })
-
-      // Save to server
-      const response = await fetch(
-        `/api/annotations/${encodeURIComponent(videoId)}/frames/${currentFrameBoxes.frameIndex}/boxes`,
-        {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            annotations: [{ boxIndex, label }]
-          })
-        }
-      )
-
-      if (!response.ok) {
-        throw new Error('Failed to save annotation')
+      if (frameIndex === 'analysis') {
+        setViewMode('analysis')
+        // Keep the current frame selected for annotation, or default to first frame
+        setSelectedFrameIndex(
+          prev => prev ?? (frames.length > 0 ? (frames[0]?.frameIndex ?? null) : null)
+        )
+      } else {
+        setViewMode('frame')
+        setSelectedFrameIndex(frameIndex)
       }
 
-      // Invalidate cache for this frame
-      frameBoxesCache.current.delete(currentFrameBoxes.frameIndex)
+      // Reload mislabels only when navigating away AND annotations were made (background refresh to update list)
+      if (isChangingView && hasUnsyncedAnnotations) {
+        console.log(
+          `[Frontend] Navigating to different frame/view with unsynced annotations, reloading mislabels in background`
+        )
+        void loadMislabels(false)
+        setHasUnsyncedAnnotations(false)
+      }
+    },
+    [frames, viewMode, selectedFrameIndex, hasUnsyncedAnnotations, loadMislabels]
+  )
 
-      // Mark that we have unsynced annotations
-      setHasUnsyncedAnnotations(true)
-    } catch (err) {
-      console.error('Failed to save box annotation:', err)
-      // Reload frame to revert optimistic update
-      setSelectedFrameIndex(prev => prev)
-    }
-  }, [videoId, currentFrameBoxes])
+  // Handle box annotation (left click = in, right click = out)
+  const handleBoxClick = useCallback(
+    async (boxIndex: number, label: 'in' | 'out') => {
+      if (!videoId || !currentFrameBoxes) return
+
+      try {
+        // Update local state optimistically
+        setCurrentFrameBoxes(prev => {
+          if (!prev) return prev
+          return {
+            ...prev,
+            boxes: prev.boxes.map(box =>
+              box.boxIndex === boxIndex
+                ? {
+                    ...box,
+                    userLabel: label,
+                    colorCode: label === 'in' ? 'annotated_in' : 'annotated_out',
+                  }
+                : box
+            ),
+          }
+        })
+
+        // Save to server
+        const response = await fetch(
+          `/api/annotations/${encodeURIComponent(videoId)}/frames/${currentFrameBoxes.frameIndex}/boxes`,
+          {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              annotations: [{ boxIndex, label }],
+            }),
+          }
+        )
+
+        if (!response.ok) {
+          throw new Error('Failed to save annotation')
+        }
+
+        // Invalidate cache for this frame
+        frameBoxesCache.current.delete(currentFrameBoxes.frameIndex)
+
+        // Mark that we have unsynced annotations
+        setHasUnsyncedAnnotations(true)
+      } catch (err) {
+        console.error('Failed to save box annotation:', err)
+        // Reload frame to revert optimistic update
+        setSelectedFrameIndex(prev => prev)
+      }
+    },
+    [videoId, currentFrameBoxes]
+  )
 
   // Sync canvas size with displayed image
   useEffect(() => {
@@ -369,7 +395,7 @@ export default function ReviewLabels() {
         const img = imageRef.current
         setCanvasSize({
           width: img.clientWidth,
-          height: img.clientHeight
+          height: img.clientHeight,
         })
       }
     }
@@ -413,55 +439,59 @@ export default function ReviewLabels() {
 
       // Draw boxes using original bounds
       currentFrameBoxes.boxes.forEach((box, index) => {
-      // Convert original pixel bounds to canvas coordinates
-      const boxX = box.originalBounds.left * scale
-      const boxY = box.originalBounds.top * scale
-      const boxWidth = (box.originalBounds.right - box.originalBounds.left) * scale
-      const boxHeight = (box.originalBounds.bottom - box.originalBounds.top) * scale
+        // Convert original pixel bounds to canvas coordinates
+        const boxX = box.originalBounds.left * scale
+        const boxY = box.originalBounds.top * scale
+        const boxWidth = (box.originalBounds.right - box.originalBounds.left) * scale
+        const boxHeight = (box.originalBounds.bottom - box.originalBounds.top) * scale
 
-      // Get color based on color code
-      const colors = getBoxColors(box.colorCode)
+        // Get color based on color code
+        const colors = getBoxColors(box.colorCode)
 
-      // Draw box
-      ctx.strokeStyle = colors.border
-      ctx.fillStyle = colors.background
-      ctx.lineWidth = hoveredBoxIndex === index ? 3 : 2
+        // Draw box
+        ctx.strokeStyle = colors.border
+        ctx.fillStyle = colors.background
+        ctx.lineWidth = hoveredBoxIndex === index ? 3 : 2
 
-      ctx.fillRect(boxX, boxY, boxWidth, boxHeight)
-      ctx.strokeRect(boxX, boxY, boxWidth, boxHeight)
+        ctx.fillRect(boxX, boxY, boxWidth, boxHeight)
+        ctx.strokeRect(boxX, boxY, boxWidth, boxHeight)
 
-      // Draw text label if hovered
-      if (hoveredBoxIndex === index) {
-        // Scale font size to match box height
-        const fontSize = Math.max(Math.floor(boxHeight), 10)
-        const labelHeight = fontSize + 8
+        // Draw text label if hovered
+        if (hoveredBoxIndex === index) {
+          // Scale font size to match box height
+          const fontSize = Math.max(Math.floor(boxHeight), 10)
+          const labelHeight = fontSize + 8
 
-        // Set font before measuring text
-        ctx.font = `${fontSize}px monospace`
-        const textWidth = ctx.measureText(box.text).width
-        const labelWidth = Math.max(boxWidth, textWidth + 8)
+          // Set font before measuring text
+          ctx.font = `${fontSize}px monospace`
+          const textWidth = ctx.measureText(box.text).width
+          const labelWidth = Math.max(boxWidth, textWidth + 8)
 
-        // Draw background
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.75)'
-        ctx.fillRect(boxX, boxY - labelHeight, labelWidth, labelHeight)
+          // Draw background
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.75)'
+          ctx.fillRect(boxX, boxY - labelHeight, labelWidth, labelHeight)
 
-        // Draw centered text
-        ctx.fillStyle = '#ffffff'
-        ctx.textBaseline = 'middle'
-        ctx.textAlign = 'center'
-        ctx.fillText(box.text, boxX + labelWidth / 2, boxY - labelHeight / 2)
+          // Draw centered text
+          ctx.fillStyle = '#ffffff'
+          ctx.textBaseline = 'middle'
+          ctx.textAlign = 'center'
+          ctx.fillText(box.text, boxX + labelWidth / 2, boxY - labelHeight / 2)
 
-        // Reset to defaults
-        ctx.textBaseline = 'alphabetic'
-        ctx.textAlign = 'left'
-      }
-    })
+          // Reset to defaults
+          ctx.textBaseline = 'alphabetic'
+          ctx.textAlign = 'left'
+        }
+      })
 
       // Draw crop bounds overlay (yellow dashed)
-      const cropLeft = (currentFrameBoxes.cropBounds.left / currentFrameBoxes.frameWidth) * canvas.width
-      const cropTop = (currentFrameBoxes.cropBounds.top / currentFrameBoxes.frameHeight) * canvas.height
-      const cropRight = (currentFrameBoxes.cropBounds.right / currentFrameBoxes.frameWidth) * canvas.width
-      const cropBottom = (currentFrameBoxes.cropBounds.bottom / currentFrameBoxes.frameHeight) * canvas.height
+      const cropLeft =
+        (currentFrameBoxes.cropBounds.left / currentFrameBoxes.frameWidth) * canvas.width
+      const cropTop =
+        (currentFrameBoxes.cropBounds.top / currentFrameBoxes.frameHeight) * canvas.height
+      const cropRight =
+        (currentFrameBoxes.cropBounds.right / currentFrameBoxes.frameWidth) * canvas.width
+      const cropBottom =
+        (currentFrameBoxes.cropBounds.bottom / currentFrameBoxes.frameHeight) * canvas.height
 
       ctx.strokeStyle = '#facc15' // Yellow
       ctx.lineWidth = 2
@@ -491,7 +521,16 @@ export default function ReviewLabels() {
 
       ctx.setLineDash([])
     }
-  }, [canvasSize, viewMode, currentFrameBoxes, hoveredBoxIndex, isSelecting, selectionStart, selectionCurrent, selectionLabel])
+  }, [
+    canvasSize,
+    viewMode,
+    currentFrameBoxes,
+    hoveredBoxIndex,
+    isSelecting,
+    selectionStart,
+    selectionCurrent,
+    selectionLabel,
+  ])
 
   // Call drawCanvas in an effect when dependencies change
   useEffect(() => {
@@ -515,7 +554,14 @@ export default function ReviewLabels() {
 
   // Complete selection and annotate boxes
   const completeSelection = useCallback(async () => {
-    if (!isSelecting || !selectionStart || !selectionCurrent || !selectionLabel || !currentFrameBoxes) return
+    if (
+      !isSelecting ||
+      !selectionStart ||
+      !selectionCurrent ||
+      !selectionLabel ||
+      !currentFrameBoxes
+    )
+      return
 
     // Calculate selection rectangle in canvas coordinates
     const selRectCanvas = {
@@ -531,7 +577,7 @@ export default function ReviewLabels() {
 
       // Find all boxes fully enclosed by selection rectangle
       const enclosedBoxes: number[] = []
-      currentFrameBoxes.boxes.forEach((box) => {
+      currentFrameBoxes.boxes.forEach(box => {
         const boxX = box.originalBounds.left * scale
         const boxY = box.originalBounds.top * scale
         const boxRight = box.originalBounds.right * scale
@@ -566,7 +612,9 @@ export default function ReviewLabels() {
           if (selectedFrameIndex !== null) {
             frameBoxesCache.current.delete(selectedFrameIndex)
           }
-          const response = await fetch(`/api/annotations/${encodeURIComponent(videoId)}/frames/${selectedFrameIndex}/boxes`)
+          const response = await fetch(
+            `/api/annotations/${encodeURIComponent(videoId)}/frames/${selectedFrameIndex}/boxes`
+          )
           const data = await response.json()
           setCurrentFrameBoxes(data)
 
@@ -588,90 +636,50 @@ export default function ReviewLabels() {
     setSelectionStart(null)
     setSelectionCurrent(null)
     setSelectionLabel(null)
-  }, [isSelecting, selectionStart, selectionCurrent, selectionLabel, currentFrameBoxes, canvasSize, videoId, selectedFrameIndex, viewMode])
+  }, [
+    isSelecting,
+    selectionStart,
+    selectionCurrent,
+    selectionLabel,
+    currentFrameBoxes,
+    canvasSize,
+    videoId,
+    selectedFrameIndex,
+    viewMode,
+  ])
 
   // Handle canvas click - individual box annotation, or start/complete selection
-  const handleCanvasClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!canvasRef.current || canvasSize.width === 0) return
+  const handleCanvasClick = useCallback(
+    (e: React.MouseEvent<HTMLCanvasElement>) => {
+      if (!canvasRef.current || canvasSize.width === 0) return
 
-    // Only handle left and right button
-    if (e.button !== 0 && e.button !== 2) return
+      // Only handle left and right button
+      if (e.button !== 0 && e.button !== 2) return
 
-    // Prevent context menu on right click
-    if (e.button === 2) {
-      e.preventDefault()
-      e.stopPropagation()
-    }
-
-    const canvas = canvasRef.current
-    const rect = canvas.getBoundingClientRect()
-    const x = e.clientX - rect.left
-    const y = e.clientY - rect.top
-
-    if (isSelecting) {
-      // Already selecting - second click completes selection
-      void completeSelection()
-      return
-    }
-
-    // Frame mode only
-    if (!currentFrameBoxes) return
-
-    // Check if clicking on a box
-    const scale = canvasSize.width / currentFrameBoxes.frameWidth
-    let clickedBoxIndex: number | null = null
-
-    for (let i = currentFrameBoxes.boxes.length - 1; i >= 0; i--) {
-      const box = currentFrameBoxes.boxes[i]
-      if (!box) continue
-
-      const boxX = box.originalBounds.left * scale
-      const boxY = box.originalBounds.top * scale
-      const boxWidth = (box.originalBounds.right - box.originalBounds.left) * scale
-      const boxHeight = (box.originalBounds.bottom - box.originalBounds.top) * scale
-
-      if (x >= boxX && x <= boxX + boxWidth && y >= boxY && y <= boxY + boxHeight) {
-        clickedBoxIndex = box.boxIndex
-        break
+      // Prevent context menu on right click
+      if (e.button === 2) {
+        e.preventDefault()
+        e.stopPropagation()
       }
-    }
 
-    if (clickedBoxIndex !== null) {
-      // Clicked on a box - annotate it individually
-      const label = e.button === 0 ? 'in' : 'out'
-      handleBoxClick(clickedBoxIndex, label)
-    } else {
-      // Clicked on empty space - start rectangle selection
-      const label = e.button === 0 ? 'in' : 'out'
-      setIsSelecting(true)
-      setSelectionStart({ x, y })
-      setSelectionCurrent({ x, y })
-      setSelectionLabel(label)
-    }
-  }, [currentFrameBoxes, canvasSize, isSelecting, completeSelection, handleBoxClick, viewMode])
+      const canvas = canvasRef.current
+      const rect = canvas.getBoundingClientRect()
+      const x = e.clientX - rect.left
+      const y = e.clientY - rect.top
 
-  // Handle mouse move - update selection rectangle or detect hover
-  const handleCanvasMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!canvasRef.current || canvasSize.width === 0) return
+      if (isSelecting) {
+        // Already selecting - second click completes selection
+        void completeSelection()
+        return
+      }
 
-    const canvas = canvasRef.current
-    const rect = canvas.getBoundingClientRect()
-    const x = e.clientX - rect.left
-    const y = e.clientY - rect.top
+      // Frame mode only
+      if (!currentFrameBoxes) return
 
-    // Update selection current position if selecting
-    if (isSelecting) {
-      setSelectionCurrent({ x, y })
-      return
-    }
-
-    // Box hover detection only in frame mode
-    if (viewMode === 'frame' && currentFrameBoxes) {
-      // Calculate scale factor
+      // Check if clicking on a box
       const scale = canvasSize.width / currentFrameBoxes.frameWidth
+      let clickedBoxIndex: number | null = null
 
-      // Find hovered box using original bounds
-      let foundIndex: number | null = null
       for (let i = currentFrameBoxes.boxes.length - 1; i >= 0; i--) {
         const box = currentFrameBoxes.boxes[i]
         if (!box) continue
@@ -682,14 +690,70 @@ export default function ReviewLabels() {
         const boxHeight = (box.originalBounds.bottom - box.originalBounds.top) * scale
 
         if (x >= boxX && x <= boxX + boxWidth && y >= boxY && y <= boxY + boxHeight) {
-          foundIndex = i
+          clickedBoxIndex = box.boxIndex
           break
         }
       }
 
-      setHoveredBoxIndex(foundIndex)
-    }
-  }, [currentFrameBoxes, canvasSize, isSelecting, viewMode])
+      if (clickedBoxIndex !== null) {
+        // Clicked on a box - annotate it individually
+        const label = e.button === 0 ? 'in' : 'out'
+        handleBoxClick(clickedBoxIndex, label)
+      } else {
+        // Clicked on empty space - start rectangle selection
+        const label = e.button === 0 ? 'in' : 'out'
+        setIsSelecting(true)
+        setSelectionStart({ x, y })
+        setSelectionCurrent({ x, y })
+        setSelectionLabel(label)
+      }
+    },
+    [currentFrameBoxes, canvasSize, isSelecting, completeSelection, handleBoxClick, viewMode]
+  )
+
+  // Handle mouse move - update selection rectangle or detect hover
+  const handleCanvasMouseMove = useCallback(
+    (e: React.MouseEvent<HTMLCanvasElement>) => {
+      if (!canvasRef.current || canvasSize.width === 0) return
+
+      const canvas = canvasRef.current
+      const rect = canvas.getBoundingClientRect()
+      const x = e.clientX - rect.left
+      const y = e.clientY - rect.top
+
+      // Update selection current position if selecting
+      if (isSelecting) {
+        setSelectionCurrent({ x, y })
+        return
+      }
+
+      // Box hover detection only in frame mode
+      if (viewMode === 'frame' && currentFrameBoxes) {
+        // Calculate scale factor
+        const scale = canvasSize.width / currentFrameBoxes.frameWidth
+
+        // Find hovered box using original bounds
+        let foundIndex: number | null = null
+        for (let i = currentFrameBoxes.boxes.length - 1; i >= 0; i--) {
+          const box = currentFrameBoxes.boxes[i]
+          if (!box) continue
+
+          const boxX = box.originalBounds.left * scale
+          const boxY = box.originalBounds.top * scale
+          const boxWidth = (box.originalBounds.right - box.originalBounds.left) * scale
+          const boxHeight = (box.originalBounds.bottom - box.originalBounds.top) * scale
+
+          if (x >= boxX && x <= boxX + boxWidth && y >= boxY && y <= boxY + boxHeight) {
+            foundIndex = i
+            break
+          }
+        }
+
+        setHoveredBoxIndex(foundIndex)
+      }
+    },
+    [currentFrameBoxes, canvasSize, isSelecting, viewMode]
+  )
 
   const handleCanvasContextMenu = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     e.preventDefault()
@@ -806,7 +870,16 @@ export default function ReviewLabels() {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [viewMode, selectedFrameIndex, frames, hoveredBoxIndex, currentFrameBoxes, isSelecting, handleThumbnailClick, handleBoxClick])
+  }, [
+    viewMode,
+    selectedFrameIndex,
+    frames,
+    hoveredBoxIndex,
+    currentFrameBoxes,
+    isSelecting,
+    handleThumbnailClick,
+    handleBoxClick,
+  ])
 
   // Show error prominently, but don't block UI for loading
   if (error) {
@@ -819,9 +892,25 @@ export default function ReviewLabels() {
             {isProcessing ? (
               <>
                 <div className="mb-4 flex items-center justify-center">
-                  <svg className="h-12 w-12 animate-spin text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  <svg
+                    className="h-12 w-12 animate-spin text-blue-500"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    ></circle>
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    ></path>
                   </svg>
                 </div>
                 <h2 className="mb-2 text-center text-xl font-bold text-gray-900 dark:text-white">
@@ -847,16 +936,24 @@ export default function ReviewLabels() {
             ) : (
               <>
                 <div className="mb-4 text-center text-red-500">
-                  <svg className="mx-auto h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  <svg
+                    className="mx-auto h-12 w-12"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                    />
                   </svg>
                 </div>
                 <h2 className="mb-2 text-center text-xl font-bold text-gray-900 dark:text-white">
                   Error Loading Mislabels
                 </h2>
-                <p className="mb-6 text-center text-gray-600 dark:text-gray-400">
-                  {error}
-                </p>
+                <p className="mb-6 text-center text-gray-600 dark:text-gray-400">{error}</p>
                 <button
                   onClick={() => {
                     setError(null)
@@ -887,9 +984,7 @@ export default function ReviewLabels() {
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
               Review Potential Mislabels
             </h1>
-            <div className="text-sm text-gray-600 dark:text-gray-400">
-              Video: {videoId}
-            </div>
+            <div className="text-sm text-gray-600 dark:text-gray-400">Video: {videoId}</div>
           </div>
         </div>
 
@@ -918,9 +1013,7 @@ export default function ReviewLabels() {
                 </div>
               ) : (
                 <div className="flex min-h-[400px] items-center justify-center text-gray-500 dark:text-gray-400">
-                  {loadingFrame
-                    ? 'Loading frame...'
-                    : 'Select a frame to review'}
+                  {loadingFrame ? 'Loading frame...' : 'Select a frame to review'}
                 </div>
               )}
             </div>
@@ -940,7 +1033,7 @@ export default function ReviewLabels() {
               )}
 
               {/* Frame thumbnails */}
-              {frames.map((frame) => (
+              {frames.map(frame => (
                 <button
                   key={frame.frameIndex}
                   onClick={() => handleThumbnailClick(frame.frameIndex)}
@@ -982,9 +1075,7 @@ export default function ReviewLabels() {
               </button>
             </div>
 
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-              Mislabel Review
-            </h2>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Mislabel Review</h2>
 
             {/* Instructions */}
             <div className="rounded-md bg-blue-50 p-3 text-sm text-blue-900 dark:bg-blue-950 dark:text-blue-100">
@@ -1014,17 +1105,11 @@ export default function ReviewLabels() {
                 <div className="mt-1 text-xs text-gray-600 dark:text-gray-400">
                   {currentFrameBoxes.boxes.length} total boxes
                   <br />
-                  {
-                    currentFrameBoxes.boxes.filter((b) => b.userLabel === 'in')
-                      .length
-                  }{' '}
-                  annotated as caption
+                  {currentFrameBoxes.boxes.filter(b => b.userLabel === 'in').length} annotated as
+                  caption
                   <br />
-                  {
-                    currentFrameBoxes.boxes.filter((b) => b.userLabel === 'out')
-                      .length
-                  }{' '}
-                  annotated as noise
+                  {currentFrameBoxes.boxes.filter(b => b.userLabel === 'out').length} annotated as
+                  noise
                 </div>
               </div>
             )}
@@ -1043,9 +1128,7 @@ export default function ReviewLabels() {
                       backgroundColor: 'rgba(20,184,166,0.25)',
                     }}
                   />
-                  <span className="text-gray-700 dark:text-gray-300">
-                    Annotated: Caption
-                  </span>
+                  <span className="text-gray-700 dark:text-gray-300">Annotated: Caption</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div
@@ -1055,9 +1138,7 @@ export default function ReviewLabels() {
                       backgroundColor: 'rgba(220,38,38,0.25)',
                     }}
                   />
-                  <span className="text-gray-700 dark:text-gray-300">
-                    Annotated: Noise
-                  </span>
+                  <span className="text-gray-700 dark:text-gray-300">Annotated: Noise</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div
@@ -1067,9 +1148,7 @@ export default function ReviewLabels() {
                       backgroundColor: 'rgba(59,130,246,0.15)',
                     }}
                   />
-                  <span className="text-gray-700 dark:text-gray-300">
-                    Predicted: Caption
-                  </span>
+                  <span className="text-gray-700 dark:text-gray-300">Predicted: Caption</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div
@@ -1079,9 +1158,7 @@ export default function ReviewLabels() {
                       backgroundColor: 'rgba(249,115,22,0.15)',
                     }}
                   />
-                  <span className="text-gray-700 dark:text-gray-300">
-                    Predicted: Noise
-                  </span>
+                  <span className="text-gray-700 dark:text-gray-300">Predicted: Noise</span>
                 </div>
               </div>
             </div>

@@ -1,9 +1,12 @@
-import { type LoaderFunctionArgs, type ActionFunctionArgs } from 'react-router'
-import { getDbPath } from '~/utils/video-paths'
-import Database from 'better-sqlite3'
 import { existsSync } from 'fs'
+
+import Database from 'better-sqlite3'
+import { type LoaderFunctionArgs, type ActionFunctionArgs } from 'react-router'
+
 import { getOrGenerateCombinedImage } from '../utils/image-processing'
 import { runOCROnCombinedImage } from '../utils/ocr-wrapper'
+
+import { getDbPath } from '~/utils/video-paths'
 
 interface Annotation {
   id: number
@@ -43,7 +46,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
   if (!encodedVideoId || !id) {
     return new Response(JSON.stringify({ error: 'Missing videoId or id' }), {
       status: 400,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
     })
   }
 
@@ -56,19 +59,24 @@ export async function loader({ params }: LoaderFunctionArgs) {
     if (db instanceof Response) return db
 
     // Get annotation
-    const annotation = db.prepare('SELECT * FROM captions WHERE id = ?').get(annotationId) as Annotation | undefined
+    const annotation = db.prepare('SELECT * FROM captions WHERE id = ?').get(annotationId) as
+      | Annotation
+      | undefined
 
     if (!annotation) {
       db.close()
       return new Response(JSON.stringify({ error: 'Annotation not found' }), {
         status: 404,
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
       })
     }
 
     // Check if combined OCR is already cached in database
     let combinedOCRText = annotation.text_ocr_combined
-    console.log('  Current text_ocr_combined:', combinedOCRText ? `"${combinedOCRText.substring(0, 50)}..."` : 'null')
+    console.log(
+      '  Current text_ocr_combined:',
+      combinedOCRText ? `"${combinedOCRText.substring(0, 50)}..."` : 'null'
+    )
 
     if (!combinedOCRText) {
       console.log('  Generating combined image and running OCR...')
@@ -84,7 +92,10 @@ export async function loader({ params }: LoaderFunctionArgs) {
       // Run OCR on combined image
       console.log('  Calling runOCROnCombinedImage with path:', combinedImagePath)
       console.log('  runOCROnCombinedImage function type:', typeof runOCROnCombinedImage)
-      console.log('  runOCROnCombinedImage function:', runOCROnCombinedImage.toString().substring(0, 200))
+      console.log(
+        '  runOCROnCombinedImage function:',
+        runOCROnCombinedImage.toString().substring(0, 200)
+      )
 
       let ocrResult
       try {
@@ -110,15 +121,22 @@ export async function loader({ params }: LoaderFunctionArgs) {
       } else {
         combinedOCRText = ocrResult.text
       }
-      console.log('  OCR extracted text:', combinedOCRText ? `"${combinedOCRText.substring(0, 50)}..." (length: ${combinedOCRText.length})` : 'empty')
+      console.log(
+        '  OCR extracted text:',
+        combinedOCRText
+          ? `"${combinedOCRText.substring(0, 50)}..." (length: ${combinedOCRText.length})`
+          : 'empty'
+      )
 
       // Cache OCR result in database
       console.log('  Saving to database...')
-      db.prepare(`
+      db.prepare(
+        `
         UPDATE captions
         SET text_ocr_combined = ?
         WHERE id = ?
-      `).run(combinedOCRText, annotationId)
+      `
+      ).run(combinedOCRText, annotationId)
       console.log('  Database updated successfully')
     } else {
       console.log('  Using cached OCR text from database')
@@ -128,23 +146,23 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
     // TODO: Trigger per-frame OCR in background (Phase 6 enhancement)
 
-    return new Response(JSON.stringify({
-      annotation: {
-        ...annotation,
-        text_ocr_combined: combinedOCRText
-      },
-      combinedImageUrl: `/api/images/${encodeURIComponent(videoId)}/text_images/annotation_${annotationId}.jpg`
-    }), {
-      headers: { 'Content-Type': 'application/json' }
-    })
-  } catch (error) {
     return new Response(
-      JSON.stringify({ error: (error as Error).message }),
+      JSON.stringify({
+        annotation: {
+          ...annotation,
+          text_ocr_combined: combinedOCRText,
+        },
+        combinedImageUrl: `/api/images/${encodeURIComponent(videoId)}/text_images/annotation_${annotationId}.jpg`,
+      }),
       {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
       }
     )
+  } catch (error) {
+    return new Response(JSON.stringify({ error: (error as Error).message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    })
   }
 }
 
@@ -155,7 +173,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
   if (!encodedVideoId || !id) {
     return new Response(JSON.stringify({ error: 'Missing videoId or id' }), {
       status: 400,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
     })
   }
 
@@ -170,19 +188,16 @@ export async function action({ params, request }: ActionFunctionArgs) {
     // Update text annotation fields
     const { text, text_status, text_notes } = body
 
-    db.prepare(`
+    db.prepare(
+      `
       UPDATE captions
       SET text = ?,
           text_status = ?,
           text_notes = ?,
           text_pending = 0
       WHERE id = ?
-    `).run(
-      text !== undefined ? text : null,
-      text_status || null,
-      text_notes || null,
-      annotationId
-    )
+    `
+    ).run(text !== undefined ? text : null, text_status || null, text_notes || null, annotationId)
 
     // Get updated annotation
     const annotation = db.prepare('SELECT * FROM captions WHERE id = ?').get(annotationId)
@@ -190,15 +205,12 @@ export async function action({ params, request }: ActionFunctionArgs) {
     db.close()
 
     return new Response(JSON.stringify({ annotation }), {
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
     })
   } catch (error) {
-    return new Response(
-      JSON.stringify({ error: (error as Error).message }),
-      {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      }
-    )
+    return new Response(JSON.stringify({ error: (error as Error).message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    })
   }
 }

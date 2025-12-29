@@ -1,10 +1,11 @@
 import { Link, useLoaderData } from 'react-router'
+
 import { AppLayout } from '~/components/AppLayout'
 
 // Loader function to expose default video ID from environment
 export async function loader() {
   return {
-    defaultVideoId: process.env['DEFAULT_VIDEO_ID'] || ''
+    defaultVideoId: process.env['DEFAULT_VIDEO_ID'] || '',
   }
 }
 
@@ -27,20 +28,32 @@ export default function Home() {
         <div className="mb-10 grid grid-cols-1 gap-6 sm:grid-cols-3">
           <div className="overflow-hidden rounded-lg bg-white shadow dark:bg-gray-800">
             <div className="px-4 py-5 sm:p-6">
-              <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Annotations</dt>
-              <dd className="mt-1 text-3xl font-semibold tracking-tight text-gray-900 dark:text-white">0</dd>
+              <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                Total Annotations
+              </dt>
+              <dd className="mt-1 text-3xl font-semibold tracking-tight text-gray-900 dark:text-white">
+                0
+              </dd>
             </div>
           </div>
           <div className="overflow-hidden rounded-lg bg-white shadow dark:bg-gray-800">
             <div className="px-4 py-5 sm:p-6">
-              <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Pending Review</dt>
-              <dd className="mt-1 text-3xl font-semibold tracking-tight text-gray-900 dark:text-white">0</dd>
+              <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                Pending Review
+              </dt>
+              <dd className="mt-1 text-3xl font-semibold tracking-tight text-gray-900 dark:text-white">
+                0
+              </dd>
             </div>
           </div>
           <div className="overflow-hidden rounded-lg bg-white shadow dark:bg-gray-800">
             <div className="px-4 py-5 sm:p-6">
-              <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Completion Rate</dt>
-              <dd className="mt-1 text-3xl font-semibold tracking-tight text-gray-900 dark:text-white">0%</dd>
+              <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                Completion Rate
+              </dt>
+              <dd className="mt-1 text-3xl font-semibold tracking-tight text-gray-900 dark:text-white">
+                0%
+              </dd>
             </div>
           </div>
         </div>
@@ -58,13 +71,21 @@ export default function Home() {
               </p>
               <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row sm:gap-x-6">
                 <Link
-                  to={defaultVideoId ? `/annotate/boundaries?videoId=${encodeURIComponent(defaultVideoId)}` : '/annotate/boundaries'}
+                  to={
+                    defaultVideoId
+                      ? `/annotate/boundaries?videoId=${encodeURIComponent(defaultVideoId)}`
+                      : '/annotate/boundaries'
+                  }
                   className="rounded-md bg-white px-6 py-3 text-sm font-semibold text-teal-600 shadow-sm hover:bg-teal-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
                 >
                   Mark Caption Boundaries
                 </Link>
                 <Link
-                  to={defaultVideoId ? `/annotate/text?videoId=${encodeURIComponent(defaultVideoId)}` : '/annotate/text'}
+                  to={
+                    defaultVideoId
+                      ? `/annotate/text?videoId=${encodeURIComponent(defaultVideoId)}`
+                      : '/annotate/text'
+                  }
                   className="rounded-md bg-white px-6 py-3 text-sm font-semibold text-teal-600 shadow-sm hover:bg-teal-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
                 >
                   Annotate Caption Text
@@ -107,7 +128,8 @@ export default function Home() {
                 Frame-by-Frame Annotation
               </h3>
               <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                Navigate video frames with precision controls. Mark exact start and end points for each caption.
+                Navigate video frames with precision controls. Mark exact start and end points for
+                each caption.
               </p>
             </div>
 
@@ -132,7 +154,8 @@ export default function Home() {
                 Quality Control
               </h3>
               <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                Mark caption status, add notes, and ensure high-quality annotations with structured review workflow.
+                Mark caption status, add notes, and ensure high-quality annotations with structured
+                review workflow.
               </p>
             </div>
 
@@ -157,7 +180,8 @@ export default function Home() {
                 Keyboard Shortcuts
               </h3>
               <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                Work efficiently with comprehensive keyboard shortcuts for navigation, marking, and saving.
+                Work efficiently with comprehensive keyboard shortcuts for navigation, marking, and
+                saving.
               </p>
             </div>
 

@@ -5,9 +5,10 @@
  * Allows user to see what text was detected and potentially manually annotate layout.
  */
 
+import Database from 'better-sqlite3'
 import { type LoaderFunctionArgs } from 'react-router'
 import { useLoaderData, useNavigate } from 'react-router'
-import Database from 'better-sqlite3'
+
 import { getDbPath } from '~/utils/video-paths'
 
 interface OcrBox {
@@ -42,21 +43,33 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const db = new Database(dbPath, { readonly: true })
   try {
     // Get video metadata
-    const metadata = db.prepare(`
+    const metadata = db
+      .prepare(
+        `
       SELECT display_path, video_id FROM video_metadata WHERE id = 1
-    `).get() as { display_path: string; video_id: string } | undefined
+    `
+      )
+      .get() as { display_path: string; video_id: string } | undefined
 
     // Get processing status
-    const status = db.prepare(`
+    const status = db
+      .prepare(
+        `
       SELECT error_message, error_details FROM processing_status WHERE id = 1
-    `).get() as { error_message: string; error_details: string } | undefined
+    `
+      )
+      .get() as { error_message: string; error_details: string } | undefined
 
     // Get all OCR boxes grouped by frame
-    const boxes = db.prepare(`
+    const boxes = db
+      .prepare(
+        `
       SELECT frame_index, box_index, text, confidence, x, y, width, height
       FROM full_frame_ocr
       ORDER BY frame_index, box_index
-    `).all() as OcrBox[]
+    `
+      )
+      .all() as OcrBox[]
 
     // Group boxes by frame
     const frameMap = new Map<number, OcrBox[]>()
@@ -78,7 +91,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       totalFrames: frames.length,
       frames,
       errorMessage: status?.error_message,
-      errorDetails: status?.error_details
+      errorDetails: status?.error_details,
     }
   } finally {
     db.close()
@@ -100,9 +113,7 @@ export default function LayoutReview() {
           >
             ← Back to Videos
           </button>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Layout Review
-          </h1>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Layout Review</h1>
           <p className="text-gray-600">{data.displayPath}</p>
         </div>
 
@@ -111,7 +122,11 @@ export default function LayoutReview() {
           <div className="flex">
             <div className="flex-shrink-0">
               <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                <path
+                  fillRule="evenodd"
+                  d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                  clipRule="evenodd"
+                />
               </svg>
             </div>
             <div className="ml-3">
@@ -120,12 +135,11 @@ export default function LayoutReview() {
               </h3>
               <div className="mt-2 text-sm text-yellow-700">
                 <p>
-                  OCR detected <strong>{data.totalBoxes} text boxes</strong> across <strong>{data.totalFrames} frames</strong>,
-                  but they don't form a consistent subtitle region pattern.
+                  OCR detected <strong>{data.totalBoxes} text boxes</strong> across{' '}
+                  <strong>{data.totalFrames} frames</strong>, but they don't form a consistent
+                  subtitle region pattern.
                 </p>
-                <p className="mt-2">
-                  This usually means:
-                </p>
+                <p className="mt-2">This usually means:</p>
                 <ul className="list-disc list-inside mt-1 space-y-1">
                   <li>Video has minimal or no burned-in subtitles</li>
                   <li>Text appears sporadically (credits, signs, etc.)</li>
@@ -158,17 +172,15 @@ export default function LayoutReview() {
             <p className="text-gray-500 italic">No text detected in any frames</p>
           ) : (
             <div className="space-y-6">
-              {data.frames.map((frame) => (
+              {data.frames.map(frame => (
                 <div key={frame.frameIndex} className="border-l-2 border-gray-200 pl-4">
                   <h3 className="text-sm font-medium text-gray-700 mb-2">
                     Frame {frame.frameIndex} ({(frame.frameIndex / 10).toFixed(1)}s)
                   </h3>
                   <div className="space-y-2">
-                    {frame.boxes.map((box) => (
+                    {frame.boxes.map(box => (
                       <div key={box.boxIndex} className="flex items-start space-x-3 text-sm">
-                        <span className="font-mono bg-gray-100 px-2 py-1 rounded">
-                          {box.text}
-                        </span>
+                        <span className="font-mono bg-gray-100 px-2 py-1 rounded">{box.text}</span>
                         <span className="text-gray-500">
                           conf: {(box.confidence * 100).toFixed(0)}%
                         </span>

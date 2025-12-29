@@ -4,6 +4,7 @@
  */
 
 import Database from 'better-sqlite3'
+
 import { getAllVideos, getDbPath } from '~/utils/video-paths'
 
 interface ActiveUpload {
@@ -27,18 +28,24 @@ export async function loader() {
       try {
         const db = new Database(dbPath, { readonly: true })
         try {
-          const status = db.prepare(`
+          const status = db
+            .prepare(
+              `
             SELECT status, upload_progress, upload_started_at
             FROM processing_status
             WHERE id = 1 AND status = 'uploading'
-          `).get() as { status: string; upload_progress: number; upload_started_at: string } | undefined
+          `
+            )
+            .get() as
+            | { status: string; upload_progress: number; upload_started_at: string }
+            | undefined
 
           if (status) {
             activeUploads.push({
-              videoId: video.displayPath,  // Return display_path to user
+              videoId: video.displayPath, // Return display_path to user
               originalFilename: video.originalFilename,
               uploadProgress: status.upload_progress || 0,
-              uploadStartedAt: status.upload_started_at
+              uploadStartedAt: status.upload_started_at,
             })
           }
         } finally {
@@ -51,16 +58,13 @@ export async function loader() {
     }
 
     return new Response(JSON.stringify({ uploads: activeUploads }), {
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
     })
   } catch (error) {
     console.error('[ActiveUploads] Error:', error)
-    return new Response(
-      JSON.stringify({ error: (error as Error).message }),
-      {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      }
-    )
+    return new Response(JSON.stringify({ error: (error as Error).message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    })
   }
 }

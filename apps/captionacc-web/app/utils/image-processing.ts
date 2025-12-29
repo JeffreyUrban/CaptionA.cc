@@ -5,10 +5,11 @@
  * for optimal OCR text extraction.
  */
 
-import sharp from 'sharp'
-import { resolve } from 'path'
 import { existsSync, mkdirSync, unlinkSync } from 'fs'
+import { resolve } from 'path'
+
 import Database from 'better-sqlite3'
+import sharp from 'sharp'
 
 // Image quality constant
 const COMBINED_IMAGE_QUALITY = 95
@@ -84,11 +85,7 @@ export async function generateCombinedImage(
   }
 
   // Convert all frames to raw pixel data
-  const pixelArrays: Buffer[] = await Promise.all(
-    frameBuffers.map(frame =>
-      frame.raw().toBuffer()
-    )
-  )
+  const pixelArrays: Buffer[] = await Promise.all(frameBuffers.map(frame => frame.raw().toBuffer()))
 
   // Calculate median for each pixel position
   const medianBuffer = Buffer.alloc(width * height * channels)
@@ -136,8 +133,8 @@ export async function generateCombinedImage(
     raw: {
       width,
       height,
-      channels
-    }
+      channels,
+    },
   })
     .jpeg({ quality: COMBINED_IMAGE_QUALITY })
     .toFile(outputPath)
@@ -153,10 +150,7 @@ export async function generateCombinedImage(
  * @param annotationId - Annotation ID
  * @returns Path to combined image if it exists, null otherwise
  */
-export function getCombinedImagePath(
-  videoPath: string,
-  annotationId: number
-): string | null {
+export function getCombinedImagePath(videoPath: string, annotationId: number): string | null {
   const imagePath = resolve(
     process.cwd(),
     '..',
@@ -262,11 +256,7 @@ export async function getOrGenerateCombinedImage(
   }
 
   // Convert all frames to raw pixel data
-  const pixelArrays: Buffer[] = await Promise.all(
-    frameBuffers.map(frame =>
-      frame.raw().toBuffer()
-    )
-  )
+  const pixelArrays: Buffer[] = await Promise.all(frameBuffers.map(frame => frame.raw().toBuffer()))
 
   // Calculate median for each pixel position
   const medianBuffer = Buffer.alloc(width * height * channels)
@@ -293,8 +283,8 @@ export async function getOrGenerateCombinedImage(
     raw: {
       width,
       height,
-      channels
-    }
+      channels,
+    },
   })
     .jpeg({ quality: COMBINED_IMAGE_QUALITY })
     .toFile(outputPath)
@@ -309,10 +299,7 @@ export async function getOrGenerateCombinedImage(
  * @param videoPath - Relative path to video
  * @param annotationId - Annotation ID
  */
-export function deleteCombinedImage(
-  videoPath: string,
-  annotationId: number
-): void {
+export function deleteCombinedImage(videoPath: string, annotationId: number): void {
   const imagePath = resolve(
     process.cwd(),
     '..',

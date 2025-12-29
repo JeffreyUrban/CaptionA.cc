@@ -6,6 +6,7 @@
 
 import { readFileSync } from 'fs'
 import { resolve } from 'path'
+
 import Database from 'better-sqlite3'
 
 /**
@@ -31,7 +32,11 @@ export function migrateCropBounds(dbPath: string): boolean {
     console.log(`[Migration] Applying crop_bounds migration to ${dbPath}`)
 
     // Read migration SQL
-    const migrationPath = resolve(__dirname, 'migrations', '001_add_crop_bounds_to_cropped_frames.sql')
+    const migrationPath = resolve(
+      __dirname,
+      'migrations',
+      '001_add_crop_bounds_to_cropped_frames.sql'
+    )
     const migrationSQL = readFileSync(migrationPath, 'utf-8')
 
     // Split by semicolon and execute each statement

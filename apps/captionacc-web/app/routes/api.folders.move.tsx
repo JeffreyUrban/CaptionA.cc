@@ -1,11 +1,13 @@
 /**
  * Move a virtual folder by updating display_path in video databases
  */
-import type { ActionFunctionArgs } from 'react-router'
-import { getAllVideos } from '~/utils/video-paths'
-import { resolve } from 'path'
-import Database from 'better-sqlite3'
 import { existsSync } from 'fs'
+import { resolve } from 'path'
+
+import Database from 'better-sqlite3'
+import type { ActionFunctionArgs } from 'react-router'
+
+import { getAllVideos } from '~/utils/video-paths'
 
 export async function action({ request }: ActionFunctionArgs) {
   if (request.method !== 'PATCH') {
@@ -21,14 +23,20 @@ export async function action({ request }: ActionFunctionArgs) {
 
   // targetFolder can be empty string (root folder)
   if (targetFolder === undefined || targetFolder === null) {
-    return Response.json({ error: 'targetFolder is required (use empty string for root)' }, { status: 400 })
+    return Response.json(
+      { error: 'targetFolder is required (use empty string for root)' },
+      { status: 400 }
+    )
   }
 
   // Validate target folder path if not empty
   if (targetFolder) {
     const trimmedTargetFolder = targetFolder.trim()
     if (trimmedTargetFolder.startsWith('/') || trimmedTargetFolder.endsWith('/')) {
-      return Response.json({ error: 'Target folder should not start or end with /' }, { status: 400 })
+      return Response.json(
+        { error: 'Target folder should not start or end with /' },
+        { status: 400 }
+      )
     }
 
     if (!/^[a-zA-Z0-9_\-/\s]+$/.test(trimmedTargetFolder)) {
@@ -45,7 +53,10 @@ export async function action({ request }: ActionFunctionArgs) {
 
   // Prevent moving a folder into itself or its descendants
   if (newPath.startsWith(`${folderPath}/`)) {
-    return Response.json({ error: 'Cannot move a folder into itself or its descendants' }, { status: 400 })
+    return Response.json(
+      { error: 'Cannot move a folder into itself or its descendants' },
+      { status: 400 }
+    )
   }
 
   // Prevent moving a folder to its current location
@@ -55,15 +66,17 @@ export async function action({ request }: ActionFunctionArgs) {
 
   // Find all videos in this folder (display_path starts with folderPath/)
   const allVideos = getAllVideos()
-  const videosToMove = allVideos.filter(v =>
-    v.displayPath.startsWith(`${folderPath}/`) || v.displayPath === folderPath
+  const videosToMove = allVideos.filter(
+    v => v.displayPath.startsWith(`${folderPath}/`) || v.displayPath === folderPath
   )
 
   if (videosToMove.length === 0) {
     return Response.json({ error: 'No videos found in this folder' }, { status: 404 })
   }
 
-  console.log(`[FolderMove] Moving ${videosToMove.length} videos from "${folderPath}" to "${newPath}"`)
+  console.log(
+    `[FolderMove] Moving ${videosToMove.length} videos from "${folderPath}" to "${newPath}"`
+  )
 
   const dataDir = resolve(process.cwd(), '..', '..', 'local', 'data')
   const errors: string[] = []
@@ -93,12 +106,13 @@ export async function action({ request }: ActionFunctionArgs) {
         console.log(`[FolderMove] Updating ${video.displayPath} -> ${newDisplayPath}`)
 
         // Update display_path in database
-        db.prepare(`
+        db.prepare(
+          `
           UPDATE video_metadata
           SET display_path = ?
           WHERE id = 1
-        `).run(newDisplayPath)
-
+        `
+        ).run(newDisplayPath)
       } finally {
         db.close()
       }
@@ -109,16 +123,19 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   if (errors.length > 0) {
-    return Response.json({
-      error: 'Failed to move some videos',
-      details: errors
-    }, { status: 500 })
+    return Response.json(
+      {
+        error: 'Failed to move some videos',
+        details: errors,
+      },
+      { status: 500 }
+    )
   }
 
   return Response.json({
     success: true,
     oldPath: folderPath,
     newPath,
-    videosUpdated: videosToMove.length
+    videosUpdated: videosToMove.length,
   })
 }

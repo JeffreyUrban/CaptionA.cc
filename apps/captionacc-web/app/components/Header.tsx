@@ -1,7 +1,8 @@
 import { Link } from 'react-router'
-import { useTheme } from "~/providers"
+
 import { Container } from '~/components/Container'
-import featureFlags from "~/config/featureFlags"
+import featureFlags from '~/config/featureFlags'
+import { useTheme } from '~/providers'
 
 function ThemeToggle() {
   const { theme, toggleTheme } = useTheme()

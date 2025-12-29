@@ -1,10 +1,11 @@
 /**
  * Rename a folder in the video library
  */
-import type { ActionFunctionArgs } from 'react-router'
-import { resolve } from 'path'
-import { rename, access, readdir } from 'fs/promises'
 import { constants } from 'fs'
+import { rename, access, readdir } from 'fs/promises'
+import { resolve } from 'path'
+
+import type { ActionFunctionArgs } from 'react-router'
 
 export async function action({ request }: ActionFunctionArgs) {
   if (request.method !== 'PATCH') {
@@ -51,9 +52,12 @@ export async function action({ request }: ActionFunctionArgs) {
   try {
     const entries = await readdir(oldFullPath)
     if (entries.includes('annotations.db')) {
-      return Response.json({
-        error: 'Cannot rename video directory directly. This is a video, not a folder.'
-      }, { status: 400 })
+      return Response.json(
+        {
+          error: 'Cannot rename video directory directly. This is a video, not a folder.',
+        },
+        { status: 400 }
+      )
     }
   } catch (error) {
     console.error('Failed to read directory:', error)

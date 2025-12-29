@@ -11,6 +11,7 @@ Efficiently mark start and end frames for caption and non-caption sequences thro
 ## Key Insight
 
 **Caption transitions are visible when comparing frames:**
+
 - Caption appears in 2 of 3 frames → at beginning or end of sequence
 - Stacking frames vertically with tight spacing reveals character-level differences
 - Wide frames (2/3 window width) maximize readability
@@ -80,12 +81,14 @@ Efficiently mark start and end frames for caption and non-caption sequences thro
 ### Frame Stack
 
 **Vertical alignment:**
+
 - All frames same width (constrained to 2/3 viewport)
 - Tight vertical spacing (1-4px gap)
 - Frames stack in scrollable container
 - Current frame highlighted with ring/border
 
 **Opacity gradient:**
+
 - Current frame: 100% opacity, teal ring
 - ±1 frame: 90% opacity
 - ±2 frame: 70% opacity
@@ -97,24 +100,28 @@ Efficiently mark start and end frames for caption and non-caption sequences thro
 ### Frame Spacing Options
 
 **Linear (Default):**
+
 ```
 Offsets: [-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5]
 Total frames shown: 11
 ```
 
 **Exponential:**
+
 ```
 Offsets: [-8, -4, -2, -1, 0, 1, 2, 4, 8]
 Total frames shown: 9
 ```
 
 **Hybrid:**
+
 ```
 Offsets: [-10, -5, -3, -2, -1, 0, 1, 2, 3, 5, 10]
 Total frames shown: 11
 ```
 
 **Configuration:**
+
 - Dropdown in controls panel
 - Persists per video (localStorage)
 - Updates visible frames immediately
@@ -124,10 +131,12 @@ Total frames shown: 11
 ### Navigation
 
 **Mouse:**
+
 - Scroll wheel: Move through frames (±1 frame per scroll tick)
 - Click frame in stack: Jump to that frame (optional feature)
 
 **Keyboard:**
+
 - `↑/↓` or `←/→`: ±1 frame
 - `Shift + Arrow`: ±10 frames
 - `Ctrl + Arrow`: ±50 frames
@@ -162,6 +171,7 @@ Total frames shown: 11
 8. Save (Enter)
 
 **Visual feedback:**
+
 - Marked start frame: Orange left border
 - Marked end frame: Orange right border
 - Range between marks: Light orange background
@@ -208,10 +218,12 @@ Sequence Type:
 ```
 
 **Meaning:**
+
 - Caption: Frames contain caption text, text will be determined later
 - Non-caption: Frames do not contain caption text
 
 **Data saved:**
+
 - Caption: `annotation_type: 'caption'`, `text: 'NOT_YET_DETERMINED'`
 - Non-caption: `annotation_type: 'non_caption'`, `text: null`
 
@@ -225,6 +237,7 @@ Predicted:
 ```
 
 **Behavior:**
+
 - Show if predictions available for current position
 - Click "View Prediction" to jump to predicted start
 - Confidence range shown (±2 frames means prediction may be off by 2)
@@ -239,18 +252,21 @@ Predicted:
 ## Session History
 
 **Bottom panel:**
+
 ```
 Session History (45 annotations):
 [#45: 140-147 Caption] [#44: 130-138 Non-cap] [#43: 120-128 Caption] ...
 ```
 
 **Features:**
+
 - Shows all annotations from current session
 - Click to jump back and review
 - Highlights current annotation
 - Scrollable horizontally
 
 **Display format:**
+
 ```
 #<id>: <start>-<end> <type>
 ```
@@ -301,7 +317,7 @@ const getOpacity = (frameIndex: number) => {
     4: 0.5,
     5: 0.4,
     8: 0.3,
-    10: 0.2
+    10: 0.2,
   }
   return opacityMap[distance] ?? 0.3
 }
@@ -374,18 +390,21 @@ Response:
 ### Frame Loading Strategy
 
 **Progressive loading:**
+
 1. Load current frame immediately
 2. Load ±1 frames (high priority)
 3. Load remaining visible frames (lower priority)
 4. Preload ±10 frames in background
 
 **Caching:**
+
 - Cache loaded frames in memory
 - Evict frames >50 frames away from current
 
 ### Scroll Performance
 
 **Optimize for smooth scrolling:**
+
 - Virtualize frame list (only render visible frames)
 - Use `transform: translateY()` for scroll (GPU accelerated)
 - Debounce frame index updates (100ms)
@@ -412,12 +431,14 @@ useEffect(() => {
 ## Testing Considerations
 
 **Test with:**
+
 - Short sequences (2-5 frames)
 - Medium sequences (20-30 frames)
 - Long sequences (50+ frames)
 - Very long non-caption sequences (100+ frames)
 
 **Verify:**
+
 - Smooth scrolling through thousands of frames
 - Correct boundary marking
 - Session history persistence

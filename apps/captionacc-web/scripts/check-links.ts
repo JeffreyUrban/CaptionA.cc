@@ -17,7 +17,7 @@ async function checkLinks(options: CheckLinksOptions = { url: SITE_URL }) {
 
   const checker = new LinkChecker()
 
-  checker.on('link', (result) => {
+  checker.on('link', result => {
     const status = result.status || 0
     const state = result.state
 

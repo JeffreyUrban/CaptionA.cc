@@ -1,11 +1,20 @@
+import {
+  Menu,
+  MenuButton,
+  MenuItem,
+  MenuItems,
+  Dialog,
+  DialogPanel,
+  DialogTitle,
+} from '@headlessui/react'
+import { CloudArrowUpIcon } from '@heroicons/react/20/solid'
+import { FolderIcon, DocumentIcon, XMarkIcon, ChevronDownIcon } from '@heroicons/react/24/outline'
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useLoaderData, useSearchParams } from 'react-router'
 import type { LoaderFunctionArgs } from 'react-router'
-import { AppLayout } from '~/components/AppLayout'
-import { FolderIcon, DocumentIcon, XMarkIcon, ChevronDownIcon } from '@heroicons/react/24/outline'
-import { CloudArrowUpIcon } from '@heroicons/react/20/solid'
-import { Menu, MenuButton, MenuItem, MenuItems, Dialog, DialogPanel, DialogTitle } from '@headlessui/react'
 import * as tus from 'tus-js-client'
+
+import { AppLayout } from '~/components/AppLayout'
 
 // Extend File to include webkitRelativePath (non-standard but widely supported)
 interface FileWithPath extends Omit<File, 'webkitRelativePath'> {
@@ -55,10 +64,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url)
   const preselectedFolder = url.searchParams.get('folder')
 
-  return new Response(
-    JSON.stringify({ preselectedFolder }),
-    { headers: { 'Content-Type': 'application/json' } }
-  )
+  return new Response(JSON.stringify({ preselectedFolder }), {
+    headers: { 'Content-Type': 'application/json' },
+  })
 }
 
 interface VideoFilePreview {
@@ -68,14 +76,22 @@ interface VideoFilePreview {
   type: string
   selected: boolean
   uploadProgress: number
-  uploadStatus: 'pending' | 'queued' | 'uploading' | 'complete' | 'error' | 'paused' | 'stalled' | 'retrying'
+  uploadStatus:
+    | 'pending'
+    | 'queued'
+    | 'uploading'
+    | 'complete'
+    | 'error'
+    | 'paused'
+    | 'stalled'
+    | 'retrying'
   uploadId?: string
-  uploadUrl?: string  // TUS upload URL for resumability
+  uploadUrl?: string // TUS upload URL for resumability
   error?: string
   isDuplicate?: boolean
   existingUploadedAt?: string
   retryCount?: number
-  lastActivityAt?: number  // Timestamp for stall detection
+  lastActivityAt?: number // Timestamp for stall detection
 }
 
 const CONCURRENT_UPLOADS = 3
@@ -114,7 +130,10 @@ function formatDuration(seconds: number): string {
  * @param preview - If true, don't modify videos, just check if collapses would happen
  * @returns Number of collapses that were (or would be) performed
  */
-async function collapseSingleVideoFolders(videos: VideoFilePreview[], preview: boolean = false): Promise<number> {
+async function collapseSingleVideoFolders(
+  videos: VideoFilePreview[],
+  preview: boolean = false
+): Promise<number> {
   if (videos.length === 0) return 0
 
   // Fetch existing folders from the server
@@ -169,9 +188,11 @@ async function collapseSingleVideoFolders(videos: VideoFilePreview[], preview: b
           const newPathParts = pathParts.slice(0, -2).concat(filename)
           const newRelativePath = newPathParts.length > 0 ? newPathParts.join('/') : filename
 
-          console.log(`[collapseSingleVideoFolders] Collapsing: ${video.relativePath} -> ${newRelativePath}`)
+          console.log(
+            `[collapseSingleVideoFolders] Collapsing: ${video.relativePath} -> ${newRelativePath}`
+          )
           video.relativePath = newRelativePath
-          changed = true  // Only continue looping if we actually modified paths
+          changed = true // Only continue looping if we actually modified paths
         }
       }
     }
@@ -228,7 +249,9 @@ export default function UploadPage() {
       .then(res => res.json())
       .then(async data => {
         if (data.uploads && data.uploads.length > 0) {
-          console.log(`[Upload] Found ${data.uploads.length} incomplete upload(s) from previous session - auto-clearing`)
+          console.log(
+            `[Upload] Found ${data.uploads.length} incomplete upload(s) from previous session - auto-clearing`
+          )
 
           // Store the list before clearing
           setIncompleteUploads(data.uploads)
@@ -245,86 +268,96 @@ export default function UploadPage() {
       })
   }, [])
 
-  const processFiles = useCallback(async (fileList: FileList | null) => {
-    if (!fileList || fileList.length === 0) return
+  const processFiles = useCallback(
+    async (fileList: FileList | null) => {
+      if (!fileList || fileList.length === 0) return
 
-    // Prevent starting new upload while one is in progress
-    if (uploading) {
-      console.log('[processFiles] Upload already in progress, ignoring new files')
-      alert('An upload is already in progress. Please wait for it to complete before starting a new upload.')
-      return
-    }
-
-    console.log(`[processFiles] Processing ${fileList.length} files`)
-    const videos: VideoFilePreview[] = []
-    const skipped: File[] = []
-
-    for (const file of Array.from(fileList)) {
-      if (file.type.startsWith('video/')) {
-        const relativePath = (file as FileWithPath).webkitRelativePath || file.name
-        console.log(`[processFiles] Found video: ${relativePath} (${file.type})`)
-        videos.push({
-          file,
-          relativePath,
-          size: file.size,
-          type: file.type,
-          selected: true,
-          uploadProgress: 0,
-          uploadStatus: 'queued',
-        })
-      } else {
-        skipped.push(file)
+      // Prevent starting new upload while one is in progress
+      if (uploading) {
+        console.log('[processFiles] Upload already in progress, ignoring new files')
+        alert(
+          'An upload is already in progress. Please wait for it to complete before starting a new upload.'
+        )
+        return
       }
-    }
 
-    console.log(`[processFiles] Result: ${videos.length} videos, ${skipped.length} skipped`)
+      console.log(`[processFiles] Processing ${fileList.length} files`)
+      const videos: VideoFilePreview[] = []
+      const skipped: File[] = []
 
-    // Check if collapses are available (preview mode)
-    const collapseCount = await collapseSingleVideoFolders(videos, true)
-    setCollapsesAvailable(collapseCount > 0)
-    console.log(`[processFiles] ${collapseCount} collapse(s) available`)
-
-    // Apply collapse immediately if available (so preview shows collapsed paths)
-    if (collapseCount > 0) {
-      await collapseSingleVideoFolders(videos, false)
-      console.log('[processFiles] Applied folder collapse to preview')
-    }
-
-    // Check for duplicates
-    if (videos.length > 0) {
-      const videoPaths = videos.map(v => {
-        const pathParts = v.relativePath.split('/')
-        const filename = pathParts[pathParts.length - 1]
-        if (!filename) return ''
-        return pathParts.slice(0, -1).concat(filename.replace(/\.\w+$/, '')).join('/')
-      })
-
-      try {
-        console.log('[processFiles] Checking for duplicates:', videoPaths)
-        const response = await fetch(`/api/annotations/check-duplicates?paths=${encodeURIComponent(videoPaths.join(','))}`)
-        const duplicates = await response.json()
-        console.log('[processFiles] Duplicate check results:', duplicates)
-
-        for (let i = 0; i < videos.length; i++) {
-          const videoPath = videoPaths[i]
-          if (!videoPath) continue
-          if (duplicates[videoPath]?.exists) {
-            console.log(`[processFiles] Found duplicate: ${videoPath}`)
-            const video = videos[i]
-            if (!video) continue
-            video.isDuplicate = true
-            video.existingUploadedAt = duplicates[videoPath].uploadedAt
-          }
+      for (const file of Array.from(fileList)) {
+        if (file.type.startsWith('video/')) {
+          const relativePath = (file as FileWithPath).webkitRelativePath || file.name
+          console.log(`[processFiles] Found video: ${relativePath} (${file.type})`)
+          videos.push({
+            file,
+            relativePath,
+            size: file.size,
+            type: file.type,
+            selected: true,
+            uploadProgress: 0,
+            uploadStatus: 'queued',
+          })
+        } else {
+          skipped.push(file)
         }
-      } catch (error) {
-        console.error('Failed to check duplicates:', error)
       }
-    }
 
-    setVideoFiles(videos)
-    setSkippedFiles(skipped)
-    setShowConfirmation(true)
-  }, [uploading])
+      console.log(`[processFiles] Result: ${videos.length} videos, ${skipped.length} skipped`)
+
+      // Check if collapses are available (preview mode)
+      const collapseCount = await collapseSingleVideoFolders(videos, true)
+      setCollapsesAvailable(collapseCount > 0)
+      console.log(`[processFiles] ${collapseCount} collapse(s) available`)
+
+      // Apply collapse immediately if available (so preview shows collapsed paths)
+      if (collapseCount > 0) {
+        await collapseSingleVideoFolders(videos, false)
+        console.log('[processFiles] Applied folder collapse to preview')
+      }
+
+      // Check for duplicates
+      if (videos.length > 0) {
+        const videoPaths = videos.map(v => {
+          const pathParts = v.relativePath.split('/')
+          const filename = pathParts[pathParts.length - 1]
+          if (!filename) return ''
+          return pathParts
+            .slice(0, -1)
+            .concat(filename.replace(/\.\w+$/, ''))
+            .join('/')
+        })
+
+        try {
+          console.log('[processFiles] Checking for duplicates:', videoPaths)
+          const response = await fetch(
+            `/api/annotations/check-duplicates?paths=${encodeURIComponent(videoPaths.join(','))}`
+          )
+          const duplicates = await response.json()
+          console.log('[processFiles] Duplicate check results:', duplicates)
+
+          for (let i = 0; i < videos.length; i++) {
+            const videoPath = videoPaths[i]
+            if (!videoPath) continue
+            if (duplicates[videoPath]?.exists) {
+              console.log(`[processFiles] Found duplicate: ${videoPath}`)
+              const video = videos[i]
+              if (!video) continue
+              video.isDuplicate = true
+              video.existingUploadedAt = duplicates[videoPath].uploadedAt
+            }
+          }
+        } catch (error) {
+          console.error('Failed to check duplicates:', error)
+        }
+      }
+
+      setVideoFiles(videos)
+      setSkippedFiles(skipped)
+      setShowConfirmation(true)
+    },
+    [uploading]
+  )
 
   const handleDragEnter = (e: React.DragEvent) => {
     e.preventDefault()
@@ -371,7 +404,9 @@ export default function UploadPage() {
         const entry = item.webkitGetAsEntry()
         console.log(`[handleDrop] Item ${i}: webkitGetAsEntry() returned`, entry)
         if (entry) {
-          console.log(`[handleDrop] Item ${i}: isFile=${entry.isFile}, isDirectory=${entry.isDirectory}`)
+          console.log(
+            `[handleDrop] Item ${i}: isFile=${entry.isFile}, isDirectory=${entry.isDirectory}`
+          )
           entries.push(entry)
         } else {
           console.log(`[handleDrop] Item ${i}: webkitGetAsEntry() returned null/undefined`)
@@ -396,16 +431,18 @@ export default function UploadPage() {
   }
 
   async function traverseFileTree(item: FileSystemEntry, path: string, files: File[]) {
-    console.log(`[traverseFileTree] Processing: ${path}${item.name}, isFile=${item.isFile}, isDirectory=${item.isDirectory}`)
+    console.log(
+      `[traverseFileTree] Processing: ${path}${item.name}, isFile=${item.isFile}, isDirectory=${item.isDirectory}`
+    )
     if (item.isFile) {
       console.log(`[traverseFileTree] Getting file for: ${item.name}`)
       const fileEntry = item as FileSystemFileEntry
-      const file = await new Promise<File>((resolve) => {
+      const file = await new Promise<File>(resolve => {
         fileEntry.file((f: File) => {
           console.log(`[traverseFileTree] Got file: ${f.name}, size=${f.size}, type=${f.type}`)
           Object.defineProperty(f, 'webkitRelativePath', {
             value: path + f.name,
-            writable: false
+            writable: false,
           })
           resolve(f)
         })
@@ -415,7 +452,7 @@ export default function UploadPage() {
     } else if (item.isDirectory) {
       const dirEntry = item as FileSystemDirectoryEntry
       const dirReader = dirEntry.createReader()
-      const entries = await new Promise<FileSystemEntry[]>((resolve) => {
+      const entries = await new Promise<FileSystemEntry[]>(resolve => {
         dirReader.readEntries((entries: FileSystemEntry[]) => resolve(entries))
       })
       for (const entry of entries) {
@@ -429,9 +466,7 @@ export default function UploadPage() {
   }
 
   const toggleFileSelection = (index: number) => {
-    setVideoFiles(prev => prev.map((f, i) =>
-      i === index ? { ...f, selected: !f.selected } : f
-    ))
+    setVideoFiles(prev => prev.map((f, i) => (i === index ? { ...f, selected: !f.selected } : f)))
   }
 
   const selectedVideos = videoFiles.filter(f => f.selected)
@@ -447,14 +482,16 @@ export default function UploadPage() {
       // Re-apply collapse
       console.log('[handleCollapseToggle] Applying collapse...')
       await collapseSingleVideoFolders(videoFiles, false)
-      setVideoFiles([...videoFiles])  // Trigger re-render
+      setVideoFiles([...videoFiles]) // Trigger re-render
     } else {
       // Restore original paths
       console.log('[handleCollapseToggle] Restoring original paths...')
-      setVideoFiles(prev => prev.map(v => ({
-        ...v,
-        relativePath: (v.file as FileWithPath).webkitRelativePath || v.file.name
-      })))
+      setVideoFiles(prev =>
+        prev.map(v => ({
+          ...v,
+          relativePath: (v.file as FileWithPath).webkitRelativePath || v.file.name,
+        }))
+      )
     }
   }
 
@@ -466,9 +503,9 @@ export default function UploadPage() {
     console.log(`[startUpload] Starting upload for ${selected.length} videos`)
 
     // Mark all as pending (not queued yet)
-    setVideoFiles(prev => prev.map(v =>
-      v.selected ? { ...v, uploadStatus: 'pending' as const, retryCount: 0 } : v
-    ))
+    setVideoFiles(prev =>
+      prev.map(v => (v.selected ? { ...v, uploadStatus: 'pending' as const, retryCount: 0 } : v))
+    )
 
     // Start processing queue
     processUploadQueue()
@@ -479,8 +516,8 @@ export default function UploadPage() {
       const newFiles = [...prev]
 
       // Count active uploads
-      const activeCount = newFiles.filter(v =>
-        v.uploadStatus === 'uploading' || v.uploadStatus === 'retrying'
+      const activeCount = newFiles.filter(
+        v => v.uploadStatus === 'uploading' || v.uploadStatus === 'retrying'
       ).length
 
       // Calculate available slots
@@ -490,16 +527,20 @@ export default function UploadPage() {
       // Find videos ready to upload
       const readyToUpload = newFiles
         .map((v, idx) => ({ video: v, index: idx }))
-        .filter(({ video }) =>
-          video.selected &&
-          (video.uploadStatus === 'pending' || video.uploadStatus === 'stalled')
+        .filter(
+          ({ video }) =>
+            video.selected && (video.uploadStatus === 'pending' || video.uploadStatus === 'stalled')
         )
         .slice(0, availableSlots)
 
       // Start uploads for available slots
       readyToUpload.forEach(({ video, index }) => {
         startSingleUpload(index, video.retryCount || 0)
-        newFiles[index] = { ...video, uploadStatus: 'uploading' as const, lastActivityAt: Date.now() }
+        newFiles[index] = {
+          ...video,
+          uploadStatus: 'uploading' as const,
+          lastActivityAt: Date.now(),
+        }
       })
 
       return newFiles
@@ -517,7 +558,10 @@ export default function UploadPage() {
       console.error(`[Upload] Invalid filename for ${video.relativePath}`)
       return
     }
-    let videoPath = pathParts.slice(0, -1).concat(filename.replace(/\.\w+$/, '')).join('/')
+    let videoPath = pathParts
+      .slice(0, -1)
+      .concat(filename.replace(/\.\w+$/, ''))
+      .join('/')
 
     // Prepend selected folder if any
     if (selectedFolder) {
@@ -525,7 +569,9 @@ export default function UploadPage() {
     }
 
     const videoId = `video-${index}`
-    console.log(`[Upload] Starting ${video.relativePath} (attempt ${retryCount + 1}/${MAX_RETRIES + 1})`)
+    console.log(
+      `[Upload] Starting ${video.relativePath} (attempt ${retryCount + 1}/${MAX_RETRIES + 1})`
+    )
 
     const upload = new tus.Upload(video.file, {
       endpoint: '/api/upload',
@@ -537,22 +583,28 @@ export default function UploadPage() {
         filetype: video.file.type,
         videoPath: videoPath,
       },
-      onError: (error) => {
+      onError: error => {
         console.error(`[Upload] Failed ${video.relativePath}:`, error)
 
         // Check if we should retry
         if (retryCount < MAX_RETRIES && isRetryableError(error)) {
           const delay = RETRY_DELAYS[Math.min(retryCount, RETRY_DELAYS.length - 1)]
-          console.log(`[Upload] Will retry ${video.relativePath} in ${delay}ms (attempt ${retryCount + 1})`)
+          console.log(
+            `[Upload] Will retry ${video.relativePath} in ${delay}ms (attempt ${retryCount + 1})`
+          )
 
-          setVideoFiles(prev => prev.map((v, i) =>
-            i === index ? {
-              ...v,
-              uploadStatus: 'retrying',
-              error: `Retrying... (attempt ${retryCount + 1}/${MAX_RETRIES})`,
-              retryCount: retryCount + 1
-            } : v
-          ))
+          setVideoFiles(prev =>
+            prev.map((v, i) =>
+              i === index
+                ? {
+                    ...v,
+                    uploadStatus: 'retrying',
+                    error: `Retrying... (attempt ${retryCount + 1}/${MAX_RETRIES})`,
+                    retryCount: retryCount + 1,
+                  }
+                : v
+            )
+          )
 
           // Schedule retry
           setTimeout(() => {
@@ -560,14 +612,18 @@ export default function UploadPage() {
           }, delay)
         } else {
           // Max retries exceeded or non-retryable error
-          setVideoFiles(prev => prev.map((v, i) =>
-            i === index ? {
-              ...v,
-              uploadStatus: 'error',
-              error: error.message,
-              retryCount: retryCount + 1
-            } : v
-          ))
+          setVideoFiles(prev =>
+            prev.map((v, i) =>
+              i === index
+                ? {
+                    ...v,
+                    uploadStatus: 'error',
+                    error: error.message,
+                    retryCount: retryCount + 1,
+                  }
+                : v
+            )
+          )
           activeUploads.delete(videoId)
 
           // Process next in queue
@@ -576,19 +632,25 @@ export default function UploadPage() {
       },
       onProgress: (bytesUploaded, bytesTotal) => {
         const progress = (bytesUploaded / bytesTotal) * 100
-        setVideoFiles(prev => prev.map((v, i) =>
-          i === index ? {
-            ...v,
-            uploadProgress: progress,
-            lastActivityAt: Date.now()
-          } : v
-        ))
+        setVideoFiles(prev =>
+          prev.map((v, i) =>
+            i === index
+              ? {
+                  ...v,
+                  uploadProgress: progress,
+                  lastActivityAt: Date.now(),
+                }
+              : v
+          )
+        )
       },
       onSuccess: () => {
         console.log(`[Upload] Complete ${video.relativePath}`)
-        setVideoFiles(prev => prev.map((v, i) =>
-          i === index ? { ...v, uploadStatus: 'complete', uploadProgress: 100 } : v
-        ))
+        setVideoFiles(prev =>
+          prev.map((v, i) =>
+            i === index ? { ...v, uploadStatus: 'complete', uploadProgress: 100 } : v
+          )
+        )
         activeUploads.delete(videoId)
         saveUploadProgress()
 
@@ -597,8 +659,8 @@ export default function UploadPage() {
 
         // Check if all done
         const allSelected = videoFiles.filter(v => v.selected)
-        const allComplete = allSelected.every(v =>
-          v.uploadStatus === 'complete' || v.uploadStatus === 'error'
+        const allComplete = allSelected.every(
+          v => v.uploadStatus === 'complete' || v.uploadStatus === 'error'
         )
         if (allComplete) {
           setUploading(false)
@@ -608,11 +670,9 @@ export default function UploadPage() {
         // Store upload URL for resumability
         const uploadUrl = res.getHeader('Location')
         if (uploadUrl) {
-          setVideoFiles(prev => prev.map((v, i) =>
-            i === index ? { ...v, uploadUrl } : v
-          ))
+          setVideoFiles(prev => prev.map((v, i) => (i === index ? { ...v, uploadUrl } : v)))
         }
-      }
+      },
     })
 
     upload.start()
@@ -623,10 +683,12 @@ export default function UploadPage() {
   const isRetryableError = (error: Error): boolean => {
     const message = error.message.toLowerCase()
     // Retry on network errors, timeouts, 5xx errors
-    return message.includes('network') ||
-           message.includes('timeout') ||
-           message.includes('aborted') ||
-           message.includes('5')  // 5xx status codes
+    return (
+      message.includes('network') ||
+      message.includes('timeout') ||
+      message.includes('aborted') ||
+      message.includes('5')
+    ) // 5xx status codes
   }
 
   // Cancel handlers for smart cancel options
@@ -634,11 +696,13 @@ export default function UploadPage() {
     console.log('[Upload] Stopping queued uploads...')
 
     // Mark all pending uploads as cancelled
-    setVideoFiles(prev => prev.map(v =>
-      v.uploadStatus === 'pending' || v.uploadStatus === 'stalled'
-        ? { ...v, uploadStatus: 'error' as const, error: 'Cancelled by user' }
-        : v
-    ))
+    setVideoFiles(prev =>
+      prev.map(v =>
+        v.uploadStatus === 'pending' || v.uploadStatus === 'stalled'
+          ? { ...v, uploadStatus: 'error' as const, error: 'Cancelled by user' }
+          : v
+      )
+    )
 
     setShowStopQueuedModal(false)
   }
@@ -647,17 +711,19 @@ export default function UploadPage() {
     console.log('[Upload] Aborting all uploads...')
 
     // Abort active uploads
-    activeUploads.forEach((upload) => {
+    activeUploads.forEach(upload => {
       upload.abort()
     })
     activeUploads.clear()
 
     // Mark all non-complete uploads as cancelled
-    setVideoFiles(prev => prev.map(v =>
-      v.uploadStatus !== 'complete'
-        ? { ...v, uploadStatus: 'error' as const, error: 'Cancelled by user' }
-        : v
-    ))
+    setVideoFiles(prev =>
+      prev.map(v =>
+        v.uploadStatus !== 'complete'
+          ? { ...v, uploadStatus: 'error' as const, error: 'Cancelled by user' }
+          : v
+      )
+    )
 
     setUploading(false)
     setShowAbortAllModal(false)
@@ -669,17 +735,21 @@ export default function UploadPage() {
 
     const interval = setInterval(() => {
       const now = Date.now()
-      setVideoFiles(prev => prev.map(v => {
-        if (v.uploadStatus === 'uploading' && v.lastActivityAt) {
-          const timeSinceActivity = now - v.lastActivityAt
-          if (timeSinceActivity > STALL_TIMEOUT) {
-            console.warn(`[Upload] Stalled ${v.relativePath} (no activity for ${timeSinceActivity}ms)`)
-            // Mark as stalled so it can be retried
-            return { ...v, uploadStatus: 'stalled' as const, error: 'Upload stalled' }
+      setVideoFiles(prev =>
+        prev.map(v => {
+          if (v.uploadStatus === 'uploading' && v.lastActivityAt) {
+            const timeSinceActivity = now - v.lastActivityAt
+            if (timeSinceActivity > STALL_TIMEOUT) {
+              console.warn(
+                `[Upload] Stalled ${v.relativePath} (no activity for ${timeSinceActivity}ms)`
+              )
+              // Mark as stalled so it can be retried
+              return { ...v, uploadStatus: 'stalled' as const, error: 'Upload stalled' }
+            }
           }
-        }
-        return v
-      }))
+          return v
+        })
+      )
 
       // Trigger queue processing to pick up stalled uploads
       processUploadQueue()
@@ -707,7 +777,8 @@ export default function UploadPage() {
   const stalledCount = videoFiles.filter(v => v.selected && v.uploadStatus === 'stalled').length
 
   // Check if any uploads are in progress (not just the uploading flag)
-  const hasActiveUploads = uploadingCount > 0 || retryingCount > 0 || pendingCount > 0 || stalledCount > 0
+  const hasActiveUploads =
+    uploadingCount > 0 || retryingCount > 0 || pendingCount > 0 || stalledCount > 0
 
   // Warn user before closing/navigating during uploads (only if uploads are actually in progress)
   useEffect(() => {
@@ -723,9 +794,7 @@ export default function UploadPage() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
   }, [hasActiveUploads])
 
-  const overallProgress = selectedCount > 0
-    ? (completedCount / selectedCount) * 100
-    : 0
+  const overallProgress = selectedCount > 0 ? (completedCount / selectedCount) * 100 : 0
 
   // Calculate target path for a video (showing preview of collapse if enabled)
   const getTargetPath = (video: VideoFilePreview) => {
@@ -735,7 +804,10 @@ export default function UploadPage() {
     const pathParts = video.relativePath.split('/')
     const filename = pathParts[pathParts.length - 1]
     if (!filename) return ''
-    let videoPath = pathParts.slice(0, -1).concat(filename.replace(/\.\w+$/, '')).join('/')
+    let videoPath = pathParts
+      .slice(0, -1)
+      .concat(filename.replace(/\.\w+$/, ''))
+      .join('/')
 
     // Prepend selected folder if any
     if (selectedFolder) {
@@ -759,7 +831,8 @@ export default function UploadPage() {
               Upload Videos
             </h1>
             <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-              Upload video files for caption annotation. Drag folders to preserve directory structure.
+              Upload video files for caption annotation. Drag folders to preserve directory
+              structure.
             </p>
           </div>
         </div>
@@ -770,16 +843,22 @@ export default function UploadPage() {
             <div className="flex">
               <div className="flex-shrink-0">
                 <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clipRule="evenodd" />
+                  <path
+                    fillRule="evenodd"
+                    d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z"
+                    clipRule="evenodd"
+                  />
                 </svg>
               </div>
               <div className="ml-3 flex-1">
                 <h3 className="text-sm font-medium text-blue-800 dark:text-blue-200">
-                  Cleared {incompleteUploads.length} interrupted upload{incompleteUploads.length !== 1 ? 's' : ''}
+                  Cleared {incompleteUploads.length} interrupted upload
+                  {incompleteUploads.length !== 1 ? 's' : ''}
                 </h3>
                 <div className="mt-2 text-sm text-blue-700 dark:text-blue-300">
                   <p className="mb-2">
-                    These uploads were interrupted when the page was closed and have been automatically cleared:
+                    These uploads were interrupted when the page was closed and have been
+                    automatically cleared:
                   </p>
                   <details className="mt-2">
                     <summary className="cursor-pointer font-medium hover:text-blue-800 dark:hover:text-blue-200">
@@ -814,7 +893,10 @@ export default function UploadPage() {
           <div className="mt-8">
             {/* Folder Selection */}
             <div className="mb-6">
-              <label htmlFor="folder-select" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <label
+                htmlFor="folder-select"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+              >
                 Upload to folder (optional)
               </label>
               <Menu as="div" className="relative w-full sm:w-96">
@@ -865,9 +947,10 @@ export default function UploadPage() {
               className={`
                 relative border-2 border-dashed rounded-lg p-12 text-center
                 transition-colors
-                ${dragActive
-                  ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20'
-                  : 'border-gray-300 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-600'
+                ${
+                  dragActive
+                    ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20'
+                    : 'border-gray-300 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-600'
                 }
               `}
               onDragEnter={handleDragEnter}
@@ -880,9 +963,7 @@ export default function UploadPage() {
                 <p className="text-sm font-semibold text-gray-900 dark:text-gray-200">
                   Drag folder or videos here
                 </p>
-                <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">
-                  or click to browse
-                </p>
+                <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">or click to browse</p>
               </div>
               <div className="mt-4 text-xs text-gray-500 dark:text-gray-500">
                 Supports: MP4, MKV, AVI, MOV, WebM
@@ -900,7 +981,10 @@ export default function UploadPage() {
               <input
                 ref={folderInputRef}
                 type="file"
-                {...({ webkitdirectory: '', directory: '' } as React.InputHTMLAttributes<HTMLInputElement>)}
+                {...({
+                  webkitdirectory: '',
+                  directory: '',
+                } as React.InputHTMLAttributes<HTMLInputElement>)}
                 onChange={handleFileSelect}
                 className="hidden"
               />
@@ -943,8 +1027,16 @@ export default function UploadPage() {
                 <div className="mt-4 rounded-md bg-yellow-50 dark:bg-yellow-900/20 p-4 border border-yellow-200 dark:border-yellow-800">
                   <div className="flex">
                     <div className="flex-shrink-0">
-                      <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+                      <svg
+                        className="h-5 w-5 text-yellow-400"
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z"
+                          clipRule="evenodd"
+                        />
                       </svg>
                     </div>
                     <div className="ml-3 flex-1">
@@ -953,16 +1045,25 @@ export default function UploadPage() {
                       </h3>
                       <div className="mt-2 text-sm text-yellow-700 dark:text-yellow-400">
                         <p>
-                          {videoFiles.filter(v => v.isDuplicate).length} video{videoFiles.filter(v => v.isDuplicate).length !== 1 ? 's target' : ' targets'} the same path as existing {videoFiles.filter(v => v.isDuplicate).length !== 1 ? 'videos' : 'video'}.
-                          Uploading will overwrite the existing video and all annotation data at {videoFiles.filter(v => v.isDuplicate).length !== 1 ? 'these paths' : 'this path'}.
+                          {videoFiles.filter(v => v.isDuplicate).length} video
+                          {videoFiles.filter(v => v.isDuplicate).length !== 1
+                            ? 's target'
+                            : ' targets'}{' '}
+                          the same path as existing{' '}
+                          {videoFiles.filter(v => v.isDuplicate).length !== 1 ? 'videos' : 'video'}.
+                          Uploading will overwrite the existing video and all annotation data at{' '}
+                          {videoFiles.filter(v => v.isDuplicate).length !== 1
+                            ? 'these paths'
+                            : 'this path'}
+                          .
                         </p>
                       </div>
                       <div className="mt-3">
                         <button
                           onClick={() => {
-                            setVideoFiles(prev => prev.map(f =>
-                              f.isDuplicate ? { ...f, selected: false } : f
-                            ))
+                            setVideoFiles(prev =>
+                              prev.map(f => (f.isDuplicate ? { ...f, selected: false } : f))
+                            )
                           }}
                           className="text-sm font-medium text-yellow-800 dark:text-yellow-300 hover:text-yellow-700 dark:hover:text-yellow-200 underline"
                         >
@@ -981,7 +1082,7 @@ export default function UploadPage() {
                     <input
                       type="checkbox"
                       checked={collapseEnabled}
-                      onChange={(e) => handleCollapseToggle(e.target.checked)}
+                      onChange={e => handleCollapseToggle(e.target.checked)}
                       className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                     />
                     <span className="text-sm text-gray-700 dark:text-gray-300">
@@ -1032,7 +1133,7 @@ export default function UploadPage() {
                           <input
                             type="checkbox"
                             checked={selectedVideos.length === videoFiles.length}
-                            onChange={(e) => {
+                            onChange={e => {
                               const checked = e.target.checked
                               setVideoFiles(prev => prev.map(f => ({ ...f, selected: checked })))
                             }}
@@ -1055,7 +1156,10 @@ export default function UploadPage() {
                     </thead>
                     <tbody className="divide-y divide-gray-200 dark:divide-gray-800 bg-white dark:bg-gray-950">
                       {videoFiles.map((video, index) => (
-                        <tr key={index} className={`hover:bg-gray-50 dark:hover:bg-gray-900 ${video.isDuplicate ? 'bg-yellow-50 dark:bg-yellow-900/10' : ''}`}>
+                        <tr
+                          key={index}
+                          className={`hover:bg-gray-50 dark:hover:bg-gray-900 ${video.isDuplicate ? 'bg-yellow-50 dark:bg-yellow-900/10' : ''}`}
+                        >
                           <td className="py-3 pl-4 pr-3 sm:pl-6">
                             <input
                               type="checkbox"
@@ -1108,7 +1212,8 @@ export default function UploadPage() {
                     {skippedFiles.map((file, index) => (
                       <li key={index} className="flex items-center gap-2">
                         <XMarkIcon className="h-4 w-4 text-gray-400" />
-                        {(file as FileWithPath).webkitRelativePath || file.name} ({file.type || 'unknown'})
+                        {(file as FileWithPath).webkitRelativePath || file.name} (
+                        {file.type || 'unknown'})
                       </li>
                     ))}
                   </ul>
@@ -1138,7 +1243,8 @@ export default function UploadPage() {
 
               {/* Info */}
               <div className="mt-4 text-sm text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 p-3 rounded-md border border-amber-200 dark:border-amber-800">
-                ⚠️ <strong>Keep this page open during uploads.</strong> Closing or navigating away will stop uploads. They cannot resume automatically.
+                ⚠️ <strong>Keep this page open during uploads.</strong> Closing or navigating away
+                will stop uploads. They cannot resume automatically.
               </div>
             </div>
           </div>
@@ -1150,7 +1256,9 @@ export default function UploadPage() {
             <div className="px-4 py-5 sm:p-6">
               <div className="flex items-center justify-between">
                 <h3 className="text-base font-semibold text-gray-900 dark:text-gray-200">
-                  {uploading ? `Uploading ${selectedCount} video${selectedCount !== 1 ? 's' : ''}...` : 'Upload Complete'}
+                  {uploading
+                    ? `Uploading ${selectedCount} video${selectedCount !== 1 ? 's' : ''}...`
+                    : 'Upload Complete'}
                 </h3>
                 <div className="text-sm text-gray-600 dark:text-gray-400">
                   {completedCount} of {selectedCount} complete ({Math.round(overallProgress)}%)
@@ -1166,49 +1274,76 @@ export default function UploadPage() {
               </div>
 
               {/* Status breakdown */}
-              {uploading && (uploadingCount > 0 || retryingCount > 0 || pendingCount > 0 || stalledCount > 0 || errorCount > 0) && (
-                <div className="mt-3 flex flex-wrap gap-3 text-xs">
-                  {uploadingCount > 0 && <span className="text-blue-600 dark:text-blue-400">↑ {uploadingCount} uploading</span>}
-                  {retryingCount > 0 && <span className="text-yellow-600 dark:text-yellow-400">⟳ {retryingCount} retrying</span>}
-                  {pendingCount > 0 && <span className="text-gray-500 dark:text-gray-400">⋯ {pendingCount} pending</span>}
-                  {stalledCount > 0 && <span className="text-orange-600 dark:text-orange-400">⏸ {stalledCount} stalled</span>}
-                  {errorCount > 0 && <span className="text-red-600 dark:text-red-400">✗ {errorCount} failed</span>}
-                </div>
-              )}
+              {uploading &&
+                (uploadingCount > 0 ||
+                  retryingCount > 0 ||
+                  pendingCount > 0 ||
+                  stalledCount > 0 ||
+                  errorCount > 0) && (
+                  <div className="mt-3 flex flex-wrap gap-3 text-xs">
+                    {uploadingCount > 0 && (
+                      <span className="text-blue-600 dark:text-blue-400">
+                        ↑ {uploadingCount} uploading
+                      </span>
+                    )}
+                    {retryingCount > 0 && (
+                      <span className="text-yellow-600 dark:text-yellow-400">
+                        ⟳ {retryingCount} retrying
+                      </span>
+                    )}
+                    {pendingCount > 0 && (
+                      <span className="text-gray-500 dark:text-gray-400">
+                        ⋯ {pendingCount} pending
+                      </span>
+                    )}
+                    {stalledCount > 0 && (
+                      <span className="text-orange-600 dark:text-orange-400">
+                        ⏸ {stalledCount} stalled
+                      </span>
+                    )}
+                    {errorCount > 0 && (
+                      <span className="text-red-600 dark:text-red-400">✗ {errorCount} failed</span>
+                    )}
+                  </div>
+                )}
 
               {/* Cancel buttons */}
-              {uploading && (uploadingCount > 0 || retryingCount > 0 || pendingCount > 0 || stalledCount > 0) && (
-                <div className="mt-4 flex flex-wrap gap-3">
-                  {(pendingCount > 0 || stalledCount > 0) && (
+              {uploading &&
+                (uploadingCount > 0 ||
+                  retryingCount > 0 ||
+                  pendingCount > 0 ||
+                  stalledCount > 0) && (
+                  <div className="mt-4 flex flex-wrap gap-3">
+                    {(pendingCount > 0 || stalledCount > 0) && (
+                      <button
+                        onClick={() => setShowStopQueuedModal(true)}
+                        className="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
+                      >
+                        Stop Queued ({pendingCount + stalledCount})
+                      </button>
+                    )}
                     <button
-                      onClick={() => setShowStopQueuedModal(true)}
-                      className="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
+                      onClick={() => setShowAbortAllModal(true)}
+                      className="px-3 py-1.5 text-sm font-medium text-red-700 dark:text-red-300 bg-white dark:bg-gray-800 border border-red-300 dark:border-red-600 rounded-md hover:bg-red-50 dark:hover:bg-red-900/30"
                     >
-                      Stop Queued ({pendingCount + stalledCount})
+                      Abort All Uploads
                     </button>
-                  )}
-                  <button
-                    onClick={() => setShowAbortAllModal(true)}
-                    className="px-3 py-1.5 text-sm font-medium text-red-700 dark:text-red-300 bg-white dark:bg-gray-800 border border-red-300 dark:border-red-600 rounded-md hover:bg-red-50 dark:hover:bg-red-900/30"
-                  >
-                    Abort All Uploads
-                  </button>
-                </div>
-              )}
+                  </div>
+                )}
 
               {/* File List - Two Section Layout */}
               <div className="mt-6 space-y-6">
                 {(() => {
                   const selectedVideos = videoFiles.filter(v => v.selected)
-                  const inProgressVideos = selectedVideos.filter(v =>
-                    v.uploadStatus === 'uploading' ||
-                    v.uploadStatus === 'retrying' ||
-                    v.uploadStatus === 'pending' ||
-                    v.uploadStatus === 'stalled'
+                  const inProgressVideos = selectedVideos.filter(
+                    v =>
+                      v.uploadStatus === 'uploading' ||
+                      v.uploadStatus === 'retrying' ||
+                      v.uploadStatus === 'pending' ||
+                      v.uploadStatus === 'stalled'
                   )
-                  const finishedVideos = selectedVideos.filter(v =>
-                    v.uploadStatus === 'complete' ||
-                    v.uploadStatus === 'error'
+                  const finishedVideos = selectedVideos.filter(
+                    v => v.uploadStatus === 'complete' || v.uploadStatus === 'error'
                   )
 
                   return (
@@ -1223,7 +1358,10 @@ export default function UploadPage() {
                             {inProgressVideos.map((video, idx) => {
                               const originalIndex = videoFiles.indexOf(video)
                               return (
-                                <div key={originalIndex} className="border border-gray-200 dark:border-gray-700 rounded-md p-4">
+                                <div
+                                  key={originalIndex}
+                                  className="border border-gray-200 dark:border-gray-700 rounded-md p-4"
+                                >
                                   <div className="flex items-center justify-between">
                                     <div className="flex-1 min-w-0">
                                       <p className="text-sm font-medium text-gray-900 dark:text-gray-200 truncate">
@@ -1288,7 +1426,10 @@ export default function UploadPage() {
                             {finishedVideos.map((video, idx) => {
                               const originalIndex = videoFiles.indexOf(video)
                               return (
-                                <div key={originalIndex} className="border border-gray-200 dark:border-gray-700 rounded-md p-4">
+                                <div
+                                  key={originalIndex}
+                                  className="border border-gray-200 dark:border-gray-700 rounded-md p-4"
+                                >
                                   <div className="flex items-center justify-between">
                                     <div className="flex-1 min-w-0">
                                       <p className="text-sm font-medium text-gray-900 dark:text-gray-200 truncate">
@@ -1306,7 +1447,9 @@ export default function UploadPage() {
                                       )}
                                       {video.uploadStatus === 'error' && (
                                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">
-                                          {video.error === 'Cancelled by user' ? 'Cancelled' : 'Error'}
+                                          {video.error === 'Cancelled by user'
+                                            ? 'Cancelled'
+                                            : 'Error'}
                                         </span>
                                       )}
                                     </div>
@@ -1332,8 +1475,18 @@ export default function UploadPage() {
                 <div className="mt-6 rounded-lg bg-green-50 dark:bg-green-900/20 p-6 border border-green-200 dark:border-green-800">
                   <div className="flex items-start">
                     <div className="flex-shrink-0">
-                      <svg className="h-6 w-6 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      <svg
+                        className="h-6 w-6 text-green-600 dark:text-green-400"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                        />
                       </svg>
                     </div>
                     <div className="ml-3 flex-1">
@@ -1342,8 +1495,9 @@ export default function UploadPage() {
                       </h3>
                       <div className="mt-2 text-sm text-green-700 dark:text-green-400">
                         <p>
-                          Successfully uploaded {selectedVideos.length} video{selectedVideos.length !== 1 ? 's' : ''}.
-                          Background processing (frame extraction and OCR) has started automatically.
+                          Successfully uploaded {selectedVideos.length} video
+                          {selectedVideos.length !== 1 ? 's' : ''}. Background processing (frame
+                          extraction and OCR) has started automatically.
                         </p>
                       </div>
                       <div className="mt-4 flex gap-3">
@@ -1374,7 +1528,11 @@ export default function UploadPage() {
         )}
 
         {/* Stop Queued Modal */}
-        <Dialog open={showStopQueuedModal} onClose={() => setShowStopQueuedModal(false)} className="relative z-50">
+        <Dialog
+          open={showStopQueuedModal}
+          onClose={() => setShowStopQueuedModal(false)}
+          className="relative z-50"
+        >
           <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
           <div className="fixed inset-0 flex items-center justify-center p-4">
             <DialogPanel className="max-w-md rounded-lg bg-white dark:bg-gray-800 p-6 shadow-xl">
@@ -1383,22 +1541,34 @@ export default function UploadPage() {
               </DialogTitle>
               <div className="mt-4 text-sm text-gray-600 dark:text-gray-400">
                 <p>
-                  This will cancel {(() => {
-                    const currentPending = videoFiles.filter(v => v.uploadStatus === 'pending').length
-                    const currentStalled = videoFiles.filter(v => v.uploadStatus === 'stalled').length
+                  This will cancel{' '}
+                  {(() => {
+                    const currentPending = videoFiles.filter(
+                      v => v.uploadStatus === 'pending'
+                    ).length
+                    const currentStalled = videoFiles.filter(
+                      v => v.uploadStatus === 'stalled'
+                    ).length
                     const total = currentPending + currentStalled
                     return total
-                  })()} queued upload{(() => {
-                    const total = videoFiles.filter(v =>
-                      v.uploadStatus === 'pending' || v.uploadStatus === 'stalled'
+                  })()}{' '}
+                  queued upload
+                  {(() => {
+                    const total = videoFiles.filter(
+                      v => v.uploadStatus === 'pending' || v.uploadStatus === 'stalled'
                     ).length
                     return total !== 1 ? 's' : ''
-                  })()}.
+                  })()}
+                  .
                 </p>
                 <p className="mt-2">
-                  Uploads currently in progress ({videoFiles.filter(v =>
-                    v.uploadStatus === 'uploading' || v.uploadStatus === 'retrying'
-                  ).length}) will continue.
+                  Uploads currently in progress (
+                  {
+                    videoFiles.filter(
+                      v => v.uploadStatus === 'uploading' || v.uploadStatus === 'retrying'
+                    ).length
+                  }
+                  ) will continue.
                 </p>
               </div>
               <div className="mt-6 flex gap-3 justify-end">
@@ -1420,7 +1590,11 @@ export default function UploadPage() {
         </Dialog>
 
         {/* Abort All Modal */}
-        <Dialog open={showAbortAllModal} onClose={() => setShowAbortAllModal(false)} className="relative z-50">
+        <Dialog
+          open={showAbortAllModal}
+          onClose={() => setShowAbortAllModal(false)}
+          className="relative z-50"
+        >
           <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
           <div className="fixed inset-0 flex items-center justify-center p-4">
             <DialogPanel className="max-w-md rounded-lg bg-white dark:bg-gray-800 p-6 shadow-xl">
@@ -1432,15 +1606,26 @@ export default function UploadPage() {
                   This will immediately stop all uploads in progress and cancel all queued uploads.
                 </p>
                 <div className="mt-3 space-y-1 text-xs">
-                  <p>• Currently uploading/retrying: {videoFiles.filter(v =>
-                    v.uploadStatus === 'uploading' || v.uploadStatus === 'retrying'
-                  ).length}</p>
-                  <p>• Queued: {videoFiles.filter(v =>
-                    v.uploadStatus === 'pending' || v.uploadStatus === 'stalled'
-                  ).length}</p>
-                  <p>• Already completed: {videoFiles.filter(v =>
-                    v.uploadStatus === 'complete'
-                  ).length} (will be kept)</p>
+                  <p>
+                    • Currently uploading/retrying:{' '}
+                    {
+                      videoFiles.filter(
+                        v => v.uploadStatus === 'uploading' || v.uploadStatus === 'retrying'
+                      ).length
+                    }
+                  </p>
+                  <p>
+                    • Queued:{' '}
+                    {
+                      videoFiles.filter(
+                        v => v.uploadStatus === 'pending' || v.uploadStatus === 'stalled'
+                      ).length
+                    }
+                  </p>
+                  <p>
+                    • Already completed:{' '}
+                    {videoFiles.filter(v => v.uploadStatus === 'complete').length} (will be kept)
+                  </p>
                 </div>
               </div>
               <div className="mt-6 flex gap-3 justify-end">

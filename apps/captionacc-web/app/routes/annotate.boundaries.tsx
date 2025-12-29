@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useSearchParams, useLoaderData, useNavigate } from 'react-router'
 import type { LoaderFunctionArgs } from 'react-router'
+
 import { AppLayout } from '~/components/AppLayout'
 
 // Types
@@ -17,7 +18,7 @@ interface Annotation {
   start_frame_index: number
   end_frame_index: number
   boundary_state: AnnotationState
-  boundary_pending: boolean  // When true, annotation is treated as pending for workflow purposes
+  boundary_pending: boolean // When true, annotation is treated as pending for workflow purposes
   boundary_updated_at?: string
   text: string | null
   created_at?: string
@@ -33,7 +34,7 @@ const ANNOTATION_CACHE_RANGE = 1000 // Cache annotations within ±1000 frames
 const FRAME_OFFSETS: Record<FrameSpacing, number[]> = {
   linear: [-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5],
   exponential: [-8, -4, -2, -1, 0, 1, 2, 4, 8],
-  hybrid: [-10, -5, -3, -2, -1, 0, 1, 2, 3, 5, 10]
+  hybrid: [-10, -5, -3, -2, -1, 0, 1, 2, 3, 5, 10],
 }
 
 // Opacity for frame distance
@@ -45,13 +46,13 @@ const OPACITY_MAP: Record<number, number> = {
   4: 0.5,
   5: 0.4,
   8: 0.3,
-  10: 0.2
+  10: 0.2,
 }
 
 // Loader function to expose environment variables
 export async function loader() {
   return {
-    defaultVideoId: process.env['DEFAULT_VIDEO_ID'] || ''
+    defaultVideoId: process.env['DEFAULT_VIDEO_ID'] || '',
   }
 }
 
@@ -67,10 +68,14 @@ function getEffectiveState(annotation: Annotation): 'pending' | AnnotationState 
 function getAnnotationBorderColor(annotation: Annotation): string {
   const effectiveState = getEffectiveState(annotation)
   switch (effectiveState) {
-    case 'pending': return 'border-pink-500'
-    case 'predicted': return 'border-indigo-500'
-    case 'confirmed': return 'border-teal-500'
-    case 'gap': return ''
+    case 'pending':
+      return 'border-pink-500'
+    case 'predicted':
+      return 'border-indigo-500'
+    case 'confirmed':
+      return 'border-teal-500'
+    case 'gap':
+      return ''
   }
 }
 
@@ -104,7 +109,9 @@ export default function BoundaryWorkflow() {
   const [completedFrames, setCompletedFrames] = useState(0) // Count of non-gap, non-pending frames
 
   const [frameSpacing, setFrameSpacing] = useState<FrameSpacing>('linear')
-  const [windowHeight, setWindowHeight] = useState(typeof window !== 'undefined' ? window.innerHeight : 1000)
+  const [windowHeight, setWindowHeight] = useState(
+    typeof window !== 'undefined' ? window.innerHeight : 1000
+  )
   const [jumpToFrameInput, setJumpToFrameInput] = useState('')
   const [showHelpModal, setShowHelpModal] = useState(false)
 
@@ -162,7 +169,9 @@ export default function BoundaryWorkflow() {
           )
           const allAnnotationsData = await allAnnotationsResponse.json()
           // Check if there's at least one other annotation besides the active one
-          setHasPrevAnnotation(allAnnotationsData.annotations && allAnnotationsData.annotations.length > 1)
+          setHasPrevAnnotation(
+            allAnnotationsData.annotations && allAnnotationsData.annotations.length > 1
+          )
           setHasNextAnnotation(false)
         }
 
@@ -189,26 +198,27 @@ export default function BoundaryWorkflow() {
   }, [videoId])
 
   // Helper: Load annotations for visible range
-  const loadAnnotations = useCallback(async (startFrame: number, endFrame: number) => {
-    const encodedVideoId = encodeURIComponent(videoId)
+  const loadAnnotations = useCallback(
+    async (startFrame: number, endFrame: number) => {
+      const encodedVideoId = encodeURIComponent(videoId)
 
-    try {
-      const response = await fetch(
-        `/api/annotations/${encodedVideoId}?start=${startFrame}&end=${endFrame}`
-      )
-      const data = await response.json()
-      setAnnotations(data.annotations || [])
-    } catch (error) {
-      console.error('Failed to load annotations:', error)
-    }
-  }, [videoId])
+      try {
+        const response = await fetch(
+          `/api/annotations/${encodedVideoId}?start=${startFrame}&end=${endFrame}`
+        )
+        const data = await response.json()
+        setAnnotations(data.annotations || [])
+      } catch (error) {
+        console.error('Failed to load annotations:', error)
+      }
+    },
+    [videoId]
+  )
 
   // Mark this video as being worked on for stats refresh on Videos page
   useEffect(() => {
     if (videoId && typeof window !== 'undefined') {
-      const touchedVideos = new Set(
-        JSON.parse(localStorage.getItem('touched-videos') || '[]')
-      )
+      const touchedVideos = new Set(JSON.parse(localStorage.getItem('touched-videos') || '[]'))
       touchedVideos.add(videoId)
       localStorage.setItem('touched-videos', JSON.stringify(Array.from(touchedVideos)))
     }
@@ -265,18 +275,24 @@ export default function BoundaryWorkflow() {
   }, [currentFrameIndex, frameSpacing, totalFrames, windowHeight])
 
   // Get opacity for frame distance
-  const getOpacity = useCallback((frameIndex: number) => {
-    const distance = Math.abs(frameIndex - currentFrameIndex)
-    return OPACITY_MAP[distance] ?? 0.3
-  }, [currentFrameIndex])
+  const getOpacity = useCallback(
+    (frameIndex: number) => {
+      const distance = Math.abs(frameIndex - currentFrameIndex)
+      return OPACITY_MAP[distance] ?? 0.3
+    },
+    [currentFrameIndex]
+  )
 
   // Can save if both boundaries marked (single frame captions allowed: start == end)
   const canSave = markedStart !== null && markedEnd !== null && markedStart <= markedEnd
 
   // Navigation functions
-  const navigateFrame = useCallback((delta: number) => {
-    setCurrentFrameIndex(prev => Math.max(0, Math.min(prev + delta, totalFrames - 1)))
-  }, [totalFrames])
+  const navigateFrame = useCallback(
+    (delta: number) => {
+      setCurrentFrameIndex(prev => Math.max(0, Math.min(prev + delta, totalFrames - 1)))
+    },
+    [totalFrames]
+  )
 
   // Marking functions
   const markStart = useCallback(() => {
@@ -316,136 +332,148 @@ export default function BoundaryWorkflow() {
   }, [activeAnnotation])
 
   // Drag-to-scroll handlers
-  const handleDragStart = useCallback((e: React.MouseEvent) => {
-    e.preventDefault() // Prevent default drag behavior
+  const handleDragStart = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault() // Prevent default drag behavior
 
-    // Cancel momentum if running
-    if (momentumFrameRef.current !== null) {
-      cancelAnimationFrame(momentumFrameRef.current)
-      momentumFrameRef.current = null
-    }
-
-    isDraggingRef.current = true
-    dragStartYRef.current = e.clientY
-    dragStartFrameRef.current = currentFrameIndex
-    lastYRef.current = e.clientY
-    lastTimeRef.current = Date.now()
-    velocityRef.current = 0
-    setCursorStyle('grabbing')
-
-    // Add global listeners for move and up
-    const handleMove = (moveEvent: MouseEvent) => {
-      if (!isDraggingRef.current) return
-
-      const now = Date.now()
-      const deltaY = dragStartYRef.current - moveEvent.clientY
-      const frameDelta = Math.round(deltaY / 30) // 30 pixels per frame
-      const newFrame = Math.max(0, Math.min(dragStartFrameRef.current + frameDelta, totalFrames - 1))
-
-      // Calculate velocity for momentum
-      const timeDelta = now - lastTimeRef.current
-      if (timeDelta > 0) {
-        const yDelta = lastYRef.current - moveEvent.clientY
-        velocityRef.current = (yDelta / timeDelta) * 16 / 30 // Convert to frames per 16ms
+      // Cancel momentum if running
+      if (momentumFrameRef.current !== null) {
+        cancelAnimationFrame(momentumFrameRef.current)
+        momentumFrameRef.current = null
       }
 
-      lastYRef.current = moveEvent.clientY
-      lastTimeRef.current = now
-      setCurrentFrameIndex(newFrame)
-    }
+      isDraggingRef.current = true
+      dragStartYRef.current = e.clientY
+      dragStartFrameRef.current = currentFrameIndex
+      lastYRef.current = e.clientY
+      lastTimeRef.current = Date.now()
+      velocityRef.current = 0
+      setCursorStyle('grabbing')
 
-    const handleUp = () => {
-      if (!isDraggingRef.current) return
-      isDraggingRef.current = false
-      setCursorStyle('grab')
+      // Add global listeners for move and up
+      const handleMove = (moveEvent: MouseEvent) => {
+        if (!isDraggingRef.current) return
 
-      // Remove listeners
-      window.removeEventListener('mousemove', handleMove)
-      window.removeEventListener('mouseup', handleUp)
+        const now = Date.now()
+        const deltaY = dragStartYRef.current - moveEvent.clientY
+        const frameDelta = Math.round(deltaY / 30) // 30 pixels per frame
+        const newFrame = Math.max(
+          0,
+          Math.min(dragStartFrameRef.current + frameDelta, totalFrames - 1)
+        )
 
-      // Apply momentum with fractional position tracking
-      const initialVelocity = velocityRef.current
-      if (Math.abs(initialVelocity) > 0.05) {
-        let velocity = initialVelocity
-        let position = currentFrameIndex // Track fractional position
-        const friction = 0.99 // Friction factor for smooth deceleration
+        // Calculate velocity for momentum
+        const timeDelta = now - lastTimeRef.current
+        if (timeDelta > 0) {
+          const yDelta = lastYRef.current - moveEvent.clientY
+          velocityRef.current = ((yDelta / timeDelta) * 16) / 30 // Convert to frames per 16ms
+        }
 
-        const animate = () => {
-          velocity *= friction
+        lastYRef.current = moveEvent.clientY
+        lastTimeRef.current = now
+        setCurrentFrameIndex(newFrame)
+      }
 
-          // Stop when velocity becomes negligible
-          if (Math.abs(velocity) < 0.01) {
-            momentumFrameRef.current = null
-            return
+      const handleUp = () => {
+        if (!isDraggingRef.current) return
+        isDraggingRef.current = false
+        setCursorStyle('grab')
+
+        // Remove listeners
+        window.removeEventListener('mousemove', handleMove)
+        window.removeEventListener('mouseup', handleUp)
+
+        // Apply momentum with fractional position tracking
+        const initialVelocity = velocityRef.current
+        if (Math.abs(initialVelocity) > 0.05) {
+          let velocity = initialVelocity
+          let position = currentFrameIndex // Track fractional position
+          const friction = 0.99 // Friction factor for smooth deceleration
+
+          const animate = () => {
+            velocity *= friction
+
+            // Stop when velocity becomes negligible
+            if (Math.abs(velocity) < 0.01) {
+              momentumFrameRef.current = null
+              return
+            }
+
+            // Update fractional position
+            position += velocity
+
+            // Clamp to valid range
+            position = Math.max(0, Math.min(position, totalFrames - 1))
+
+            // Update displayed frame (rounded from fractional position)
+            const newFrame = Math.round(position)
+            setCurrentFrameIndex(newFrame)
+
+            momentumFrameRef.current = requestAnimationFrame(animate)
           }
-
-          // Update fractional position
-          position += velocity
-
-          // Clamp to valid range
-          position = Math.max(0, Math.min(position, totalFrames - 1))
-
-          // Update displayed frame (rounded from fractional position)
-          const newFrame = Math.round(position)
-          setCurrentFrameIndex(newFrame)
-
           momentumFrameRef.current = requestAnimationFrame(animate)
         }
-        momentumFrameRef.current = requestAnimationFrame(animate)
       }
-    }
 
-    window.addEventListener('mousemove', handleMove)
-    window.addEventListener('mouseup', handleUp)
-  }, [currentFrameIndex, totalFrames])
+      window.addEventListener('mousemove', handleMove)
+      window.addEventListener('mouseup', handleUp)
+    },
+    [currentFrameIndex, totalFrames]
+  )
 
   // Navigate to previous/next annotation by updated_at time
-  const navigateToAnnotation = useCallback(async (direction: 'prev' | 'next') => {
-    if (!activeAnnotation) return
+  const navigateToAnnotation = useCallback(
+    async (direction: 'prev' | 'next') => {
+      if (!activeAnnotation) return
 
-    try {
-      const encodedVideoId = encodeURIComponent(videoId)
-      const response = await fetch(
-        `/api/annotations/${encodedVideoId}/navigate?direction=${direction}&currentId=${activeAnnotation.id}`
-      )
-      const data = await response.json()
+      try {
+        const encodedVideoId = encodeURIComponent(videoId)
+        const response = await fetch(
+          `/api/annotations/${encodedVideoId}/navigate?direction=${direction}&currentId=${activeAnnotation.id}`
+        )
+        const data = await response.json()
 
-      if (data.annotation) {
-        setActiveAnnotation(data.annotation)
-        setCurrentFrameIndex(data.annotation.start_frame_index)
-        setMarkedStart(data.annotation.start_frame_index)
-        setMarkedEnd(data.annotation.end_frame_index)
+        if (data.annotation) {
+          setActiveAnnotation(data.annotation)
+          setCurrentFrameIndex(data.annotation.start_frame_index)
+          setMarkedStart(data.annotation.start_frame_index)
+          setMarkedEnd(data.annotation.end_frame_index)
 
-        // After navigating, check both directions
-        checkNavigationAvailability(data.annotation.id)
+          // After navigating, check both directions
+          checkNavigationAvailability(data.annotation.id)
+        }
+      } catch (error) {
+        console.error(`Failed to navigate to ${direction} annotation:`, error)
       }
-    } catch (error) {
-      console.error(`Failed to navigate to ${direction} annotation:`, error)
-    }
-  }, [activeAnnotation, videoId])
+    },
+    [activeAnnotation, videoId]
+  )
 
   // Helper to check navigation availability
-  const checkNavigationAvailability = useCallback(async (annotationId: number) => {
-    const encodedVideoId = encodeURIComponent(videoId)
+  const checkNavigationAvailability = useCallback(
+    async (annotationId: number) => {
+      const encodedVideoId = encodeURIComponent(videoId)
 
-    try {
-      // Check for previous
-      const prevResponse = await fetch(
-        `/api/annotations/${encodedVideoId}/navigate?direction=prev&currentId=${annotationId}`
-      )
-      const prevData = await prevResponse.json()
-      setHasPrevAnnotation(!!prevData.annotation)
+      try {
+        // Check for previous
+        const prevResponse = await fetch(
+          `/api/annotations/${encodedVideoId}/navigate?direction=prev&currentId=${annotationId}`
+        )
+        const prevData = await prevResponse.json()
+        setHasPrevAnnotation(!!prevData.annotation)
 
-      // Check for next
-      const nextResponse = await fetch(
-        `/api/annotations/${encodedVideoId}/navigate?direction=next&currentId=${annotationId}`
-      )
-      const nextData = await nextResponse.json()
-      setHasNextAnnotation(!!nextData.annotation)
-    } catch (error) {
-      console.error('Failed to check navigation:', error)
-    }
-  }, [videoId])
+        // Check for next
+        const nextResponse = await fetch(
+          `/api/annotations/${encodedVideoId}/navigate?direction=next&currentId=${annotationId}`
+        )
+        const nextData = await nextResponse.json()
+        setHasNextAnnotation(!!nextData.annotation)
+      } catch (error) {
+        console.error('Failed to check navigation:', error)
+      }
+    },
+    [videoId]
+  )
 
   // Jump to frame and load annotation containing it
   const jumpToFrame = useCallback(async () => {
@@ -543,9 +571,12 @@ export default function BoundaryWorkflow() {
           id: activeAnnotation.id,
           start_frame_index: markedStart,
           end_frame_index: markedEnd,
-          boundary_state: activeAnnotation.boundary_state === 'gap' ? 'confirmed' : activeAnnotation.boundary_state,
-          boundary_pending: false
-        })
+          boundary_state:
+            activeAnnotation.boundary_state === 'gap'
+              ? 'confirmed'
+              : activeAnnotation.boundary_state,
+          boundary_pending: false,
+        }),
       })
 
       if (!saveResponse.ok) {
@@ -584,14 +615,25 @@ export default function BoundaryWorkflow() {
     } catch (error) {
       console.error('Failed to save annotation:', error)
     }
-  }, [canSave, markedStart, markedEnd, videoId, activeAnnotation, updateProgress, visibleFrameIndices, loadAnnotations])
+  }, [
+    canSave,
+    markedStart,
+    markedEnd,
+    videoId,
+    activeAnnotation,
+    updateProgress,
+    visibleFrameIndices,
+    loadAnnotations,
+  ])
 
   // Keyboard event handler
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Skip if typing in input/textarea
-      if (document.activeElement?.tagName === 'INPUT' ||
-          document.activeElement?.tagName === 'TEXTAREA') {
+      if (
+        document.activeElement?.tagName === 'INPUT' ||
+        document.activeElement?.tagName === 'TEXTAREA'
+      ) {
         return
       }
 
@@ -692,7 +734,7 @@ export default function BoundaryWorkflow() {
           newFrames.set(frame.frame_index, {
             frame_index: frame.frame_index,
             image_url: imageUrl,
-            ocr_text: '' // OCR text not used in boundary workflow
+            ocr_text: '', // OCR text not used in boundary workflow
           })
         }
 
@@ -716,11 +758,14 @@ export default function BoundaryWorkflow() {
   }, [visibleFrameIndices, videoId])
 
   // Find annotation(s) for a given frame
-  const getAnnotationsForFrame = useCallback((frameIndex: number) => {
-    return annotations.filter(
-      ann => frameIndex >= ann.start_frame_index && frameIndex <= ann.end_frame_index
-    )
-  }, [annotations])
+  const getAnnotationsForFrame = useCallback(
+    (frameIndex: number) => {
+      return annotations.filter(
+        ann => frameIndex >= ann.start_frame_index && frameIndex <= ann.end_frame_index
+      )
+    },
+    [annotations]
+  )
 
   // Make current frame's annotation active
   const activateCurrentFrameAnnotation = useCallback(async () => {
@@ -745,10 +790,13 @@ export default function BoundaryWorkflow() {
   }, [currentFrameIndex, videoId, checkNavigationAvailability])
 
   // Check if frame is in marked range (active annotation being edited)
-  const isInMarkedRange = useCallback((frameIndex: number) => {
-    if (markedStart === null || markedEnd === null) return false
-    return frameIndex >= markedStart && frameIndex <= markedEnd
-  }, [markedStart, markedEnd])
+  const isInMarkedRange = useCallback(
+    (frameIndex: number) => {
+      if (markedStart === null || markedEnd === null) return false
+      return frameIndex >= markedStart && frameIndex <= markedEnd
+    },
+    [markedStart, markedEnd]
+  )
 
   // Switch to text correction mode
   const switchToTextCorrection = () => {
@@ -764,9 +812,7 @@ export default function BoundaryWorkflow() {
             <div className="text-lg font-semibold text-gray-900 dark:text-white">
               Loading video metadata...
             </div>
-            <div className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-              {videoId}
-            </div>
+            <div className="mt-2 text-sm text-gray-600 dark:text-gray-400">{videoId}</div>
           </div>
         </div>
       </AppLayout>
@@ -786,7 +832,8 @@ export default function BoundaryWorkflow() {
                   Workflow Complete!
                 </div>
                 <div className="text-sm text-green-700 dark:text-green-300">
-                  All {totalFrames.toLocaleString()} frames have been annotated. You can continue reviewing and editing as needed.
+                  All {totalFrames.toLocaleString()} frames have been annotated. You can continue
+                  reviewing and editing as needed.
                 </div>
               </div>
             </div>
@@ -815,7 +862,7 @@ export default function BoundaryWorkflow() {
                 // Find the primary annotation to display (prefer active annotation)
                 const primaryAnnotation =
                   frameAnnotations.find(
-                    (ann) => activeAnnotation && ann.id === activeAnnotation.id
+                    ann => activeAnnotation && ann.id === activeAnnotation.id
                   ) || frameAnnotations[0]
 
                 // Determine border classes
@@ -826,10 +873,8 @@ export default function BoundaryWorkflow() {
                   borderColor = getAnnotationBorderColor(primaryAnnotation)
 
                   // Check if this frame is at the start or end of the annotation
-                  const isAnnotationStart =
-                    frameIndex === primaryAnnotation.start_frame_index
-                  const isAnnotationEnd =
-                    frameIndex === primaryAnnotation.end_frame_index
+                  const isAnnotationStart = frameIndex === primaryAnnotation.start_frame_index
+                  const isAnnotationEnd = frameIndex === primaryAnnotation.end_frame_index
 
                   if (borderColor) {
                     // Create continuous border for the annotation
@@ -852,8 +897,7 @@ export default function BoundaryWorkflow() {
                   frameIndex <= markedEnd
                 ) {
                   // Create continuous orange border around the marked range
-                  orangeBorderClasses =
-                    'border-l-4 border-r-4 border-orange-500'
+                  orangeBorderClasses = 'border-l-4 border-r-4 border-orange-500'
                   if (frameIndex === markedStart) {
                     orangeBorderClasses += ' border-t-4 rounded-t'
                   }
@@ -884,7 +928,7 @@ export default function BoundaryWorkflow() {
                             height: 0,
                             borderTop: '12px solid transparent',
                             borderBottom: '12px solid transparent',
-                            borderLeft: '12px solid rgb(156, 163, 175)' // gray-400
+                            borderLeft: '12px solid rgb(156, 163, 175)', // gray-400
                           }}
                         />
                         {/* Right triangle pointing left */}
@@ -896,7 +940,7 @@ export default function BoundaryWorkflow() {
                             height: 0,
                             borderTop: '12px solid transparent',
                             borderBottom: '12px solid transparent',
-                            borderRight: '12px solid rgb(156, 163, 175)' // gray-400
+                            borderRight: '12px solid rgb(156, 163, 175)', // gray-400
                           }}
                         />
                       </>
@@ -911,7 +955,7 @@ export default function BoundaryWorkflow() {
                           setMarkedEnd(null)
                         }
                       }}
-                      onContextMenu={(e) => {
+                      onContextMenu={e => {
                         e.preventDefault()
                         setMarkedEnd(frameIndex)
                         // Reset start if it's after the new end
@@ -929,7 +973,7 @@ export default function BoundaryWorkflow() {
                           alt={`Frame ${frameIndex}`}
                           className="w-full"
                           draggable={false}
-                          onError={(e) => {
+                          onError={e => {
                             // Fallback for missing images
                             const target = e.target as HTMLImageElement
                             target.style.display = 'none'
@@ -990,20 +1034,15 @@ export default function BoundaryWorkflow() {
 
             {/* Video info */}
             <div>
-              <div className="text-sm font-semibold text-gray-500 dark:text-gray-400">
-                Video
-              </div>
-              <div className="text-lg font-bold text-gray-900 dark:text-white">
-                {videoId}
-              </div>
+              <div className="text-sm font-semibold text-gray-500 dark:text-gray-400">Video</div>
+              <div className="text-lg font-bold text-gray-900 dark:text-white">{videoId}</div>
               <div className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                Frame: {currentFrameIndex.toLocaleString()} /{' '}
-                {totalFrames.toLocaleString()}
+                Frame: {currentFrameIndex.toLocaleString()} / {totalFrames.toLocaleString()}
               </div>
               <div className="mt-1 text-xs text-gray-500 dark:text-gray-500">
                 Progress: {(workflowProgress || 0).toFixed(2)}% (
-                {(completedFrames || 0).toLocaleString()} /{' '}
-                {totalFrames.toLocaleString()} completed)
+                {(completedFrames || 0).toLocaleString()} / {totalFrames.toLocaleString()}{' '}
+                completed)
               </div>
 
               {/* Jump to frame */}
@@ -1011,8 +1050,8 @@ export default function BoundaryWorkflow() {
                 <input
                   type="number"
                   value={jumpToFrameInput}
-                  onChange={(e) => setJumpToFrameInput(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && jumpToFrame()}
+                  onChange={e => setJumpToFrameInput(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && jumpToFrame()}
                   placeholder="Frame #"
                   className="flex-1 rounded-md border border-gray-300 px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                 />
@@ -1045,9 +1084,7 @@ export default function BoundaryWorkflow() {
               </label>
               <select
                 value={frameSpacing}
-                onChange={(e) =>
-                  setFrameSpacing(e.target.value as FrameSpacing)
-                }
+                onChange={e => setFrameSpacing(e.target.value as FrameSpacing)}
                 className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
               >
                 <option value="linear">Linear (1,1,1...)</option>
@@ -1063,9 +1100,7 @@ export default function BoundaryWorkflow() {
               </div>
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">
-                    Start:
-                  </span>
+                  <span className="text-gray-600 dark:text-gray-400">Start:</span>
                   <span className="font-mono font-semibold text-gray-900 dark:text-white">
                     {markedStart ?? 'not set'}
                   </span>
@@ -1147,30 +1182,21 @@ export default function BoundaryWorkflow() {
                   </div>
                   <div className="space-y-1 text-sm">
                     <div className="flex justify-between">
-                      <span className="text-gray-600 dark:text-gray-400">
-                        State:
-                      </span>
+                      <span className="text-gray-600 dark:text-gray-400">State:</span>
                       <span className="font-semibold text-gray-900 dark:text-white capitalize">
                         {getEffectiveState(activeAnnotation)}
                       </span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600 dark:text-gray-400">
-                        Range:
-                      </span>
+                      <span className="text-gray-600 dark:text-gray-400">Range:</span>
                       <span className="font-mono text-gray-900 dark:text-white">
-                        {activeAnnotation.start_frame_index}-
-                        {activeAnnotation.end_frame_index}
+                        {activeAnnotation.start_frame_index}-{activeAnnotation.end_frame_index}
                       </span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600 dark:text-gray-400">
-                        Frames:
-                      </span>
+                      <span className="text-gray-600 dark:text-gray-400">Frames:</span>
                       <span className="font-mono text-gray-900 dark:text-white">
-                        {activeAnnotation.end_frame_index -
-                          activeAnnotation.start_frame_index +
-                          1}
+                        {activeAnnotation.end_frame_index - activeAnnotation.start_frame_index + 1}
                       </span>
                     </div>
                   </div>
@@ -1186,8 +1212,7 @@ export default function BoundaryWorkflow() {
                       : 'cursor-not-allowed bg-gray-400 dark:bg-gray-700'
                   }`}
                 >
-                  Save & Next{' '}
-                  <span className="text-xs opacity-75">(Enter)</span>
+                  Save & Next <span className="text-xs opacity-75">(Enter)</span>
                 </button>
 
                 {/* History Navigation */}
@@ -1218,9 +1243,7 @@ export default function BoundaryWorkflow() {
 
                 <button
                   onClick={deleteAnnotation}
-                  disabled={
-                    !activeAnnotation || activeAnnotation.boundary_state === 'gap'
-                  }
+                  disabled={!activeAnnotation || activeAnnotation.boundary_state === 'gap'}
                   className={`w-full rounded-md border-2 px-4 py-2 text-sm font-semibold ${
                     activeAnnotation && activeAnnotation.boundary_state !== 'gap'
                       ? 'border-red-500 text-red-600 hover:bg-red-50 dark:border-red-600 dark:text-red-400 dark:hover:bg-red-950'
@@ -1297,7 +1320,7 @@ export default function BoundaryWorkflow() {
         >
           <div
             className="w-full max-w-3xl rounded-lg bg-white bg-opacity-75 px-2 py-5 shadow-xl dark:bg-gray-900 dark:bg-opacity-75"
-            onClick={(e) => e.stopPropagation()}
+            onClick={e => e.stopPropagation()}
           >
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
@@ -1317,15 +1340,13 @@ export default function BoundaryWorkflow() {
                   Purpose
                 </h3>
                 <p>
-                  This page helps you review and correct frame range boundaries
-                  for video content. Each annotation is either a single
-                  caption&apos;s range or a single non-caption range between
-                  captions.
+                  This page helps you review and correct frame range boundaries for video content.
+                  Each annotation is either a single caption&apos;s range or a single non-caption
+                  range between captions.
                 </p>
                 <p className="mt-2">
-                  <strong>Important:</strong> The bounds should include both the
-                  start and end frames of the range, as shown by the colored
-                  border around the frames.
+                  <strong>Important:</strong> The bounds should include both the start and end
+                  frames of the range, as shown by the colored border around the frames.
                 </p>
               </section>
 
@@ -1348,9 +1369,9 @@ export default function BoundaryWorkflow() {
                       Predicted (Indigo Border)
                     </div>
                     <p className="mt-1 text-indigo-800 dark:text-indigo-300">
-                      Machine learning predictions for frame range boundaries
-                      (captions or non-caption content). These are considered
-                      complete and are not included in the review workflow.
+                      Machine learning predictions for frame range boundaries (captions or
+                      non-caption content). These are considered complete and are not included in
+                      the review workflow.
                     </p>
                   </div>
 
@@ -1359,9 +1380,8 @@ export default function BoundaryWorkflow() {
                       Confirmed (Teal Border)
                     </div>
                     <p className="mt-1 text-teal-800 dark:text-teal-300">
-                      Human-verified annotations with correct boundaries for
-                      either captions or non-caption content. These are
-                      considered complete and accurate.
+                      Human-verified annotations with correct boundaries for either captions or
+                      non-caption content. These are considered complete and accurate.
                     </p>
                   </div>
 
@@ -1370,22 +1390,19 @@ export default function BoundaryWorkflow() {
                       Pending (Pink Border)
                     </div>
                     <p className="mt-1 text-pink-800 dark:text-pink-300">
-                      Annotations for captions or non-caption content that need
-                      review or correction. These appear in the workflow queue
-                      for human verification.
+                      Annotations for captions or non-caption content that need review or
+                      correction. These appear in the workflow queue for human verification.
                     </p>
                   </div>
                 </div>
               </section>
 
               <section>
-                <h3 className="mb-2 text-lg font-semibold text-gray-900 dark:text-white">
-                  Gaps
-                </h3>
+                <h3 className="mb-2 text-lg font-semibold text-gray-900 dark:text-white">Gaps</h3>
                 <p>
-                  Gaps are frame ranges that haven&apos;t been assigned yet.
-                  They appear in the workflow queue so you can determine what
-                  type of content they contain and annotate them accordingly.
+                  Gaps are frame ranges that haven&apos;t been assigned yet. They appear in the
+                  workflow queue so you can determine what type of content they contain and annotate
+                  them accordingly.
                 </p>
               </section>
 
@@ -1394,30 +1411,19 @@ export default function BoundaryWorkflow() {
                   Workflow
                 </h3>
                 <ol className="list-decimal space-y-2 pl-5">
+                  <li>Review the active annotation or gap shown with a colored border</li>
+                  <li>Navigate through frames using scroll wheel, drag, or keyboard shortcuts</li>
                   <li>
-                    Review the active annotation or gap shown with a colored
-                    border
+                    Adjust boundaries using Mark Start/End buttons or (left, right) mouse clicks
                   </li>
                   <li>
-                    Navigate through frames using scroll wheel, drag, or
-                    keyboard shortcuts
+                    The orange border shows the range that will be saved as the caption /
+                    non-caption
                   </li>
                   <li>
-                    Adjust boundaries using Mark Start/End buttons or (left,
-                    right) mouse clicks
+                    Click &ldquo;Save &amp; Next&rdquo; to confirm and move to the next annotation
                   </li>
-                  <li>
-                    The orange border shows the range that will be saved as the
-                    caption / non-caption
-                  </li>
-                  <li>
-                    Click &ldquo;Save &amp; Next&rdquo; to confirm and move to
-                    the next annotation
-                  </li>
-                  <li>
-                    Use &ldquo;Clear Marks&rdquo; to reset to original
-                    boundaries if needed
-                  </li>
+                  <li>Use &ldquo;Clear Marks&rdquo; to reset to original boundaries if needed</li>
                 </ol>
               </section>
 
@@ -1426,29 +1432,16 @@ export default function BoundaryWorkflow() {
                   Rules &amp; Tips
                 </h3>
                 <ul className="list-disc space-y-2 pl-5">
-                  <li>
-                    Boundaries must include both start and end frames
-                    (inclusive)
-                  </li>
+                  <li>Boundaries must include both start and end frames (inclusive)</li>
                   <li>A caption can be a single frame (start = end)</li>
+                  <li>Annotations cannot overlap - each frame belongs to exactly one annotation</li>
                   <li>
-                    Annotations cannot overlap - each frame belongs to exactly
-                    one annotation
+                    A caption can be set to overlap with another caption - that caption will be
+                    adjusted and set to Pending status
                   </li>
-                  <li>
-                    A caption can be set to overlap with another caption - that
-                    caption will be adjusted and set to Pending status
-                  </li>
-                  <li>
-                    The teal ring highlights the currently displayed frame
-                  </li>
-                  <li>
-                    Use frame spacing controls to adjust visible frame density
-                  </li>
-                  <li>
-                    Progress tracks the percentage of confirmed and predicted
-                    frames
-                  </li>
+                  <li>The teal ring highlights the currently displayed frame</li>
+                  <li>Use frame spacing controls to adjust visible frame density</li>
+                  <li>Progress tracks the percentage of confirmed and predicted frames</li>
                 </ul>
               </section>
             </div>

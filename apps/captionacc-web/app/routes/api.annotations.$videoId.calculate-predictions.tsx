@@ -1,8 +1,10 @@
-import { type ActionFunctionArgs } from 'react-router'
-import { getDbPath } from '~/utils/video-paths'
-import Database from 'better-sqlite3'
 import { existsSync } from 'fs'
+
+import Database from 'better-sqlite3'
+import { type ActionFunctionArgs } from 'react-router'
+
 import { predictBoxLabel, trainModel, initializeSeedModel } from '~/utils/box-prediction'
+import { getDbPath } from '~/utils/video-paths'
 
 interface VideoLayoutConfig {
   frame_width: number
@@ -39,7 +41,7 @@ export async function action({ params }: ActionFunctionArgs) {
   if (!encodedVideoId) {
     return new Response(JSON.stringify({ error: 'Missing videoId' }), {
       status: 400,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
     })
   }
 
@@ -50,13 +52,15 @@ export async function action({ params }: ActionFunctionArgs) {
     if (db instanceof Response) return db
 
     // Get layout config
-    const layoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as VideoLayoutConfig | undefined
+    const layoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as
+      | VideoLayoutConfig
+      | undefined
 
     if (!layoutConfig) {
       db.close()
       return new Response(JSON.stringify({ error: 'Layout config not found' }), {
         status: 404,
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
       })
     }
 
@@ -68,15 +72,21 @@ export async function action({ params }: ActionFunctionArgs) {
     if (trainingCount) {
       console.log(`[Calculate Predictions] Model retrained with ${trainingCount} annotations`)
     } else {
-      console.log('[Calculate Predictions] Using seed model or heuristics (insufficient training data)')
+      console.log(
+        '[Calculate Predictions] Using seed model or heuristics (insufficient training data)'
+      )
     }
 
     // Get model version if available
-    const modelRow = db.prepare('SELECT model_version FROM box_classification_model WHERE id = 1').get() as { model_version: string } | undefined
+    const modelRow = db
+      .prepare('SELECT model_version FROM box_classification_model WHERE id = 1')
+      .get() as { model_version: string } | undefined
     const modelVersion = modelRow?.model_version || 'heuristic_v1'
 
     // Fetch all OCR boxes
-    const boxes = db.prepare(`
+    const boxes = db
+      .prepare(
+        `
       SELECT
         id,
         frame_index,
@@ -84,7 +94,9 @@ export async function action({ params }: ActionFunctionArgs) {
         x, y, width, height
       FROM full_frame_ocr
       ORDER BY frame_index, box_index
-    `).all() as Array<{
+    `
+      )
+      .all() as Array<{
       id: number
       frame_index: number
       box_index: number
@@ -143,19 +155,16 @@ export async function action({ params }: ActionFunctionArgs) {
         const prediction = predictBoxLabel(bounds, layoutConfig, allBoxBounds, db)
 
         // Update database
-        updateStmt.run(
-          prediction.label,
-          prediction.confidence,
-          modelVersion,
-          box.id
-        )
+        updateStmt.run(prediction.label, prediction.confidence, modelVersion, box.id)
 
         processedCount++
 
         // Log progress every 1000 boxes
         if (processedCount % 1000 === 0) {
           const elapsed = ((Date.now() - startTime) / 1000).toFixed(1)
-          console.log(`[Calculate Predictions] Processed ${processedCount}/${boxes.length} boxes (${elapsed}s)`)
+          console.log(
+            `[Calculate Predictions] Processed ${processedCount}/${boxes.length} boxes (${elapsed}s)`
+          )
         }
       }
     }
@@ -165,22 +174,27 @@ export async function action({ params }: ActionFunctionArgs) {
 
     db.close()
 
-    return new Response(JSON.stringify({
-      success: true,
-      processedCount,
-      totalTime: parseFloat(totalTime),
-      modelVersion
-    }), {
-      headers: { 'Content-Type': 'application/json' }
-    })
-
+    return new Response(
+      JSON.stringify({
+        success: true,
+        processedCount,
+        totalTime: parseFloat(totalTime),
+        modelVersion,
+      }),
+      {
+        headers: { 'Content-Type': 'application/json' },
+      }
+    )
   } catch (error) {
     console.error('Error calculating predictions:', error)
-    return new Response(JSON.stringify({
-      error: error instanceof Error ? error.message : 'Unknown error'
-    }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
-    })
+    return new Response(
+      JSON.stringify({
+        error: error instanceof Error ? error.message : 'Unknown error',
+      }),
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    )
   }
 }

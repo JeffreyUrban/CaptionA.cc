@@ -1,7 +1,9 @@
-import { type ActionFunctionArgs } from 'react-router'
-import { getDbPath } from '~/utils/video-paths'
-import Database from 'better-sqlite3'
 import { existsSync } from 'fs'
+
+import Database from 'better-sqlite3'
+import { type ActionFunctionArgs } from 'react-router'
+
+import { getDbPath } from '~/utils/video-paths'
 
 interface VideoLayoutConfig {
   id: number
@@ -45,7 +47,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
   if (!encodedVideoId) {
     return new Response(JSON.stringify({ error: 'Missing videoId' }), {
       status: 400,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
     })
   }
 
@@ -53,12 +55,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
 
   try {
     const body = await request.json()
-    const {
-      cropBounds,
-      selectionBounds,
-      selectionMode,
-      layoutParams
-    } = body as {
+    const { cropBounds, selectionBounds, selectionMode, layoutParams } = body as {
       cropBounds?: { left: number; top: number; right: number; bottom: number }
       selectionBounds?: { left: number; top: number; right: number; bottom: number }
       selectionMode?: 'hard' | 'soft' | 'disabled'
@@ -76,23 +73,25 @@ export async function action({ params, request }: ActionFunctionArgs) {
     if (db instanceof Response) return db
 
     // Get current config
-    const currentConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as VideoLayoutConfig | undefined
+    const currentConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as
+      | VideoLayoutConfig
+      | undefined
 
     if (!currentConfig) {
       db.close()
       return new Response(JSON.stringify({ error: 'Layout config not found' }), {
         status: 404,
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
       })
     }
 
     // Check if crop bounds changed
-    const cropBoundsChanged = cropBounds && (
-      cropBounds.left !== currentConfig.crop_left ||
-      cropBounds.top !== currentConfig.crop_top ||
-      cropBounds.right !== currentConfig.crop_right ||
-      cropBounds.bottom !== currentConfig.crop_bottom
-    )
+    const cropBoundsChanged =
+      cropBounds &&
+      (cropBounds.left !== currentConfig.crop_left ||
+        cropBounds.top !== currentConfig.crop_top ||
+        cropBounds.right !== currentConfig.crop_right ||
+        cropBounds.bottom !== currentConfig.crop_bottom)
 
     let framesInvalidated = 0
 
@@ -103,7 +102,8 @@ export async function action({ params, request }: ActionFunctionArgs) {
       // Update crop bounds and increment version if changed
       if (cropBoundsChanged && cropBounds) {
         // Increment crop_bounds_version
-        db.prepare(`
+        db.prepare(
+          `
           UPDATE video_layout_config
           SET crop_bounds_version = crop_bounds_version + 1,
               crop_left = ?,
@@ -112,20 +112,26 @@ export async function action({ params, request }: ActionFunctionArgs) {
               crop_bottom = ?,
               updated_at = datetime('now')
           WHERE id = 1
-        `).run(cropBounds.left, cropBounds.top, cropBounds.right, cropBounds.bottom)
+        `
+        ).run(cropBounds.left, cropBounds.top, cropBounds.right, cropBounds.bottom)
 
         // Invalidate all frames (set crop_bounds_version to 0)
-        const result = db.prepare(`
+        const result = db
+          .prepare(
+            `
           UPDATE frames_ocr
           SET crop_bounds_version = 0
-        `).run()
+        `
+          )
+          .run()
 
         framesInvalidated = result.changes
 
         console.log(`Crop bounds changed: invalidated ${framesInvalidated} frames`)
       } else if (cropBounds) {
         // Update crop bounds without incrementing version (no actual change)
-        db.prepare(`
+        db.prepare(
+          `
           UPDATE video_layout_config
           SET crop_left = ?,
               crop_top = ?,
@@ -133,7 +139,8 @@ export async function action({ params, request }: ActionFunctionArgs) {
               crop_bottom = ?,
               updated_at = datetime('now')
           WHERE id = 1
-        `).run(cropBounds.left, cropBounds.top, cropBounds.right, cropBounds.bottom)
+        `
+        ).run(cropBounds.left, cropBounds.top, cropBounds.right, cropBounds.bottom)
       }
 
       // Update selection bounds and mode
@@ -142,8 +149,18 @@ export async function action({ params, request }: ActionFunctionArgs) {
         const values: (number | string)[] = []
 
         if (selectionBounds !== undefined) {
-          updates.push('selection_left = ?', 'selection_top = ?', 'selection_right = ?', 'selection_bottom = ?')
-          values.push(selectionBounds.left, selectionBounds.top, selectionBounds.right, selectionBounds.bottom)
+          updates.push(
+            'selection_left = ?',
+            'selection_top = ?',
+            'selection_right = ?',
+            'selection_bottom = ?'
+          )
+          values.push(
+            selectionBounds.left,
+            selectionBounds.top,
+            selectionBounds.right,
+            selectionBounds.bottom
+          )
         }
 
         if (selectionMode !== undefined) {
@@ -151,18 +168,21 @@ export async function action({ params, request }: ActionFunctionArgs) {
           values.push(selectionMode)
         }
 
-        updates.push('updated_at = datetime(\'now\')')
+        updates.push("updated_at = datetime('now')")
 
-        db.prepare(`
+        db.prepare(
+          `
           UPDATE video_layout_config
           SET ${updates.join(', ')}
           WHERE id = 1
-        `).run(...values)
+        `
+        ).run(...values)
       }
 
       // Update layout parameters (Bayesian priors)
       if (layoutParams) {
-        db.prepare(`
+        db.prepare(
+          `
           UPDATE video_layout_config
           SET vertical_position = ?,
               vertical_std = ?,
@@ -172,7 +192,8 @@ export async function action({ params, request }: ActionFunctionArgs) {
               anchor_position = ?,
               updated_at = datetime('now')
           WHERE id = 1
-        `).run(
+        `
+        ).run(
           layoutParams.verticalPosition,
           layoutParams.verticalStd,
           layoutParams.boxHeight,
@@ -184,7 +205,9 @@ export async function action({ params, request }: ActionFunctionArgs) {
         // Clear the trained model since it was trained with different layout parameters
         // Predictions will fall back to heuristics until model is retrained
         db.prepare(`DELETE FROM box_classification_model WHERE id = 1`).run()
-        console.log(`[Layout Config] Layout parameters changed, cleared trained model (will use heuristics until retrained)`)
+        console.log(
+          `[Layout Config] Layout parameters changed, cleared trained model (will use heuristics until retrained)`
+        )
       }
 
       db.prepare('COMMIT').run()
@@ -198,10 +221,15 @@ export async function action({ params, request }: ActionFunctionArgs) {
     // Trigger prediction recalculation if layout parameters changed
     // (predictions depend on these parameters, so they need to be recalculated)
     if (layoutParams) {
-      console.log(`[Layout Config] Layout parameters changed, triggering prediction recalculation for ${videoId}`)
-      fetch(`http://localhost:5173/api/annotations/${encodeURIComponent(videoId)}/calculate-predictions`, {
-        method: 'POST'
-      })
+      console.log(
+        `[Layout Config] Layout parameters changed, triggering prediction recalculation for ${videoId}`
+      )
+      fetch(
+        `http://localhost:5173/api/annotations/${encodeURIComponent(videoId)}/calculate-predictions`,
+        {
+          method: 'POST',
+        }
+      )
         .then(response => response.json())
         .then(result => {
           console.log(`[Layout Config] Predictions recalculated after layout change:`, result)
@@ -211,22 +239,27 @@ export async function action({ params, request }: ActionFunctionArgs) {
         })
     }
 
-    return new Response(JSON.stringify({
-      success: true,
-      boundsChanged: cropBoundsChanged,
-      framesInvalidated,
-      layoutParamsChanged: !!layoutParams,
-    }), {
-      headers: { 'Content-Type': 'application/json' }
-    })
-
+    return new Response(
+      JSON.stringify({
+        success: true,
+        boundsChanged: cropBoundsChanged,
+        framesInvalidated,
+        layoutParamsChanged: !!layoutParams,
+      }),
+      {
+        headers: { 'Content-Type': 'application/json' },
+      }
+    )
   } catch (error) {
     console.error('Error updating layout config:', error)
-    return new Response(JSON.stringify({
-      error: error instanceof Error ? error.message : 'Unknown error'
-    }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
-    })
+    return new Response(
+      JSON.stringify({
+        error: error instanceof Error ? error.message : 'Unknown error',
+      }),
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    )
   }
 }

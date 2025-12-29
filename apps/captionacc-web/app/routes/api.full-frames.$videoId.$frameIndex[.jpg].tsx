@@ -1,6 +1,7 @@
-import { type LoaderFunctionArgs } from 'react-router'
-import { getDbPath } from '~/utils/video-paths'
 import Database from 'better-sqlite3'
+import { type LoaderFunctionArgs } from 'react-router'
+
+import { getDbPath } from '~/utils/video-paths'
 
 export async function loader({ params }: LoaderFunctionArgs) {
   const { videoId: encodedVideoId, frameIndex } = params

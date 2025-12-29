@@ -5,6 +5,7 @@
 
 import { readdirSync, unlinkSync, existsSync, readFileSync } from 'fs'
 import { resolve } from 'path'
+
 import Database from 'better-sqlite3'
 
 interface UploadMetadata {
@@ -66,14 +67,16 @@ export async function action() {
             // Mark as deleted in database first
             const db = new Database(dbPath)
             try {
-              db.prepare(`
+              db.prepare(
+                `
                 UPDATE processing_status
                 SET status = 'error',
                     error_message = 'Upload interrupted and cleared',
                     deleted = 1,
                     deleted_at = datetime('now')
                 WHERE id = 1
-              `).run()
+              `
+              ).run()
             } finally {
               db.close()
             }
@@ -89,16 +92,13 @@ export async function action() {
     console.log(`[ClearIncomplete] Cleared ${cleared} incomplete upload(s)`)
 
     return new Response(JSON.stringify({ cleared }), {
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
     })
   } catch (error) {
     console.error('[ClearIncomplete] Error:', error)
-    return new Response(
-      JSON.stringify({ error: (error as Error).message }),
-      {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      }
-    )
+    return new Response(JSON.stringify({ error: (error as Error).message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    })
   }
 }

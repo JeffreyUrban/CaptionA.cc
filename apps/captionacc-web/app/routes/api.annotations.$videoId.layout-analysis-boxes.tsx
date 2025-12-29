@@ -1,8 +1,10 @@
-import { type LoaderFunctionArgs } from 'react-router'
-import { getDbPath } from '~/utils/video-paths'
-import Database from 'better-sqlite3'
 import { existsSync } from 'fs'
+
+import Database from 'better-sqlite3'
+import { type LoaderFunctionArgs } from 'react-router'
+
 import { predictBoxLabel } from '~/utils/box-prediction'
+import { getDbPath } from '~/utils/video-paths'
 
 interface VideoLayoutConfig {
   frame_width: number
@@ -50,7 +52,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
   if (!encodedVideoId) {
     return new Response(JSON.stringify({ error: 'Missing videoId' }), {
       status: 400,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
     })
   }
 
@@ -61,18 +63,22 @@ export async function loader({ params }: LoaderFunctionArgs) {
     if (db instanceof Response) return db
 
     // Get layout config
-    const layoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as VideoLayoutConfig | undefined
+    const layoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as
+      | VideoLayoutConfig
+      | undefined
 
     if (!layoutConfig) {
       db.close()
       return new Response(JSON.stringify({ error: 'Layout config not found' }), {
         status: 404,
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
       })
     }
 
     // Fetch all OCR boxes from full_frame_ocr table with predictions
-    const boxes = db.prepare(`
+    const boxes = db
+      .prepare(
+        `
       SELECT
         id,
         frame_index,
@@ -82,7 +88,9 @@ export async function loader({ params }: LoaderFunctionArgs) {
         predicted_confidence
       FROM full_frame_ocr
       ORDER BY frame_index, box_index
-    `).all() as Array<{
+    `
+      )
+      .all() as Array<{
       id: number
       frame_index: number
       box_index: number
@@ -95,13 +103,17 @@ export async function loader({ params }: LoaderFunctionArgs) {
     }>
 
     // Fetch user annotations (full_frame_box_labels)
-    const annotations = db.prepare(`
+    const annotations = db
+      .prepare(
+        `
       SELECT
         frame_index,
         box_index,
         label
       FROM full_frame_box_labels
-    `).all() as Array<{
+    `
+      )
+      .all() as Array<{
       frame_index: number
       box_index: number
       label: 'in' | 'out'
@@ -185,13 +197,13 @@ export async function loader({ params }: LoaderFunctionArgs) {
     db.close()
 
     return new Response(JSON.stringify({ boxes: boxesData }), {
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
     })
   } catch (error) {
     console.error('Error fetching layout analysis boxes:', error)
     return new Response(JSON.stringify({ error: String(error) }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
     })
   }
 }

@@ -7,8 +7,9 @@
  * - videoId: UUID for the video
  */
 
-import { resolve } from 'path'
 import { existsSync, readdirSync } from 'fs'
+import { resolve } from 'path'
+
 import Database from 'better-sqlite3'
 
 const dataDir = resolve(process.cwd(), '..', '..', 'local', 'data')
@@ -43,9 +44,13 @@ export function resolveDisplayPath(displayPath: string): string | null {
           try {
             const db = new Database(dbPath, { readonly: true })
             try {
-              const result = db.prepare(`
+              const result = db
+                .prepare(
+                  `
                 SELECT storage_path FROM video_metadata WHERE id = 1 AND display_path = ?
-              `).get(displayPath) as { storage_path: string } | undefined
+              `
+                )
+                .get(displayPath) as { storage_path: string } | undefined
 
               if (result) {
                 return result.storage_path
@@ -122,17 +127,23 @@ export function getVideoMetadata(pathOrId: string): VideoMetadata | null {
   try {
     const db = new Database(dbPath, { readonly: true })
     try {
-      const result = db.prepare(`
+      const result = db
+        .prepare(
+          `
         SELECT video_id, video_hash, storage_path, display_path, original_filename
         FROM video_metadata
         WHERE id = 1
-      `).get() as {
-        video_id: string
-        video_hash: string
-        storage_path: string
-        display_path: string
-        original_filename: string
-      } | undefined
+      `
+        )
+        .get() as
+        | {
+            video_id: string
+            video_hash: string
+            storage_path: string
+            display_path: string
+            original_filename: string
+          }
+        | undefined
 
       if (!result) return null
 
@@ -174,17 +185,23 @@ export function getAllVideos(): VideoMetadata[] {
           try {
             const db = new Database(dbPath, { readonly: true })
             try {
-              const result = db.prepare(`
+              const result = db
+                .prepare(
+                  `
                 SELECT video_id, video_hash, storage_path, display_path, original_filename
                 FROM video_metadata
                 WHERE id = 1
-              `).get() as {
-                video_id: string
-                video_hash: string
-                storage_path: string
-                display_path: string
-                original_filename: string
-              } | undefined
+              `
+                )
+                .get() as
+                | {
+                    video_id: string
+                    video_hash: string
+                    storage_path: string
+                    display_path: string
+                    original_filename: string
+                  }
+                | undefined
 
               if (result) {
                 videos.push({

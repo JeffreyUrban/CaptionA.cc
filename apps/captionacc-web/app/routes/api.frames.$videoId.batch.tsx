@@ -1,6 +1,7 @@
-import { type LoaderFunctionArgs } from 'react-router'
-import { getDbPath } from '~/utils/video-paths'
 import Database from 'better-sqlite3'
+import { type LoaderFunctionArgs } from 'react-router'
+
+import { getDbPath } from '~/utils/video-paths'
 
 export async function loader({ params, request }: LoaderFunctionArgs) {
   const { videoId: encodedVideoId } = params
@@ -18,9 +19,9 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
   }
 
   // Parse comma-separated indices
-  const indices = indicesParam.split(',').map((idx) => parseInt(idx.trim(), 10))
+  const indices = indicesParam.split(',').map(idx => parseInt(idx.trim(), 10))
 
-  if (indices.some((idx) => isNaN(idx))) {
+  if (indices.some(idx => isNaN(idx))) {
     return new Response('Invalid frame indices', { status: 400 })
   }
 
@@ -56,7 +57,7 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
     }>
 
     // Convert to JSON response with base64-encoded images
-    const frames = rows.map((row) => ({
+    const frames = rows.map(row => ({
       frame_index: row.frame_index,
       image_data: row.image_data.toString('base64'),
       width: row.width,

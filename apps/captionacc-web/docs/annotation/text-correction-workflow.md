@@ -19,6 +19,7 @@ Review OCR-extracted text from all frames in a caption sequence, identify charac
 ## Key Insight
 
 **OCR text varies across frames in predictable ways:**
+
 - Certain character positions oscillate between options (e.g., 'a' vs 'o')
 - Extra errant text appears before/after the main caption
 - Consistent characters across many frames are likely correct
@@ -89,6 +90,7 @@ Review OCR-extracted text from all frames in a caption sequence, identify charac
 ### Frame Display
 
 **Single frame view:**
+
 - Current frame from annotation range
 - Full width (2/3 of viewport)
 - High quality, readable caption text in frame
@@ -98,12 +100,14 @@ Review OCR-extracted text from all frames in a caption sequence, identify charac
 **Goal:** Align OCR and Caption text fields horizontally with the text position in the frame.
 
 **Controls:**
+
 - Anchor X slider: 0-100% (horizontal offset from left)
 - Font Size slider: 12-48px
 - Real-time preview as sliders adjust
 - Settings persist per video (localStorage)
 
 **Visual alignment:**
+
 ```
 ┌─────────────────────────────────┐
 │ [Frame with caption text]       │
@@ -122,6 +126,7 @@ Review OCR-extracted text from all frames in a caption sequence, identify charac
 ### OCR Text Display
 
 **Read-only text display below frame:**
+
 - Monospace font for character alignment
 - Character-level highlighting:
   - Green background: Consistent across frames (appears in 80%+ of frames)
@@ -132,6 +137,7 @@ Review OCR-extracted text from all frames in a caption sequence, identify charac
 ### Caption Text Field
 
 **Editable text below OCR:**
+
 - Initially populated from most common OCR text when entering workflow
 - Monospace font matching OCR display
 - Same horizontal alignment as OCR text
@@ -142,6 +148,7 @@ Review OCR-extracted text from all frames in a caption sequence, identify charac
   - Cursor indicates clickable characters
 
 **Example interaction:**
+
 ```
 OCR:     Hello, how ore you?
                    ^^^ (yellow - inconsistent)
@@ -153,6 +160,7 @@ Caption: Hello, how are you?
 ### Frame OCR Comparison Panel
 
 **List of all frames in range with their OCR text:**
+
 ```
 140: "Hello, how are you?"
 141: "Hello, how are you?"
@@ -165,6 +173,7 @@ Caption: Hello, how are you?
 ```
 
 **Features:**
+
 - Scrollable list
 - Current frame highlighted/marked
 - Click frame to jump to it
@@ -176,6 +185,7 @@ Caption: Hello, how are you?
 ### Algorithm
 
 For each character position across all frames:
+
 1. Collect all characters at that position
 2. Count frequency of each variant
 3. Determine consistency threshold (e.g., 80%)
@@ -184,7 +194,7 @@ For each character position across all frames:
 ```typescript
 interface CharacterVariant {
   position: number
-  variants: Array<{ char: string, count: number }>
+  variants: Array<{ char: string; count: number }>
   isConsistent: boolean
   mostCommon: string
 }
@@ -195,10 +205,13 @@ function analyzeCharacterVariants(frames: Frame[]): CharacterVariant[] {
 
   for (let pos = 0; pos < maxLength; pos++) {
     const chars = frames.map(f => f.ocr_text[pos] || ' ').filter(c => c)
-    const charCounts = chars.reduce((acc, char) => {
-      acc[char] = (acc[char] || 0) + 1
-      return acc
-    }, {} as Record<string, number>)
+    const charCounts = chars.reduce(
+      (acc, char) => {
+        acc[char] = (acc[char] || 0) + 1
+        return acc
+      },
+      {} as Record<string, number>
+    )
 
     const variantList = Object.entries(charCounts)
       .map(([char, count]) => ({ char, count }))
@@ -212,7 +225,7 @@ function analyzeCharacterVariants(frames: Frame[]): CharacterVariant[] {
       position: pos,
       variants: variantList,
       isConsistent,
-      mostCommon: mostCommon.char
+      mostCommon: mostCommon.char,
     })
   }
 
@@ -223,11 +236,13 @@ function analyzeCharacterVariants(frames: Frame[]): CharacterVariant[] {
 ### Character Highlighting
 
 **OCR Text (read-only):**
+
 - Green: Consistent (≥80% agreement)
 - Yellow: Inconsistent (multiple variants)
 - Red: Errant (appears in <20% of frames)
 
 **Caption Text (editable):**
+
 - No highlight: Consistent (no action needed)
 - Yellow highlight: Inconsistent (click to cycle)
 - Hover tooltip: Shows all variants with counts
@@ -245,14 +260,13 @@ function cycleCharacter(position: number) {
   const nextChar = variant.variants[nextIdx].char
 
   setCaptionText(
-    captionText.substring(0, position) +
-    nextChar +
-    captionText.substring(position + 1)
+    captionText.substring(0, position) + nextChar + captionText.substring(position + 1)
   )
 }
 ```
 
 **User experience:**
+
 1. User sees yellow highlight on 'o' in "how ore you?"
 2. Hovers to see tooltip: "a(6) | o(1)"
 3. Clicks character
@@ -281,6 +295,7 @@ Text Alignment:
 ```
 
 **Behavior:**
+
 - Sliders update alignment in real-time
 - Values persist per video in localStorage
 - Reset button restores default values (50%, 16px)
@@ -295,6 +310,7 @@ Navigation:
 ```
 
 **Keyboard shortcuts:**
+
 - `←/→` or `↑/↓`: Navigate between frames in range
 - `Home`: Jump to first frame in range
 - `End`: Jump to last frame in range
@@ -340,6 +356,7 @@ Notes (optional):
 ### Initial Load
 
 When loading annotation for text correction:
+
 1. Fetch annotation with `text: 'NOT_YET_DETERMINED'`
 2. Load all frames in range (start to end)
 3. Analyze character variants across frames
@@ -350,6 +367,7 @@ When loading annotation for text correction:
 ### Frame Navigation
 
 **Within annotation range:**
+
 - Navigate with arrow keys or mouse wheel
 - OCR text updates to show current frame
 - Caption text remains editable
@@ -372,6 +390,7 @@ When loading annotation for text correction:
    - Use for adding/removing words, fixing structure
 
 **Auto-suggestions:**
+
 - On load, caption text = most common OCR text
 - Character positions with disagreements highlighted
 - Tooltip shows options with vote counts
@@ -379,16 +398,19 @@ When loading annotation for text correction:
 ### Saving
 
 **Save triggers:**
+
 - Click "Save" button
 - Press Enter key
 - Auto-validate before saving
 
 **Validation:**
+
 - Text must not be empty (unless status is "No Caption")
 - Text should differ from "NOT_YET_DETERMINED"
 - Warn if text identical to OCR text (may want review)
 
 **After save:**
+
 - Mark annotation as complete
 - Load next annotation with `text: 'NOT_YET_DETERMINED'`
 - Update session history
@@ -504,6 +526,7 @@ Response:
 ### Text Alignment Persistence
 
 Store per-video in localStorage:
+
 ```typescript
 const STORAGE_KEY = 'caption-text-alignment'
 
@@ -522,6 +545,7 @@ function loadAlignment(videoId: string): TextAlignment {
 ### Character Variant Caching
 
 Cache analysis results to avoid recalculating:
+
 ```typescript
 const [characterVariants, setCharacterVariants] = useState<CharacterVariant[]>([])
 
@@ -564,6 +588,7 @@ useEffect(() => {
 ## Testing Considerations
 
 **Test with:**
+
 - Short captions (5-10 characters)
 - Long captions (50+ characters)
 - Multi-line captions
@@ -572,6 +597,7 @@ useEffect(() => {
 - Frames with completely different OCR (catch errors)
 
 **Verify:**
+
 - Character cycling works correctly
 - Text alignment adjusts properly
 - All frames in range load correctly

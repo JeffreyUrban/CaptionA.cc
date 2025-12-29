@@ -1,11 +1,13 @@
 /**
  * Move a video to a different folder by updating its display_path
  */
-import type { ActionFunctionArgs } from 'react-router'
-import { getVideoMetadata } from '~/utils/video-paths'
-import { resolve } from 'path'
-import Database from 'better-sqlite3'
 import { existsSync } from 'fs'
+import { resolve } from 'path'
+
+import Database from 'better-sqlite3'
+import type { ActionFunctionArgs } from 'react-router'
+
+import { getVideoMetadata } from '~/utils/video-paths'
 
 export async function action({ request }: ActionFunctionArgs) {
   if (request.method !== 'PATCH') {
@@ -21,14 +23,20 @@ export async function action({ request }: ActionFunctionArgs) {
 
   // targetFolder can be empty string (root folder)
   if (targetFolder === undefined || targetFolder === null) {
-    return Response.json({ error: 'targetFolder is required (use empty string for root)' }, { status: 400 })
+    return Response.json(
+      { error: 'targetFolder is required (use empty string for root)' },
+      { status: 400 }
+    )
   }
 
   // Validate target folder path if not empty
   if (targetFolder) {
     const trimmedTargetFolder = targetFolder.trim()
     if (trimmedTargetFolder.startsWith('/') || trimmedTargetFolder.endsWith('/')) {
-      return Response.json({ error: 'Target folder should not start or end with /' }, { status: 400 })
+      return Response.json(
+        { error: 'Target folder should not start or end with /' },
+        { status: 400 }
+      )
     }
 
     if (!/^[a-zA-Z0-9_\-/\s]+$/.test(trimmedTargetFolder)) {
@@ -67,11 +75,13 @@ export async function action({ request }: ActionFunctionArgs) {
   try {
     const db = new Database(dbPath)
     try {
-      db.prepare(`
+      db.prepare(
+        `
         UPDATE video_metadata
         SET display_path = ?
         WHERE id = 1
-      `).run(newPath)
+      `
+      ).run(newPath)
 
       console.log(`[VideoMove] Updated display_path: ${metadata.displayPath} -> ${newPath}`)
     } finally {
@@ -85,6 +95,6 @@ export async function action({ request }: ActionFunctionArgs) {
   return Response.json({
     success: true,
     oldPath: metadata.displayPath,
-    newPath
+    newPath,
   })
 }

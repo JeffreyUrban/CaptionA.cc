@@ -1,5 +1,5 @@
 const featureFlags = {
-    showContact: true,
-};
+  showContact: true,
+}
 
-export default featureFlags;
+export default featureFlags

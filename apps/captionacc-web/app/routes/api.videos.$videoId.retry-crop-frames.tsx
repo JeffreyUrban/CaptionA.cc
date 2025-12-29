@@ -2,10 +2,11 @@
  * Retry failed crop_frames processing
  */
 
-import { type ActionFunctionArgs } from 'react-router'
-import { getDbPath } from '~/utils/video-paths'
 import Database from 'better-sqlite3'
+import { type ActionFunctionArgs } from 'react-router'
+
 import { queueCropFramesProcessing } from '~/services/crop-frames-processing'
+import { getDbPath } from '~/utils/video-paths'
 
 export async function action({ params }: ActionFunctionArgs) {
   const { videoId: encodedVideoId } = params
@@ -13,7 +14,7 @@ export async function action({ params }: ActionFunctionArgs) {
   if (!encodedVideoId) {
     return new Response(JSON.stringify({ error: 'Missing videoId' }), {
       status: 400,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
     })
   }
 
@@ -24,7 +25,7 @@ export async function action({ params }: ActionFunctionArgs) {
     if (!dbPath) {
       return new Response(JSON.stringify({ error: 'Video not found' }), {
         status: 404,
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
       })
     }
 
@@ -39,58 +40,79 @@ export async function action({ params }: ActionFunctionArgs) {
     const db = new Database(dbPath)
     try {
       // Get current crop_frames status
-      const status = db.prepare(`
+      const status = db
+        .prepare(
+          `
         SELECT status FROM crop_frames_status WHERE id = 1
-      `).get() as { status: string } | undefined
+      `
+        )
+        .get() as { status: string } | undefined
 
       if (!status) {
         return new Response(JSON.stringify({ error: 'No crop_frames status found' }), {
           status: 404,
-          headers: { 'Content-Type': 'application/json' }
+          headers: { 'Content-Type': 'application/json' },
         })
       }
 
       // Only retry if in error state
       if (status.status !== 'error') {
-        return new Response(JSON.stringify({
-          error: `Cannot retry crop_frames in ${status.status} state. Only error state can be retried.`
-        }), {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' }
-        })
+        return new Response(
+          JSON.stringify({
+            error: `Cannot retry crop_frames in ${status.status} state. Only error state can be retried.`,
+          }),
+          {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
       }
 
       // Get crop bounds from video_layout_config
-      const config = db.prepare(`
+      const config = db
+        .prepare(
+          `
         SELECT crop_left, crop_top, crop_right, crop_bottom
         FROM video_layout_config WHERE id = 1
-      `).get() as {
-        crop_left: number
-        crop_top: number
-        crop_right: number
-        crop_bottom: number
-      } | undefined
+      `
+        )
+        .get() as
+        | {
+            crop_left: number
+            crop_top: number
+            crop_right: number
+            crop_bottom: number
+          }
+        | undefined
 
       if (!config) {
-        return new Response(JSON.stringify({
-          error: 'Layout not approved - cannot retry crop_frames'
-        }), {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' }
-        })
+        return new Response(
+          JSON.stringify({
+            error: 'Layout not approved - cannot retry crop_frames',
+          }),
+          {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
       }
 
       layoutConfig = config
 
       // Get display_path for logging
-      const metadata = db.prepare(`
+      const metadata = db
+        .prepare(
+          `
         SELECT display_path FROM video_metadata WHERE id = 1
-      `).get() as { display_path: string } | undefined
+      `
+        )
+        .get() as { display_path: string } | undefined
 
       videoPath = metadata?.display_path || videoId
 
       // Reset status to queued
-      db.prepare(`
+      db.prepare(
+        `
         UPDATE crop_frames_status
         SET status = 'queued',
             error_message = NULL,
@@ -98,7 +120,8 @@ export async function action({ params }: ActionFunctionArgs) {
             error_occurred_at = NULL,
             retry_count = 0
         WHERE id = 1
-      `).run()
+      `
+      ).run()
 
       console.log(`[RetryCropFrames] Queued retry for video: ${videoPath}`)
     } finally {
@@ -113,23 +136,29 @@ export async function action({ params }: ActionFunctionArgs) {
         left: layoutConfig.crop_left,
         top: layoutConfig.crop_top,
         right: layoutConfig.crop_right,
-        bottom: layoutConfig.crop_bottom
-      }
+        bottom: layoutConfig.crop_bottom,
+      },
     })
 
-    return new Response(JSON.stringify({
-      success: true,
-      message: 'Crop frames queued for reprocessing'
-    }), {
-      headers: { 'Content-Type': 'application/json' }
-    })
+    return new Response(
+      JSON.stringify({
+        success: true,
+        message: 'Crop frames queued for reprocessing',
+      }),
+      {
+        headers: { 'Content-Type': 'application/json' },
+      }
+    )
   } catch (error) {
     console.error(`[RetryCropFrames] Error retrying ${videoId}:`, error)
-    return new Response(JSON.stringify({
-      error: error instanceof Error ? error.message : 'Unknown error'
-    }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
-    })
+    return new Response(
+      JSON.stringify({
+        error: error instanceof Error ? error.message : 'Unknown error',
+      }),
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    )
   }
 }
