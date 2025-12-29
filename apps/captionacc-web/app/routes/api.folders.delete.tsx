@@ -5,13 +5,34 @@
  * This endpoint finds all videos with display_path starting with the folder path
  * and deletes their UUID directories.
  */
-import { rm } from 'fs/promises'
+import { existsSync } from 'fs'
+import { rm, readFile, writeFile } from 'fs/promises'
 import { resolve } from 'path'
 
 import Database from 'better-sqlite3'
 import type { ActionFunctionArgs } from 'react-router'
 
 import { getAllVideos, getDbPath } from '~/utils/video-paths'
+
+const dataDir = resolve(process.cwd(), '..', '..', 'local', 'data')
+const foldersMetaPath = resolve(dataDir, '.folders.json')
+
+interface FoldersMetadata {
+  emptyFolders: string[]
+}
+
+async function removeFromEmptyFolders(folderPath: string): Promise<void> {
+  try {
+    if (existsSync(foldersMetaPath)) {
+      const content = await readFile(foldersMetaPath, 'utf-8')
+      const metadata: FoldersMetadata = JSON.parse(content)
+      metadata.emptyFolders = metadata.emptyFolders.filter(f => f !== folderPath)
+      await writeFile(foldersMetaPath, JSON.stringify(metadata, null, 2), 'utf-8')
+    }
+  } catch (error) {
+    // If file doesn't exist or is invalid, ignore
+  }
+}
 
 export async function action({ request }: ActionFunctionArgs) {
   if (request.method !== 'DELETE') {
@@ -39,9 +60,16 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const videoCount = videosToDelete.length
 
-  // If folder doesn't exist (no videos found), return 404
+  // If folder doesn't exist (no videos found), check if it's an empty folder in metadata
   if (videoCount === 0) {
-    return Response.json({ error: 'Folder does not exist or is empty' }, { status: 404 })
+    // Try to remove from empty folders metadata
+    await removeFromEmptyFolders(normalizedFolderPath)
+    return Response.json({
+      success: true,
+      folderPath: normalizedFolderPath,
+      videosDeleted: 0,
+      wasEmptyFolder: true,
+    })
   }
 
   // If not confirmed, return the count for user confirmation
@@ -99,6 +127,9 @@ export async function action({ request }: ActionFunctionArgs) {
       )
     }
   }
+
+  // Clean up from empty folders metadata
+  await removeFromEmptyFolders(normalizedFolderPath)
 
   if (errors.length > 0) {
     return Response.json(

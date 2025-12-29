@@ -1,4 +1,4 @@
-import { existsSync } from 'fs'
+import { existsSync, readFileSync } from 'fs'
 import { resolve } from 'path'
 
 import {
@@ -35,6 +35,82 @@ import {
   type VideoStats,
 } from '~/utils/video-tree'
 
+interface FoldersMetadata {
+  emptyFolders: string[]
+}
+
+function readEmptyFolders(dataDir: string): string[] {
+  const foldersMetaPath = resolve(dataDir, '.folders.json')
+  try {
+    if (existsSync(foldersMetaPath)) {
+      const content = readFileSync(foldersMetaPath, 'utf-8')
+      const metadata: FoldersMetadata = JSON.parse(content)
+      return metadata.emptyFolders || []
+    }
+  } catch (error) {
+    // If file doesn't exist or is invalid, return empty
+  }
+  return []
+}
+
+/**
+ * Insert empty folders into the tree as FolderNodes
+ */
+function insertEmptyFolders(tree: TreeNode[], emptyFolders: string[]): TreeNode[] {
+  for (const folderPath of emptyFolders) {
+    const segments = folderPath.split('/')
+    let currentLevel = tree
+    let parentFolder: FolderNode | null = null
+
+    // Navigate/create the folder structure
+    for (let i = 0; i < segments.length; i++) {
+      const segment = segments[i]
+      if (!segment) continue
+
+      const path = segments.slice(0, i + 1).join('/')
+
+      // Find existing node at this level
+      let node = currentLevel.find(n => n.name === segment)
+
+      if (!node) {
+        // Create new folder node
+        const folderNode: FolderNode = {
+          type: 'folder',
+          name: segment,
+          path,
+          children: [],
+          stats: {
+            totalAnnotations: 0,
+            pendingReview: 0,
+            confirmedAnnotations: 0,
+            predictedAnnotations: 0,
+            gapAnnotations: 0,
+            progress: 0,
+            totalFrames: 0,
+            coveredFrames: 0,
+            hasOcrData: false,
+            layoutApproved: false,
+            boundaryPendingReview: 0,
+            textPendingReview: 0,
+            badges: [],
+          },
+          videoCount: 0,
+        }
+        currentLevel.push(folderNode)
+        node = folderNode
+      }
+
+      // Move to next level
+      if (node.type === 'folder') {
+        parentFolder = node
+        currentLevel = node.children
+      }
+    }
+  }
+
+  return tree
+}
+
 export async function loader() {
   const dataDir = resolve(process.cwd(), '..', '..', 'local', 'data')
 
@@ -52,8 +128,12 @@ export async function loader() {
     videoId: video.displayPath,
   }))
 
-  // Build tree structure (without stats - will be loaded client-side)
-  const tree = buildVideoTree(videos)
+  // Build tree structure from videos only (without stats - will be loaded client-side)
+  let tree = buildVideoTree(videos)
+
+  // Get empty folders from metadata and insert them as proper FolderNodes
+  const emptyFolders = readEmptyFolders(dataDir)
+  tree = insertEmptyFolders(tree, emptyFolders)
 
   // Calculate video counts for each folder
   tree.forEach(node => {
