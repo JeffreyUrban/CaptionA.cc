@@ -119,6 +119,13 @@ export default function AnnotateLayout() {
     }
   }, [frames, selectedFrameIndex])
 
+  // Reset pulse timer when frame changes
+  useEffect(() => {
+    if (selectedFrameIndex !== null) {
+      setPulseStartTime(Date.now())
+    }
+  }, [selectedFrameIndex])
+
   // Canvas state
   const imageRef = useRef<HTMLImageElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -134,6 +141,10 @@ export default function AnnotateLayout() {
   const [selectionStart, setSelectionStart] = useState<{ x: number; y: number } | null>(null)
   const [selectionCurrent, setSelectionCurrent] = useState<{ x: number; y: number } | null>(null)
   const [selectionLabel, setSelectionLabel] = useState<'in' | 'out' | 'clear' | null>(null) // Based on which button started selection
+
+  // Box highlighting mode - makes boxes blink with bigger borders to help find them
+  const [boxHighlightMode, setBoxHighlightMode] = useState(true) // Active by default for now
+  const [pulseStartTime, setPulseStartTime] = useState(Date.now()) // Track when to start ramping up pulse
 
   // Layout controls state (local modifications before save)
   const [cropBoundsEdit, setCropBoundsEdit] = useState<{
@@ -574,6 +585,9 @@ export default function AnnotateLayout() {
           }
         })
 
+        // Reset pulse timer when annotation is made
+        setPulseStartTime(Date.now())
+
         // Save to server
         const response = await fetch(
           `/api/annotations/${encodeURIComponent(videoId)}/frames/${currentFrameBoxes.frameIndex}/boxes`,
@@ -666,6 +680,14 @@ export default function AnnotateLayout() {
       // Calculate scale factor from original frame to displayed image
       const scale = canvasSize.width / currentFrameBoxes.frameWidth
 
+      // Calculate pulsing line width for highlight mode
+      const pulsePhase = (Date.now() % 1000) / 1000 // 0-1 over 1 second
+      const pulseValue = Math.sin(pulsePhase * Math.PI * 2) * 0.5 + 0.5 // Oscillates 0-1
+
+      // Calculate pulse intensity ramp (gradually increases over 10 seconds)
+      const elapsedSeconds = (Date.now() - pulseStartTime) / 1000
+      const pulseIntensity = Math.min(elapsedSeconds / 10, 1) // 0 to 1 over 10 seconds
+
       // Draw boxes using original bounds
       currentFrameBoxes.boxes.forEach((box, index) => {
         // Convert original pixel bounds to canvas coordinates
@@ -678,12 +700,54 @@ export default function AnnotateLayout() {
         const colors = getBoxColors(box.colorCode)
 
         // Draw box
-        ctx.strokeStyle = colors.border
         ctx.fillStyle = colors.background
-        ctx.lineWidth = hoveredBoxIndex === index ? 3 : 2
+
+        // Determine line width with pulsing effect when highlight mode is active
+        // Only pulse unannotated boxes (boxes without a user label)
+        const isUnannotated = box.userLabel === null
+        let lineWidth = 2
+        if (hoveredBoxIndex === index) {
+          lineWidth = 3
+        } else if (boxHighlightMode && isUnannotated) {
+          // Pulse between 2 and 5 pixels for unannotated boxes only
+          // Scale pulse by intensity (ramps up over 10 seconds)
+          lineWidth = 2 + pulseValue * pulseIntensity * 3
+        }
+        ctx.lineWidth = lineWidth
 
         ctx.fillRect(boxX, boxY, boxWidth, boxHeight)
-        ctx.strokeRect(boxX, boxY, boxWidth, boxHeight)
+
+        // Draw border with shadow/glow for better visibility when highlight mode is active
+        // Only apply to unannotated boxes
+        if (boxHighlightMode && isUnannotated && hoveredBoxIndex !== index) {
+          // Scale shadow effect with pulse and ramp intensity
+          const shadowIntensity = pulseValue * pulseIntensity // Ramps up over 10 seconds
+
+          if (shadowIntensity > 0.1) {
+            // Add a contrasting shadow/glow effect
+            ctx.shadowBlur = 8 * shadowIntensity
+            ctx.shadowColor = `rgba(255, 255, 255, ${0.9 * shadowIntensity})`
+            ctx.strokeStyle = colors.border
+            ctx.lineWidth = lineWidth
+            ctx.strokeRect(boxX, boxY, boxWidth, boxHeight)
+
+            // Draw a second time with dark shadow for better contrast on light backgrounds
+            ctx.shadowColor = `rgba(0, 0, 0, ${0.9 * shadowIntensity})`
+            ctx.strokeRect(boxX, boxY, boxWidth, boxHeight)
+
+            // Clear shadow for future drawing
+            ctx.shadowBlur = 0
+          } else {
+            // At minimum pulse, render like normal (no shadow)
+            ctx.strokeStyle = colors.border
+            ctx.lineWidth = lineWidth
+            ctx.strokeRect(boxX, boxY, boxWidth, boxHeight)
+          }
+        } else {
+          // Normal rendering without highlight or for hovered boxes
+          ctx.strokeStyle = colors.border
+          ctx.strokeRect(boxX, boxY, boxWidth, boxHeight)
+        }
 
         // Draw text label if hovered
         if (hoveredBoxIndex === index) {
@@ -867,12 +931,32 @@ export default function AnnotateLayout() {
     selectionCurrent,
     selectionLabel,
     selectedFrameIndex,
+    boxHighlightMode,
+    pulseStartTime,
   ])
 
   // Call drawCanvas in an effect when dependencies change
   useEffect(() => {
     drawCanvas()
   }, [drawCanvas])
+
+  // Continuous animation loop when box highlight mode is active
+  useEffect(() => {
+    if (!boxHighlightMode || viewMode !== 'frame') return
+
+    let animationFrameId: number
+
+    const animate = () => {
+      drawCanvas()
+      animationFrameId = requestAnimationFrame(animate)
+    }
+
+    animationFrameId = requestAnimationFrame(animate)
+
+    return () => {
+      cancelAnimationFrame(animationFrameId)
+    }
+  }, [boxHighlightMode, viewMode, drawCanvas])
 
   // Get box colors based on color code
   const getBoxColors = (colorCode: string): { border: string; background: string } => {
