@@ -46,6 +46,7 @@ interface FrameInfo {
   captionBoxCount: number // Estimated using simple heuristics
   minConfidence: number // Lowest OCR confidence among all boxes in frame
   hasAnnotations: boolean
+  hasUnannotatedBoxes: boolean // Whether frame has boxes that haven't been annotated
   imageUrl: string
 }
 
@@ -270,21 +271,31 @@ export async function loader({ params }: LoaderFunctionArgs) {
       // Check if frame has any box annotations in database
       const hasAnnotations = annotatedBoxIndices.size > 0
 
+      // Track whether frame has any unannotated boxes
+      const hasUnannotatedBoxes = unannotatedPredictions.length > 0
+
       return {
         frameIndex,
         totalBoxCount,
         captionBoxCount,
         minConfidence,
         hasAnnotations,
+        hasUnannotatedBoxes,
         imageUrl: `/api/full-frames/${encodeURIComponent(videoId)}/${frameIndex}.jpg`,
       }
     })
 
-    // Sort by minimum confidence (ascending - lowest confidence first) and select top 11
-    const topFrames = frameInfos.sort((a, b) => a.minConfidence - b.minConfidence).slice(0, 11)
+    // Filter out frames with no unannotated boxes, then sort by minimum confidence
+    const framesWithUnannotatedBoxes = frameInfos.filter(f => f.hasUnannotatedBoxes)
+    const topFrames = framesWithUnannotatedBoxes
+      .sort((a, b) => a.minConfidence - b.minConfidence)
+      .slice(0, 11)
 
     console.log(
-      `Selected ${topFrames.length} top frames by minConfidence:`,
+      `Filtered ${frameInfos.length} total frames → ${framesWithUnannotatedBoxes.length} with unannotated boxes → selected top ${topFrames.length}`
+    )
+    console.log(
+      `Top frames by minConfidence:`,
       topFrames.map(f => `${f.frameIndex}(${f.minConfidence.toFixed(3)})`).join(', ')
     )
 
