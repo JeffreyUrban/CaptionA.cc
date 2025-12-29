@@ -121,8 +121,12 @@ export default function AnnotateLayout() {
   // Canvas state
   const imageRef = useRef<HTMLImageElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const interactionAreaRef = useRef<HTMLDivElement>(null)
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 })
   const [hoveredBoxIndex, setHoveredBoxIndex] = useState<number | null>(null)
+
+  // Padding around frame for easier boundary selection (in pixels when frame is at natural size)
+  const SELECTION_PADDING = 20
 
   // Selection rectangle state (click-to-start, click-to-end)
   const [isSelecting, setIsSelecting] = useState(false)
@@ -1058,9 +1062,33 @@ export default function AnnotateLayout() {
     recalculateCropBounds,
   ])
 
+  // Helper function to convert interaction area coordinates to canvas coordinates
+  const getCanvasCoordinates = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (!imageRef.current || !interactionAreaRef.current) return null
+
+    const image = imageRef.current
+    const interactionArea = interactionAreaRef.current
+
+    // Get mouse position relative to interaction area
+    const areaRect = interactionArea.getBoundingClientRect()
+    const areaX = e.clientX - areaRect.left
+    const areaY = e.clientY - areaRect.top
+
+    // Get image position within interaction area (frame is centered with padding)
+    const imageRect = image.getBoundingClientRect()
+    const imageOffsetX = imageRect.left - areaRect.left
+    const imageOffsetY = imageRect.top - areaRect.top
+
+    // Calculate position relative to canvas (which overlays the image)
+    const x = areaX - imageOffsetX
+    const y = areaY - imageOffsetY
+
+    return { x, y }
+  }, [])
+
   // Handle canvas click - individual box annotation, or start/complete selection
   const handleCanvasClick = useCallback(
-    (e: React.MouseEvent<HTMLCanvasElement>) => {
+    (e: React.MouseEvent<HTMLDivElement>) => {
       if (!canvasRef.current || canvasSize.width === 0) return
 
       // Disable annotations during recalculation
@@ -1075,10 +1103,9 @@ export default function AnnotateLayout() {
         e.stopPropagation()
       }
 
-      const canvas = canvasRef.current
-      const rect = canvas.getBoundingClientRect()
-      const x = e.clientX - rect.left
-      const y = e.clientY - rect.top
+      const coords = getCanvasCoordinates(e)
+      if (!coords) return
+      const { x, y } = coords
 
       if (isSelecting) {
         // Already selecting - second click completes selection
@@ -1133,21 +1160,28 @@ export default function AnnotateLayout() {
         setSelectionLabel(label)
       }
     },
-    [currentFrameBoxes, canvasSize, isSelecting, completeSelection, handleBoxClick, viewMode]
+    [
+      currentFrameBoxes,
+      canvasSize,
+      isSelecting,
+      completeSelection,
+      handleBoxClick,
+      viewMode,
+      getCanvasCoordinates,
+    ]
   )
 
   // Handle mouse move - update selection rectangle or detect hover
   const handleCanvasMouseMove = useCallback(
-    (e: React.MouseEvent<HTMLCanvasElement>) => {
+    (e: React.MouseEvent<HTMLDivElement>) => {
       if (!canvasRef.current || canvasSize.width === 0) return
 
       // Disable annotations during recalculation
       if (annotationsSinceRecalc >= RECALC_THRESHOLD) return
 
-      const canvas = canvasRef.current
-      const rect = canvas.getBoundingClientRect()
-      const x = e.clientX - rect.left
-      const y = e.clientY - rect.top
+      const coords = getCanvasCoordinates(e)
+      if (!coords) return
+      const { x, y } = coords
 
       // Update selection current position if selecting
       if (isSelecting) {
@@ -1180,10 +1214,10 @@ export default function AnnotateLayout() {
         setHoveredBoxIndex(foundIndex)
       }
     },
-    [currentFrameBoxes, canvasSize, isSelecting, viewMode]
+    [currentFrameBoxes, canvasSize, isSelecting, viewMode, getCanvasCoordinates]
   )
 
-  const handleCanvasContextMenu = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+  const handleCanvasContextMenu = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     e.preventDefault()
     e.stopPropagation()
   }, [])
@@ -1423,21 +1457,27 @@ export default function AnnotateLayout() {
             {/* Main canvas */}
             <div className="relative flex flex-shrink-0 items-center justify-center rounded-lg border border-gray-300 bg-gray-900 dark:border-gray-600 dark:bg-gray-800 p-4">
               {viewMode === 'analysis' && layoutConfig ? (
-                <div className="relative inline-block max-w-full max-h-full">
-                  <img
-                    ref={imageRef}
-                    src={`data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="${layoutConfig.frameWidth}" height="${layoutConfig.frameHeight}"><rect width="100%" height="100%" fill="black"/></svg>`}
-                    alt="Analysis view"
-                    className="max-w-full max-h-full object-contain"
-                  />
-                  <canvas
-                    ref={canvasRef}
-                    className="absolute left-0 top-0 cursor-crosshair"
-                    style={{ touchAction: 'none' }}
-                    onMouseDown={handleCanvasClick}
-                    onMouseMove={handleCanvasMouseMove}
-                    onContextMenu={handleCanvasContextMenu}
-                  />
+                <div
+                  ref={interactionAreaRef}
+                  className="relative inline-block cursor-crosshair"
+                  style={{ padding: `${SELECTION_PADDING}px` }}
+                  onMouseDown={handleCanvasClick}
+                  onMouseMove={handleCanvasMouseMove}
+                  onContextMenu={handleCanvasContextMenu}
+                >
+                  <div className="relative">
+                    <img
+                      ref={imageRef}
+                      src={`data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="${layoutConfig.frameWidth}" height="${layoutConfig.frameHeight}"><rect width="100%" height="100%" fill="black"/></svg>`}
+                      alt="Analysis view"
+                      className="max-w-full max-h-full object-contain block"
+                    />
+                    <canvas
+                      ref={canvasRef}
+                      className="absolute left-0 top-0"
+                      style={{ touchAction: 'none', pointerEvents: 'none' }}
+                    />
+                  </div>
                   {analysisBoxes === null && (
                     <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50">
                       <div className="text-white text-lg">Loading analysis boxes...</div>
@@ -1463,21 +1503,27 @@ export default function AnnotateLayout() {
                   )}
                 </div>
               ) : viewMode === 'frame' && currentFrameBoxes ? (
-                <div className="relative inline-block max-w-full max-h-full">
-                  <img
-                    ref={imageRef}
-                    src={currentFrameBoxes.imageUrl}
-                    alt={`Frame ${currentFrameBoxes.frameIndex}`}
-                    className="max-w-full max-h-full object-contain"
-                  />
-                  <canvas
-                    ref={canvasRef}
-                    className="absolute left-0 top-0 cursor-crosshair"
-                    style={{ touchAction: 'none' }}
-                    onMouseDown={handleCanvasClick}
-                    onMouseMove={handleCanvasMouseMove}
-                    onContextMenu={handleCanvasContextMenu}
-                  />
+                <div
+                  ref={interactionAreaRef}
+                  className="relative inline-block cursor-crosshair"
+                  style={{ padding: `${SELECTION_PADDING}px` }}
+                  onMouseDown={handleCanvasClick}
+                  onMouseMove={handleCanvasMouseMove}
+                  onContextMenu={handleCanvasContextMenu}
+                >
+                  <div className="relative">
+                    <img
+                      ref={imageRef}
+                      src={currentFrameBoxes.imageUrl}
+                      alt={`Frame ${currentFrameBoxes.frameIndex}`}
+                      className="max-w-full max-h-full object-contain block"
+                    />
+                    <canvas
+                      ref={canvasRef}
+                      className="absolute left-0 top-0"
+                      style={{ touchAction: 'none', pointerEvents: 'none' }}
+                    />
+                  </div>
                   {annotationsSinceRecalc >= RECALC_THRESHOLD && (
                     <div className="absolute inset-0 flex items-center justify-center bg-blue-900 bg-opacity-70 pointer-events-none">
                       <div className="bg-blue-800 px-6 py-4 rounded-lg shadow-lg">
