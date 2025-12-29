@@ -26,10 +26,14 @@ interface VideoLayoutConfig {
 }
 
 interface BoxData {
-  bounds: { left: number; top: number; right: number; bottom: number }
+  boxIndex: number
+  text: string
+  originalBounds: { left: number; top: number; right: number; bottom: number }
+  displayBounds: { left: number; top: number; right: number; bottom: number }
   predictedLabel: 'in' | 'out'
   predictedConfidence: number
   userLabel: 'in' | 'out' | null
+  colorCode: string
 }
 
 function getDatabase(videoId: string): Database.Database | Response {
@@ -83,6 +87,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
         id,
         frame_index,
         box_index,
+        text,
         x, y, width, height,
         predicted_label,
         predicted_confidence
@@ -94,6 +99,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
       id: number
       frame_index: number
       box_index: number
+      text: string
       x: number
       y: number
       width: number
@@ -185,11 +191,27 @@ export async function loader({ params }: LoaderFunctionArgs) {
           updatePredictionStmt.run(predictedLabel, predictedConfidence, box.id)
         }
 
+        // Generate color code based on label
+        let colorCode: string
+        if (userLabel === 'in') {
+          colorCode = '#14b8a6' // teal
+        } else if (userLabel === 'out') {
+          colorCode = '#dc2626' // red
+        } else if (predictedLabel === 'in') {
+          colorCode = '#3b82f6' // blue
+        } else {
+          colorCode = '#f97316' // orange
+        }
+
         boxesData.push({
-          bounds,
+          boxIndex: box.box_index,
+          text: box.text,
+          originalBounds: bounds,
+          displayBounds: bounds, // Same as original for analysis view
           predictedLabel,
           predictedConfidence,
           userLabel,
+          colorCode,
         })
       }
     }
