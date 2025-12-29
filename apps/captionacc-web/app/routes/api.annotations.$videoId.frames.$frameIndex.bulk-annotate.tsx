@@ -1,7 +1,9 @@
-import { type ActionFunctionArgs } from 'react-router'
-import { getDbPath } from '~/utils/video-paths'
-import Database from 'better-sqlite3'
 import { existsSync } from 'fs'
+
+import Database from 'better-sqlite3'
+import { type ActionFunctionArgs } from 'react-router'
+
+import { getDbPath } from '~/utils/video-paths'
 
 interface BulkAnnotateRequest {
   rectangle: {
@@ -13,7 +15,7 @@ interface BulkAnnotateRequest {
   action: 'mark_in' | 'mark_out' | 'clear'
 }
 
-function getDatabase(videoId: string) {
+function getDatabase(videoId: string): Database.Database | Response {
   const dbPath = getDbPath(videoId)
   if (!dbPath) {
     return new Response('Video not found', { status: 404 })
@@ -33,7 +35,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
   if (!encodedVideoId || !frameIndexStr) {
     return new Response(JSON.stringify({ error: 'Missing videoId or frameIndex' }), {
       status: 400,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
     })
   }
 
@@ -43,44 +45,51 @@ export async function action({ params, request }: ActionFunctionArgs) {
   if (isNaN(frameIndex)) {
     return new Response(JSON.stringify({ error: 'Invalid frameIndex' }), {
       status: 400,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
     })
   }
 
   try {
-    const body = await request.json() as BulkAnnotateRequest
+    const body = (await request.json()) as BulkAnnotateRequest
     const { rectangle, action } = body
 
     if (!rectangle || !action) {
       return new Response(JSON.stringify({ error: 'Missing rectangle or action' }), {
         status: 400,
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
       })
     }
 
     const db = getDatabase(videoId)
+    if (db instanceof Response) return db
 
     // Get layout config for frame dimensions
-    const layoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as {
-      frame_width: number
-      frame_height: number
-    } | undefined
+    const layoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as
+      | {
+          frame_width: number
+          frame_height: number
+        }
+      | undefined
 
     if (!layoutConfig) {
       db.close()
       return new Response(JSON.stringify({ error: 'Layout config not found' }), {
         status: 404,
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
       })
     }
 
     // Load OCR boxes for this frame from database
-    const ocrBoxes = db.prepare(`
+    const ocrBoxes = db
+      .prepare(
+        `
       SELECT box_index, text, confidence, x, y, width, height
       FROM full_frame_ocr
       WHERE frame_index = ?
       ORDER BY box_index
-    `).all(frameIndex) as Array<{
+    `
+      )
+      .all(frameIndex) as Array<{
       box_index: number
       text: string
       confidence: number
@@ -92,13 +101,16 @@ export async function action({ params, request }: ActionFunctionArgs) {
 
     if (ocrBoxes.length === 0) {
       db.close()
-      return new Response(JSON.stringify({
-        success: true,
-        annotatedCount: 0,
-        message: 'No OCR boxes found for this frame'
-      }), {
-        headers: { 'Content-Type': 'application/json' }
-      })
+      return new Response(
+        JSON.stringify({
+          success: true,
+          annotatedCount: 0,
+          message: 'No OCR boxes found for this frame',
+        }),
+        {
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
     }
 
     // Find all boxes that intersect with the rectangle
@@ -142,14 +154,17 @@ export async function action({ params, request }: ActionFunctionArgs) {
 
       db.close()
 
-      return new Response(JSON.stringify({
-        success: true,
-        action: 'clear',
-        annotatedCount: boxesInRectangle.length,
-        boxIndices: boxesInRectangle
-      }), {
-        headers: { 'Content-Type': 'application/json' }
-      })
+      return new Response(
+        JSON.stringify({
+          success: true,
+          action: 'clear',
+          annotatedCount: boxesInRectangle.length,
+          boxIndices: boxesInRectangle,
+        }),
+        {
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
     } else if (action === 'mark_in') {
       // Mark boxes as "in" (captions)
       const stmt = db.prepare(`
@@ -184,27 +199,22 @@ export async function action({ params, request }: ActionFunctionArgs) {
         const boxTop = boxBottom - Math.floor(box.height * layoutConfig.frame_height)
         const boxRight = boxLeft + Math.floor(box.width * layoutConfig.frame_width)
 
-        stmt.run(
-          frameIndex,
-          boxIndex,
-          box.text,
-          boxLeft,
-          boxTop,
-          boxRight,
-          boxBottom
-        )
+        stmt.run(frameIndex, boxIndex, box.text, boxLeft, boxTop, boxRight, boxBottom)
       }
 
       db.close()
 
-      return new Response(JSON.stringify({
-        success: true,
-        action: 'mark_in',
-        annotatedCount: boxesInRectangle.length,
-        boxIndices: boxesInRectangle
-      }), {
-        headers: { 'Content-Type': 'application/json' }
-      })
+      return new Response(
+        JSON.stringify({
+          success: true,
+          action: 'mark_in',
+          annotatedCount: boxesInRectangle.length,
+          boxIndices: boxesInRectangle,
+        }),
+        {
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
     } else {
       // action === 'mark_out'
       // Insert or update labels for these boxes
@@ -240,39 +250,37 @@ export async function action({ params, request }: ActionFunctionArgs) {
         const boxTop = boxBottom - Math.floor(box.height * layoutConfig.frame_height)
         const boxRight = boxLeft + Math.floor(box.width * layoutConfig.frame_width)
 
-        stmt.run(
-          frameIndex,
-          boxIndex,
-          box.text,
-          boxLeft,
-          boxTop,
-          boxRight,
-          boxBottom
-        )
+        stmt.run(frameIndex, boxIndex, box.text, boxLeft, boxTop, boxRight, boxBottom)
       }
 
       db.close()
 
-      return new Response(JSON.stringify({
-        success: true,
-        action: 'mark_out',
-        annotatedCount: boxesInRectangle.length,
-        boxIndices: boxesInRectangle
-      }), {
-        headers: { 'Content-Type': 'application/json' }
-      })
+      return new Response(
+        JSON.stringify({
+          success: true,
+          action: 'mark_out',
+          annotatedCount: boxesInRectangle.length,
+          boxIndices: boxesInRectangle,
+        }),
+        {
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
     }
   } catch (error) {
     console.error('Error in bulk annotate:', error)
     if (error instanceof Error) {
       console.error('Error stack:', error.stack)
     }
-    return new Response(JSON.stringify({
-      error: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined
-    }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
-    })
+    return new Response(
+      JSON.stringify({
+        error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+      }),
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    )
   }
 }

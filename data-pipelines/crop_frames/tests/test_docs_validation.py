@@ -103,9 +103,7 @@ def test_tree_structure_line_length(md_file):
                 long_lines.append((i, len(line), line[:100]))
 
     if long_lines:
-        message = (
-            f"\n\n{md_file} has tree structure lines exceeding {MAX_LINE_LENGTH} characters:\n"
-        )
+        message = f"\n\n{md_file} has tree structure lines exceeding {MAX_LINE_LENGTH} characters:\n"
         for line_num, length, preview in long_lines:
             message += f"  Line {line_num}: {length} chars - {preview}...\n"
         pytest.fail(message)

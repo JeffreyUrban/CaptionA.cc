@@ -48,7 +48,7 @@ export async function loader() {
             uploadLength,
             currentSize,
             progress,
-            createdAt: metadata.createdAt || new Date().toISOString()
+            createdAt: metadata.createdAt || new Date().toISOString(),
           })
         }
       } catch (error) {
@@ -57,16 +57,13 @@ export async function loader() {
     }
 
     return new Response(JSON.stringify({ uploads: incompleteUploads }), {
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
     })
   } catch (error) {
     console.error('[IncompleteUploads] Error:', error)
-    return new Response(
-      JSON.stringify({ error: (error as Error).message }),
-      {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      }
-    )
+    return new Response(JSON.stringify({ error: (error as Error).message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    })
   }
 }

@@ -115,7 +115,11 @@ CREATE TABLE IF NOT EXISTS cropped_frames (
     width INTEGER NOT NULL,
     height INTEGER NOT NULL,
     file_size INTEGER NOT NULL,
-    crop_bounds_version INTEGER DEFAULT 1,  -- Invalidation tracking
+    crop_left INTEGER NOT NULL,  -- Actual crop bounds used (absolute pixels in original frame)
+    crop_top INTEGER NOT NULL,
+    crop_right INTEGER NOT NULL,
+    crop_bottom INTEGER NOT NULL,
+    crop_bounds_version INTEGER DEFAULT 1,  -- Version tracking for grouping/history
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 

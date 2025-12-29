@@ -43,9 +43,7 @@ function calculateStats(values: number[]): { mean: number; std: number } {
     return { mean, std: 0 }
   }
 
-  const variance =
-    values.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) /
-    (values.length - 1)
+  const variance = values.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / (values.length - 1)
 
   return { mean, std: Math.sqrt(variance) }
 }
@@ -54,22 +52,23 @@ function calculateStats(values: number[]): { mean: number; std: number } {
  * Calculate simple linear regression (least squares)
  * Returns slope and intercept for y = slope * x + intercept
  */
-function linearRegression(
-  x: number[],
-  y: number[]
-): { slope: number; intercept: number } {
+function linearRegression(x: number[], y: number[]): { slope: number; intercept: number } {
   if (x.length !== y.length || x.length === 0) {
     return { slope: 0, intercept: 0 }
   }
 
   if (x.length === 1) {
-    return { slope: 0, intercept: y[0] }
+    const yFirst = y[0]
+    return { slope: 0, intercept: yFirst ?? 0 }
   }
 
   const n = x.length
   const sumX = x.reduce((sum, v) => sum + v, 0)
   const sumY = y.reduce((sum, v) => sum + v, 0)
-  const sumXY = x.reduce((sum, xi, i) => sum + xi * y[i], 0)
+  const sumXY = x.reduce((sum, xi, i) => {
+    const yi = y[i]
+    return sum + (yi !== undefined ? xi * yi : 0)
+  }, 0)
   const sumX2 = x.reduce((sum, v) => sum + v * v, 0)
 
   const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX)
@@ -122,11 +121,11 @@ export function calculateDistributionParams(
   }
 
   // 1. Calculate top edge standard deviation
-  const topEdges = boxes.map((box) => box.top)
+  const topEdges = boxes.map(box => box.top)
   const topStats = calculateStats(topEdges)
 
   // 2. Calculate bottom edge standard deviation
-  const bottomEdges = boxes.map((box) => box.bottom)
+  const bottomEdges = boxes.map(box => box.bottom)
   const bottomStats = calculateStats(bottomEdges)
 
   // 3. Calculate horizontal stddev linear model
@@ -201,17 +200,13 @@ export function calculateExpansion(
 
   // Horizontal expansion (left/right)
   // Statistical padding based on distance from anchor
-  const predictedStd =
-    horizontalStdSlope * distanceFromAnchor + horizontalStdIntercept
+  const predictedStd = horizontalStdSlope * distanceFromAnchor + horizontalStdIntercept
   const statisticalPadding = STDDEV_MULTIPLE * predictedStd
 
   // Character buffer (only on far ends away from anchor)
   let charBuffer = 0
 
-  if (
-    (anchorType === 'left' && edge === 'right') ||
-    (anchorType === 'right' && edge === 'left')
-  ) {
+  if ((anchorType === 'left' && edge === 'right') || (anchorType === 'right' && edge === 'left')) {
     // Far end from anchor - full character buffer
     charBuffer = CHAR_BUFFER_MULTIPLE * charWidth
   } else if (anchorType === 'center') {

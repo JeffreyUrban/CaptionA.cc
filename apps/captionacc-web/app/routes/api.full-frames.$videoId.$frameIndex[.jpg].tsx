@@ -1,6 +1,7 @@
-import { type LoaderFunctionArgs } from 'react-router'
-import { getDbPath } from '~/utils/video-paths'
 import Database from 'better-sqlite3'
+import { type LoaderFunctionArgs } from 'react-router'
+
+import { getDbPath } from '~/utils/video-paths'
 
 export async function loader({ params }: LoaderFunctionArgs) {
   const { videoId: encodedVideoId, frameIndex } = params
@@ -39,7 +40,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
       return new Response(`Frame ${frameIndex} not found`, { status: 404 })
     }
 
-    return new Response(row.image_data, {
+    return new Response(row.image_data as unknown as BodyInit, {
       headers: {
         'Content-Type': 'image/jpeg',
         'Cache-Control': 'public, max-age=31536000, immutable',

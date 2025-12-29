@@ -1,8 +1,10 @@
-import { type LoaderFunctionArgs } from 'react-router'
-import { getVideoDir } from '~/utils/video-paths'
-import { resolve } from 'path'
-import { readFile } from 'fs/promises'
 import { existsSync } from 'fs'
+import { readFile } from 'fs/promises'
+import { resolve } from 'path'
+
+import { type LoaderFunctionArgs } from 'react-router'
+
+import { getVideoDir } from '~/utils/video-paths'
 
 export async function loader({ params }: LoaderFunctionArgs) {
   const { videoId: encodedVideoId, filename } = params

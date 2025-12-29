@@ -1,7 +1,9 @@
-import { type LoaderFunctionArgs } from 'react-router'
-import { getDbPath } from '~/utils/video-paths'
-import Database from 'better-sqlite3'
 import { existsSync } from 'fs'
+
+import Database from 'better-sqlite3'
+import { type LoaderFunctionArgs } from 'react-router'
+
+import { getDbPath } from '~/utils/video-paths'
 
 interface PotentialMislabel {
   frameIndex: number
@@ -15,7 +17,7 @@ interface PotentialMislabel {
   issueType: string
 }
 
-function getDatabase(videoId: string) {
+function getDatabase(videoId: string): Database.Database | Response {
   const dbPath = getDbPath(videoId)
   if (!dbPath) {
     return new Response('Video not found', { status: 404 })
@@ -35,7 +37,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
   if (!encodedVideoId) {
     return new Response(JSON.stringify({ error: 'Missing videoId' }), {
       status: 400,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
     })
   }
 
@@ -43,28 +45,38 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
   try {
     const db = getDatabase(videoId)
+    if (db instanceof Response) return db
 
     // Get main cluster statistics
-    const clusterStats = db.prepare(`
+    const clusterStats = db
+      .prepare(
+        `
       SELECT
         AVG(box_top) as avg_top,
         AVG(box_bottom) as avg_bottom
       FROM full_frame_box_labels
       WHERE label = 'in' AND annotation_source = 'full_frame'
-    `).get() as { avg_top: number; avg_bottom: number } | undefined
+    `
+      )
+      .get() as { avg_top: number; avg_bottom: number } | undefined
 
     if (!clusterStats) {
       db.close()
-      return new Response(JSON.stringify({
-        potentialMislabels: [],
-        message: 'No caption boxes labeled yet'
-      }), {
-        headers: { 'Content-Type': 'application/json' }
-      })
+      return new Response(
+        JSON.stringify({
+          potentialMislabels: [],
+          message: 'No caption boxes labeled yet',
+        }),
+        {
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
     }
 
     // Find potential mislabels
-    const potentialMislabels = db.prepare(`
+    const potentialMislabels = db
+      .prepare(
+        `
       SELECT
         frame_index as frameIndex,
         box_index as boxIndex,
@@ -98,41 +110,54 @@ export async function loader({ params }: LoaderFunctionArgs) {
         frame_index,
         box_index
       LIMIT 100
-    `).all(
-      clusterStats.avg_top,
-      clusterStats.avg_top,
-      clusterStats.avg_top,
-      clusterStats.avg_top,
-      clusterStats.avg_top
-    ) as PotentialMislabel[]
+    `
+      )
+      .all(
+        clusterStats.avg_top,
+        clusterStats.avg_top,
+        clusterStats.avg_top,
+        clusterStats.avg_top,
+        clusterStats.avg_top
+      ) as PotentialMislabel[]
 
     db.close()
 
-    return new Response(JSON.stringify({
-      potentialMislabels,
-      clusterStats: {
-        avgTop: Math.round(clusterStats.avg_top),
-        avgBottom: Math.round(clusterStats.avg_bottom)
-      },
-      summary: {
-        total: potentialMislabels.length,
-        modelDisagreements: potentialMislabels.filter(m => m.predictedLabel && m.predictedLabel !== m.userLabel).length,
-        verticalOutliers: potentialMislabels.filter(m => m.topDeviation > 50).length,
-        highConfidenceDisagreements: potentialMislabels.filter(m =>
-          m.predictedLabel && m.predictedLabel !== m.userLabel && m.predictedConfidence && m.predictedConfidence > 0.7
-        ).length
+    return new Response(
+      JSON.stringify({
+        potentialMislabels,
+        clusterStats: {
+          avgTop: Math.round(clusterStats.avg_top),
+          avgBottom: Math.round(clusterStats.avg_bottom),
+        },
+        summary: {
+          total: potentialMislabels.length,
+          modelDisagreements: potentialMislabels.filter(
+            m => m.predictedLabel && m.predictedLabel !== m.userLabel
+          ).length,
+          verticalOutliers: potentialMislabels.filter(m => m.topDeviation > 50).length,
+          highConfidenceDisagreements: potentialMislabels.filter(
+            m =>
+              m.predictedLabel &&
+              m.predictedLabel !== m.userLabel &&
+              m.predictedConfidence &&
+              m.predictedConfidence > 0.7
+          ).length,
+        },
+      }),
+      {
+        headers: { 'Content-Type': 'application/json' },
       }
-    }), {
-      headers: { 'Content-Type': 'application/json' }
-    })
-
+    )
   } catch (error) {
     console.error('Error finding potential mislabels:', error)
-    return new Response(JSON.stringify({
-      error: error instanceof Error ? error.message : 'Unknown error'
-    }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
-    })
+    return new Response(
+      JSON.stringify({
+        error: error instanceof Error ? error.message : 'Unknown error',
+      }),
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    )
   }
 }

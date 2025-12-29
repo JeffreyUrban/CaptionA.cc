@@ -1,14 +1,19 @@
-import { type LoaderFunctionArgs } from 'react-router'
-import { getDbPath } from '~/utils/video-paths'
-import Database from 'better-sqlite3'
 import { existsSync } from 'fs'
+
+import Database from 'better-sqlite3'
+import { type LoaderFunctionArgs } from 'react-router'
+
+import { getDbPath } from '~/utils/video-paths'
 
 interface FrameOCR {
   frame_index: number
   ocr_text: string
-  ocr_annotations: string  // JSON: [[text, conf, [x, y, w, h]], ...]
+  ocr_annotations: string // JSON: [[text, conf, [x, y, w, h]], ...]
   ocr_confidence: number
 }
+
+// Python OCR annotation format: [text, confidence, [x, y, width, height]]
+type PythonOCRAnnotation = [string, number, [number, number, number, number]]
 
 interface VideoLayoutConfig {
   id: number
@@ -38,13 +43,13 @@ interface VideoLayoutConfig {
 interface FrameInfo {
   frameIndex: number
   totalBoxCount: number
-  captionBoxCount: number  // Estimated using simple heuristics
-  minConfidence: number  // Lowest OCR confidence among all boxes in frame
+  captionBoxCount: number // Estimated using simple heuristics
+  minConfidence: number // Lowest OCR confidence among all boxes in frame
   hasAnnotations: boolean
   imageUrl: string
 }
 
-function getDatabase(videoId: string) {
+function getDatabase(videoId: string): Database.Database | Response {
   const dbPath = getDbPath(videoId)
   if (!dbPath) {
     return new Response('Video not found', { status: 404 })
@@ -62,7 +67,7 @@ function getDatabase(videoId: string) {
  * Uses crop bounds to filter boxes - boxes inside crop region are likely captions.
  */
 function estimateCaptionBoxCount(
-  ocrAnnotations: any[],
+  ocrAnnotations: PythonOCRAnnotation[],
   frameWidth: number,
   frameHeight: number,
   cropBounds: { left: number; top: number; right: number; bottom: number }
@@ -87,12 +92,11 @@ function estimateCaptionBoxCount(
     const boxRight = boxLeft + Math.floor(width * frameWidth)
 
     // Check if box is inside crop bounds
-    const insideCrop = (
+    const insideCrop =
       boxLeft >= cropBounds.left &&
       boxTop >= cropBounds.top &&
       boxRight <= cropBounds.right &&
       boxBottom <= cropBounds.bottom
-    )
 
     if (insideCrop) {
       count++
@@ -110,7 +114,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
   if (!encodedVideoId) {
     return new Response(JSON.stringify({ error: 'Missing videoId' }), {
       status: 400,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
     })
   }
 
@@ -118,60 +122,81 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
   try {
     const db = getDatabase(videoId)
+    if (db instanceof Response) return db
 
     // Check processing status first
-    const processingStatus = db.prepare('SELECT status FROM processing_status WHERE id = 1').get() as { status: string } | undefined
+    const processingStatus = db
+      .prepare('SELECT status FROM processing_status WHERE id = 1')
+      .get() as { status: string } | undefined
 
     if (!processingStatus) {
       db.close()
-      return new Response(JSON.stringify({
-        error: 'Processing status not found',
-        processingStatus: 'unknown'
-      }), {
-        status: 404,
-        headers: { 'Content-Type': 'application/json' }
-      })
+      return new Response(
+        JSON.stringify({
+          error: 'Processing status not found',
+          processingStatus: 'unknown',
+        }),
+        {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
     }
 
     // Block access if processing is not complete
     if (processingStatus.status !== 'processing_complete') {
       db.close()
-      return new Response(JSON.stringify({
-        error: 'Video is still processing. Please wait for processing to complete.',
-        processingStatus: processingStatus.status
-      }), {
-        status: 425, // Too Early
-        headers: { 'Content-Type': 'application/json' }
-      })
+      return new Response(
+        JSON.stringify({
+          error: 'Video is still processing. Please wait for processing to complete.',
+          processingStatus: processingStatus.status,
+        }),
+        {
+          status: 425, // Too Early
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
     }
 
     // Get layout config from database
-    const layoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as VideoLayoutConfig | undefined
+    const layoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as
+      | VideoLayoutConfig
+      | undefined
 
     if (!layoutConfig) {
       db.close()
-      return new Response(JSON.stringify({
-        error: 'Layout config not found. Run full_frames analysis first.',
-        processingStatus: processingStatus.status
-      }), {
-        status: 404,
-        headers: { 'Content-Type': 'application/json' }
-      })
+      return new Response(
+        JSON.stringify({
+          error: 'Layout config not found. Run full_frames analysis first.',
+          processingStatus: processingStatus.status,
+        }),
+        {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
     }
 
     // Load frames from full_frame_ocr table
-    const frames = db.prepare(`
+    const frames = db
+      .prepare(
+        `
       SELECT DISTINCT frame_index FROM full_frame_ocr ORDER BY frame_index
-    `).all() as Array<{ frame_index: number }>
+    `
+      )
+      .all() as Array<{ frame_index: number }>
 
     if (frames.length === 0) {
       db.close()
-      return new Response(JSON.stringify({
-        error: 'No OCR data found in database. Run full_frames analysis first.'
-      }), {
-        status: 404,
-        headers: { 'Content-Type': 'application/json' }
-      })
+      return new Response(
+        JSON.stringify({
+          error: 'No OCR data found in database. Run full_frames analysis first.',
+        }),
+        {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
     }
 
     console.log(`Found ${frames.length} frames in full_frame_ocr table`)
@@ -179,12 +204,16 @@ export async function loader({ params }: LoaderFunctionArgs) {
     // Calculate caption box count for each frame
     const frameInfos: FrameInfo[] = frames.map(({ frame_index: frameIndex }) => {
       // Get all OCR boxes for this frame with cached predictions
-      const ocrAnnotations = db.prepare(`
+      const ocrAnnotations = db
+        .prepare(
+          `
         SELECT box_index, text, confidence, x, y, width, height, predicted_confidence
         FROM full_frame_ocr
         WHERE frame_index = ?
         ORDER BY box_index
-      `).all(frameIndex) as Array<{
+      `
+        )
+        .all(frameIndex) as Array<{
         box_index: number
         text: string
         confidence: number
@@ -196,10 +225,10 @@ export async function loader({ params }: LoaderFunctionArgs) {
       }>
 
       // Convert to annotation format for estimateCaptionBoxCount
-      const annotationsArray = ocrAnnotations.map(box => [
+      const annotationsArray: PythonOCRAnnotation[] = ocrAnnotations.map(box => [
         box.text,
         box.confidence,
-        [box.x, box.y, box.width, box.height]
+        [box.x, box.y, box.width, box.height],
       ])
 
       const totalBoxCount = ocrAnnotations.length
@@ -217,21 +246,26 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
       // Get annotated box indices for this frame
       const annotatedBoxIndices = new Set(
-        (db.prepare(`
+        (
+          db
+            .prepare(
+              `
           SELECT box_index
           FROM full_frame_box_labels
           WHERE frame_index = ? AND label_source = 'user'
-        `).all(frameIndex) as Array<{ box_index: number }>).map(row => row.box_index)
+        `
+            )
+            .all(frameIndex) as Array<{ box_index: number }>
+        ).map(row => row.box_index)
       )
 
       // Get minimum predicted confidence among unannotated boxes (use cached values)
       const unannotatedPredictions: number[] = ocrAnnotations
         .filter(box => !annotatedBoxIndices.has(box.box_index))
-        .map(box => box.predicted_confidence ?? 0.5)  // Use cached prediction or default
+        .map(box => box.predicted_confidence ?? 0.5) // Use cached prediction or default
 
-      const minConfidence = unannotatedPredictions.length > 0
-        ? Math.min(...unannotatedPredictions)
-        : 1.0  // All boxes annotated - push to end of queue
+      const minConfidence =
+        unannotatedPredictions.length > 0 ? Math.min(...unannotatedPredictions) : 1.0 // All boxes annotated - push to end of queue
 
       // Check if frame has any box annotations in database
       const hasAnnotations = annotatedBoxIndices.size > 0
@@ -242,21 +276,24 @@ export async function loader({ params }: LoaderFunctionArgs) {
         captionBoxCount,
         minConfidence,
         hasAnnotations,
-        imageUrl: `/api/full-frames/${encodeURIComponent(videoId)}/${frameIndex}.jpg`
+        imageUrl: `/api/full-frames/${encodeURIComponent(videoId)}/${frameIndex}.jpg`,
       }
     })
 
     // Sort by minimum confidence (ascending - lowest confidence first) and select top 11
-    const topFrames = frameInfos
-      .sort((a, b) => a.minConfidence - b.minConfidence)
-      .slice(0, 11)
+    const topFrames = frameInfos.sort((a, b) => a.minConfidence - b.minConfidence).slice(0, 11)
 
-    console.log(`Selected ${topFrames.length} top frames by minConfidence:`, topFrames.map(f => `${f.frameIndex}(${f.minConfidence.toFixed(3)})`).join(', '))
+    console.log(
+      `Selected ${topFrames.length} top frames by minConfidence:`,
+      topFrames.map(f => `${f.frameIndex}(${f.minConfidence.toFixed(3)})`).join(', ')
+    )
 
     // Check if layout has been approved
     let layoutApproved = false
     try {
-      const prefs = db.prepare(`SELECT layout_approved FROM video_preferences WHERE id = 1`).get() as { layout_approved: number } | undefined
+      const prefs = db
+        .prepare(`SELECT layout_approved FROM video_preferences WHERE id = 1`)
+        .get() as { layout_approved: number } | undefined
       layoutApproved = (prefs?.layout_approved ?? 0) === 1
     } catch {
       // Table or column doesn't exist
@@ -289,22 +326,24 @@ export async function loader({ params }: LoaderFunctionArgs) {
         horizontalStdIntercept: layoutConfig.horizontal_std_intercept,
         cropBoundsVersion: layoutConfig.crop_bounds_version,
       },
-      layoutApproved
+      layoutApproved,
     }
 
     db.close()
 
     return new Response(JSON.stringify(response), {
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
     })
-
   } catch (error) {
     console.error('Error in layout queue API:', error)
-    return new Response(JSON.stringify({
-      error: error instanceof Error ? error.message : 'Unknown error'
-    }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
-    })
+    return new Response(
+      JSON.stringify({
+        error: error instanceof Error ? error.message : 'Unknown error',
+      }),
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    )
   }
 }

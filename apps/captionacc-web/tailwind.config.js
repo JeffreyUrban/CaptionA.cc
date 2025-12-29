@@ -27,29 +27,29 @@ export default {
         DEFAULT: {
           css: {
             // Reduce spacing before headings
-            'h2': {
+            h2: {
               marginTop: '1.5rem',
               marginBottom: '1rem',
             },
-            'h3': {
+            h3: {
               marginTop: '1rem',
               marginBottom: '0.75rem',
             },
-            'h4': {
+            h4: {
               marginTop: '0.75rem',
               marginBottom: '0.5rem',
             },
             // Reduce spacing around lists
-            'ul': {
+            ul: {
               marginTop: '0.5rem',
               marginBottom: '0.5rem',
             },
-            'li': {
+            li: {
               marginTop: '0.25rem',
               marginBottom: '0.25rem',
             },
             // Adjust paragraph spacing
-            'p': {
+            p: {
               marginTop: '0.75rem',
               marginBottom: '0.75rem',
             },

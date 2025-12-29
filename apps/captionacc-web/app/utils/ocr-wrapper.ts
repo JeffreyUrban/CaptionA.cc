@@ -40,6 +40,12 @@ export interface OCRAnnotation {
 }
 
 /**
+ * OCR annotation input - handles both TypeScript object format and Python array format
+ * Python format: [text, confidence, bbox]
+ */
+export type OCRAnnotationInput = OCRAnnotation | unknown[]
+
+/**
  * Per-frame OCR result
  */
 export interface FrameOCRResult {
@@ -105,21 +111,21 @@ result = process_frame_ocr_with_retry(
 
 # Output as JSON (ensure_ascii=False for Chinese characters)
 print(json.dumps(result, ensure_ascii=False))
-      `
+      `,
     ])
 
     let stdout = ''
     let stderr = ''
 
-    python.stdout.on('data', (data) => {
+    python.stdout.on('data', data => {
       stdout += data.toString()
     })
 
-    python.stderr.on('data', (data) => {
+    python.stderr.on('data', data => {
       stderr += data.toString()
     })
 
-    python.on('close', (code) => {
+    python.on('close', code => {
       console.log(`[${reqId}] Python process closed with code ${code}`)
       console.log(`[${reqId}] stdout length: ${stdout.length}, stderr length: ${stderr.length}`)
       console.log(`[${reqId}] stdout content:`, stdout.substring(0, 500))
@@ -138,15 +144,15 @@ print(json.dumps(result, ensure_ascii=False))
         // Extract clean text from annotations
         const text = extractTextFromAnnotations(result.annotations || [])
 
-        const resolvedObj: any = {
+        const resolvedObj: OCRResult & { __debug_reqId?: string; __debug_textLength?: number } = {
           imagePath: result.image_path,
           framework: result.framework,
           languagePreference: result.language_preference,
-          text: text,  // Explicit property name
+          text: text, // Explicit property name
           annotations: result.annotations || [],
           error: result.error,
-          __debug_reqId: reqId,  // Debug marker
-          __debug_textLength: text?.length
+          __debug_reqId: reqId, // Debug marker
+          __debug_textLength: text?.length,
         }
 
         console.log(`[${reqId}] runOCR resolving with debug markers, text len=${text?.length}`)
@@ -174,13 +180,16 @@ print(json.dumps(result, ensure_ascii=False))
  * @param annotations - Array of OCR annotations from ocr_utils
  * @returns Concatenated text from all annotations
  */
-export function extractTextFromAnnotations(annotations: any[]): string {
+export function extractTextFromAnnotations(annotations: OCRAnnotationInput[]): string {
   if (!annotations || annotations.length === 0) {
     console.log('extractTextFromAnnotations: no annotations')
     return ''
   }
 
-  console.log(`extractTextFromAnnotations: ${annotations.length} annotations, first one:`, annotations[0])
+  console.log(
+    `extractTextFromAnnotations: ${annotations.length} annotations, first one:`,
+    annotations[0]
+  )
 
   // Handle two formats:
   // 1. Array format from Python: [text, confidence, bbox]
@@ -190,12 +199,14 @@ export function extractTextFromAnnotations(annotations: any[]): string {
       if (Array.isArray(ann)) {
         // Array format: [text, confidence, bbox]
         return ann[0] || ''
-      } else {
+      } else if (typeof ann === 'object' && ann !== null && 'text' in ann) {
         // Object format: {text: "..."}
-        return ann.text || ''
+        return (ann as { text?: string }).text || ''
+      } else {
+        return ''
       }
     })
-    .filter(text => text.trim().length > 0)
+    .filter((text): text is string => typeof text === 'string' && text.trim().length > 0)
 
   console.log(`extractTextFromAnnotations: extracted ${texts.length} text items`)
   const result = texts.join('\n')
@@ -239,7 +250,7 @@ export async function runOCROnFramesV2(
   try {
     // Run OCR on all frames in parallel
     const results = await Promise.all(
-      frameIndices.map(async (frameIndex) => {
+      frameIndices.map(async frameIndex => {
         // Load frame from database
         const stmt = db.prepare('SELECT image_data FROM cropped_frames WHERE frame_index = ?')
         const row = stmt.get(frameIndex) as { image_data: Buffer } | undefined
@@ -248,7 +259,7 @@ export async function runOCROnFramesV2(
           console.error(`Frame ${frameIndex} not found in database`)
           return {
             frameIndex,
-            result: { frameIndex, ocrText: '', ocrConfidence: 0 }
+            result: { frameIndex, ocrText: '', ocrConfidence: 0 },
           }
         }
 
@@ -266,25 +277,33 @@ export async function runOCROnFramesV2(
           console.log(`[runOCROnFrames] Got result for frame ${frameIndex}:`, {
             hasText: 'text' in ocrResult,
             textLength: ocrResult.text?.length,
-            debugReqId: (ocrResult as any).__debug_reqId,
-            debugTextLength: (ocrResult as any).__debug_textLength,
-            keys: Object.keys(ocrResult)
+            debugReqId:
+              '__debug_reqId' in ocrResult
+                ? (ocrResult as Record<string, unknown>)['__debug_reqId']
+                : undefined,
+            debugTextLength:
+              '__debug_textLength' in ocrResult
+                ? (ocrResult as Record<string, unknown>)['__debug_textLength']
+                : undefined,
+            keys: Object.keys(ocrResult),
           })
 
           const text = ocrResult.text || ''
-          console.log(`Frame ${frameIndex}: after extracting, text="${text.substring(0,20)}" len=${text.length}`)
+          console.log(
+            `Frame ${frameIndex}: after extracting, text="${text.substring(0, 20)}" len=${text.length}`
+          )
 
           const resultObj = {
             frameIndex,
             ocrText: text,
-            ocrConfidence: calculateAverageConfidence(ocrResult.annotations)
+            ocrConfidence: calculateAverageConfidence(ocrResult.annotations),
           }
 
           console.log(`Frame ${frameIndex} final result:`, JSON.stringify(resultObj))
 
           return {
             frameIndex,
-            result: resultObj
+            result: resultObj,
           }
         } catch (error) {
           console.error(`OCR failed for frame ${frameIndex}:`, error)
@@ -293,8 +312,8 @@ export async function runOCROnFramesV2(
             result: {
               frameIndex,
               ocrText: '',
-              ocrConfidence: 0
-            }
+              ocrConfidence: 0,
+            },
           }
         } finally {
           // Clean up temp file
@@ -306,13 +325,15 @@ export async function runOCROnFramesV2(
             console.error(`Failed to clean up temp file for frame ${frameIndex}:`, cleanupError)
           }
         }
-    })
-  )
+      })
+    )
 
     // Convert to Map
     const resultMap = new Map<number, FrameOCRResult>()
     results.forEach(({ frameIndex, result }) => {
-      console.log(`Adding to map: frame ${frameIndex}, ocrText="${result.ocrText}", length=${result.ocrText?.length}`)
+      console.log(
+        `Adding to map: frame ${frameIndex}, ocrText="${result.ocrText}", length=${result.ocrText?.length}`
+      )
       resultMap.set(frameIndex, result)
     })
 
@@ -329,7 +350,7 @@ export async function runOCROnFramesV2(
  * @param annotations - Array of OCR annotations
  * @returns Average confidence (0-1), or 1 if no confidence data
  */
-function calculateAverageConfidence(annotations: any[]): number {
+function calculateAverageConfidence(annotations: OCRAnnotationInput[]): number {
   if (!annotations || annotations.length === 0) {
     return 0
   }
@@ -341,7 +362,7 @@ function calculateAverageConfidence(annotations: any[]): number {
     .map(ann => {
       if (Array.isArray(ann)) {
         // Array format: [text, confidence, bbox]
-        return ann[1]  // confidence at index 1
+        return ann[1] // confidence at index 1
       } else {
         // Object format: {confidence: ...}
         return ann.confidence
@@ -381,15 +402,15 @@ export async function runOCROnCombinedImage(
     let stdout = ''
     let stderr = ''
 
-    python.stdout.on('data', (data) => {
+    python.stdout.on('data', data => {
       stdout += data.toString()
     })
 
-    python.stderr.on('data', (data) => {
+    python.stderr.on('data', data => {
       stderr += data.toString()
     })
 
-    python.on('close', (code) => {
+    python.on('close', code => {
       console.log(`[${reqId}] Python process closed with code ${code}`)
       console.log(`[${reqId}] stdout:`, stdout.substring(0, 200))
       console.log(`[${reqId}] stderr:`, stderr.substring(0, 200))
@@ -416,7 +437,7 @@ export async function runOCROnCombinedImage(
           languagePreference: result.language || language,
           text: result.text || '',
           annotations: [],
-          error: result.error
+          error: result.error,
         }
 
         console.log(`[${reqId}] Resolving with text length: ${ocrResult.text.length}`)

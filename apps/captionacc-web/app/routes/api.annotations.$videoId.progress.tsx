@@ -1,9 +1,11 @@
-import { type LoaderFunctionArgs } from 'react-router'
-import { getDbPath } from '~/utils/video-paths'
-import Database from 'better-sqlite3'
 import { existsSync } from 'fs'
 
-function getDatabase(videoId: string) {
+import Database from 'better-sqlite3'
+import { type LoaderFunctionArgs } from 'react-router'
+
+import { getDbPath } from '~/utils/video-paths'
+
+function getDatabase(videoId: string): Database.Database | Response {
   const dbPath = getDbPath(videoId)
   if (!dbPath) {
     return new Response('Video not found', { status: 404 })
@@ -22,7 +24,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
   if (!encodedVideoId) {
     return new Response(JSON.stringify({ error: 'Missing videoId' }), {
       status: 400,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
     })
   }
 
@@ -30,19 +32,28 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
   try {
     const db = getDatabase(videoId)
+    if (db instanceof Response) return db
 
     // Calculate total frames in annotations that are not gaps and not pending
-    const result = db.prepare(`
+    const result = db
+      .prepare(
+        `
       SELECT SUM(end_frame_index - start_frame_index + 1) as completed_frames
       FROM captions
       WHERE boundary_state != 'gap' AND boundary_pending = 0
-    `).get() as { completed_frames: number | null }
+    `
+      )
+      .get() as { completed_frames: number | null }
 
     // Get total frames from all annotations (should equal video total)
-    const totalResult = db.prepare(`
+    const totalResult = db
+      .prepare(
+        `
       SELECT SUM(end_frame_index - start_frame_index + 1) as total_frames
       FROM captions
-    `).get() as { total_frames: number }
+    `
+      )
+      .get() as { total_frames: number }
 
     db.close()
 
@@ -50,20 +61,20 @@ export async function loader({ params }: LoaderFunctionArgs) {
     const totalFrames = totalResult.total_frames
     const progress = totalFrames > 0 ? (completedFrames / totalFrames) * 100 : 0
 
-    return new Response(JSON.stringify({
-      completed_frames: completedFrames,
-      total_frames: totalFrames,
-      progress_percent: progress
-    }), {
-      headers: { 'Content-Type': 'application/json' }
-    })
-  } catch (error) {
     return new Response(
-      JSON.stringify({ error: (error as Error).message }),
+      JSON.stringify({
+        completed_frames: completedFrames,
+        total_frames: totalFrames,
+        progress_percent: progress,
+      }),
       {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
       }
     )
+  } catch (error) {
+    return new Response(JSON.stringify({ error: (error as Error).message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    })
   }
 }

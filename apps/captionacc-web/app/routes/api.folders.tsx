@@ -1,6 +1,7 @@
+import { existsSync } from 'fs'
 import { readdir } from 'fs/promises'
 import { resolve } from 'path'
-import { existsSync } from 'fs'
+
 import type { LoaderFunctionArgs } from 'react-router'
 
 interface FolderItem {
@@ -14,7 +15,11 @@ interface FolderItem {
  * - Contain video subdirectories
  * - Are empty leaf folders
  */
-async function findFolders(dir: string, baseDir: string, parentPath: string = ''): Promise<FolderItem[]> {
+async function findFolders(
+  dir: string,
+  baseDir: string,
+  parentPath: string = ''
+): Promise<FolderItem[]> {
   const folders: FolderItem[] = []
 
   try {
@@ -40,7 +45,7 @@ async function findFolders(dir: string, baseDir: string, parentPath: string = ''
       if (parentPath) {
         folders.push({
           path: parentPath,
-          name: parentPath.split('/').pop()!
+          name: parentPath.split('/').pop()!,
         })
       }
 
@@ -56,7 +61,7 @@ async function findFolders(dir: string, baseDir: string, parentPath: string = ''
       if (parentPath) {
         folders.push({
           path: parentPath,
-          name: parentPath.split('/').pop()!
+          name: parentPath.split('/').pop()!,
         })
       }
     }
@@ -74,10 +79,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const dataDir = resolve(process.cwd(), '..', '..', 'local', 'data')
 
   if (!existsSync(dataDir)) {
-    return new Response(
-      JSON.stringify({ folders: [] }),
-      { headers: { 'Content-Type': 'application/json' } }
-    )
+    return new Response(JSON.stringify({ folders: [] }), {
+      headers: { 'Content-Type': 'application/json' },
+    })
   }
 
   // Find all folders
@@ -87,12 +91,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
   folders.sort((a, b) => a.path.localeCompare(b.path))
 
   // Remove duplicates (in case a folder was found multiple times)
-  const uniqueFolders = folders.filter((folder, index, self) =>
-    index === self.findIndex(f => f.path === folder.path)
+  const uniqueFolders = folders.filter(
+    (folder, index, self) => index === self.findIndex(f => f.path === folder.path)
   )
 
-  return new Response(
-    JSON.stringify({ folders: uniqueFolders }),
-    { headers: { 'Content-Type': 'application/json' } }
-  )
+  return new Response(JSON.stringify({ folders: uniqueFolders }), {
+    headers: { 'Content-Type': 'application/json' },
+  })
 }

@@ -1,9 +1,11 @@
-import { type LoaderFunctionArgs } from 'react-router'
-import { getDbPath, getVideoDir } from '~/utils/video-paths'
-import Database from 'better-sqlite3'
-import { resolve } from 'path'
-import { existsSync } from 'fs'
 import { spawn } from 'child_process'
+import { existsSync } from 'fs'
+import { resolve } from 'path'
+
+import Database from 'better-sqlite3'
+import { type LoaderFunctionArgs } from 'react-router'
+
+import { getDbPath, getVideoDir } from '~/utils/video-paths'
 
 interface Annotation {
   id: number
@@ -19,7 +21,7 @@ interface FrameOCR {
   ocr_confidence: number
 }
 
-function getDatabase(videoId: string) {
+function getDatabase(videoId: string): Database.Database | Response {
   const dbPath = getDbPath(videoId)
   if (!dbPath) {
     return new Response('Video not found', { status: 404 })
@@ -41,7 +43,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
   if (!encodedVideoId || !id) {
     return new Response(JSON.stringify({ error: 'Missing videoId or id' }), {
       status: 400,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
     })
   }
 
@@ -50,15 +52,18 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
   try {
     const db = getDatabase(videoId)
+    if (db instanceof Response) return db
 
     // Get annotation to determine frame range
-    const annotation = db.prepare('SELECT * FROM captions WHERE id = ?').get(annotationId) as Annotation | undefined
+    const annotation = db.prepare('SELECT * FROM captions WHERE id = ?').get(annotationId) as
+      | Annotation
+      | undefined
 
     if (!annotation) {
       db.close()
       return new Response(JSON.stringify({ error: 'Annotation not found' }), {
         status: 404,
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
       })
     }
 
@@ -69,12 +74,16 @@ export async function loader({ params }: LoaderFunctionArgs) {
     }
 
     // Fetch existing OCR data from frames_ocr table
-    const existingOCRData = db.prepare(`
+    const existingOCRData = db
+      .prepare(
+        `
       SELECT frame_index, ocr_text, ocr_annotations, ocr_confidence
       FROM frames_ocr
       WHERE frame_index BETWEEN ? AND ?
       ORDER BY frame_index
-    `).all(annotation.start_frame_index, annotation.end_frame_index) as FrameOCR[]
+    `
+      )
+      .all(annotation.start_frame_index, annotation.end_frame_index) as FrameOCR[]
 
     // Create map of existing OCR data
     const existingOCRMap = new Map<number, FrameOCR>()
@@ -85,7 +94,9 @@ export async function loader({ params }: LoaderFunctionArgs) {
     // Find frames that need OCR
     const framesToOCR = frameIndices.filter(idx => !existingOCRMap.has(idx))
 
-    console.log(`Annotation ${annotationId}: ${frameIndices.length} frames total, ${existingOCRData.length} cached, ${framesToOCR.length} need OCR`)
+    console.log(
+      `Annotation ${annotationId}: ${frameIndices.length} frames total, ${existingOCRData.length} cached, ${framesToOCR.length} need OCR`
+    )
 
     // Run OCR on missing frames
     const videoDir = getVideoDir(videoId)
@@ -93,7 +104,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
       db.close()
       return new Response(JSON.stringify({ error: 'Video directory not found' }), {
         status: 404,
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
       })
     }
 
@@ -116,16 +127,16 @@ export async function loader({ params }: LoaderFunctionArgs) {
       let stdout = ''
       let stderr = ''
 
-      python.stdout.on('data', (data) => {
+      python.stdout.on('data', data => {
         stdout += data.toString()
       })
 
-      python.stderr.on('data', (data) => {
+      python.stderr.on('data', data => {
         stderr += data.toString()
       })
 
       await new Promise<void>((resolve, reject) => {
-        python.on('close', (code) => {
+        python.on('close', code => {
           if (code !== 0) {
             console.error(`Python OCR service failed:`, stderr)
             reject(new Error(`Python OCR service exited with code ${code}`))
@@ -140,7 +151,9 @@ export async function loader({ params }: LoaderFunctionArgs) {
             for (const result of results) {
               const { frame_index, ocr_text, ocr_annotations, ocr_confidence } = result
 
-              console.log(`Frame ${frame_index}: text="${ocr_text.substring(0, 30)}" len=${ocr_text.length}`)
+              console.log(
+                `Frame ${frame_index}: text="${ocr_text.substring(0, 30)}" len=${ocr_text.length}`
+              )
 
               // Insert into database
               insertStmt.run(frame_index, ocr_text, JSON.stringify(ocr_annotations), ocr_confidence)
@@ -150,7 +163,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
                 frame_index,
                 ocr_text,
                 ocr_annotations: JSON.stringify(ocr_annotations),
-                ocr_confidence
+                ocr_confidence,
               })
             }
 
@@ -167,37 +180,40 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
     // Convert to expected format with camelCase, ordered by frame index
     const frameResults = frameIndices.map(idx => {
-      const row = existingOCRMap.get(idx)!
+      const row = existingOCRMap.get(idx)
+      if (!row) {
+        throw new Error(`Frame ${idx} not found in OCR map`)
+      }
       return {
         frameIndex: row.frame_index,
-        ocrText: row.ocr_text || '',
+        ocrText: row.ocr_text ?? '',
         ocrAnnotations: row.ocr_annotations ? JSON.parse(row.ocr_annotations) : [],
-        ocrConfidence: row.ocr_confidence || 0
+        ocrConfidence: row.ocr_confidence ?? 0,
       }
     })
 
-    return new Response(JSON.stringify({
-      annotationId,
-      frameRange: {
-        start: annotation.start_frame_index,
-        end: annotation.end_frame_index
-      },
-      frames: frameResults
-    }), {
-      headers: {
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-        'Pragma': 'no-cache',
-        'Expires': '0'
-      }
-    })
-  } catch (error) {
     return new Response(
-      JSON.stringify({ error: (error as Error).message }),
+      JSON.stringify({
+        annotationId,
+        frameRange: {
+          start: annotation.start_frame_index,
+          end: annotation.end_frame_index,
+        },
+        frames: frameResults,
+      }),
       {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+          Pragma: 'no-cache',
+          Expires: '0',
+        },
       }
     )
+  } catch (error) {
+    return new Response(JSON.stringify({ error: (error as Error).message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    })
   }
 }

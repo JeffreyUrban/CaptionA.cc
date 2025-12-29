@@ -1,4 +1,5 @@
 repos:
+# Python checks
 - repo: https://github.com/astral-sh/ruff-pre-commit
   rev: v0.14.6
   hooks:
@@ -16,6 +17,30 @@ repos:
     - typer>=0.9.0
     - rich>=13.0.0
     files: ^src/
+
+# TypeScript checks
+- repo: local
+  hooks:
+  - id: typescript-check
+    name: TypeScript Type Check
+    entry: bash -c 'cd apps/captionacc-web && npx tsc --noEmit --incremental false'
+    language: system
+    files: ^apps/captionacc-web/.*\.(ts|tsx)$
+    pass_filenames: false
+  - id: prettier
+    name: Prettier Format
+    entry: npx --prefix apps/captionacc-web prettier --write --ignore-unknown
+    language: system
+    files: ^apps/captionacc-web/.*\.(ts|tsx|js|jsx|json|css|md)$
+    pass_filenames: true
+  - id: eslint
+    name: ESLint
+    entry: bash -c 'cd apps/captionacc-web && npx eslint'
+    language: system
+    files: ^apps/captionacc-web/.*\.(ts|tsx)$
+    pass_filenames: true
+
+# General checks
 - repo: https://github.com/pre-commit/pre-commit-hooks
   rev: v4.5.0
   hooks:

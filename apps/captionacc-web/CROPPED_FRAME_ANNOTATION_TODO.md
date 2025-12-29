@@ -11,14 +11,19 @@ When implementing box annotation in the text annotation workflow (cropped frame 
 Show all annotations for the current cropped frame, regardless of source:
 
 ```typescript
-const userAnnotations = db.prepare(`
+const userAnnotations = db
+  .prepare(
+    `
   SELECT box_index, label, annotation_source
   FROM full_frame_box_labels
   WHERE frame_index = ? AND label_source = 'user'
-`).all(croppedFrameIndex)
+`
+  )
+  .all(croppedFrameIndex)
 ```
 
 This automatically includes:
+
 - Annotations from `annotation_source='cropped_frame'` for this frame
 - Annotations from `annotation_source='full_frame'` if they happen to share the same frame_index (unlikely but possible)
 
@@ -33,7 +38,9 @@ If you want to show annotations from other frames that spatially overlap the cur
 const layoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get()
 
 // Get all annotations that overlap the cropped region
-const overlappingAnnotations = db.prepare(`
+const overlappingAnnotations = db
+  .prepare(
+    `
   SELECT
     annotation_source,
     frame_index,
@@ -49,12 +56,14 @@ const overlappingAnnotations = db.prepare(`
     AND box_left <= ?
     AND box_bottom >= ?
     AND box_top <= ?
-`).all(
-  layoutConfig.crop_left,
-  layoutConfig.crop_right,
-  layoutConfig.crop_top,
-  layoutConfig.crop_bottom
-)
+`
+  )
+  .all(
+    layoutConfig.crop_left,
+    layoutConfig.crop_right,
+    layoutConfig.crop_top,
+    layoutConfig.crop_bottom
+  )
 ```
 
 This will show annotations from both full frames and other cropped frames that fall within the visible area.
@@ -71,7 +80,7 @@ const cropBounds = {
   left: layoutConfig.crop_left,
   top: layoutConfig.crop_top,
   right: layoutConfig.crop_right,
-  bottom: layoutConfig.crop_bottom
+  bottom: layoutConfig.crop_bottom,
 }
 
 const cropWidth = cropBounds.right - cropBounds.left
@@ -112,7 +121,7 @@ upsert.run(
   croppedFrameIndex,
   boxIndex,
   boxText,
-  boxLeftFullFrame,    // Full-frame coordinates
+  boxLeftFullFrame, // Full-frame coordinates
   boxTopFullFrame,
   boxRightFullFrame,
   boxBottomFullFrame,
@@ -126,6 +135,7 @@ upsert.run(
 ### Important: No Foreign Key Constraints
 
 The `full_frame_box_labels` table has **NO foreign key constraints** to OCR tables. This means:
+
 - ✓ Annotations persist even when source frames are deleted (useful for training)
 - ✓ DELETE operations work even when source frames no longer exist
 - ✓ No orphaned reference errors when clearing annotations
@@ -136,12 +146,14 @@ When a user clears/deletes an annotation, simply DELETE the row:
 
 ```typescript
 // Delete annotation - works regardless of whether source frame still exists
-db.prepare(`
+db.prepare(
+  `
   DELETE FROM full_frame_box_labels
   WHERE annotation_source = ?
     AND frame_index = ?
     AND box_index = ?
-`).run(annotationSource, frameIndex, boxIndex)
+`
+).run(annotationSource, frameIndex, boxIndex)
 ```
 
 **No need to check if source frame exists** - the DELETE will succeed either way.
@@ -179,7 +191,7 @@ async function clearAllAnnotationsForFrame(
   onClick={async () => {
     if (confirm('Clear all annotations for this frame? This cannot be undone.')) {
       await fetch(`/api/annotations/${videoId}/frames/${frameIndex}/clear-all`, {
-        method: 'DELETE'
+        method: 'DELETE',
       })
       // Reload annotations
       loadAnnotations()
@@ -202,6 +214,7 @@ async function clearAllAnnotationsForFrame(
 ### Preservation on Re-crop
 
 When crop bounds change (`crop_bounds_version` increments):
+
 - Existing cropped frame annotations are **preserved** with their old `crop_bounds_version`
 - They remain in full-frame coordinates, so they still contribute to training
 - **They still display** when viewing the same frame_index (frame indices don't change)
@@ -211,6 +224,7 @@ When crop bounds change (`crop_bounds_version` increments):
 ### Annotations After Re-cropping
 
 When crop bounds change (e.g., `crop_bounds_version` increments from 1→2):
+
 - **Annotations persist** in `full_frame_box_labels` with their original `crop_bounds_version=1`
 - **OCR is regenerated** - `cropped_frame_ocr` is re-populated with new boxes for the same frame indices
 - **Annotations still display** - frame indices still exist, query by `frame_index` still works
@@ -219,6 +233,7 @@ When crop bounds change (e.g., `crop_bounds_version` increments from 1→2):
 - **Can be cleaned up** - "clear all" button removes all annotations for the frame
 
 **Example scenario:**
+
 1. User annotates boxes in cropped frame #123 with `crop_bounds_version=1`
    - Creates: `annotation_source='cropped_frame'`, `frame_index=123`, `crop_bounds_version=1`
 2. Crop bounds change → `crop_bounds_version` increments to 2

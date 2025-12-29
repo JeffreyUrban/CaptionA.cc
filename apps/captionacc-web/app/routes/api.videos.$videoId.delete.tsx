@@ -1,7 +1,9 @@
-import { type ActionFunctionArgs } from 'react-router'
 import { existsSync } from 'fs'
 import { rm } from 'fs/promises'
+
 import Database from 'better-sqlite3'
+import { type ActionFunctionArgs } from 'react-router'
+
 import { getDbPath, getVideoDir } from '~/utils/video-paths'
 
 /**
@@ -58,7 +60,7 @@ export async function action({ params }: ActionFunctionArgs) {
   if (!encodedVideoId) {
     return new Response(JSON.stringify({ error: 'Missing videoId' }), {
       status: 400,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
     })
   }
 
@@ -70,13 +72,16 @@ export async function action({ params }: ActionFunctionArgs) {
     const videoDir = getVideoDir(videoId)
 
     if (!dbPath || !videoDir) {
-      return new Response(JSON.stringify({
-        error: 'Video not found',
-        videoId
-      }), {
-        status: 404,
-        headers: { 'Content-Type': 'application/json' }
-      })
+      return new Response(
+        JSON.stringify({
+          error: 'Video not found',
+          videoId,
+        }),
+        {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
     }
 
     // Soft delete: mark as deleted and get PID
@@ -84,19 +89,25 @@ export async function action({ params }: ActionFunctionArgs) {
     const db = new Database(dbPath)
     try {
       // Get current job ID (PID) before marking deleted
-      const status = db.prepare(`
+      const status = db
+        .prepare(
+          `
         SELECT current_job_id FROM processing_status WHERE id = 1
-      `).get() as { current_job_id: string | null } | undefined
+      `
+        )
+        .get() as { current_job_id: string | null } | undefined
 
       pid = status?.current_job_id || null
 
       // Mark as deleted
-      db.prepare(`
+      db.prepare(
+        `
         UPDATE processing_status
         SET deleted = 1,
             deleted_at = datetime('now')
         WHERE id = 1
-      `).run()
+      `
+      ).run()
 
       console.log(`[VideoDelete] Marked as deleted: ${videoId} (PID: ${pid || 'none'})`)
     } finally {
@@ -109,21 +120,26 @@ export async function action({ params }: ActionFunctionArgs) {
     })
 
     // Return success immediately
-    return new Response(JSON.stringify({
-      success: true,
-      videoId
-    }), {
-      headers: { 'Content-Type': 'application/json' }
-    })
-
+    return new Response(
+      JSON.stringify({
+        success: true,
+        videoId,
+      }),
+      {
+        headers: { 'Content-Type': 'application/json' },
+      }
+    )
   } catch (error) {
     console.error('Error deleting video:', error)
-    return new Response(JSON.stringify({
-      error: error instanceof Error ? error.message : 'Unknown error',
-      videoId
-    }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
-    })
+    return new Response(
+      JSON.stringify({
+        error: error instanceof Error ? error.message : 'Unknown error',
+        videoId,
+      }),
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    )
   }
 }

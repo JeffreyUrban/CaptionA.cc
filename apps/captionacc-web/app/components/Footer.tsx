@@ -1,6 +1,7 @@
 import { Link } from 'react-router'
+
 import { Container } from '~/components/Container'
-import featureFlags from "~/config/featureFlags"
+import featureFlags from '~/config/featureFlags'
 
 export function Footer() {
   return (
@@ -8,7 +9,7 @@ export function Footer() {
       <Container>
         <div className="flex flex-col items-center justify-between gap-4 py-8 sm:flex-row">
           {/* Navigation Links */}
-          {(featureFlags.showContact) && (
+          {featureFlags.showContact && (
             <nav className="flex gap-6">
               <Link
                 to="/"

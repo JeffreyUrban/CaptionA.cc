@@ -11,7 +11,9 @@
     "lint": "echo 'Run linting in individual TypeScript projects'",
     "build": "echo 'Build individual TypeScript projects'"
   },
-  "devDependencies": {},
+  "devDependencies": {
+    "globals": "^16.5.0"
+  },
   "engines": {
     "node": ">=18.0.0"
   }
