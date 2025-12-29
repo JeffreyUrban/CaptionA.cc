@@ -40,8 +40,8 @@ interface ModelParams {
   n_training_samples: number
   prior_in: number
   prior_out: number
-  in_features: GaussianParams[] // 7 features
-  out_features: GaussianParams[] // 7 features
+  in_features: GaussianParams[] // 9 features
+  out_features: GaussianParams[] // 9 features
 }
 
 interface ModelRow {
@@ -63,6 +63,10 @@ interface ModelRow {
   in_normalized_y_std: number
   in_normalized_area_mean: number
   in_normalized_area_std: number
+  in_user_annotated_in_mean: number
+  in_user_annotated_in_std: number
+  in_user_annotated_out_mean: number
+  in_user_annotated_out_std: number
   out_vertical_alignment_mean: number
   out_vertical_alignment_std: number
   out_height_similarity_mean: number
@@ -77,18 +81,30 @@ interface ModelRow {
   out_normalized_y_std: number
   out_normalized_area_mean: number
   out_normalized_area_std: number
+  out_user_annotated_in_mean: number
+  out_user_annotated_in_std: number
+  out_user_annotated_out_mean: number
+  out_user_annotated_out_std: number
 }
 
 /**
- * Extract 7 features from a box based on local clustering with other boxes.
+ * Extract 9 features from a box based on local clustering with other boxes.
  *
  * All features are independent of pre-computed cluster parameters to avoid
  * circular dependencies. Uses k-nearest neighbors approach.
+ *
+ * Features 8-9 are user annotations as binary indicators:
+ * - Feature 8: isUserAnnotatedIn (1.0 if user annotated as "in", 0.0 otherwise)
+ * - Feature 9: isUserAnnotatedOut (1.0 if user annotated as "out", 0.0 otherwise)
+ * Unannotated boxes have both features = 0.0
  */
 function extractFeatures(
   box: BoxBounds,
   layout: VideoLayoutConfig,
-  allBoxes: BoxBounds[]
+  allBoxes: BoxBounds[],
+  frameIndex: number,
+  boxIndex: number,
+  db: Database.Database | null
 ): number[] {
   const boxWidth = box.right - box.left
   const boxHeight = box.bottom - box.top
@@ -207,6 +223,43 @@ function extractFeatures(
   // Feature 6: Normalized area (unchanged)
   const normalizedArea = frameArea > 0 ? boxArea / frameArea : 0.0
 
+  // Feature 7 & 8: User annotations as binary indicators
+  // We use TWO features instead of one to avoid the "neutral value" problem:
+  // - With one feature (0.0=out, 0.5=unannotated, 1.0=in), the model never sees 0.5 during training
+  //   (all boxes are annotated), causing numerical issues when predicting unannotated boxes
+  // - With two binary features, unannotated boxes are (0,0) which the model learns during training
+  //   from boxes of the opposite class (e.g., "in" boxes have isUserAnnotatedOut=0)
+  let isUserAnnotatedIn = 0.0
+  let isUserAnnotatedOut = 0.0
+
+  if (db) {
+    try {
+      const annotation = db
+        .prepare(
+          `
+        SELECT label
+        FROM full_frame_box_labels
+        WHERE annotation_source = 'full_frame'
+          AND frame_index = ?
+          AND box_index = ?
+          AND label_source = 'user'
+      `
+        )
+        .get(frameIndex, boxIndex) as { label: 'in' | 'out' } | undefined
+
+      if (annotation) {
+        if (annotation.label === 'in') {
+          isUserAnnotatedIn = 1.0
+        } else {
+          isUserAnnotatedOut = 1.0
+        }
+      }
+    } catch (error) {
+      // If table doesn't exist or query fails, features remain 0.0
+      console.warn('[extractFeatures] Failed to lookup user annotation:', error)
+    }
+  }
+
   return [
     topAlignmentScore,
     bottomAlignmentScore,
@@ -215,6 +268,8 @@ function extractFeatures(
     aspectRatio,
     normalizedYPosition,
     normalizedArea,
+    isUserAnnotatedIn,
+    isUserAnnotatedOut,
   ]
 }
 
@@ -235,12 +290,82 @@ function gaussianPDF(x: number, mean: number, std: number): number {
 }
 
 /**
+ * Migrate box_classification_model schema to include user annotation columns if needed.
+ */
+function migrateModelSchema(db: Database.Database): void {
+  try {
+    // Check if new user_annotated columns exist
+    db.prepare('SELECT in_user_annotated_in_mean FROM box_classification_model WHERE id = 1').get()
+    // If we get here, columns exist - no migration needed
+    return
+  } catch (error) {
+    // Columns don't exist - need to migrate
+    console.log('[migrateModelSchema] Adding user annotation columns to box_classification_model')
+
+    try {
+      // Add the 8 new columns (4 for in class, 4 for out class, 2 features each)
+      db.prepare(
+        'ALTER TABLE box_classification_model ADD COLUMN in_user_annotated_in_mean REAL'
+      ).run()
+      db.prepare(
+        'ALTER TABLE box_classification_model ADD COLUMN in_user_annotated_in_std REAL'
+      ).run()
+      db.prepare(
+        'ALTER TABLE box_classification_model ADD COLUMN in_user_annotated_out_mean REAL'
+      ).run()
+      db.prepare(
+        'ALTER TABLE box_classification_model ADD COLUMN in_user_annotated_out_std REAL'
+      ).run()
+      db.prepare(
+        'ALTER TABLE box_classification_model ADD COLUMN out_user_annotated_in_mean REAL'
+      ).run()
+      db.prepare(
+        'ALTER TABLE box_classification_model ADD COLUMN out_user_annotated_in_std REAL'
+      ).run()
+      db.prepare(
+        'ALTER TABLE box_classification_model ADD COLUMN out_user_annotated_out_mean REAL'
+      ).run()
+      db.prepare(
+        'ALTER TABLE box_classification_model ADD COLUMN out_user_annotated_out_std REAL'
+      ).run()
+
+      // Update existing model with reasonable defaults for the new features
+      // "in" boxes: isUserAnnotatedIn=1, isUserAnnotatedOut=0
+      // "out" boxes: isUserAnnotatedIn=0, isUserAnnotatedOut=1
+      db.prepare(
+        `
+        UPDATE box_classification_model
+        SET
+          in_user_annotated_in_mean = 1.0,
+          in_user_annotated_in_std = 0.01,
+          in_user_annotated_out_mean = 0.0,
+          in_user_annotated_out_std = 0.01,
+          out_user_annotated_in_mean = 0.0,
+          out_user_annotated_in_std = 0.01,
+          out_user_annotated_out_mean = 1.0,
+          out_user_annotated_out_std = 0.01
+        WHERE id = 1
+      `
+      ).run()
+
+      console.log('[migrateModelSchema] Schema migration completed successfully')
+    } catch (migrationError) {
+      console.error('[migrateModelSchema] Migration failed:', migrationError)
+      // If migration fails, we'll need to recreate the model
+      throw new Error('Failed to migrate model schema - model will need to be retrained')
+    }
+  }
+}
+
+/**
  * Load model parameters from database.
  *
  * Accepts both seed model (n_training_samples = 0) and trained models (n_training_samples >= 10).
  * The seed model provides reasonable starting predictions before user annotations are available.
  */
 function loadModelFromDB(db: Database.Database): ModelParams | null {
+  // Migrate schema if needed
+  migrateModelSchema(db)
   const row = db.prepare('SELECT * FROM box_classification_model WHERE id = 1').get() as
     | ModelRow
     | undefined
@@ -267,6 +392,8 @@ function loadModelFromDB(db: Database.Database): ModelParams | null {
     { mean: row.in_aspect_ratio_mean, std: row.in_aspect_ratio_std },
     { mean: row.in_normalized_y_mean, std: row.in_normalized_y_std },
     { mean: row.in_normalized_area_mean, std: row.in_normalized_area_std },
+    { mean: row.in_user_annotated_in_mean, std: row.in_user_annotated_in_std },
+    { mean: row.in_user_annotated_out_mean, std: row.in_user_annotated_out_std },
   ]
 
   const outFeatures: GaussianParams[] = [
@@ -277,6 +404,8 @@ function loadModelFromDB(db: Database.Database): ModelParams | null {
     { mean: row.out_aspect_ratio_mean, std: row.out_aspect_ratio_std },
     { mean: row.out_normalized_y_mean, std: row.out_normalized_y_std },
     { mean: row.out_normalized_area_mean, std: row.out_normalized_area_std },
+    { mean: row.out_user_annotated_in_mean, std: row.out_user_annotated_in_std },
+    { mean: row.out_user_annotated_out_mean, std: row.out_user_annotated_out_std },
   ]
 
   return {
@@ -296,30 +425,78 @@ function predictBayesian(
   box: BoxBounds,
   layout: VideoLayoutConfig,
   model: ModelParams,
-  allBoxes: BoxBounds[]
+  allBoxes: BoxBounds[],
+  frameIndex: number,
+  boxIndex: number,
+  db: Database.Database
 ): { label: 'in' | 'out'; confidence: number } {
-  const features = extractFeatures(box, layout, allBoxes)
+  const features = extractFeatures(box, layout, allBoxes, frameIndex, boxIndex, db)
 
-  // Calculate likelihoods: P(features|class) = ∏ Gaussian_PDF(feature_i)
-  let likelihoodIn = 1.0
-  let likelihoodOut = 1.0
+  // Calculate log-likelihoods using log-space to prevent numerical underflow
+  //
+  // PROBLEM: Naive Bayes multiplies probabilities for each feature:
+  //   P(features|class) = P(f1|class) × P(f2|class) × ... × P(f9|class)
+  //
+  // With 9 features, each having Gaussian PDF values often < 0.01, the product can underflow to 0.
+  // Example: 0.01^9 = 1e-18, which underflows to 0 in floating point.
+  //
+  // When a single feature has an extreme value (e.g., topAlignment=177 vs mean=0.5),
+  // its Gaussian PDF ≈ 0, causing the entire likelihood to become 0 for both classes.
+  // This leads to the degenerate case where total = posteriorIn + posteriorOut = 0.
+  //
+  // SOLUTION: Use log-space arithmetic
+  //   log(P(features|class)) = log(P(f1|class)) + log(P(f2|class)) + ... + log(P(f9|class))
+  //
+  // Benefits:
+  //   - Product becomes sum (numerically stable)
+  //   - Can represent very small probabilities (log(1e-100) = -230, no underflow)
+  //   - Convert back to probability space only at the end
+  //
+  // See: https://en.wikipedia.org/wiki/Log_probability
+  let logLikelihoodIn = 0.0
+  let logLikelihoodOut = 0.0
 
-  for (let i = 0; i < 7; i++) {
-    likelihoodIn *= gaussianPDF(features[i]!, model.in_features[i]!.mean, model.in_features[i]!.std)
-    likelihoodOut *= gaussianPDF(
+  for (let i = 0; i < 9; i++) {
+    const pdfIn = gaussianPDF(features[i]!, model.in_features[i]!.mean, model.in_features[i]!.std)
+    const pdfOut = gaussianPDF(
       features[i]!,
       model.out_features[i]!.mean,
       model.out_features[i]!.std
     )
+
+    // Add to log-likelihood (log of product is sum of logs)
+    // Use Math.max to avoid log(0) = -Infinity
+    logLikelihoodIn += Math.log(Math.max(pdfIn, 1e-300))
+    logLikelihoodOut += Math.log(Math.max(pdfOut, 1e-300))
   }
 
-  // Apply Bayes' theorem: P(class|features) ∝ P(features|class) * P(class)
-  const posteriorIn = likelihoodIn * model.prior_in
-  const posteriorOut = likelihoodOut * model.prior_out
+  // Apply Bayes' theorem in log-space: log(P(class|features)) = log(P(features|class)) + log(P(class))
+  const logPosteriorIn = logLikelihoodIn + Math.log(model.prior_in)
+  const logPosteriorOut = logLikelihoodOut + Math.log(model.prior_out)
+
+  // Convert back from log-space for final probabilities using the log-sum-exp trick
+  //
+  // PROBLEM: Direct conversion can overflow/underflow:
+  //   posteriorIn = exp(logPosteriorIn)  // Can overflow if logPosteriorIn is large
+  //   total = posteriorIn + posteriorOut // Can be Infinity or NaN
+  //
+  // SOLUTION: Log-sum-exp trick - factor out the maximum before exponentiating:
+  //   max = max(logPosteriorIn, logPosteriorOut)
+  //   posteriorIn = exp(logPosteriorIn - max)
+  //   posteriorOut = exp(logPosteriorOut - max)
+  //   total = posteriorIn + posteriorOut
+  //
+  // This ensures that the largest exponent is always 0, preventing overflow.
+  // The max term cancels out when computing probIn = posteriorIn / total.
+  //
+  // See: https://en.wikipedia.org/wiki/LogSumExp
+  const maxLogPosterior = Math.max(logPosteriorIn, logPosteriorOut)
+  const posteriorIn = Math.exp(logPosteriorIn - maxLogPosterior)
+  const posteriorOut = Math.exp(logPosteriorOut - maxLogPosterior)
   const total = posteriorIn + posteriorOut
 
-  if (total === 0) {
-    // Degenerate case
+  if (total === 0 || !isFinite(total)) {
+    // Degenerate case (shouldn't happen with log-space, but handle it just in case)
     return { label: 'in', confidence: 0.5 }
   }
 
@@ -409,6 +586,8 @@ export function predictBoxLabel(
   boxBounds: BoxBounds,
   layoutConfig: VideoLayoutConfig,
   allBoxes: BoxBounds[],
+  frameIndex: number,
+  boxIndex: number,
   db?: Database.Database
 ): { label: 'in' | 'out'; confidence: number } {
   // Try to use Bayesian model if database provided
@@ -416,7 +595,7 @@ export function predictBoxLabel(
     try {
       const model = loadModelFromDB(db)
       if (model) {
-        return predictBayesian(boxBounds, layoutConfig, model, allBoxes)
+        return predictBayesian(boxBounds, layoutConfig, model, allBoxes, frameIndex, boxIndex, db)
       }
     } catch (error) {
       // Log error and fall back to heuristics
@@ -440,6 +619,9 @@ export function predictBoxLabel(
  * @param db Database connection
  */
 export function initializeSeedModel(db: Database.Database): void {
+  // Migrate schema if needed (add user_annotation columns)
+  migrateModelSchema(db)
+
   // Check if model already exists
   const existing = db.prepare('SELECT id FROM box_classification_model WHERE id = 1').get()
   if (existing) {
@@ -450,7 +632,7 @@ export function initializeSeedModel(db: Database.Database): void {
   console.log('[initializeSeedModel] Initializing seed model with typical caption parameters')
 
   // Seed parameters based on typical caption characteristics
-  // Features in order: [topAlignment, bottomAlignment, heightSimilarity, horizontalClustering, aspectRatio, normalizedY, normalizedArea]
+  // Features in order: [topAlignment, bottomAlignment, heightSimilarity, horizontalClustering, aspectRatio, normalizedY, normalizedArea, isUserAnnotatedIn, isUserAnnotatedOut]
 
   // "in" (caption) boxes: well-aligned, similar, clustered, wide, bottom of frame, small
   const inParams = [
@@ -461,6 +643,8 @@ export function initializeSeedModel(db: Database.Database): void {
     { mean: 4.0, std: 2.0 }, // aspectRatio: wide boxes (3-5x wider than tall)
     { mean: 0.8, std: 0.1 }, // normalizedY: bottom 20% of frame (0.75-0.85)
     { mean: 0.02, std: 0.015 }, // normalizedArea: 1-3% of frame area
+    { mean: 0.5, std: 0.5 }, // isUserAnnotatedIn: neutral (no annotations yet)
+    { mean: 0.5, std: 0.5 }, // isUserAnnotatedOut: neutral (no annotations yet)
   ]
 
   // "out" (noise) boxes: less aligned, varied, scattered, more varied
@@ -472,6 +656,8 @@ export function initializeSeedModel(db: Database.Database): void {
     { mean: 2.0, std: 3.0 }, // aspectRatio: more varied
     { mean: 0.5, std: 0.3 }, // normalizedY: more varied vertical position
     { mean: 0.03, std: 0.03 }, // normalizedArea: more varied area
+    { mean: 0.5, std: 0.5 }, // isUserAnnotatedIn: neutral (no annotations yet)
+    { mean: 0.5, std: 0.5 }, // isUserAnnotatedOut: neutral (no annotations yet)
   ]
 
   // Start with balanced priors (50/50)
@@ -495,21 +681,25 @@ export function initializeSeedModel(db: Database.Database): void {
       in_aspect_ratio_mean, in_aspect_ratio_std,
       in_normalized_y_mean, in_normalized_y_std,
       in_normalized_area_mean, in_normalized_area_std,
+      in_user_annotated_in_mean, in_user_annotated_in_std,
+      in_user_annotated_out_mean, in_user_annotated_out_std,
       out_vertical_alignment_mean, out_vertical_alignment_std,
       out_height_similarity_mean, out_height_similarity_std,
       out_anchor_distance_mean, out_anchor_distance_std,
       out_crop_overlap_mean, out_crop_overlap_std,
       out_aspect_ratio_mean, out_aspect_ratio_std,
       out_normalized_y_mean, out_normalized_y_std,
-      out_normalized_area_mean, out_normalized_area_std
+      out_normalized_area_mean, out_normalized_area_std,
+      out_user_annotated_in_mean, out_user_annotated_in_std,
+      out_user_annotated_out_mean, out_user_annotated_out_std
     ) VALUES (
       1,
       'seed_v1',
       datetime('now'),
       0,
       ?, ?,
-      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
     )
   `
   ).run(
@@ -529,6 +719,10 @@ export function initializeSeedModel(db: Database.Database): void {
     inParams[5]!.std,
     inParams[6]!.mean,
     inParams[6]!.std,
+    inParams[7]!.mean,
+    inParams[7]!.std,
+    inParams[8]!.mean,
+    inParams[8]!.std,
     outParams[0]!.mean,
     outParams[0]!.std,
     outParams[1]!.mean,
@@ -542,7 +736,11 @@ export function initializeSeedModel(db: Database.Database): void {
     outParams[5]!.mean,
     outParams[5]!.std,
     outParams[6]!.mean,
-    outParams[6]!.std
+    outParams[6]!.std,
+    outParams[7]!.mean,
+    outParams[7]!.std,
+    outParams[8]!.mean,
+    outParams[8]!.std
   )
 
   console.log('[initializeSeedModel] Seed model initialized successfully')
@@ -561,6 +759,9 @@ export function initializeSeedModel(db: Database.Database): void {
  * @returns Number of training samples used, or null if insufficient data
  */
 export function trainModel(db: Database.Database, layoutConfig: VideoLayoutConfig): number | null {
+  // Migrate schema if needed (add user_annotation columns)
+  migrateModelSchema(db)
+
   // Fetch all user annotations
   const annotations = db
     .prepare(
@@ -571,7 +772,8 @@ export function trainModel(db: Database.Database, layoutConfig: VideoLayoutConfi
       box_top,
       box_right,
       box_bottom,
-      frame_index
+      frame_index,
+      box_index
     FROM full_frame_box_labels
     WHERE label_source = 'user'
     ORDER BY frame_index
@@ -584,6 +786,7 @@ export function trainModel(db: Database.Database, layoutConfig: VideoLayoutConfi
     box_right: number
     box_bottom: number
     frame_index: number
+    box_index: number
   }>
 
   if (annotations.length < 10) {
@@ -662,7 +865,14 @@ export function trainModel(db: Database.Database, layoutConfig: VideoLayoutConfi
       bottom: ann.box_bottom,
     }
 
-    const features = extractFeatures(boxBounds, layoutConfig, allBoxes)
+    const features = extractFeatures(
+      boxBounds,
+      layoutConfig,
+      allBoxes,
+      ann.frame_index,
+      ann.box_index,
+      db
+    )
 
     if (ann.label === 'in') {
       inFeatures.push(features)
@@ -684,14 +894,16 @@ export function trainModel(db: Database.Database, layoutConfig: VideoLayoutConfi
     const mean = values.reduce((sum, v) => sum + v, 0) / values.length
     const variance = values.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / values.length
     const std = Math.sqrt(variance)
-    return { mean, std: std > 0 ? std : 1e-6 } // Avoid zero std
+    // Use minimum std of 0.01 to avoid numerical precision issues
+    // For user_annotation feature with all 0s or all 1s, this allows ~68% probability within ±0.01
+    return { mean, std: Math.max(std, 0.01) }
   }
 
   // Extract each feature column and calculate parameters
   const inParams: Array<{ mean: number; std: number }> = []
   const outParams: Array<{ mean: number; std: number }> = []
 
-  for (let i = 0; i < 7; i++) {
+  for (let i = 0; i < 9; i++) {
     const inFeatureValues = inFeatures.map(f => f[i]!)
     const outFeatureValues = outFeatures.map(f => f[i]!)
 
@@ -721,21 +933,25 @@ export function trainModel(db: Database.Database, layoutConfig: VideoLayoutConfi
       in_aspect_ratio_mean, in_aspect_ratio_std,
       in_normalized_y_mean, in_normalized_y_std,
       in_normalized_area_mean, in_normalized_area_std,
+      in_user_annotated_in_mean, in_user_annotated_in_std,
+      in_user_annotated_out_mean, in_user_annotated_out_std,
       out_vertical_alignment_mean, out_vertical_alignment_std,
       out_height_similarity_mean, out_height_similarity_std,
       out_anchor_distance_mean, out_anchor_distance_std,
       out_crop_overlap_mean, out_crop_overlap_std,
       out_aspect_ratio_mean, out_aspect_ratio_std,
       out_normalized_y_mean, out_normalized_y_std,
-      out_normalized_area_mean, out_normalized_area_std
+      out_normalized_area_mean, out_normalized_area_std,
+      out_user_annotated_in_mean, out_user_annotated_in_std,
+      out_user_annotated_out_mean, out_user_annotated_out_std
     ) VALUES (
       1,
       'naive_bayes_v1',
       datetime('now'),
       ?,
       ?, ?,
-      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
     )
   `
   ).run(
@@ -756,6 +972,10 @@ export function trainModel(db: Database.Database, layoutConfig: VideoLayoutConfi
     inParams[5]!.std,
     inParams[6]!.mean,
     inParams[6]!.std,
+    inParams[7]!.mean,
+    inParams[7]!.std,
+    inParams[8]!.mean,
+    inParams[8]!.std,
     outParams[0]!.mean,
     outParams[0]!.std,
     outParams[1]!.mean,
@@ -769,7 +989,11 @@ export function trainModel(db: Database.Database, layoutConfig: VideoLayoutConfi
     outParams[5]!.mean,
     outParams[5]!.std,
     outParams[6]!.mean,
-    outParams[6]!.std
+    outParams[6]!.std,
+    outParams[7]!.mean,
+    outParams[7]!.std,
+    outParams[8]!.mean,
+    outParams[8]!.std
   )
 
   console.log(

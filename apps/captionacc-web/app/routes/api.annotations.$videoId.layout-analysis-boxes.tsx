@@ -183,7 +183,14 @@ export async function loader({ params }: LoaderFunctionArgs) {
           predictedConfidence = box.predicted_confidence
         } else {
           // Calculate prediction on-the-fly
-          const prediction = predictBoxLabel(bounds, layoutConfig, allBoxBounds, db)
+          const prediction = predictBoxLabel(
+            bounds,
+            layoutConfig,
+            allBoxBounds,
+            box.frame_index,
+            box.box_index,
+            db
+          )
           predictedLabel = prediction.label
           predictedConfidence = prediction.confidence
 
