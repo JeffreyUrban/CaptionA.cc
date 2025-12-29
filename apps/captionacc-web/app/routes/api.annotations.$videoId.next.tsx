@@ -1,7 +1,9 @@
-import { type LoaderFunctionArgs } from 'react-router'
-import { getDbPath } from '~/utils/video-paths'
-import Database from 'better-sqlite3'
 import { existsSync } from 'fs'
+
+import Database from 'better-sqlite3'
+import { type LoaderFunctionArgs } from 'react-router'
+
+import { getDbPath } from '~/utils/video-paths'
 
 interface Annotation {
   id: number
@@ -14,7 +16,7 @@ interface Annotation {
   created_at: string
 }
 
-function getDatabase(videoId: string) {
+function getDatabase(videoId: string): Database.Database | Response {
   const dbPath = getDbPath(videoId)
   if (!dbPath) {
     return new Response('Video not found', { status: 404 })
@@ -33,7 +35,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
   if (!encodedVideoId) {
     return new Response(JSON.stringify({ error: 'Missing videoId' }), {
       status: 400,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
     })
   }
 
@@ -41,35 +43,37 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
   try {
     const db = getDatabase(videoId)
+    if (db instanceof Response) return db
 
     // Find the next pending or gap annotation with lowest start_frame_index
     // Pending annotations take priority over gaps
-    const annotation = db.prepare(`
+    const annotation = db
+      .prepare(
+        `
       SELECT * FROM captions
       WHERE boundary_pending = 1 OR boundary_state = 'gap'
       ORDER BY boundary_pending DESC, start_frame_index ASC
       LIMIT 1
-    `).get() as Annotation | undefined
+    `
+      )
+      .get() as Annotation | undefined
 
     db.close()
 
     if (!annotation) {
       // No pending or gap annotations - workflow is complete!
       return new Response(JSON.stringify({ annotation: null, complete: true }), {
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
       })
     }
 
     return new Response(JSON.stringify({ annotation, complete: false }), {
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
     })
   } catch (error) {
-    return new Response(
-      JSON.stringify({ error: (error as Error).message }),
-      {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      }
-    )
+    return new Response(JSON.stringify({ error: (error as Error).message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    })
   }
 }

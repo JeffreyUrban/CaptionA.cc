@@ -1,8 +1,10 @@
-import { type ActionFunctionArgs } from 'react-router'
-import { getDbPath } from '~/utils/video-paths'
-import Database from 'better-sqlite3'
 import { existsSync } from 'fs'
+
+import Database from 'better-sqlite3'
+import { type ActionFunctionArgs } from 'react-router'
+
 import { predictBoxLabel } from '~/utils/box-prediction'
+import { getDbPath } from '~/utils/video-paths'
 
 interface BulkAnnotateAllRequest {
   rectangle: {
@@ -14,7 +16,7 @@ interface BulkAnnotateAllRequest {
   action: 'mark_out' | 'clear'
 }
 
-function getDatabase(videoId: string) {
+function getDatabase(videoId: string): Database.Database | Response {
   const dbPath = getDbPath(videoId)
   if (!dbPath) {
     return new Response('Video not found', { status: 404 })
@@ -34,57 +36,66 @@ export async function action({ params, request }: ActionFunctionArgs) {
   if (!encodedVideoId) {
     return new Response(JSON.stringify({ error: 'Missing videoId' }), {
       status: 400,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
     })
   }
 
   const videoId = decodeURIComponent(encodedVideoId)
 
   try {
-    const body = await request.json() as BulkAnnotateAllRequest
+    const body = (await request.json()) as BulkAnnotateAllRequest
     const { rectangle, action } = body
 
     if (!rectangle || !action) {
       return new Response(JSON.stringify({ error: 'Missing rectangle or action' }), {
         status: 400,
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
       })
     }
 
     const db = getDatabase(videoId)
+    if (db instanceof Response) return db
 
     // Get layout config for frame dimensions and predictions
-    const layoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as {
-      frame_width: number
-      frame_height: number
-      crop_left: number
-      crop_top: number
-      crop_right: number
-      crop_bottom: number
-      vertical_position: number | null
-      vertical_std: number | null
-      box_height: number | null
-      box_height_std: number | null
-      anchor_type: 'left' | 'center' | 'right' | null
-      anchor_position: number | null
-    } | undefined
+    const layoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as
+      | {
+          frame_width: number
+          frame_height: number
+          crop_left: number
+          crop_top: number
+          crop_right: number
+          crop_bottom: number
+          vertical_position: number | null
+          vertical_std: number | null
+          box_height: number | null
+          box_height_std: number | null
+          anchor_type: 'left' | 'center' | 'right' | null
+          anchor_position: number | null
+        }
+      | undefined
 
     if (!layoutConfig) {
       db.close()
       return new Response(JSON.stringify({ error: 'Layout config not found' }), {
         status: 404,
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
       })
     }
 
     // Get model version if available
-    const modelInfo = db.prepare('SELECT model_version FROM box_classification_model WHERE id = 1').get() as { model_version: string } | undefined
-    const modelVersion = modelInfo?.model_version || null
+    const modelInfo = db
+      .prepare('SELECT model_version FROM box_classification_model WHERE id = 1')
+      .get() as { model_version: string } | undefined
+    const modelVersion = modelInfo?.model_version ?? null
 
     // Get all unique frame indices from full_frame_ocr table
-    const frames = db.prepare(`
+    const frames = db
+      .prepare(
+        `
       SELECT DISTINCT frame_index FROM full_frame_ocr ORDER BY frame_index
-    `).all() as Array<{ frame_index: number }>
+    `
+      )
+      .all() as Array<{ frame_index: number }>
 
     let totalAnnotatedBoxes = 0
     let newlyAnnotatedBoxes = 0
@@ -93,12 +104,16 @@ export async function action({ params, request }: ActionFunctionArgs) {
     // Process each frame
     for (const { frame_index: frameIndex } of frames) {
       // Load OCR boxes for this frame
-      const ocrBoxes = db.prepare(`
+      const ocrBoxes = db
+        .prepare(
+          `
         SELECT box_index, text, confidence, x, y, width, height
         FROM full_frame_ocr
         WHERE frame_index = ?
         ORDER BY box_index
-      `).all(frameIndex) as Array<{
+      `
+        )
+        .all(frameIndex) as Array<{
         box_index: number
         text: string
         confidence: number
@@ -156,10 +171,16 @@ export async function action({ params, request }: ActionFunctionArgs) {
           // action === 'mark_out'
           // Check which boxes already have labels
           const existingLabels = new Set(
-            (db.prepare(`
+            (
+              db
+                .prepare(
+                  `
               SELECT box_index FROM full_frame_box_labels
               WHERE frame_index = ? AND box_index IN (${boxesInRectangle.map(() => '?').join(',')})
-            `).all(frameIndex, ...boxesInRectangle) as Array<{ box_index: number }>).map(row => row.box_index)
+            `
+                )
+                .all(frameIndex, ...boxesInRectangle) as Array<{ box_index: number }>
+            ).map(row => row.box_index)
           )
 
           // Insert or update labels for these boxes
@@ -203,7 +224,12 @@ export async function action({ params, request }: ActionFunctionArgs) {
             const boxTop = boxBottom - Math.floor(box.height * layoutConfig.frame_height)
             const boxRight = boxLeft + Math.floor(box.width * layoutConfig.frame_width)
 
-            const originalBounds = { left: boxLeft, top: boxTop, right: boxRight, bottom: boxBottom }
+            const originalBounds = {
+              left: boxLeft,
+              top: boxTop,
+              right: boxRight,
+              bottom: boxBottom,
+            }
 
             // Get prediction for this box
             const prediction = predictBoxLabel(originalBounds, layoutConfig, allBoxBounds, db)
@@ -230,29 +256,37 @@ export async function action({ params, request }: ActionFunctionArgs) {
 
     db.close()
 
-    console.log(`Bulk annotated ${totalAnnotatedBoxes} boxes (${newlyAnnotatedBoxes} new) across ${framesProcessed.length} frames`)
+    console.log(
+      `Bulk annotated ${totalAnnotatedBoxes} boxes (${newlyAnnotatedBoxes} new) across ${framesProcessed.length} frames`
+    )
 
-    return new Response(JSON.stringify({
-      success: true,
-      action,
-      totalAnnotatedBoxes,
-      newlyAnnotatedBoxes,
-      framesProcessed: framesProcessed.length,
-      frameIndices: framesProcessed
-    }), {
-      headers: { 'Content-Type': 'application/json' }
-    })
+    return new Response(
+      JSON.stringify({
+        success: true,
+        action,
+        totalAnnotatedBoxes,
+        newlyAnnotatedBoxes,
+        framesProcessed: framesProcessed.length,
+        frameIndices: framesProcessed,
+      }),
+      {
+        headers: { 'Content-Type': 'application/json' },
+      }
+    )
   } catch (error) {
     console.error('Error in bulk annotate all:', error)
     if (error instanceof Error) {
       console.error('Error stack:', error.stack)
     }
-    return new Response(JSON.stringify({
-      error: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined
-    }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
-    })
+    return new Response(
+      JSON.stringify({
+        error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+      }),
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    )
   }
 }

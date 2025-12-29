@@ -40,8 +40,8 @@ interface ModelParams {
   n_training_samples: number
   prior_in: number
   prior_out: number
-  in_features: GaussianParams[]  // 7 features
-  out_features: GaussianParams[]  // 7 features
+  in_features: GaussianParams[] // 7 features
+  out_features: GaussianParams[] // 7 features
 }
 
 interface ModelRow {
@@ -85,7 +85,11 @@ interface ModelRow {
  * All features are independent of pre-computed cluster parameters to avoid
  * circular dependencies. Uses k-nearest neighbors approach.
  */
-function extractFeatures(box: BoxBounds, layout: VideoLayoutConfig, allBoxes: BoxBounds[]): number[] {
+function extractFeatures(
+  box: BoxBounds,
+  layout: VideoLayoutConfig,
+  allBoxes: BoxBounds[]
+): number[] {
   const boxWidth = box.right - box.left
   const boxHeight = box.bottom - box.top
   const boxCenterX = (box.left + box.right) / 2
@@ -97,8 +101,14 @@ function extractFeatures(box: BoxBounds, layout: VideoLayoutConfig, allBoxes: Bo
   const k = Math.max(5, Math.ceil(allBoxes.length * 0.2))
 
   // Filter out the current box from allBoxes
-  const otherBoxes = allBoxes.filter(b =>
-    !(b.left === box.left && b.top === box.top && b.right === box.right && b.bottom === box.bottom)
+  const otherBoxes = allBoxes.filter(
+    b =>
+      !(
+        b.left === box.left &&
+        b.top === box.top &&
+        b.right === box.right &&
+        b.bottom === box.bottom
+      )
   )
 
   // Feature 1a: Top edge vertical alignment
@@ -113,7 +123,8 @@ function extractFeatures(box: BoxBounds, layout: VideoLayoutConfig, allBoxes: Bo
     if (sortedByTop.length > 1) {
       const topPositions = sortedByTop.map(item => item.box.top)
       const mean = topPositions.reduce((sum, val) => sum + val, 0) / topPositions.length
-      const variance = topPositions.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / topPositions.length
+      const variance =
+        topPositions.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / topPositions.length
       const std = Math.sqrt(variance)
       topAlignmentScore = std > 0 ? Math.abs(box.top - mean) / std : 0
     }
@@ -131,7 +142,9 @@ function extractFeatures(box: BoxBounds, layout: VideoLayoutConfig, allBoxes: Bo
     if (sortedByBottom.length > 1) {
       const bottomPositions = sortedByBottom.map(item => item.box.bottom)
       const mean = bottomPositions.reduce((sum, val) => sum + val, 0) / bottomPositions.length
-      const variance = bottomPositions.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / bottomPositions.length
+      const variance =
+        bottomPositions.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) /
+        bottomPositions.length
       const std = Math.sqrt(variance)
       bottomAlignmentScore = std > 0 ? Math.abs(box.bottom - mean) / std : 0
     }
@@ -149,7 +162,8 @@ function extractFeatures(box: BoxBounds, layout: VideoLayoutConfig, allBoxes: Bo
     if (sortedByBottom.length > 1) {
       const heights = sortedByBottom.map(item => item.box.bottom - item.box.top)
       const mean = heights.reduce((sum, val) => sum + val, 0) / heights.length
-      const variance = heights.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / heights.length
+      const variance =
+        heights.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / heights.length
       const std = Math.sqrt(variance)
       heightSimilarityScore = std > 0 ? Math.abs(boxHeight - mean) / std : 0
     }
@@ -160,8 +174,8 @@ function extractFeatures(box: BoxBounds, layout: VideoLayoutConfig, allBoxes: Bo
   // measure horizontal center distance variance
   let horizontalClusteringScore = 0.0
   if (otherBoxes.length > 0) {
-    const verticalWeight = 0.7  // Weight for vertical proximity
-    const horizontalWeight = 0.3  // Weight for horizontal proximity
+    const verticalWeight = 0.7 // Weight for vertical proximity
+    const horizontalWeight = 0.3 // Weight for horizontal proximity
 
     const sortedByCombined = otherBoxes
       .map(b => {
@@ -177,7 +191,8 @@ function extractFeatures(box: BoxBounds, layout: VideoLayoutConfig, allBoxes: Bo
     if (sortedByCombined.length > 1) {
       const centerXs = sortedByCombined.map(item => item.centerX)
       const mean = centerXs.reduce((sum, val) => sum + val, 0) / centerXs.length
-      const variance = centerXs.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / centerXs.length
+      const variance =
+        centerXs.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / centerXs.length
       const std = Math.sqrt(variance)
       horizontalClusteringScore = std > 0 ? Math.abs(boxCenterX - mean) / std : 0
     }
@@ -214,7 +229,7 @@ function gaussianPDF(x: number, mean: number, std: number): number {
 
   const variance = std ** 2
   const coefficient = 1.0 / Math.sqrt(2 * Math.PI * variance)
-  const exponent = -0.5 * ((x - mean) ** 2) / variance
+  const exponent = (-0.5 * (x - mean) ** 2) / variance
 
   return coefficient * Math.exp(exponent)
 }
@@ -225,8 +240,10 @@ function gaussianPDF(x: number, mean: number, std: number): number {
  * Accepts both seed model (n_training_samples = 0) and trained models (n_training_samples >= 10).
  * The seed model provides reasonable starting predictions before user annotations are available.
  */
-function loadModelFromDB(db: Database): ModelParams | null {
-  const row = db.prepare('SELECT * FROM box_classification_model WHERE id = 1').get() as ModelRow | undefined
+function loadModelFromDB(db: Database.Database): ModelParams | null {
+  const row = db.prepare('SELECT * FROM box_classification_model WHERE id = 1').get() as
+    | ModelRow
+    | undefined
 
   if (!row) {
     return null
@@ -235,7 +252,9 @@ function loadModelFromDB(db: Database): ModelParams | null {
   // Accept seed model (0 samples) or trained model (10+ samples)
   // Reject models with 1-9 samples (insufficient for meaningful statistics)
   if (row.n_training_samples > 0 && row.n_training_samples < 10) {
-    console.warn(`[loadModelFromDB] Model has insufficient samples (${row.n_training_samples}), falling back to heuristics`)
+    console.warn(
+      `[loadModelFromDB] Model has insufficient samples (${row.n_training_samples}), falling back to heuristics`
+    )
     return null
   }
 
@@ -287,7 +306,11 @@ function predictBayesian(
 
   for (let i = 0; i < 7; i++) {
     likelihoodIn *= gaussianPDF(features[i]!, model.in_features[i]!.mean, model.in_features[i]!.std)
-    likelihoodOut *= gaussianPDF(features[i]!, model.out_features[i]!.mean, model.out_features[i]!.std)
+    likelihoodOut *= gaussianPDF(
+      features[i]!,
+      model.out_features[i]!.mean,
+      model.out_features[i]!.std
+    )
   }
 
   // Apply Bayes' theorem: P(class|features) ∝ P(features|class) * P(class)
@@ -328,13 +351,13 @@ function predictWithHeuristics(
   const boxHeight = boxBounds.bottom - boxBounds.top
 
   // Expected caption characteristics (initial guesses, tune on dataset later)
-  const EXPECTED_CAPTION_Y = 0.75  // 75% from top (bottom quarter of frame)
-  const EXPECTED_CAPTION_HEIGHT_RATIO = 0.05  // 5% of frame height
+  const EXPECTED_CAPTION_Y = 0.75 // 75% from top (bottom quarter of frame)
+  const EXPECTED_CAPTION_HEIGHT_RATIO = 0.05 // 5% of frame height
 
   // Score 1: Vertical position penalty
   const normalizedY = boxCenterY / frameHeight
   const yDeviation = Math.abs(normalizedY - EXPECTED_CAPTION_Y)
-  const yScore = Math.max(0, 1.0 - yDeviation * 2.5)  // Full penalty at 40% deviation
+  const yScore = Math.max(0, 1.0 - yDeviation * 2.5) // Full penalty at 40% deviation
 
   // Score 2: Box height penalty
   const heightRatio = boxHeight / frameHeight
@@ -342,16 +365,15 @@ function predictWithHeuristics(
   const heightScore = Math.max(0, 1.0 - heightDeviation / EXPECTED_CAPTION_HEIGHT_RATIO)
 
   // Combine scores (weights: tune on dataset later)
-  const captionScore = (
-    yScore * 0.6 +        // Vertical position is strong signal
-    heightScore * 0.4     // Height is secondary signal
-  )
+  const captionScore =
+    yScore * 0.6 + // Vertical position is strong signal
+    heightScore * 0.4 // Height is secondary signal
 
   // Convert to label and confidence
   if (captionScore >= 0.6) {
-    return { label: 'in', confidence: 0.5 + captionScore * 0.3 }  // 0.68 - 0.80
+    return { label: 'in', confidence: 0.5 + captionScore * 0.3 } // 0.68 - 0.80
   } else {
-    return { label: 'out', confidence: 0.5 + (1 - captionScore) * 0.3 }  // 0.62 - 0.80
+    return { label: 'out', confidence: 0.5 + (1 - captionScore) * 0.3 } // 0.62 - 0.80
   }
 }
 
@@ -387,7 +409,7 @@ export function predictBoxLabel(
   boxBounds: BoxBounds,
   layoutConfig: VideoLayoutConfig,
   allBoxes: BoxBounds[],
-  db?: Database
+  db?: Database.Database
 ): { label: 'in' | 'out'; confidence: number } {
   // Try to use Bayesian model if database provided
   if (db) {
@@ -417,7 +439,7 @@ export function predictBoxLabel(
  *
  * @param db Database connection
  */
-export function initializeSeedModel(db: Database): void {
+export function initializeSeedModel(db: Database.Database): void {
   // Check if model already exists
   const existing = db.prepare('SELECT id FROM box_classification_model WHERE id = 1').get()
   if (existing) {
@@ -432,24 +454,24 @@ export function initializeSeedModel(db: Database): void {
 
   // "in" (caption) boxes: well-aligned, similar, clustered, wide, bottom of frame, small
   const inParams = [
-    { mean: 0.5, std: 0.5 },   // topAlignment: low = well aligned
-    { mean: 0.5, std: 0.5 },   // bottomAlignment: low = well aligned
-    { mean: 0.5, std: 0.5 },   // heightSimilarity: low = similar heights
-    { mean: 0.5, std: 0.5 },   // horizontalClustering: low = clustered
-    { mean: 4.0, std: 2.0 },   // aspectRatio: wide boxes (3-5x wider than tall)
-    { mean: 0.8, std: 0.1 },   // normalizedY: bottom 20% of frame (0.75-0.85)
-    { mean: 0.02, std: 0.015 } // normalizedArea: 1-3% of frame area
+    { mean: 0.5, std: 0.5 }, // topAlignment: low = well aligned
+    { mean: 0.5, std: 0.5 }, // bottomAlignment: low = well aligned
+    { mean: 0.5, std: 0.5 }, // heightSimilarity: low = similar heights
+    { mean: 0.5, std: 0.5 }, // horizontalClustering: low = clustered
+    { mean: 4.0, std: 2.0 }, // aspectRatio: wide boxes (3-5x wider than tall)
+    { mean: 0.8, std: 0.1 }, // normalizedY: bottom 20% of frame (0.75-0.85)
+    { mean: 0.02, std: 0.015 }, // normalizedArea: 1-3% of frame area
   ]
 
   // "out" (noise) boxes: less aligned, varied, scattered, more varied
   const outParams = [
-    { mean: 1.5, std: 1.0 },   // topAlignment: higher = less aligned
-    { mean: 1.5, std: 1.0 },   // bottomAlignment: higher = less aligned
-    { mean: 1.5, std: 1.0 },   // heightSimilarity: higher = varied heights
-    { mean: 1.5, std: 1.0 },   // horizontalClustering: higher = scattered
-    { mean: 2.0, std: 3.0 },   // aspectRatio: more varied
-    { mean: 0.5, std: 0.3 },   // normalizedY: more varied vertical position
-    { mean: 0.03, std: 0.03 }  // normalizedArea: more varied area
+    { mean: 1.5, std: 1.0 }, // topAlignment: higher = less aligned
+    { mean: 1.5, std: 1.0 }, // bottomAlignment: higher = less aligned
+    { mean: 1.5, std: 1.0 }, // heightSimilarity: higher = varied heights
+    { mean: 1.5, std: 1.0 }, // horizontalClustering: higher = scattered
+    { mean: 2.0, std: 3.0 }, // aspectRatio: more varied
+    { mean: 0.5, std: 0.3 }, // normalizedY: more varied vertical position
+    { mean: 0.03, std: 0.03 }, // normalizedArea: more varied area
   ]
 
   // Start with balanced priors (50/50)
@@ -457,7 +479,8 @@ export function initializeSeedModel(db: Database): void {
   const priorOut = 0.5
 
   // Store seed model in database
-  db.prepare(`
+  db.prepare(
+    `
     INSERT INTO box_classification_model (
       id,
       model_version,
@@ -488,22 +511,38 @@ export function initializeSeedModel(db: Database): void {
       ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
       ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
     )
-  `).run(
-    priorIn, priorOut,
-    inParams[0]!.mean, inParams[0]!.std,
-    inParams[1]!.mean, inParams[1]!.std,
-    inParams[2]!.mean, inParams[2]!.std,
-    inParams[3]!.mean, inParams[3]!.std,
-    inParams[4]!.mean, inParams[4]!.std,
-    inParams[5]!.mean, inParams[5]!.std,
-    inParams[6]!.mean, inParams[6]!.std,
-    outParams[0]!.mean, outParams[0]!.std,
-    outParams[1]!.mean, outParams[1]!.std,
-    outParams[2]!.mean, outParams[2]!.std,
-    outParams[3]!.mean, outParams[3]!.std,
-    outParams[4]!.mean, outParams[4]!.std,
-    outParams[5]!.mean, outParams[5]!.std,
-    outParams[6]!.mean, outParams[6]!.std
+  `
+  ).run(
+    priorIn,
+    priorOut,
+    inParams[0]!.mean,
+    inParams[0]!.std,
+    inParams[1]!.mean,
+    inParams[1]!.std,
+    inParams[2]!.mean,
+    inParams[2]!.std,
+    inParams[3]!.mean,
+    inParams[3]!.std,
+    inParams[4]!.mean,
+    inParams[4]!.std,
+    inParams[5]!.mean,
+    inParams[5]!.std,
+    inParams[6]!.mean,
+    inParams[6]!.std,
+    outParams[0]!.mean,
+    outParams[0]!.std,
+    outParams[1]!.mean,
+    outParams[1]!.std,
+    outParams[2]!.mean,
+    outParams[2]!.std,
+    outParams[3]!.mean,
+    outParams[3]!.std,
+    outParams[4]!.mean,
+    outParams[4]!.std,
+    outParams[5]!.mean,
+    outParams[5]!.std,
+    outParams[6]!.mean,
+    outParams[6]!.std
   )
 
   console.log('[initializeSeedModel] Seed model initialized successfully')
@@ -521,9 +560,11 @@ export function initializeSeedModel(db: Database): void {
  * @param layoutConfig Video layout configuration
  * @returns Number of training samples used, or null if insufficient data
  */
-export function trainModel(db: Database, layoutConfig: VideoLayoutConfig): number | null {
+export function trainModel(db: Database.Database, layoutConfig: VideoLayoutConfig): number | null {
   // Fetch all user annotations
-  const annotations = db.prepare(`
+  const annotations = db
+    .prepare(
+      `
     SELECT
       label,
       box_left,
@@ -534,7 +575,9 @@ export function trainModel(db: Database, layoutConfig: VideoLayoutConfig): numbe
     FROM full_frame_box_labels
     WHERE label_source = 'user'
     ORDER BY frame_index
-  `).all() as Array<{
+  `
+    )
+    .all() as Array<{
     label: 'in' | 'out'
     box_left: number
     box_top: number
@@ -547,7 +590,9 @@ export function trainModel(db: Database, layoutConfig: VideoLayoutConfig): numbe
     console.log(`[trainModel] Insufficient training data: ${annotations.length} samples (need 10+)`)
 
     // If annotations were cleared, reset to seed model
-    const existingModel = db.prepare('SELECT n_training_samples FROM box_classification_model WHERE id = 1').get() as { n_training_samples: number } | undefined
+    const existingModel = db
+      .prepare('SELECT n_training_samples FROM box_classification_model WHERE id = 1')
+      .get() as { n_training_samples: number } | undefined
 
     if (existingModel && existingModel.n_training_samples >= 10) {
       console.log(`[trainModel] Resetting to seed model (annotations cleared)`)
@@ -580,12 +625,16 @@ export function trainModel(db: Database, layoutConfig: VideoLayoutConfig): numbe
   for (const ann of annotations) {
     // Get all boxes in this frame for context
     if (!frameBoxesCache.has(ann.frame_index)) {
-      const boxes = db.prepare(`
+      const boxes = db
+        .prepare(
+          `
         SELECT x, y, width, height
         FROM full_frame_ocr
         WHERE frame_index = ?
         ORDER BY box_index
-      `).all(ann.frame_index) as Array<{
+      `
+        )
+        .all(ann.frame_index) as Array<{
         x: number
         y: number
         width: number
@@ -610,7 +659,7 @@ export function trainModel(db: Database, layoutConfig: VideoLayoutConfig): numbe
       left: ann.box_left,
       top: ann.box_top,
       right: ann.box_right,
-      bottom: ann.box_bottom
+      bottom: ann.box_bottom,
     }
 
     const features = extractFeatures(boxBounds, layoutConfig, allBoxes)
@@ -624,7 +673,9 @@ export function trainModel(db: Database, layoutConfig: VideoLayoutConfig): numbe
 
   // Need at least 2 samples per class for meaningful statistics
   if (inFeatures.length < 2 || outFeatures.length < 2) {
-    console.log(`[trainModel] Insufficient samples per class: in=${inFeatures.length}, out=${outFeatures.length}`)
+    console.log(
+      `[trainModel] Insufficient samples per class: in=${inFeatures.length}, out=${outFeatures.length}`
+    )
     return null
   }
 
@@ -633,7 +684,7 @@ export function trainModel(db: Database, layoutConfig: VideoLayoutConfig): numbe
     const mean = values.reduce((sum, v) => sum + v, 0) / values.length
     const variance = values.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / values.length
     const std = Math.sqrt(variance)
-    return { mean, std: std > 0 ? std : 1e-6 }  // Avoid zero std
+    return { mean, std: std > 0 ? std : 1e-6 } // Avoid zero std
   }
 
   // Extract each feature column and calculate parameters
@@ -654,7 +705,8 @@ export function trainModel(db: Database, layoutConfig: VideoLayoutConfig): numbe
   const priorOut = outFeatures.length / total
 
   // Store model in database
-  db.prepare(`
+  db.prepare(
+    `
     INSERT OR REPLACE INTO box_classification_model (
       id,
       model_version,
@@ -685,26 +737,44 @@ export function trainModel(db: Database, layoutConfig: VideoLayoutConfig): numbe
       ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
       ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
     )
-  `).run(
+  `
+  ).run(
     total,
-    priorIn, priorOut,
-    inParams[0]!.mean, inParams[0]!.std,
-    inParams[1]!.mean, inParams[1]!.std,
-    inParams[2]!.mean, inParams[2]!.std,
-    inParams[3]!.mean, inParams[3]!.std,
-    inParams[4]!.mean, inParams[4]!.std,
-    inParams[5]!.mean, inParams[5]!.std,
-    inParams[6]!.mean, inParams[6]!.std,
-    outParams[0]!.mean, outParams[0]!.std,
-    outParams[1]!.mean, outParams[1]!.std,
-    outParams[2]!.mean, outParams[2]!.std,
-    outParams[3]!.mean, outParams[3]!.std,
-    outParams[4]!.mean, outParams[4]!.std,
-    outParams[5]!.mean, outParams[5]!.std,
-    outParams[6]!.mean, outParams[6]!.std
+    priorIn,
+    priorOut,
+    inParams[0]!.mean,
+    inParams[0]!.std,
+    inParams[1]!.mean,
+    inParams[1]!.std,
+    inParams[2]!.mean,
+    inParams[2]!.std,
+    inParams[3]!.mean,
+    inParams[3]!.std,
+    inParams[4]!.mean,
+    inParams[4]!.std,
+    inParams[5]!.mean,
+    inParams[5]!.std,
+    inParams[6]!.mean,
+    inParams[6]!.std,
+    outParams[0]!.mean,
+    outParams[0]!.std,
+    outParams[1]!.mean,
+    outParams[1]!.std,
+    outParams[2]!.mean,
+    outParams[2]!.std,
+    outParams[3]!.mean,
+    outParams[3]!.std,
+    outParams[4]!.mean,
+    outParams[4]!.std,
+    outParams[5]!.mean,
+    outParams[5]!.std,
+    outParams[6]!.mean,
+    outParams[6]!.std
   )
 
-  console.log(`[trainModel] Model trained successfully: ${inFeatures.length} 'in', ${outFeatures.length} 'out'`)
+  console.log(
+    `[trainModel] Model trained successfully: ${inFeatures.length} 'in', ${outFeatures.length} 'out'`
+  )
 
   return total
 }

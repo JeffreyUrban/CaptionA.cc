@@ -1,14 +1,18 @@
-import { type LoaderFunctionArgs, type ActionFunctionArgs } from 'react-router'
-import { getDbPath } from '~/utils/video-paths'
-import Database from 'better-sqlite3'
 import { existsSync } from 'fs'
-import { predictBoxLabel } from '~/utils/box-prediction'
+
+import Database from 'better-sqlite3'
+import { type LoaderFunctionArgs, type ActionFunctionArgs } from 'react-router'
+
 import { triggerModelTraining } from '~/services/model-training'
+import { predictBoxLabel } from '~/utils/box-prediction'
+import { getDbPath } from '~/utils/video-paths'
+
+type PythonOCRAnnotation = [string, number, [number, number, number, number]]
 
 interface FrameOCR {
   frame_index: number
   ocr_text: string
-  ocr_annotations: string  // JSON: [[text, conf, [x, y, w, h]], ...]
+  ocr_annotations: string // JSON: [[text, conf, [x, y, w, h]], ...]
   ocr_confidence: number
 }
 
@@ -53,7 +57,7 @@ interface BoxData {
   colorCode: string
 }
 
-function getDatabase(videoId: string) {
+function getDatabase(videoId: string): Database.Database | Response {
   const dbPath = getDbPath(videoId)
   if (!dbPath) {
     return new Response('Video not found', { status: 404 })
@@ -125,7 +129,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
   if (!encodedVideoId || !frameIndexStr) {
     return new Response(JSON.stringify({ error: 'Missing videoId or frameIndex' }), {
       status: 400,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
     })
   }
 
@@ -134,25 +138,32 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
   try {
     const db = getDatabase(videoId)
+    if (db instanceof Response) return db
 
     // Get layout config
-    const layoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as VideoLayoutConfig | undefined
+    const layoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as
+      | VideoLayoutConfig
+      | undefined
 
     if (!layoutConfig) {
       db.close()
       return new Response(JSON.stringify({ error: 'Layout config not found' }), {
         status: 404,
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
       })
     }
 
     // Load frame OCR from full_frame_ocr table
-    const ocrBoxes = db.prepare(`
+    const ocrBoxes = db
+      .prepare(
+        `
       SELECT box_index, text, confidence, x, y, width, height
       FROM full_frame_ocr
       WHERE frame_index = ?
       ORDER BY box_index
-    `).all(frameIndex) as Array<{
+    `
+      )
+      .all(frameIndex) as Array<{
       box_index: number
       text: string
       confidence: number
@@ -164,27 +175,34 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
     if (ocrBoxes.length === 0) {
       db.close()
-      return new Response(JSON.stringify({
-        error: `Frame ${frameIndex} not found in OCR data. Run full_frames analysis first.`
-      }), {
-        status: 404,
-        headers: { 'Content-Type': 'application/json' }
-      })
+      return new Response(
+        JSON.stringify({
+          error: `Frame ${frameIndex} not found in OCR data. Run full_frames analysis first.`,
+        }),
+        {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
     }
 
     // Convert to annotation format: [text, confidence, [x, y, width, height]]
-    const ocrAnnotations = ocrBoxes.map(box => [
+    const ocrAnnotations: PythonOCRAnnotation[] = ocrBoxes.map(box => [
       box.text,
       box.confidence,
-      [box.x, box.y, box.width, box.height]
+      [box.x, box.y, box.width, box.height],
     ])
 
     // Get user annotations for this frame
-    const userAnnotations = db.prepare(`
+    const userAnnotations = db
+      .prepare(
+        `
       SELECT box_index, label
       FROM full_frame_box_labels
       WHERE frame_index = ? AND label_source = 'user'
-    `).all(frameIndex) as Array<{ box_index: number; label: 'in' | 'out' }>
+    `
+      )
+      .all(frameIndex) as Array<{ box_index: number; label: 'in' | 'out' }>
 
     const userAnnotationMap = new Map<number, 'in' | 'out'>()
     userAnnotations.forEach(ann => {
@@ -268,17 +286,19 @@ export async function loader({ params }: LoaderFunctionArgs) {
     db.close()
 
     return new Response(JSON.stringify(response), {
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
     })
-
   } catch (error) {
     console.error('Error in frame boxes API:', error)
-    return new Response(JSON.stringify({
-      error: error instanceof Error ? error.message : 'Unknown error'
-    }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
-    })
+    return new Response(
+      JSON.stringify({
+        error: error instanceof Error ? error.message : 'Unknown error',
+      }),
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    )
   }
 }
 
@@ -289,7 +309,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
   if (!encodedVideoId || !frameIndexStr) {
     return new Response(JSON.stringify({ error: 'Missing videoId or frameIndex' }), {
       status: 400,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
     })
   }
 
@@ -305,30 +325,37 @@ export async function action({ params, request }: ActionFunctionArgs) {
     if (!annotations || !Array.isArray(annotations)) {
       return new Response(JSON.stringify({ error: 'Invalid annotations format' }), {
         status: 400,
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
       })
     }
 
     const db = getDatabase(videoId)
+    if (db instanceof Response) return db
 
     // Get layout config for frame dimensions
-    const layoutConfig = db.prepare('SELECT frame_width, frame_height FROM video_layout_config WHERE id = 1').get() as { frame_width: number; frame_height: number } | undefined
+    const layoutConfig = db
+      .prepare('SELECT frame_width, frame_height FROM video_layout_config WHERE id = 1')
+      .get() as { frame_width: number; frame_height: number } | undefined
 
     if (!layoutConfig) {
       db.close()
       return new Response(JSON.stringify({ error: 'Layout config not found' }), {
         status: 404,
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
       })
     }
 
     // Load frame OCR from full_frame_ocr table
-    const ocrBoxes = db.prepare(`
+    const ocrBoxes = db
+      .prepare(
+        `
       SELECT box_index, text, confidence, x, y, width, height
       FROM full_frame_ocr
       WHERE frame_index = ?
       ORDER BY box_index
-    `).all(frameIndex) as Array<{
+    `
+      )
+      .all(frameIndex) as Array<{
       box_index: number
       text: string
       confidence: number
@@ -340,26 +367,33 @@ export async function action({ params, request }: ActionFunctionArgs) {
 
     if (ocrBoxes.length === 0) {
       db.close()
-      return new Response(JSON.stringify({
-        error: `Frame ${frameIndex} not found in OCR data`
-      }), {
-        status: 404,
-        headers: { 'Content-Type': 'application/json' }
-      })
+      return new Response(
+        JSON.stringify({
+          error: `Frame ${frameIndex} not found in OCR data`,
+        }),
+        {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
     }
 
     // Convert to annotation format: [text, confidence, [x, y, width, height]]
-    const ocrAnnotations = ocrBoxes.map(box => [
+    const ocrAnnotations: PythonOCRAnnotation[] = ocrBoxes.map(box => [
       box.text,
       box.confidence,
-      [box.x, box.y, box.width, box.height]
+      [box.x, box.y, box.width, box.height],
     ])
 
     // Get layout config for predictions
-    const fullLayoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as VideoLayoutConfig | undefined
+    const fullLayoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as
+      | VideoLayoutConfig
+      | undefined
 
     // Get model version if available
-    const modelInfo = db.prepare('SELECT model_version FROM box_classification_model WHERE id = 1').get() as { model_version: string } | undefined
+    const modelInfo = db
+      .prepare('SELECT model_version FROM box_classification_model WHERE id = 1')
+      .get() as { model_version: string } | undefined
     const modelVersion = modelInfo?.model_version || null
 
     // Convert all boxes to bounds for feature extraction
@@ -394,7 +428,12 @@ export async function action({ params, request }: ActionFunctionArgs) {
 
       // Get box data from OCR
       // IMPORTANT: y is measured from BOTTOM of image, not top
-      const [text, _conf, [x, y, width, height]] = ocrAnnotations[boxIndex]
+      const ocrAnnotation = ocrAnnotations[boxIndex]
+      if (!ocrAnnotation) {
+        console.warn(`Annotation not found at index ${boxIndex}`)
+        continue
+      }
+      const [text, _conf, [x, y, width, height]] = ocrAnnotation
 
       // Convert fractional to pixels
       const boxLeft = Math.floor(x * layoutConfig.frame_width)
@@ -416,44 +455,65 @@ export async function action({ params, request }: ActionFunctionArgs) {
       }
 
       upsert.run(
-        frameIndex, boxIndex, text, boxLeft, boxTop, boxRight, boxBottom,
-        label, predictedLabel, predictedConfidence, modelVersion
+        frameIndex,
+        boxIndex,
+        text,
+        boxLeft,
+        boxTop,
+        boxRight,
+        boxBottom,
+        label,
+        predictedLabel,
+        predictedConfidence,
+        modelVersion
       )
     }
 
     // Check if automatic retraining threshold reached
-    const annotationStats = db.prepare(`
+    const annotationStats = db
+      .prepare(
+        `
       SELECT
         COUNT(*) as total_annotations,
         COALESCE((SELECT n_training_samples FROM box_classification_model WHERE id = 1), 0) as last_model_count
       FROM full_frame_box_labels
       WHERE label_source = 'user'
-    `).get() as { total_annotations: number; last_model_count: number }
+    `
+      )
+      .get() as { total_annotations: number; last_model_count: number }
 
-    const newAnnotationsSinceLastTrain = annotationStats.total_annotations - annotationStats.last_model_count
+    const newAnnotationsSinceLastTrain =
+      annotationStats.total_annotations - annotationStats.last_model_count
 
     db.close()
 
     // Auto-retrain after every 20 new annotations
     if (newAnnotationsSinceLastTrain >= 20) {
-      console.log(`[Auto-retrain] Triggering model training: ${newAnnotationsSinceLastTrain} new annotations since last train`)
+      console.log(
+        `[Auto-retrain] Triggering model training: ${newAnnotationsSinceLastTrain} new annotations since last train`
+      )
       triggerModelTraining(videoId)
     }
 
-    return new Response(JSON.stringify({
-      success: true,
-      annotatedCount: annotations.length,
-    }), {
-      headers: { 'Content-Type': 'application/json' }
-    })
-
+    return new Response(
+      JSON.stringify({
+        success: true,
+        annotatedCount: annotations.length,
+      }),
+      {
+        headers: { 'Content-Type': 'application/json' },
+      }
+    )
   } catch (error) {
     console.error('Error saving box annotations:', error)
-    return new Response(JSON.stringify({
-      error: error instanceof Error ? error.message : 'Unknown error'
-    }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
-    })
+    return new Response(
+      JSON.stringify({
+        error: error instanceof Error ? error.message : 'Unknown error',
+      }),
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    )
   }
 }

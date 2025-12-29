@@ -14,6 +14,7 @@
 
 import { readdirSync, unlinkSync, existsSync, statSync, readFileSync } from 'fs'
 import { resolve } from 'path'
+
 import Database from 'better-sqlite3'
 
 const STALE_THRESHOLD_HOURS = 24
@@ -49,17 +50,24 @@ function cleanupStaleUploads() {
 
       if (ageMs > staleThreshold) {
         // Read metadata before deleting
-        let metadata: any = null
+        let metadata: unknown = null
         if (existsSync(metadataPath)) {
-          metadata = JSON.parse(readFileSync(metadataPath, 'utf-8'))
+          metadata = JSON.parse(readFileSync(metadataPath, 'utf-8')) as unknown
         }
 
-        const videoPath = metadata?.metadata?.videoPath || uploadId
-        const progress = metadata && existsSync(uploadPath)
-          ? Math.round((statSync(uploadPath).size / metadata.uploadLength) * 100)
-          : 0
+        const metadataObj = metadata as {
+          metadata?: { videoPath?: string; storagePath?: string }
+          uploadLength?: number
+        } | null
+        const videoPath = metadataObj?.metadata?.videoPath || uploadId
+        const progress =
+          metadataObj && existsSync(uploadPath) && metadataObj.uploadLength
+            ? Math.round((statSync(uploadPath).size / metadataObj.uploadLength) * 100)
+            : 0
 
-        console.log(`[Cleanup] Clearing stale upload: ${videoPath} (${progress}% complete, ${Math.round(ageMs / (60 * 60 * 1000))}h old)`)
+        console.log(
+          `[Cleanup] Clearing stale upload: ${videoPath} (${progress}% complete, ${Math.round(ageMs / (60 * 60 * 1000))}h old)`
+        )
 
         // Delete partial upload file
         if (existsSync(uploadPath)) {
@@ -72,14 +80,14 @@ function cleanupStaleUploads() {
         }
 
         // Mark database as error if it exists
-        if (metadata?.metadata?.storagePath) {
+        if (metadataObj?.metadata?.storagePath) {
           const dbPath = resolve(
             process.cwd(),
             '..',
             '..',
             'local',
             'data',
-            ...metadata.metadata.storagePath.split('/'),
+            ...metadataObj.metadata.storagePath.split('/'),
             'annotations.db'
           )
 
@@ -87,14 +95,16 @@ function cleanupStaleUploads() {
             try {
               const db = new Database(dbPath)
               try {
-                db.prepare(`
+                db.prepare(
+                  `
                   UPDATE processing_status
                   SET status = 'error',
                       error_message = 'Upload stalled and automatically cleared after 24h',
                       deleted = 1,
                       deleted_at = datetime('now')
                   WHERE id = 1
-                `).run()
+                `
+                ).run()
               } finally {
                 db.close()
               }

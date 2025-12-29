@@ -34,6 +34,7 @@ A production-ready template for building modern web applications with React Rout
    - Update `app/routes/_index.tsx` to replace template content
 
 3. **Install and run**
+
    ```bash
    npm install
    npm run dev
@@ -80,11 +81,13 @@ This ensures that all code merged to main has been reviewed and passes all autom
 1. Clone or copy this template
 
 2. Install dependencies:
+
 ```bash
 npm install
 ```
 
 3. Start the development server:
+
 ```bash
 npm run dev
 ```
@@ -148,11 +151,12 @@ The route will automatically be available at `/about`.
 Create a new MDX file in `app/routes/`:
 
 ```mdx
-// app/routes/blog.mdx
----
+## // app/routes/blog.mdx
+
 title: My Blog
 description: A blog post written in MDX
 date: 2024-01-01
+
 ---
 
 # My Blog
@@ -166,10 +170,10 @@ Enable/disable sections using feature flags in `app/config/featureFlags.ts`:
 
 ```typescript
 const featureFlags = {
-    showArticles: true,    // Show articles section
-    showProjects: true,    // Show projects section
-    // ... add your own flags
-};
+  showArticles: true, // Show articles section
+  showProjects: true, // Show projects section
+  // ... add your own flags
+}
 ```
 
 Use them in components:
@@ -177,7 +181,9 @@ Use them in components:
 ```tsx
 import featureFlags from '~/config/featureFlags'
 
-{featureFlags.showArticles && <ArticlesSection />}
+{
+  featureFlags.showArticles && <ArticlesSection />
+}
 ```
 
 ### Styling
@@ -264,6 +270,7 @@ After creating a project from this template, customize these files:
 ### Adding New Content
 
 **New Pages** - Create files in `app/routes/`:
+
 ```tsx
 // app/routes/about.tsx
 import { Container } from '~/components/Container'
@@ -279,6 +286,7 @@ export default function About() {
 ```
 
 **New Components** - Create files in `app/components/`:
+
 ```tsx
 // app/components/MyComponent.tsx
 export function MyComponent() {
@@ -287,11 +295,13 @@ export function MyComponent() {
 ```
 
 **Images** - Add to `app/assets/images/` and import with optimization:
+
 ```tsx
 import myImage from '~/assets/images/photo.jpg?w=800;1200&format=webp'
 ```
 
 **MDX Pages** - Create `.mdx` files in `app/routes/`:
+
 ```mdx
 ---
 title: My Blog Post
@@ -303,7 +313,7 @@ date: 2025-01-01
 Content with **markdown** and React components!
 ```
 
-*I like and recommend [Tailwind Plus](https://tailwindcss.com/plus) for component libraries.*
+_I like and recommend [Tailwind Plus](https://tailwindcss.com/plus) for component libraries._
 
 ## Optional Packages
 
@@ -312,16 +322,20 @@ The following packages were intentionally excluded but can be added when needed:
 ### Suggested Additions
 
 #### `react-lazy-load-image-component`
+
 ```bash
 npm install react-lazy-load-image-component
 npm install -D @types/react-lazy-load-image-component
 ```
+
 **When to add:** Building image galleries, photo portfolios, or pages with many images that benefit from lazy loading for performance.
 
 #### `react-swipeable`
+
 ```bash
 npm install react-swipeable
 ```
+
 **When to add:** Adding touch/swipe gestures for mobile carousels, image galleries, or interactive slide components.
 
 ## Included and Demonstrated
@@ -329,12 +343,14 @@ npm install react-swipeable
 The template includes and actively demonstrates these features on the home page:
 
 ### `@tailwindcss/typography`
+
 - **Status:** Actively used with `prose` classes in the Typography Plugin demo section
 - **Keep if:** You're building a blog, documentation site, or any content-heavy pages
 - **Remove if:** You're building a pure application UI without prose content
 - **To remove:** `npm uninstall @tailwindcss/typography` and update `tailwind.config.js`
 
 ### `vite-imagetools`
+
 - **Status:** Actively used to optimize and display the placeholder image
 - **Keep if:** You plan to use images (recommended - setup is complex)
 - **Remove if:** Building a text-only application
@@ -342,6 +358,7 @@ The template includes and actively demonstrates these features on the home page:
 - **To remove:** `npm uninstall vite-imagetools` and update `vite.config.ts`
 
 ### MDX Support (`@mdx-js/rollup`, `remark-*`)
+
 - **Status:** Actively demonstrated with the `/example` page
 - **Keep if:** You want to write content in MDX (markdown + React components)
 - **Remove if:** Pure TypeScript/TSX workflow preferred
@@ -349,6 +366,7 @@ The template includes and actively demonstrates these features on the home page:
 - **To remove:** `npm uninstall @mdx-js/rollup remark-frontmatter remark-mdx-frontmatter` and update `vite.config.ts`
 
 ### Link Checking (`cheerio`, `linkinator`)
+
 - **Status:** Only used in optional scripts (`check:links`, `check:external-links`)
 - **Keep if:** You want automated link validation for production sites
 - **Remove if:** Not needed for your workflow
@@ -364,6 +382,7 @@ The template includes a `Dockerfile` and `fly.toml` for easy deployment to Fly.i
 #### Initial Setup
 
 1. **Install Fly CLI**
+
    ```bash
    # macOS
    brew install flyctl
@@ -376,11 +395,13 @@ The template includes a `Dockerfile` and `fly.toml` for easy deployment to Fly.i
    ```
 
 2. **Sign up and login**
+
    ```bash
    fly auth signup  # or fly auth login if you have an account
    ```
 
 3. **Launch your app**
+
    ```bash
    fly launch
    ```
@@ -404,6 +425,7 @@ The template includes a `Dockerfile` and `fly.toml` for easy deployment to Fly.i
 #### Subsequent Deployments
 
 After initial setup, just run:
+
 ```bash
 fly deploy
 ```
@@ -411,6 +433,7 @@ fly deploy
 #### Custom Domain
 
 To add a custom domain:
+
 ```bash
 fly certs create yourdomain.com
 fly certs create www.yourdomain.com
@@ -433,6 +456,7 @@ The template includes GitHub Actions for automatic deployment. To configure:
 **Prerequisites**: You must first create the app on Fly.io before GitHub Actions can deploy to it.
 
 1. **Create the app on Fly.io** (one-time setup)
+
    ```bash
    fly launch
    ```
@@ -442,6 +466,7 @@ The template includes GitHub Actions for automatic deployment. To configure:
 2. **Generate a Fly API token**
 
    Option A - Using CLI:
+
    ```bash
    fly tokens create deploy
    ```
@@ -476,6 +501,7 @@ The template includes GitHub Actions workflows for PR preview deployments. To en
    - Example: If your app is `my-app`, use `pr-${{ github.event.number }}-my-app`
 
 2. **Generate a fresh org-level token** (required for creating/destroying apps)
+
    ```bash
    fly tokens org <YOUR_ORG_NAME>
    ```
@@ -494,6 +520,7 @@ The template includes GitHub Actions workflows for PR preview deployments. To en
    - Paste the token and save
 
 **How it works:**
+
 - Each PR creates a new app named `pr-{number}-{your-app-name}`
 - Apps are accessible at `https://pr-{number}-{your-app-name}.fly.dev`
 - Apps are automatically destroyed when PRs are closed or merged
@@ -501,12 +528,14 @@ The template includes GitHub Actions workflows for PR preview deployments. To en
 **Troubleshooting:**
 
 If PR deployments fail with "Not authorized to deploy this app":
+
 1. Verify the workflow file has the correct app name (not `mysitename-site`)
 2. Regenerate a fresh org token: `fly tokens org <YOUR_ORG_NAME>`
 3. Update the `FLY_API_TOKEN` secret in GitHub with the new token
 4. Ensure you're using an org token, not a deploy token
 
 **Note**:
+
 - Regular deploy tokens (`fly tokens create deploy`) don't have permission to create new apps
 - PR preview apps count toward your Fly.io resource limits
 - Monitor usage at https://fly.io/dashboard
@@ -520,6 +549,7 @@ npm run build
 ```
 
 Deploy the `build/` directory to any Node.js hosting platform:
+
 - **Vercel**: `vercel deploy`
 - **Netlify**: Drag the `build/` folder to Netlify's deploy UI
 - **Railway**: Connect your GitHub repo
@@ -532,6 +562,7 @@ Deploy the `build/` directory to any Node.js hosting platform:
 Renovate automatically creates pull requests to update your dependencies. It's more powerful and configurable than Dependabot.
 
 The template includes a pre-configured `renovate.json` file with:
+
 - Weekly updates (Monday mornings)
 - Auto-merge for minor and patch updates
 - Recommended security and stability settings
@@ -557,6 +588,7 @@ The template includes a pre-configured `renovate.json` file with:
 3. **Customize (optional)**
 
    The included `renovate.json` can be customized. Common additions:
+
    ```json
    {
      "extends": ["config:recommended"],
@@ -581,17 +613,19 @@ The template includes a pre-configured `renovate.json` file with:
 #### Alternative: Dependabot
 
 If you prefer Dependabot, create `.github/dependabot.yml`:
+
 ```yaml
 version: 2
 updates:
-  - package-ecosystem: "npm"
-    directory: "/"
+  - package-ecosystem: 'npm'
+    directory: '/'
     schedule:
-      interval: "weekly"
+      interval: 'weekly'
     open-pull-requests-limit: 10
 ```
 
 Renovate is recommended because it:
+
 - Groups related updates
 - Has better auto-merge capabilities
 - Provides more detailed PR descriptions
@@ -617,6 +651,7 @@ npx tsx scripts/cleanup-stale-uploads.ts
 ```
 
 **Recommended cron schedule** (daily at 2am):
+
 ```cron
 0 2 * * * cd /path/to/CaptionA.cc/apps/captionacc-web && npx tsx scripts/cleanup-stale-uploads.ts
 ```

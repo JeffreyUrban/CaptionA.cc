@@ -1,10 +1,12 @@
-import { type ActionFunctionArgs } from 'react-router'
-import { getDbPath } from '~/utils/video-paths'
-import Database from 'better-sqlite3'
 import { existsSync } from 'fs'
-import { deleteCombinedImage } from '~/utils/image-processing'
 
-function getDatabase(videoId: string) {
+import Database from 'better-sqlite3'
+import { type ActionFunctionArgs } from 'react-router'
+
+import { deleteCombinedImage } from '~/utils/image-processing'
+import { getDbPath } from '~/utils/video-paths'
+
+function getDatabase(videoId: string): Database.Database | Response {
   const dbPath = getDbPath(videoId)
   if (!dbPath) {
     return new Response('Video not found', { status: 404 })
@@ -24,7 +26,7 @@ export async function action({ params }: ActionFunctionArgs) {
   if (!encodedVideoId || !id) {
     return new Response(JSON.stringify({ error: 'Missing videoId or id' }), {
       status: 400,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
     })
   }
 
@@ -33,26 +35,31 @@ export async function action({ params }: ActionFunctionArgs) {
 
   try {
     const db = getDatabase(videoId)
+    if (db instanceof Response) return db
 
     // Get the annotation to delete
-    const annotation = db.prepare('SELECT * FROM captions WHERE id = ?').get(annotationId) as {
-      id: number
-      start_frame_index: number
-      end_frame_index: number
-    } | undefined
+    const annotation = db.prepare('SELECT * FROM captions WHERE id = ?').get(annotationId) as
+      | {
+          id: number
+          start_frame_index: number
+          end_frame_index: number
+        }
+      | undefined
 
     if (!annotation) {
       db.close()
       return new Response(JSON.stringify({ error: 'Annotation not found' }), {
         status: 404,
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
       })
     }
 
     const { start_frame_index, end_frame_index } = annotation
 
     // Find adjacent gap annotations
-    const adjacentGaps = db.prepare(`
+    const adjacentGaps = db
+      .prepare(
+        `
       SELECT * FROM captions
       WHERE boundary_state = 'gap'
       AND (
@@ -60,7 +67,9 @@ export async function action({ params }: ActionFunctionArgs) {
         OR start_frame_index = ? + 1
       )
       ORDER BY start_frame_index
-    `).all(start_frame_index, end_frame_index) as Array<{
+    `
+      )
+      .all(start_frame_index, end_frame_index) as Array<{
       id: number
       start_frame_index: number
       end_frame_index: number
@@ -94,28 +103,32 @@ export async function action({ params }: ActionFunctionArgs) {
     }
 
     // Create merged gap annotation
-    const result = db.prepare(`
+    const result = db
+      .prepare(
+        `
       INSERT INTO captions (start_frame_index, end_frame_index, boundary_state, boundary_pending)
       VALUES (?, ?, 'gap', 0)
-    `).run(mergedStart, mergedEnd)
+    `
+      )
+      .run(mergedStart, mergedEnd)
 
     const mergedGap = db.prepare('SELECT * FROM captions WHERE id = ?').get(result.lastInsertRowid)
 
     db.close()
 
-    return new Response(JSON.stringify({
-      deleted: annotationId,
-      mergedGap
-    }), {
-      headers: { 'Content-Type': 'application/json' }
-    })
-  } catch (error) {
     return new Response(
-      JSON.stringify({ error: (error as Error).message }),
+      JSON.stringify({
+        deleted: annotationId,
+        mergedGap,
+      }),
       {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
       }
     )
+  } catch (error) {
+    return new Response(JSON.stringify({ error: (error as Error).message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    })
   }
 }

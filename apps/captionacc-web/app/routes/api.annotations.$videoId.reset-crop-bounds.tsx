@@ -1,14 +1,19 @@
-import { type ActionFunctionArgs } from 'react-router'
-import { getDbPath } from '~/utils/video-paths'
-import Database from 'better-sqlite3'
 import { existsSync } from 'fs'
+
+import Database from 'better-sqlite3'
+import { type ActionFunctionArgs } from 'react-router'
+
+import { getDbPath } from '~/utils/video-paths'
 
 interface FrameOCR {
   frame_index: number
   ocr_text: string
-  ocr_annotations: string  // JSON: [[text, conf, [x, y, w, h]], ...]
+  ocr_annotations: string // JSON: [[text, conf, [x, y, w, h]], ...]
   ocr_confidence: number
 }
+
+// Python OCR annotation format: [text, confidence, [x, y, width, height]]
+type PythonOCRAnnotation = [string, number, [number, number, number, number]]
 
 interface VideoLayoutConfig {
   frame_width: number
@@ -31,8 +36,8 @@ interface BoxStats {
   maxBottom: number
   minLeft: number
   maxRight: number
-  topEdges: number[]  // For calculating top_edge_std
-  bottomEdges: number[]  // For calculating bottom_edge_std
+  topEdges: number[] // For calculating top_edge_std
+  bottomEdges: number[] // For calculating bottom_edge_std
   centerYValues: number[]
   heightValues: number[]
   widthValues: number[]
@@ -41,7 +46,33 @@ interface BoxStats {
   centerXValues: number[]
 }
 
-function getDatabase(videoId: string) {
+interface LayoutParams {
+  verticalPosition: number
+  verticalStd: number
+  boxHeight: number
+  boxHeightStd: number
+  anchorType: 'left' | 'center' | 'right'
+  anchorPosition: number
+  topEdgeStd: number
+  bottomEdgeStd: number
+}
+
+interface AnalysisStats {
+  totalBoxes: number
+  captionBoxes: number
+  verticalPosition: number
+  boxHeight: number
+  topEdgeStd: number
+  bottomEdgeStd: number
+}
+
+interface OCRAnalysisResult {
+  cropBounds: { left: number; top: number; right: number; bottom: number }
+  layoutParams: LayoutParams
+  stats: AnalysisStats
+}
+
+function getDatabase(videoId: string): Database.Database | Response {
   const dbPath = getDbPath(videoId)
   if (!dbPath) {
     return new Response('Video not found', { status: 404 })
@@ -115,7 +146,7 @@ function analyzeOCRBoxes(
   frames: FrameOCR[],
   frameWidth: number,
   frameHeight: number
-): { cropBounds: { left: number; top: number; right: number; bottom: number }; layoutParams: any; stats: any } {
+): OCRAnalysisResult {
   const stats: BoxStats = {
     minTop: frameHeight,
     maxBottom: 0,
@@ -135,7 +166,7 @@ function analyzeOCRBoxes(
 
   // Collect all box statistics
   for (const frame of frames) {
-    let ocrAnnotations: any[] = []
+    let ocrAnnotations: PythonOCRAnnotation[] = []
     try {
       ocrAnnotations = JSON.parse(frame.ocr_annotations || '[]')
     } catch (e) {
@@ -150,7 +181,7 @@ function analyzeOCRBoxes(
 
       // Convert fractional to pixels (convert y from bottom-referenced to top-referenced)
       const boxLeft = Math.floor(x * frameWidth)
-      const boxBottom = Math.floor((1 - y) * frameHeight)  // Convert from bottom-referenced to top-referenced
+      const boxBottom = Math.floor((1 - y) * frameHeight) // Convert from bottom-referenced to top-referenced
       const boxTop = boxBottom - Math.floor(height * frameHeight)
       const boxRight = boxLeft + Math.floor(width * frameWidth)
 
@@ -208,7 +239,9 @@ function analyzeOCRBoxes(
 
     // Safety: if we filter out more than 10% of values, keep original
     if (filtered.length < values.length * 0.9) {
-      console.log(`[Outlier Filtering] Filtered too many (${values.length - filtered.length}), keeping original`)
+      console.log(
+        `[Outlier Filtering] Filtered too many (${values.length - filtered.length}), keeping original`
+      )
       return values
     }
 
@@ -222,8 +255,12 @@ function analyzeOCRBoxes(
   stats.rightEdges = filterOutliers(stats.rightEdges)
   stats.centerXValues = filterOutliers(stats.centerXValues)
 
-  console.log(`[Outlier Filtering] Left edges: ${originalLeftCount} → ${stats.leftEdges.length} (removed ${originalLeftCount - stats.leftEdges.length})`)
-  console.log(`[Outlier Filtering] Right edges: ${originalRightCount} → ${stats.rightEdges.length} (removed ${originalRightCount - stats.rightEdges.length})`)
+  console.log(
+    `[Outlier Filtering] Left edges: ${originalLeftCount} → ${stats.leftEdges.length} (removed ${originalLeftCount - stats.leftEdges.length})`
+  )
+  console.log(
+    `[Outlier Filtering] Right edges: ${originalRightCount} → ${stats.rightEdges.length} (removed ${originalRightCount - stats.rightEdges.length})`
+  )
 
   // Calculate modes and standard deviations
   const verticalPosition = calculateMode(stats.centerYValues, 5)
@@ -293,7 +330,8 @@ function analyzeOCRBoxes(
   }
 
   // Calculate center of mass for center detection
-  const meanCenterX = stats.centerXValues.reduce((sum, val) => sum + val, 0) / stats.centerXValues.length
+  const meanCenterX =
+    stats.centerXValues.reduce((sum, val) => sum + val, 0) / stats.centerXValues.length
   const frameCenterX = frameWidth / 2
 
   // Determine anchor type
@@ -304,7 +342,10 @@ function analyzeOCRBoxes(
   const leftEdgeStrength = maxPositiveDerivative
   const rightEdgeStrength = Math.abs(maxNegativeDerivative)
 
-  if (centerOfMassNearFrameCenter && Math.abs(leftEdgeStrength - rightEdgeStrength) < leftEdgeStrength * 0.3) {
+  if (
+    centerOfMassNearFrameCenter &&
+    Math.abs(leftEdgeStrength - rightEdgeStrength) < leftEdgeStrength * 0.3
+  ) {
     // Centered and symmetric edges = center anchor
     anchorType = 'center'
     anchorPosition = Math.round(meanCenterX)
@@ -327,9 +368,15 @@ function analyzeOCRBoxes(
     }
   }
 
-  console.log(`[Anchor Detection] Horizontal - Left edge at x=${leftEdgePos} (derivative=${maxPositiveDerivative})`)
-  console.log(`[Anchor Detection] Horizontal - Right edge at x=${rightEdgePos} (derivative=${maxNegativeDerivative})`)
-  console.log(`[Anchor Detection] Horizontal - Center of mass: ${Math.round(meanCenterX)}, frame center: ${frameCenterX}`)
+  console.log(
+    `[Anchor Detection] Horizontal - Left edge at x=${leftEdgePos} (derivative=${maxPositiveDerivative})`
+  )
+  console.log(
+    `[Anchor Detection] Horizontal - Right edge at x=${rightEdgePos} (derivative=${maxNegativeDerivative})`
+  )
+  console.log(
+    `[Anchor Detection] Horizontal - Center of mass: ${Math.round(meanCenterX)}, frame center: ${frameCenterX}`
+  )
   console.log(`[Anchor Detection] Horizontal - Chosen: ${anchorType} at ${anchorPosition}`)
 
   // Calculate horizontal edge sharpness for adaptive padding
@@ -337,7 +384,9 @@ function analyzeOCRBoxes(
   const leftEdgeSharpness = maxPositiveDerivative / maxHorizontalDensity
   const rightEdgeSharpness = Math.abs(maxNegativeDerivative) / maxHorizontalDensity
 
-  console.log(`[Anchor Detection] Horizontal - Left sharpness=${leftEdgeSharpness.toFixed(3)}, Right sharpness=${rightEdgeSharpness.toFixed(3)}`)
+  console.log(
+    `[Anchor Detection] Horizontal - Left sharpness=${leftEdgeSharpness.toFixed(3)}, Right sharpness=${rightEdgeSharpness.toFixed(3)}`
+  )
 
   // Apply same derivative method for vertical bounds (top/bottom of caption region)
   // Calculate box density at each vertical position
@@ -381,20 +430,26 @@ function analyzeOCRBoxes(
     }
   }
 
-  console.log(`[Anchor Detection] Vertical - Top edge at y=${topEdgePos} (derivative=${maxPositiveVerticalDerivative})`)
-  console.log(`[Anchor Detection] Vertical - Bottom edge at y=${bottomEdgePos} (derivative=${maxNegativeVerticalDerivative})`)
+  console.log(
+    `[Anchor Detection] Vertical - Top edge at y=${topEdgePos} (derivative=${maxPositiveVerticalDerivative})`
+  )
+  console.log(
+    `[Anchor Detection] Vertical - Bottom edge at y=${bottomEdgePos} (derivative=${maxNegativeVerticalDerivative})`
+  )
 
   // Calculate vertical edge sharpness for adaptive padding
   const maxVerticalDensity = Math.max(...densityByY)
   const topEdgeSharpness = maxPositiveVerticalDerivative / maxVerticalDensity
   const bottomEdgeSharpness = Math.abs(maxNegativeVerticalDerivative) / maxVerticalDensity
 
-  console.log(`[Anchor Detection] Vertical - Top sharpness=${topEdgeSharpness.toFixed(3)}, Bottom sharpness=${bottomEdgeSharpness.toFixed(3)}`)
+  console.log(
+    `[Anchor Detection] Vertical - Top sharpness=${topEdgeSharpness.toFixed(3)}, Bottom sharpness=${bottomEdgeSharpness.toFixed(3)}`
+  )
 
   // Calculate crop bounds: detected edge position ± adaptive padding
   // Padding increases when edges are less sharp (less consistent positions)
-  const PADDING_FRACTION = 0.1  // Base padding: 1/10 of box dimension
-  const SHARPNESS_FACTOR = 2.0  // How much to increase padding for gradual edges
+  const PADDING_FRACTION = 0.1 // Base padding: 1/10 of box dimension
+  const SHARPNESS_FACTOR = 2.0 // How much to increase padding for gradual edges
 
   // Adaptive vertical padding: padding × (1 + factor × (1 - sharpness))
   const topPaddingMultiplier = 1 + SHARPNESS_FACTOR * (1 - Math.min(1, topEdgeSharpness))
@@ -406,14 +461,21 @@ function analyzeOCRBoxes(
   const cropTop = Math.max(0, topEdgePos - topPadding)
   const cropBottom = Math.min(frameHeight, bottomEdgePos + bottomPadding)
 
-  console.log(`[Crop Bounds] Vertical - Top padding=${topPadding}px (×${topPaddingMultiplier.toFixed(2)}), Bottom padding=${bottomPadding}px (×${bottomPaddingMultiplier.toFixed(2)})`)
+  console.log(
+    `[Crop Bounds] Vertical - Top padding=${topPadding}px (×${topPaddingMultiplier.toFixed(2)}), Bottom padding=${bottomPadding}px (×${bottomPaddingMultiplier.toFixed(2)})`
+  )
 
   // Helper function: Fit polynomial to find where density reaches zero
   // Uses simple quadratic fit: y = ax² + bx + c
   // Only samples the trailing-off region where density is positive
-  function findZeroCrossing(densities: number[], startX: number, endX: number, searchDirection: 'right' | 'left'): number {
-    const points: Array<{x: number, y: number}> = []
-    const minDensity = 1  // Stop when density drops below this
+  function findZeroCrossing(
+    densities: number[],
+    startX: number,
+    endX: number,
+    searchDirection: 'right' | 'left'
+  ): number {
+    const points: Array<{ x: number; y: number }> = []
+    const minDensity = 1 // Stop when density drops below this
 
     if (searchDirection === 'right') {
       // Sample points from startX to the right until density drops to near-zero
@@ -458,8 +520,13 @@ function analyzeOCRBoxes(
 
     // Fit quadratic using least squares: y = a*x² + b*x + c
     // Build normal equations for least squares
-    let sumX = 0, sumX2 = 0, sumX3 = 0, sumX4 = 0
-    let sumY = 0, sumXY = 0, sumX2Y = 0
+    let sumX = 0,
+      sumX2 = 0,
+      sumX3 = 0,
+      sumX4 = 0
+    let sumY = 0,
+      sumXY = 0,
+      sumX2Y = 0
     const n = points.length
 
     for (const p of points) {
@@ -478,7 +545,10 @@ function analyzeOCRBoxes(
     // [sumX2  sumX   n    ] [c]   [sumY  ]
 
     // Using Cramer's rule (simplified for this case)
-    const det = sumX4 * (sumX2 * n - sumX * sumX) - sumX3 * (sumX3 * n - sumX * sumX2) + sumX2 * (sumX3 * sumX - sumX2 * sumX2)
+    const det =
+      sumX4 * (sumX2 * n - sumX * sumX) -
+      sumX3 * (sumX3 * n - sumX * sumX2) +
+      sumX2 * (sumX3 * sumX - sumX2 * sumX2)
 
     if (Math.abs(det) < 1e-10) {
       // Singular matrix, use linear fit instead
@@ -491,9 +561,21 @@ function analyzeOCRBoxes(
       return Math.round(zeroX)
     }
 
-    const a = ((sumX2 * n - sumX * sumX) * sumX2Y - (sumX3 * n - sumX * sumX2) * sumXY + (sumX3 * sumX - sumX2 * sumX2) * sumY) / det
-    const b = ((sumX4 * sumXY - sumX3 * sumX2Y) * n - (sumX4 * sumY - sumX2 * sumX2Y) * sumX + (sumX3 * sumY - sumX2 * sumXY) * sumX2) / det
-    const c = ((sumX4 * (sumX2 * sumY - sumX * sumXY) - sumX3 * (sumX3 * sumY - sumX * sumX2Y)) + sumX2 * (sumX3 * sumXY - sumX2 * sumX2Y)) / det
+    const a =
+      ((sumX2 * n - sumX * sumX) * sumX2Y -
+        (sumX3 * n - sumX * sumX2) * sumXY +
+        (sumX3 * sumX - sumX2 * sumX2) * sumY) /
+      det
+    const b =
+      ((sumX4 * sumXY - sumX3 * sumX2Y) * n -
+        (sumX4 * sumY - sumX2 * sumX2Y) * sumX +
+        (sumX3 * sumY - sumX2 * sumXY) * sumX2) /
+      det
+    const c =
+      (sumX4 * (sumX2 * sumY - sumX * sumXY) -
+        sumX3 * (sumX3 * sumY - sumX * sumX2Y) +
+        sumX2 * (sumX3 * sumXY - sumX2 * sumX2Y)) /
+      det
 
     // Find zero crossing of quadratic: ax² + bx + c = 0
     if (Math.abs(a) > 1e-10) {
@@ -530,8 +612,8 @@ function analyzeOCRBoxes(
   const leftAnchorPaddingMultiplier = 1 + SHARPNESS_FACTOR * (1 - Math.min(1, leftEdgeSharpness))
   const rightAnchorPaddingMultiplier = 1 + SHARPNESS_FACTOR * (1 - Math.min(1, rightEdgeSharpness))
 
-  const baseDensePadding = boxWidth * PADDING_FRACTION  // Base padding for dense edges
-  const fixedSparsePadding = Math.ceil(boxWidth * 2)  // Fixed padding for sparse far sides
+  const baseDensePadding = boxWidth * PADDING_FRACTION // Base padding for dense edges
+  const fixedSparsePadding = Math.ceil(boxWidth * 2) // Fixed padding for sparse far sides
 
   // For sparse data, use actual box extents instead of polynomial fitting
   const minLeft = Math.min(...stats.leftEdges)
@@ -542,7 +624,9 @@ function analyzeOCRBoxes(
     cropLeft = Math.max(0, minLeft - fixedSparsePadding)
     cropRight = Math.min(frameWidth, maxRight + fixedSparsePadding)
 
-    console.log(`[Crop Bounds] Horizontal - Center anchor at ${anchorPosition}: using box extents ${minLeft}-${maxRight} with ±${fixedSparsePadding}px padding`)
+    console.log(
+      `[Crop Bounds] Horizontal - Center anchor at ${anchorPosition}: using box extents ${minLeft}-${maxRight} with ±${fixedSparsePadding}px padding`
+    )
   } else if (anchorType === 'left') {
     // For left anchors: adaptive padding on dense anchor side (left), box extent on far side (right)
     const leftPadding = Math.ceil(baseDensePadding * leftAnchorPaddingMultiplier)
@@ -550,7 +634,9 @@ function analyzeOCRBoxes(
 
     cropRight = Math.min(frameWidth, maxRight + fixedSparsePadding)
 
-    console.log(`[Crop Bounds] Horizontal - Left anchor at ${anchorPosition}: left=${cropLeft} (anchor-${leftPadding}px, ×${leftAnchorPaddingMultiplier.toFixed(2)}), right=${cropRight} (extent=${maxRight}+${fixedSparsePadding}px)`)
+    console.log(
+      `[Crop Bounds] Horizontal - Left anchor at ${anchorPosition}: left=${cropLeft} (anchor-${leftPadding}px, ×${leftAnchorPaddingMultiplier.toFixed(2)}), right=${cropRight} (extent=${maxRight}+${fixedSparsePadding}px)`
+    )
   } else {
     // For right anchors: box extent on far side (left), adaptive padding on dense anchor side (right)
     cropLeft = Math.max(0, minLeft - fixedSparsePadding)
@@ -558,10 +644,14 @@ function analyzeOCRBoxes(
     const rightPadding = Math.ceil(baseDensePadding * rightAnchorPaddingMultiplier)
     cropRight = Math.min(frameWidth, anchorPosition + rightPadding)
 
-    console.log(`[Crop Bounds] Horizontal - Right anchor at ${anchorPosition}: left=${cropLeft} (extent=${minLeft}-${fixedSparsePadding}px), right=${cropRight} (anchor+${rightPadding}px, ×${rightAnchorPaddingMultiplier.toFixed(2)})`)
+    console.log(
+      `[Crop Bounds] Horizontal - Right anchor at ${anchorPosition}: left=${cropLeft} (extent=${minLeft}-${fixedSparsePadding}px), right=${cropRight} (anchor+${rightPadding}px, ×${rightAnchorPaddingMultiplier.toFixed(2)})`
+    )
   }
 
-  console.log(`[Crop Bounds] Final bounds: [${cropLeft}, ${cropTop}] - [${cropRight}, ${cropBottom}] with adaptive padding (sharpness factor=${SHARPNESS_FACTOR})`)
+  console.log(
+    `[Crop Bounds] Final bounds: [${cropLeft}, ${cropTop}] - [${cropRight}, ${cropBottom}] with adaptive padding (sharpness factor=${SHARPNESS_FACTOR})`
+  )
 
   // Count caption boxes (those near the vertical mode)
   const captionBoxCount = stats.centerYValues.filter(
@@ -603,7 +693,7 @@ export async function action({ params }: ActionFunctionArgs) {
   if (!encodedVideoId) {
     return new Response(JSON.stringify({ error: 'Missing videoId' }), {
       status: 400,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
     })
   }
 
@@ -611,36 +701,45 @@ export async function action({ params }: ActionFunctionArgs) {
 
   try {
     const db = getDatabase(videoId)
+    if (db instanceof Response) return db
 
     // Get current layout config for frame dimensions
-    const layoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as VideoLayoutConfig | undefined
+    const layoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as
+      | VideoLayoutConfig
+      | undefined
 
     if (!layoutConfig) {
       db.close()
       return new Response(JSON.stringify({ error: 'Layout config not found' }), {
         status: 404,
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
       })
     }
 
     // Get unique frame indices
-    const frameIndices = db.prepare(`
+    const frameIndices = db
+      .prepare(
+        `
       SELECT DISTINCT frame_index
       FROM full_frame_ocr
       ORDER BY frame_index
-    `).all() as Array<{ frame_index: number }>
+    `
+      )
+      .all() as Array<{ frame_index: number }>
 
     if (frameIndices.length === 0) {
       db.close()
       return new Response(JSON.stringify({ error: 'No OCR data found' }), {
         status: 404,
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
       })
     }
 
     // Get unique frame indices with caption boxes
     // Uses predictions with user label overrides
-    const captionFrameIndices = db.prepare(`
+    const captionFrameIndices = db
+      .prepare(
+        `
       SELECT DISTINCT o.frame_index
       FROM full_frame_ocr o
       LEFT JOIN full_frame_box_labels l
@@ -653,11 +752,15 @@ export async function action({ params }: ActionFunctionArgs) {
         (l.label_source = 'user' AND l.label = 'in')
       )
       ORDER BY o.frame_index
-    `).all() as Array<{ frame_index: number }>
+    `
+      )
+      .all() as Array<{ frame_index: number }>
 
     // Build frames with caption boxes only
     const frames: FrameOCR[] = captionFrameIndices.map(({ frame_index }) => {
-      const boxes = db.prepare(`
+      const boxes = db
+        .prepare(
+          `
         SELECT
           o.text as box_text,
           FLOOR(o.x * ?) as box_left,
@@ -676,15 +779,17 @@ export async function action({ params }: ActionFunctionArgs) {
             (l.label_source = 'user' AND l.label = 'in')
           )
         ORDER BY o.box_index
-      `).all(
-        layoutConfig.frame_width,
-        layoutConfig.frame_height,
-        layoutConfig.frame_height,
-        layoutConfig.frame_width,
-        layoutConfig.frame_width,
-        layoutConfig.frame_height,
-        frame_index
-      ) as Array<{
+      `
+        )
+        .all(
+          layoutConfig.frame_width,
+          layoutConfig.frame_height,
+          layoutConfig.frame_height,
+          layoutConfig.frame_width,
+          layoutConfig.frame_width,
+          layoutConfig.frame_height,
+          frame_index
+        ) as Array<{
         box_text: string
         box_left: number
         box_top: number
@@ -699,22 +804,24 @@ export async function action({ params }: ActionFunctionArgs) {
         1.0,
         [
           box.box_left / layoutConfig.frame_width,
-          (layoutConfig.frame_height - box.box_bottom) / layoutConfig.frame_height,  // Convert from top-referenced to bottom-referenced
+          (layoutConfig.frame_height - box.box_bottom) / layoutConfig.frame_height, // Convert from top-referenced to bottom-referenced
           (box.box_right - box.box_left) / layoutConfig.frame_width,
-          (box.box_bottom - box.box_top) / layoutConfig.frame_height
-        ]
+          (box.box_bottom - box.box_top) / layoutConfig.frame_height,
+        ],
       ])
 
       return {
         frame_index,
         ocr_text: boxes.map(b => b.box_text).join(' '),
         ocr_annotations: JSON.stringify(ocrAnnotations),
-        ocr_confidence: 1.0
+        ocr_confidence: 1.0,
       }
     })
 
     // Log summary of boxes used for anchor detection
-    const totalBoxStats = db.prepare(`
+    const totalBoxStats = db
+      .prepare(
+        `
       SELECT
         COUNT(*) as total_boxes,
         SUM(CASE WHEN o.predicted_label = 'in' THEN 1 ELSE 0 END) as predicted_in,
@@ -725,9 +832,18 @@ export async function action({ params }: ActionFunctionArgs) {
         ON o.frame_index = l.frame_index
         AND o.box_index = l.box_index
         AND l.annotation_source = 'full_frame'
-    `).get() as { total_boxes: number; predicted_in: number; user_labeled_in: number; user_labeled_out: number }
+    `
+      )
+      .get() as {
+      total_boxes: number
+      predicted_in: number
+      user_labeled_in: number
+      user_labeled_out: number
+    }
 
-    const captionBoxCount = db.prepare(`
+    const captionBoxCount = db
+      .prepare(
+        `
       SELECT COUNT(*) as count
       FROM full_frame_ocr o
       LEFT JOIN full_frame_box_labels l
@@ -738,12 +854,40 @@ export async function action({ params }: ActionFunctionArgs) {
         (l.label IS NULL AND o.predicted_label = 'in')
         OR (l.label_source = 'user' AND l.label = 'in')
       )
-    `).get() as { count: number }
+    `
+      )
+      .get() as { count: number }
 
     console.log(`[Reset Crop Bounds] Total OCR boxes: ${totalBoxStats.total_boxes}`)
     console.log(`[Reset Crop Bounds] Predicted as captions: ${totalBoxStats.predicted_in}`)
-    console.log(`[Reset Crop Bounds] User labeled IN: ${totalBoxStats.user_labeled_in}, OUT: ${totalBoxStats.user_labeled_out}`)
-    console.log(`[Reset Crop Bounds] Using ${captionBoxCount.count} caption boxes for anchor detection (predicted + user overrides)`)
+    console.log(
+      `[Reset Crop Bounds] User labeled IN: ${totalBoxStats.user_labeled_in}, OUT: ${totalBoxStats.user_labeled_out}`
+    )
+    console.log(
+      `[Reset Crop Bounds] Using ${captionBoxCount.count} caption boxes for anchor detection (predicted + user overrides)`
+    )
+
+    // Check if there are any caption boxes to analyze
+    if (captionBoxCount.count === 0) {
+      db.close()
+      return new Response(
+        JSON.stringify({
+          error: 'No caption boxes found',
+          message:
+            'Cannot recalculate crop bounds because no OCR boxes are labeled as captions. Please label some boxes as "in" (captions) first.',
+          stats: {
+            totalBoxes: totalBoxStats.total_boxes,
+            userLabeledOut: totalBoxStats.user_labeled_out,
+            userLabeledIn: totalBoxStats.user_labeled_in,
+            predictedIn: totalBoxStats.predicted_in,
+          },
+        }),
+        {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
+    }
 
     console.log(`Analyzing ${frames.length} frames for crop bounds reset`)
 
@@ -755,7 +899,8 @@ export async function action({ params }: ActionFunctionArgs) {
 
     try {
       // Update crop bounds and increment version
-      db.prepare(`
+      db.prepare(
+        `
         UPDATE video_layout_config
         SET crop_left = ?,
             crop_top = ?,
@@ -764,7 +909,8 @@ export async function action({ params }: ActionFunctionArgs) {
             crop_bounds_version = crop_bounds_version + 1,
             updated_at = datetime('now')
         WHERE id = 1
-      `).run(
+      `
+      ).run(
         analysis.cropBounds.left,
         analysis.cropBounds.top,
         analysis.cropBounds.right,
@@ -772,7 +918,8 @@ export async function action({ params }: ActionFunctionArgs) {
       )
 
       // Update layout parameters
-      db.prepare(`
+      db.prepare(
+        `
         UPDATE video_layout_config
         SET vertical_position = ?,
             vertical_std = ?,
@@ -783,7 +930,8 @@ export async function action({ params }: ActionFunctionArgs) {
             top_edge_std = ?,
             bottom_edge_std = ?
         WHERE id = 1
-      `).run(
+      `
+      ).run(
         analysis.layoutParams.verticalPosition,
         analysis.layoutParams.verticalStd,
         analysis.layoutParams.boxHeight,
@@ -803,26 +951,30 @@ export async function action({ params }: ActionFunctionArgs) {
 
       db.close()
 
-      return new Response(JSON.stringify({
-        success: true,
-        newCropBounds: analysis.cropBounds,
-        analysisData: analysis.stats,
-      }), {
-        headers: { 'Content-Type': 'application/json' }
-      })
-
+      return new Response(
+        JSON.stringify({
+          success: true,
+          newCropBounds: analysis.cropBounds,
+          analysisData: analysis.stats,
+        }),
+        {
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
     } catch (error) {
       db.prepare('ROLLBACK').run()
       throw error
     }
-
   } catch (error) {
     console.error('Error resetting crop bounds:', error)
-    return new Response(JSON.stringify({
-      error: error instanceof Error ? error.message : 'Unknown error'
-    }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
-    })
+    return new Response(
+      JSON.stringify({
+        error: error instanceof Error ? error.message : 'Unknown error',
+      }),
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    )
   }
 }

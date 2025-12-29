@@ -1,0 +1,2994 @@
+[
+  {
+    "display_path": "a_bite_of_china/1",
+    "keep_video_id": "14424db6-f8ef-4133-8c2b-53d854bece59",
+    "keep_score": 2877,
+    "delete_video_id": "a7e122f6-3486-4299-926b-1bbf3ace9600",
+    "delete_score": 297,
+    "reason": "more work (score 2877 vs 297)"
+  },
+  {
+    "display_path": "a_bite_of_china/2",
+    "keep_video_id": "b15cd7a9-c43f-4a05-bcd9-b018d1b3c6a5",
+    "keep_score": 296,
+    "delete_video_id": "aabf445c-b2f5-4d3d-97f4-41459095c44f",
+    "delete_score": 296,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "a_bite_of_china/3",
+    "keep_video_id": "4713c6dd-7227-4bf0-bdc8-9b069fee1853",
+    "keep_score": 143687,
+    "delete_video_id": "ef2b0e58-d5ad-41e3-bd16-7c960e084207",
+    "delete_score": 297,
+    "reason": "more work (score 143687 vs 297)"
+  },
+  {
+    "display_path": "a_bite_of_china/4",
+    "keep_video_id": "192bfb40-b27c-48fc-9312-b29d2b185bce",
+    "keep_score": 2446,
+    "delete_video_id": "5e80877b-5ce6-46c5-afd9-bef5e57b8d0e",
+    "delete_score": 296,
+    "reason": "more work (score 2446 vs 296)"
+  },
+  {
+    "display_path": "a_bite_of_china/5",
+    "keep_video_id": "5d62b9d5-4500-4348-b88e-dbc022feef00",
+    "keep_score": 297,
+    "delete_video_id": "23e4d5ef-810c-48b5-afc2-9379e97331b0",
+    "delete_score": 297,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "a_bite_of_china/6",
+    "keep_video_id": "ee2db437-7bf2-460e-bdfb-6cb5921b5d0b",
+    "keep_score": 3507,
+    "delete_video_id": "fb6ccde0-2006-472a-8470-d1de291ec748",
+    "delete_score": 297,
+    "reason": "more work (score 3507 vs 297)"
+  },
+  {
+    "display_path": "a_bite_of_china/7",
+    "keep_video_id": "0347f7ff-932e-4557-8fa2-816976628b16",
+    "keep_score": 794,
+    "delete_video_id": "69a302b5-4c6b-4160-ad96-d1629398f10c",
+    "delete_score": 294,
+    "reason": "more work (score 794 vs 294)"
+  },
+  {
+    "display_path": "a_love_so_romantic/01",
+    "keep_video_id": "39a78c8f-a2c6-4513-8a88-589025ba5623",
+    "keep_score": 214,
+    "delete_video_id": "2b9a1d51-41ec-416c-84fc-ac2612683fe6",
+    "delete_score": 214,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "a_love_so_romantic/02",
+    "keep_video_id": "170e25ea-fd07-4905-a7d3-b54c456b3714",
+    "keep_score": 237,
+    "delete_video_id": "315633d9-8132-40c5-91f0-950c7ef328bf",
+    "delete_score": 237,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "a_love_so_romantic/03",
+    "keep_video_id": "2b54d389-622f-4bfb-9c7d-3be2913d3224",
+    "keep_score": 12948,
+    "delete_video_id": "35080685-58b7-4432-8da5-2e66a00904d8",
+    "delete_score": 198,
+    "reason": "more work (score 12948 vs 198)"
+  },
+  {
+    "display_path": "a_love_so_romantic/04",
+    "keep_video_id": "94fa2313-9d19-43f3-b592-39c9d2c338b4",
+    "keep_score": 210,
+    "delete_video_id": "dd11fbfc-e82f-4e00-bd7f-70361b35c902",
+    "delete_score": 210,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "a_love_so_romantic/05",
+    "keep_video_id": "b48409e1-a4b4-4114-bb61-ed9040a275ef",
+    "keep_score": 219,
+    "delete_video_id": "f631aff6-fc9a-460b-b8e4-81f3d67ee56e",
+    "delete_score": 219,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "a_love_so_romantic/06",
+    "keep_video_id": "bc6086c6-5386-42ce-8603-be6bba684fd3",
+    "keep_score": 223,
+    "delete_video_id": "f1c97fcf-24c1-4d27-9bdc-63dd551aa834",
+    "delete_score": 223,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "a_love_so_romantic/07",
+    "keep_video_id": "cb57976f-c03c-4219-ba41-4e0e48566b06",
+    "keep_score": 212,
+    "delete_video_id": "8b8d8bc4-a5b1-4ad7-bcfa-1517f2e3a403",
+    "delete_score": 212,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "a_love_so_romantic/08",
+    "keep_video_id": "523217b2-aafe-4053-8a56-4dfea4150454",
+    "keep_score": 3009,
+    "delete_video_id": "c8c15d1b-fe6d-469b-9d6c-58161c2d88f2",
+    "delete_score": 209,
+    "reason": "more work (score 3009 vs 209)"
+  },
+  {
+    "display_path": "a_love_so_romantic/09",
+    "keep_video_id": "30fda3d3-5ebb-48cb-8d14-859c569f1158",
+    "keep_score": 5295,
+    "delete_video_id": "867de202-1ecf-4e93-87b7-1b02391cf910",
+    "delete_score": 195,
+    "reason": "more work (score 5295 vs 195)"
+  },
+  {
+    "display_path": "a_love_so_romantic/10",
+    "keep_video_id": "576df066-9010-4ebe-941c-992da33c09c6",
+    "keep_score": 209,
+    "delete_video_id": "e8740e71-f431-4993-a511-d5cd2a8abcff",
+    "delete_score": 209,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "a_love_so_romantic/11",
+    "keep_video_id": "e4ead5c2-682c-4762-8cab-0d12692c9652",
+    "keep_score": 230,
+    "delete_video_id": "bfa123d1-fe96-4e60-a212-dc279cdd991d",
+    "delete_score": 230,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "a_love_so_romantic/12",
+    "keep_video_id": "1984b04e-fb28-408a-b7b0-d55649f1abe2",
+    "keep_score": 210,
+    "delete_video_id": "2a4ecca9-ecfc-412a-ae22-c766cf207b4d",
+    "delete_score": 210,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "a_love_so_romantic/13",
+    "keep_video_id": "9f9a1f75-3490-425e-a484-402fac70d4ba",
+    "keep_score": 207,
+    "delete_video_id": "90e44280-43da-4221-88f4-d929c025f186",
+    "delete_score": 207,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "a_love_so_romantic/14",
+    "keep_video_id": "ee603252-6fd4-48e8-a5fe-6b2870ddeaf7",
+    "keep_score": 3752,
+    "delete_video_id": "f238394c-37a8-42a4-8595-cf4114950f7f",
+    "delete_score": 212,
+    "reason": "more work (score 3752 vs 212)"
+  },
+  {
+    "display_path": "a_love_so_romantic/15",
+    "keep_video_id": "73c9ca13-98c3-4c18-ab99-860130d3274d",
+    "keep_score": 6274,
+    "delete_video_id": "d25118d8-91c0-4691-b0d3-d7bd41c1dfd1",
+    "delete_score": 194,
+    "reason": "more work (score 6274 vs 194)"
+  },
+  {
+    "display_path": "a_love_so_romantic/16",
+    "keep_video_id": "5dda15d1-5f29-4475-aba9-2d95504284b7",
+    "keep_score": 208,
+    "delete_video_id": "8ceb0479-4fbf-4d3d-95b7-486bdbbfdf2c",
+    "delete_score": 208,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "a_love_so_romantic/17",
+    "keep_video_id": "e57b60d7-cf7a-4018-89c7-a3252747110c",
+    "keep_score": 4299,
+    "delete_video_id": "f7e3cafc-46be-4a1c-b3b2-cd5756fac78d",
+    "delete_score": 199,
+    "reason": "more work (score 4299 vs 199)"
+  },
+  {
+    "display_path": "a_love_so_romantic/18",
+    "keep_video_id": "a02c2f85-1f7b-44df-8576-9fa105bfe0ab",
+    "keep_score": 191,
+    "delete_video_id": "8de36826-6555-440a-850b-20f9fdd096e6",
+    "delete_score": 191,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "a_love_so_romantic/19",
+    "keep_video_id": "289f3f94-8b69-4214-809e-667c175c0b1c",
+    "keep_score": 2219,
+    "delete_video_id": "80ff6b37-3475-49ee-adf9-d049787fe8bd",
+    "delete_score": 199,
+    "reason": "more work (score 2219 vs 199)"
+  },
+  {
+    "display_path": "a_love_so_romantic/20",
+    "keep_video_id": "ee213752-8513-40e1-a40c-93136c9e928b",
+    "keep_score": 200,
+    "delete_video_id": "c29b82ba-50fe-451d-8307-94ae68efc208",
+    "delete_score": 200,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "a_love_so_romantic/21",
+    "keep_video_id": "25a13d5d-e35d-4c63-b93e-2ebc1a5e03a1",
+    "keep_score": 12559,
+    "delete_video_id": "7778271a-cbb0-4249-9591-3630ba663780",
+    "delete_score": 189,
+    "reason": "more work (score 12559 vs 189)"
+  },
+  {
+    "display_path": "a_love_so_romantic/22",
+    "keep_video_id": "4a1fac76-b224-4229-b259-31e8be3a51ae",
+    "keep_score": 102960,
+    "delete_video_id": "4554b8f2-a26b-476c-beec-7fe5b4cd160a",
+    "delete_score": 215,
+    "reason": "more work (score 102960 vs 215)"
+  },
+  {
+    "display_path": "a_love_so_romantic/23",
+    "keep_video_id": "44ea33ce-cae7-40b4-8bdc-5858dc6131d6",
+    "keep_score": 97475,
+    "delete_video_id": "73ebc85b-b0ca-4d1a-a775-50030bc43133",
+    "delete_score": 190,
+    "reason": "more work (score 97475 vs 190)"
+  },
+  {
+    "display_path": "a_love_so_romantic/24",
+    "keep_video_id": "4228f313-fb37-416e-be3e-defa0caa5ed3",
+    "keep_score": 9173,
+    "delete_video_id": "e360f028-dc68-475b-8857-fe194dda86a2",
+    "delete_score": 203,
+    "reason": "more work (score 9173 vs 203)"
+  },
+  {
+    "display_path": "a_love_so_romantic/25",
+    "keep_video_id": "19c538ed-55ef-4ccd-8582-4c28f53e6eba",
+    "keep_score": 5440,
+    "delete_video_id": "7817b62f-1b81-488f-b7b0-1895d7657601",
+    "delete_score": 210,
+    "reason": "more work (score 5440 vs 210)"
+  },
+  {
+    "display_path": "a_love_so_romantic/26",
+    "keep_video_id": "c5126e28-7df8-410a-b71f-e4bae6663c71",
+    "keep_score": 196,
+    "delete_video_id": "14d823c6-360c-4063-a281-34c0878c8e06",
+    "delete_score": 196,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "a_love_so_romantic/27",
+    "keep_video_id": "ecf9efca-f839-4e60-8777-073d387db93f",
+    "keep_score": 190,
+    "delete_video_id": "06d154e4-2285-4638-9001-8786fffe9c99",
+    "delete_score": 190,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "a_love_so_romantic/28",
+    "keep_video_id": "2a427d99-1ef6-4426-b09b-9f4980439060",
+    "keep_score": 194,
+    "delete_video_id": "a806b396-5a11-4d0e-9147-9c0898e085aa",
+    "delete_score": 194,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "a_love_so_romantic/29",
+    "keep_video_id": "9b2cc272-2c00-470a-9c58-9aaaba36b1d2",
+    "keep_score": 5270,
+    "delete_video_id": "e6ba9b26-3444-490d-9f39-823b044dbc63",
+    "delete_score": 210,
+    "reason": "more work (score 5270 vs 210)"
+  },
+  {
+    "display_path": "a_love_so_romantic/30",
+    "keep_video_id": "f2093194-c4d0-48e5-8f08-e07f0d319163",
+    "keep_score": 27179,
+    "delete_video_id": "ffd88eeb-99f5-41e4-9d5e-55797a51451a",
+    "delete_score": 209,
+    "reason": "more work (score 27179 vs 209)"
+  },
+  {
+    "display_path": "a_love_so_romantic/31",
+    "keep_video_id": "0a28c46b-f15a-4710-a075-0083b183c514",
+    "keep_score": 13629,
+    "delete_video_id": "f313489f-b7b4-4277-bdd8-d3ddb8ec097d",
+    "delete_score": 199,
+    "reason": "more work (score 13629 vs 199)"
+  },
+  {
+    "display_path": "a_love_so_romantic/32",
+    "keep_video_id": "50c16764-aa60-44bc-8a65-2a31e179897b",
+    "keep_score": 231,
+    "delete_video_id": "f232f2ec-9c05-4b8e-b4df-17557fd65e50",
+    "delete_score": 231,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "ace_vs_ace_s8/01",
+    "keep_video_id": "2e6f23d3-9396-4a66-9c4b-bd0ff6f11e8d",
+    "keep_score": 1575,
+    "delete_video_id": "ecbc5a03-7d9b-4d37-bf3b-c15367ac4206",
+    "delete_score": 675,
+    "reason": "more work (score 1575 vs 675)"
+  },
+  {
+    "display_path": "ace_vs_ace_s8/02",
+    "keep_video_id": "d4421d1a-c823-4352-882b-530c892e5023",
+    "keep_score": 669,
+    "delete_video_id": "4f681b10-c3a0-4df6-ad55-c233b6131ddd",
+    "delete_score": 669,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "ace_vs_ace_s8/03",
+    "keep_video_id": "a4ed7288-aeb6-4968-9e04-f20c0f8ea9e8",
+    "keep_score": 652,
+    "delete_video_id": "cb617df1-b6c4-460a-b1f8-75867bd70e44",
+    "delete_score": 652,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "ace_vs_ace_s8/04",
+    "keep_video_id": "e75ff620-dda5-4cce-9874-23de690ef623",
+    "keep_score": 646,
+    "delete_video_id": "e07f1b29-2482-4bd5-b566-0a4b59526746",
+    "delete_score": 646,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "ace_vs_ace_s8/05",
+    "keep_video_id": "addf5bc7-bf4e-46a0-b048-36586d2f8c1a",
+    "keep_score": 652,
+    "delete_video_id": "bdb21f05-f64d-4c49-b3cb-a8e703ad360a",
+    "delete_score": 652,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "ace_vs_ace_s8/06",
+    "keep_video_id": "7bae3359-fd20-469b-a5c6-9d681c27a672",
+    "keep_score": 649,
+    "delete_video_id": "31cabba0-e701-474d-9373-68391180ed1c",
+    "delete_score": 649,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "ace_vs_ace_s8/07",
+    "keep_video_id": "5dc8b55f-0ed1-4a73-8909-2e09baf66570",
+    "keep_score": 647,
+    "delete_video_id": "6ca7c361-33b9-49dc-bafc-42ddd3398c69",
+    "delete_score": 647,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "ace_vs_ace_s8/08",
+    "keep_video_id": "ac8660b9-f4ec-4fb1-b3c6-e25d187d3429",
+    "keep_score": 627,
+    "delete_video_id": "f661a2c8-e082-4122-8477-fddc559150cd",
+    "delete_score": 627,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "ace_vs_ace_s8/09",
+    "keep_video_id": "499f9b0d-08e2-4688-9192-000af7f38367",
+    "keep_score": 193316,
+    "delete_video_id": "f5306eb9-2601-40ee-9937-fe2b154c7e1c",
+    "delete_score": 396,
+    "reason": "more work (score 193316 vs 396)"
+  },
+  {
+    "display_path": "ace_vs_ace_s8/10",
+    "keep_video_id": "2fe433ad-3f31-4c3c-a429-823f9f977235",
+    "keep_score": 711,
+    "delete_video_id": "fa4903f2-5ba9-4d50-9d2a-dd5cb0a2f0f1",
+    "delete_score": 711,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "ace_vs_ace_s8/11",
+    "keep_video_id": "6ed4c99c-33db-45bd-bbb9-0505cd00c4f9",
+    "keep_score": 712,
+    "delete_video_id": "e09088e7-d4cb-40c6-954b-e65db96e3312",
+    "delete_score": 712,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "ace_vs_ace_s8/12",
+    "keep_video_id": "44ebafd5-e0fe-4959-b4fe-9337e80c30fb",
+    "keep_score": 334127,
+    "delete_video_id": "a9eacb9c-6f24-48c4-afc5-bd56a4c4da83",
+    "delete_score": 677,
+    "reason": "more work (score 334127 vs 677)"
+  },
+  {
+    "display_path": "ace_vs_ace_s8/13",
+    "keep_video_id": "7debbf9e-3767-473e-b320-006ce9feb438",
+    "keep_score": 752,
+    "delete_video_id": "db718a57-102d-4e3a-bc76-148ea4c6d656",
+    "delete_score": 752,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "back-to-field/01",
+    "keep_video_id": "56042889-dae3-47b7-bbc6-60817f718b4a",
+    "keep_score": 290,
+    "delete_video_id": "a81e5936-7a9a-4e22-8302-344f11745985",
+    "delete_score": 50,
+    "reason": "more work (score 290 vs 50)"
+  },
+  {
+    "display_path": "back-to-field/02",
+    "keep_video_id": "27a2b4a3-58be-4bc4-b152-8ccfddcf1d53",
+    "keep_score": 631,
+    "delete_video_id": "63ef769f-e5b8-4821-a74f-fe24b3645b50",
+    "delete_score": 631,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "back-to-field/03",
+    "keep_video_id": "ed7f0544-9e42-4f90-9e91-18a8913034ca",
+    "keep_score": 15,
+    "delete_video_id": "a1f1232f-3c34-4428-8308-b8e31acf5faf",
+    "delete_score": 15,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "back-to-field/04",
+    "keep_video_id": "52bc6db0-aaef-4482-9be5-a9ff477ac7f4",
+    "keep_score": 10208,
+    "delete_video_id": "f82ea66f-4b12-4311-a267-fdec8e5b29a4",
+    "delete_score": 608,
+    "reason": "more work (score 10208 vs 608)"
+  },
+  {
+    "display_path": "back-to-field/05",
+    "keep_video_id": "ea1bc6a2-9e6e-4e4d-ac58-69b66d8e4a60",
+    "keep_score": 779,
+    "delete_video_id": "79be53c3-36bb-4296-a9f6-978b86cc3d7a",
+    "delete_score": 779,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "back-to-field/06",
+    "keep_video_id": "6249f710-8a83-4c88-8b40-cb0829b6d17a",
+    "keep_score": 6,
+    "delete_video_id": "4f69480e-fe1b-44fd-bdfc-baef3dc0188f",
+    "delete_score": 6,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "back-to-field/07",
+    "keep_video_id": "466517b8-74ee-4909-b8b6-91302d05737f",
+    "keep_score": 3352,
+    "delete_video_id": "33669145-7177-4a2d-a470-bebb05922b64",
+    "delete_score": 17,
+    "reason": "more work (score 3352 vs 17)"
+  },
+  {
+    "display_path": "back-to-field/08",
+    "keep_video_id": "95eea3d0-43c4-47d5-862d-be69b2a32272",
+    "keep_score": 603,
+    "delete_video_id": "166e101e-c0e6-4fca-8bc9-f5953de9061d",
+    "delete_score": 603,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "back-to-field/09",
+    "keep_video_id": "eeb8e352-0645-4e11-9843-c1d62d5bf021",
+    "keep_score": 427,
+    "delete_video_id": "9fd8248e-feec-45ce-ad33-da04213a0fc9",
+    "delete_score": 427,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "back-to-field/10",
+    "keep_video_id": "6215e4e3-b8ff-489f-bfa2-9838b7324990",
+    "keep_score": 31,
+    "delete_video_id": "f017906c-629d-4792-baa2-fe410e960bb5",
+    "delete_score": 31,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "back-to-field/11",
+    "keep_video_id": "45f6ad25-f511-4a87-bd3a-9e44bd6fdd5a",
+    "keep_score": 276407,
+    "delete_video_id": "77e6dce1-1571-4889-9a27-ee005a2d380c",
+    "delete_score": 562,
+    "reason": "more work (score 276407 vs 562)"
+  },
+  {
+    "display_path": "back-to-field/12",
+    "keep_video_id": "930e2b26-53a7-4019-807b-6489e63bb9b7",
+    "keep_score": 15,
+    "delete_video_id": "1d1c0878-b1fe-4ba7-9fd7-8c8502dbd30a",
+    "delete_score": 15,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "back-to-field/13",
+    "keep_video_id": "064efd61-22d5-4b64-902a-e8c7b6abcbda",
+    "keep_score": 194,
+    "delete_video_id": "f001e58d-4b97-4c6c-8ea4-b854e9298f4b",
+    "delete_score": 194,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "back-to-field/14",
+    "keep_video_id": "5e8154b7-2d04-4eb9-8ddd-add807fda0de",
+    "keep_score": 171,
+    "delete_video_id": "a7140106-a43a-46aa-a00d-1b443a9f5579",
+    "delete_score": 171,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "back-to-field/15",
+    "keep_video_id": "df7e168e-9814-4c4a-8ab2-720e41e613f2",
+    "keep_score": 38,
+    "delete_video_id": "c04884cb-2428-4ac9-b69c-b0ac7d8aa2f6",
+    "delete_score": 38,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "back-to-field/16",
+    "keep_video_id": "4be3af39-c26f-4151-9afe-d747e2eb19ef",
+    "keep_score": 188171,
+    "delete_video_id": "bc478a0a-26c1-4e99-9791-bbebee6d0b70",
+    "delete_score": 386,
+    "reason": "more work (score 188171 vs 386)"
+  },
+  {
+    "display_path": "back-to-field/17",
+    "keep_video_id": "27642626-64a6-4ce4-bb5c-1fbb47955929",
+    "keep_score": 497,
+    "delete_video_id": "d259daec-32d0-4436-bcda-0c555ca4f327",
+    "delete_score": 497,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "car-teardown-comparison/01",
+    "keep_video_id": "aa0442f2-49db-4ec2-9c38-ac11f5ded131",
+    "keep_score": 1936,
+    "delete_video_id": "e6ff2ee1-bbf0-4261-9d41-eddd42ce8fe0",
+    "delete_score": 156,
+    "reason": "more work (score 1936 vs 156)"
+  },
+  {
+    "display_path": "car-teardown-comparison/02",
+    "keep_video_id": "3313cd01-3ebf-4390-9fad-1b49fc121baf",
+    "keep_score": 116,
+    "delete_video_id": "153f7a8b-613e-4bba-8cc0-57a7b33bf1c2",
+    "delete_score": 116,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "car-teardown-comparison/03",
+    "keep_video_id": "9176ed61-f2f1-45b0-a11d-654807dabdd6",
+    "keep_score": 10939,
+    "delete_video_id": "97b6c495-5283-453f-be7c-14f49fe0480f",
+    "delete_score": 169,
+    "reason": "more work (score 10939 vs 169)"
+  },
+  {
+    "display_path": "car-teardown-comparison/04",
+    "keep_video_id": "86fa0dd5-1d55-4542-b99d-b0949597da7f",
+    "keep_score": 21565,
+    "delete_video_id": "ec3a9a9a-5409-4ad7-b787-9ea7b01499dc",
+    "delete_score": 125,
+    "reason": "more work (score 21565 vs 125)"
+  },
+  {
+    "display_path": "car-teardown-comparison/05",
+    "keep_video_id": "70584f78-9152-4a46-a15d-d96851bc4aae",
+    "keep_score": 3301,
+    "delete_video_id": "7cfa74fb-ecd1-4f72-87bc-fcaa01de62ae",
+    "delete_score": 141,
+    "reason": "more work (score 3301 vs 141)"
+  },
+  {
+    "display_path": "car-teardown-comparison/06",
+    "keep_video_id": "aa389881-491f-40fc-9d10-1e1339fc615e",
+    "keep_score": 4544,
+    "delete_video_id": "eceba164-8883-440a-9ebb-260a5dd64ffc",
+    "delete_score": 154,
+    "reason": "more work (score 4544 vs 154)"
+  },
+  {
+    "display_path": "car-teardown-comparison/07",
+    "keep_video_id": "d6b84d80-edc2-4e23-832f-590ec986f8f5",
+    "keep_score": 117,
+    "delete_video_id": "cf6fd7a2-61cd-404f-8b0c-1092dce00122",
+    "delete_score": 117,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "car-teardown-comparison/08",
+    "keep_video_id": "3d47b3a8-8423-4139-a198-3f64bf91d40b",
+    "keep_score": 5596,
+    "delete_video_id": "dac9d8c4-a0a4-4c2a-bb8b-bd2f702cb0ce",
+    "delete_score": 156,
+    "reason": "more work (score 5596 vs 156)"
+  },
+  {
+    "display_path": "car-teardown-comparison/09",
+    "keep_video_id": "c62b1ede-27d0-4b54-9544-9934b57f1a70",
+    "keep_score": 125,
+    "delete_video_id": "25d9060c-6469-446b-bd59-e70194c2d3aa",
+    "delete_score": 125,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "car-teardown-comparison/10",
+    "keep_video_id": "6766fd0e-59c0-4891-9b60-38b17d4e7135",
+    "keep_score": 162,
+    "delete_video_id": "1dc73994-d6d6-454a-acf1-a92cc7546eb7",
+    "delete_score": 162,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "chinas_megaprojects_iii/01",
+    "keep_video_id": "580633d9-b273-4a81-a2a1-fa437fb4132a",
+    "keep_score": 307,
+    "delete_video_id": "fec12607-9e48-49d4-83a0-6ee56e3d3b1a",
+    "delete_score": 307,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "chinas_megaprojects_iii/02",
+    "keep_video_id": "3aaadad2-8ba4-48ca-94ad-15678b49f697",
+    "keep_score": 152247,
+    "delete_video_id": "4d1695c7-1b57-4a63-bf94-a174d8ece10a",
+    "delete_score": 307,
+    "reason": "more work (score 152247 vs 307)"
+  },
+  {
+    "display_path": "chinas_megaprojects_iii/03",
+    "keep_video_id": "04527484-ea7b-497c-8230-75ce3950d21a",
+    "keep_score": 151397,
+    "delete_video_id": "9d1b3cca-3589-4486-9fec-d929d3c7adb3",
+    "delete_score": 307,
+    "reason": "more work (score 151397 vs 307)"
+  },
+  {
+    "display_path": "chinas_megaprojects_iii/04",
+    "keep_video_id": "025780e3-f936-43c4-b988-134182783993",
+    "keep_score": 150317,
+    "delete_video_id": "63dde516-beb7-473e-be92-932fd7b0873c",
+    "delete_score": 307,
+    "reason": "more work (score 150317 vs 307)"
+  },
+  {
+    "display_path": "chinas_megaprojects_iii/05",
+    "keep_video_id": "29f61668-34c2-44eb-9c22-880bf50cee13",
+    "keep_score": 6707,
+    "delete_video_id": "6277f534-25c2-49ac-b47e-252eddc1ca75",
+    "delete_score": 307,
+    "reason": "more work (score 6707 vs 307)"
+  },
+  {
+    "display_path": "chinese-beauty-shop/01",
+    "keep_video_id": "52087bb2-5485-4211-ab10-09e9bbafd4f7",
+    "keep_score": 6881,
+    "delete_video_id": "6adef086-52ad-4551-befc-19d1a3251c9f",
+    "delete_score": 621,
+    "reason": "more work (score 6881 vs 621)"
+  },
+  {
+    "display_path": "chinese-beauty-shop/02",
+    "keep_video_id": "a8c26cdc-a3a0-48be-8b20-10d8dce37ee0",
+    "keep_score": 493,
+    "delete_video_id": "b9889dbc-4367-4140-b171-73fecc7e7a00",
+    "delete_score": 493,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "chinese-beauty-shop/03",
+    "keep_video_id": "1e20b981-d5cd-4cdf-b66e-b800a07d7e16",
+    "keep_score": 601,
+    "delete_video_id": "25409d6a-475f-4836-b9ad-02b5ad45343e",
+    "delete_score": 601,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "chinese-beauty-shop/04",
+    "keep_video_id": "42d5e11c-189f-48c1-99f3-386f554194f2",
+    "keep_score": 369983,
+    "delete_video_id": "e6906577-876b-4551-9f6d-7dd2e1d12373",
+    "delete_score": 748,
+    "reason": "more work (score 369983 vs 748)"
+  },
+  {
+    "display_path": "chinese-beauty-shop/05",
+    "keep_video_id": "62b4e8f5-6ebd-412e-ba62-05299396bec9",
+    "keep_score": 633,
+    "delete_video_id": "0aa5bc5a-2196-4089-8351-253a7a755712",
+    "delete_score": 633,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "chinese-beauty-shop/06",
+    "keep_video_id": "fd450640-e97d-4557-9cea-b23fceed141a",
+    "keep_score": 281,
+    "delete_video_id": "8473bf0a-52ec-4a10-bb46-81eec630430e",
+    "delete_score": 281,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "chinese-beauty-shop/07",
+    "keep_video_id": "02b42b26-9321-41c5-a2f1-327d32f7036a",
+    "keep_score": 629,
+    "delete_video_id": "7eff19a1-9645-4357-b806-d9921a1d0f67",
+    "delete_score": 629,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "feichengwurao/20220101",
+    "keep_video_id": "95b2d9b2-2e2c-462c-9e2a-fb9a50c57398",
+    "keep_score": 562,
+    "delete_video_id": "eb074df8-9ba4-4fb2-9533-1c72a1e97108",
+    "delete_score": 562,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "feichengwurao/20220108",
+    "keep_video_id": "fe194479-d7f5-4fc7-bc7d-96d3d32d9c42",
+    "keep_score": 549,
+    "delete_video_id": "d4f98d24-390d-4032-8ff7-3531f5b00ceb",
+    "delete_score": 549,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "feichengwurao/20220115",
+    "keep_video_id": "5066433d-0793-4d21-81ed-ec72cdfd0d75",
+    "keep_score": 86590,
+    "delete_video_id": "54158c43-7012-4ec7-9031-ad9cb37945f1",
+    "delete_score": 520,
+    "reason": "more work (score 86590 vs 520)"
+  },
+  {
+    "display_path": "feichengwurao/20220122",
+    "keep_video_id": "df5eea9d-959b-4c00-bda2-2d3d36c116d6",
+    "keep_score": 90100,
+    "delete_video_id": "f321ab43-78e5-4221-b0cb-52385ddf1614",
+    "delete_score": 610,
+    "reason": "more work (score 90100 vs 610)"
+  },
+  {
+    "display_path": "feichengwurao/20220129",
+    "keep_video_id": "b1d4d7bc-a27f-4d7f-a1ca-6fb6949e5c46",
+    "keep_score": 574,
+    "delete_video_id": "cd182e36-0180-4fac-9462-afdac4593aef",
+    "delete_score": 574,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "feichengwurao/20220205",
+    "keep_video_id": "4bf11069-cf38-4436-8c6f-1770f7d22fec",
+    "keep_score": 312103,
+    "delete_video_id": "af0c719f-5eb5-4bdd-aeba-fa946ce8f8b4",
+    "delete_score": 633,
+    "reason": "more work (score 312103 vs 633)"
+  },
+  {
+    "display_path": "feichengwurao/20220212",
+    "keep_video_id": "5188143d-e7dd-46c8-bda1-3eeb8f318080",
+    "keep_score": 533,
+    "delete_video_id": "63a953e4-8296-4799-9858-017e62d81fc2",
+    "delete_score": 533,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "feichengwurao/20220219",
+    "keep_video_id": "61c3123f-cb1f-4c0a-a6a9-b12650b17bd5",
+    "keep_score": 507,
+    "delete_video_id": "ef458874-c7b7-4fd4-bf46-2fc28023891a",
+    "delete_score": 507,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "feichengwurao/20220226",
+    "keep_video_id": "a4e9570a-c26f-4428-97a1-2f8637ee10ba",
+    "keep_score": 518,
+    "delete_video_id": "a1bb2367-929c-46a0-a5a4-e1e91b81f910",
+    "delete_score": 518,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "feichengwurao/20220305",
+    "keep_video_id": "3abbda88-81c6-47fb-b69d-7542ba1fbfef",
+    "keep_score": 240786,
+    "delete_video_id": "4ee49a67-ea20-4218-9909-3c8ee75dae94",
+    "delete_score": 491,
+    "reason": "more work (score 240786 vs 491)"
+  },
+  {
+    "display_path": "feichengwurao/20220312",
+    "keep_video_id": "6e198dd6-b4ac-4b93-944e-22cf654d7c78",
+    "keep_score": 522,
+    "delete_video_id": "c2432db6-42e7-4882-a9b1-ac30a9d32e58",
+    "delete_score": 522,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "feichengwurao/20220319",
+    "keep_video_id": "0867709d-2b07-49e9-9b5c-a93b8d3ee1b7",
+    "keep_score": 548,
+    "delete_video_id": "a8074975-20ae-4d9b-a5de-920c8a654ac1",
+    "delete_score": 548,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "feichengwurao/20220409",
+    "keep_video_id": "106a316c-8987-4f9c-985b-bf21fa3699bd",
+    "keep_score": 516,
+    "delete_video_id": "0f72ef29-b047-4400-a679-7f9d96abd34b",
+    "delete_score": 516,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "feichengwurao/20220416",
+    "keep_video_id": "ee17e26f-71c9-4228-ace5-6ee988a2b856",
+    "keep_score": 508,
+    "delete_video_id": "8865f1c7-8af1-4fab-b4b0-46af88b00298",
+    "delete_score": 508,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "feichengwurao/20220423",
+    "keep_video_id": "98f63d62-cdba-46ac-9de5-252a36c1ef05",
+    "keep_score": 499,
+    "delete_video_id": "13796332-69bd-4424-a865-1278cf5494de",
+    "delete_score": 499,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "feichengwurao/20220430",
+    "keep_video_id": "541959db-7ed1-472e-8cc5-a23bf0eef971",
+    "keep_score": 543,
+    "delete_video_id": "c27a7d27-19ce-40b9-866d-ce9239492378",
+    "delete_score": 543,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "feichengwurao/20220507",
+    "keep_video_id": "c7592f60-a664-4e0a-a10e-25a22bb33f16",
+    "keep_score": 511,
+    "delete_video_id": "2184cb23-504c-4a24-aba9-7d0c63162f86",
+    "delete_score": 511,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "feichengwurao/20220514",
+    "keep_video_id": "438e7347-a404-4015-a630-047e850802f9",
+    "keep_score": 253761,
+    "delete_video_id": "e617bd80-ce98-40e7-ba2f-60ea5d1e80de",
+    "delete_score": 516,
+    "reason": "more work (score 253761 vs 516)"
+  },
+  {
+    "display_path": "feichengwurao/20220521",
+    "keep_video_id": "0490163e-15b3-4295-a40e-937207600d4d",
+    "keep_score": 425,
+    "delete_video_id": "20b1075a-80dd-4764-aca0-7cec9f1b7a36",
+    "delete_score": 425,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "feichengwurao/20220528",
+    "keep_video_id": "93dc44e0-4801-4d54-a81d-7984f1bf5e34",
+    "keep_score": 552,
+    "delete_video_id": "f86d12ec-13d0-449d-938e-a942948f96c0",
+    "delete_score": 552,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "feichengwurao/20220604",
+    "keep_video_id": "9cff15c9-c4cb-4273-b393-a55815acfedc",
+    "keep_score": 480,
+    "delete_video_id": "b3f6b9f8-795b-47da-a3fd-b9912903341d",
+    "delete_score": 480,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "feichengwurao/20220611",
+    "keep_video_id": "5b4e78c7-5fa3-47dd-9e72-0af8640bc495",
+    "keep_score": 581,
+    "delete_video_id": "b75d84ea-f025-4983-b9d1-5259ee28f90d",
+    "delete_score": 581,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "feichengwurao/20220618",
+    "keep_video_id": "45f85d57-cc8f-4535-83be-9efd3409f27d",
+    "keep_score": 250680,
+    "delete_video_id": "7c937414-5de2-49d0-9abb-3935869f8a86",
+    "delete_score": 510,
+    "reason": "more work (score 250680 vs 510)"
+  },
+  {
+    "display_path": "feichengwurao/20220625",
+    "keep_video_id": "c281a5c5-2477-449c-b69d-d8dbc5981612",
+    "keep_score": 540,
+    "delete_video_id": "2c7621fc-e952-4203-bdcb-0c57da3a5315",
+    "delete_score": 540,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "feichengwurao/20220702",
+    "keep_video_id": "72a770ea-599c-4b9c-9528-ec69804acb5a",
+    "keep_score": 501,
+    "delete_video_id": "537f5504-5f08-47a2-be62-20e0fe11349c",
+    "delete_score": 501,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "feichengwurao/20220709",
+    "keep_video_id": "2c1fe35f-5428-4806-bd4d-01f495fcbeb5",
+    "keep_score": 554,
+    "delete_video_id": "7025737f-01eb-4d83-8213-9aa6c3888689",
+    "delete_score": 554,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "feichengwurao/20220716",
+    "keep_video_id": "de69e332-34dd-4809-9b23-a87ef662b8b8",
+    "keep_score": 526,
+    "delete_video_id": "84a8701a-6408-4a37-ad95-13790e0a002a",
+    "delete_score": 526,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "feichengwurao/20220723",
+    "keep_video_id": "e49a8e12-5d7e-44e6-9acf-9c89046215a0",
+    "keep_score": 476,
+    "delete_video_id": "7035064e-1f42-4d7b-bf4b-418c845f4d35",
+    "delete_score": 476,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "feichengwurao/20220730",
+    "keep_video_id": "05d24a2e-7e91-4b15-afbd-1eef2c71b88b",
+    "keep_score": 484,
+    "delete_video_id": "0a34d27a-0238-4f50-8f36-0093c5d28693",
+    "delete_score": 484,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "feichengwurao/20220806",
+    "keep_video_id": "f42bb328-16eb-4001-a2c4-04f197c72d08",
+    "keep_score": 497,
+    "delete_video_id": "17e30d6d-bc6a-4c6c-9004-6f360374e3c7",
+    "delete_score": 497,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "feichengwurao/20220813",
+    "keep_video_id": "0a61fed5-0725-4a58-86c7-f28cf763332d",
+    "keep_score": 486,
+    "delete_video_id": "b927e303-287d-440f-b19c-3ca1f6886bd3",
+    "delete_score": 486,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "feichengwurao/20220820",
+    "keep_video_id": "5ebff232-993c-4b65-8a34-04609893d749",
+    "keep_score": 533,
+    "delete_video_id": "a839f9c6-4d8b-4b59-aa47-5798643bc451",
+    "delete_score": 533,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "feichengwurao/20220827",
+    "keep_video_id": "423c4ceb-288d-46aa-a116-c3fda16db192",
+    "keep_score": 241086,
+    "delete_video_id": "8a7c6c21-41b5-48bb-bdc1-6ec428a19204",
+    "delete_score": 491,
+    "reason": "more work (score 241086 vs 491)"
+  },
+  {
+    "display_path": "feichengwurao/20220903",
+    "keep_video_id": "d02aee9b-896e-45db-930c-49620a4a1c93",
+    "keep_score": 530,
+    "delete_video_id": "9172eb64-a57c-4499-a93d-93f2cc7058a1",
+    "delete_score": 530,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "feichengwurao/20220910",
+    "keep_video_id": "efcb3c21-1c0e-4562-b761-b0451c9655f0",
+    "keep_score": 545,
+    "delete_video_id": "f10395c7-199c-482c-afd7-5a6e8e110953",
+    "delete_score": 545,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "feichengwurao/20220917",
+    "keep_video_id": "54590d71-ce6c-4b95-b29b-09292b5e16d8",
+    "keep_score": 488,
+    "delete_video_id": "54570266-724b-4cf0-b3a5-f2a981ea3dc1",
+    "delete_score": 488,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "feichengwurao/20220924",
+    "keep_video_id": "e321b3bc-b7ff-430d-86d5-1b4f77270df6",
+    "keep_score": 514,
+    "delete_video_id": "ea4632c4-57e8-4a9b-9cdb-2b013149da81",
+    "delete_score": 514,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "feichengwurao/20221001",
+    "keep_video_id": "e6867970-4153-4fb0-8562-9bd5ac8b1ce8",
+    "keep_score": 523,
+    "delete_video_id": "78d08d2f-2660-401c-91fe-185cf92cc2c6",
+    "delete_score": 523,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "feichengwurao/20221008",
+    "keep_video_id": "9d06809b-084e-44f6-9642-72ab34966755",
+    "keep_score": 492,
+    "delete_video_id": "b771f518-7d2e-4a14-9672-1d1598f8921d",
+    "delete_score": 492,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "feichengwurao/20221015",
+    "keep_video_id": "41d7a12f-a2d3-4b0d-b66f-9cb155621aad",
+    "keep_score": 291211,
+    "delete_video_id": "e5e8a651-685b-46ba-8ed6-bb024b00aac0",
+    "delete_score": 591,
+    "reason": "more work (score 291211 vs 591)"
+  },
+  {
+    "display_path": "feichengwurao/20221022",
+    "keep_video_id": "c91a8e41-ffb1-4acc-99e8-ec362eb47958",
+    "keep_score": 554,
+    "delete_video_id": "79d102f6-2aeb-426b-8337-9341474e345d",
+    "delete_score": 554,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "feichengwurao/20221029",
+    "keep_video_id": "dab98bd9-c1a3-449b-969f-c27f99bcecde",
+    "keep_score": 577,
+    "delete_video_id": "90951f01-ca57-460a-8ac8-ab3046a5dacf",
+    "delete_score": 577,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "feichengwurao/20221105",
+    "keep_video_id": "efc233f9-1dbd-4fe5-90cb-6298c991dd7d",
+    "keep_score": 569,
+    "delete_video_id": "8e00f16d-ff99-47d0-81e0-d8a524774836",
+    "delete_score": 569,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "feichengwurao/20221112",
+    "keep_video_id": "f27d27b3-300a-40c3-8485-6fbc8eb24eba",
+    "keep_score": 577,
+    "delete_video_id": "f7a61bd2-02e2-4ab2-884c-8617a00a60f6",
+    "delete_score": 577,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "feichengwurao/20221119",
+    "keep_video_id": "1ad53e01-2bc5-4a7d-bf9b-17d983e88764",
+    "keep_score": 559,
+    "delete_video_id": "14bb5d5f-7f52-4b7a-b60b-e4cd697b3b05",
+    "delete_score": 559,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "feichengwurao/20221126",
+    "keep_video_id": "69ce5426-8ac8-486a-b0b3-263ccd6adb56",
+    "keep_score": 514,
+    "delete_video_id": "71df506c-4e88-476a-828f-9f8e2e16afba",
+    "delete_score": 514,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "feichengwurao/20221210",
+    "keep_video_id": "c94303c6-bb47-46fd-8498-ca4f61b2672d",
+    "keep_score": 531,
+    "delete_video_id": "bf5bb267-0be9-4f49-a687-4f94faf1fb59",
+    "delete_score": 531,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "feichengwurao/20221224",
+    "keep_video_id": "735d8b86-87c6-4936-b9ef-67518fd9351a",
+    "keep_score": 519,
+    "delete_video_id": "73ccbed1-7b16-4897-9794-8013bc68afb0",
+    "delete_score": 519,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "fresh_teachers/01",
+    "keep_video_id": "145de7e2-3e4c-4b7e-a8da-20e785b7f80a",
+    "keep_score": 11379,
+    "delete_video_id": "79ad5da5-692c-45fe-91cb-4bbf23d083dd",
+    "delete_score": 169,
+    "reason": "more work (score 11379 vs 169)"
+  },
+  {
+    "display_path": "fresh_teachers/02",
+    "keep_video_id": "13bfa09f-23dc-4820-b31a-bceafa2c9019",
+    "keep_score": 10137,
+    "delete_video_id": "e9d45943-0414-4162-b3b4-10b55546740d",
+    "delete_score": 157,
+    "reason": "more work (score 10137 vs 157)"
+  },
+  {
+    "display_path": "fresh_teachers/03",
+    "keep_video_id": "937b60f9-7d11-47f2-a31c-c7097145e037",
+    "keep_score": 20360,
+    "delete_video_id": "b2f67efb-50ca-4ca5-b6e6-f7161738b938",
+    "delete_score": 190,
+    "reason": "more work (score 20360 vs 190)"
+  },
+  {
+    "display_path": "fresh_teachers/04",
+    "keep_video_id": "49c5b0de-d8aa-4401-9abc-aa892f0a13f2",
+    "keep_score": 102923,
+    "delete_video_id": "bf2540ee-6f20-4e2c-a93f-5e37cb2b142d",
+    "delete_score": 193,
+    "reason": "more work (score 102923 vs 193)"
+  },
+  {
+    "display_path": "fresh_teachers/05",
+    "keep_video_id": "99a7cb9a-e833-45e1-97f9-4994d1e45758",
+    "keep_score": 13633,
+    "delete_video_id": "c78915e6-19b4-4a8c-9a94-93805fdef07a",
+    "delete_score": 193,
+    "reason": "more work (score 13633 vs 193)"
+  },
+  {
+    "display_path": "fresh_teachers/06",
+    "keep_video_id": "198d9600-a26e-46a5-97d0-e6a0cbefb3a1",
+    "keep_score": 11383,
+    "delete_video_id": "ce56fbf0-37b0-41b0-82ab-ae04f9df7e77",
+    "delete_score": 173,
+    "reason": "more work (score 11383 vs 173)"
+  },
+  {
+    "display_path": "fresh_teachers/07",
+    "keep_video_id": "b09b9f0f-69e5-4ee1-a071-68da80fe3c9e",
+    "keep_score": 11574,
+    "delete_video_id": "c593ac49-9779-4f5c-b870-dd8555a27e90",
+    "delete_score": 184,
+    "reason": "more work (score 11574 vs 184)"
+  },
+  {
+    "display_path": "fresh_teachers/08",
+    "keep_video_id": "440c6933-d11e-4cc1-aaa8-e0f62f547543",
+    "keep_score": 81468,
+    "delete_video_id": "582f3b5f-3746-4d1c-9867-41d0c8f60dec",
+    "delete_score": 173,
+    "reason": "more work (score 81468 vs 173)"
+  },
+  {
+    "display_path": "fresh_teachers/09",
+    "keep_video_id": "2f72e57c-643f-4858-bc0b-2833de0a5862",
+    "keep_score": 16249,
+    "delete_video_id": "6a3d7fd0-21e0-4d39-b6b9-82e4ddf71cd0",
+    "delete_score": 179,
+    "reason": "more work (score 16249 vs 179)"
+  },
+  {
+    "display_path": "fresh_teachers/10",
+    "keep_video_id": "703fc2d4-0b1a-455a-a815-0d6d49ab0c8f",
+    "keep_score": 9893,
+    "delete_video_id": "db20f25f-cbcb-40fa-8adc-6cb3f31a53c2",
+    "delete_score": 193,
+    "reason": "more work (score 9893 vs 193)"
+  },
+  {
+    "display_path": "fresh_teachers/11",
+    "keep_video_id": "ad8a4589-a9e6-4b91-9d64-ae6e04c06a45",
+    "keep_score": 15370,
+    "delete_video_id": "ec42a9af-330b-47a9-939b-32113277a222",
+    "delete_score": 180,
+    "reason": "more work (score 15370 vs 180)"
+  },
+  {
+    "display_path": "fresh_teachers/12",
+    "keep_video_id": "2d7ce2e8-f220-4867-85cf-887542cc693f",
+    "keep_score": 14086,
+    "delete_video_id": "e72750e4-5712-4e52-bf4c-0ef86fa9c11a",
+    "delete_score": 186,
+    "reason": "more work (score 14086 vs 186)"
+  },
+  {
+    "display_path": "fresh_teachers/13",
+    "keep_video_id": "16226579-6d0e-4057-a935-25dae0baabad",
+    "keep_score": 15160,
+    "delete_video_id": "34e76016-e306-4101-bd56-169b95a755b3",
+    "delete_score": 180,
+    "reason": "more work (score 15160 vs 180)"
+  },
+  {
+    "display_path": "fresh_teachers/14",
+    "keep_video_id": "4bad95d2-54d8-486e-8479-5ebffa4cd797",
+    "keep_score": 87184,
+    "delete_video_id": "e650b255-34dc-4290-a35a-febd75ab2b67",
+    "delete_score": 184,
+    "reason": "more work (score 87184 vs 184)"
+  },
+  {
+    "display_path": "fresh_teachers/15",
+    "keep_video_id": "a19dbd95-9626-4820-a2b8-eaeb5b357dbc",
+    "keep_score": 17681,
+    "delete_video_id": "d07e875d-d5a8-4278-87cb-3f615b204e5c",
+    "delete_score": 181,
+    "reason": "more work (score 17681 vs 181)"
+  },
+  {
+    "display_path": "fresh_teachers/16",
+    "keep_video_id": "5f8d8496-1a3a-4580-9324-67e874aa1c79",
+    "keep_score": 14511,
+    "delete_video_id": "f883675b-5afb-40ec-b878-97be4b65e9d9",
+    "delete_score": 191,
+    "reason": "more work (score 14511 vs 191)"
+  },
+  {
+    "display_path": "fresh_teachers/17",
+    "keep_video_id": "bf26661c-0b8f-4968-8d16-bca9668256b2",
+    "keep_score": 12550,
+    "delete_video_id": "d1b7776c-c32f-4fb8-99da-6402bbf8597e",
+    "delete_score": 180,
+    "reason": "more work (score 12550 vs 180)"
+  },
+  {
+    "display_path": "fresh_teachers/18",
+    "keep_video_id": "981cf402-9a00-4ded-b9cb-8b8d6b620d7c",
+    "keep_score": 22492,
+    "delete_video_id": "ca29620b-38b5-4804-8f29-a5a41448ecef",
+    "delete_score": 192,
+    "reason": "more work (score 22492 vs 192)"
+  },
+  {
+    "display_path": "fresh_teachers/19",
+    "keep_video_id": "5730a4eb-4649-4751-b243-9240502f7a21",
+    "keep_score": 183,
+    "delete_video_id": "2a8bc281-097b-4eb0-9b81-08649d66d99c",
+    "delete_score": 183,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "fresh_teachers/20",
+    "keep_video_id": "a59f0535-3666-4602-9e72-da021bb6f904",
+    "keep_score": 171,
+    "delete_video_id": "dd27c094-1be3-479b-bf26-2e6057058233",
+    "delete_score": 171,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "fresh_teachers/21",
+    "keep_video_id": "7b6a1b9d-6a86-42d6-bbbc-b4c269650f4a",
+    "keep_score": 184,
+    "delete_video_id": "3a667f75-ae55-4eba-bc7b-fe40388390dc",
+    "delete_score": 184,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "fresh_teachers/22",
+    "keep_video_id": "3d338b53-dc97-4b96-a810-d696bec2db6d",
+    "keep_score": 89158,
+    "delete_video_id": "728b86b1-7923-4bc6-b6b3-1fa7435adc3a",
+    "delete_score": 188,
+    "reason": "more work (score 89158 vs 188)"
+  },
+  {
+    "display_path": "fresh_teachers/23",
+    "keep_video_id": "424169b5-bcc2-4b8d-bf0a-ed4e0031ae73",
+    "keep_score": 80871,
+    "delete_video_id": "b84a7f91-96ce-49e6-b1c0-568e11eb8161",
+    "delete_score": 171,
+    "reason": "more work (score 80871 vs 171)"
+  },
+  {
+    "display_path": "fresh_teachers/24",
+    "keep_video_id": "6a69ffaa-cdea-40b4-816f-fd2983b88cc6",
+    "keep_score": 206,
+    "delete_video_id": "ee4a2deb-8914-47cb-8cd6-0d6380eb1726",
+    "delete_score": 206,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "horsepower-showdown/01",
+    "keep_video_id": "47bd8a97-ca72-4b9c-a9d1-cc616a413f01",
+    "keep_score": 33111,
+    "delete_video_id": "6b9de5b3-06c5-4047-a41b-dfd2a22ebce6",
+    "delete_score": 76,
+    "reason": "more work (score 33111 vs 76)"
+  },
+  {
+    "display_path": "horsepower-showdown/02",
+    "keep_video_id": "0a407f3e-599d-4389-8496-753017f3f43b",
+    "keep_score": 106,
+    "delete_video_id": "1d186c8a-86b4-4040-b26e-0b5be75018a0",
+    "delete_score": 106,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "horsepower-showdown/03",
+    "keep_video_id": "eb2cc715-b833-4827-8262-604294287406",
+    "keep_score": 149,
+    "delete_video_id": "a79fb920-663a-4277-96ef-cec6fd4e7cb4",
+    "delete_score": 149,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "horsepower-showdown/04",
+    "keep_video_id": "0f02faf1-08fd-4fc8-9410-366ba6daec75",
+    "keep_score": 113,
+    "delete_video_id": "24c60816-93f0-4b7f-95c0-ead91b7c0da0",
+    "delete_score": 113,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "horsepower-showdown/05",
+    "keep_video_id": "53be238e-eb42-41f5-85b2-365c5925f4d0",
+    "keep_score": 125,
+    "delete_video_id": "850a46d5-00b7-4f27-8cd6-01b6f29631a7",
+    "delete_score": 125,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "horsepower-showdown/06",
+    "keep_video_id": "bea7dd92-00e2-40d1-a5b4-9059b2a4a6ea",
+    "keep_score": 129,
+    "delete_video_id": "bf0e7a32-31fa-412e-bbfa-7c951cfc3485",
+    "delete_score": 129,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "horsepower-showdown/07",
+    "keep_video_id": "b267e9d5-07d4-4d18-896e-fc791385a1fe",
+    "keep_score": 44,
+    "delete_video_id": "2d4a9477-11ed-4a5e-a2ec-53706111944a",
+    "delete_score": 44,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "horsepower-showdown/08",
+    "keep_video_id": "4c980ba2-a2b2-4925-8493-b0a3efd1003a",
+    "keep_score": 154128,
+    "delete_video_id": "2de48a64-2053-43be-b898-8eecdcd45d05",
+    "delete_score": 318,
+    "reason": "more work (score 154128 vs 318)"
+  },
+  {
+    "display_path": "horsepower-showdown/09",
+    "keep_video_id": "df9d9751-15ee-4156-a504-68611fc9e04f",
+    "keep_score": 136,
+    "delete_video_id": "13ab2035-dd25-49a0-9d37-bed21db19ab0",
+    "delete_score": 136,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "horsepower-showdown/10",
+    "keep_video_id": "19757704-59a7-437a-9cce-9e0abcce21e5",
+    "keep_score": 108,
+    "delete_video_id": "5dc99c18-fbd0-4576-9562-9f25480ced2d",
+    "delete_score": 108,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "horsepower-showdown/11",
+    "keep_video_id": "66d8bfb7-ceb6-4b2b-935e-a1b0169ce745",
+    "keep_score": 97,
+    "delete_video_id": "363ea2f0-8a66-4c3c-b11d-6f5a4d661dd1",
+    "delete_score": 97,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "horsepower-showdown/12",
+    "keep_video_id": "1140a951-c9ff-408c-847b-f7452e290fd5",
+    "keep_score": 121,
+    "delete_video_id": "7f03d213-1540-4834-ba97-0e9df461ac2b",
+    "delete_score": 121,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "horsepower-showdown/13",
+    "keep_video_id": "aeeb841b-6bd1-4f47-8ca9-dab93c429aa5",
+    "keep_score": 143,
+    "delete_video_id": "29fb1632-71ab-4dba-b3d6-3189fb82a6e7",
+    "delete_score": 143,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "horsepower-showdown/14",
+    "keep_video_id": "80e9607d-8329-4c2e-b016-054ab7b6efd6",
+    "keep_score": 141,
+    "delete_video_id": "2489433f-1cd3-4f08-a165-07d34d8d0c7b",
+    "delete_score": 141,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "im_a_racer/01",
+    "keep_video_id": "d5e849ef-2a25-4d28-96cf-36d65d9eb644",
+    "keep_score": 182,
+    "delete_video_id": "f1358d69-66b9-4f44-b33b-b2601b5bec40",
+    "delete_score": 182,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "im_a_racer/02",
+    "keep_video_id": "407ce030-6faf-42e0-bc44-c3dbbc147739",
+    "keep_score": 80932,
+    "delete_video_id": "90ceff55-ee9e-4740-8112-b55a8a105e3a",
+    "delete_score": 172,
+    "reason": "more work (score 80932 vs 172)"
+  },
+  {
+    "display_path": "im_a_racer/03",
+    "keep_video_id": "32fdd7f7-a775-4792-ad08-3dcfce2c90b1",
+    "keep_score": 209,
+    "delete_video_id": "0edfd555-9278-4a06-86cd-a91ed9be98a1",
+    "delete_score": 209,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "im_a_racer/04",
+    "keep_video_id": "4d797376-202a-4dc2-9a1f-400f10104a22",
+    "keep_score": 254,
+    "delete_video_id": "d5da6ab8-00c7-4851-9958-e3d4440004c6",
+    "delete_score": 254,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "im_a_racer/05",
+    "keep_video_id": "6bd66226-b105-441b-bf76-76de60d3cc75",
+    "keep_score": 120,
+    "delete_video_id": "b7cf2b15-74f6-44fe-9427-c2381560d056",
+    "delete_score": 120,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "im_a_racer/06",
+    "keep_video_id": "6cff2133-44fb-4e12-b475-a8c74e59db32",
+    "keep_score": 362,
+    "delete_video_id": "84c321e3-5cc4-43fa-a238-f6eb63aef7d5",
+    "delete_score": 362,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "im_a_racer/07",
+    "keep_video_id": "0ccfb165-b753-4cbe-868d-6fc37f3c0669",
+    "keep_score": 375,
+    "delete_video_id": "eaf7fa0f-00e8-4aa5-9038-d7239f7f0cc0",
+    "delete_score": 375,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "im_a_racer/08",
+    "keep_video_id": "69fd67bd-b8e5-4809-8b8e-7d6c59c1e5a6",
+    "keep_score": 383,
+    "delete_video_id": "f6af9123-b25d-4f11-b17a-2ad2e090fa0b",
+    "delete_score": 383,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "im_a_racer/09",
+    "keep_video_id": "f2da390a-fe7c-4994-8ac1-b743a669752c",
+    "keep_score": 397,
+    "delete_video_id": "375e56ba-6a94-404c-9946-9bb3bac90d39",
+    "delete_score": 397,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "im_a_racer/10",
+    "keep_video_id": "898f6a60-915a-4f9a-9c62-d3acc9a74d13",
+    "keep_score": 152,
+    "delete_video_id": "6cadeb5e-acd9-4f4a-b29f-66d182c13870",
+    "delete_score": 152,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "im_a_racer/11",
+    "keep_video_id": "57eae896-4d8f-458c-84d4-ee141f65c437",
+    "keep_score": 489,
+    "delete_video_id": "d7b89b8e-cfda-4fc4-a590-f3ac430a1de8",
+    "delete_score": 489,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "im_a_racer/12",
+    "keep_video_id": "68f63ed5-3b7a-45e3-805c-b98e69a67775",
+    "keep_score": 218,
+    "delete_video_id": "9cd90a04-9198-4d28-b67b-5ba1a0547ce5",
+    "delete_score": 218,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "im_a_racer/13",
+    "keep_video_id": "baafd48a-4f0a-4f9d-8c4a-715f7da2045a",
+    "keep_score": 100,
+    "delete_video_id": "13981d9e-a75b-4991-9ef0-ddcba3e3a393",
+    "delete_score": 100,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "im_a_racer/14",
+    "keep_video_id": "23c3b5ac-510d-4f16-978f-5d8b32483efa",
+    "keep_score": 121,
+    "delete_video_id": "13da025a-c507-49de-a94d-63d864a94aa5",
+    "delete_score": 121,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "im_a_racer/15",
+    "keep_video_id": "938ec16f-5767-43ef-aa3c-12765d637fb0",
+    "keep_score": 368,
+    "delete_video_id": "832a0acb-94aa-4795-9419-5cc1a27c06e6",
+    "delete_score": 368,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "im_a_racer/16",
+    "keep_video_id": "45d87bd2-2a21-4710-9098-66b950ff0ae2",
+    "keep_score": 79188,
+    "delete_video_id": "515dae56-000e-4ef7-b74d-2c40596dc654",
+    "delete_score": 168,
+    "reason": "more work (score 79188 vs 168)"
+  },
+  {
+    "display_path": "im_a_racer/17",
+    "keep_video_id": "3b7f9dd4-5e8c-4643-a261-9135d56964c7",
+    "keep_score": 146232,
+    "delete_video_id": "f2c163a1-0b8d-4444-92d3-38409d6e1f00",
+    "delete_score": 302,
+    "reason": "more work (score 146232 vs 302)"
+  },
+  {
+    "display_path": "im_a_racer/18",
+    "keep_video_id": "6a4692a4-9b52-408b-904b-fef82b769f85",
+    "keep_score": 215,
+    "delete_video_id": "9ce528dd-eed3-4815-aa64-fd4ab973e784",
+    "delete_score": 215,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "im_a_racer/19",
+    "keep_video_id": "482d6746-afd5-4e6f-863f-d9b5d16ff6a6",
+    "keep_score": 137184,
+    "delete_video_id": "7ab14c01-379b-484c-863a-bcc954303430",
+    "delete_score": 284,
+    "reason": "more work (score 137184 vs 284)"
+  },
+  {
+    "display_path": "im_a_racer/20",
+    "keep_video_id": "6194b46e-6597-4c16-bc57-eebb87a4d057",
+    "keep_score": 194,
+    "delete_video_id": "21528709-08bd-45d5-ac21-2515b888ee9f",
+    "delete_score": 194,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "im_a_racer/21",
+    "keep_video_id": "241e84a9-6d27-4ec3-b3ae-e63cce63aef9",
+    "keep_score": 416,
+    "delete_video_id": "12f62141-f488-4d9d-bfb9-3da97a65b076",
+    "delete_score": 416,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "im_a_racer/22",
+    "keep_video_id": "e4542b9c-8da8-4504-af14-acfeb3324039",
+    "keep_score": 408,
+    "delete_video_id": "2483bfdf-e84f-44e2-b91a-b5f2d831c9dd",
+    "delete_score": 408,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "im_a_racer/23",
+    "keep_video_id": "184f336f-5362-4f68-95c6-5271ce516936",
+    "keep_score": 209,
+    "delete_video_id": "bffe1b40-ab68-4911-bd82-16b6a7920654",
+    "delete_score": 209,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "im_a_racer/24",
+    "keep_video_id": "6c1a6de6-df95-4d92-8b1d-4e200cd1567a",
+    "keep_score": 227,
+    "delete_video_id": "7883dcc2-8776-4be5-8a6f-7c65aec6aa76",
+    "delete_score": 227,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "im_a_racer/25",
+    "keep_video_id": "4688ab38-0713-4777-9236-6dc41589b1c2",
+    "keep_score": 233852,
+    "delete_video_id": "6916655d-06eb-425b-832f-456968fe1fce",
+    "delete_score": 477,
+    "reason": "more work (score 233852 vs 477)"
+  },
+  {
+    "display_path": "im_a_racer/26",
+    "keep_video_id": "4c57ac5b-f68f-4870-aa41-dca3e7a06e22",
+    "keep_score": 78647,
+    "delete_video_id": "9e62d51a-35fc-483c-9ba2-9f2aa7b23325",
+    "delete_score": 167,
+    "reason": "more work (score 78647 vs 167)"
+  },
+  {
+    "display_path": "im_a_racer/27",
+    "keep_video_id": "589bf3ee-8ad7-4804-9595-9fafbed12692",
+    "keep_score": 296,
+    "delete_video_id": "5c29fb82-b197-4cf1-ac48-9b9292325fd5",
+    "delete_score": 296,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "im_a_racer/28",
+    "keep_video_id": "0be792a6-8472-479f-b3fa-9028e6172820",
+    "keep_score": 332,
+    "delete_video_id": "fd134c3b-d1d0-4d1e-bb7d-72765b7a921f",
+    "delete_score": 332,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "im_a_racer/29",
+    "keep_video_id": "8ae38ca1-8315-4936-9705-98452d883064",
+    "keep_score": 149,
+    "delete_video_id": "7eedecea-53d9-46f3-abc1-e1f4531e888e",
+    "delete_score": 149,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "im_a_racer/30",
+    "keep_video_id": "f7abe592-5933-4b3d-a1c2-4eb6f0b5715b",
+    "keep_score": 266,
+    "delete_video_id": "8b640aa7-32ab-42ae-b684-9d7654399dd6",
+    "delete_score": 266,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "im_a_racer/31",
+    "keep_video_id": "dbfda871-8562-4cb0-9b65-bb94deb904a0",
+    "keep_score": 419,
+    "delete_video_id": "2d7b7f4f-cdb8-4482-a696-16c7506028f9",
+    "delete_score": 419,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "im_a_racer/32",
+    "keep_video_id": "4664f3c2-1a9d-472f-8b27-a8866a7023dc",
+    "keep_score": 78867,
+    "delete_video_id": "c661bc36-5693-4181-85be-8f9566d00ab2",
+    "delete_score": 167,
+    "reason": "more work (score 78867 vs 167)"
+  },
+  {
+    "display_path": "im_a_racer/33",
+    "keep_video_id": "73d0e723-a441-470d-ba22-b2bfc0f4bc83",
+    "keep_score": 362,
+    "delete_video_id": "0abc067d-6727-4dbd-a0e2-0bf24821c59b",
+    "delete_score": 362,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "love-through-a-millennium/01",
+    "keep_video_id": "d2900e92-9d17-4b76-8ab7-7509b5f80e08",
+    "keep_score": 265,
+    "delete_video_id": "b7a29baa-4610-45ce-9108-e262ca20e265",
+    "delete_score": 265,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "love-through-a-millennium/02",
+    "keep_video_id": "4868ce0e-efcb-4bb7-b20b-a1853ad96f3e",
+    "keep_score": 141092,
+    "delete_video_id": "533cb3d6-2b15-445a-b2a6-a4731776bf6e",
+    "delete_score": 292,
+    "reason": "more work (score 141092 vs 292)"
+  },
+  {
+    "display_path": "love-through-a-millennium/03",
+    "keep_video_id": "162be4d4-ff62-4de5-894b-13ea8fd0b1be",
+    "keep_score": 327,
+    "delete_video_id": "dcc7b68e-fc43-48c8-996e-ca48c804d608",
+    "delete_score": 327,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "love-through-a-millennium/04",
+    "keep_video_id": "3870a26e-0d79-48ac-ab40-78dbc06c09ef",
+    "keep_score": 328,
+    "delete_video_id": "9915be4e-5b8a-4915-90d9-269a99b7e1e6",
+    "delete_score": 328,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "love-through-a-millennium/05",
+    "keep_video_id": "69302c75-f7a9-4a6f-a982-a2249a761d08",
+    "keep_score": 296,
+    "delete_video_id": "a4187f5b-ce84-450b-b994-5cd91e7d034e",
+    "delete_score": 296,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "love-through-a-millennium/06",
+    "keep_video_id": "3ed09df7-73e1-472c-a29c-837c14ad0085",
+    "keep_score": 139929,
+    "delete_video_id": "3a497575-8342-4afe-b13f-0dbb9b74ae2d",
+    "delete_score": 139929,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "love-through-a-millennium/07",
+    "keep_video_id": "bd6bb843-6bc1-491f-b3a7-023c0887e61b",
+    "keep_score": 277,
+    "delete_video_id": "8ef81578-8d83-4030-b423-26fdab8e92f7",
+    "delete_score": 277,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "love-through-a-millennium/08",
+    "keep_video_id": "429283a8-1324-4405-92c5-5336604e33f0",
+    "keep_score": 112875,
+    "delete_video_id": "34979499-f850-43b9-b68c-7e0daf07cb19",
+    "delete_score": 235,
+    "reason": "more work (score 112875 vs 235)"
+  },
+  {
+    "display_path": "love-through-a-millennium/09",
+    "keep_video_id": "486a399d-19c2-491d-af18-151620f4c8c6",
+    "keep_score": 135380,
+    "delete_video_id": "71ce6611-62b3-4d2a-af5c-9bdfbc822d1b",
+    "delete_score": 280,
+    "reason": "more work (score 135380 vs 280)"
+  },
+  {
+    "display_path": "love-through-a-millennium/10",
+    "keep_video_id": "88d1a5fa-5ba1-4ff6-9c8e-19a04389cf92",
+    "keep_score": 284,
+    "delete_video_id": "76d67b70-5925-47a2-8882-9001acdb316a",
+    "delete_score": 284,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "love-through-a-millennium/11",
+    "keep_video_id": "62d0a5ad-d56b-4c44-b9e9-a5bcaa8a5490",
+    "keep_score": 213,
+    "delete_video_id": "08d3c133-8192-4ac7-bc99-3587e7998423",
+    "delete_score": 213,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "love-through-a-millennium/12",
+    "keep_video_id": "69ba15bb-36bf-4058-982d-60d7762360ee",
+    "keep_score": 293,
+    "delete_video_id": "af6958bb-b3d9-4221-ac7a-c1c1a774c5e5",
+    "delete_score": 293,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "love-through-a-millennium/13",
+    "keep_video_id": "c917459e-4ef5-45e8-8442-d8604924184c",
+    "keep_score": 294,
+    "delete_video_id": "81e1c8e4-0eae-437b-a26c-851186a0ef94",
+    "delete_score": 294,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "love-through-a-millennium/14",
+    "keep_video_id": "e5c9978c-6f8b-438e-97fd-2f972551e795",
+    "keep_score": 243,
+    "delete_video_id": "8d825c46-d6e7-47fd-822d-8f8afa566cbd",
+    "delete_score": 243,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "love-through-a-millennium/15",
+    "keep_video_id": "0eb56c99-13cc-42ed-8a32-84c35c0ff198",
+    "keep_score": 296,
+    "delete_video_id": "c7e137f9-744e-42ce-b68b-a4b342c0b5e0",
+    "delete_score": 296,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "love-through-a-millennium/16",
+    "keep_video_id": "60d6306c-3859-4fa8-8d2d-94f2a0a186ba",
+    "keep_score": 243,
+    "delete_video_id": "878a2d3c-8175-459a-a941-42586f32bc0c",
+    "delete_score": 243,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "love-through-a-millennium/17",
+    "keep_video_id": "9f2a6fd0-c143-49dc-a774-78f11b53e48d",
+    "keep_score": 289,
+    "delete_video_id": "010b7e79-34c6-43ab-9c88-082ae50cf0a6",
+    "delete_score": 289,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "love-through-a-millennium/18",
+    "keep_video_id": "c9078d9c-2add-4610-95dd-def00a865fed",
+    "keep_score": 187,
+    "delete_video_id": "18549ef8-9ec7-410b-bece-631525614f32",
+    "delete_score": 187,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "love-through-a-millennium/19",
+    "keep_video_id": "5032c18d-e360-40d3-b7ff-036ddf8968e1",
+    "keep_score": 298,
+    "delete_video_id": "fcf4559d-9d72-456d-bbab-ba11634d657f",
+    "delete_score": 298,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "love-through-a-millennium/20",
+    "keep_video_id": "468f228b-3f26-4b8e-b5b0-6f2cbe11f6f1",
+    "keep_score": 94398,
+    "delete_video_id": "8166e27a-b570-43e6-9a7d-1d46ee0506e4",
+    "delete_score": 198,
+    "reason": "more work (score 94398 vs 198)"
+  },
+  {
+    "display_path": "love-through-a-millennium/21",
+    "keep_video_id": "36e3228c-3770-41e1-810c-bf9bcb3cb59a",
+    "keep_score": 329,
+    "delete_video_id": "7f30a39b-8506-4937-937e-21c43f0ed711",
+    "delete_score": 329,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "love-through-a-millennium/22",
+    "keep_video_id": "197eb852-fff7-47a7-bcfb-1925bf857d7b",
+    "keep_score": 156,
+    "delete_video_id": "f84f8622-dddb-4b6d-b680-7c88055830c6",
+    "delete_score": 156,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "meteor_garden/01",
+    "keep_video_id": "bf7bc5ac-6c0f-4082-bd7d-ceb970f29cb6",
+    "keep_score": 239,
+    "delete_video_id": "ffa638a3-8bef-496c-bce8-e726e2263b22",
+    "delete_score": 239,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "meteor_garden/02",
+    "keep_video_id": "37307428-2dc1-4e01-8e7f-45357a06136d",
+    "keep_score": 269,
+    "delete_video_id": "8bed0263-8b13-4ea8-89ae-618fd2f383fb",
+    "delete_score": 269,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "meteor_garden/03",
+    "keep_video_id": "61d91b77-1844-4f8b-bcd0-7d0ff9972bee",
+    "keep_score": 246,
+    "delete_video_id": "81f8af9c-c738-4c34-bd56-f6ce06b85647",
+    "delete_score": 246,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "meteor_garden/04",
+    "keep_video_id": "66ad9c10-89b6-4b82-a87d-e2ce2f021ddd",
+    "keep_score": 250,
+    "delete_video_id": "b1c79f76-814d-4689-ba0b-6b0a9b4bc1d9",
+    "delete_score": 250,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "meteor_garden/06",
+    "keep_video_id": "495c823e-a306-4a09-9d92-5bd1167ab50f",
+    "keep_score": 121713,
+    "delete_video_id": "fa311ab7-8585-4c9f-a39e-b62c028e7f86",
+    "delete_score": 253,
+    "reason": "more work (score 121713 vs 253)"
+  },
+  {
+    "display_path": "meteor_garden/08",
+    "keep_video_id": "3262f7ae-a22e-4245-b9db-b387f2f01a11",
+    "keep_score": 259,
+    "delete_video_id": "37b48215-8bf0-423a-98b6-043aedabc776",
+    "delete_score": 259,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "meteor_garden/09",
+    "keep_video_id": "6b3fa11b-1569-4d36-86ca-bff39b64786d",
+    "keep_score": 258,
+    "delete_video_id": "2cb501e4-9800-4944-bb55-981994bf9241",
+    "delete_score": 258,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "meteor_garden/10",
+    "keep_video_id": "09321a19-35b3-435b-8815-2a858ad6a845",
+    "keep_score": 261,
+    "delete_video_id": "d4ba101b-8f25-472a-9c5e-9c4ba713257d",
+    "delete_score": 261,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "meteor_garden/11",
+    "keep_video_id": "800410aa-94a6-4479-bce1-962397ee14aa",
+    "keep_score": 254,
+    "delete_video_id": "b6a4e042-1944-4bba-aa36-9523d1b961d0",
+    "delete_score": 254,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "meteor_garden/12",
+    "keep_video_id": "0b6b2871-ed6f-4cb1-8bef-4c7a5b69071a",
+    "keep_score": 263,
+    "delete_video_id": "ea9c8523-824c-4b5c-9f20-4fa9aa979617",
+    "delete_score": 263,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "meteor_garden/13",
+    "keep_video_id": "2aa9ba74-a726-478e-8a7d-3ec5495067d7",
+    "keep_score": 254,
+    "delete_video_id": "912ba41e-a2aa-4c60-9bb9-dca81a509a8e",
+    "delete_score": 254,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "meteor_garden/14",
+    "keep_video_id": "a5b1817a-2fa3-4973-b072-38c59c9a8871",
+    "keep_score": 263,
+    "delete_video_id": "377c2bae-9944-48c6-be09-aa367b7509d0",
+    "delete_score": 263,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "meteor_garden/15",
+    "keep_video_id": "536e99a5-364e-43de-99f1-eb18ef69efaf",
+    "keep_score": 267,
+    "delete_video_id": "2b44f5d2-d5a6-4074-9223-3bf536b60f03",
+    "delete_score": 267,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "meteor_garden/16",
+    "keep_video_id": "57ab6b43-c5b9-418e-ae41-46bd56a8a719",
+    "keep_score": 271,
+    "delete_video_id": "f37b47f9-4b6f-4300-be83-c6afb903683d",
+    "delete_score": 271,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "meteor_garden/17",
+    "keep_video_id": "34c92e66-0106-4cc6-b26d-8efe8b308560",
+    "keep_score": 271,
+    "delete_video_id": "1d33b10f-eb3e-4454-af20-2ee0508b90aa",
+    "delete_score": 271,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "meteor_garden/18",
+    "keep_video_id": "87d9f6ca-474e-462e-8b5e-4d2b23bd1bec",
+    "keep_score": 264,
+    "delete_video_id": "cce8dc22-a1dd-45e8-aae7-8e82521239f0",
+    "delete_score": 264,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "meteor_garden/19",
+    "keep_video_id": "28a7c576-05d5-4db0-84d1-fe259566a46f",
+    "keep_score": 259,
+    "delete_video_id": "99728a6b-faa2-4a81-a832-754afd5fb96e",
+    "delete_score": 259,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "meteor_garden/20",
+    "keep_video_id": "69a5844c-74ad-4830-964f-aff31a317e1e",
+    "keep_score": 274,
+    "delete_video_id": "7a739c8e-1009-46bf-9fc8-90c0bd76875b",
+    "delete_score": 274,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "meteor_garden/21",
+    "keep_video_id": "42f314dc-d580-446d-989e-801da42b8bfd",
+    "keep_score": 134629,
+    "delete_video_id": "de5dbc7f-cb2f-4842-9943-dc45db67ecc5",
+    "delete_score": 279,
+    "reason": "more work (score 134629 vs 279)"
+  },
+  {
+    "display_path": "meteor_garden/22",
+    "keep_video_id": "c98a69a1-a088-4c14-8673-6b9656000f1d",
+    "keep_score": 271,
+    "delete_video_id": "822f5d4a-ee18-4ba5-9dbd-41f3c78430ed",
+    "delete_score": 271,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "meteor_garden/23",
+    "keep_video_id": "41c65a55-a705-4d8d-a40b-785744904214",
+    "keep_score": 132995,
+    "delete_video_id": "6a895e71-cdc8-488b-851f-22d323e759a4",
+    "delete_score": 275,
+    "reason": "more work (score 132995 vs 275)"
+  },
+  {
+    "display_path": "meteor_garden/24",
+    "keep_video_id": "11e4ffbd-6ab1-41b8-b30c-eebfca145a9c",
+    "keep_score": 282,
+    "delete_video_id": "e6d991de-efc3-4680-b90d-9aa8e7a5b920",
+    "delete_score": 282,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "meteor_garden/25",
+    "keep_video_id": "684863cd-c1b0-4dcc-a00f-6ae3cc51e4a4",
+    "keep_score": 263,
+    "delete_video_id": "79381d8a-20fe-4943-839d-2496faea1c95",
+    "delete_score": 263,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "meteor_garden/26",
+    "keep_video_id": "3fa2b4bf-5d3c-4445-8841-9bbc548bb822",
+    "keep_score": 125135,
+    "delete_video_id": "1f129566-9224-482e-9f81-70a1528285b2",
+    "delete_score": 260,
+    "reason": "more work (score 125135 vs 260)"
+  },
+  {
+    "display_path": "meteor_garden/27",
+    "keep_video_id": "adae40f0-da30-46b2-abf4-937a4d71af03",
+    "keep_score": 266,
+    "delete_video_id": "7cf6958c-f795-499f-abd3-f48dad0ae5ec",
+    "delete_score": 266,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "meteor_garden/28",
+    "keep_video_id": "bedafdcd-5506-429e-bfb1-305aa1ce0e03",
+    "keep_score": 271,
+    "delete_video_id": "97b55bce-226e-42a7-a9ac-3417cf5e9a9b",
+    "delete_score": 271,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "meteor_garden/29",
+    "keep_video_id": "24179d20-27a8-4f0d-b8cb-8f42c6a0070d",
+    "keep_score": 263,
+    "delete_video_id": "1316c40e-ae7c-412e-991c-a8f6b8413be0",
+    "delete_score": 263,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "nothing_but_thirty/01",
+    "keep_video_id": "10e51a6b-7063-49b9-a176-e768c6afd3c6",
+    "keep_score": 283,
+    "delete_video_id": "c53d4fbc-e205-4612-8891-8cca4743c829",
+    "delete_score": 283,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "nothing_but_thirty/02",
+    "keep_video_id": "3df73707-2722-46d3-958a-dadc4e947d49",
+    "keep_score": 134363,
+    "delete_video_id": "4f826386-f6b4-47dc-86ae-06f2b6eae768",
+    "delete_score": 278,
+    "reason": "more work (score 134363 vs 278)"
+  },
+  {
+    "display_path": "nothing_but_thirty/03",
+    "keep_video_id": "88cd3dbe-e21e-43f5-af35-4223894ca0df",
+    "keep_score": 289,
+    "delete_video_id": "8b9887fc-3f0a-4527-9344-5abd21812a20",
+    "delete_score": 289,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "nothing_but_thirty/04",
+    "keep_video_id": "41c420e4-943f-4eb4-ab37-bdc01f9f09c1",
+    "keep_score": 131938,
+    "delete_video_id": "12f09993-e49c-4aa7-89ef-91383b6d2af3",
+    "delete_score": 273,
+    "reason": "more work (score 131938 vs 273)"
+  },
+  {
+    "display_path": "nothing_but_thirty/05",
+    "keep_video_id": "c65f0c9b-42c1-4a9d-9397-05c926574765",
+    "keep_score": 292,
+    "delete_video_id": "856fe583-e4bc-49d5-8990-9581be6f56c9",
+    "delete_score": 292,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "nothing_but_thirty/06",
+    "keep_video_id": "4a62ce70-19c6-4b03-94d6-29585f885e8c",
+    "keep_score": 135541,
+    "delete_video_id": "5119f1ca-6278-4b30-aa4b-6425cba7d791",
+    "delete_score": 281,
+    "reason": "more work (score 135541 vs 281)"
+  },
+  {
+    "display_path": "nothing_but_thirty/07",
+    "keep_video_id": "c83d8b6a-6446-4f24-b49b-87057e767d7c",
+    "keep_score": 266,
+    "delete_video_id": "dd3be5e8-57e0-4baf-8a33-1a3a21ec3ccb",
+    "delete_score": 266,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "nothing_but_thirty/08",
+    "keep_video_id": "3a4532cf-e75a-4626-9b8e-13aa36c32c64",
+    "keep_score": 288,
+    "delete_video_id": "1eddd258-a618-408b-948e-859759561781",
+    "delete_score": 288,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "nothing_but_thirty/09",
+    "keep_video_id": "9de2ed59-2f96-494d-ad2d-7a3ce6d907f5",
+    "keep_score": 276,
+    "delete_video_id": "5eb8fe22-d4f1-4199-8e70-8fc93c19c8f9",
+    "delete_score": 276,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "nothing_but_thirty/10",
+    "keep_video_id": "9be1a64b-a303-45fd-811b-e1d8ee48b6aa",
+    "keep_score": 269,
+    "delete_video_id": "c27fe75a-8000-4663-a4cd-ea920edbade4",
+    "delete_score": 269,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "nothing_but_thirty/11",
+    "keep_video_id": "3f84ae5c-16c7-4cbe-8dc3-6c618e419782",
+    "keep_score": 140596,
+    "delete_video_id": "be0e64fa-ed97-4651-be8e-50ec2f6fbf2b",
+    "delete_score": 291,
+    "reason": "more work (score 140596 vs 291)"
+  },
+  {
+    "display_path": "nothing_but_thirty/12",
+    "keep_video_id": "46b1fd10-659d-406a-ba95-223a3dacfe25",
+    "keep_score": 140205,
+    "delete_video_id": "bb31224f-218f-4fce-9d96-1eaa8101ddbf",
+    "delete_score": 290,
+    "reason": "more work (score 140205 vs 290)"
+  },
+  {
+    "display_path": "nothing_but_thirty/13",
+    "keep_video_id": "a6606b82-96b6-4365-8bef-3eae5f4076c3",
+    "keep_score": 284,
+    "delete_video_id": "71bafd39-311d-405c-a501-30be591b2786",
+    "delete_score": 284,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "nothing_but_thirty/14",
+    "keep_video_id": "56cbd9bf-4044-4246-a6de-15925ef180ef",
+    "keep_score": 287,
+    "delete_video_id": "1a0d73c7-dcdb-46d0-bef1-2d3157a8a799",
+    "delete_score": 287,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "nothing_but_thirty/15",
+    "keep_video_id": "80e0b8ab-897e-4307-91e7-213222849845",
+    "keep_score": 290,
+    "delete_video_id": "f9354cf0-d35a-4c71-aba8-039db85638fa",
+    "delete_score": 290,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "nothing_but_thirty/16",
+    "keep_video_id": "53405661-dae2-4af4-8a04-3e0d06e0520a",
+    "keep_score": 273,
+    "delete_video_id": "f9dce916-de84-4258-83c4-1fdc0b062f3c",
+    "delete_score": 273,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "nothing_but_thirty/17",
+    "keep_video_id": "c8d7632c-cefa-4aaa-b9bf-044aa9faf6ba",
+    "keep_score": 277,
+    "delete_video_id": "ba095181-d9b5-4541-ada4-28143f1fee97",
+    "delete_score": 277,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "nothing_but_thirty/18",
+    "keep_video_id": "5f81f274-57f5-4ee7-aa3e-decfcac2d18f",
+    "keep_score": 275,
+    "delete_video_id": "7cf6c088-8aa3-4d03-a2bd-0553af62eb47",
+    "delete_score": 275,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "nothing_but_thirty/19",
+    "keep_video_id": "4638bc32-c233-474b-8de0-4e90b0b5673c",
+    "keep_score": 136522,
+    "delete_video_id": "c24a0706-1f42-423f-9656-0fbe2c64685e",
+    "delete_score": 282,
+    "reason": "more work (score 136522 vs 282)"
+  },
+  {
+    "display_path": "nothing_but_thirty/20",
+    "keep_video_id": "d911710b-4519-4613-8f91-572141c58e11",
+    "keep_score": 271,
+    "delete_video_id": "e1ee05ad-3ca2-4298-a90b-3531c4a024bb",
+    "delete_score": 271,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "nothing_but_thirty/21",
+    "keep_video_id": "4215e89c-c3ea-4e93-a973-213edc6bf01a",
+    "keep_score": 138597,
+    "delete_video_id": "eeeeb63e-83c6-45cd-8e4e-c44c653c80b8",
+    "delete_score": 287,
+    "reason": "more work (score 138597 vs 287)"
+  },
+  {
+    "display_path": "nothing_but_thirty/22",
+    "keep_video_id": "8a32ba0f-4f27-4557-9bac-4384ae6bb836",
+    "keep_score": 281,
+    "delete_video_id": "b92d0991-f316-4f2e-8793-644c7dd1cee1",
+    "delete_score": 281,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "nothing_but_thirty/23",
+    "keep_video_id": "6b3242d6-3b81-4310-ae2c-b0dbb6d29591",
+    "keep_score": 276,
+    "delete_video_id": "85845fc6-cfb9-408c-9e77-01201fcb78e7",
+    "delete_score": 276,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "nothing_but_thirty/24",
+    "keep_video_id": "32e4ab8c-8a17-484e-8da8-c15e95386044",
+    "keep_score": 265,
+    "delete_video_id": "2548ae8c-4cb2-459e-8667-18ae31a81585",
+    "delete_score": 265,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "nothing_but_thirty/25",
+    "keep_video_id": "4ab23c78-2ecf-491a-aae9-bae426b1c4be",
+    "keep_score": 135711,
+    "delete_video_id": "576cf291-9faf-4cbc-94d1-609c4179bcbf",
+    "delete_score": 281,
+    "reason": "more work (score 135711 vs 281)"
+  },
+  {
+    "display_path": "nothing_but_thirty/26",
+    "keep_video_id": "d8453445-8cc1-45c0-b099-e91608a866ac",
+    "keep_score": 280,
+    "delete_video_id": "cb8d2ec7-f99b-4d8f-af81-061ba79cd7a2",
+    "delete_score": 280,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "nothing_but_thirty/27",
+    "keep_video_id": "6153b986-f80c-4c2c-8fda-0667c2b2a1d1",
+    "keep_score": 286,
+    "delete_video_id": "d15a9cc9-a7fe-46e1-858e-94fe45624c2c",
+    "delete_score": 286,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "nothing_but_thirty/28",
+    "keep_video_id": "6ac2513c-48e4-44e0-b22e-ef0ce6b3e5dd",
+    "keep_score": 281,
+    "delete_video_id": "994fefb8-9d0d-459f-aecd-3b9bc4166112",
+    "delete_score": 281,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "nothing_but_thirty/29",
+    "keep_video_id": "f484c626-5856-47e7-a55c-c0dc82671430",
+    "keep_score": 276,
+    "delete_video_id": "38dd91da-7c4f-4fbf-a73f-31717d2964f0",
+    "delete_score": 276,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "nothing_but_thirty/30",
+    "keep_video_id": "46ffeac9-75f0-4408-bdd8-a3501ea7e9d3",
+    "keep_score": 137204,
+    "delete_video_id": "fef9df41-2bd6-4bb7-8ef6-712ede48103d",
+    "delete_score": 284,
+    "reason": "more work (score 137204 vs 284)"
+  },
+  {
+    "display_path": "nothing_but_thirty/31",
+    "keep_video_id": "c854ca0f-6cee-47bf-9cc9-91f02150197d",
+    "keep_score": 282,
+    "delete_video_id": "6d04cef7-e38f-47be-9333-0a2030c969b3",
+    "delete_score": 282,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "nothing_but_thirty/32",
+    "keep_video_id": "d4085ce5-7467-4f51-97e5-ad030669afec",
+    "keep_score": 286,
+    "delete_video_id": "d5b4ab1e-436a-4637-a1d0-276c85ab71c7",
+    "delete_score": 286,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "nothing_but_thirty/33",
+    "keep_video_id": "6a0f48b8-d96c-4ed7-8ecf-f2eb9bb560ef",
+    "keep_score": 278,
+    "delete_video_id": "e27e4eb9-b188-4792-b113-7466ef134fcb",
+    "delete_score": 278,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "nothing_but_thirty/34",
+    "keep_video_id": "de122bd8-cd1c-4956-83f2-c36b9a873d7d",
+    "keep_score": 284,
+    "delete_video_id": "8e071d1e-c3f4-46cf-8363-83e4c116e3b4",
+    "delete_score": 284,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "nothing_but_thirty/35",
+    "keep_video_id": "e2a759d1-0a00-4f3c-a2c1-6795f3ab1b65",
+    "keep_score": 283,
+    "delete_video_id": "746d68e5-c108-4f2f-be75-353990abbce6",
+    "delete_score": 283,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "nothing_but_thirty/36",
+    "keep_video_id": "9372e04e-fe05-4548-8e29-3f5635a2739c",
+    "keep_score": 281,
+    "delete_video_id": "0dfe09fd-a414-4037-8043-c70ea96f6576",
+    "delete_score": 281,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "nothing_but_thirty/37",
+    "keep_video_id": "8f9ae710-45b1-4d17-9ecc-4832003ca154",
+    "keep_score": 282,
+    "delete_video_id": "64d03e9b-8d01-4b19-b7b4-ae0703432802",
+    "delete_score": 282,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "nothing_but_thirty/38",
+    "keep_video_id": "bbd26b1d-397f-4254-ae35-73aa4fdd801a",
+    "keep_score": 279,
+    "delete_video_id": "f7e36c20-5168-4346-a953-9d9a9740c37f",
+    "delete_score": 279,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "nothing_but_thirty/39",
+    "keep_video_id": "6314b284-9325-43a9-aec6-cf83e296dfff",
+    "keep_score": 274,
+    "delete_video_id": "8b149443-0158-475a-a39c-080676f01fcf",
+    "delete_score": 274,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "nothing_but_thirty/40",
+    "keep_video_id": "b72470fd-53c7-44e0-bf93-6f297a09e05f",
+    "keep_score": 276,
+    "delete_video_id": "703faa2f-7044-47f3-a836-ed8f30d45c59",
+    "delete_score": 276,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "nothing_but_thirty/41",
+    "keep_video_id": "35e12ae7-cb81-496b-bea5-a052f9fcf0cd",
+    "keep_score": 277,
+    "delete_video_id": "997b7d0f-f9b6-4f99-b00f-89a93130f3ae",
+    "delete_score": 277,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "nothing_but_thirty/42",
+    "keep_video_id": "90af817d-d10f-42c7-bfd4-0db16c04ad75",
+    "keep_score": 279,
+    "delete_video_id": "23416683-1d03-4459-bf9f-b4605fe73999",
+    "delete_score": 279,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "nothing_but_thirty/43",
+    "keep_video_id": "b5ff9daa-3298-4948-9653-eb0c43a70eb9",
+    "keep_score": 285,
+    "delete_video_id": "8b61c50a-d10b-4144-9dcf-0400ec2207d2",
+    "delete_score": 285,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "one_and_a_half_summer/01",
+    "keep_video_id": "9a31e077-b4b2-41a6-a8fd-34e04055304b",
+    "keep_score": 282,
+    "delete_video_id": "cd383a65-c413-4b96-87ca-3795bc0f07e7",
+    "delete_score": 282,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "one_and_a_half_summer/02",
+    "keep_video_id": "6f543cbf-6cfd-49d1-8e51-6724c4ae9fe7",
+    "keep_score": 257,
+    "delete_video_id": "9bfbae31-5405-4931-96c4-ad96c1b91c43",
+    "delete_score": 257,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "one_and_a_half_summer/03",
+    "keep_video_id": "c918518b-8a9b-474f-b928-25f7ce7bfd20",
+    "keep_score": 258,
+    "delete_video_id": "07c88f0f-31e7-432c-a266-1fedcfded274",
+    "delete_score": 258,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "one_and_a_half_summer/04",
+    "keep_video_id": "86b31116-3def-4559-9ea7-18efb6dec7e0",
+    "keep_score": 258,
+    "delete_video_id": "b6736de0-0b94-4f7b-a088-ea527848613f",
+    "delete_score": 258,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "one_and_a_half_summer/05",
+    "keep_video_id": "d728d443-ef46-42df-b04b-1a76c8fe1601",
+    "keep_score": 259,
+    "delete_video_id": "55390d78-b2f8-4aa2-b9a4-9fe270350ead",
+    "delete_score": 259,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "one_and_a_half_summer/06",
+    "keep_video_id": "c545e84b-0ecd-4111-943b-879f866c72c1",
+    "keep_score": 259,
+    "delete_video_id": "f1cca9a2-f8dd-413f-91e5-dfe1219f6088",
+    "delete_score": 259,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "one_and_a_half_summer/08",
+    "keep_video_id": "b1158898-51cd-41ab-8fad-b50f6319921e",
+    "keep_score": 259,
+    "delete_video_id": "2d2c9a27-e9fe-40e7-a3f2-32c6b0a8fe9e",
+    "delete_score": 259,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "one_and_a_half_summer/09",
+    "keep_video_id": "a48c08b8-78bb-49c0-ae72-77c9f9e7a442",
+    "keep_score": 257,
+    "delete_video_id": "27669162-aaa1-4e30-814f-74f62b2e4882",
+    "delete_score": 257,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "one_and_a_half_summer/10",
+    "keep_video_id": "0a1191e7-1c15-4041-8bd9-9a3ece3bb596",
+    "keep_score": 257,
+    "delete_video_id": "79c2e270-3e79-40ed-a394-0aa0e96265e6",
+    "delete_score": 257,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "one_and_a_half_summer/11",
+    "keep_video_id": "e9aa778e-adde-4221-bef3-a01ef74a5f63",
+    "keep_score": 257,
+    "delete_video_id": "1e18e8a6-caf3-45b7-8e79-ef5e9960f16d",
+    "delete_score": 257,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "one_and_a_half_summer/12",
+    "keep_video_id": "552531b8-bbf9-4654-9272-1df089773718",
+    "keep_score": 257,
+    "delete_video_id": "ea0311c6-d1ce-473e-aaf1-e5a6f2962b10",
+    "delete_score": 257,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "one_and_a_half_summer/13",
+    "keep_video_id": "a1e74c02-64b4-4b85-8873-d0091745b93c",
+    "keep_score": 257,
+    "delete_video_id": "1ca923f3-324f-4e6c-b333-4605c98502b4",
+    "delete_score": 257,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "one_and_a_half_summer/14",
+    "keep_video_id": "8fc74767-fd72-49a5-b08a-4edd124084a7",
+    "keep_score": 257,
+    "delete_video_id": "f9d8e84c-045d-4640-8b24-f14c06508144",
+    "delete_score": 257,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "one_and_a_half_summer/15",
+    "keep_video_id": "40900239-07bc-42dd-ab38-5fef9c7ce729",
+    "keep_score": 123577,
+    "delete_video_id": "abbb5a49-478a-43ae-8c23-3de738726dc3",
+    "delete_score": 257,
+    "reason": "more work (score 123577 vs 257)"
+  },
+  {
+    "display_path": "one_and_a_half_summer/16",
+    "keep_video_id": "608c3f44-ebca-48aa-a9fb-615508a07917",
+    "keep_score": 259,
+    "delete_video_id": "d51bd377-e148-4bef-ba96-15a5c34f6046",
+    "delete_score": 259,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "one_and_a_half_summer/17",
+    "keep_video_id": "60af6f13-963f-4ec1-bb24-353e42136265",
+    "keep_score": 258,
+    "delete_video_id": "b839928d-cb33-4c59-902b-d97076db5352",
+    "delete_score": 258,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "one_and_a_half_summer/18",
+    "keep_video_id": "91112b84-e87f-42a6-8dbe-dddbb49c9754",
+    "keep_score": 257,
+    "delete_video_id": "8b3b5a2e-8888-4f7c-93a0-6ce5e871a887",
+    "delete_score": 257,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "one_and_a_half_summer/19",
+    "keep_video_id": "f39842c4-a29d-459e-8906-ea9e9fcfa2f9",
+    "keep_score": 257,
+    "delete_video_id": "7e424e0e-bf99-4298-ba7c-71909f7d2ac1",
+    "delete_score": 257,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "one_and_a_half_summer/20",
+    "keep_video_id": "fe9290d1-409c-41ab-b743-d8662c6d7a77",
+    "keep_score": 257,
+    "delete_video_id": "c5e492f2-9799-4f37-991e-7e0fcd32aeaf",
+    "delete_score": 257,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "one_and_a_half_summer/21",
+    "keep_video_id": "bef09681-080b-4c39-8dfb-9fff1520704a",
+    "keep_score": 259,
+    "delete_video_id": "eda7adf0-0fd6-477e-9683-b174f044cf62",
+    "delete_score": 259,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "one_and_a_half_summer/22",
+    "keep_video_id": "43868181-4d68-4720-bf14-d43c6320ba02",
+    "keep_score": 124368,
+    "delete_video_id": "7d1114bc-36c8-40ec-aa88-77a979582fb7",
+    "delete_score": 258,
+    "reason": "more work (score 124368 vs 258)"
+  },
+  {
+    "display_path": "one_and_a_half_summer/23",
+    "keep_video_id": "f39427c5-a097-4f8e-b667-046e97b7d986",
+    "keep_score": 257,
+    "delete_video_id": "2412bf18-7892-485d-8aa8-1b3224c1f36d",
+    "delete_score": 257,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "one_and_a_half_summer/24",
+    "keep_video_id": "4606b711-6a02-4e8e-8e95-0bd035b484c4",
+    "keep_score": 123697,
+    "delete_video_id": "b585705e-1b43-49f6-bcf4-e8a97bd74a2f",
+    "delete_score": 257,
+    "reason": "more work (score 123697 vs 257)"
+  },
+  {
+    "display_path": "one_and_a_half_summer/25",
+    "keep_video_id": "c00c28fe-e1f0-4904-812b-fb0df6778db0",
+    "keep_score": 257,
+    "delete_video_id": "16665c0b-cc20-47c5-bd3a-798822d12403",
+    "delete_score": 257,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "one_and_a_half_summer/26",
+    "keep_video_id": "cf08e9ca-639e-455e-8d29-215cf3e11fa8",
+    "keep_score": 257,
+    "delete_video_id": "55027e26-b8fa-4610-852f-7a2d94b02a8e",
+    "delete_score": 257,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "one_and_a_half_summer/27",
+    "keep_video_id": "75409070-f81e-42cd-b3ed-89c628258288",
+    "keep_score": 259,
+    "delete_video_id": "d313faa9-8ab6-45a6-b0e2-44dc72d6ec1d",
+    "delete_score": 259,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "pillars_of_a_great_power_ii/01",
+    "keep_video_id": "15304f36-3fac-4f7f-842e-295207295224",
+    "keep_score": 310,
+    "delete_video_id": "859ca454-50cf-402b-b7ac-e2ca033674c7",
+    "delete_score": 310,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "pillars_of_a_great_power_ii/02",
+    "keep_video_id": "ad29064d-dc85-4edd-b2f8-f9c7e38e30e0",
+    "keep_score": 310,
+    "delete_video_id": "a1cc820e-ed85-476b-8446-63b5ef51c446",
+    "delete_score": 310,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "pillars_of_a_great_power_ii/03",
+    "keep_video_id": "9fa70bae-53df-445a-bf0d-7490541fd916",
+    "keep_score": 310,
+    "delete_video_id": "990ad684-7c55-4ac6-bd78-d75473041123",
+    "delete_score": 310,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "pillars_of_a_great_power_ii/04",
+    "keep_video_id": "68a35e67-3a4c-4a6d-89d6-0c108fd3408d",
+    "keep_score": 310,
+    "delete_video_id": "6f8ccb3f-cf63-47ab-a9fe-e4e7e23b3119",
+    "delete_score": 310,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "pillars_of_a_great_power_ii/05",
+    "keep_video_id": "9aa41c12-f58f-4eda-8aa5-2dc00edbb757",
+    "keep_score": 310,
+    "delete_video_id": "b88f5df6-2f09-4b36-89a3-7b2420a1e205",
+    "delete_score": 310,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "pillars_of_a_great_power_ii/06",
+    "keep_video_id": "f1f12084-052c-4844-9697-237235e53bfb",
+    "keep_score": 310,
+    "delete_video_id": "29b90023-1be8-4a06-b005-82338e06c7d3",
+    "delete_score": 0,
+    "reason": "more work (score 310 vs 0)"
+  },
+  {
+    "display_path": "pillars_of_a_great_power_ii/07",
+    "keep_video_id": "cff9c9fe-067c-4390-97bb-27f392fceb99",
+    "keep_score": 310,
+    "delete_video_id": "8e6defaf-5eb8-4289-90b3-055e220d4540",
+    "delete_score": 310,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "pillars_of_a_great_power_ii/08",
+    "keep_video_id": "d4e4fdc2-d2c6-410f-8ca8-6e474e37546a",
+    "keep_score": 310,
+    "delete_video_id": "b84ee15a-6682-49f5-83e1-def45b91b485",
+    "delete_score": 310,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "please_be_my_family/01",
+    "keep_video_id": "527b4ce6-3c49-4c02-b6eb-e236c65f6004",
+    "keep_score": 223,
+    "delete_video_id": "1b8d0553-cf02-4f52-9d80-4cdd72737561",
+    "delete_score": 223,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "please_be_my_family/02",
+    "keep_video_id": "fb5d8719-965f-4fd3-9280-0044518f1ac7",
+    "keep_score": 184,
+    "delete_video_id": "b19bea8f-d4b7-4142-ad17-49bef8e94f52",
+    "delete_score": 184,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "please_be_my_family/03",
+    "keep_video_id": "4dc7a94a-ed2d-45c1-a58c-581f05f2a732",
+    "keep_score": 193,
+    "delete_video_id": "f83eef05-0051-4e12-8725-95f69cc9460e",
+    "delete_score": 193,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "please_be_my_family/04",
+    "keep_video_id": "7c197956-6908-4aee-95d3-8b9ea1f3cedf",
+    "keep_score": 179,
+    "delete_video_id": "f9b6e6ea-c16e-4ffa-8fbf-28ce24f1b205",
+    "delete_score": 179,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "please_be_my_family/05",
+    "keep_video_id": "3542ef9f-3eaf-4b95-aa42-add46574e49d",
+    "keep_score": 184,
+    "delete_video_id": "fc05c057-1e53-4857-9c03-41b5b1adb70a",
+    "delete_score": 0,
+    "reason": "more work (score 184 vs 0)"
+  },
+  {
+    "display_path": "please_be_my_family/06",
+    "keep_video_id": "9430cb93-021c-4cec-99c6-2fdb52e31734",
+    "keep_score": 185,
+    "delete_video_id": "75355300-f362-48e1-b04d-ace9d03f8904",
+    "delete_score": 185,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "please_be_my_family/07",
+    "keep_video_id": "b46f7117-a2c5-450b-b5c6-908e94052e1d",
+    "keep_score": 177,
+    "delete_video_id": "52e72d79-f125-468f-80bf-920c04e59cda",
+    "delete_score": 177,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "please_be_my_family/08",
+    "keep_video_id": "732caaad-2559-47a6-9b89-a5c0b83b78df",
+    "keep_score": 177,
+    "delete_video_id": "e86d4bd0-c0d4-4cdf-8b5c-3ef534f8a4a4",
+    "delete_score": 177,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "please_be_my_family/09",
+    "keep_video_id": "26fb5a39-44e5-4663-a45b-a08570b9de35",
+    "keep_score": 201,
+    "delete_video_id": "39200eab-8111-4da5-9655-88898647ec0b",
+    "delete_score": 201,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "please_be_my_family/10",
+    "keep_video_id": "56e7a7a8-e298-497b-bfbf-3dd367745e12",
+    "keep_score": 192,
+    "delete_video_id": "2c6fb751-d908-446c-8b37-905e44e12092",
+    "delete_score": 192,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "please_be_my_family/11",
+    "keep_video_id": "f22fbc24-d9b7-448d-9de6-82b4320330c4",
+    "keep_score": 205,
+    "delete_video_id": "b182bef5-4b8c-45db-8876-30e783c17c0f",
+    "delete_score": 205,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "please_be_my_family/12",
+    "keep_video_id": "47741518-4a40-4554-8850-cad2ce1fdf60",
+    "keep_score": 98281,
+    "delete_video_id": "fdc2c60f-b2a9-4e6d-bc8f-db8bb20e2cd2",
+    "delete_score": 0,
+    "reason": "more work (score 98281 vs 0)"
+  },
+  {
+    "display_path": "please_be_my_family/13",
+    "keep_video_id": "7fe1b393-ac3f-46d9-9089-336a2e491df8",
+    "keep_score": 202,
+    "delete_video_id": "0565553a-7ca3-4f49-b6f0-af379ad46b6e",
+    "delete_score": 0,
+    "reason": "more work (score 202 vs 0)"
+  },
+  {
+    "display_path": "please_be_my_family/14",
+    "keep_video_id": "3407be63-9072-4a98-8437-7edc5aaf0e75",
+    "keep_score": 211,
+    "delete_video_id": "90d52d11-d60a-4096-9d30-ff88d66c840e",
+    "delete_score": 211,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "please_be_my_family/15",
+    "keep_video_id": "4600721a-3bfc-4713-ae98-17ebd7fef621",
+    "keep_score": 102304,
+    "delete_video_id": "3018a017-0ce2-4eb3-ae1c-f8065aedd97e",
+    "delete_score": 214,
+    "reason": "more work (score 102304 vs 214)"
+  },
+  {
+    "display_path": "please_be_my_family/16",
+    "keep_video_id": "6f8e144a-51b7-4ce6-9a41-dbd4673d9980",
+    "keep_score": 193,
+    "delete_video_id": "14a8f1cb-68ea-48c3-9e0c-1f8169fc67d0",
+    "delete_score": 0,
+    "reason": "more work (score 193 vs 0)"
+  },
+  {
+    "display_path": "please_be_my_family/17",
+    "keep_video_id": "3c47e48d-78dc-41e9-90a8-8ff12ff7ac18",
+    "keep_score": 89960,
+    "delete_video_id": "bbbe5773-3aa3-4f3a-acc7-79b63964128a",
+    "delete_score": 190,
+    "reason": "more work (score 89960 vs 190)"
+  },
+  {
+    "display_path": "please_be_my_family/18",
+    "keep_video_id": "4677539d-3f56-4f9c-a7d9-e26417398f0f",
+    "keep_score": 90025,
+    "delete_video_id": "dcadac21-6f0a-4d07-9087-218bea80cb47",
+    "delete_score": 190,
+    "reason": "more work (score 90025 vs 190)"
+  },
+  {
+    "display_path": "please_be_my_family/19",
+    "keep_video_id": "89afe8ea-3008-459a-82e2-ac97c096e235",
+    "keep_score": 194,
+    "delete_video_id": "732e02c1-759e-4a8a-b62e-cfe5883d312b",
+    "delete_score": 194,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "please_be_my_family/20",
+    "keep_video_id": "f92c8b76-bc03-4822-a416-82e91ec0b39c",
+    "keep_score": 194,
+    "delete_video_id": "4f21e08b-b890-4e74-9f24-297344cc15b7",
+    "delete_score": 137,
+    "reason": "more work (score 194 vs 137)"
+  },
+  {
+    "display_path": "please_be_my_family/21",
+    "keep_video_id": "68de3c7a-cced-4d1a-9f12-3b25d1fb9b68",
+    "keep_score": 210,
+    "delete_video_id": "641ac7c6-da43-40a1-8b43-1eb67a052964",
+    "delete_score": 210,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "please_be_my_family/22",
+    "keep_video_id": "b2907fce-3a9b-4c3c-a61d-6c45837717d6",
+    "keep_score": 193,
+    "delete_video_id": "c5fa502e-d28b-414b-ae44-8f82ff82f382",
+    "delete_score": 193,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "please_be_my_family/23",
+    "keep_video_id": "fdf936f8-5b3e-44e9-bcc1-4dfba7557d3e",
+    "keep_score": 189,
+    "delete_video_id": "a124c710-20c4-45cb-a114-732dfd901076",
+    "delete_score": 189,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "please_be_my_family/24",
+    "keep_video_id": "88d56b15-2f66-4f31-a187-61c643df5fef",
+    "keep_score": 223,
+    "delete_video_id": "b7fa13ac-0493-4dc1-8ea1-552e041eb824",
+    "delete_score": 223,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "please_be_my_family/25",
+    "keep_video_id": "f3c97b06-4b6a-4866-bb35-d74441211fcd",
+    "keep_score": 186,
+    "delete_video_id": "9f3c56eb-279e-4b5e-b8dc-0eb6df926bad",
+    "delete_score": 186,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "please_be_my_family/26",
+    "keep_video_id": "ad89e602-a478-4921-98d3-8f2c2fc85789",
+    "keep_score": 212,
+    "delete_video_id": "855d770f-2f70-489a-b2fd-0a4c961a52f4",
+    "delete_score": 212,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "please_be_my_family/27",
+    "keep_video_id": "eb76eb2d-2182-4af5-bfb9-5d551f0430b9",
+    "keep_score": 222,
+    "delete_video_id": "faf5fffa-e1b7-45fb-9d66-1404c92562c9",
+    "delete_score": 222,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "please_be_my_family/28",
+    "keep_video_id": "4d196263-0bc3-479e-9b4c-2daa453273e0",
+    "keep_score": 227,
+    "delete_video_id": "7ecf8e7b-9088-45d1-83cc-19ff2443632d",
+    "delete_score": 227,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "please_be_my_family/29",
+    "keep_video_id": "4960205e-2632-4f07-b088-6f3435d95483",
+    "keep_score": 99253,
+    "delete_video_id": "525dd12e-75f7-49db-b4e6-3cb9f2a4199f",
+    "delete_score": 266,
+    "reason": "more work (score 99253 vs 266)"
+  },
+  {
+    "display_path": "please_be_my_family/30",
+    "keep_video_id": "e31ea3d2-7616-48f2-a56f-0a04cc418716",
+    "keep_score": 195,
+    "delete_video_id": "ba673083-b9e9-486d-8614-21e3eacb7a46",
+    "delete_score": 195,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "three-teenagers/01",
+    "keep_video_id": "e4f946a4-a6e4-4a44-b190-f86e83d20f08",
+    "keep_score": 238,
+    "delete_video_id": "ce1ab0b6-7e0b-4542-9453-19abe5febe41",
+    "delete_score": 238,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "three-teenagers/02",
+    "keep_video_id": "58182ea3-718d-4465-abf1-4c023c67455a",
+    "keep_score": 562,
+    "delete_video_id": "a4e22bef-93d9-4128-bfdb-bec7defb0c9d",
+    "delete_score": 562,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "three-teenagers/03",
+    "keep_video_id": "519f403f-9076-4c9e-b375-b3c3241b32f3",
+    "keep_score": 514,
+    "delete_video_id": "99f640dd-9f2d-44e2-b1c5-ca9a378ca3c3",
+    "delete_score": 514,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "three-teenagers/04",
+    "keep_video_id": "3ef6c5da-d795-4620-9d5e-c586f112c52b",
+    "keep_score": 148536,
+    "delete_video_id": "6fbac9cf-eac0-4090-badc-10602043168d",
+    "delete_score": 306,
+    "reason": "more work (score 148536 vs 306)"
+  },
+  {
+    "display_path": "three-teenagers/05",
+    "keep_video_id": "5af4c658-a345-426a-9894-04fbdb25d853",
+    "keep_score": 183,
+    "delete_video_id": "aef50526-26d1-46a9-8004-4a539a6e9f8f",
+    "delete_score": 183,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "three-teenagers/06",
+    "keep_video_id": "f398eabf-3679-46e2-aa31-d11b231a2d6e",
+    "keep_score": 273,
+    "delete_video_id": "7bbdb1bc-cc6d-490a-9568-b621a19b4fdb",
+    "delete_score": 273,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "three-teenagers/07",
+    "keep_video_id": "38ad42df-4717-4a87-ae3b-ff77d1f90a5a",
+    "keep_score": 265,
+    "delete_video_id": "f6946150-aca5-4b42-939d-95865c7d8d8f",
+    "delete_score": 265,
+    "reason": "more recent modifications"
+  },
+  {
+    "display_path": "three-teenagers/08",
+    "keep_video_id": "6ef6b69a-d0b1-4039-b59e-ebbd286d8a2b",
+    "keep_score": 346,
+    "delete_video_id": "2c7cb987-048b-4142-8bdf-1989147e9bf3",
+    "delete_score": 278,
+    "reason": "more work (score 346 vs 278)"
+  }
+]

@@ -7,8 +7,9 @@
  * - videoId: UUID for the video
  */
 
-import { resolve } from 'path'
 import { existsSync, readdirSync } from 'fs'
+import { resolve } from 'path'
+
 import Database from 'better-sqlite3'
 
 const dataDir = resolve(process.cwd(), '..', '..', 'local', 'data')
@@ -43,9 +44,13 @@ export function resolveDisplayPath(displayPath: string): string | null {
           try {
             const db = new Database(dbPath, { readonly: true })
             try {
-              const result = db.prepare(`
+              const result = db
+                .prepare(
+                  `
                 SELECT storage_path FROM video_metadata WHERE id = 1 AND display_path = ?
-              `).get(displayPath) as { storage_path: string } | undefined
+              `
+                )
+                .get(displayPath) as { storage_path: string } | undefined
 
               if (result) {
                 return result.storage_path
@@ -122,17 +127,23 @@ export function getVideoMetadata(pathOrId: string): VideoMetadata | null {
   try {
     const db = new Database(dbPath, { readonly: true })
     try {
-      const result = db.prepare(`
+      const result = db
+        .prepare(
+          `
         SELECT video_id, video_hash, storage_path, display_path, original_filename
         FROM video_metadata
         WHERE id = 1
-      `).get() as {
-        video_id: string
-        video_hash: string
-        storage_path: string
-        display_path: string
-        original_filename: string
-      } | undefined
+      `
+        )
+        .get() as
+        | {
+            video_id: string
+            video_hash: string
+            storage_path: string
+            display_path: string
+            original_filename: string
+          }
+        | undefined
 
       if (!result) return null
 
@@ -174,26 +185,51 @@ export function getAllVideos(): VideoMetadata[] {
           try {
             const db = new Database(dbPath, { readonly: true })
             try {
-              const result = db.prepare(`
+              const result = db
+                .prepare(
+                  `
                 SELECT video_id, video_hash, storage_path, display_path, original_filename
                 FROM video_metadata
                 WHERE id = 1
-              `).get() as {
-                video_id: string
-                video_hash: string
-                storage_path: string
-                display_path: string
-                original_filename: string
-              } | undefined
+              `
+                )
+                .get() as
+                | {
+                    video_id: string
+                    video_hash: string
+                    storage_path: string
+                    display_path: string
+                    original_filename: string
+                  }
+                | undefined
 
               if (result) {
-                videos.push({
-                  videoId: result.video_id,
-                  videoHash: result.video_hash,
-                  storagePath: result.storage_path,
-                  displayPath: result.display_path,
-                  originalFilename: result.original_filename,
-                })
+                // Validate display_path to filter out corrupted/invalid entries
+                const isValidDisplayPath =
+                  result.display_path &&
+                  result.display_path.length > 0 &&
+                  // Not a UUID bucket directory (2-char hex like "f0", "ff", "12")
+                  !(
+                    result.display_path.length === 2 && /^[0-9a-f]{2}$/i.test(result.display_path)
+                  ) &&
+                  // Not a single number (like "1", "20")
+                  !/^\d+$/.test(result.display_path) &&
+                  // Not a hidden file/folder
+                  !result.display_path.startsWith('.')
+
+                if (isValidDisplayPath) {
+                  videos.push({
+                    videoId: result.video_id,
+                    videoHash: result.video_hash,
+                    storagePath: result.storage_path,
+                    displayPath: result.display_path,
+                    originalFilename: result.original_filename,
+                  })
+                } else {
+                  console.warn(
+                    `[VideoResolution] Skipping invalid display_path: "${result.display_path}" in ${dbPath}`
+                  )
+                }
               }
             } finally {
               db.close()

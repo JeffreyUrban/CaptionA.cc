@@ -22,11 +22,11 @@ async function getUploadDir(): Promise<string> {
 }
 
 interface UploadMetadata {
-  videoPath: string  // display_path (user-facing path like "level1/video")
+  videoPath: string // display_path (user-facing path like "level1/video")
   filename: string
   filetype?: string
-  videoId?: string  // UUID for this video
-  storagePath?: string  // hash-bucketed path like "a4/a4f2b8c3-..."
+  videoId?: string // UUID for this video
+  storagePath?: string // hash-bucketed path like "a4/a4f2b8c3-..."
 }
 
 // Simple tus protocol implementation without tus-node-server
@@ -58,7 +58,8 @@ async function handleTusRequest(request: Request): Promise<Response> {
         'Tus-Extension': 'creation,termination',
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'POST,HEAD,PATCH,OPTIONS',
-        'Access-Control-Allow-Headers': 'Upload-Offset,Upload-Length,Tus-Resumable,Upload-Metadata,Content-Type',
+        'Access-Control-Allow-Headers':
+          'Upload-Offset,Upload-Length,Tus-Resumable,Upload-Metadata,Content-Type',
         'Access-Control-Expose-Headers': 'Upload-Offset,Location,Upload-Length,Tus-Resumable',
       },
     })
@@ -97,7 +98,7 @@ async function handleCreateUpload(request: Request): Promise<Response> {
 
   // Generate UUID for video storage (stable identifier)
   const videoId = randomUUID()
-  const storagePath = `${videoId.slice(0, 2)}/${videoId}`  // Hash-bucketed path
+  const storagePath = `${videoId.slice(0, 2)}/${videoId}` // Hash-bucketed path
 
   // Save metadata (including videoId and storagePath)
   await writeJSON(metadataPath, {
@@ -116,7 +117,7 @@ async function handleCreateUpload(request: Request): Promise<Response> {
   createWriteStream(uploadPath).end()
 
   // Initialize database at storage path (not display path)
-  const displayPath = metadata.videoPath  // User-facing path
+  const displayPath = metadata.videoPath // User-facing path
   const videoDir = resolve(process.cwd(), '..', '..', 'local', 'data', ...storagePath.split('/'))
   mkdirSync(videoDir, { recursive: true })
 
@@ -130,25 +131,23 @@ async function handleCreateUpload(request: Request): Promise<Response> {
     db.exec(schema)
 
     // Insert video metadata with UUID-based storage
-    db.prepare(`
+    db.prepare(
+      `
       INSERT OR REPLACE INTO video_metadata (
         id, video_id, video_hash, storage_path, display_path,
         original_filename, file_size_bytes, upload_method
       ) VALUES (1, ?, '', ?, ?, ?, ?, 'web_upload')
-    `).run(
-      videoId,
-      storagePath,
-      displayPath,
-      metadata.filename,
-      parseInt(uploadLength)
-    )
+    `
+    ).run(videoId, storagePath, displayPath, metadata.filename, parseInt(uploadLength))
 
     // Insert initial processing status
-    db.prepare(`
+    db.prepare(
+      `
       INSERT OR REPLACE INTO processing_status (
         id, status, upload_progress, upload_started_at
       ) VALUES (1, 'uploading', 0.0, datetime('now'))
-    `).run()
+    `
+    ).run()
   } finally {
     db.close()
   }
@@ -159,7 +158,7 @@ async function handleCreateUpload(request: Request): Promise<Response> {
     status: 201,
     headers: {
       'Tus-Resumable': '1.0.0',
-      'Location': `/api/upload/${uploadId}`,
+      Location: `/api/upload/${uploadId}`,
       'Upload-Offset': '0',
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Expose-Headers': 'Location,Upload-Offset,Tus-Resumable',
@@ -222,7 +221,7 @@ async function handlePatchRequest(request: Request, uploadId: string): Promise<R
 
   await new Promise((resolve, reject) => {
     const stream = createWriteStream(uploadPath, { flags: 'a' })
-    stream.write(chunk, (err) => {
+    stream.write(chunk, err => {
       if (err) reject(err)
       else resolve(undefined)
     })
@@ -234,6 +233,9 @@ async function handlePatchRequest(request: Request, uploadId: string): Promise<R
 
   // Update progress in database (use storagePath, not displayPath)
   const storagePath = metadata.metadata.storagePath
+  if (!storagePath) {
+    throw new Error('Storage path missing from metadata')
+  }
   const dbPath = resolve(
     process.cwd(),
     '..',
@@ -247,19 +249,24 @@ async function handlePatchRequest(request: Request, uploadId: string): Promise<R
   const db = new Database(dbPath)
   try {
     const progress = newSize / metadata.uploadLength
-    db.prepare(`
+    db.prepare(
+      `
       UPDATE processing_status
       SET upload_progress = ?
       WHERE id = 1
-    `).run(progress)
+    `
+    ).run(progress)
   } finally {
     db.close()
   }
 
   if (complete) {
     // Upload complete - move file to UUID-based storage and compute hash
-    const storagePath = metadata.metadata.storagePath
+    const completeStoragePath = metadata.metadata.storagePath
     const displayPath = metadata.metadata.videoPath
+    if (!completeStoragePath) {
+      throw new Error('Storage path missing from metadata')
+    }
 
     const finalVideoPath = resolve(
       process.cwd(),
@@ -267,7 +274,7 @@ async function handlePatchRequest(request: Request, uploadId: string): Promise<R
       '..',
       'local',
       'data',
-      ...storagePath.split('/'),
+      ...completeStoragePath.split('/'),
       metadata.metadata.filename
     )
 
@@ -283,20 +290,20 @@ async function handlePatchRequest(request: Request, uploadId: string): Promise<R
         'run',
         'python',
         '-c',
-        `from video_utils import compute_video_hash; from pathlib import Path; print(compute_video_hash(Path("${finalVideoPath.replace(/"/g, '\\"')}")))`
+        `from video_utils import compute_video_hash; from pathlib import Path; print(compute_video_hash(Path("${finalVideoPath.replace(/"/g, '\\"')}")))`,
       ],
       {
         cwd: resolve(process.cwd(), '..', '..', 'packages', 'video_utils'),
-        stdio: ['ignore', 'pipe', 'pipe']
+        stdio: ['ignore', 'pipe', 'pipe'],
       }
     )
 
     let videoHash = ''
-    computeHashProcess.stdout?.on('data', (data) => {
+    computeHashProcess.stdout?.on('data', data => {
       videoHash += data.toString().trim()
     })
 
-    await new Promise<void>((resolve) => {
+    await new Promise<void>(resolve => {
       computeHashProcess.on('close', () => resolve())
     })
 
@@ -305,34 +312,38 @@ async function handlePatchRequest(request: Request, uploadId: string): Promise<R
     // Update status and video hash
     const db = new Database(dbPath)
     try {
-      db.prepare(`
+      db.prepare(
+        `
         UPDATE processing_status
         SET status = 'upload_complete',
             upload_progress = 1.0,
             upload_completed_at = datetime('now')
         WHERE id = 1
-      `).run()
+      `
+      ).run()
 
       // Update video hash
       if (videoHash) {
-        db.prepare(`
+        db.prepare(
+          `
           UPDATE video_metadata
           SET video_hash = ?
           WHERE id = 1
-        `).run(videoHash)
+        `
+        ).run(videoHash)
       }
     } finally {
       db.close()
     }
 
-    console.log(`[tus] Upload complete: ${displayPath} (storage: ${storagePath})`)
+    console.log(`[tus] Upload complete: ${displayPath} (storage: ${completeStoragePath})`)
 
     // Queue video for background processing (respects concurrency limits)
     const { queueVideoProcessing } = await import('~/services/video-processing')
     queueVideoProcessing({
-      videoPath: displayPath,  // Pass display path for logging
+      videoPath: displayPath, // Pass display path for logging
       videoFile: finalVideoPath,
-      videoId: metadata.metadata.videoId,  // Pass UUID for tracking
+      videoId: metadata.metadata.videoId, // Pass UUID for tracking
     })
   }
 
@@ -348,30 +359,37 @@ async function handlePatchRequest(request: Request, uploadId: string): Promise<R
 }
 
 function parseUploadMetadata(metadataHeader: string): UploadMetadata {
-  const metadata: any = {}
+  const metadata: Record<string, string> = {}
   const pairs = metadataHeader.split(',')
 
   for (const pair of pairs) {
     const [key, value] = pair.trim().split(' ')
     if (key && value) {
       // Use atob for browser compatibility (though this only runs server-side)
-      const decoded = typeof Buffer !== 'undefined'
-        ? Buffer.from(value, 'base64').toString('utf-8')
-        : atob(value)
+      const decoded =
+        typeof Buffer !== 'undefined' ? Buffer.from(value, 'base64').toString('utf-8') : atob(value)
       metadata[key] = decoded
     }
   }
 
-  return metadata
+  return metadata as unknown as UploadMetadata
 }
 
-async function readJSON(path: string): Promise<any> {
+interface UploadMetadataFile {
+  uploadId: string
+  uploadLength: number
+  metadata: UploadMetadata
+  createdAt: string
+  offset: number
+}
+
+async function readJSON(path: string): Promise<UploadMetadataFile> {
   const { readFile } = await import('fs/promises')
   const content = await readFile(path, 'utf-8')
-  return JSON.parse(content)
+  return JSON.parse(content) as UploadMetadataFile
 }
 
-async function writeJSON(path: string, data: any): Promise<void> {
+async function writeJSON(path: string, data: unknown): Promise<void> {
   const fs = await import('fs/promises')
   await fs.writeFile(path, JSON.stringify(data, null, 2), 'utf-8')
 }

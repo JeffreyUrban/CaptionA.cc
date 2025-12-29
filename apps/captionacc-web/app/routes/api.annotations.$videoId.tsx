@@ -1,8 +1,10 @@
-import { type LoaderFunctionArgs, type ActionFunctionArgs } from 'react-router'
-import { getDbPath } from '~/utils/video-paths'
-import Database from 'better-sqlite3'
 import { existsSync } from 'fs'
+
+import Database from 'better-sqlite3'
+import { type LoaderFunctionArgs, type ActionFunctionArgs } from 'react-router'
+
 import { deleteCombinedImage, getOrGenerateCombinedImage } from '~/utils/image-processing'
+import { getDbPath } from '~/utils/video-paths'
 
 interface Annotation {
   id: number
@@ -20,7 +22,7 @@ interface Annotation {
   created_at: string
 }
 
-function getOrCreateDatabase(videoId: string) {
+function getOrCreateDatabase(videoId: string): Database.Database | Response {
   const dbPath = getDbPath(videoId)
   if (!dbPath) {
     return new Response('Video not found', { status: 404 })
@@ -102,12 +104,14 @@ async function regenerateCombinedImageForAnnotation(
   await getOrGenerateCombinedImage(videoId, annotationId, startFrame, endFrame)
 
   // Clear OCR cache and mark text as pending
-  db.prepare(`
+  db.prepare(
+    `
     UPDATE captions
     SET text_ocr_combined = NULL,
         text_pending = 1
     WHERE id = ?
-  `).run(annotationId)
+  `
+  ).run(annotationId)
 }
 
 // GET - Fetch annotations in a range
@@ -116,7 +120,7 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
   if (!encodedVideoId) {
     return new Response(JSON.stringify({ error: 'Missing videoId' }), {
       status: 400,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
     })
   }
 
@@ -127,27 +131,29 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
 
   try {
     const db = getOrCreateDatabase(videoId)
+    if (db instanceof Response) return db
 
     // Query annotations that overlap with the requested range
-    const annotations = db.prepare(`
+    const annotations = db
+      .prepare(
+        `
       SELECT * FROM captions
       WHERE end_frame_index >= ? AND start_frame_index <= ?
       ORDER BY start_frame_index
-    `).all(startFrame, endFrame) as Annotation[]
+    `
+      )
+      .all(startFrame, endFrame) as Annotation[]
 
     db.close()
 
     return new Response(JSON.stringify({ annotations }), {
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
     })
   } catch (error) {
-    return new Response(
-      JSON.stringify({ error: (error as Error).message }),
-      {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      }
-    )
+    return new Response(JSON.stringify({ error: (error as Error).message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    })
   }
 }
 
@@ -157,7 +163,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
   if (!encodedVideoId) {
     return new Response(JSON.stringify({ error: 'Missing videoId' }), {
       status: 400,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
     })
   }
 
@@ -166,6 +172,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
 
   try {
     const db = getOrCreateDatabase(videoId)
+    if (db instanceof Response) return db
 
     if (request.method === 'PUT') {
       // Update existing annotation with overlap resolution
@@ -175,64 +182,108 @@ export async function action({ params, request }: ActionFunctionArgs) {
       const original = db.prepare('SELECT * FROM captions WHERE id = ?').get(id) as Annotation
 
       // Find overlapping annotations (excluding the one being updated)
-      const overlapping = db.prepare(`
+      const overlapping = db
+        .prepare(
+          `
         SELECT * FROM captions
         WHERE id != ?
         AND NOT (end_frame_index < ? OR start_frame_index > ?)
-      `).all(id, start_frame_index, end_frame_index) as Annotation[]
+      `
+        )
+        .all(id, start_frame_index, end_frame_index) as Annotation[]
 
       // Resolve overlaps by adjusting conflicting annotations
       const modifiedAnnotations: Array<{ id: number; startFrame: number; endFrame: number }> = []
 
       for (const overlap of overlapping) {
-        if (overlap.start_frame_index >= start_frame_index && overlap.end_frame_index <= end_frame_index) {
+        if (
+          overlap.start_frame_index >= start_frame_index &&
+          overlap.end_frame_index <= end_frame_index
+        ) {
           // Completely contained - delete it and its combined image
           deleteCombinedImage(videoId, overlap.id)
           db.prepare('DELETE FROM captions WHERE id = ?').run(overlap.id)
-        } else if (overlap.start_frame_index < start_frame_index && overlap.end_frame_index > end_frame_index) {
+        } else if (
+          overlap.start_frame_index < start_frame_index &&
+          overlap.end_frame_index > end_frame_index
+        ) {
           // New annotation is contained within existing - split the existing
           // Keep the left part, set to pending
-          db.prepare(`
+          db.prepare(
+            `
             UPDATE captions
             SET end_frame_index = ?, boundary_pending = 1
             WHERE id = ?
-          `).run(start_frame_index - 1, overlap.id)
-          modifiedAnnotations.push({ id: overlap.id, startFrame: overlap.start_frame_index, endFrame: start_frame_index - 1 })
+          `
+          ).run(start_frame_index - 1, overlap.id)
+          modifiedAnnotations.push({
+            id: overlap.id,
+            startFrame: overlap.start_frame_index,
+            endFrame: start_frame_index - 1,
+          })
 
           // Create right part as pending
-          const result = db.prepare(`
+          const result = db
+            .prepare(
+              `
             INSERT INTO captions (start_frame_index, end_frame_index, boundary_state, boundary_pending, text)
             VALUES (?, ?, ?, 1, ?)
-          `).run(end_frame_index + 1, overlap.end_frame_index, overlap.boundary_state, overlap.text)
-          modifiedAnnotations.push({ id: result.lastInsertRowid as number, startFrame: end_frame_index + 1, endFrame: overlap.end_frame_index })
+          `
+            )
+            .run(end_frame_index + 1, overlap.end_frame_index, overlap.boundary_state, overlap.text)
+          modifiedAnnotations.push({
+            id: result.lastInsertRowid as number,
+            startFrame: end_frame_index + 1,
+            endFrame: overlap.end_frame_index,
+          })
         } else if (overlap.start_frame_index < start_frame_index) {
           // Overlaps on the left - trim it
-          db.prepare(`
+          db.prepare(
+            `
             UPDATE captions
             SET end_frame_index = ?, boundary_pending = 1
             WHERE id = ?
-          `).run(start_frame_index - 1, overlap.id)
-          modifiedAnnotations.push({ id: overlap.id, startFrame: overlap.start_frame_index, endFrame: start_frame_index - 1 })
+          `
+          ).run(start_frame_index - 1, overlap.id)
+          modifiedAnnotations.push({
+            id: overlap.id,
+            startFrame: overlap.start_frame_index,
+            endFrame: start_frame_index - 1,
+          })
         } else {
           // Overlaps on the right - trim it
-          db.prepare(`
+          db.prepare(
+            `
             UPDATE captions
             SET start_frame_index = ?, boundary_pending = 1
             WHERE id = ?
-          `).run(end_frame_index + 1, overlap.id)
-          modifiedAnnotations.push({ id: overlap.id, startFrame: end_frame_index + 1, endFrame: overlap.end_frame_index })
+          `
+          ).run(end_frame_index + 1, overlap.id)
+          modifiedAnnotations.push({
+            id: overlap.id,
+            startFrame: end_frame_index + 1,
+            endFrame: overlap.end_frame_index,
+          })
         }
       }
 
       // Regenerate combined images for all modified overlapping annotations
       for (const modified of modifiedAnnotations) {
-        await regenerateCombinedImageForAnnotation(videoId, modified.id, modified.startFrame, modified.endFrame, db)
+        await regenerateCombinedImageForAnnotation(
+          videoId,
+          modified.id,
+          modified.startFrame,
+          modified.endFrame,
+          db
+        )
       }
 
       // Helper function to create or merge gap annotation
       const createOrMergeGap = (gapStart: number, gapEnd: number) => {
         // Find adjacent gap annotations
-        const adjacentGaps = db.prepare(`
+        const adjacentGaps = db
+          .prepare(
+            `
           SELECT * FROM captions
           WHERE boundary_state = 'gap'
           AND (
@@ -240,7 +291,9 @@ export async function action({ params, request }: ActionFunctionArgs) {
             OR start_frame_index = ? + 1
           )
           ORDER BY start_frame_index
-        `).all(gapStart, gapEnd) as Annotation[]
+        `
+          )
+          .all(gapStart, gapEnd) as Annotation[]
 
         // Calculate merged gap range
         let mergedStart = gapStart
@@ -265,10 +318,12 @@ export async function action({ params, request }: ActionFunctionArgs) {
         }
 
         // Create merged gap annotation
-        db.prepare(`
+        db.prepare(
+          `
           INSERT INTO captions (start_frame_index, end_frame_index, boundary_state, boundary_pending)
           VALUES (?, ?, 'gap', 0)
-        `).run(mergedStart, mergedEnd)
+        `
+        ).run(mergedStart, mergedEnd)
       }
 
       // Create gap annotations for uncovered ranges when annotation is reduced
@@ -283,34 +338,55 @@ export async function action({ params, request }: ActionFunctionArgs) {
       }
 
       // Update the annotation and mark as confirmed
-      db.prepare(`
+      db.prepare(
+        `
         UPDATE captions
         SET start_frame_index = ?,
             end_frame_index = ?,
             boundary_state = ?,
             boundary_pending = 0
         WHERE id = ?
-      `).run(start_frame_index, end_frame_index, boundary_state || 'confirmed', id)
+      `
+      ).run(start_frame_index, end_frame_index, boundary_state || 'confirmed', id)
 
       // Regenerate combined image if boundaries changed
-      if (start_frame_index !== original.start_frame_index || end_frame_index !== original.end_frame_index) {
-        await regenerateCombinedImageForAnnotation(videoId, id, start_frame_index, end_frame_index, db)
+      if (
+        start_frame_index !== original.start_frame_index ||
+        end_frame_index !== original.end_frame_index
+      ) {
+        await regenerateCombinedImageForAnnotation(
+          videoId,
+          id,
+          start_frame_index,
+          end_frame_index,
+          db
+        )
       }
 
       const annotation = db.prepare('SELECT * FROM captions WHERE id = ?').get(id)
       db.close()
 
       return new Response(JSON.stringify({ annotation }), {
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
       })
     } else {
       // Create new annotation
       const { start_frame_index, end_frame_index, boundary_state, boundary_pending, text } = body
 
-      const result = db.prepare(`
+      const result = db
+        .prepare(
+          `
         INSERT INTO captions (start_frame_index, end_frame_index, boundary_state, boundary_pending, text)
         VALUES (?, ?, ?, ?, ?)
-      `).run(start_frame_index, end_frame_index, boundary_state, boundary_pending ? 1 : 0, text || null)
+      `
+        )
+        .run(
+          start_frame_index,
+          end_frame_index,
+          boundary_state,
+          boundary_pending ? 1 : 0,
+          text || null
+        )
 
       const annotationId = result.lastInsertRowid as number
 
@@ -326,16 +402,13 @@ export async function action({ params, request }: ActionFunctionArgs) {
       db.close()
 
       return new Response(JSON.stringify({ annotation }), {
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
       })
     }
   } catch (error) {
-    return new Response(
-      JSON.stringify({ error: (error as Error).message }),
-      {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      }
-    )
+    return new Response(JSON.stringify({ error: (error as Error).message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    })
   }
 }

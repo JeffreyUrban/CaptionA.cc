@@ -223,6 +223,14 @@ def write_frames_to_database(
     if not frame_files:
         return 0
 
+    # Clear existing frames from database to prevent UNIQUE constraint errors
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute("DELETE FROM full_frames")
+        conn.commit()
+    finally:
+        conn.close()
+
     # Prepare frame data
     frames = []
     for frame_file in frame_files:

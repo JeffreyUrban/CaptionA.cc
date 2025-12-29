@@ -10,17 +10,25 @@
  */
 
 import { spawn } from 'child_process'
-import { resolve } from 'path'
-import Database from 'better-sqlite3'
 import { existsSync, readdirSync } from 'fs'
-import { getDbPath, getVideoDir, getAllVideos } from '~/utils/video-paths'
-import { tryStartProcessing, finishProcessing, registerQueueProcessor } from './processing-coordinator'
+import { resolve } from 'path'
+
+import Database from 'better-sqlite3'
+
 import { recoverStalledCropFrames } from './crop-frames-processing'
+import {
+  tryStartProcessing,
+  finishProcessing,
+  registerQueueProcessor,
+} from './processing-coordinator'
+
+import { migrateDatabase } from '~/db/migrate'
+import { getDbPath, getVideoDir, getAllVideos } from '~/utils/video-paths'
 
 interface ProcessingOptions {
-  videoPath: string  // Display path (user-facing) like "show_name/video_name"
-  videoFile: string  // Full path to uploaded video file
-  videoId?: string   // UUID for this video (optional for backward compat)
+  videoPath: string // Display path (user-facing) like "show_name/video_name"
+  videoFile: string // Full path to uploaded video file
+  videoId?: string // UUID for this video (optional for backward compat)
 }
 
 // Processing queue management
@@ -30,7 +38,9 @@ const processingQueue: ProcessingOptions[] = []
  * Add video to processing queue and start processing if capacity available
  */
 export function queueVideoProcessing(options: ProcessingOptions): void {
-  console.log(`[FullFramesQueue] Queuing ${options.videoPath} (queue size: ${processingQueue.length})`)
+  console.log(
+    `[FullFramesQueue] Queuing ${options.videoPath} (queue size: ${processingQueue.length})`
+  )
   processingQueue.push(options)
   processNextInQueue()
 }
@@ -51,7 +61,9 @@ function processNextInQueue(): void {
   }
 
   const nextVideo = processingQueue.shift()!
-  console.log(`[FullFramesQueue] Starting ${nextVideo.videoPath} (${processingQueue.length} remaining)`)
+  console.log(
+    `[FullFramesQueue] Starting ${nextVideo.videoPath} (${processingQueue.length} remaining)`
+  )
 
   triggerVideoProcessing(nextVideo)
     .catch(error => {
@@ -92,18 +104,22 @@ export async function triggerVideoProcessing(options: ProcessingOptions): Promis
 
     const db = new Database(dbPath)
     try {
-      db.prepare(`
+      db.prepare(
+        `
         UPDATE processing_status
         SET status = 'error',
             error_message = 'Video file not found (may have been renamed or deleted)',
             error_details = ?,
             error_occurred_at = datetime('now')
         WHERE id = 1
-      `).run(JSON.stringify({
-        reason: 'file_not_found',
-        videoFile,
-        videoPath
-      }))
+      `
+      ).run(
+        JSON.stringify({
+          reason: 'file_not_found',
+          videoFile,
+          videoPath,
+        })
+      )
     } finally {
       db.close()
     }
@@ -115,13 +131,15 @@ export async function triggerVideoProcessing(options: ProcessingOptions): Promis
   // Update status to processing
   const db = new Database(dbPath)
   try {
-    db.prepare(`
+    db.prepare(
+      `
       UPDATE processing_status
       SET status = 'extracting_frames',
           processing_started_at = datetime('now'),
           processing_attempts = processing_attempts + 1
       WHERE id = 1
-    `).run()
+    `
+    ).run()
   } finally {
     db.close()
   }
@@ -142,11 +160,11 @@ export async function triggerVideoProcessing(options: ProcessingOptions): Promis
       '--output-dir',
       outputDir,
       '--frame-rate',
-      '0.1'  // 0.1Hz = 10x sampling
+      '0.1', // 0.1Hz = 10x sampling
     ],
     {
       cwd: resolve(process.cwd(), '..', '..', 'data-pipelines', 'full_frames'),
-      stdio: ['ignore', 'pipe', 'pipe']
+      stdio: ['ignore', 'pipe', 'pipe'],
     }
   )
 
@@ -155,11 +173,15 @@ export async function triggerVideoProcessing(options: ProcessingOptions): Promis
   if (pid) {
     const db2 = new Database(dbPath)
     try {
-      db2.prepare(`
+      db2
+        .prepare(
+          `
         UPDATE processing_status
         SET current_job_id = ?
         WHERE id = 1
-      `).run(pid.toString())
+      `
+        )
+        .run(pid.toString())
     } finally {
       db2.close()
     }
@@ -168,7 +190,7 @@ export async function triggerVideoProcessing(options: ProcessingOptions): Promis
   let stdout = ''
   let stderr = ''
 
-  fullFramesCmd.stdout?.on('data', (data) => {
+  fullFramesCmd.stdout?.on('data', data => {
     stdout += data.toString()
     console.log(`[full_frames] ${data.toString().trim()}`)
 
@@ -177,11 +199,13 @@ export async function triggerVideoProcessing(options: ProcessingOptions): Promis
       if (existsSync(dbPath)) {
         const db = new Database(dbPath)
         try {
-          db.prepare(`
+          db.prepare(
+            `
             UPDATE processing_status
             SET last_heartbeat_at = datetime('now')
             WHERE id = 1
-          `).run()
+          `
+          ).run()
         } finally {
           db.close()
         }
@@ -203,11 +227,13 @@ export async function triggerVideoProcessing(options: ProcessingOptions): Promis
         if (existsSync(dbPath)) {
           const db = new Database(dbPath)
           try {
-            db.prepare(`
+            db.prepare(
+              `
               UPDATE processing_status
               SET ocr_progress = ?
               WHERE id = 1
-            `).run(progress)
+            `
+            ).run(progress)
           } finally {
             db.close()
           }
@@ -219,17 +245,19 @@ export async function triggerVideoProcessing(options: ProcessingOptions): Promis
     }
   })
 
-  fullFramesCmd.stderr?.on('data', (data) => {
+  fullFramesCmd.stderr?.on('data', data => {
     stderr += data.toString()
     console.error(`[full_frames] ${data.toString().trim()}`)
   })
 
   // Return a Promise that resolves when the process completes
-  return new Promise<void>((resolve) => {
-    fullFramesCmd.on('close', (code) => {
+  return new Promise<void>(resolve => {
+    fullFramesCmd.on('close', code => {
       // Skip status update if video was deleted during processing
       if (!existsSync(dbPath)) {
-        console.log(`[VideoProcessing] Video ${videoPath} was deleted during processing, skipping status update`)
+        console.log(
+          `[VideoProcessing] Video ${videoPath} was deleted during processing, skipping status update`
+        )
         resolve()
         return
       }
@@ -239,7 +267,8 @@ export async function triggerVideoProcessing(options: ProcessingOptions): Promis
         try {
           if (code === 0) {
             // Success - mark as complete
-            db.prepare(`
+            db.prepare(
+              `
               UPDATE processing_status
               SET status = 'processing_complete',
                   processing_completed_at = datetime('now'),
@@ -247,19 +276,22 @@ export async function triggerVideoProcessing(options: ProcessingOptions): Promis
                   ocr_progress = 1.0,
                   layout_analysis_progress = 1.0
               WHERE id = 1
-            `).run()
+            `
+            ).run()
 
             console.log(`[VideoProcessing] Processing complete: ${videoPath}`)
           } else {
             // Error - mark as failed
-            db.prepare(`
+            db.prepare(
+              `
               UPDATE processing_status
               SET status = 'error',
                   error_message = ?,
                   error_details = ?,
                   error_occurred_at = datetime('now')
               WHERE id = 1
-            `).run(
+            `
+            ).run(
               `full_frames pipeline failed with code ${code}`,
               JSON.stringify({ code, stdout, stderr })
             )
@@ -276,12 +308,14 @@ export async function triggerVideoProcessing(options: ProcessingOptions): Promis
       resolve()
     })
 
-    fullFramesCmd.on('error', (error) => {
+    fullFramesCmd.on('error', error => {
       console.error(`[VideoProcessing] Failed to start processing: ${error.message}`)
 
       // Skip status update if video was deleted
       if (!existsSync(dbPath)) {
-        console.log(`[VideoProcessing] Video ${videoPath} was deleted, skipping error status update`)
+        console.log(
+          `[VideoProcessing] Video ${videoPath} was deleted, skipping error status update`
+        )
         resolve()
         return
       }
@@ -289,14 +323,16 @@ export async function triggerVideoProcessing(options: ProcessingOptions): Promis
       try {
         const db = new Database(dbPath)
         try {
-          db.prepare(`
+          db.prepare(
+            `
             UPDATE processing_status
             SET status = 'error',
                 error_message = ?,
                 error_details = ?,
                 error_occurred_at = datetime('now')
             WHERE id = 1
-          `).run(
+          `
+          ).run(
             `Failed to start processing: ${error.message}`,
             JSON.stringify({ error: error.message, stack: error.stack })
           )
@@ -324,9 +360,13 @@ export function getProcessingStatus(videoPath: string) {
 
   const db = new Database(dbPath, { readonly: true })
   try {
-    const status = db.prepare(`
+    const status = db
+      .prepare(
+        `
       SELECT * FROM processing_status WHERE id = 1
-    `).get()
+    `
+      )
+      .get()
     return status
   } finally {
     db.close()
@@ -346,6 +386,13 @@ export function recoverStalledProcessing() {
   for (const video of allVideos) {
     const dbPath = getDbPath(video.videoId)
     if (dbPath) {
+      // Run migrations (idempotent - safe to run multiple times)
+      try {
+        migrateDatabase(dbPath)
+      } catch (error) {
+        console.error(`[VideoProcessing] Failed to migrate ${video.displayPath}:`, error)
+      }
+
       // Check both full_frames and crop_frames processing
       checkAndRecoverVideo(dbPath, video.displayPath, video.videoId)
       recoverStalledCropFrames(video.videoId, video.displayPath)
@@ -360,15 +407,21 @@ function checkAndRecoverVideo(dbPath: string, videoPath: string, videoId: string
   try {
     const db = new Database(dbPath)
     try {
-      const status = db.prepare(`
+      const status = db
+        .prepare(
+          `
         SELECT status, current_job_id, processing_started_at, last_heartbeat_at
         FROM processing_status WHERE id = 1
-      `).get() as {
-        status: string
-        current_job_id: string | null
-        processing_started_at: string | null
-        last_heartbeat_at: string | null
-      } | undefined
+      `
+        )
+        .get() as
+        | {
+            status: string
+            current_job_id: string | null
+            processing_started_at: string | null
+            last_heartbeat_at: string | null
+          }
+        | undefined
 
       if (!status) return
 
@@ -383,32 +436,109 @@ function checkAndRecoverVideo(dbPath: string, videoPath: string, videoId: string
           return
         }
 
-        const videoFiles = readdirSync(videoDir).filter(f =>
-          f.endsWith('.mp4') || f.endsWith('.mkv') || f.endsWith('.avi') || f.endsWith('.mov')
+        const videoFiles = readdirSync(videoDir).filter(
+          f => f.endsWith('.mp4') || f.endsWith('.mkv') || f.endsWith('.avi') || f.endsWith('.mov')
         )
 
-        if (videoFiles.length === 0) {
+        const firstVideoFile = videoFiles[0]
+        if (!firstVideoFile) {
           console.error(`[VideoProcessing] Video file not found in ${videoDir}`)
 
           // Mark as error since we can't requeue without a video file
-          db.prepare(`
+          db.prepare(
+            `
             UPDATE processing_status
             SET status = 'error',
                 error_message = 'Video file not found (cannot requeue)',
                 error_occurred_at = datetime('now')
             WHERE id = 1
-          `).run()
+          `
+          ).run()
           return
         }
 
-        const videoFile = resolve(videoDir, videoFiles[0])
+        const videoFile = resolve(videoDir, firstVideoFile)
 
         // Requeue for processing
         queueVideoProcessing({
           videoPath: videoPath,
           videoFile,
-          videoId
+          videoId,
         })
+        return
+      }
+
+      // Auto-retry recoverable errors
+      if (status.status === 'error') {
+        const errorInfo = db
+          .prepare(
+            `
+          SELECT error_message, error_details FROM processing_status WHERE id = 1
+        `
+          )
+          .get() as { error_message: string; error_details: string } | undefined
+
+        // Check for recoverable errors
+        const isOcrFailure =
+          errorInfo?.error_details?.includes('OCR') && errorInfo?.error_details?.includes('failed')
+        const isInterrupted = errorInfo?.error_message?.includes('Processing interrupted')
+        const isDuplicateFrame = errorInfo?.error_details?.includes(
+          'UNIQUE constraint failed: full_frames.frame_index'
+        )
+
+        if (isOcrFailure || isInterrupted || isDuplicateFrame) {
+          const errorType = isDuplicateFrame ? 'duplicate frames' : 'recoverable error'
+          console.log(
+            `[VideoProcessing] Auto-retrying ${videoPath} (${errorType}: ${errorInfo?.error_message})`
+          )
+
+          // Clear existing full_frames if duplicate error
+          if (isDuplicateFrame) {
+            try {
+              const deleteResult = db.prepare(`DELETE FROM full_frames`).run()
+              console.log(
+                `[VideoProcessing] Cleared ${deleteResult.changes} existing frames from database`
+              )
+            } catch (error) {
+              console.error(`[VideoProcessing] Failed to clear frames for ${videoPath}:`, error)
+              return
+            }
+          }
+
+          // Find the video file
+          const videoDir = getVideoDir(videoId)
+          if (videoDir) {
+            const videoFiles = readdirSync(videoDir).filter(
+              f =>
+                f.endsWith('.mp4') || f.endsWith('.mkv') || f.endsWith('.avi') || f.endsWith('.mov')
+            )
+
+            const firstVideoFile = videoFiles[0]
+            if (firstVideoFile) {
+              const videoFile = resolve(videoDir, firstVideoFile)
+
+              // Reset to upload_complete
+              db.prepare(
+                `
+                UPDATE processing_status
+                SET status = 'upload_complete',
+                    error_message = NULL,
+                    error_details = NULL,
+                    error_occurred_at = NULL
+                WHERE id = 1
+              `
+              ).run()
+
+              // Queue for reprocessing
+              queueVideoProcessing({
+                videoPath,
+                videoFile,
+                videoId,
+              })
+            }
+          }
+        }
+
         return
       }
 
@@ -431,22 +561,47 @@ function checkAndRecoverVideo(dbPath: string, videoPath: string, videoId: string
       }
 
       if (!processRunning) {
-        // Process is not running - mark as failed
-        console.log(`[VideoProcessing] Recovering stalled processing for ${videoPath} (PID ${pid} not running)`)
+        // Process is not running - auto-retry
+        console.log(
+          `[VideoProcessing] Auto-retrying interrupted processing for ${videoPath} (PID ${pid} not running)`
+        )
 
-        db.prepare(`
+        // Reset to upload_complete to allow reprocessing
+        db.prepare(
+          `
           UPDATE processing_status
-          SET status = 'error',
-              error_message = 'Processing interrupted (server restart or process crash)',
-              error_details = ?,
-              error_occurred_at = datetime('now')
+          SET status = 'upload_complete',
+              error_message = NULL,
+              error_details = NULL,
+              error_occurred_at = NULL
           WHERE id = 1
-        `).run(JSON.stringify({
-          reason: 'stalled_process',
-          pid,
-          lastHeartbeat: status.last_heartbeat_at,
-          processingStarted: status.processing_started_at
-        }))
+        `
+        ).run()
+
+        // Get video file path for reprocessing
+        const videoDir = getVideoDir(videoId)
+        if (videoDir) {
+          const videoFiles = readdirSync(videoDir).filter(
+            f =>
+              f.endsWith('.mp4') || f.endsWith('.mkv') || f.endsWith('.avi') || f.endsWith('.mov')
+          )
+
+          const firstVideoFile = videoFiles[0]
+          if (firstVideoFile) {
+            const videoFile = resolve(videoDir, firstVideoFile)
+
+            // Queue for reprocessing after DB is closed
+            setTimeout(() => {
+              queueVideoProcessing({
+                videoPath,
+                videoFile,
+                videoId,
+              })
+            }, 0)
+          } else {
+            console.error(`[VideoProcessing] Cannot retry ${videoPath}: video file not found`)
+          }
+        }
       }
     } finally {
       db.close()

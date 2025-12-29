@@ -1,17 +1,19 @@
-import { reactRouter } from "@react-router/dev/vite";
-import { defineConfig } from "vite";
-import tsconfigPaths from "vite-tsconfig-paths";
-import mdx from "@mdx-js/rollup";
-import remarkFrontmatter from "remark-frontmatter";
-import remarkMdxFrontmatter from "remark-mdx-frontmatter";
-import { imagetools } from "vite-imagetools";
-import path from "path";
+import path from 'path'
 
-export default defineConfig({
-  envDir: path.resolve(__dirname, "../.."), // Load .env from monorepo root
+import mdx from '@mdx-js/rollup'
+import { reactRouter } from '@react-router/dev/vite'
+import remarkFrontmatter from 'remark-frontmatter'
+import remarkMdxFrontmatter from 'remark-mdx-frontmatter'
+import { visualizer } from 'rollup-plugin-visualizer'
+import { defineConfig } from 'vite'
+import { imagetools } from 'vite-imagetools'
+import tsconfigPaths from 'vite-tsconfig-paths'
+
+export default defineConfig(({ mode }) => ({
+  envDir: path.resolve(__dirname, '../..'), // Load .env from monorepo root
   resolve: {
     alias: {
-      "~": path.resolve(__dirname, "./app"),
+      '~': path.resolve(__dirname, './app'),
     },
   },
   plugins: [
@@ -21,5 +23,14 @@ export default defineConfig({
     }),
     reactRouter(),
     tsconfigPaths(),
-  ],
-});
+    // Bundle analyzer - only in production builds when ANALYZE=true
+    mode === 'production' &&
+      process.env['ANALYZE'] === 'true' &&
+      visualizer({
+        filename: './build/stats.html',
+        open: true,
+        gzipSize: true,
+        brotliSize: true,
+      }),
+  ].filter(Boolean),
+}))

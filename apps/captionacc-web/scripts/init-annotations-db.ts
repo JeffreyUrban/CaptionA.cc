@@ -6,10 +6,10 @@
  * Example: node scripts/init-annotations-db.ts content_name/video_id
  */
 
-import Database from 'better-sqlite3'
-import { readFileSync } from 'fs'
+import { readFileSync, mkdirSync } from 'fs'
 import { resolve, dirname } from 'path'
-import { mkdirSync } from 'fs'
+
+import Database from 'better-sqlite3'
 
 const videoPath = process.argv[2]
 

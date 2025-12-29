@@ -1,10 +1,15 @@
 /**
  * Rename a folder in the video library
+ * Updates display_path for all videos in the folder (storage paths are immutable UUIDs)
  */
-import type { ActionFunctionArgs } from 'react-router'
 import { resolve } from 'path'
-import { rename, access, readdir } from 'fs/promises'
-import { constants } from 'fs'
+
+import Database from 'better-sqlite3'
+import type { ActionFunctionArgs } from 'react-router'
+
+import { getAllVideos } from '~/utils/video-paths'
+
+const dataDir = resolve(process.cwd(), '..', '..', 'local', 'data')
 
 export async function action({ request }: ActionFunctionArgs) {
   if (request.method !== 'PATCH') {
@@ -24,46 +29,84 @@ export async function action({ request }: ActionFunctionArgs) {
     return Response.json({ error: 'Folder path should not start or end with /' }, { status: 400 })
   }
 
-  if (!/^[a-zA-Z0-9_\-\/\s]+$/.test(trimmedNewPath)) {
+  if (!/^[a-zA-Z0-9_\-/\s]+$/.test(trimmedNewPath)) {
     return Response.json({ error: 'Folder path contains invalid characters' }, { status: 400 })
   }
 
-  const dataDir = resolve(process.cwd(), '..', '..', 'local', 'data')
-  const oldFullPath = resolve(dataDir, oldPath)
-  const newFullPath = resolve(dataDir, trimmedNewPath)
+  // Get all videos to find those in this folder
+  const allVideos = getAllVideos()
 
-  // Check if old folder exists
-  try {
-    await access(oldFullPath, constants.F_OK)
-  } catch {
-    return Response.json({ error: 'Source folder does not exist' }, { status: 404 })
+  // Find videos in the old folder path
+  const oldPathPrefix = oldPath + '/'
+  const videosInFolder = allVideos.filter(
+    video => video.displayPath === oldPath || video.displayPath.startsWith(oldPathPrefix)
+  )
+
+  if (videosInFolder.length === 0) {
+    return Response.json({ error: 'Folder does not exist or is empty' }, { status: 404 })
   }
 
-  // Check if new path already exists
-  try {
-    await access(newFullPath, constants.F_OK)
-    return Response.json({ error: 'Target folder already exists' }, { status: 409 })
-  } catch {
-    // Good - target doesn't exist
-  }
-
-  // Verify it's a directory, not a video directory (has annotations.db)
-  try {
-    const entries = await readdir(oldFullPath)
-    if (entries.includes('annotations.db')) {
-      return Response.json({
-        error: 'Cannot rename video directory directly. This is a video, not a folder.'
-      }, { status: 400 })
+  // Check if any video would conflict with existing paths in new location
+  const newPathPrefix = trimmedNewPath + '/'
+  for (const video of videosInFolder) {
+    // Calculate new display path for this video
+    let newDisplayPath: string
+    if (video.displayPath === oldPath) {
+      newDisplayPath = trimmedNewPath
+    } else {
+      // Replace the old folder prefix with the new one
+      newDisplayPath = trimmedNewPath + video.displayPath.substring(oldPath.length)
     }
-  } catch (error) {
-    console.error('Failed to read directory:', error)
-    return Response.json({ error: 'Failed to read source folder' }, { status: 500 })
+
+    // Check if new path already exists
+    const existingVideo = allVideos.find(v => v.displayPath === newDisplayPath)
+    if (existingVideo) {
+      return Response.json(
+        { error: `Target path already exists: ${newDisplayPath}` },
+        { status: 409 }
+      )
+    }
   }
 
-  // Rename the folder
+  // Update all videos in the folder
   try {
-    await rename(oldFullPath, newFullPath)
-    return Response.json({ success: true, oldPath, newPath: trimmedNewPath })
+    let updatedCount = 0
+
+    for (const video of videosInFolder) {
+      // Calculate new display path
+      let newDisplayPath: string
+      if (video.displayPath === oldPath) {
+        newDisplayPath = trimmedNewPath
+      } else {
+        newDisplayPath = trimmedNewPath + video.displayPath.substring(oldPath.length)
+      }
+
+      // Get database path from storage path
+      const { storagePath } = video
+      const dbPath = resolve(dataDir, ...storagePath.split('/'), 'annotations.db')
+
+      // Update display_path in database
+      const db = new Database(dbPath)
+      try {
+        db.prepare(
+          `
+          UPDATE video_metadata
+          SET display_path = ?
+          WHERE id = 1
+        `
+        ).run(newDisplayPath)
+        updatedCount++
+      } finally {
+        db.close()
+      }
+    }
+
+    return Response.json({
+      success: true,
+      oldPath,
+      newPath: trimmedNewPath,
+      updatedVideos: updatedCount,
+    })
   } catch (error) {
     console.error('Failed to rename folder:', error)
     return Response.json({ error: 'Failed to rename folder' }, { status: 500 })

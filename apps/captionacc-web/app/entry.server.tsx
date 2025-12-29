@@ -4,25 +4,26 @@
  * For more information, see https://reactrouter.com/file-conventions/entry.server
  */
 
-import { PassThrough } from "node:stream";
+import { PassThrough } from 'node:stream'
 
-import type { AppLoadContext, EntryContext } from "react-router";
-import { createReadableStreamFromReadable } from "@react-router/node";
-import { ServerRouter } from "react-router";
-import { isbot } from "isbot";
-import { renderToPipeableStream } from "react-dom/server";
-import { startPeriodicCleanup } from "~/services/video-cleanup";
-import { recoverStalledProcessing } from "~/services/video-processing";
+import { createReadableStreamFromReadable } from '@react-router/node'
+import { isbot } from 'isbot'
+import { renderToPipeableStream } from 'react-dom/server'
+import { ServerRouter } from 'react-router'
+import type { AppLoadContext, EntryContext } from 'react-router'
+
+import { startPeriodicCleanup } from '~/services/video-cleanup'
+import { recoverStalledProcessing } from '~/services/video-processing'
 // Import to register queue processors with coordinator
-import "~/services/crop-frames-processing";
+import '~/services/crop-frames-processing'
 
-const ABORT_DELAY = 5_000;
+const ABORT_DELAY = 5_000
 
 // Start periodic cleanup on server startup
-startPeriodicCleanup();
+startPeriodicCleanup()
 
 // Recover any stalled processing jobs from server restart
-recoverStalledProcessing();
+recoverStalledProcessing()
 
 export default function handleRequest(
   request: Request,
@@ -34,19 +35,9 @@ export default function handleRequest(
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   loadContext: AppLoadContext
 ) {
-  return isbot(request.headers.get("user-agent") || "")
-    ? handleBotRequest(
-        request,
-        responseStatusCode,
-        responseHeaders,
-        routerContext
-      )
-    : handleBrowserRequest(
-        request,
-        responseStatusCode,
-        responseHeaders,
-        routerContext
-      );
+  return isbot(request.headers.get('user-agent') ?? '')
+    ? handleBotRequest(request, responseStatusCode, responseHeaders, routerContext)
+    : handleBrowserRequest(request, responseStatusCode, responseHeaders, routerContext)
 }
 
 function handleBotRequest(
@@ -56,46 +47,43 @@ function handleBotRequest(
   routerContext: EntryContext
 ) {
   return new Promise((resolve, reject) => {
-    let shellRendered = false;
+    let shellRendered = false
     const { pipe, abort } = renderToPipeableStream(
-      <ServerRouter
-        context={routerContext}
-        url={request.url}
-      />,
+      <ServerRouter context={routerContext} url={request.url} />,
       {
         onAllReady() {
-          shellRendered = true;
-          const body = new PassThrough();
-          const stream = createReadableStreamFromReadable(body);
+          shellRendered = true
+          const body = new PassThrough()
+          const stream = createReadableStreamFromReadable(body)
 
-          responseHeaders.set("Content-Type", "text/html");
+          responseHeaders.set('Content-Type', 'text/html')
 
           resolve(
             new Response(stream, {
               headers: responseHeaders,
               status: responseStatusCode,
             })
-          );
+          )
 
-          pipe(body);
+          pipe(body)
         },
         onShellError(error: unknown) {
-          reject(error);
+          reject(error)
         },
         onError(error: unknown) {
-          responseStatusCode = 500;
+          responseStatusCode = 500
           // Log streaming rendering errors from inside the shell.  Don't log
           // errors encountered during initial shell rendering since they'll
           // reject and get logged in handleDocumentRequest.
           if (shellRendered) {
-            console.error(error);
+            console.error(error)
           }
         },
       }
-    );
+    )
 
-    setTimeout(abort, ABORT_DELAY);
-  });
+    setTimeout(abort, ABORT_DELAY)
+  })
 }
 
 function handleBrowserRequest(
@@ -105,44 +93,41 @@ function handleBrowserRequest(
   routerContext: EntryContext
 ) {
   return new Promise((resolve, reject) => {
-    let shellRendered = false;
+    let shellRendered = false
     const { pipe, abort } = renderToPipeableStream(
-      <ServerRouter
-        context={routerContext}
-        url={request.url}
-      />,
+      <ServerRouter context={routerContext} url={request.url} />,
       {
         onShellReady() {
-          shellRendered = true;
-          const body = new PassThrough();
-          const stream = createReadableStreamFromReadable(body);
+          shellRendered = true
+          const body = new PassThrough()
+          const stream = createReadableStreamFromReadable(body)
 
-          responseHeaders.set("Content-Type", "text/html");
+          responseHeaders.set('Content-Type', 'text/html')
 
           resolve(
             new Response(stream, {
               headers: responseHeaders,
               status: responseStatusCode,
             })
-          );
+          )
 
-          pipe(body);
+          pipe(body)
         },
         onShellError(error: unknown) {
-          reject(error);
+          reject(error)
         },
         onError(error: unknown) {
-          responseStatusCode = 500;
+          responseStatusCode = 500
           // Log streaming rendering errors from inside the shell.  Don't log
           // errors encountered during initial shell rendering since they'll
           // reject and get logged in handleDocumentRequest.
           if (shellRendered) {
-            console.error(error);
+            console.error(error)
           }
         },
       }
-    );
+    )
 
-    setTimeout(abort, ABORT_DELAY);
-  });
+    setTimeout(abort, ABORT_DELAY)
+  })
 }

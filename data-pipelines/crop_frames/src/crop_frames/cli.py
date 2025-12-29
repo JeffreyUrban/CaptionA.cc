@@ -1,7 +1,6 @@
 """Command-line interface for crop_frames."""
 
 from pathlib import Path
-from typing import Optional
 
 import typer
 from rich.console import Console
@@ -14,7 +13,9 @@ from rich.progress import (
 )
 
 from . import __version__
-from .crop_frames import extract_frames as extract_frames_core, resize_frames
+from .crop_frames import extract_frames as extract_frames_core
+from .crop_frames import resize_frames as resize_frames_core
+from .database import get_database_path, write_frames_to_database
 
 app = typer.Typer(
     name="crop_frames",
@@ -58,12 +59,12 @@ def extract_frames(
         "-r",
         help="Frame sampling rate in Hz",
     ),
-    resize_width: Optional[int] = typer.Option(
+    resize_width: int | None = typer.Option(
         None,
         "--resize-width",
         help="Optional: resize frames to this width",
     ),
-    resize_height: Optional[int] = typer.Option(
+    resize_height: int | None = typer.Option(
         None,
         "--resize-height",
         help="Optional: resize frames to this height",
@@ -73,7 +74,17 @@ def extract_frames(
         "--preserve-aspect/--stretch",
         help="Preserve aspect ratio when resizing (default: stretch)",
     ),
-    version: Optional[bool] = typer.Option(
+    write_to_db: bool = typer.Option(
+        False,
+        "--write-to-db",
+        help="Write frames to database and cleanup filesystem frames",
+    ),
+    crop_bounds_version: int = typer.Option(
+        1,
+        "--crop-bounds-version",
+        help="Crop bounds version from video_layout_config (required if --write-to-db)",
+    ),
+    version: bool | None = typer.Option(
         None,
         "--version",
         callback=version_callback,
@@ -109,18 +120,14 @@ def extract_frames(
         crop_box = (x, y, crop_width, crop_height)
     except ValueError as e:
         console.print(f"[red]Error:[/red] Invalid crop format: {e}")
-        console.print(
-            "Expected format: 'left,top,right,bottom' (e.g., '100,200,700,250')"
-        )
-        raise typer.Exit(1)
+        console.print("Expected format: 'left,top,right,bottom' (e.g., '100,200,700,250')")
+        raise typer.Exit(1) from None
 
     # Validate resize parameters
     resize_params = None
     if resize_width is not None or resize_height is not None:
         if resize_width is None or resize_height is None:
-            console.print(
-                "[red]Error:[/red] Both --resize-width and --resize-height must be specified together"
-            )
+            console.print("[red]Error:[/red] Both --resize-width and --resize-height must be specified together")
             raise typer.Exit(1)
         resize_params = (resize_width, resize_height)
 
@@ -132,7 +139,20 @@ def extract_frames(
     if resize_params:
         console.print(f"Resize: {resize_width}×{resize_height}")
         console.print(f"Mode: {'preserve aspect' if preserve_aspect else 'stretch'}")
+    if write_to_db:
+        console.print(f"Database: Write to DB and cleanup (crop_bounds_version: {crop_bounds_version})")
     console.print()
+
+    # Clear existing frames before processing (to avoid stale frames from previous runs)
+    if output_dir.exists():
+        console.print("[bold]Clearing existing frames...[/bold]")
+        cleared_count = 0
+        for frame_file in output_dir.glob("frame_*.jpg"):
+            frame_file.unlink()
+            cleared_count += 1
+        if cleared_count > 0:
+            console.print(f"  [green]✓[/green] Cleared {cleared_count} existing frames")
+        console.print()
 
     try:
         with Progress(
@@ -159,12 +179,47 @@ def extract_frames(
 
         console.print(f"[green]✓[/green] Extracted {num_frames} frames to {result_dir}")
 
+        # Write frames to database and cleanup if requested
+        if write_to_db:
+            console.print()
+            console.print("[bold]Writing frames to database...[/bold]")
+
+            db_path = get_database_path(result_dir)
+            # Crop bounds as (left, top, right, bottom)
+            crop_bounds_tuple = (left, top, right, bottom)
+
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                TaskProgressColumn(),
+                console=console,
+            ) as progress:
+                task = progress.add_task("Writing frames...", total=num_frames)
+
+                frames_written = write_frames_to_database(
+                    frames_dir=result_dir,
+                    db_path=db_path,
+                    crop_bounds=crop_bounds_tuple,
+                    crop_bounds_version=crop_bounds_version,
+                    progress_callback=lambda current, total: progress.update(task, completed=current),
+                    delete_after_write=True,
+                )
+
+            console.print(f"  [green]✓[/green] Stored {frames_written} frames in database")
+            console.print("  [green]✓[/green] Deleted filesystem frames")
+
+            # Remove empty output directory
+            if result_dir.exists() and not any(result_dir.iterdir()):
+                result_dir.rmdir()
+                console.print("  [green]✓[/green] Removed empty directory")
+
     except FileNotFoundError as e:
         console.print(f"[red]Error:[/red] {e}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
     except Exception as e:
         console.print(f"[red]Error:[/red] {e}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
 
 @app.command()
@@ -197,7 +252,7 @@ def resize_frames(
         "--preserve-aspect/--stretch",
         help="Preserve aspect ratio with padding (default: stretch to fill)",
     ),
-    version: Optional[bool] = typer.Option(
+    version: bool | None = typer.Option(
         None,
         "--version",
         callback=version_callback,
@@ -235,7 +290,7 @@ def resize_frames(
             def update_progress(current: int, total: int) -> None:
                 progress.update(task, completed=current, total=total)
 
-            result_dir, num_frames = resize_frames(
+            result_dir, num_frames = resize_frames_core(
                 input_dir=input_dir,
                 output_dir=output_dir,
                 target_width=width,
@@ -248,10 +303,10 @@ def resize_frames(
 
     except FileNotFoundError as e:
         console.print(f"[red]Error:[/red] {e}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
     except Exception as e:
         console.print(f"[red]Error:[/red] {e}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
 
 if __name__ == "__main__":

@@ -1,7 +1,9 @@
-import { resolve } from 'path'
 import { existsSync } from 'fs'
 import { readdir } from 'fs/promises'
+import { resolve } from 'path'
+
 import Database from 'better-sqlite3'
+
 import { type VideoStats } from './video-stats'
 
 export interface VideoInfo {
@@ -17,8 +19,8 @@ export interface FolderNode {
   name: string
   path: string
   children: TreeNode[]
-  stats: VideoStats  // Aggregated stats
-  videoCount: number  // Total videos recursively
+  stats: VideoStats // Aggregated stats
+  videoCount: number // Total videos recursively
 }
 
 export interface VideoNode {
@@ -26,7 +28,7 @@ export interface VideoNode {
   name: string
   path: string
   videoId: string
-  stats: VideoStats | null  // Individual video stats (loaded async)
+  stats: VideoStats | null // Individual video stats (loaded async)
 }
 
 /**
@@ -43,6 +45,7 @@ export function buildVideoTree(videos: VideoInfo[]): TreeNode[] {
     // Build intermediate folder nodes
     for (let i = 0; i < segments.length - 1; i++) {
       const segment = segments[i]
+      if (!segment) continue
       const path = segments.slice(0, i + 1).join('/')
 
       if (!currentLevel.has(segment)) {
@@ -59,9 +62,14 @@ export function buildVideoTree(videos: VideoInfo[]): TreeNode[] {
             gapAnnotations: 0,
             progress: 0,
             totalFrames: 0,
-            coveredFrames: 0
+            coveredFrames: 0,
+            hasOcrData: false,
+            layoutApproved: false,
+            boundaryPendingReview: 0,
+            textPendingReview: 0,
+            badges: [],
           },
-          videoCount: 0
+          videoCount: 0,
         }
         currentLevel.set(segment, folderNode)
       }
@@ -79,12 +87,13 @@ export function buildVideoTree(videos: VideoInfo[]): TreeNode[] {
 
     // Add video node as leaf
     const videoName = segments[segments.length - 1]
+    if (!videoName) continue
     const videoNode: VideoNode = {
       type: 'video',
       name: videoName,
       path: video.videoId,
       videoId: video.videoId,
-      stats: null  // Will be loaded async
+      stats: null, // Will be loaded async
     }
 
     if (parentFolder && !parentFolder.children.some(c => c.path === videoNode.path)) {
@@ -112,23 +121,6 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
     'annotations.db'
   )
 
-  // Get total frames from crop_frames directory
-  const framesDir = resolve(
-    process.cwd(),
-    '..',
-    '..',
-    'local',
-    'data',
-    ...videoId.split('/'),
-    'crop_frames'
-  )
-
-  let totalFrames = 0
-  if (existsSync(framesDir)) {
-    const files = await readdir(framesDir)
-    totalFrames = files.filter(f => f.startsWith('frame_') && f.endsWith('.jpg')).length
-  }
-
   if (!existsSync(dbPath)) {
     return {
       totalAnnotations: 0,
@@ -137,15 +129,35 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
       predictedAnnotations: 0,
       gapAnnotations: 0,
       progress: 0,
-      totalFrames,
-      coveredFrames: 0
+      totalFrames: 0,
+      coveredFrames: 0,
+      hasOcrData: false,
+      layoutApproved: false,
+      boundaryPendingReview: 0,
+      textPendingReview: 0,
+      badges: [],
     }
   }
 
   const db = new Database(dbPath, { readonly: true })
 
+  // Count cropped frames from database (not filesystem)
+  // Frames are written to DB and filesystem is cleaned up after processing
+  let totalFrames = 0
   try {
-    const result = db.prepare(`
+    const frameCount = db.prepare(`SELECT COUNT(*) as count FROM cropped_frames`).get() as
+      | { count: number }
+      | undefined
+    totalFrames = frameCount?.count ?? 0
+  } catch {
+    // Table doesn't exist yet
+    totalFrames = 0
+  }
+
+  try {
+    const result = db
+      .prepare(
+        `
       SELECT
         COUNT(*) as total,
         SUM(CASE WHEN boundary_pending = 1 THEN 1 ELSE 0 END) as pending,
@@ -153,7 +165,9 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
         SUM(CASE WHEN boundary_state = 'predicted' THEN 1 ELSE 0 END) as predicted,
         SUM(CASE WHEN boundary_state = 'gap' THEN 1 ELSE 0 END) as gaps
       FROM captions
-    `).get() as {
+    `
+      )
+      .get() as {
       total: number
       pending: number
       confirmed: number
@@ -162,17 +176,19 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
     }
 
     // Calculate frame coverage for non-gap, non-pending annotations
-    const frameCoverage = db.prepare(`
+    const frameCoverage = db
+      .prepare(
+        `
       SELECT
         SUM(end_frame_index - start_frame_index + 1) as covered_frames
       FROM captions
       WHERE boundary_state != 'gap' AND boundary_pending = 0
-    `).get() as { covered_frames: number | null }
+    `
+      )
+      .get() as { covered_frames: number | null }
 
     const coveredFrames = frameCoverage.covered_frames || 0
-    const progress = totalFrames > 0
-      ? Math.round((coveredFrames / totalFrames) * 100)
-      : 0
+    const progress = totalFrames > 0 ? Math.round((coveredFrames / totalFrames) * 100) : 0
 
     return {
       totalAnnotations: result.total,
@@ -182,7 +198,12 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
       gapAnnotations: result.gaps,
       progress,
       totalFrames,
-      coveredFrames
+      coveredFrames,
+      hasOcrData: false,
+      layoutApproved: false,
+      boundaryPendingReview: 0,
+      textPendingReview: 0,
+      badges: [],
     }
   } finally {
     db.close()
@@ -229,9 +250,7 @@ export function calculateFolderStats(node: FolderNode): void {
     }
   }
 
-  const progress = totalFrames > 0
-    ? Math.round((coveredFrames / totalFrames) * 100)
-    : 0
+  const progress = totalFrames > 0 ? Math.round((coveredFrames / totalFrames) * 100) : 0
 
   node.stats = {
     totalAnnotations,
@@ -241,7 +260,12 @@ export function calculateFolderStats(node: FolderNode): void {
     gapAnnotations,
     progress,
     totalFrames,
-    coveredFrames
+    coveredFrames,
+    hasOcrData: false,
+    layoutApproved: false,
+    boundaryPendingReview: 0,
+    textPendingReview: 0,
+    badges: [],
   }
   node.videoCount = videoCount
 }
