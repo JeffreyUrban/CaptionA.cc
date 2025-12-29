@@ -735,11 +735,72 @@ export async function action({ params }: ActionFunctionArgs) {
       })
     }
 
-    // Get unique frame indices with caption boxes
-    // Uses predictions with user label overrides
-    const captionFrameIndices = db
+    // Count caption boxes to determine if we need fallback
+    const totalBoxStats = db
       .prepare(
         `
+      SELECT
+        COUNT(*) as total_boxes,
+        SUM(CASE WHEN o.predicted_label = 'in' THEN 1 ELSE 0 END) as predicted_in,
+        SUM(CASE WHEN l.label = 'in' AND l.label_source = 'user' THEN 1 ELSE 0 END) as user_labeled_in,
+        SUM(CASE WHEN l.label = 'out' AND l.label_source = 'user' THEN 1 ELSE 0 END) as user_labeled_out
+      FROM full_frame_ocr o
+      LEFT JOIN full_frame_box_labels l
+        ON o.frame_index = l.frame_index
+        AND o.box_index = l.box_index
+        AND l.annotation_source = 'full_frame'
+    `
+      )
+      .get() as {
+      total_boxes: number
+      predicted_in: number
+      user_labeled_in: number
+      user_labeled_out: number
+    }
+
+    const captionBoxCount = db
+      .prepare(
+        `
+      SELECT COUNT(*) as count
+      FROM full_frame_ocr o
+      LEFT JOIN full_frame_box_labels l
+        ON o.frame_index = l.frame_index
+        AND o.box_index = l.box_index
+        AND l.annotation_source = 'full_frame'
+      WHERE (
+        (l.label IS NULL AND o.predicted_label = 'in')
+        OR (l.label_source = 'user' AND l.label = 'in')
+      )
+    `
+      )
+      .get() as { count: number }
+
+    console.log(`[Reset Crop Bounds] Total OCR boxes: ${totalBoxStats.total_boxes}`)
+    console.log(`[Reset Crop Bounds] Predicted as captions: ${totalBoxStats.predicted_in}`)
+    console.log(
+      `[Reset Crop Bounds] User labeled IN: ${totalBoxStats.user_labeled_in}, OUT: ${totalBoxStats.user_labeled_out}`
+    )
+    console.log(
+      `[Reset Crop Bounds] Using ${captionBoxCount.count} caption boxes for anchor detection (predicted + user overrides)`
+    )
+
+    // Check if there are any caption boxes to analyze
+    // If model predicted everything as 'out' and user hasn't labeled anything,
+    // fall back to using ALL boxes for initial analysis
+    const useAllBoxesFallback = captionBoxCount.count === 0
+
+    // Get unique frame indices with caption boxes
+    // Uses predictions with user label overrides
+    // Falls back to ALL boxes if model predicted everything as 'out'
+    const captionFrameIndices = db
+      .prepare(
+        useAllBoxesFallback
+          ? `
+      SELECT DISTINCT frame_index
+      FROM full_frame_ocr
+      ORDER BY frame_index
+    `
+          : `
       SELECT DISTINCT o.frame_index
       FROM full_frame_ocr o
       LEFT JOIN full_frame_box_labels l
@@ -756,11 +817,29 @@ export async function action({ params }: ActionFunctionArgs) {
       )
       .all() as Array<{ frame_index: number }>
 
-    // Build frames with caption boxes only
+    if (useAllBoxesFallback) {
+      console.log(
+        `[Reset Crop Bounds] No caption boxes predicted/labeled - using ALL ${totalBoxStats.total_boxes} boxes for initial analysis`
+      )
+    }
+
+    // Build frames with caption boxes (or all boxes if fallback)
     const frames: FrameOCR[] = captionFrameIndices.map(({ frame_index }) => {
       const boxes = db
         .prepare(
-          `
+          useAllBoxesFallback
+            ? `
+        SELECT
+          text as box_text,
+          FLOOR(x * ?) as box_left,
+          FLOOR((1 - y) * ?) - FLOOR(height * ?) as box_top,
+          FLOOR(x * ?) + FLOOR(width * ?) as box_right,
+          FLOOR((1 - y) * ?) as box_bottom
+        FROM full_frame_ocr
+        WHERE frame_index = ?
+        ORDER BY box_index
+      `
+            : `
         SELECT
           o.text as box_text,
           FLOOR(o.x * ?) as box_left,
@@ -817,77 +896,6 @@ export async function action({ params }: ActionFunctionArgs) {
         ocr_confidence: 1.0,
       }
     })
-
-    // Log summary of boxes used for anchor detection
-    const totalBoxStats = db
-      .prepare(
-        `
-      SELECT
-        COUNT(*) as total_boxes,
-        SUM(CASE WHEN o.predicted_label = 'in' THEN 1 ELSE 0 END) as predicted_in,
-        SUM(CASE WHEN l.label = 'in' AND l.label_source = 'user' THEN 1 ELSE 0 END) as user_labeled_in,
-        SUM(CASE WHEN l.label = 'out' AND l.label_source = 'user' THEN 1 ELSE 0 END) as user_labeled_out
-      FROM full_frame_ocr o
-      LEFT JOIN full_frame_box_labels l
-        ON o.frame_index = l.frame_index
-        AND o.box_index = l.box_index
-        AND l.annotation_source = 'full_frame'
-    `
-      )
-      .get() as {
-      total_boxes: number
-      predicted_in: number
-      user_labeled_in: number
-      user_labeled_out: number
-    }
-
-    const captionBoxCount = db
-      .prepare(
-        `
-      SELECT COUNT(*) as count
-      FROM full_frame_ocr o
-      LEFT JOIN full_frame_box_labels l
-        ON o.frame_index = l.frame_index
-        AND o.box_index = l.box_index
-        AND l.annotation_source = 'full_frame'
-      WHERE (
-        (l.label IS NULL AND o.predicted_label = 'in')
-        OR (l.label_source = 'user' AND l.label = 'in')
-      )
-    `
-      )
-      .get() as { count: number }
-
-    console.log(`[Reset Crop Bounds] Total OCR boxes: ${totalBoxStats.total_boxes}`)
-    console.log(`[Reset Crop Bounds] Predicted as captions: ${totalBoxStats.predicted_in}`)
-    console.log(
-      `[Reset Crop Bounds] User labeled IN: ${totalBoxStats.user_labeled_in}, OUT: ${totalBoxStats.user_labeled_out}`
-    )
-    console.log(
-      `[Reset Crop Bounds] Using ${captionBoxCount.count} caption boxes for anchor detection (predicted + user overrides)`
-    )
-
-    // Check if there are any caption boxes to analyze
-    if (captionBoxCount.count === 0) {
-      db.close()
-      return new Response(
-        JSON.stringify({
-          error: 'No caption boxes found',
-          message:
-            'Cannot recalculate crop bounds because no OCR boxes are labeled as captions. Please label some boxes as "in" (captions) first.',
-          stats: {
-            totalBoxes: totalBoxStats.total_boxes,
-            userLabeledOut: totalBoxStats.user_labeled_out,
-            userLabeledIn: totalBoxStats.user_labeled_in,
-            predictedIn: totalBoxStats.predicted_in,
-          },
-        }),
-        {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' },
-        }
-      )
-    }
 
     console.log(`Analyzing ${frames.length} frames for crop bounds reset`)
 

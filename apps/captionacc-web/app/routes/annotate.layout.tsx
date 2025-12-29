@@ -1751,19 +1751,19 @@ export default function AnnotateLayout() {
 
             {/* Annotation Progress Indicator */}
             {boxStats?.captionBoxes === 0 ? (
-              // Alert when no caption boxes
-              <div className="rounded-md border-2 border-yellow-500 bg-yellow-50 p-3 dark:border-yellow-600 dark:bg-yellow-900/20">
+              // Alert when no caption boxes - using all boxes as fallback
+              <div className="rounded-md border-2 border-blue-500 bg-blue-50 p-3 dark:border-blue-600 dark:bg-blue-900/20">
                 <div className="flex items-center gap-2">
-                  <span className="text-xl">⚠️</span>
-                  <div className="text-sm font-semibold text-yellow-800 dark:text-yellow-300">
-                    All Boxes Labeled as Noise
+                  <span className="text-xl">ℹ️</span>
+                  <div className="text-sm font-semibold text-blue-800 dark:text-blue-300">
+                    No Caption Boxes Identified Yet
                   </div>
                 </div>
-                <div className="mt-2 text-xs text-yellow-700 dark:text-yellow-400">
-                  {boxStats.totalBoxes} boxes total, all labeled as noise/out
+                <div className="mt-2 text-xs text-blue-700 dark:text-blue-400">
+                  Using all {boxStats.totalBoxes} boxes for initial layout analysis
                 </div>
-                <div className="mt-2 text-xs text-yellow-800 dark:text-yellow-300 font-medium">
-                  Cannot calculate crop bounds without caption boxes.
+                <div className="mt-2 text-xs text-blue-800 dark:text-blue-300 font-medium">
+                  Label caption boxes to improve accuracy.
                   <br />
                   Left-click boxes or press &apos;I&apos; while hovering to mark as captions.
                 </div>
