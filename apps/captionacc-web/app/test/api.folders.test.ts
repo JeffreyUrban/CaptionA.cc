@@ -162,6 +162,63 @@ describe('Folder API', () => {
     })
   })
 
+  describe('PATCH /api/folders/move', () => {
+    it('should move an empty folder', async () => {
+      const testFolder = createTestFolder('move-empty')
+      const targetFolder = 'a_bite_of_china'
+
+      // Create the folder
+      await fetch('http://localhost:5173/api/folders/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folderPath: testFolder }),
+      })
+
+      // Move the folder
+      const response = await fetch('http://localhost:5173/api/folders/move', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          folderPath: testFolder,
+          targetFolder,
+        }),
+      })
+
+      expect(response.status).toBe(200)
+      const data = await response.json()
+      expect(data).toEqual({
+        success: true,
+        oldPath: testFolder,
+        newPath: `${targetFolder}/${testFolder}`,
+        videosUpdated: 0,
+        wasEmptyFolder: true,
+      })
+
+      // Verify old path is gone and new path exists
+      const metadata = readFoldersMetadata()
+      expect(metadata.emptyFolders).not.toContain(testFolder)
+      expect(metadata.emptyFolders).toContain(`${targetFolder}/${testFolder}`)
+
+      // Cleanup - track the new path for deletion
+      testFolders.push(`${targetFolder}/${testFolder}`)
+    })
+
+    it('should return 404 when trying to move non-existent folder', async () => {
+      const response = await fetch('http://localhost:5173/api/folders/move', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          folderPath: 'nonexistent-folder',
+          targetFolder: 'a_bite_of_china',
+        }),
+      })
+
+      expect(response.status).toBe(404)
+      const data = await response.json()
+      expect(data).toEqual({ error: 'Folder not found' })
+    })
+  })
+
   describe('POST /api/folders/create', () => {
     it('should create a new empty folder', async () => {
       const testFolder = createTestFolder('new-folder')

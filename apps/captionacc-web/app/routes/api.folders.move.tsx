@@ -1,13 +1,20 @@
 /**
  * Move a virtual folder by updating display_path in video databases
  */
-import { existsSync } from 'fs'
+import { existsSync, readFileSync, writeFileSync } from 'fs'
 import { resolve } from 'path'
 
 import Database from 'better-sqlite3'
 import type { ActionFunctionArgs } from 'react-router'
 
 import { getAllVideos } from '~/utils/video-paths'
+
+const dataDir = resolve(process.cwd(), '..', '..', 'local', 'data')
+const foldersMetaPath = resolve(dataDir, '.folders.json')
+
+interface FoldersMetadata {
+  emptyFolders: string[]
+}
 
 export async function action({ request }: ActionFunctionArgs) {
   if (request.method !== 'PATCH') {
@@ -70,15 +77,55 @@ export async function action({ request }: ActionFunctionArgs) {
     v => v.displayPath.startsWith(`${folderPath}/`) || v.displayPath === folderPath
   )
 
+  // Check if it's an empty folder in metadata
+  let isEmptyFolder = false
   if (videosToMove.length === 0) {
-    return Response.json({ error: 'No videos found in this folder' }, { status: 404 })
+    try {
+      if (existsSync(foldersMetaPath)) {
+        const content = readFileSync(foldersMetaPath, 'utf-8')
+        const metadata: FoldersMetadata = JSON.parse(content)
+        isEmptyFolder = metadata.emptyFolders.includes(folderPath)
+      }
+    } catch (error) {
+      console.error('[FolderMove] Error reading folders metadata:', error)
+    }
+
+    if (!isEmptyFolder) {
+      return Response.json({ error: 'Folder not found' }, { status: 404 })
+    }
+  }
+
+  // Handle empty folder move
+  if (isEmptyFolder) {
+    try {
+      const content = readFileSync(foldersMetaPath, 'utf-8')
+      const metadata: FoldersMetadata = JSON.parse(content)
+
+      // Remove old path and add new path
+      metadata.emptyFolders = metadata.emptyFolders.filter(f => f !== folderPath)
+      metadata.emptyFolders.push(newPath)
+
+      writeFileSync(foldersMetaPath, JSON.stringify(metadata, null, 2), 'utf-8')
+
+      console.log(`[FolderMove] Moved empty folder "${folderPath}" to "${newPath}"`)
+
+      return Response.json({
+        success: true,
+        oldPath: folderPath,
+        newPath,
+        videosUpdated: 0,
+        wasEmptyFolder: true,
+      })
+    } catch (error) {
+      console.error('[FolderMove] Error moving empty folder:', error)
+      return Response.json({ error: 'Failed to move folder' }, { status: 500 })
+    }
   }
 
   console.log(
     `[FolderMove] Moving ${videosToMove.length} videos from "${folderPath}" to "${newPath}"`
   )
 
-  const dataDir = resolve(process.cwd(), '..', '..', 'local', 'data')
   const errors: string[] = []
 
   // Update display_path for each video
