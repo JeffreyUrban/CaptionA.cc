@@ -1818,7 +1818,12 @@ export default function AnnotateLayout() {
               onClick={async () => {
                 if (
                   confirm(
-                    'Mark layout annotation as complete? This will enable boundary annotation for this video and trigger frame re-cropping.'
+                    'Approve layout and start frame re-cropping?\n\n' +
+                      'This will:\n' +
+                      '• Mark layout annotation as complete\n' +
+                      '• Enable boundary annotation for this video\n' +
+                      '• Start frame re-cropping in the background\n\n' +
+                      'Continue?'
                   )
                 ) {
                   try {
@@ -1840,9 +1845,7 @@ export default function AnnotateLayout() {
                       method: 'POST',
                     }).catch(err => console.error('Frame re-cropping failed:', err))
 
-                    alert(
-                      'Layout marked as complete! Frame re-cropping started in background. You can now annotate boundaries for this video.'
-                    )
+                    // No success alert needed - user already confirmed they understood what would happen
                   } catch (err) {
                     console.error('Error marking layout complete:', err)
                     alert('Failed to mark layout complete')
