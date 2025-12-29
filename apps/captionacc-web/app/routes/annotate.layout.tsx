@@ -10,6 +10,7 @@ interface FrameInfo {
   captionBoxCount: number
   minConfidence: number
   hasAnnotations: boolean
+  hasUnannotatedBoxes: boolean
   imageUrl: string
 }
 
@@ -1511,7 +1512,14 @@ export default function AnnotateLayout() {
                   onMouseMove={handleCanvasMouseMove}
                   onContextMenu={handleCanvasContextMenu}
                 >
-                  <div className="relative">
+                  <div
+                    className="relative"
+                    style={{
+                      outline: currentFrameBoxes.boxes.every(box => box.userLabel !== null)
+                        ? '3px solid #10b981'
+                        : 'none',
+                    }}
+                  >
                     <img
                       ref={imageRef}
                       src={currentFrameBoxes.imageUrl}
