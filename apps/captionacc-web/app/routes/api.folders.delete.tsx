@@ -21,16 +21,42 @@ interface FoldersMetadata {
   emptyFolders: string[]
 }
 
-async function removeFromEmptyFolders(folderPath: string): Promise<void> {
+async function readFoldersMetadata(): Promise<FoldersMetadata> {
+  try {
+    if (existsSync(foldersMetaPath)) {
+      const content = await readFile(foldersMetaPath, 'utf-8')
+      return JSON.parse(content)
+    }
+  } catch (error) {
+    // If file doesn't exist or is invalid, return empty
+  }
+  return { emptyFolders: [] }
+}
+
+async function removeFromEmptyFolders(folderPath: string): Promise<boolean> {
   try {
     if (existsSync(foldersMetaPath)) {
       const content = await readFile(foldersMetaPath, 'utf-8')
       const metadata: FoldersMetadata = JSON.parse(content)
+      const before = metadata.emptyFolders.length
       metadata.emptyFolders = metadata.emptyFolders.filter(f => f !== folderPath)
-      await writeFile(foldersMetaPath, JSON.stringify(metadata, null, 2), 'utf-8')
+      const after = metadata.emptyFolders.length
+
+      if (before > after) {
+        await writeFile(foldersMetaPath, JSON.stringify(metadata, null, 2), 'utf-8')
+        console.log(`[FolderDelete] Removed "${folderPath}" from empty folders metadata`)
+        return true
+      } else {
+        console.log(`[FolderDelete] Folder "${folderPath}" not found in empty folders metadata`)
+        return false
+      }
+    } else {
+      console.log('[FolderDelete] Empty folders metadata file does not exist')
+      return false
     }
   } catch (error) {
-    // If file doesn't exist or is invalid, ignore
+    console.error('[FolderDelete] Error removing from empty folders:', error)
+    return false
   }
 }
 
@@ -60,16 +86,16 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const videoCount = videosToDelete.length
 
-  // If folder doesn't exist (no videos found), check if it's an empty folder in metadata
+  // Check if it's an empty folder (exists in metadata but has no videos)
+  let isEmptyFolder = false
   if (videoCount === 0) {
-    // Try to remove from empty folders metadata
-    await removeFromEmptyFolders(normalizedFolderPath)
-    return Response.json({
-      success: true,
-      folderPath: normalizedFolderPath,
-      videosDeleted: 0,
-      wasEmptyFolder: true,
-    })
+    // Check if folder exists in empty folders metadata
+    const metadata = await readFoldersMetadata()
+    isEmptyFolder = metadata.emptyFolders.includes(normalizedFolderPath)
+
+    if (!isEmptyFolder) {
+      return Response.json({ error: 'Folder not found' }, { status: 404 })
+    }
   }
 
   // If not confirmed, return the count for user confirmation
@@ -78,6 +104,20 @@ export async function action({ request }: ActionFunctionArgs) {
       requiresConfirmation: true,
       videoCount,
       folderPath,
+    })
+  }
+
+  // Delete empty folder if applicable
+  if (isEmptyFolder) {
+    const removed = await removeFromEmptyFolders(normalizedFolderPath)
+    if (!removed) {
+      return Response.json({ error: 'Failed to delete folder' }, { status: 500 })
+    }
+    return Response.json({
+      success: true,
+      folderPath: normalizedFolderPath,
+      videosDeleted: 0,
+      wasEmptyFolder: true,
     })
   }
 

@@ -115,9 +115,7 @@ export async function loader() {
   const dataDir = resolve(process.cwd(), '..', '..', 'local', 'data')
 
   if (!existsSync(dataDir)) {
-    return new Response(JSON.stringify({ tree: [] }), {
-      headers: { 'Content-Type': 'application/json' },
-    })
+    return { tree: [] }
   }
 
   // Get all videos with their metadata (uses display_path)
@@ -145,9 +143,7 @@ export async function loader() {
   // Sort tree: folders first, then videos
   const sortedTree = sortTreeNodes(tree)
 
-  return new Response(JSON.stringify({ tree: sortedTree }), {
-    headers: { 'Content-Type': 'application/json' },
-  })
+  return { tree: sortedTree }
 }
 
 interface TreeRowProps {
@@ -728,11 +724,25 @@ function TreeRow({
   )
 }
 
+// Cache version - increment to invalidate cache when VideoStats structure changes
+const CACHE_VERSION = 'v12'
+
+// Helper to validate video IDs (same logic as server-side validation)
+function isValidVideoId(videoId: string): boolean {
+  if (!videoId || videoId.length === 0) return false
+  // Not a UUID bucket directory (2-char hex like "f0", "ff", "12")
+  if (videoId.length === 2 && /^[0-9a-f]{2}$/i.test(videoId)) return false
+  // Not a single number (like "1", "20")
+  if (/^\d+$/.test(videoId)) return false
+  // Not a hidden file/folder
+  if (videoId.startsWith('.')) return false
+  return true
+}
+
 export default function VideosPage() {
   const { tree } = useLoaderData<{ tree: TreeNode[] }>()
   const revalidator = useRevalidator()
   const [searchQuery, setSearchQuery] = useState('')
-  const CACHE_VERSION = 'v11' // Increment to invalidate cache when VideoStats structure changes
 
   // Modal states
   const [createFolderModal, setCreateFolderModal] = useState<{
@@ -797,7 +807,14 @@ export default function VideosPage() {
       if (cached) {
         try {
           const parsed = JSON.parse(cached)
-          return new Map(Object.entries(parsed))
+          // Filter out invalid video IDs from cache
+          const validEntries = Object.entries(parsed).filter(([videoId]) => isValidVideoId(videoId))
+          if (validEntries.length < Object.entries(parsed).length) {
+            console.log(
+              `[Videos] Filtered ${Object.entries(parsed).length - validEntries.length} invalid cached entries`
+            )
+          }
+          return new Map(validEntries)
         } catch {
           return new Map()
         }
