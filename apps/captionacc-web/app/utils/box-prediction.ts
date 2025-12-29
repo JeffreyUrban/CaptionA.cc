@@ -40,8 +40,8 @@ interface ModelParams {
   n_training_samples: number
   prior_in: number
   prior_out: number
-  in_features: GaussianParams[] // 9 features
-  out_features: GaussianParams[] // 9 features
+  in_features: GaussianParams[] // 26 features
+  out_features: GaussianParams[] // 26 features
 }
 
 interface ModelRow {
@@ -49,6 +49,7 @@ interface ModelRow {
   n_training_samples: number
   prior_in: number
   prior_out: number
+  // Features 1-7: Spatial features
   in_vertical_alignment_mean: number
   in_vertical_alignment_std: number
   in_height_similarity_mean: number
@@ -63,10 +64,6 @@ interface ModelRow {
   in_normalized_y_std: number
   in_normalized_area_mean: number
   in_normalized_area_std: number
-  in_user_annotated_in_mean: number
-  in_user_annotated_in_std: number
-  in_user_annotated_out_mean: number
-  in_user_annotated_out_std: number
   out_vertical_alignment_mean: number
   out_vertical_alignment_std: number
   out_height_similarity_mean: number
@@ -81,22 +78,231 @@ interface ModelRow {
   out_normalized_y_std: number
   out_normalized_area_mean: number
   out_normalized_area_std: number
+  // Features 8-9: User annotations
+  in_user_annotated_in_mean: number
+  in_user_annotated_in_std: number
+  in_user_annotated_out_mean: number
+  in_user_annotated_out_std: number
   out_user_annotated_in_mean: number
   out_user_annotated_in_std: number
   out_user_annotated_out_mean: number
   out_user_annotated_out_std: number
+  // Features 10-13: Edge positions
+  in_normalized_left_mean: number
+  in_normalized_left_std: number
+  in_normalized_top_mean: number
+  in_normalized_top_std: number
+  in_normalized_right_mean: number
+  in_normalized_right_std: number
+  in_normalized_bottom_mean: number
+  in_normalized_bottom_std: number
+  out_normalized_left_mean: number
+  out_normalized_left_std: number
+  out_normalized_top_mean: number
+  out_normalized_top_std: number
+  out_normalized_right_mean: number
+  out_normalized_right_std: number
+  out_normalized_bottom_mean: number
+  out_normalized_bottom_std: number
+  // Features 14-24: Character sets (11 features)
+  in_is_roman_mean: number
+  in_is_roman_std: number
+  in_is_hanzi_mean: number
+  in_is_hanzi_std: number
+  in_is_arabic_mean: number
+  in_is_arabic_std: number
+  in_is_korean_mean: number
+  in_is_korean_std: number
+  in_is_hiragana_mean: number
+  in_is_hiragana_std: number
+  in_is_katakana_mean: number
+  in_is_katakana_std: number
+  in_is_cyrillic_mean: number
+  in_is_cyrillic_std: number
+  in_is_devanagari_mean: number
+  in_is_devanagari_std: number
+  in_is_thai_mean: number
+  in_is_thai_std: number
+  in_is_digits_mean: number
+  in_is_digits_std: number
+  in_is_punctuation_mean: number
+  in_is_punctuation_std: number
+  out_is_roman_mean: number
+  out_is_roman_std: number
+  out_is_hanzi_mean: number
+  out_is_hanzi_std: number
+  out_is_arabic_mean: number
+  out_is_arabic_std: number
+  out_is_korean_mean: number
+  out_is_korean_std: number
+  out_is_hiragana_mean: number
+  out_is_hiragana_std: number
+  out_is_katakana_mean: number
+  out_is_katakana_std: number
+  out_is_cyrillic_mean: number
+  out_is_cyrillic_std: number
+  out_is_devanagari_mean: number
+  out_is_devanagari_std: number
+  out_is_thai_mean: number
+  out_is_thai_std: number
+  out_is_digits_mean: number
+  out_is_digits_std: number
+  out_is_punctuation_mean: number
+  out_is_punctuation_std: number
+  // Features 25-26: Temporal features
+  in_time_from_start_mean: number
+  in_time_from_start_std: number
+  in_time_from_end_mean: number
+  in_time_from_end_std: number
+  out_time_from_start_mean: number
+  out_time_from_start_std: number
+  out_time_from_end_mean: number
+  out_time_from_end_std: number
 }
 
 /**
- * Extract 9 features from a box based on local clustering with other boxes.
+ * Character set detection results using Unicode ranges.
+ * Each field is binary (1.0 if detected, 0.0 otherwise).
+ * Non-exclusive: text can contain multiple character sets.
+ */
+interface CharacterSets {
+  isRoman: number
+  isHanzi: number
+  isArabic: number
+  isKorean: number
+  isHiragana: number
+  isKatakana: number
+  isCyrillic: number
+  isDevanagari: number
+  isThai: number
+  isDigits: number
+  isPunctuation: number
+}
+
+/**
+ * Detect character sets in text using Unicode character code ranges.
+ * Returns binary indicators (1.0 or 0.0) for each character set.
+ * Non-exclusive: "Season 2 第二季" returns {isRoman: 1.0, isHanzi: 1.0, isDigits: 1.0, ...}
+ */
+function detectCharacterSets(text: string): CharacterSets {
+  let isRoman = 0.0
+  let isHanzi = 0.0
+  let isArabic = 0.0
+  let isKorean = 0.0
+  let isHiragana = 0.0
+  let isKatakana = 0.0
+  let isCyrillic = 0.0
+  let isDevanagari = 0.0
+  let isThai = 0.0
+  let isDigits = 0.0
+  let isPunctuation = 0.0
+
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i)
+
+    // Roman (Latin): Basic Latin, Latin-1 Supplement, Latin Extended-A, Latin Extended-B
+    if (
+      (code >= 0x0041 && code <= 0x005a) || // A-Z
+      (code >= 0x0061 && code <= 0x007a) || // a-z
+      (code >= 0x00c0 && code <= 0x00ff) || // Latin-1 Supplement (À-ÿ)
+      (code >= 0x0100 && code <= 0x017f) || // Latin Extended-A
+      (code >= 0x0180 && code <= 0x024f) // Latin Extended-B
+    ) {
+      isRoman = 1.0
+    }
+
+    // Hanzi (Chinese): CJK Unified Ideographs + Extension A
+    if (
+      (code >= 0x4e00 && code <= 0x9fff) || // CJK Unified Ideographs
+      (code >= 0x3400 && code <= 0x4dbf) // CJK Extension A
+    ) {
+      isHanzi = 1.0
+    }
+
+    // Arabic: Arabic + Arabic Supplement
+    if (
+      (code >= 0x0600 && code <= 0x06ff) || // Arabic
+      (code >= 0x0750 && code <= 0x077f) // Arabic Supplement
+    ) {
+      isArabic = 1.0
+    }
+
+    // Korean (Hangul): Hangul Syllables + Hangul Jamo
+    if (
+      (code >= 0xac00 && code <= 0xd7af) || // Hangul Syllables
+      (code >= 0x1100 && code <= 0x11ff) // Hangul Jamo
+    ) {
+      isKorean = 1.0
+    }
+
+    // Hiragana
+    if (code >= 0x3040 && code <= 0x309f) {
+      isHiragana = 1.0
+    }
+
+    // Katakana
+    if (code >= 0x30a0 && code <= 0x30ff) {
+      isKatakana = 1.0
+    }
+
+    // Cyrillic
+    if (code >= 0x0400 && code <= 0x04ff) {
+      isCyrillic = 1.0
+    }
+
+    // Devanagari
+    if (code >= 0x0900 && code <= 0x097f) {
+      isDevanagari = 1.0
+    }
+
+    // Thai
+    if (code >= 0x0e00 && code <= 0x0e7f) {
+      isThai = 1.0
+    }
+
+    // Digits (ASCII digits)
+    if (code >= 0x0030 && code <= 0x0039) {
+      isDigits = 1.0
+    }
+
+    // Punctuation (ASCII punctuation)
+    if (
+      (code >= 0x0021 && code <= 0x002f) || // ! " # $ % & ' ( ) * + , - . /
+      (code >= 0x003a && code <= 0x0040) || // : ; < = > ? @
+      (code >= 0x005b && code <= 0x0060) || // [ \ ] ^ _ `
+      (code >= 0x007b && code <= 0x007e) // { | } ~
+    ) {
+      isPunctuation = 1.0
+    }
+  }
+
+  return {
+    isRoman,
+    isHanzi,
+    isArabic,
+    isKorean,
+    isHiragana,
+    isKatakana,
+    isCyrillic,
+    isDevanagari,
+    isThai,
+    isDigits,
+    isPunctuation,
+  }
+}
+
+/**
+ * Extract 26 features from a box for Bayesian classification.
  *
- * All features are independent of pre-computed cluster parameters to avoid
- * circular dependencies. Uses k-nearest neighbors approach.
+ * Feature categories:
+ * - Features 1-7: Spatial features (alignment, clustering, aspect ratio, position, area)
+ * - Features 8-9: User annotations (binary indicators for "in" and "out" labels)
+ * - Features 10-13: Edge positions (normalized left, top, right, bottom in [0-1] range)
+ * - Features 14-24: Character sets (11 binary indicators, non-exclusive)
+ * - Features 25-26: Temporal features (time from start and end in seconds)
  *
- * Features 8-9 are user annotations as binary indicators:
- * - Feature 8: isUserAnnotatedIn (1.0 if user annotated as "in", 0.0 otherwise)
- * - Feature 9: isUserAnnotatedOut (1.0 if user annotated as "out", 0.0 otherwise)
- * Unannotated boxes have both features = 0.0
+ * All spatial features use k-nearest neighbors approach, independent of pre-computed
+ * cluster parameters to avoid circular dependencies.
  */
 function extractFeatures(
   box: BoxBounds,
@@ -104,6 +310,9 @@ function extractFeatures(
   allBoxes: BoxBounds[],
   frameIndex: number,
   boxIndex: number,
+  boxText: string,
+  timestampSeconds: number,
+  durationSeconds: number,
   db: Database.Database | null
 ): number[] {
   const boxWidth = box.right - box.left
@@ -223,7 +432,7 @@ function extractFeatures(
   // Feature 6: Normalized area (unchanged)
   const normalizedArea = frameArea > 0 ? boxArea / frameArea : 0.0
 
-  // Feature 7 & 8: User annotations as binary indicators
+  // Features 8-9: User annotations as binary indicators
   // We use TWO features instead of one to avoid the "neutral value" problem:
   // - With one feature (0.0=out, 0.5=unannotated, 1.0=in), the model never sees 0.5 during training
   //   (all boxes are annotated), causing numerical issues when predicting unannotated boxes
@@ -260,7 +469,25 @@ function extractFeatures(
     }
   }
 
+  // Features 10-13: Edge positions (normalized to [0-1] range)
+  // Robust to aspect ratio and resolution changes
+  const normalizedLeft = layout.frame_width > 0 ? box.left / layout.frame_width : 0.0
+  const normalizedTop = layout.frame_height > 0 ? box.top / layout.frame_height : 0.0
+  const normalizedRight = layout.frame_width > 0 ? box.right / layout.frame_width : 0.0
+  const normalizedBottom = layout.frame_height > 0 ? box.bottom / layout.frame_height : 0.0
+
+  // Features 14-24: Character sets (11 binary indicators, non-exclusive)
+  // Detects script/character type using Unicode ranges
+  const charSets = detectCharacterSets(boxText)
+
+  // Features 25-26: Temporal features (absolute time in seconds)
+  // Time from start helps detect opening titles
+  // Time from end helps detect closing credits
+  const timeFromStart = timestampSeconds
+  const timeFromEnd = durationSeconds - timestampSeconds
+
   return [
+    // Features 1-7: Spatial
     topAlignmentScore,
     bottomAlignmentScore,
     heightSimilarityScore,
@@ -268,8 +495,29 @@ function extractFeatures(
     aspectRatio,
     normalizedYPosition,
     normalizedArea,
+    // Features 8-9: User annotations
     isUserAnnotatedIn,
     isUserAnnotatedOut,
+    // Features 10-13: Edge positions
+    normalizedLeft,
+    normalizedTop,
+    normalizedRight,
+    normalizedBottom,
+    // Features 14-24: Character sets (11 features)
+    charSets.isRoman,
+    charSets.isHanzi,
+    charSets.isArabic,
+    charSets.isKorean,
+    charSets.isHiragana,
+    charSets.isKatakana,
+    charSets.isCyrillic,
+    charSets.isDevanagari,
+    charSets.isThai,
+    charSets.isDigits,
+    charSets.isPunctuation,
+    // Features 25-26: Temporal
+    timeFromStart,
+    timeFromEnd,
   ]
 }
 
@@ -290,70 +538,264 @@ function gaussianPDF(x: number, mean: number, std: number): number {
 }
 
 /**
- * Migrate box_classification_model schema to include user annotation columns if needed.
+ * Migrate box_classification_model schema to 26-feature model if needed.
+ *
+ * Adds 68 columns for 17 new features (edge positions, character sets, temporal):
+ * - 4 edge position features (normalized left, top, right, bottom)
+ * - 11 character set features (is_roman, is_hanzi, is_arabic, is_korean, is_hiragana,
+ *   is_katakana, is_cyrillic, is_devanagari, is_thai, is_digits, is_punctuation)
+ * - 2 temporal features (time_from_start, time_from_end)
+ *
+ * Each feature requires 4 columns (mean + std for "in" class, mean + std for "out" class).
  */
 function migrateModelSchema(db: Database.Database): void {
   try {
-    // Check if new user_annotated columns exist
-    db.prepare('SELECT in_user_annotated_in_mean FROM box_classification_model WHERE id = 1').get()
-    // If we get here, columns exist - no migration needed
+    // Check if 26-feature schema exists by testing for one of the new columns
+    db.prepare('SELECT in_normalized_left_mean FROM box_classification_model WHERE id = 1').get()
+    // If we get here, 26-feature schema already exists
     return
   } catch (error) {
-    // Columns don't exist - need to migrate
-    console.log('[migrateModelSchema] Adding user annotation columns to box_classification_model')
+    // Schema needs migration - could be 7-feature or 9-feature schema
+    console.log('[migrateModelSchema] Migrating to 26-feature schema (adding 17 new features)')
 
     try {
-      // Add the 8 new columns (4 for in class, 4 for out class, 2 features each)
-      db.prepare(
-        'ALTER TABLE box_classification_model ADD COLUMN in_user_annotated_in_mean REAL'
-      ).run()
-      db.prepare(
-        'ALTER TABLE box_classification_model ADD COLUMN in_user_annotated_in_std REAL'
-      ).run()
-      db.prepare(
-        'ALTER TABLE box_classification_model ADD COLUMN in_user_annotated_out_mean REAL'
-      ).run()
-      db.prepare(
-        'ALTER TABLE box_classification_model ADD COLUMN in_user_annotated_out_std REAL'
-      ).run()
-      db.prepare(
-        'ALTER TABLE box_classification_model ADD COLUMN out_user_annotated_in_mean REAL'
-      ).run()
-      db.prepare(
-        'ALTER TABLE box_classification_model ADD COLUMN out_user_annotated_in_std REAL'
-      ).run()
-      db.prepare(
-        'ALTER TABLE box_classification_model ADD COLUMN out_user_annotated_out_mean REAL'
-      ).run()
-      db.prepare(
-        'ALTER TABLE box_classification_model ADD COLUMN out_user_annotated_out_std REAL'
-      ).run()
+      // First, ensure 9-feature schema exists (user annotations)
+      try {
+        db.prepare(
+          'SELECT in_user_annotated_in_mean FROM box_classification_model WHERE id = 1'
+        ).get()
+      } catch {
+        // Need to add user annotation columns first (features 8-9)
+        console.log('[migrateModelSchema] Adding user annotation columns (features 8-9)')
+        db.prepare(
+          'ALTER TABLE box_classification_model ADD COLUMN in_user_annotated_in_mean REAL'
+        ).run()
+        db.prepare(
+          'ALTER TABLE box_classification_model ADD COLUMN in_user_annotated_in_std REAL'
+        ).run()
+        db.prepare(
+          'ALTER TABLE box_classification_model ADD COLUMN in_user_annotated_out_mean REAL'
+        ).run()
+        db.prepare(
+          'ALTER TABLE box_classification_model ADD COLUMN in_user_annotated_out_std REAL'
+        ).run()
+        db.prepare(
+          'ALTER TABLE box_classification_model ADD COLUMN out_user_annotated_in_mean REAL'
+        ).run()
+        db.prepare(
+          'ALTER TABLE box_classification_model ADD COLUMN out_user_annotated_in_std REAL'
+        ).run()
+        db.prepare(
+          'ALTER TABLE box_classification_model ADD COLUMN out_user_annotated_out_mean REAL'
+        ).run()
+        db.prepare(
+          'ALTER TABLE box_classification_model ADD COLUMN out_user_annotated_out_std REAL'
+        ).run()
+      }
 
-      // Update existing model with reasonable defaults for the new features
-      // "in" boxes: isUserAnnotatedIn=1, isUserAnnotatedOut=0
-      // "out" boxes: isUserAnnotatedIn=0, isUserAnnotatedOut=1
+      // Now add features 10-26 (edge positions, character sets, temporal)
+
+      // Features 10-13: Edge positions
+      const edgeFeatures = [
+        'normalized_left',
+        'normalized_top',
+        'normalized_right',
+        'normalized_bottom',
+      ]
+      for (const feature of edgeFeatures) {
+        db.prepare(`ALTER TABLE box_classification_model ADD COLUMN in_${feature}_mean REAL`).run()
+        db.prepare(`ALTER TABLE box_classification_model ADD COLUMN in_${feature}_std REAL`).run()
+        db.prepare(`ALTER TABLE box_classification_model ADD COLUMN out_${feature}_mean REAL`).run()
+        db.prepare(`ALTER TABLE box_classification_model ADD COLUMN out_${feature}_std REAL`).run()
+      }
+
+      // Features 14-24: Character sets
+      const charSetFeatures = [
+        'is_roman',
+        'is_hanzi',
+        'is_arabic',
+        'is_korean',
+        'is_hiragana',
+        'is_katakana',
+        'is_cyrillic',
+        'is_devanagari',
+        'is_thai',
+        'is_digits',
+        'is_punctuation',
+      ]
+      for (const feature of charSetFeatures) {
+        db.prepare(`ALTER TABLE box_classification_model ADD COLUMN in_${feature}_mean REAL`).run()
+        db.prepare(`ALTER TABLE box_classification_model ADD COLUMN in_${feature}_std REAL`).run()
+        db.prepare(`ALTER TABLE box_classification_model ADD COLUMN out_${feature}_mean REAL`).run()
+        db.prepare(`ALTER TABLE box_classification_model ADD COLUMN out_${feature}_std REAL`).run()
+      }
+
+      // Features 25-26: Temporal features
+      const temporalFeatures = ['time_from_start', 'time_from_end']
+      for (const feature of temporalFeatures) {
+        db.prepare(`ALTER TABLE box_classification_model ADD COLUMN in_${feature}_mean REAL`).run()
+        db.prepare(`ALTER TABLE box_classification_model ADD COLUMN in_${feature}_std REAL`).run()
+        db.prepare(`ALTER TABLE box_classification_model ADD COLUMN out_${feature}_mean REAL`).run()
+        db.prepare(`ALTER TABLE box_classification_model ADD COLUMN out_${feature}_std REAL`).run()
+      }
+
+      // Set reasonable defaults for existing model rows
+      // Note: This UPDATE will be replaced by full retraining, these are just placeholders
       db.prepare(
         `
         UPDATE box_classification_model
         SET
-          in_user_annotated_in_mean = 1.0,
-          in_user_annotated_in_std = 0.01,
-          in_user_annotated_out_mean = 0.0,
-          in_user_annotated_out_std = 0.01,
-          out_user_annotated_in_mean = 0.0,
-          out_user_annotated_in_std = 0.01,
-          out_user_annotated_out_mean = 1.0,
-          out_user_annotated_out_std = 0.01
+          -- User annotations (features 8-9)
+          in_user_annotated_in_mean = COALESCE(in_user_annotated_in_mean, 1.0),
+          in_user_annotated_in_std = COALESCE(in_user_annotated_in_std, 0.01),
+          in_user_annotated_out_mean = COALESCE(in_user_annotated_out_mean, 0.0),
+          in_user_annotated_out_std = COALESCE(in_user_annotated_out_std, 0.01),
+          out_user_annotated_in_mean = COALESCE(out_user_annotated_in_mean, 0.0),
+          out_user_annotated_in_std = COALESCE(out_user_annotated_in_std, 0.01),
+          out_user_annotated_out_mean = COALESCE(out_user_annotated_out_mean, 1.0),
+          out_user_annotated_out_std = COALESCE(out_user_annotated_out_std, 0.01),
+          -- Edge positions (features 10-13): default to center of frame
+          in_normalized_left_mean = 0.4, in_normalized_left_std = 0.2,
+          in_normalized_top_mean = 0.7, in_normalized_top_std = 0.1,
+          in_normalized_right_mean = 0.6, in_normalized_right_std = 0.2,
+          in_normalized_bottom_mean = 0.8, in_normalized_bottom_std = 0.1,
+          out_normalized_left_mean = 0.5, out_normalized_left_std = 0.3,
+          out_normalized_top_mean = 0.5, out_normalized_top_std = 0.3,
+          out_normalized_right_mean = 0.5, out_normalized_right_std = 0.3,
+          out_normalized_bottom_mean = 0.5, out_normalized_bottom_std = 0.3,
+          -- Character sets (features 14-24): neutral defaults
+          in_is_roman_mean = 0.5, in_is_roman_std = 0.5,
+          in_is_hanzi_mean = 0.5, in_is_hanzi_std = 0.5,
+          in_is_arabic_mean = 0.5, in_is_arabic_std = 0.5,
+          in_is_korean_mean = 0.5, in_is_korean_std = 0.5,
+          in_is_hiragana_mean = 0.5, in_is_hiragana_std = 0.5,
+          in_is_katakana_mean = 0.5, in_is_katakana_std = 0.5,
+          in_is_cyrillic_mean = 0.5, in_is_cyrillic_std = 0.5,
+          in_is_devanagari_mean = 0.5, in_is_devanagari_std = 0.5,
+          in_is_thai_mean = 0.5, in_is_thai_std = 0.5,
+          in_is_digits_mean = 0.5, in_is_digits_std = 0.5,
+          in_is_punctuation_mean = 0.5, in_is_punctuation_std = 0.5,
+          out_is_roman_mean = 0.5, out_is_roman_std = 0.5,
+          out_is_hanzi_mean = 0.5, out_is_hanzi_std = 0.5,
+          out_is_arabic_mean = 0.5, out_is_arabic_std = 0.5,
+          out_is_korean_mean = 0.5, out_is_korean_std = 0.5,
+          out_is_hiragana_mean = 0.5, out_is_hiragana_std = 0.5,
+          out_is_katakana_mean = 0.5, out_is_katakana_std = 0.5,
+          out_is_cyrillic_mean = 0.5, out_is_cyrillic_std = 0.5,
+          out_is_devanagari_mean = 0.5, out_is_devanagari_std = 0.5,
+          out_is_thai_mean = 0.5, out_is_thai_std = 0.5,
+          out_is_digits_mean = 0.5, out_is_digits_std = 0.5,
+          out_is_punctuation_mean = 0.5, out_is_punctuation_std = 0.5,
+          -- Temporal features (features 25-26): mid-video defaults
+          in_time_from_start_mean = 300.0, in_time_from_start_std = 200.0,
+          in_time_from_end_mean = 300.0, in_time_from_end_std = 200.0,
+          out_time_from_start_mean = 300.0, out_time_from_start_std = 200.0,
+          out_time_from_end_mean = 300.0, out_time_from_end_std = 200.0
         WHERE id = 1
       `
       ).run()
 
-      console.log('[migrateModelSchema] Schema migration completed successfully')
+      console.log(
+        '[migrateModelSchema] Successfully migrated to 26-feature schema (68 new columns)'
+      )
+      console.log(
+        '[migrateModelSchema] WARNING: Model needs retraining to learn proper parameters for new features'
+      )
     } catch (migrationError) {
       console.error('[migrateModelSchema] Migration failed:', migrationError)
-      // If migration fails, we'll need to recreate the model
       throw new Error('Failed to migrate model schema - model will need to be retrained')
     }
+  }
+}
+
+/**
+ * Migrate video_preferences schema to add index_framerate_hz if needed.
+ */
+function migrateVideoPreferencesSchema(db: Database.Database): void {
+  try {
+    // Check if column exists
+    db.prepare('SELECT index_framerate_hz FROM video_preferences WHERE id = 1').get()
+    // If we get here, column exists - no migration needed
+    return
+  } catch (error) {
+    // Column doesn't exist - need to migrate
+    console.log('[migrateVideoPreferencesSchema] Adding index_framerate_hz to video_preferences')
+
+    try {
+      db.prepare(
+        'ALTER TABLE video_preferences ADD COLUMN index_framerate_hz REAL DEFAULT 10.0'
+      ).run()
+
+      // Set default value for existing row
+      db.prepare('UPDATE video_preferences SET index_framerate_hz = 10.0 WHERE id = 1').run()
+
+      console.log('[migrateVideoPreferencesSchema] Migration completed successfully')
+    } catch (migrationError) {
+      console.error('[migrateVideoPreferencesSchema] Migration failed:', migrationError)
+      throw new Error('Failed to migrate video_preferences schema')
+    }
+  }
+}
+
+/**
+ * Migrate full_frame_ocr schema to add timestamp_seconds if needed.
+ * Calculates timestamps from frame_index and index_framerate_hz.
+ */
+function migrateFullFrameOcrSchema(db: Database.Database): void {
+  try {
+    // Check if column exists
+    const testRow = db.prepare('SELECT timestamp_seconds FROM full_frame_ocr LIMIT 1').get() as
+      | { timestamp_seconds: number | null }
+      | undefined
+
+    // If we get here, column exists
+    // Check if we need to populate it (might be NULL for existing rows)
+    const nullCount = db
+      .prepare('SELECT COUNT(*) as count FROM full_frame_ocr WHERE timestamp_seconds IS NULL')
+      .get() as { count: number }
+
+    if (nullCount.count === 0) {
+      // All rows have timestamps, no migration needed
+      return
+    }
+
+    console.log(
+      `[migrateFullFrameOcrSchema] Populating timestamp_seconds for ${nullCount.count} rows`
+    )
+  } catch (error) {
+    // Column doesn't exist - need to migrate
+    console.log('[migrateFullFrameOcrSchema] Adding timestamp_seconds to full_frame_ocr')
+
+    try {
+      db.prepare('ALTER TABLE full_frame_ocr ADD COLUMN timestamp_seconds REAL').run()
+    } catch (migrationError) {
+      console.error('[migrateFullFrameOcrSchema] Failed to add column:', migrationError)
+      throw new Error('Failed to migrate full_frame_ocr schema')
+    }
+  }
+
+  try {
+    // Get index framerate (default 10.0 Hz = 0.1 second intervals)
+    const prefs = db
+      .prepare('SELECT index_framerate_hz FROM video_preferences WHERE id = 1')
+      .get() as { index_framerate_hz: number } | undefined
+
+    const indexFramerate = prefs?.index_framerate_hz ?? 10.0
+
+    // Calculate and populate timestamps for rows without them
+    // timestamp = frame_index / index_framerate_hz
+    db.prepare(
+      `
+      UPDATE full_frame_ocr
+      SET timestamp_seconds = frame_index / ?
+      WHERE timestamp_seconds IS NULL
+    `
+    ).run(indexFramerate)
+
+    console.log('[migrateFullFrameOcrSchema] Timestamps populated successfully')
+  } catch (migrationError) {
+    console.error('[migrateFullFrameOcrSchema] Failed to populate timestamps:', migrationError)
+    throw new Error('Failed to populate timestamps in full_frame_ocr')
   }
 }
 
@@ -364,8 +806,10 @@ function migrateModelSchema(db: Database.Database): void {
  * The seed model provides reasonable starting predictions before user annotations are available.
  */
 function loadModelFromDB(db: Database.Database): ModelParams | null {
-  // Migrate schema if needed
+  // Migrate schemas if needed
   migrateModelSchema(db)
+  migrateVideoPreferencesSchema(db)
+  migrateFullFrameOcrSchema(db)
   const row = db.prepare('SELECT * FROM box_classification_model WHERE id = 1').get() as
     | ModelRow
     | undefined
@@ -383,8 +827,9 @@ function loadModelFromDB(db: Database.Database): ModelParams | null {
     return null
   }
 
-  // Parse model parameters from database row
+  // Parse model parameters from database row (26 features)
   const inFeatures: GaussianParams[] = [
+    // Features 1-7: Spatial features
     { mean: row.in_vertical_alignment_mean, std: row.in_vertical_alignment_std },
     { mean: row.in_height_similarity_mean, std: row.in_height_similarity_std },
     { mean: row.in_anchor_distance_mean, std: row.in_anchor_distance_std },
@@ -392,11 +837,33 @@ function loadModelFromDB(db: Database.Database): ModelParams | null {
     { mean: row.in_aspect_ratio_mean, std: row.in_aspect_ratio_std },
     { mean: row.in_normalized_y_mean, std: row.in_normalized_y_std },
     { mean: row.in_normalized_area_mean, std: row.in_normalized_area_std },
+    // Features 8-9: User annotations
     { mean: row.in_user_annotated_in_mean, std: row.in_user_annotated_in_std },
     { mean: row.in_user_annotated_out_mean, std: row.in_user_annotated_out_std },
+    // Features 10-13: Edge positions
+    { mean: row.in_normalized_left_mean, std: row.in_normalized_left_std },
+    { mean: row.in_normalized_top_mean, std: row.in_normalized_top_std },
+    { mean: row.in_normalized_right_mean, std: row.in_normalized_right_std },
+    { mean: row.in_normalized_bottom_mean, std: row.in_normalized_bottom_std },
+    // Features 14-24: Character sets
+    { mean: row.in_is_roman_mean, std: row.in_is_roman_std },
+    { mean: row.in_is_hanzi_mean, std: row.in_is_hanzi_std },
+    { mean: row.in_is_arabic_mean, std: row.in_is_arabic_std },
+    { mean: row.in_is_korean_mean, std: row.in_is_korean_std },
+    { mean: row.in_is_hiragana_mean, std: row.in_is_hiragana_std },
+    { mean: row.in_is_katakana_mean, std: row.in_is_katakana_std },
+    { mean: row.in_is_cyrillic_mean, std: row.in_is_cyrillic_std },
+    { mean: row.in_is_devanagari_mean, std: row.in_is_devanagari_std },
+    { mean: row.in_is_thai_mean, std: row.in_is_thai_std },
+    { mean: row.in_is_digits_mean, std: row.in_is_digits_std },
+    { mean: row.in_is_punctuation_mean, std: row.in_is_punctuation_std },
+    // Features 25-26: Temporal features
+    { mean: row.in_time_from_start_mean, std: row.in_time_from_start_std },
+    { mean: row.in_time_from_end_mean, std: row.in_time_from_end_std },
   ]
 
   const outFeatures: GaussianParams[] = [
+    // Features 1-7: Spatial features
     { mean: row.out_vertical_alignment_mean, std: row.out_vertical_alignment_std },
     { mean: row.out_height_similarity_mean, std: row.out_height_similarity_std },
     { mean: row.out_anchor_distance_mean, std: row.out_anchor_distance_std },
@@ -404,8 +871,29 @@ function loadModelFromDB(db: Database.Database): ModelParams | null {
     { mean: row.out_aspect_ratio_mean, std: row.out_aspect_ratio_std },
     { mean: row.out_normalized_y_mean, std: row.out_normalized_y_std },
     { mean: row.out_normalized_area_mean, std: row.out_normalized_area_std },
+    // Features 8-9: User annotations
     { mean: row.out_user_annotated_in_mean, std: row.out_user_annotated_in_std },
     { mean: row.out_user_annotated_out_mean, std: row.out_user_annotated_out_std },
+    // Features 10-13: Edge positions
+    { mean: row.out_normalized_left_mean, std: row.out_normalized_left_std },
+    { mean: row.out_normalized_top_mean, std: row.out_normalized_top_std },
+    { mean: row.out_normalized_right_mean, std: row.out_normalized_right_std },
+    { mean: row.out_normalized_bottom_mean, std: row.out_normalized_bottom_std },
+    // Features 14-24: Character sets
+    { mean: row.out_is_roman_mean, std: row.out_is_roman_std },
+    { mean: row.out_is_hanzi_mean, std: row.out_is_hanzi_std },
+    { mean: row.out_is_arabic_mean, std: row.out_is_arabic_std },
+    { mean: row.out_is_korean_mean, std: row.out_is_korean_std },
+    { mean: row.out_is_hiragana_mean, std: row.out_is_hiragana_std },
+    { mean: row.out_is_katakana_mean, std: row.out_is_katakana_std },
+    { mean: row.out_is_cyrillic_mean, std: row.out_is_cyrillic_std },
+    { mean: row.out_is_devanagari_mean, std: row.out_is_devanagari_std },
+    { mean: row.out_is_thai_mean, std: row.out_is_thai_std },
+    { mean: row.out_is_digits_mean, std: row.out_is_digits_std },
+    { mean: row.out_is_punctuation_mean, std: row.out_is_punctuation_std },
+    // Features 25-26: Temporal features
+    { mean: row.out_time_from_start_mean, std: row.out_time_from_start_std },
+    { mean: row.out_time_from_end_mean, std: row.out_time_from_end_std },
   ]
 
   return {
@@ -428,24 +916,37 @@ function predictBayesian(
   allBoxes: BoxBounds[],
   frameIndex: number,
   boxIndex: number,
+  boxText: string,
+  timestampSeconds: number,
+  durationSeconds: number,
   db: Database.Database
 ): { label: 'in' | 'out'; confidence: number } {
-  const features = extractFeatures(box, layout, allBoxes, frameIndex, boxIndex, db)
+  const features = extractFeatures(
+    box,
+    layout,
+    allBoxes,
+    frameIndex,
+    boxIndex,
+    boxText,
+    timestampSeconds,
+    durationSeconds,
+    db
+  )
 
   // Calculate log-likelihoods using log-space to prevent numerical underflow
   //
   // PROBLEM: Naive Bayes multiplies probabilities for each feature:
-  //   P(features|class) = P(f1|class) × P(f2|class) × ... × P(f9|class)
+  //   P(features|class) = P(f1|class) × P(f2|class) × ... × P(f26|class)
   //
-  // With 9 features, each having Gaussian PDF values often < 0.01, the product can underflow to 0.
-  // Example: 0.01^9 = 1e-18, which underflows to 0 in floating point.
+  // With 26 features, each having Gaussian PDF values often < 0.01, the product can underflow to 0.
+  // Example: 0.01^26 = 1e-52, which underflows to 0 in floating point.
   //
   // When a single feature has an extreme value (e.g., topAlignment=177 vs mean=0.5),
   // its Gaussian PDF ≈ 0, causing the entire likelihood to become 0 for both classes.
   // This leads to the degenerate case where total = posteriorIn + posteriorOut = 0.
   //
   // SOLUTION: Use log-space arithmetic
-  //   log(P(features|class)) = log(P(f1|class)) + log(P(f2|class)) + ... + log(P(f9|class))
+  //   log(P(features|class)) = log(P(f1|class)) + log(P(f2|class)) + ... + log(P(f26|class))
   //
   // Benefits:
   //   - Product becomes sum (numerically stable)
@@ -456,7 +957,7 @@ function predictBayesian(
   let logLikelihoodIn = 0.0
   let logLikelihoodOut = 0.0
 
-  for (let i = 0; i < 9; i++) {
+  for (let i = 0; i < 26; i++) {
     const pdfIn = gaussianPDF(features[i]!, model.in_features[i]!.mean, model.in_features[i]!.std)
     const pdfOut = gaussianPDF(
       features[i]!,
@@ -595,7 +1096,38 @@ export function predictBoxLabel(
     try {
       const model = loadModelFromDB(db)
       if (model) {
-        return predictBayesian(boxBounds, layoutConfig, model, allBoxes, frameIndex, boxIndex, db)
+        // Fetch box text and timestamp for feature extraction
+        const boxData = db
+          .prepare(
+            `
+          SELECT text, timestamp_seconds
+          FROM full_frame_ocr
+          WHERE frame_index = ? AND box_index = ?
+        `
+          )
+          .get(frameIndex, boxIndex) as { text: string; timestamp_seconds: number } | undefined
+
+        const boxText = boxData?.text ?? ''
+        const timestampSeconds = boxData?.timestamp_seconds ?? 0.0
+
+        // Fetch video duration for temporal features
+        const videoDuration = db
+          .prepare('SELECT duration_seconds FROM video_metadata WHERE id = 1')
+          .get() as { duration_seconds: number } | undefined
+        const durationSeconds = videoDuration?.duration_seconds ?? 600.0 // Default 10 minutes
+
+        return predictBayesian(
+          boxBounds,
+          layoutConfig,
+          model,
+          allBoxes,
+          frameIndex,
+          boxIndex,
+          boxText,
+          timestampSeconds,
+          durationSeconds,
+          db
+        )
       }
     } catch (error) {
       // Log error and fall back to heuristics
@@ -631,11 +1163,14 @@ export function initializeSeedModel(db: Database.Database): void {
 
   console.log('[initializeSeedModel] Initializing seed model with typical caption parameters')
 
-  // Seed parameters based on typical caption characteristics
-  // Features in order: [topAlignment, bottomAlignment, heightSimilarity, horizontalClustering, aspectRatio, normalizedY, normalizedArea, isUserAnnotatedIn, isUserAnnotatedOut]
+  // Seed parameters based on typical caption characteristics (26 features)
+  // Features: spatial (1-7), user annotations (8-9), edge positions (10-13),
+  // character sets (14-24), temporal (25-26)
 
-  // "in" (caption) boxes: well-aligned, similar, clustered, wide, bottom of frame, small
+  // "in" (caption) boxes: well-aligned, similar, clustered, wide, bottom of frame, small,
+  // center-aligned horizontally, contain typical caption characters, mid-video
   const inParams = [
+    // Spatial features (1-7)
     { mean: 0.5, std: 0.5 }, // topAlignment: low = well aligned
     { mean: 0.5, std: 0.5 }, // bottomAlignment: low = well aligned
     { mean: 0.5, std: 0.5 }, // heightSimilarity: low = similar heights
@@ -643,12 +1178,34 @@ export function initializeSeedModel(db: Database.Database): void {
     { mean: 4.0, std: 2.0 }, // aspectRatio: wide boxes (3-5x wider than tall)
     { mean: 0.8, std: 0.1 }, // normalizedY: bottom 20% of frame (0.75-0.85)
     { mean: 0.02, std: 0.015 }, // normalizedArea: 1-3% of frame area
+    // User annotations (8-9)
     { mean: 0.5, std: 0.5 }, // isUserAnnotatedIn: neutral (no annotations yet)
     { mean: 0.5, std: 0.5 }, // isUserAnnotatedOut: neutral (no annotations yet)
+    // Edge positions (10-13): center-bottom of frame
+    { mean: 0.35, std: 0.15 }, // normalizedLeft: ~30-50% from left
+    { mean: 0.75, std: 0.1 }, // normalizedTop: bottom quarter
+    { mean: 0.65, std: 0.15 }, // normalizedRight: ~50-80% from left
+    { mean: 0.85, std: 0.1 }, // normalizedBottom: near bottom
+    // Character sets (14-24): neutral (language-agnostic)
+    { mean: 0.5, std: 0.5 }, // isRoman
+    { mean: 0.5, std: 0.5 }, // isHanzi
+    { mean: 0.5, std: 0.5 }, // isArabic
+    { mean: 0.5, std: 0.5 }, // isKorean
+    { mean: 0.5, std: 0.5 }, // isHiragana
+    { mean: 0.5, std: 0.5 }, // isKatakana
+    { mean: 0.5, std: 0.5 }, // isCyrillic
+    { mean: 0.5, std: 0.5 }, // isDevanagari
+    { mean: 0.5, std: 0.5 }, // isThai
+    { mean: 0.5, std: 0.5 }, // isDigits
+    { mean: 0.5, std: 0.5 }, // isPunctuation
+    // Temporal features (25-26): mid-video (not opening/closing credits)
+    { mean: 300.0, std: 200.0 }, // timeFromStart: 100-500 seconds
+    { mean: 300.0, std: 200.0 }, // timeFromEnd: 100-500 seconds
   ]
 
-  // "out" (noise) boxes: less aligned, varied, scattered, more varied
+  // "out" (noise) boxes: less aligned, varied, scattered, varied positions
   const outParams = [
+    // Spatial features (1-7)
     { mean: 1.5, std: 1.0 }, // topAlignment: higher = less aligned
     { mean: 1.5, std: 1.0 }, // bottomAlignment: higher = less aligned
     { mean: 1.5, std: 1.0 }, // heightSimilarity: higher = varied heights
@@ -656,15 +1213,37 @@ export function initializeSeedModel(db: Database.Database): void {
     { mean: 2.0, std: 3.0 }, // aspectRatio: more varied
     { mean: 0.5, std: 0.3 }, // normalizedY: more varied vertical position
     { mean: 0.03, std: 0.03 }, // normalizedArea: more varied area
-    { mean: 0.5, std: 0.5 }, // isUserAnnotatedIn: neutral (no annotations yet)
-    { mean: 0.5, std: 0.5 }, // isUserAnnotatedOut: neutral (no annotations yet)
+    // User annotations (8-9)
+    { mean: 0.5, std: 0.5 }, // isUserAnnotatedIn: neutral
+    { mean: 0.5, std: 0.5 }, // isUserAnnotatedOut: neutral
+    // Edge positions (10-13): varied positions across frame
+    { mean: 0.5, std: 0.3 }, // normalizedLeft: anywhere
+    { mean: 0.5, std: 0.3 }, // normalizedTop: anywhere
+    { mean: 0.5, std: 0.3 }, // normalizedRight: anywhere
+    { mean: 0.5, std: 0.3 }, // normalizedBottom: anywhere
+    // Character sets (14-24): neutral
+    { mean: 0.5, std: 0.5 }, // isRoman
+    { mean: 0.5, std: 0.5 }, // isHanzi
+    { mean: 0.5, std: 0.5 }, // isArabic
+    { mean: 0.5, std: 0.5 }, // isKorean
+    { mean: 0.5, std: 0.5 }, // isHiragana
+    { mean: 0.5, std: 0.5 }, // isKatakana
+    { mean: 0.5, std: 0.5 }, // isCyrillic
+    { mean: 0.5, std: 0.5 }, // isDevanagari
+    { mean: 0.5, std: 0.5 }, // isThai
+    { mean: 0.5, std: 0.5 }, // isDigits
+    { mean: 0.5, std: 0.5 }, // isPunctuation
+    // Temporal features (25-26): varied timing
+    { mean: 300.0, std: 250.0 }, // timeFromStart: more varied
+    { mean: 300.0, std: 250.0 }, // timeFromEnd: more varied
   ]
 
   // Start with balanced priors (50/50)
   const priorIn = 0.5
   const priorOut = 0.5
 
-  // Store seed model in database
+  // Store seed model in database (26 features = 104 columns + metadata)
+  // Uses same schema as trainModel()
   db.prepare(
     `
     INSERT INTO box_classification_model (
@@ -683,6 +1262,23 @@ export function initializeSeedModel(db: Database.Database): void {
       in_normalized_area_mean, in_normalized_area_std,
       in_user_annotated_in_mean, in_user_annotated_in_std,
       in_user_annotated_out_mean, in_user_annotated_out_std,
+      in_normalized_left_mean, in_normalized_left_std,
+      in_normalized_top_mean, in_normalized_top_std,
+      in_normalized_right_mean, in_normalized_right_std,
+      in_normalized_bottom_mean, in_normalized_bottom_std,
+      in_is_roman_mean, in_is_roman_std,
+      in_is_hanzi_mean, in_is_hanzi_std,
+      in_is_arabic_mean, in_is_arabic_std,
+      in_is_korean_mean, in_is_korean_std,
+      in_is_hiragana_mean, in_is_hiragana_std,
+      in_is_katakana_mean, in_is_katakana_std,
+      in_is_cyrillic_mean, in_is_cyrillic_std,
+      in_is_devanagari_mean, in_is_devanagari_std,
+      in_is_thai_mean, in_is_thai_std,
+      in_is_digits_mean, in_is_digits_std,
+      in_is_punctuation_mean, in_is_punctuation_std,
+      in_time_from_start_mean, in_time_from_start_std,
+      in_time_from_end_mean, in_time_from_end_std,
       out_vertical_alignment_mean, out_vertical_alignment_std,
       out_height_similarity_mean, out_height_similarity_std,
       out_anchor_distance_mean, out_anchor_distance_std,
@@ -691,56 +1287,38 @@ export function initializeSeedModel(db: Database.Database): void {
       out_normalized_y_mean, out_normalized_y_std,
       out_normalized_area_mean, out_normalized_area_std,
       out_user_annotated_in_mean, out_user_annotated_in_std,
-      out_user_annotated_out_mean, out_user_annotated_out_std
+      out_user_annotated_out_mean, out_user_annotated_out_std,
+      out_normalized_left_mean, out_normalized_left_std,
+      out_normalized_top_mean, out_normalized_top_std,
+      out_normalized_right_mean, out_normalized_right_std,
+      out_normalized_bottom_mean, out_normalized_bottom_std,
+      out_is_roman_mean, out_is_roman_std,
+      out_is_hanzi_mean, out_is_hanzi_std,
+      out_is_arabic_mean, out_is_arabic_std,
+      out_is_korean_mean, out_is_korean_std,
+      out_is_hiragana_mean, out_is_hiragana_std,
+      out_is_katakana_mean, out_is_katakana_std,
+      out_is_cyrillic_mean, out_is_cyrillic_std,
+      out_is_devanagari_mean, out_is_devanagari_std,
+      out_is_thai_mean, out_is_thai_std,
+      out_is_digits_mean, out_is_digits_std,
+      out_is_punctuation_mean, out_is_punctuation_std,
+      out_time_from_start_mean, out_time_from_start_std,
+      out_time_from_end_mean, out_time_from_end_std
     ) VALUES (
       1,
-      'seed_v1',
+      'seed_v2',
       datetime('now'),
       0,
       ?, ?,
-      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+      ${Array(104).fill('?').join(', ')}
     )
   `
   ).run(
     priorIn,
     priorOut,
-    inParams[0]!.mean,
-    inParams[0]!.std,
-    inParams[1]!.mean,
-    inParams[1]!.std,
-    inParams[2]!.mean,
-    inParams[2]!.std,
-    inParams[3]!.mean,
-    inParams[3]!.std,
-    inParams[4]!.mean,
-    inParams[4]!.std,
-    inParams[5]!.mean,
-    inParams[5]!.std,
-    inParams[6]!.mean,
-    inParams[6]!.std,
-    inParams[7]!.mean,
-    inParams[7]!.std,
-    inParams[8]!.mean,
-    inParams[8]!.std,
-    outParams[0]!.mean,
-    outParams[0]!.std,
-    outParams[1]!.mean,
-    outParams[1]!.std,
-    outParams[2]!.mean,
-    outParams[2]!.std,
-    outParams[3]!.mean,
-    outParams[3]!.std,
-    outParams[4]!.mean,
-    outParams[4]!.std,
-    outParams[5]!.mean,
-    outParams[5]!.std,
-    outParams[6]!.mean,
-    outParams[6]!.std,
-    outParams[7]!.mean,
-    outParams[7]!.std,
-    outParams[8]!.mean,
-    outParams[8]!.std
+    ...inParams.flatMap(p => [p.mean, p.std]),
+    ...outParams.flatMap(p => [p.mean, p.std])
   )
 
   console.log('[initializeSeedModel] Seed model initialized successfully')
@@ -809,17 +1387,16 @@ export function trainModel(db: Database.Database, layoutConfig: VideoLayoutConfi
 
   console.log(`[trainModel] Training with ${annotations.length} user annotations`)
 
-  // Group annotations by frame to get all boxes for feature extraction
-  const annotationsByFrame = new Map<number, typeof annotations>()
-  for (const ann of annotations) {
-    if (!annotationsByFrame.has(ann.frame_index)) {
-      annotationsByFrame.set(ann.frame_index, [])
-    }
-    annotationsByFrame.get(ann.frame_index)!.push(ann)
-  }
+  // Get video duration for temporal features
+  const videoDuration = db
+    .prepare('SELECT duration_seconds FROM video_metadata WHERE id = 1')
+    .get() as { duration_seconds: number } | undefined
+  const durationSeconds = videoDuration?.duration_seconds ?? 600.0 // Default 10 minutes if not set
 
   // Get all OCR boxes for each frame (needed for feature extraction context)
   const frameBoxesCache = new Map<number, BoxBounds[]>()
+  const frameBoxTextCache = new Map<string, string>() // Key: "frameIndex-boxIndex"
+  const frameBoxTimestampCache = new Map<number, number>() // Key: frameIndex
 
   // Extract features for each annotation
   const inFeatures: number[][] = []
@@ -831,19 +1408,23 @@ export function trainModel(db: Database.Database, layoutConfig: VideoLayoutConfi
       const boxes = db
         .prepare(
           `
-        SELECT x, y, width, height
+        SELECT box_index, text, timestamp_seconds, x, y, width, height
         FROM full_frame_ocr
         WHERE frame_index = ?
         ORDER BY box_index
       `
         )
         .all(ann.frame_index) as Array<{
+        box_index: number
+        text: string
+        timestamp_seconds: number
         x: number
         y: number
         width: number
         height: number
       }>
 
+      // Cache box bounds
       const boxBounds = boxes.map(b => {
         const left = Math.floor(b.x * layoutConfig.frame_width)
         const bottom = Math.floor((1 - b.y) * layoutConfig.frame_height)
@@ -853,8 +1434,15 @@ export function trainModel(db: Database.Database, layoutConfig: VideoLayoutConfi
         const right = left + boxWidth
         return { left, top, right, bottom }
       })
-
       frameBoxesCache.set(ann.frame_index, boxBounds)
+
+      // Cache box text and timestamp
+      for (const box of boxes) {
+        frameBoxTextCache.set(`${ann.frame_index}-${box.box_index}`, box.text)
+      }
+      if (boxes.length > 0) {
+        frameBoxTimestampCache.set(ann.frame_index, boxes[0]!.timestamp_seconds)
+      }
     }
 
     const allBoxes = frameBoxesCache.get(ann.frame_index)!
@@ -865,12 +1453,19 @@ export function trainModel(db: Database.Database, layoutConfig: VideoLayoutConfi
       bottom: ann.box_bottom,
     }
 
+    // Get box text and timestamp
+    const boxText = frameBoxTextCache.get(`${ann.frame_index}-${ann.box_index}`) ?? ''
+    const timestampSeconds = frameBoxTimestampCache.get(ann.frame_index) ?? 0.0
+
     const features = extractFeatures(
       boxBounds,
       layoutConfig,
       allBoxes,
       ann.frame_index,
       ann.box_index,
+      boxText,
+      timestampSeconds,
+      durationSeconds,
       db
     )
 
@@ -899,11 +1494,11 @@ export function trainModel(db: Database.Database, layoutConfig: VideoLayoutConfi
     return { mean, std: Math.max(std, 0.01) }
   }
 
-  // Extract each feature column and calculate parameters
+  // Extract each feature column and calculate parameters (26 features)
   const inParams: Array<{ mean: number; std: number }> = []
   const outParams: Array<{ mean: number; std: number }> = []
 
-  for (let i = 0; i < 9; i++) {
+  for (let i = 0; i < 26; i++) {
     const inFeatureValues = inFeatures.map(f => f[i]!)
     const outFeatureValues = outFeatures.map(f => f[i]!)
 
@@ -916,7 +1511,7 @@ export function trainModel(db: Database.Database, layoutConfig: VideoLayoutConfi
   const priorIn = inFeatures.length / total
   const priorOut = outFeatures.length / total
 
-  // Store model in database
+  // Store model in database (26 features = 104 columns + metadata)
   db.prepare(
     `
     INSERT OR REPLACE INTO box_classification_model (
@@ -935,6 +1530,23 @@ export function trainModel(db: Database.Database, layoutConfig: VideoLayoutConfi
       in_normalized_area_mean, in_normalized_area_std,
       in_user_annotated_in_mean, in_user_annotated_in_std,
       in_user_annotated_out_mean, in_user_annotated_out_std,
+      in_normalized_left_mean, in_normalized_left_std,
+      in_normalized_top_mean, in_normalized_top_std,
+      in_normalized_right_mean, in_normalized_right_std,
+      in_normalized_bottom_mean, in_normalized_bottom_std,
+      in_is_roman_mean, in_is_roman_std,
+      in_is_hanzi_mean, in_is_hanzi_std,
+      in_is_arabic_mean, in_is_arabic_std,
+      in_is_korean_mean, in_is_korean_std,
+      in_is_hiragana_mean, in_is_hiragana_std,
+      in_is_katakana_mean, in_is_katakana_std,
+      in_is_cyrillic_mean, in_is_cyrillic_std,
+      in_is_devanagari_mean, in_is_devanagari_std,
+      in_is_thai_mean, in_is_thai_std,
+      in_is_digits_mean, in_is_digits_std,
+      in_is_punctuation_mean, in_is_punctuation_std,
+      in_time_from_start_mean, in_time_from_start_std,
+      in_time_from_end_mean, in_time_from_end_std,
       out_vertical_alignment_mean, out_vertical_alignment_std,
       out_height_similarity_mean, out_height_similarity_std,
       out_anchor_distance_mean, out_anchor_distance_std,
@@ -943,57 +1555,39 @@ export function trainModel(db: Database.Database, layoutConfig: VideoLayoutConfi
       out_normalized_y_mean, out_normalized_y_std,
       out_normalized_area_mean, out_normalized_area_std,
       out_user_annotated_in_mean, out_user_annotated_in_std,
-      out_user_annotated_out_mean, out_user_annotated_out_std
+      out_user_annotated_out_mean, out_user_annotated_out_std,
+      out_normalized_left_mean, out_normalized_left_std,
+      out_normalized_top_mean, out_normalized_top_std,
+      out_normalized_right_mean, out_normalized_right_std,
+      out_normalized_bottom_mean, out_normalized_bottom_std,
+      out_is_roman_mean, out_is_roman_std,
+      out_is_hanzi_mean, out_is_hanzi_std,
+      out_is_arabic_mean, out_is_arabic_std,
+      out_is_korean_mean, out_is_korean_std,
+      out_is_hiragana_mean, out_is_hiragana_std,
+      out_is_katakana_mean, out_is_katakana_std,
+      out_is_cyrillic_mean, out_is_cyrillic_std,
+      out_is_devanagari_mean, out_is_devanagari_std,
+      out_is_thai_mean, out_is_thai_std,
+      out_is_digits_mean, out_is_digits_std,
+      out_is_punctuation_mean, out_is_punctuation_std,
+      out_time_from_start_mean, out_time_from_start_std,
+      out_time_from_end_mean, out_time_from_end_std
     ) VALUES (
       1,
-      'naive_bayes_v1',
+      'naive_bayes_v2',
       datetime('now'),
       ?,
       ?, ?,
-      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+      ${Array(104).fill('?').join(', ')}
     )
   `
   ).run(
     total,
     priorIn,
     priorOut,
-    inParams[0]!.mean,
-    inParams[0]!.std,
-    inParams[1]!.mean,
-    inParams[1]!.std,
-    inParams[2]!.mean,
-    inParams[2]!.std,
-    inParams[3]!.mean,
-    inParams[3]!.std,
-    inParams[4]!.mean,
-    inParams[4]!.std,
-    inParams[5]!.mean,
-    inParams[5]!.std,
-    inParams[6]!.mean,
-    inParams[6]!.std,
-    inParams[7]!.mean,
-    inParams[7]!.std,
-    inParams[8]!.mean,
-    inParams[8]!.std,
-    outParams[0]!.mean,
-    outParams[0]!.std,
-    outParams[1]!.mean,
-    outParams[1]!.std,
-    outParams[2]!.mean,
-    outParams[2]!.std,
-    outParams[3]!.mean,
-    outParams[3]!.std,
-    outParams[4]!.mean,
-    outParams[4]!.std,
-    outParams[5]!.mean,
-    outParams[5]!.std,
-    outParams[6]!.mean,
-    outParams[6]!.std,
-    outParams[7]!.mean,
-    outParams[7]!.std,
-    outParams[8]!.mean,
-    outParams[8]!.std
+    ...inParams.flatMap(p => [p.mean, p.std]),
+    ...outParams.flatMap(p => [p.mean, p.std])
   )
 
   console.log(

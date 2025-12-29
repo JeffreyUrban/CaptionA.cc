@@ -9,7 +9,7 @@ This package provides functionality to classify OCR character bounding boxes as 
 1. **Spatial heuristics** (bootstrap before annotations exist)
 2. **Gaussian Naive Bayes** (learns from user annotations)
 
-The model uses 9 features extracted from box spatial properties and user annotations, trained incrementally as the user labels boxes during the annotation workflow.
+The model uses 26 features extracted from box spatial properties, character sets, temporal context, and user annotations, trained incrementally as the user labels boxes during the annotation workflow.
 
 ## Features
 
@@ -218,13 +218,52 @@ This ensures the largest exponent is always 0, preventing overflow.
 - ✅ Rightmost "in" box: Improved from x=1219 to x=942 (within caption region)
 - ✅ Numerical stability: No degenerate cases
 
+#### Iteration 4: Feature Expansion to 26 Features (2024-12)
+
+**Problem discovered**: Crop bounds still extending past actual captions in some videos (e.g., feichengwurao/20220122: rightmost predicted "in" at x=980 vs user annotations at x=607).
+
+**Root cause**: Model lacked direct horizontal position information. The horizontal clustering score captured relative positioning but not absolute position, making it unable to learn "boxes far to the right are noise".
+
+**Solution**: Expanded from 9 to 26 features with three new feature categories:
+
+1. **Edge Position Features (4 new features)**:
+   - Normalized left, top, right, bottom edges (all in [0-1] range)
+   - **Design choice**: Edge-based rather than center-based for robustness to aspect ratio differences and better support for word boxes in non-character-based languages
+   - Helps model learn absolute horizontal and vertical position constraints
+
+2. **Character Set Features (11 new features)**:
+   - Binary, non-exclusive detection of scripts: Roman, Hanzi, Arabic, Korean, Hiragana, Katakana, Cyrillic, Devanagari, Thai, digits, punctuation
+   - Uses Unicode character code ranges for detection
+   - **Design choice**: Non-exclusive (multi-label) because boxes can contain mixed scripts
+   - **Design choice**: Binary (not proportional) for simpler model and faster detection
+   - Helps distinguish caption text from UI elements, logos, and other on-screen text
+
+3. **Temporal Features (2 new features)**:
+   - Time from video start (seconds, absolute)
+   - Time from video end (seconds, absolute)
+   - **Design choice**: Absolute time rather than normalized to avoid assumptions about video duration distribution
+   - Helps distinguish opening titles, main content, and closing credits
+   - Requires `video_metadata.duration_seconds` and per-frame `timestamp_seconds`
+
+**Implementation details**:
+- Database schema migration: Added 68 new columns (17 new features × 2 params × 2 classes)
+- Backward compatibility: Schema auto-migrates when model loads
+- Temporal metadata: Backfill script populates duration and timestamps for existing videos
+- Frame sampling: Currently fixed 10Hz indexing (native framerate support deferred)
+
+**Results**: Ready for testing. Model now has:
+- Direct horizontal position signal (edge features)
+- Script/language awareness (character set features)
+- Temporal context (time features)
+- All with log-space numerical stability from Iteration 3
+
 ### Key Lessons Learned
 
 1. **User annotations are powerful features**: Directly encoding user labels as features provides the strongest signal for prediction.
 
 2. **Avoid "neutral values" in Bayesian models**: If the model never sees a value during training (like 0.5 for unannotated), it can't predict well with that value. Use binary indicators instead.
 
-3. **Log-space is essential for Naive Bayes**: With many features (9 in our case), multiplying probabilities will underflow. Always use log-space for numerical stability.
+3. **Log-space is essential for Naive Bayes**: With many features (26 in our case), multiplying probabilities will underflow. Always use log-space for numerical stability.
 
 4. **Iterative debugging pays off**: Each problem revealed deeper insights:
    - Missing feature → added user annotation
@@ -234,9 +273,21 @@ This ensures the largest exponent is always 0, preventing overflow.
 
 5. **Debug with specific examples**: Tracking specific boxes (frame 9500, box 42) through the entire pipeline revealed exactly where calculations failed.
 
+6. **Direct features beat derived features**: Adding explicit horizontal position (edge features) was more effective than relying on the model to infer position from clustering scores. When you know what the model needs to learn, encode it directly.
+
+7. **Feature expansion requires careful design**:
+   - Edge positions vs center positions: Consider which is more robust to variations
+   - Binary vs proportional: Simpler features can be more effective and faster to compute
+   - Absolute vs normalized: Choose based on expected data distribution and model assumptions
+   - Non-exclusive multi-label: Character sets needed multi-label because boxes can contain mixed scripts
+
+8. **Temporal context matters**: Caption appearance patterns differ across video timeline (opening titles, main content, closing credits). Adding temporal features allows the model to learn these patterns.
+
 ### Model Architecture
 
-**Features (9 total)**:
+**Features (26 total)**:
+
+*Spatial Features (1-7):*
 1. Top alignment score (0-∞, lower = better aligned)
 2. Bottom alignment score (0-∞, lower = better aligned)
 3. Height similarity score (0-∞, lower = more similar)
@@ -244,8 +295,33 @@ This ensures the largest exponent is always 0, preventing overflow.
 5. Aspect ratio (width/height)
 6. Normalized Y position (0-1, vertical position in frame)
 7. Normalized area (0-1, box area / frame area)
+
+*User Annotation Features (8-9):*
 8. Is user annotated "in" (0.0 or 1.0)
 9. Is user annotated "out" (0.0 or 1.0)
+
+*Edge Position Features (10-13):*
+10. Normalized left edge (0-1, horizontal position from left)
+11. Normalized top edge (0-1, vertical position from top)
+12. Normalized right edge (0-1, horizontal position from left)
+13. Normalized bottom edge (0-1, vertical position from top)
+
+*Character Set Features (14-24) - binary, non-exclusive:*
+14. Is Roman/Latin script (0.0 or 1.0)
+15. Is Hanzi (Chinese characters) (0.0 or 1.0)
+16. Is Arabic script (0.0 or 1.0)
+17. Is Korean (Hangul) (0.0 or 1.0)
+18. Is Hiragana (Japanese) (0.0 or 1.0)
+19. Is Katakana (Japanese) (0.0 or 1.0)
+20. Is Cyrillic script (0.0 or 1.0)
+21. Is Devanagari script (0.0 or 1.0)
+22. Is Thai script (0.0 or 1.0)
+23. Is digits (0.0 or 1.0)
+24. Is punctuation (0.0 or 1.0)
+
+*Temporal Features (25-26):*
+25. Time from start (seconds, absolute time from video start)
+26. Time from end (seconds, absolute time before video end)
 
 **Model**: Gaussian Naive Bayes
 - Each feature modeled as Gaussian distribution for each class
@@ -273,7 +349,7 @@ log P(class|features) = log P(features|class) + log P(class)
 
 **Database schema**:
 - Model stored in `box_classification_model` table
-- 2 parameters per feature per class (mean, std) = 36 columns
+- 2 parameters per feature per class (mean, std) = 104 columns (26 features × 2 params × 2 classes)
 - Plus: model version, training timestamp, prior probabilities, sample count
 
 **Performance**:
