@@ -898,6 +898,12 @@ export async function action({ params }: ActionFunctionArgs) {
     db.prepare('BEGIN TRANSACTION').run()
 
     try {
+      // Get current model version to record with bounds
+      const modelInfo = db
+        .prepare('SELECT model_version FROM box_classification_model WHERE id = 1')
+        .get() as { model_version: string } | undefined
+      const currentModelVersion = modelInfo?.model_version ?? null
+
       // Update crop bounds and increment version
       db.prepare(
         `
@@ -907,6 +913,7 @@ export async function action({ params }: ActionFunctionArgs) {
             crop_right = ?,
             crop_bottom = ?,
             crop_bounds_version = crop_bounds_version + 1,
+            analysis_model_version = ?,
             updated_at = datetime('now')
         WHERE id = 1
       `
@@ -914,7 +921,8 @@ export async function action({ params }: ActionFunctionArgs) {
         analysis.cropBounds.left,
         analysis.cropBounds.top,
         analysis.cropBounds.right,
-        analysis.cropBounds.bottom
+        analysis.cropBounds.bottom,
+        currentModelVersion
       )
 
       // Update layout parameters
