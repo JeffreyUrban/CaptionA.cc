@@ -758,7 +758,6 @@ export default function BoundaryWorkflow() {
   const timeSinceLastLog = now - lastRenderLogTimeRef.current
   if (timeSinceLastLog >= 1000) {
     const renderRate = (renderCountRef.current / timeSinceLastLog) * 1000
-    console.log(`[Render] ${renderRate.toFixed(1)} renders/sec`)
     renderCountRef.current = 0
     lastRenderLogTimeRef.current = now
   }
@@ -810,7 +809,6 @@ export default function BoundaryWorkflow() {
         // Debug logging
         updateCount++
         if (currentTime - lastLogTime >= 1000) {
-          console.log(`[RAF Updates] ${updateCount} updates/sec (target: 60)`)
           updateCount = 0
           lastLogTime = currentTime
         }
