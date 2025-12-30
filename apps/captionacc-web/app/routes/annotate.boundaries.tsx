@@ -746,14 +746,26 @@ export default function BoundaryWorkflow() {
 
     loadVisibleFrames()
 
-    // Cleanup: Revoke blob URLs when frames are no longer visible
+    // Cleanup: Revoke blob URLs and remove frames when no longer visible
     return () => {
       const visibleSet = new Set(visibleFrameIndices)
+      const framesToRemove: number[] = []
+
       frames.forEach((frame, idx) => {
         if (!visibleSet.has(idx) && frame.image_url.startsWith('blob:')) {
           URL.revokeObjectURL(frame.image_url)
+          framesToRemove.push(idx)
         }
       })
+
+      // Remove frames with revoked URLs from the Map so they get reloaded when scrolling back
+      if (framesToRemove.length > 0) {
+        setFrames(prevFrames => {
+          const newMap = new Map(prevFrames)
+          framesToRemove.forEach(idx => newMap.delete(idx))
+          return newMap
+        })
+      }
     }
   }, [visibleFrameIndices, videoId])
 
