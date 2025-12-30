@@ -1000,16 +1000,25 @@ export default function BoundaryWorkflow() {
           >
             <div className="flex h-full flex-1 flex-col justify-center gap-1 overflow-hidden p-4">
               {visibleFramePositions.map((framePosition, slotIndex) => {
-                // Find best available frame (finest modulo level loaded)
-                // Check from finest to coarsest: 1, 2, 4, 8, 16, 32
+                // Find finest available frame by checking coarsest to finest
+                // Check coarsest first (loads first, widest coverage) but keep finest found
                 let alignedFrameIndex = framePosition
                 let frame = frames.get(alignedFrameIndex)
 
                 if (!frame) {
-                  for (const modulo of [2, 4, 8, 16, 32]) {
-                    alignedFrameIndex = Math.round(framePosition / modulo) * modulo
-                    frame = frames.get(alignedFrameIndex)
-                    if (frame) break
+                  // Check from coarse to fine, keeping the finest available
+                  // Short-circuit if a level is missing (finer levels won't exist yet)
+                  for (const modulo of [32, 16, 8, 4, 2]) {
+                    const testIndex = Math.round(framePosition / modulo) * modulo
+                    const testFrame = frames.get(testIndex)
+                    if (testFrame) {
+                      frame = testFrame
+                      alignedFrameIndex = testIndex
+                      // Continue checking for finer frames
+                    } else {
+                      // Missing this level, finer levels won't exist - stop checking
+                      break
+                    }
                   }
                 }
 
