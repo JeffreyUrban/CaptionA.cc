@@ -704,148 +704,58 @@ export default function BoundaryWorkflow() {
     loadAnnotations(startFrame, endFrame)
   }, [visibleFrameIndices, loadAnnotations])
 
-  // Load and cache frames in groups of 100 (aligned to 100s boundaries)
-  // Keep at least 100 frames before and after current position (minimum 300 frames cached)
+  // Load frames for visible indices using batch API
   useEffect(() => {
-    const loadAndCacheFrames = async () => {
+    const loadVisibleFrames = async () => {
+      const newFrames = new Map(frames)
       const encodedVideoId = encodeURIComponent(videoId)
-      const BATCH_SIZE = 100
 
-      // Helper: get group start index (0, 100, 200, etc.) for a frame
-      const getGroupStart = (frameIndex: number) => Math.floor(frameIndex / BATCH_SIZE) * BATCH_SIZE
+      // Find frames that aren't loaded yet
+      const framesToLoad = visibleFrameIndices.filter(idx => !newFrames.has(idx))
 
-      // Use functional update to avoid stale closure
-      setFrames(prevFrames => {
-        // Track which groups (100s-aligned batches) are currently loaded
-        const loadedGroups = new Set<number>()
-        for (const [idx] of prevFrames) {
-          loadedGroups.add(getGroupStart(idx))
-        }
+      if (framesToLoad.length === 0) return
 
-        // Calculate groups needed to cover currentFrame - 100 to currentFrame + 100
-        const groupsToCache = new Set<number>()
+      // Load frames in batch
+      try {
+        const indicesParam = framesToLoad.join(',')
+        const response = await fetch(`/api/frames/${encodedVideoId}/batch?indices=${indicesParam}`)
+        const data = await response.json()
 
-        // Groups to cover 100 frames before current
-        const startFrame = Math.max(0, currentFrameIndex - 100)
-        const startGroup = getGroupStart(startFrame)
-
-        // Groups to cover 100 frames after current (add extra group to ensure coverage)
-        const endFrame = Math.min(totalFrames - 1, currentFrameIndex + 100)
-        const endGroup = getGroupStart(endFrame)
-
-        // Add all groups in range
-        for (let group = startGroup; group <= endGroup; group += BATCH_SIZE) {
-          if (group < totalFrames) {
-            groupsToCache.add(group)
+        // Convert base64 to blob URLs
+        for (const frame of data.frames) {
+          const binaryData = atob(frame.image_data)
+          const bytes = new Uint8Array(binaryData.length)
+          for (let i = 0; i < binaryData.length; i++) {
+            bytes[i] = binaryData.charCodeAt(i)
           }
+          const blob = new Blob([bytes], { type: 'image/jpeg' })
+          const imageUrl = URL.createObjectURL(blob)
+
+          newFrames.set(frame.frame_index, {
+            frame_index: frame.frame_index,
+            image_url: imageUrl,
+            ocr_text: '', // OCR text not used in boundary workflow
+          })
         }
 
-        // Find groups to load (not already cached)
-        const groupsToLoad: number[] = []
-        for (const group of groupsToCache) {
-          if (!loadedGroups.has(group)) {
-            groupsToLoad.push(group)
-          }
-        }
-
-        // Find groups to remove (outside cache range)
-        const groupsToRemove: number[] = []
-        for (const group of loadedGroups) {
-          if (!groupsToCache.has(group)) {
-            groupsToRemove.push(group)
-          }
-        }
-
-        // Clean up old groups (revoke URLs after a delay to avoid React render conflicts)
-        if (groupsToRemove.length > 0) {
-          setTimeout(() => {
-            for (const group of groupsToRemove) {
-              for (let i = group; i < group + BATCH_SIZE; i++) {
-                const frame = prevFrames.get(i)
-                if (frame?.image_url) {
-                  URL.revokeObjectURL(frame.image_url)
-                }
-              }
-            }
-          }, 100)
-        }
-
-        // If no groups to load, just clean up and return
-        if (groupsToLoad.length === 0) {
-          if (groupsToRemove.length > 0) {
-            const newFrames = new Map(prevFrames)
-            for (const group of groupsToRemove) {
-              for (let i = group; i < group + BATCH_SIZE; i++) {
-                newFrames.delete(i)
-              }
-            }
-            return newFrames
-          }
-          return prevFrames
-        }
-
-        // Load missing groups (each group is 100 frames aligned to 100s boundary)
-        ;(async () => {
-          for (const group of groupsToLoad) {
-            try {
-              // Generate frame indices for this group
-              const groupFrames: number[] = []
-              for (let i = group; i < group + BATCH_SIZE && i < totalFrames; i++) {
-                groupFrames.push(i)
-              }
-
-              const indicesParam = groupFrames.join(',')
-              const response = await fetch(
-                `/api/frames/${encodedVideoId}/batch?indices=${indicesParam}`
-              )
-              const data = await response.json()
-
-              // Update frames with loaded data
-              setFrames(currentFrames => {
-                const newFrames = new Map(currentFrames)
-
-                // Convert base64 to blob URLs
-                for (const frame of data.frames) {
-                  const binaryData = atob(frame.image_data)
-                  const bytes = new Uint8Array(binaryData.length)
-                  for (let i = 0; i < binaryData.length; i++) {
-                    bytes[i] = binaryData.charCodeAt(i)
-                  }
-                  const blob = new Blob([bytes], { type: 'image/jpeg' })
-                  const imageUrl = URL.createObjectURL(blob)
-
-                  newFrames.set(frame.frame_index, {
-                    frame_index: frame.frame_index,
-                    image_url: imageUrl,
-                    ocr_text: '', // OCR text not used in boundary workflow
-                  })
-                }
-
-                return newFrames
-              })
-            } catch (error) {
-              console.error('Failed to load frame group:', error)
-            }
-          }
-        })()
-
-        // Remove cleaned up frames from map
-        if (groupsToRemove.length > 0) {
-          const newFrames = new Map(prevFrames)
-          for (const group of groupsToRemove) {
-            for (let i = group; i < group + BATCH_SIZE; i++) {
-              newFrames.delete(i)
-            }
-          }
-          return newFrames
-        }
-
-        return prevFrames
-      })
+        setFrames(newFrames)
+      } catch (error) {
+        console.error('Failed to load frames:', error)
+      }
     }
 
-    loadAndCacheFrames()
-  }, [currentFrameIndex, totalFrames, videoId])
+    loadVisibleFrames()
+
+    // Cleanup: Revoke blob URLs when frames are no longer visible
+    return () => {
+      const visibleSet = new Set(visibleFrameIndices)
+      frames.forEach((frame, idx) => {
+        if (!visibleSet.has(idx) && frame.image_url.startsWith('blob:')) {
+          URL.revokeObjectURL(frame.image_url)
+        }
+      })
+    }
+  }, [visibleFrameIndices, videoId])
 
   // Find annotation(s) for a given frame
   const getAnnotationsForFrame = useCallback(
