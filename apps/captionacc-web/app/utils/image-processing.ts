@@ -11,6 +11,8 @@ import { resolve } from 'path'
 import Database from 'better-sqlite3'
 import sharp from 'sharp'
 
+import { getDbPath, getVideoDir } from './video-paths'
+
 // Image quality constant
 const COMBINED_IMAGE_QUALITY = 95
 
@@ -32,18 +34,9 @@ export async function generateCombinedImage(
   startFrame: number,
   endFrame: number
 ): Promise<string> {
-  const dbPath = resolve(
-    process.cwd(),
-    '..',
-    '..',
-    'local',
-    'data',
-    ...videoPath.split('/'),
-    'annotations.db'
-  )
-
-  if (!existsSync(dbPath)) {
-    throw new Error(`Database not found: ${dbPath}`)
+  const dbPath = getDbPath(videoPath)
+  if (!dbPath) {
+    throw new Error(`Database not found for video: ${videoPath}`)
   }
 
   // Load all frames in the range from database
@@ -111,15 +104,11 @@ export async function generateCombinedImage(
   }
 
   // Create output directory if it doesn't exist
-  const outputDir = resolve(
-    process.cwd(),
-    '..',
-    '..',
-    'local',
-    'data',
-    ...videoPath.split('/'),
-    'text_images'
-  )
+  const videoDir = getVideoDir(videoPath)
+  if (!videoDir) {
+    throw new Error(`Video directory not found for: ${videoPath}`)
+  }
+  const outputDir = resolve(videoDir, 'text_images')
 
   if (!existsSync(outputDir)) {
     mkdirSync(outputDir, { recursive: true })
@@ -151,17 +140,12 @@ export async function generateCombinedImage(
  * @returns Path to combined image if it exists, null otherwise
  */
 export function getCombinedImagePath(videoPath: string, annotationId: number): string | null {
-  const imagePath = resolve(
-    process.cwd(),
-    '..',
-    '..',
-    'local',
-    'data',
-    ...videoPath.split('/'),
-    'text_images',
-    `annotation_${annotationId}.jpg`
-  )
+  const videoDir = getVideoDir(videoPath)
+  if (!videoDir) {
+    return null
+  }
 
+  const imagePath = resolve(videoDir, 'text_images', `annotation_${annotationId}.jpg`)
   return existsSync(imagePath) ? imagePath : null
 }
 
@@ -181,16 +165,12 @@ export async function getOrGenerateCombinedImage(
   startFrame: number,
   endFrame: number
 ): Promise<string> {
-  const outputDir = resolve(
-    process.cwd(),
-    '..',
-    '..',
-    'local',
-    'data',
-    ...videoPath.split('/'),
-    'text_images'
-  )
+  const videoDir = getVideoDir(videoPath)
+  if (!videoDir) {
+    throw new Error(`Video directory not found for: ${videoPath}`)
+  }
 
+  const outputDir = resolve(videoDir, 'text_images')
   if (!existsSync(outputDir)) {
     mkdirSync(outputDir, { recursive: true })
   }
@@ -203,18 +183,9 @@ export async function getOrGenerateCombinedImage(
   }
 
   // Generate new combined image from database
-  const dbPath = resolve(
-    process.cwd(),
-    '..',
-    '..',
-    'local',
-    'data',
-    ...videoPath.split('/'),
-    'annotations.db'
-  )
-
-  if (!existsSync(dbPath)) {
-    throw new Error(`Database not found: ${dbPath}`)
+  const dbPath = getDbPath(videoPath)
+  if (!dbPath) {
+    throw new Error(`Database not found for video: ${videoPath}`)
   }
 
   // Load all frames in the range from database
@@ -300,17 +271,12 @@ export async function getOrGenerateCombinedImage(
  * @param annotationId - Annotation ID
  */
 export function deleteCombinedImage(videoPath: string, annotationId: number): void {
-  const imagePath = resolve(
-    process.cwd(),
-    '..',
-    '..',
-    'local',
-    'data',
-    ...videoPath.split('/'),
-    'text_images',
-    `annotation_${annotationId}.jpg`
-  )
+  const videoDir = getVideoDir(videoPath)
+  if (!videoDir) {
+    return
+  }
 
+  const imagePath = resolve(videoDir, 'text_images', `annotation_${annotationId}.jpg`)
   if (existsSync(imagePath)) {
     unlinkSync(imagePath)
   }
