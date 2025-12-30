@@ -25,17 +25,11 @@ interface Annotation {
 
 type FrameSpacing = 'linear' | 'exponential' | 'hybrid'
 
-// Opacity for frame distance
-const OPACITY_MAP: Record<number, number> = {
-  0: 1.0,
-  1: 0.9,
-  2: 0.7,
-  3: 0.6,
-  4: 0.5,
-  5: 0.4,
-  8: 0.3,
-  10: 0.2,
-}
+// Opacity calculation for frame distance
+// Uses exponential decay to smoothly fade frames as they get farther from current
+// Min opacity of 0.1 ensures distant frames remain slightly visible
+const MIN_OPACITY = 0.1
+const OPACITY_DECAY_RATE = 0.12
 
 // Loader function to expose environment variables
 export async function loader() {
@@ -271,10 +265,13 @@ export default function BoundaryWorkflow() {
   }, [currentFrameIndex, totalFrames, windowHeight, cropWidth, cropHeight])
 
   // Get opacity for frame distance
+  // Uses exponential decay: opacity = max(MIN_OPACITY, e^(-DECAY_RATE * distance))
   const getOpacity = useCallback(
     (frameIndex: number) => {
       const distance = Math.abs(frameIndex - currentFrameIndex)
-      return OPACITY_MAP[distance] ?? 0.3
+      if (distance === 0) return 1.0
+      const opacity = Math.exp(-OPACITY_DECAY_RATE * distance)
+      return Math.max(MIN_OPACITY, opacity)
     },
     [currentFrameIndex]
   )
