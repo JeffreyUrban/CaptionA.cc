@@ -770,14 +770,15 @@ export default function BoundaryWorkflow() {
             const chunkEnd = chunkStart + chunkSize - 1
             const chunkFrames: number[] = []
 
-            // Collect frames at modulo positions within this chunk
+            // Collect ALL frames at modulo positions within this chunk
+            // Chunks are atomic - we load all frames or none (cache check handles skip)
             for (let i = chunkStart; i <= Math.min(chunkEnd, totalFrames - 1); i++) {
-              if (i % modulo === 0 && !currentFrames.has(i)) {
+              if (i % modulo === 0) {
                 chunkFrames.push(i)
               }
             }
 
-            // Only add chunk if it has frames to load
+            // Add chunk if it has frames (including edge chunks with <32 frames)
             if (chunkFrames.length > 0) {
               chunks.push({
                 modulo,
