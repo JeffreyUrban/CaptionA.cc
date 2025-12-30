@@ -704,70 +704,116 @@ export default function BoundaryWorkflow() {
     loadAnnotations(startFrame, endFrame)
   }, [visibleFrameIndices, loadAnnotations])
 
-  // Load frames for visible indices using batch API
+  // Load and cache frames: visible frames + ±100 frames around current position
   useEffect(() => {
-    const loadVisibleFrames = async () => {
-      const newFrames = new Map(frames)
+    const loadAndCacheFrames = async () => {
       const encodedVideoId = encodeURIComponent(videoId)
 
-      // Find frames that aren't loaded yet
-      const framesToLoad = visibleFrameIndices.filter(idx => !newFrames.has(idx))
+      // Calculate cache range: current ± 100 frames
+      const CACHE_RADIUS = 100
+      const cacheStartFrame = Math.max(0, currentFrameIndex - CACHE_RADIUS)
+      const cacheEndFrame = Math.min(totalFrames - 1, currentFrameIndex + CACHE_RADIUS)
 
-      if (framesToLoad.length === 0) return
+      // Generate all frame indices in cache range
+      const framesToCache: number[] = []
+      for (let i = cacheStartFrame; i <= cacheEndFrame; i++) {
+        framesToCache.push(i)
+      }
 
-      // Load frames in batch
-      try {
-        const indicesParam = framesToLoad.join(',')
-        const response = await fetch(`/api/frames/${encodedVideoId}/batch?indices=${indicesParam}`)
-        const data = await response.json()
+      // Use functional update to avoid stale closure
+      setFrames(prevFrames => {
+        // Find frames that need to be loaded
+        const framesToLoad = framesToCache.filter(idx => !prevFrames.has(idx))
 
-        // Convert base64 to blob URLs
-        for (const frame of data.frames) {
-          const binaryData = atob(frame.image_data)
-          const bytes = new Uint8Array(binaryData.length)
-          for (let i = 0; i < binaryData.length; i++) {
-            bytes[i] = binaryData.charCodeAt(i)
+        // Find frames that should be cleaned up (outside cache range)
+        const framesToRemove: number[] = []
+        for (const [idx] of prevFrames) {
+          if (idx < cacheStartFrame || idx > cacheEndFrame) {
+            framesToRemove.push(idx)
           }
-          const blob = new Blob([bytes], { type: 'image/jpeg' })
-          const imageUrl = URL.createObjectURL(blob)
-
-          newFrames.set(frame.frame_index, {
-            frame_index: frame.frame_index,
-            image_url: imageUrl,
-            ocr_text: '', // OCR text not used in boundary workflow
-          })
         }
 
-        setFrames(newFrames)
-      } catch (error) {
-        console.error('Failed to load frames:', error)
-      }
-    }
-
-    loadVisibleFrames()
-
-    // Cleanup: Revoke blob URLs and remove frames when no longer visible
-    return () => {
-      const visibleSet = new Set(visibleFrameIndices)
-      const framesToRemove: number[] = []
-
-      frames.forEach((frame, idx) => {
-        if (!visibleSet.has(idx) && frame.image_url.startsWith('blob:')) {
-          URL.revokeObjectURL(frame.image_url)
-          framesToRemove.push(idx)
+        // Clean up old frames (revoke URLs after a delay to avoid React render conflicts)
+        if (framesToRemove.length > 0) {
+          setTimeout(() => {
+            for (const idx of framesToRemove) {
+              const frame = prevFrames.get(idx)
+              if (frame?.image_url) {
+                URL.revokeObjectURL(frame.image_url)
+              }
+            }
+          }, 100)
         }
+
+        // If no frames to load, just clean up and return
+        if (framesToLoad.length === 0) {
+          if (framesToRemove.length > 0) {
+            const newFrames = new Map(prevFrames)
+            for (const idx of framesToRemove) {
+              newFrames.delete(idx)
+            }
+            return newFrames
+          }
+          return prevFrames
+        }
+
+        // Start async load in batches of 100
+        ;(async () => {
+          const BATCH_SIZE = 100
+          for (let i = 0; i < framesToLoad.length; i += BATCH_SIZE) {
+            const batch = framesToLoad.slice(i, i + BATCH_SIZE)
+
+            try {
+              const indicesParam = batch.join(',')
+              const response = await fetch(
+                `/api/frames/${encodedVideoId}/batch?indices=${indicesParam}`
+              )
+              const data = await response.json()
+
+              // Update frames with loaded data
+              setFrames(currentFrames => {
+                const newFrames = new Map(currentFrames)
+
+                // Convert base64 to blob URLs
+                for (const frame of data.frames) {
+                  const binaryData = atob(frame.image_data)
+                  const bytes = new Uint8Array(binaryData.length)
+                  for (let i = 0; i < binaryData.length; i++) {
+                    bytes[i] = binaryData.charCodeAt(i)
+                  }
+                  const blob = new Blob([bytes], { type: 'image/jpeg' })
+                  const imageUrl = URL.createObjectURL(blob)
+
+                  newFrames.set(frame.frame_index, {
+                    frame_index: frame.frame_index,
+                    image_url: imageUrl,
+                    ocr_text: '', // OCR text not used in boundary workflow
+                  })
+                }
+
+                return newFrames
+              })
+            } catch (error) {
+              console.error('Failed to load frame batch:', error)
+            }
+          }
+        })()
+
+        // Remove cleaned up frames from map
+        if (framesToRemove.length > 0) {
+          const newFrames = new Map(prevFrames)
+          for (const idx of framesToRemove) {
+            newFrames.delete(idx)
+          }
+          return newFrames
+        }
+
+        return prevFrames
       })
-
-      // Remove frames with revoked URLs from the Map so they get reloaded when scrolling back
-      if (framesToRemove.length > 0) {
-        setFrames(prevFrames => {
-          const newMap = new Map(prevFrames)
-          framesToRemove.forEach(idx => newMap.delete(idx))
-          return newMap
-        })
-      }
     }
-  }, [visibleFrameIndices, videoId])
+
+    loadAndCacheFrames()
+  }, [currentFrameIndex, totalFrames, videoId])
 
   // Find annotation(s) for a given frame
   const getAnnotationsForFrame = useCallback(
