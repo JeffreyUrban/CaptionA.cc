@@ -1,11 +1,9 @@
 import { existsSync } from 'fs'
-import { readdir } from 'fs/promises'
-import { resolve } from 'path'
 
 import Database from 'better-sqlite3'
 import { type LoaderFunctionArgs } from 'react-router'
 
-import { getDbPath, getVideoDir } from '~/utils/video-paths'
+import { getDbPath } from '~/utils/video-paths'
 
 interface Annotation {
   id: number
@@ -141,43 +139,61 @@ export async function loader({ params }: LoaderFunctionArgs) {
   // Decode the URL-encoded videoId
   const videoId = decodeURIComponent(encodedVideoId)
 
-  // Get video directory
-  const videoDir = getVideoDir(videoId)
-  if (!videoDir) {
+  // Get database path
+  const dbPath = getDbPath(videoId)
+  if (!dbPath) {
     return new Response(JSON.stringify({ error: 'Video not found' }), {
       status: 404,
       headers: { 'Content-Type': 'application/json' },
     })
   }
 
-  // Construct path to cropped frames directory
-  const croppedDir = resolve(videoDir, 'crop_frames')
-
-  // Check if directory exists
-  if (!existsSync(croppedDir)) {
-    return new Response(JSON.stringify({ error: 'Cropped frames not found' }), {
+  // Check if database exists
+  if (!existsSync(dbPath)) {
+    return new Response(JSON.stringify({ error: 'Database not found' }), {
       status: 404,
       headers: { 'Content-Type': 'application/json' },
     })
   }
 
-  // Count frame files
-  const files = await readdir(croppedDir)
-  const frameFiles = files.filter(f => f.startsWith('frame_') && f.endsWith('.jpg'))
-  const totalFrames = frameFiles.length
+  // Get total frames from database (cropped_frames table)
+  const db = new Database(dbPath)
+  let totalFrames = 0
 
-  // Get or create database, then fill any gaps in annotation coverage
+  try {
+    // Query max frame_index from cropped_frames table
+    const result = db.prepare('SELECT MAX(frame_index) as max_index FROM cropped_frames').get() as {
+      max_index: number | null
+    }
+
+    // frame_index is 0-based, so max_index + 1 = total frames
+    totalFrames = result.max_index !== null ? result.max_index + 1 : 0
+
+    if (totalFrames === 0) {
+      db.close()
+      return new Response(JSON.stringify({ error: 'No cropped frames found in database' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+  } catch (error) {
+    console.error('Error querying cropped_frames:', error)
+    db.close()
+    return new Response(JSON.stringify({ error: 'Failed to query frame count from database' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  // Fill any gaps in annotation coverage
   let gapsCreated = 0
 
   try {
-    const db = getOrCreateDatabase(videoId)
-    if (db instanceof Response) {
-      return db
-    }
     gapsCreated = fillAnnotationGaps(db, totalFrames)
-    db.close()
   } catch (error) {
     console.error('Error filling annotation gaps:', error)
+  } finally {
+    db.close()
   }
 
   return new Response(
