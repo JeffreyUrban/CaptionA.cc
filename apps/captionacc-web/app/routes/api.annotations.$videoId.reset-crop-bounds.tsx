@@ -250,10 +250,29 @@ function analyzeOCRBoxes(
 
   const originalLeftCount = stats.leftEdges.length
   const originalRightCount = stats.rightEdges.length
+  const originalCenterXCount = stats.centerXValues.length
+
+  const originalLeftEdges = [...stats.leftEdges]
+  const originalRightEdges = [...stats.rightEdges]
+  const originalCenterXValues = [...stats.centerXValues]
 
   stats.leftEdges = filterOutliers(stats.leftEdges)
   stats.rightEdges = filterOutliers(stats.rightEdges)
   stats.centerXValues = filterOutliers(stats.centerXValues)
+
+  // Safety: if filtering resulted in empty arrays, restore originals
+  if (stats.leftEdges.length === 0) {
+    console.log('[Outlier Filtering] Left edges filtered to empty - restoring original')
+    stats.leftEdges = originalLeftEdges
+  }
+  if (stats.rightEdges.length === 0) {
+    console.log('[Outlier Filtering] Right edges filtered to empty - restoring original')
+    stats.rightEdges = originalRightEdges
+  }
+  if (stats.centerXValues.length === 0) {
+    console.log('[Outlier Filtering] Center X values filtered to empty - restoring original')
+    stats.centerXValues = originalCenterXValues
+  }
 
   console.log(
     `[Outlier Filtering] Left edges: ${originalLeftCount} → ${stats.leftEdges.length} (removed ${originalLeftCount - stats.leftEdges.length})`
@@ -458,8 +477,8 @@ function analyzeOCRBoxes(
   const topPadding = Math.ceil(boxHeight * PADDING_FRACTION * topPaddingMultiplier)
   const bottomPadding = Math.ceil(boxHeight * PADDING_FRACTION * bottomPaddingMultiplier)
 
-  const cropTop = Math.max(0, topEdgePos - topPadding)
-  const cropBottom = Math.min(frameHeight, bottomEdgePos + bottomPadding)
+  let cropTop = Math.max(0, topEdgePos - topPadding)
+  let cropBottom = Math.min(frameHeight, bottomEdgePos + bottomPadding)
 
   console.log(
     `[Crop Bounds] Vertical - Top padding=${topPadding}px (×${topPaddingMultiplier.toFixed(2)}), Bottom padding=${bottomPadding}px (×${bottomPaddingMultiplier.toFixed(2)})`
@@ -646,6 +665,28 @@ function analyzeOCRBoxes(
 
     console.log(
       `[Crop Bounds] Horizontal - Right anchor at ${anchorPosition}: left=${cropLeft} (extent=${minLeft}-${fixedSparsePadding}px), right=${cropRight} (anchor+${rightPadding}px, ×${rightAnchorPaddingMultiplier.toFixed(2)})`
+    )
+  }
+
+  // Safety: Guard against NaN values (can happen with edge cases in density calculation)
+  if (isNaN(cropLeft) || isNaN(cropRight) || isNaN(cropTop) || isNaN(cropBottom)) {
+    console.error(
+      `[Crop Bounds] ERROR: NaN values detected - cropLeft=${cropLeft}, cropTop=${cropTop}, cropRight=${cropRight}, cropBottom=${cropBottom}`
+    )
+    // Fallback to using actual box extents with fixed padding
+    const minLeft = Math.min(...stats.leftEdges)
+    const maxRight = Math.max(...stats.rightEdges)
+    const minTop = Math.min(...stats.topEdges)
+    const maxBottom = Math.max(...stats.bottomEdges)
+    const fallbackPadding = 20 // Fixed 20px padding
+
+    cropLeft = isNaN(cropLeft) ? Math.max(0, minLeft - fallbackPadding) : cropLeft
+    cropRight = isNaN(cropRight) ? Math.min(frameWidth, maxRight + fallbackPadding) : cropRight
+    cropTop = isNaN(cropTop) ? Math.max(0, minTop - fallbackPadding) : cropTop
+    cropBottom = isNaN(cropBottom) ? Math.min(frameHeight, maxBottom + fallbackPadding) : cropBottom
+
+    console.log(
+      `[Crop Bounds] Applied fallback bounds: [${cropLeft}, ${cropTop}] - [${cropRight}, ${cropBottom}]`
     )
   }
 
