@@ -697,49 +697,146 @@ export default function BoundaryWorkflow() {
     framesRef.current = frames
   }, [frames])
 
-  // Load frames with hierarchical preloading: coarse levels first, wide range
-  // Display shows best available frame - no aborts, no reactive adaptation
+  // Ref to track current frame for filtering load queue
+  const currentFrameRef = useRef(currentFrameIndex)
   useEffect(() => {
+    currentFrameRef.current = currentFrameIndex
+  }, [currentFrameIndex])
+
+  // LRU cache of loaded chunks per modulo to avoid reloading
+  // Map: modulo → array of chunk start positions (most recent at end)
+  const loadedChunksRef = useRef<Map<number, number[]>>(new Map())
+  const MAX_CHUNKS_PER_MODULO = 5
+
+  // Load frames with priority queue: prioritize high modulo, filter by range from current frame
+  useEffect(() => {
+    // Skip loading until initial metadata and annotation are loaded
+    if (isLoadingMetadata) return
+
     const loadFrameHierarchy = async () => {
       const currentFrames = framesRef.current
       const encodedVideoId = encodeURIComponent(videoId)
       const CHUNK_SIZE = 100
       const MAX_CONCURRENT = 6
 
-      const minVisible = Math.min(...visibleFramePositions)
-      const maxVisible = Math.max(...visibleFramePositions)
-      const centerFrame = Math.round((minVisible + maxVisible) / 2)
+      // Modulo levels with their preload ranges
+      const moduloLevels: Array<{ modulo: number; range: number }> = [
+        { modulo: 32, range: 1024 },
+        { modulo: 16, range: 512 },
+        { modulo: 8, range: 256 },
+        { modulo: 4, range: 128 },
+        { modulo: 2, range: 64 },
+        { modulo: 1, range: 32 },
+      ]
 
-      // Helper to load frames at a given modulo level
-      const loadModuloLevel = async (modulo: number, range: number) => {
-        const framesToLoad: number[] = []
-        const rangeStart = Math.max(0, centerFrame - range)
-        const rangeEnd = Math.min(totalFrames - 1, centerFrame + range)
+      // Build priority queue as chunks: each chunk is frames at one modulo level
+      interface QueueChunk {
+        modulo: number
+        range: number
+        frames: number[]
+      }
 
-        // Load frames aligned to this modulo
-        for (let i = rangeStart; i <= rangeEnd; i++) {
-          if (i % modulo === 0 && !currentFrames.has(i)) {
-            framesToLoad.push(i)
+      const buildQueue = (centerFrame: number): QueueChunk[] => {
+        const chunks: QueueChunk[] = []
+        const FRAMES_PER_CHUNK = 32 // Always load 32 frames per chunk
+        const loadedChunks = loadedChunksRef.current
+
+        for (const { modulo, range } of moduloLevels) {
+          const rangeStart = Math.max(0, centerFrame - range)
+          const rangeEnd = Math.min(totalFrames - 1, centerFrame + range)
+
+          // Chunk size in frame indices = 32 frames × modulo spacing
+          // For modulo 32: 32 frames × 32 = 1024 frame indices [0-1023]
+          const chunkSize = FRAMES_PER_CHUNK * modulo
+
+          // Align to chunk boundaries
+          const firstChunkStart = Math.floor(rangeStart / chunkSize) * chunkSize
+          const lastChunkStart = Math.floor(rangeEnd / chunkSize) * chunkSize
+
+          // Get cached chunks for this modulo
+          const cachedChunks = loadedChunks.get(modulo) || []
+
+          // Collect frames in chunks of 32 frames each
+          for (
+            let chunkStart = firstChunkStart;
+            chunkStart <= lastChunkStart;
+            chunkStart += chunkSize
+          ) {
+            // Skip if chunk is already in cache
+            if (cachedChunks.includes(chunkStart)) {
+              continue
+            }
+
+            const chunkEnd = chunkStart + chunkSize - 1
+            const chunkFrames: number[] = []
+
+            // Collect frames at modulo positions within this chunk
+            for (let i = chunkStart; i <= Math.min(chunkEnd, totalFrames - 1); i++) {
+              if (i % modulo === 0 && !currentFrames.has(i)) {
+                chunkFrames.push(i)
+              }
+            }
+
+            // Only add chunk if it has frames to load
+            if (chunkFrames.length > 0) {
+              chunks.push({
+                modulo,
+                range,
+                frames: chunkFrames,
+              })
+            }
           }
         }
 
-        if (framesToLoad.length === 0) return
+        // Already in priority order (32, 16, 8, 4, 2, 1)
+        return chunks
+      }
 
-        console.log(`[Frame Load] Loading %${modulo} frames: ${framesToLoad.length} frames`)
+      try {
+        let queue = buildQueue(currentFrameIndex)
 
-        const chunks: number[][] = []
-        for (let i = 0; i < framesToLoad.length; i += CHUNK_SIZE) {
-          chunks.push(framesToLoad.slice(i, i + CHUNK_SIZE))
-        }
+        if (queue.length === 0) return
 
-        const results: Array<{ frames: Array<{ frame_index: number; image_data: string }> }> = []
-        const startTime = performance.now()
+        while (queue.length > 0) {
+          // Filter to drop entire chunks outside range of current frame
+          const currentFrame = currentFrameRef.current
+          queue = queue.filter(chunk => {
+            // Check if chunk overlaps with range (not just center)
+            if (chunk.frames.length === 0) return false
+            const chunkStart = chunk.frames[0]!
+            const chunkEnd = chunk.frames[chunk.frames.length - 1]!
+            const rangeStart = currentFrame - chunk.range
+            const rangeEnd = currentFrame + chunk.range
+            // Chunk overlaps if: chunkStart <= rangeEnd && chunkEnd >= rangeStart
+            return chunkStart <= rangeEnd && chunkEnd >= rangeStart
+          })
 
-        // Process chunks with concurrency limit
-        for (let i = 0; i < chunks.length; i += MAX_CONCURRENT) {
-          const batchChunks = chunks.slice(i, i + MAX_CONCURRENT)
-          const batchPromises = batchChunks.map(async chunk => {
-            const indicesParam = chunk.join(',')
+          if (queue.length === 0) break
+
+          // Process multiple chunks concurrently
+          const batch = queue.splice(0, MAX_CONCURRENT)
+
+          const batchSummary = batch
+            .map(c => {
+              if (c.frames.length === 0) return `%${c.modulo}[empty]:0`
+              const minFrame = c.frames[0]!
+              const maxFrame = c.frames[c.frames.length - 1]!
+              // Show chunk boundaries, not just min/max frames
+              const chunkSize = 32 * c.modulo
+              const chunkStart = Math.floor(minFrame / chunkSize) * chunkSize
+              const chunkEnd = chunkStart + chunkSize - 1
+              return `%${c.modulo}[${chunkStart}-${chunkEnd}]:${c.frames.length}`
+            })
+            .join(', ')
+          console.log(
+            `[Frame Load] Loading ${batch.length} chunks [${batchSummary}], ${queue.length} remaining`
+          )
+
+          const startTime = performance.now()
+
+          // Load chunks concurrently
+          const batchPromises = batch.map(async chunk => {
+            const indicesParam = chunk.frames.join(',')
             const response = await fetch(
               `/api/frames/${encodedVideoId}/batch?indices=${indicesParam}`
             )
@@ -748,52 +845,72 @@ export default function BoundaryWorkflow() {
             }>
           })
 
-          const batchResults = await Promise.all(batchPromises)
-          results.push(...batchResults)
-        }
+          const results = await Promise.all(batchPromises)
 
-        const loadTime = performance.now() - startTime
-        console.log(`[Frame Load] %${modulo} complete: ${loadTime.toFixed(0)}ms`)
+          const loadTime = performance.now() - startTime
+          const totalLoaded = results.reduce((sum, r) => sum + r.frames.length, 0)
+          console.log(
+            `[Frame Load] Loaded ${totalLoaded} frames in ${loadTime.toFixed(0)}ms [${batchSummary}]`
+          )
 
-        // Update state with loaded frames
-        setFrames(prevFrames => {
-          const newFrames = new Map(prevFrames)
-          for (const data of results) {
-            for (const frame of data.frames) {
-              const binaryData = atob(frame.image_data)
-              const bytes = new Uint8Array(binaryData.length)
-              for (let i = 0; i < binaryData.length; i++) {
-                bytes[i] = binaryData.charCodeAt(i)
+          // Update state with loaded frames
+          setFrames(prevFrames => {
+            const newFrames = new Map(prevFrames)
+            for (const data of results) {
+              for (const frame of data.frames) {
+                const binaryData = atob(frame.image_data)
+                const bytes = new Uint8Array(binaryData.length)
+                for (let i = 0; i < binaryData.length; i++) {
+                  bytes[i] = binaryData.charCodeAt(i)
+                }
+                const blob = new Blob([bytes], { type: 'image/jpeg' })
+                const imageUrl = URL.createObjectURL(blob)
+                newFrames.set(frame.frame_index, {
+                  frame_index: frame.frame_index,
+                  image_url: imageUrl,
+                  ocr_text: '',
+                })
               }
-              const blob = new Blob([bytes], { type: 'image/jpeg' })
-              const imageUrl = URL.createObjectURL(blob)
-              newFrames.set(frame.frame_index, {
-                frame_index: frame.frame_index,
-                image_url: imageUrl,
-                ocr_text: '',
-              })
+            }
+            return newFrames
+          })
+
+          // Update chunk cache with LRU eviction
+          const loadedChunks = loadedChunksRef.current
+          for (const chunk of batch) {
+            const chunkSize = 32 * chunk.modulo
+            const chunkStart = Math.floor(chunk.frames[0]! / chunkSize) * chunkSize
+
+            // Get or create cache array for this modulo
+            let cache = loadedChunks.get(chunk.modulo)
+            if (!cache) {
+              cache = []
+              loadedChunks.set(chunk.modulo, cache)
+            }
+
+            // Add to end (most recent)
+            if (!cache.includes(chunkStart)) {
+              cache.push(chunkStart)
+
+              // Evict oldest if exceeds limit
+              if (cache.length > MAX_CHUNKS_PER_MODULO) {
+                const evicted = cache.shift()!
+                const chunkSize = 32 * chunk.modulo
+                const evictedEnd = evicted + chunkSize - 1
+                console.log(
+                  `[Frame Cache] Evicted chunk %${chunk.modulo}[${evicted}-${evictedEnd}]`
+                )
+              }
             }
           }
-          return newFrames
-        })
-      }
-
-      try {
-        // Load in strict priority order: coarsest first, widest range
-        // This ensures we always have SOMETHING to show
-        await loadModuloLevel(32, 1024) // Every 32nd frame, ±1024 frames (~64 frames)
-        await loadModuloLevel(16, 512) // Every 16th frame, ±512 frames (~64 frames)
-        await loadModuloLevel(8, 256) // Every 8th frame, ±256 frames (~64 frames)
-        await loadModuloLevel(4, 128) // Every 4th frame, ±128 frames (~64 frames)
-        await loadModuloLevel(2, 64) // Every 2nd frame, ±64 frames (~64 frames)
-        await loadModuloLevel(1, 32) // Every frame, ±32 frames (64 frames)
+        }
       } catch (error: unknown) {
         console.error('Failed to load frames:', error)
       }
     }
 
     loadFrameHierarchy()
-  }, [visibleFramePositions, totalFrames, videoId])
+  }, [currentFrameIndex, totalFrames, videoId, isLoadingMetadata])
 
   // Find annotation(s) for a given frame
   const getAnnotationsForFrame = useCallback(
