@@ -72,6 +72,19 @@ def extract_frames(
             stream = stream.filter("crop", w=width, h=height, x=x, y=y)
 
         # Apply fps filter and output
+        # NOTE: Frame rate sampling strategy
+        # Currently we use fixed-rate sampling (default 10Hz) stored in video_preferences.index_framerate_hz.
+        # This provides consistent frame indexing across all videos regardless of native framerate.
+        #
+        # Native framerate support considerations (NOT YET IMPLEMENTED):
+        # - Common video framerates: 23.976fps (film), 29.97fps (NTSC), 25fps (PAL), 50fps, 60fps
+        # - These are often fractional (e.g., 24000/1001 ≈ 23.976) to avoid precision errors
+        # - FFmpeg's fps filter resamples to target rate, select filter preserves native frames
+        # - For native framerate: use select='not(mod(n,N))' where N = round(fps/desired_rate)
+        # - Timestamp precision: Use frame PTS (presentation timestamp) for accurate indexing
+        # - Database impact: timestamp_seconds would vary per video based on native framerate
+        #
+        # For now, fixed 10Hz sampling simplifies frame indexing and temporal feature extraction.
         stream = stream.filter("fps", fps=rate_hz)
 
         (
@@ -176,6 +189,19 @@ def extract_frames_streaming(
         stream = stream.filter("crop", w=width, h=height, x=x, y=y)
 
     # Apply fps filter
+    # NOTE: Frame rate sampling strategy
+    # Currently we use fixed-rate sampling (default 10Hz) stored in video_preferences.index_framerate_hz.
+    # This provides consistent frame indexing across all videos regardless of native framerate.
+    #
+    # Native framerate support considerations (NOT YET IMPLEMENTED):
+    # - Common video framerates: 23.976fps (film), 29.97fps (NTSC), 25fps (PAL), 50fps, 60fps
+    # - These are often fractional (e.g., 24000/1001 ≈ 23.976) to avoid precision errors
+    # - FFmpeg's fps filter resamples to target rate, select filter preserves native frames
+    # - For native framerate: use select='not(mod(n,N))' where N = round(fps/desired_rate)
+    # - Timestamp precision: Use frame PTS (presentation timestamp) for accurate indexing
+    # - Database impact: timestamp_seconds would vary per video based on native framerate
+    #
+    # For now, fixed 10Hz sampling simplifies frame indexing and temporal feature extraction.
     stream = stream.filter("fps", fps=rate_hz)
 
     # Launch FFmpeg in background

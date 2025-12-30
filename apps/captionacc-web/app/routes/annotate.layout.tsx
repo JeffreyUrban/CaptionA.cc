@@ -10,6 +10,7 @@ interface FrameInfo {
   captionBoxCount: number
   minConfidence: number
   hasAnnotations: boolean
+  hasUnannotatedBoxes: boolean
   imageUrl: string
 }
 
@@ -118,17 +119,35 @@ export default function AnnotateLayout() {
     }
   }, [frames, selectedFrameIndex])
 
+  // Reset pulse timer when frame changes
+  useEffect(() => {
+    if (selectedFrameIndex !== null) {
+      setPulseStartTime(Date.now())
+    }
+  }, [selectedFrameIndex])
+
   // Canvas state
   const imageRef = useRef<HTMLImageElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const interactionAreaRef = useRef<HTMLDivElement>(null)
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 })
   const [hoveredBoxIndex, setHoveredBoxIndex] = useState<number | null>(null)
+
+  // Padding around frame for easier boundary selection (in pixels when frame is at natural size)
+  const SELECTION_PADDING = 20
 
   // Selection rectangle state (click-to-start, click-to-end)
   const [isSelecting, setIsSelecting] = useState(false)
   const [selectionStart, setSelectionStart] = useState<{ x: number; y: number } | null>(null)
   const [selectionCurrent, setSelectionCurrent] = useState<{ x: number; y: number } | null>(null)
   const [selectionLabel, setSelectionLabel] = useState<'in' | 'out' | 'clear' | null>(null) // Based on which button started selection
+
+  // Box highlighting mode - makes boxes blink with bigger borders to help find them
+  const [boxHighlightMode, setBoxHighlightMode] = useState(true) // Active by default for now
+  const [pulseStartTime, setPulseStartTime] = useState(Date.now()) // Track when to start ramping up pulse
+
+  // Confirmation modal state
+  const [showApproveModal, setShowApproveModal] = useState(false)
 
   // Layout controls state (local modifications before save)
   const [cropBoundsEdit, setCropBoundsEdit] = useState<{
@@ -661,6 +680,14 @@ export default function AnnotateLayout() {
       // Calculate scale factor from original frame to displayed image
       const scale = canvasSize.width / currentFrameBoxes.frameWidth
 
+      // Calculate pulsing line width for highlight mode
+      const pulsePhase = (Date.now() % 1000) / 1000 // 0-1 over 1 second
+      const pulseValue = Math.sin(pulsePhase * Math.PI * 2) * 0.5 + 0.5 // Oscillates 0-1
+
+      // Calculate pulse intensity ramp (gradually increases over 10 seconds)
+      const elapsedSeconds = (Date.now() - pulseStartTime) / 1000
+      const pulseIntensity = Math.min(elapsedSeconds / 10, 1) // 0 to 1 over 10 seconds
+
       // Draw boxes using original bounds
       currentFrameBoxes.boxes.forEach((box, index) => {
         // Convert original pixel bounds to canvas coordinates
@@ -673,12 +700,54 @@ export default function AnnotateLayout() {
         const colors = getBoxColors(box.colorCode)
 
         // Draw box
-        ctx.strokeStyle = colors.border
         ctx.fillStyle = colors.background
-        ctx.lineWidth = hoveredBoxIndex === index ? 3 : 2
+
+        // Determine line width with pulsing effect when highlight mode is active
+        // Only pulse unannotated boxes (boxes without a user label)
+        const isUnannotated = box.userLabel === null
+        let lineWidth = 2
+        if (hoveredBoxIndex === index) {
+          lineWidth = 3
+        } else if (boxHighlightMode && isUnannotated) {
+          // Pulse between 2 and 5 pixels for unannotated boxes only
+          // Scale pulse by intensity (ramps up over 10 seconds)
+          lineWidth = 2 + pulseValue * pulseIntensity * 3
+        }
+        ctx.lineWidth = lineWidth
 
         ctx.fillRect(boxX, boxY, boxWidth, boxHeight)
-        ctx.strokeRect(boxX, boxY, boxWidth, boxHeight)
+
+        // Draw border with shadow/glow for better visibility when highlight mode is active
+        // Only apply to unannotated boxes
+        if (boxHighlightMode && isUnannotated && hoveredBoxIndex !== index) {
+          // Scale shadow effect with pulse and ramp intensity
+          const shadowIntensity = pulseValue * pulseIntensity // Ramps up over 10 seconds
+
+          if (shadowIntensity > 0.1) {
+            // Add a contrasting shadow/glow effect
+            ctx.shadowBlur = 8 * shadowIntensity
+            ctx.shadowColor = `rgba(255, 255, 255, ${0.9 * shadowIntensity})`
+            ctx.strokeStyle = colors.border
+            ctx.lineWidth = lineWidth
+            ctx.strokeRect(boxX, boxY, boxWidth, boxHeight)
+
+            // Draw a second time with dark shadow for better contrast on light backgrounds
+            ctx.shadowColor = `rgba(0, 0, 0, ${0.9 * shadowIntensity})`
+            ctx.strokeRect(boxX, boxY, boxWidth, boxHeight)
+
+            // Clear shadow for future drawing
+            ctx.shadowBlur = 0
+          } else {
+            // At minimum pulse, render like normal (no shadow)
+            ctx.strokeStyle = colors.border
+            ctx.lineWidth = lineWidth
+            ctx.strokeRect(boxX, boxY, boxWidth, boxHeight)
+          }
+        } else {
+          // Normal rendering without highlight or for hovered boxes
+          ctx.strokeStyle = colors.border
+          ctx.strokeRect(boxX, boxY, boxWidth, boxHeight)
+        }
 
         // Draw text label if hovered
         if (hoveredBoxIndex === index) {
@@ -862,12 +931,32 @@ export default function AnnotateLayout() {
     selectionCurrent,
     selectionLabel,
     selectedFrameIndex,
+    boxHighlightMode,
+    pulseStartTime,
   ])
 
   // Call drawCanvas in an effect when dependencies change
   useEffect(() => {
     drawCanvas()
   }, [drawCanvas])
+
+  // Continuous animation loop when box highlight mode is active
+  useEffect(() => {
+    if (!boxHighlightMode || viewMode !== 'frame') return
+
+    let animationFrameId: number
+
+    const animate = () => {
+      drawCanvas()
+      animationFrameId = requestAnimationFrame(animate)
+    }
+
+    animationFrameId = requestAnimationFrame(animate)
+
+    return () => {
+      cancelAnimationFrame(animationFrameId)
+    }
+  }, [boxHighlightMode, viewMode, drawCanvas])
 
   // Get box colors based on color code
   const getBoxColors = (colorCode: string): { border: string; background: string } => {
@@ -1058,9 +1147,33 @@ export default function AnnotateLayout() {
     recalculateCropBounds,
   ])
 
+  // Helper function to convert interaction area coordinates to canvas coordinates
+  const getCanvasCoordinates = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (!imageRef.current || !interactionAreaRef.current) return null
+
+    const image = imageRef.current
+    const interactionArea = interactionAreaRef.current
+
+    // Get mouse position relative to interaction area
+    const areaRect = interactionArea.getBoundingClientRect()
+    const areaX = e.clientX - areaRect.left
+    const areaY = e.clientY - areaRect.top
+
+    // Get image position within interaction area (frame is centered with padding)
+    const imageRect = image.getBoundingClientRect()
+    const imageOffsetX = imageRect.left - areaRect.left
+    const imageOffsetY = imageRect.top - areaRect.top
+
+    // Calculate position relative to canvas (which overlays the image)
+    const x = areaX - imageOffsetX
+    const y = areaY - imageOffsetY
+
+    return { x, y }
+  }, [])
+
   // Handle canvas click - individual box annotation, or start/complete selection
   const handleCanvasClick = useCallback(
-    (e: React.MouseEvent<HTMLCanvasElement>) => {
+    (e: React.MouseEvent<HTMLDivElement>) => {
       if (!canvasRef.current || canvasSize.width === 0) return
 
       // Disable annotations during recalculation
@@ -1075,10 +1188,9 @@ export default function AnnotateLayout() {
         e.stopPropagation()
       }
 
-      const canvas = canvasRef.current
-      const rect = canvas.getBoundingClientRect()
-      const x = e.clientX - rect.left
-      const y = e.clientY - rect.top
+      const coords = getCanvasCoordinates(e)
+      if (!coords) return
+      const { x, y } = coords
 
       if (isSelecting) {
         // Already selecting - second click completes selection
@@ -1133,21 +1245,28 @@ export default function AnnotateLayout() {
         setSelectionLabel(label)
       }
     },
-    [currentFrameBoxes, canvasSize, isSelecting, completeSelection, handleBoxClick, viewMode]
+    [
+      currentFrameBoxes,
+      canvasSize,
+      isSelecting,
+      completeSelection,
+      handleBoxClick,
+      viewMode,
+      getCanvasCoordinates,
+    ]
   )
 
   // Handle mouse move - update selection rectangle or detect hover
   const handleCanvasMouseMove = useCallback(
-    (e: React.MouseEvent<HTMLCanvasElement>) => {
+    (e: React.MouseEvent<HTMLDivElement>) => {
       if (!canvasRef.current || canvasSize.width === 0) return
 
       // Disable annotations during recalculation
       if (annotationsSinceRecalc >= RECALC_THRESHOLD) return
 
-      const canvas = canvasRef.current
-      const rect = canvas.getBoundingClientRect()
-      const x = e.clientX - rect.left
-      const y = e.clientY - rect.top
+      const coords = getCanvasCoordinates(e)
+      if (!coords) return
+      const { x, y } = coords
 
       // Update selection current position if selecting
       if (isSelecting) {
@@ -1180,10 +1299,10 @@ export default function AnnotateLayout() {
         setHoveredBoxIndex(foundIndex)
       }
     },
-    [currentFrameBoxes, canvasSize, isSelecting, viewMode]
+    [currentFrameBoxes, canvasSize, isSelecting, viewMode, getCanvasCoordinates]
   )
 
-  const handleCanvasContextMenu = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+  const handleCanvasContextMenu = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     e.preventDefault()
     e.stopPropagation()
   }, [])
@@ -1421,23 +1540,29 @@ export default function AnnotateLayout() {
           {/* Left: Canvas (2/3 width) */}
           <div className="flex min-h-0 w-2/3 flex-col gap-4">
             {/* Main canvas */}
-            <div className="relative flex flex-shrink-0 items-center justify-center rounded-lg border border-gray-300 bg-gray-900 dark:border-gray-600 dark:bg-gray-800 p-4">
+            <div className="relative flex flex-shrink-0 items-center justify-center rounded-lg border border-gray-300 bg-gray-900 dark:border-gray-600 dark:bg-gray-800">
               {viewMode === 'analysis' && layoutConfig ? (
-                <div className="relative inline-block max-w-full max-h-full">
-                  <img
-                    ref={imageRef}
-                    src={`data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="${layoutConfig.frameWidth}" height="${layoutConfig.frameHeight}"><rect width="100%" height="100%" fill="black"/></svg>`}
-                    alt="Analysis view"
-                    className="max-w-full max-h-full object-contain"
-                  />
-                  <canvas
-                    ref={canvasRef}
-                    className="absolute left-0 top-0 cursor-crosshair"
-                    style={{ touchAction: 'none' }}
-                    onMouseDown={handleCanvasClick}
-                    onMouseMove={handleCanvasMouseMove}
-                    onContextMenu={handleCanvasContextMenu}
-                  />
+                <div
+                  ref={interactionAreaRef}
+                  className="relative inline-block cursor-crosshair"
+                  style={{ padding: `${SELECTION_PADDING}px` }}
+                  onMouseDown={handleCanvasClick}
+                  onMouseMove={handleCanvasMouseMove}
+                  onContextMenu={handleCanvasContextMenu}
+                >
+                  <div className="relative">
+                    <img
+                      ref={imageRef}
+                      src={`data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="${layoutConfig.frameWidth}" height="${layoutConfig.frameHeight}"><rect width="100%" height="100%" fill="black"/></svg>`}
+                      alt="Analysis view"
+                      className="max-w-full max-h-full object-contain block"
+                    />
+                    <canvas
+                      ref={canvasRef}
+                      className="absolute left-0 top-0"
+                      style={{ touchAction: 'none', pointerEvents: 'none' }}
+                    />
+                  </div>
                   {analysisBoxes === null && (
                     <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50">
                       <div className="text-white text-lg">Loading analysis boxes...</div>
@@ -1463,21 +1588,34 @@ export default function AnnotateLayout() {
                   )}
                 </div>
               ) : viewMode === 'frame' && currentFrameBoxes ? (
-                <div className="relative inline-block max-w-full max-h-full">
-                  <img
-                    ref={imageRef}
-                    src={currentFrameBoxes.imageUrl}
-                    alt={`Frame ${currentFrameBoxes.frameIndex}`}
-                    className="max-w-full max-h-full object-contain"
-                  />
-                  <canvas
-                    ref={canvasRef}
-                    className="absolute left-0 top-0 cursor-crosshair"
-                    style={{ touchAction: 'none' }}
-                    onMouseDown={handleCanvasClick}
-                    onMouseMove={handleCanvasMouseMove}
-                    onContextMenu={handleCanvasContextMenu}
-                  />
+                <div
+                  ref={interactionAreaRef}
+                  className="relative inline-block cursor-crosshair"
+                  style={{ padding: `${SELECTION_PADDING}px` }}
+                  onMouseDown={handleCanvasClick}
+                  onMouseMove={handleCanvasMouseMove}
+                  onContextMenu={handleCanvasContextMenu}
+                >
+                  <div
+                    className="relative"
+                    style={{
+                      outline: currentFrameBoxes.boxes.every(box => box.userLabel !== null)
+                        ? '3px solid #10b981'
+                        : 'none',
+                    }}
+                  >
+                    <img
+                      ref={imageRef}
+                      src={currentFrameBoxes.imageUrl}
+                      alt={`Frame ${currentFrameBoxes.frameIndex}`}
+                      className="max-w-full max-h-full object-contain block"
+                    />
+                    <canvas
+                      ref={canvasRef}
+                      className="absolute left-0 top-0"
+                      style={{ touchAction: 'none', pointerEvents: 'none' }}
+                    />
+                  </div>
                   {annotationsSinceRecalc >= RECALC_THRESHOLD && (
                     <div className="absolute inset-0 flex items-center justify-center bg-blue-900 bg-opacity-70 pointer-events-none">
                       <div className="bg-blue-800 px-6 py-4 rounded-lg shadow-lg">
@@ -1613,19 +1751,19 @@ export default function AnnotateLayout() {
 
             {/* Annotation Progress Indicator */}
             {boxStats?.captionBoxes === 0 ? (
-              // Alert when no caption boxes
-              <div className="rounded-md border-2 border-yellow-500 bg-yellow-50 p-3 dark:border-yellow-600 dark:bg-yellow-900/20">
+              // Alert when no caption boxes - using all boxes as fallback
+              <div className="rounded-md border-2 border-blue-500 bg-blue-50 p-3 dark:border-blue-600 dark:bg-blue-900/20">
                 <div className="flex items-center gap-2">
-                  <span className="text-xl">⚠️</span>
-                  <div className="text-sm font-semibold text-yellow-800 dark:text-yellow-300">
-                    All Boxes Labeled as Noise
+                  <span className="text-xl">ℹ️</span>
+                  <div className="text-sm font-semibold text-blue-800 dark:text-blue-300">
+                    No Caption Boxes Identified Yet
                   </div>
                 </div>
-                <div className="mt-2 text-xs text-yellow-700 dark:text-yellow-400">
-                  {boxStats.totalBoxes} boxes total, all labeled as noise/out
+                <div className="mt-2 text-xs text-blue-700 dark:text-blue-400">
+                  Using all {boxStats.totalBoxes} boxes for initial layout analysis
                 </div>
-                <div className="mt-2 text-xs text-yellow-800 dark:text-yellow-300 font-medium">
-                  Cannot calculate crop bounds without caption boxes.
+                <div className="mt-2 text-xs text-blue-800 dark:text-blue-300 font-medium">
+                  Label caption boxes to improve accuracy.
                   <br />
                   Left-click boxes or press &apos;I&apos; while hovering to mark as captions.
                 </div>
@@ -1677,40 +1815,7 @@ export default function AnnotateLayout() {
 
             {/* Mark Layout Complete Button */}
             <button
-              onClick={async () => {
-                if (
-                  confirm(
-                    'Mark layout annotation as complete? This will enable boundary annotation for this video and trigger frame re-cropping.'
-                  )
-                ) {
-                  try {
-                    const response = await fetch(
-                      `/api/annotations/${encodeURIComponent(videoId)}/layout-complete`,
-                      {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ complete: true }),
-                      }
-                    )
-                    if (!response.ok) throw new Error('Failed to mark layout complete')
-
-                    // Update local state
-                    setLayoutApproved(true)
-
-                    // Trigger frame re-cropping in background
-                    fetch(`/api/annotations/${encodeURIComponent(videoId)}/recrop-frames`, {
-                      method: 'POST',
-                    }).catch(err => console.error('Frame re-cropping failed:', err))
-
-                    alert(
-                      'Layout marked as complete! Frame re-cropping started in background. You can now annotate boundaries for this video.'
-                    )
-                  } catch (err) {
-                    console.error('Error marking layout complete:', err)
-                    alert('Failed to mark layout complete')
-                  }
-                }
-              }}
+              onClick={() => setShowApproveModal(true)}
               disabled={
                 // If not approved yet: always enabled (allow approval)
                 // If approved: only disabled when bounds haven't changed
@@ -1924,6 +2029,81 @@ export default function AnnotateLayout() {
           </div>
         </div>
       </div>
+
+      {/* Layout Approval Confirmation Modal */}
+      {showApproveModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 p-4 backdrop-blur-sm"
+          onClick={() => setShowApproveModal(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-lg bg-white px-6 py-5 shadow-xl dark:bg-gray-800"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white">Approve Layout</h2>
+              <button
+                onClick={() => setShowApproveModal(false)}
+                className="rounded-md p-1 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="mb-6 space-y-3 text-sm text-gray-700 dark:text-gray-300">
+              <p>This will perform the following actions:</p>
+              <ul className="list-inside list-disc space-y-2 pl-2">
+                <li>Mark layout annotation as complete</li>
+                <li>Enable boundary annotation for this video</li>
+                <li>Start frame re-cropping in the background</li>
+              </ul>
+              <p className="text-xs text-gray-600 dark:text-gray-400">
+                Frame re-cropping will run in the background and may take several minutes to
+                complete.
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowApproveModal(false)}
+                className="flex-1 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  setShowApproveModal(false)
+                  try {
+                    const response = await fetch(
+                      `/api/annotations/${encodeURIComponent(videoId)}/layout-complete`,
+                      {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ complete: true }),
+                      }
+                    )
+                    if (!response.ok) throw new Error('Failed to mark layout complete')
+
+                    // Update local state
+                    setLayoutApproved(true)
+
+                    // Trigger frame re-cropping in background
+                    fetch(`/api/annotations/${encodeURIComponent(videoId)}/recrop-frames`, {
+                      method: 'POST',
+                    }).catch(err => console.error('Frame re-cropping failed:', err))
+                  } catch (err) {
+                    console.error('Error marking layout complete:', err)
+                    alert('Failed to mark layout complete')
+                  }
+                }}
+                className="flex-1 rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 dark:bg-green-600 dark:hover:bg-green-700"
+              >
+                Approve & Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AppLayout>
   )
 }

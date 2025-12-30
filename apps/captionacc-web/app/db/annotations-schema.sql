@@ -159,6 +159,7 @@ CREATE TABLE IF NOT EXISTS video_layout_config (
 
     -- Invalidation tracking
     crop_bounds_version INTEGER NOT NULL DEFAULT 1,
+    analysis_model_version TEXT,  -- Model version used for current crop bounds analysis
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 

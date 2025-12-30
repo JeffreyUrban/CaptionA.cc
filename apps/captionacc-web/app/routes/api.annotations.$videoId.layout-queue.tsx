@@ -46,6 +46,7 @@ interface FrameInfo {
   captionBoxCount: number // Estimated using simple heuristics
   minConfidence: number // Lowest OCR confidence among all boxes in frame
   hasAnnotations: boolean
+  hasUnannotatedBoxes: boolean // Whether frame has boxes that haven't been annotated
   imageUrl: string
 }
 
@@ -143,8 +144,17 @@ export async function loader({ params }: LoaderFunctionArgs) {
       )
     }
 
-    // Block access if processing is not complete
-    if (processingStatus.status !== 'processing_complete') {
+    // Block access if processing is in progress (but not if it's in error state)
+    const inProgressStatuses = [
+      'uploading',
+      'upload_complete',
+      'extracting_frames',
+      'running_ocr',
+      'analyzing_layout',
+    ]
+
+    if (inProgressStatuses.includes(processingStatus.status)) {
+      // Truly in progress - return 425 to trigger polling
       db.close()
       return new Response(
         JSON.stringify({
@@ -153,6 +163,36 @@ export async function loader({ params }: LoaderFunctionArgs) {
         }),
         {
           status: 425, // Too Early
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
+    }
+
+    // If status is 'error', return 404 (not 425) to stop polling loop
+    if (processingStatus.status === 'error') {
+      db.close()
+      return new Response(
+        JSON.stringify({
+          error: 'Video processing failed. Cannot load layout annotation.',
+          processingStatus: processingStatus.status,
+        }),
+        {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
+    }
+
+    // If status is not 'processing_complete' and not in known states, something is wrong
+    if (processingStatus.status !== 'processing_complete') {
+      db.close()
+      return new Response(
+        JSON.stringify({
+          error: `Unexpected processing status: ${processingStatus.status}`,
+          processingStatus: processingStatus.status,
+        }),
+        {
+          status: 500,
           headers: { 'Content-Type': 'application/json' },
         }
       )
@@ -270,21 +310,31 @@ export async function loader({ params }: LoaderFunctionArgs) {
       // Check if frame has any box annotations in database
       const hasAnnotations = annotatedBoxIndices.size > 0
 
+      // Track whether frame has any unannotated boxes
+      const hasUnannotatedBoxes = unannotatedPredictions.length > 0
+
       return {
         frameIndex,
         totalBoxCount,
         captionBoxCount,
         minConfidence,
         hasAnnotations,
+        hasUnannotatedBoxes,
         imageUrl: `/api/full-frames/${encodeURIComponent(videoId)}/${frameIndex}.jpg`,
       }
     })
 
-    // Sort by minimum confidence (ascending - lowest confidence first) and select top 11
-    const topFrames = frameInfos.sort((a, b) => a.minConfidence - b.minConfidence).slice(0, 11)
+    // Filter out frames with no unannotated boxes, then sort by minimum confidence
+    const framesWithUnannotatedBoxes = frameInfos.filter(f => f.hasUnannotatedBoxes)
+    const topFrames = framesWithUnannotatedBoxes
+      .sort((a, b) => a.minConfidence - b.minConfidence)
+      .slice(0, 11)
 
     console.log(
-      `Selected ${topFrames.length} top frames by minConfidence:`,
+      `Filtered ${frameInfos.length} total frames → ${framesWithUnannotatedBoxes.length} with unannotated boxes → selected top ${topFrames.length}`
+    )
+    console.log(
+      `Top frames by minConfidence:`,
       topFrames.map(f => `${f.frameIndex}(${f.minConfidence.toFixed(3)})`).join(', ')
     )
 
