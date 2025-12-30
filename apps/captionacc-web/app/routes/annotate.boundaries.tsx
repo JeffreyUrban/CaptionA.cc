@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef, startTransition } from 'react'
-import { useSearchParams, useLoaderData } from 'react-router'
-import type { LoaderFunctionArgs } from 'react-router'
+import { useSearchParams } from 'react-router'
+
 import { AppLayout } from '~/components/AppLayout'
 
 // Types
@@ -25,17 +25,6 @@ interface Annotation {
 
 type FrameSpacing = 'linear' | 'exponential' | 'hybrid'
 
-// Annotation index granularity (index by 100s)
-const ANNOTATION_INDEX_GRANULARITY = 100
-const ANNOTATION_CACHE_RANGE = 1000 // Cache annotations within ±1000 frames
-
-// Frame spacing configurations
-const FRAME_OFFSETS: Record<FrameSpacing, number[]> = {
-  linear: [-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5],
-  exponential: [-8, -4, -2, -1, 0, 1, 2, 4, 8],
-  hybrid: [-10, -5, -3, -2, -1, 0, 1, 2, 3, 5, 10],
-}
-
 // Opacity for frame distance
 const OPACITY_MAP: Record<number, number> = {
   0: 1.0,
@@ -53,11 +42,6 @@ export async function loader() {
   return {
     defaultVideoId: process.env['DEFAULT_VIDEO_ID'] || '',
   }
-}
-
-// Helper functions for annotation management
-function getAnnotationIndexKey(frameIndex: number): number {
-  return Math.floor(frameIndex / ANNOTATION_INDEX_GRANULARITY) * ANNOTATION_INDEX_GRANULARITY
 }
 
 function getEffectiveState(annotation: Annotation): 'pending' | AnnotationState {
@@ -80,14 +64,12 @@ function getAnnotationBorderColor(annotation: Annotation): string {
 
 export default function BoundaryWorkflow() {
   const [searchParams] = useSearchParams()
-  const loaderData = useLoaderData<typeof loader>()
-  const defaultVideoId = loaderData?.defaultVideoId || ''
 
   // Get videoId from URL params, fallback to empty string
   const videoIdFromUrl = searchParams.get('videoId') || ''
 
   // State
-  const [videoId, setVideoId] = useState(videoIdFromUrl)
+  const [videoId] = useState(videoIdFromUrl)
   const [totalFrames, setTotalFrames] = useState(0)
   const [cropWidth, setCropWidth] = useState<number>(0)
   const [cropHeight, setCropHeight] = useState<number>(0)
@@ -133,9 +115,6 @@ export default function BoundaryWorkflow() {
   const workflowProgress = displayState.workflowProgress
   const completedFrames = displayState.completedFrames
   const cursorStyle = displayState.cursorStyle
-
-  // Keep for backward compatibility (not frequently updated)
-  const [annotationIndex, setAnnotationIndex] = useState<Map<number, Annotation[]>>(new Map())
 
   const [frameSpacing, setFrameSpacing] = useState<FrameSpacing>('linear')
   const [windowHeight, setWindowHeight] = useState(
@@ -349,24 +328,9 @@ export default function BoundaryWorkflow() {
     }
   }, [activeAnnotation])
 
-  // Track frame updates for debugging
-  const frameUpdateCountRef = useRef(0)
-  const lastFrameUpdateLogRef = useRef(Date.now())
-
-  const setCurrentFrameIndexWithLogging = useCallback((newIndex: number) => {
+  const setCurrentFrameIndex = useCallback((newIndex: number) => {
     // Update ref only - no render (RAF loop handles display)
     currentFrameIndexRef.current = newIndex
-
-    // Log frame update rate
-    frameUpdateCountRef.current++
-    const now = Date.now()
-    const timeSinceLog = now - lastFrameUpdateLogRef.current
-    if (timeSinceLog >= 1000) {
-      const updateRate = (frameUpdateCountRef.current / timeSinceLog) * 1000
-      console.log(`[Frame Updates] ${updateRate.toFixed(1)} updates/sec`)
-      frameUpdateCountRef.current = 0
-      lastFrameUpdateLogRef.current = now
-    }
   }, [])
 
   // Drag-to-scroll handlers
@@ -409,7 +373,7 @@ export default function BoundaryWorkflow() {
 
         lastYRef.current = moveEvent.clientY
         lastTimeRef.current = now
-        setCurrentFrameIndexWithLogging(newFrame)
+        setCurrentFrameIndex(newFrame)
       }
 
       const handleUp = () => {
@@ -445,7 +409,7 @@ export default function BoundaryWorkflow() {
 
             // Update displayed frame (rounded from fractional position)
             const newFrame = Math.round(position)
-            setCurrentFrameIndexWithLogging(newFrame)
+            setCurrentFrameIndex(newFrame)
 
             momentumFrameRef.current = requestAnimationFrame(animate)
           }
@@ -456,7 +420,7 @@ export default function BoundaryWorkflow() {
       window.addEventListener('mousemove', handleMove)
       window.addEventListener('mouseup', handleUp)
     },
-    [currentFrameIndex, totalFrames, setCurrentFrameIndexWithLogging]
+    [currentFrameIndex, totalFrames, setCurrentFrameIndex]
   )
 
   // Navigate to previous/next annotation by updated_at time
@@ -744,23 +708,7 @@ export default function BoundaryWorkflow() {
   const loadedChunksRef = useRef<Map<number, number[]>>(new Map())
   // Track chunks currently being fetched (not yet received)
   const requestedChunksRef = useRef<Map<number, Set<number>>>(new Map())
-  // Track current display modulo for logging changes
-  const displayModuloRef = useRef<number>(1)
   const MAX_CHUNKS_PER_MODULO = 5
-
-  // Track render rate for debugging
-  const renderCountRef = useRef(0)
-  const lastRenderLogTimeRef = useRef(Date.now())
-
-  // Log render rate every second
-  renderCountRef.current++
-  const now = Date.now()
-  const timeSinceLastLog = now - lastRenderLogTimeRef.current
-  if (timeSinceLastLog >= 1000) {
-    const renderRate = (renderCountRef.current / timeSinceLastLog) * 1000
-    renderCountRef.current = 0
-    lastRenderLogTimeRef.current = now
-  }
 
   // RAF render loop - ONLY source of renders
   // Throttled to 60fps, only updates when data changes
@@ -771,10 +719,6 @@ export default function BoundaryWorkflow() {
     let lastFrameCount = 0
     const targetFps = 60
     const frameInterval = 1000 / targetFps // ~16ms
-
-    // Debug: track actual update rate
-    let updateCount = 0
-    let lastLogTime = performance.now()
 
     const loop = (currentTime: number) => {
       const timeSinceUpdate = currentTime - lastUpdateTime
@@ -805,13 +749,6 @@ export default function BoundaryWorkflow() {
         lastUpdateTime = currentTime
         lastFrameIndex = frameIndex
         lastFrameCount = frameCount
-
-        // Debug logging
-        updateCount++
-        if (currentTime - lastLogTime >= 1000) {
-          updateCount = 0
-          lastLogTime = currentTime
-        }
       }
 
       // Continue loop
@@ -951,22 +888,6 @@ export default function BoundaryWorkflow() {
           // Process multiple chunks concurrently
           const batch = queue.splice(0, MAX_CONCURRENT)
 
-          const batchSummary = batch
-            .map(c => {
-              if (c.frames.length === 0) return `%${c.modulo}[empty]:0`
-              const minFrame = c.frames[0]!
-              const maxFrame = c.frames[c.frames.length - 1]!
-              // Show chunk boundaries, not just min/max frames
-              const chunkSize = 32 * c.modulo
-              const chunkStart = Math.floor(minFrame / chunkSize) * chunkSize
-              const chunkEnd = chunkStart + chunkSize - 1
-              return `%${c.modulo}[${chunkStart}-${chunkEnd}]:${c.frames.length}`
-            })
-            .join(', ')
-          // console.log(
-          //   `[Frame Load] Loading ${batch.length} chunks [${batchSummary}], ${queue.length} remaining`
-          // )
-
           // Mark chunks as requested IMMEDIATELY (before fetch) to prevent duplicate requests
           const requestedChunks = requestedChunksRef.current
           for (const chunk of batch) {
@@ -983,8 +904,6 @@ export default function BoundaryWorkflow() {
             inFlight.add(chunkStart)
           }
 
-          const startTime = performance.now()
-
           // Load chunks concurrently
           const batchPromises = batch.map(async chunk => {
             const indicesParam = chunk.frames.join(',')
@@ -997,12 +916,6 @@ export default function BoundaryWorkflow() {
           })
 
           const results = await Promise.all(batchPromises)
-
-          const loadTime = performance.now() - startTime
-          const totalLoaded = results.reduce((sum, r) => sum + r.frames.length, 0)
-          // console.log(
-          //   `[Frame Load] Loaded ${totalLoaded} frames in ${loadTime.toFixed(0)}ms [${batchSummary}]`
-          // )
 
           // Update framesRef directly (silent, no re-render)
           // RAF loop will pick up changes and update display
@@ -1051,9 +964,6 @@ export default function BoundaryWorkflow() {
               if (cache.length > MAX_CHUNKS_PER_MODULO) {
                 const evicted = cache.shift()!
                 const evictedEnd = evicted + chunkSize - 1
-                // console.log(
-                //   `[Frame Cache] Evicted chunk %${chunk.modulo}[${evicted}-${evictedEnd}]`
-                // )
               }
             }
           }
@@ -1102,15 +1012,6 @@ export default function BoundaryWorkflow() {
       console.error('Failed to activate current frame annotation:', error)
     }
   }, [currentFrameIndex, videoId, checkNavigationAvailability])
-
-  // Check if frame is in marked range (active annotation being edited)
-  const isInMarkedRange = useCallback(
-    (frameIndex: number) => {
-      if (markedStart === null || markedEnd === null) return false
-      return frameIndex >= markedStart && frameIndex <= markedEnd
-    },
-    [markedStart, markedEnd]
-  )
 
   // Show loading state while metadata loads
   if (isLoadingMetadata) {
@@ -1181,25 +1082,6 @@ export default function BoundaryWorkflow() {
                       break
                     }
                   }
-                }
-
-                // Determine highest modulo that includes this frame index
-                let usedModulo = 1
-                if (frame) {
-                  for (const modulo of [32, 16, 8, 4, 2]) {
-                    if (alignedFrameIndex % modulo === 0) {
-                      usedModulo = modulo
-                      break
-                    }
-                  }
-                }
-
-                // Log modulo changes across any frame display
-                if (frame && usedModulo !== displayModuloRef.current) {
-                  // console.log(
-                  //   `[Display] Modulo changed: ${displayModuloRef.current} → ${usedModulo}`
-                  // )
-                  displayModuloRef.current = usedModulo
                 }
 
                 // Current indicator based on position, not aligned frame
