@@ -376,8 +376,8 @@ function calculateBoundariesBadge(
     )
   }
 
-  // Priority 6: Annotate (has gap annotations that need marking)
-  if (stats.gapAnnotations > 0) {
+  // Priority 6: Incomplete (progress < 100% means there are unannotated frames)
+  if (stats.progress < 100) {
     return {
       type: 'boundaries',
       label: 'Boundaries: Annotate',
@@ -387,7 +387,7 @@ function calculateBoundariesBadge(
     }
   }
 
-  // Priority 7: Review (no gaps, but has pending review)
+  // Priority 7: Review (progress is 100%, but has pending review)
   if (stats.boundaryPendingReview > 0) {
     return {
       type: 'boundaries',
@@ -398,7 +398,7 @@ function calculateBoundariesBadge(
     }
   }
 
-  // Boundaries complete (all annotations confirmed, no pending)
+  // Boundaries complete (progress = 100%, all confirmed, no pending)
   return null
 }
 

@@ -2,6 +2,7 @@ import { existsSync } from 'fs'
 
 import Database from 'better-sqlite3'
 import { type LoaderFunctionArgs } from 'react-router'
+import sharp from 'sharp'
 
 import { getDbPath } from '~/utils/video-paths'
 
@@ -159,6 +160,8 @@ export async function loader({ params }: LoaderFunctionArgs) {
   // Get total frames from database (cropped_frames table)
   const db = new Database(dbPath)
   let totalFrames = 0
+  let cropWidth = 0
+  let cropHeight = 0
 
   try {
     // Count total number of frames in cropped_frames table
@@ -174,6 +177,17 @@ export async function loader({ params }: LoaderFunctionArgs) {
         status: 404,
         headers: { 'Content-Type': 'application/json' },
       })
+    }
+
+    // Get crop dimensions from first frame
+    const frameRow = db.prepare('SELECT image_data FROM cropped_frames LIMIT 1').get() as
+      | { image_data: Buffer }
+      | undefined
+
+    if (frameRow) {
+      const metadata = await sharp(frameRow.image_data).metadata()
+      cropWidth = metadata.width || 0
+      cropHeight = metadata.height || 0
     }
   } catch (error) {
     console.error('Error querying cropped_frames:', error)
@@ -201,6 +215,8 @@ export async function loader({ params }: LoaderFunctionArgs) {
       totalFrames,
       firstFrame: 0,
       lastFrame: totalFrames - 1,
+      cropWidth,
+      cropHeight,
       gapsCreated, // Include info about gaps that were filled
     }),
     {
