@@ -232,7 +232,14 @@ export async function action({ params, request }: ActionFunctionArgs) {
             }
 
             // Get prediction for this box
-            const prediction = predictBoxLabel(originalBounds, layoutConfig, allBoxBounds, db)
+            const prediction = predictBoxLabel(
+              originalBounds,
+              layoutConfig,
+              allBoxBounds,
+              frameIndex,
+              boxIndex,
+              db
+            )
 
             stmt.run(
               frameIndex,

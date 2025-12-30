@@ -152,7 +152,14 @@ export async function action({ params }: ActionFunctionArgs) {
         const bounds = allBoxBounds[i]!
 
         // Get prediction with all boxes from this frame
-        const prediction = predictBoxLabel(bounds, layoutConfig, allBoxBounds, db)
+        const prediction = predictBoxLabel(
+          bounds,
+          layoutConfig,
+          allBoxBounds,
+          box.frame_index,
+          box.box_index,
+          db
+        )
 
         // Update database
         updateStmt.run(prediction.label, prediction.confidence, modelVersion, box.id)

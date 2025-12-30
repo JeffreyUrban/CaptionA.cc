@@ -23,6 +23,7 @@ interface VideoLayoutConfig {
   box_height_std: number | null
   anchor_type: 'left' | 'center' | 'right' | null
   anchor_position: number | null
+  analysis_model_version: string | null
 }
 
 interface BoxData {
@@ -77,6 +78,21 @@ export async function loader({ params }: LoaderFunctionArgs) {
         status: 404,
         headers: { 'Content-Type': 'application/json' },
       })
+    }
+
+    // Check for model version mismatch (detection only - background job handles recalculation)
+    const analysisVersion = layoutConfig.analysis_model_version ?? null
+    const modelInfo = db
+      .prepare('SELECT model_version FROM box_classification_model WHERE id = 1')
+      .get() as { model_version: string } | undefined
+    const currentVersion = modelInfo?.model_version ?? null
+
+    if (analysisVersion !== currentVersion) {
+      console.log(
+        `[LayoutAnalysisBoxes] Model version mismatch detected for ${videoId}: ` +
+          `${analysisVersion ?? 'null'} → ${currentVersion}. Background check will recalculate.`
+      )
+      // Note: Actual recalculation happens via background monitor, not blocking page load
     }
 
     // Fetch all OCR boxes from full_frame_ocr table with predictions
@@ -183,7 +199,14 @@ export async function loader({ params }: LoaderFunctionArgs) {
           predictedConfidence = box.predicted_confidence
         } else {
           // Calculate prediction on-the-fly
-          const prediction = predictBoxLabel(bounds, layoutConfig, allBoxBounds, db)
+          const prediction = predictBoxLabel(
+            bounds,
+            layoutConfig,
+            allBoxBounds,
+            box.frame_index,
+            box.box_index,
+            db
+          )
           predictedLabel = prediction.label
           predictedConfidence = prediction.confidence
 

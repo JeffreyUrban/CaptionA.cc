@@ -236,7 +236,14 @@ export async function loader({ params }: LoaderFunctionArgs) {
       const originalBounds = { left: boxLeft, top: boxTop, right: boxRight, bottom: boxBottom }
 
       // Predict label (with Bayesian model if available)
-      const prediction = predictBoxLabel(originalBounds, layoutConfig, allBoxBounds, db)
+      const prediction = predictBoxLabel(
+        originalBounds,
+        layoutConfig,
+        allBoxBounds,
+        frameIndex,
+        boxIndex,
+        db
+      )
 
       // Get user annotation (if exists)
       const userLabel = userAnnotationMap.get(boxIndex) || null
@@ -449,7 +456,14 @@ export async function action({ params, request }: ActionFunctionArgs) {
       let predictedConfidence: number = 0.5
 
       if (fullLayoutConfig) {
-        const prediction = predictBoxLabel(originalBounds, fullLayoutConfig, allBoxBounds, db)
+        const prediction = predictBoxLabel(
+          originalBounds,
+          fullLayoutConfig,
+          allBoxBounds,
+          frameIndex,
+          boxIndex,
+          db
+        )
         predictedLabel = prediction.label
         predictedConfidence = prediction.confidence
       }
