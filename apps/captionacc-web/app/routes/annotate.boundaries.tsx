@@ -706,6 +706,10 @@ export default function BoundaryWorkflow() {
   // LRU cache of loaded chunks per modulo to avoid reloading
   // Map: modulo → array of chunk start positions (most recent at end)
   const loadedChunksRef = useRef<Map<number, number[]>>(new Map())
+  // Track chunks currently being fetched (not yet received)
+  const requestedChunksRef = useRef<Map<number, Set<number>>>(new Map())
+  // Track current display modulo for logging changes
+  const displayModuloRef = useRef<number>(1)
   const MAX_CHUNKS_PER_MODULO = 5
 
   // Load frames with priority queue: prioritize high modulo, filter by range from current frame
@@ -713,7 +717,11 @@ export default function BoundaryWorkflow() {
     // Skip loading until initial metadata and annotation are loaded
     if (isLoadingMetadata) return
 
+    // Cancel flag to stop previous load when frame changes
+    let cancelled = false
+
     const loadFrameHierarchy = async () => {
+      if (cancelled) return
       const currentFrames = framesRef.current
       const encodedVideoId = encodeURIComponent(videoId)
       const CHUNK_SIZE = 100
@@ -736,69 +744,83 @@ export default function BoundaryWorkflow() {
         frames: number[]
       }
 
-      const buildQueue = (centerFrame: number): QueueChunk[] => {
+      const buildQueueForModulo = (centerFrame: number, moduloLevelIndex: number): QueueChunk[] => {
         const chunks: QueueChunk[] = []
         const FRAMES_PER_CHUNK = 32 // Always load 32 frames per chunk
         const loadedChunks = loadedChunksRef.current
+        const requestedChunks = requestedChunksRef.current
 
-        for (const { modulo, range } of moduloLevels) {
-          const rangeStart = Math.max(0, centerFrame - range)
-          const rangeEnd = Math.min(totalFrames - 1, centerFrame + range)
+        if (moduloLevelIndex >= moduloLevels.length) return chunks
 
-          // Chunk size in frame indices = 32 frames × modulo spacing
-          // For modulo 32: 32 frames × 32 = 1024 frame indices [0-1023]
-          const chunkSize = FRAMES_PER_CHUNK * modulo
+        const { modulo, range } = moduloLevels[moduloLevelIndex]!
+        const rangeStart = Math.max(0, centerFrame - range)
+        const rangeEnd = Math.min(totalFrames - 1, centerFrame + range)
 
-          // Align to chunk boundaries
-          const firstChunkStart = Math.floor(rangeStart / chunkSize) * chunkSize
-          const lastChunkStart = Math.floor(rangeEnd / chunkSize) * chunkSize
+        // Chunk size in frame indices = 32 frames × modulo spacing
+        // For modulo 32: 32 frames × 32 = 1024 frame indices [0-1023]
+        const chunkSize = FRAMES_PER_CHUNK * modulo
 
-          // Get cached chunks for this modulo
-          const cachedChunks = loadedChunks.get(modulo) || []
+        // Align to chunk boundaries
+        const firstChunkStart = Math.floor(rangeStart / chunkSize) * chunkSize
+        const lastChunkStart = Math.floor(rangeEnd / chunkSize) * chunkSize
 
-          // Collect frames in chunks of 32 frames each
-          for (
-            let chunkStart = firstChunkStart;
-            chunkStart <= lastChunkStart;
-            chunkStart += chunkSize
-          ) {
-            // Skip if chunk is already in cache
-            if (cachedChunks.includes(chunkStart)) {
-              continue
+        // Get cached chunks and in-flight requests for this modulo
+        const cachedChunks = loadedChunks.get(modulo) || []
+        const inFlightChunks = requestedChunks.get(modulo) || new Set()
+
+        // Collect frames in chunks of 32 frames each
+        for (
+          let chunkStart = firstChunkStart;
+          chunkStart <= lastChunkStart;
+          chunkStart += chunkSize
+        ) {
+          // Skip if chunk is already loaded or being fetched
+          if (cachedChunks.includes(chunkStart) || inFlightChunks.has(chunkStart)) {
+            continue
+          }
+
+          const chunkEnd = chunkStart + chunkSize - 1
+          const chunkFrames: number[] = []
+
+          // Collect ALL frames at modulo positions within this chunk
+          // Chunks are atomic - we load all frames or none (cache check handles skip)
+          for (let i = chunkStart; i <= Math.min(chunkEnd, totalFrames - 1); i++) {
+            if (i % modulo === 0) {
+              chunkFrames.push(i)
             }
+          }
 
-            const chunkEnd = chunkStart + chunkSize - 1
-            const chunkFrames: number[] = []
-
-            // Collect ALL frames at modulo positions within this chunk
-            // Chunks are atomic - we load all frames or none (cache check handles skip)
-            for (let i = chunkStart; i <= Math.min(chunkEnd, totalFrames - 1); i++) {
-              if (i % modulo === 0) {
-                chunkFrames.push(i)
-              }
-            }
-
-            // Add chunk if it has frames (including edge chunks with <32 frames)
-            if (chunkFrames.length > 0) {
-              chunks.push({
-                modulo,
-                range,
-                frames: chunkFrames,
-              })
-            }
+          // Add chunk if it has frames (including edge chunks with <32 frames)
+          if (chunkFrames.length > 0) {
+            chunks.push({
+              modulo,
+              range,
+              frames: chunkFrames,
+            })
           }
         }
 
-        // Already in priority order (32, 16, 8, 4, 2, 1)
         return chunks
       }
 
       try {
-        let queue = buildQueue(currentFrameIndex)
+        // Progressive loading: start with coarsest modulo, move to finer levels as each completes
+        let currentModuloLevel = 0
+        let queue = buildQueueForModulo(currentFrameIndex, currentModuloLevel)
 
-        if (queue.length === 0) return
+        // Continue while we have chunks to load or more modulo levels to try
+        while (queue.length > 0 || currentModuloLevel < moduloLevels.length - 1) {
+          // Check if cancelled (frame changed, new load started)
+          if (cancelled) return
 
-        while (queue.length > 0) {
+          // If current level complete, move to next finer level
+          if (queue.length === 0) {
+            currentModuloLevel++
+            queue = buildQueueForModulo(currentFrameIndex, currentModuloLevel)
+            if (queue.length === 0) continue // Skip to next level if nothing to load
+          }
+
+          if (queue.length === 0) break // All levels complete
           // Filter to drop entire chunks outside range of current frame
           const currentFrame = currentFrameRef.current
           queue = queue.filter(chunk => {
@@ -829,9 +851,25 @@ export default function BoundaryWorkflow() {
               return `%${c.modulo}[${chunkStart}-${chunkEnd}]:${c.frames.length}`
             })
             .join(', ')
-          console.log(
-            `[Frame Load] Loading ${batch.length} chunks [${batchSummary}], ${queue.length} remaining`
-          )
+          // console.log(
+          //   `[Frame Load] Loading ${batch.length} chunks [${batchSummary}], ${queue.length} remaining`
+          // )
+
+          // Mark chunks as requested IMMEDIATELY (before fetch) to prevent duplicate requests
+          const requestedChunks = requestedChunksRef.current
+          for (const chunk of batch) {
+            const chunkSize = 32 * chunk.modulo
+            const chunkStart = Math.floor(chunk.frames[0]! / chunkSize) * chunkSize
+
+            // Get or create set for this modulo
+            let inFlight = requestedChunks.get(chunk.modulo)
+            if (!inFlight) {
+              inFlight = new Set()
+              requestedChunks.set(chunk.modulo, inFlight)
+            }
+
+            inFlight.add(chunkStart)
+          }
 
           const startTime = performance.now()
 
@@ -850,9 +888,9 @@ export default function BoundaryWorkflow() {
 
           const loadTime = performance.now() - startTime
           const totalLoaded = results.reduce((sum, r) => sum + r.frames.length, 0)
-          console.log(
-            `[Frame Load] Loaded ${totalLoaded} frames in ${loadTime.toFixed(0)}ms [${batchSummary}]`
-          )
+          // console.log(
+          //   `[Frame Load] Loaded ${totalLoaded} frames in ${loadTime.toFixed(0)}ms [${batchSummary}]`
+          // )
 
           // Update state with loaded frames
           setFrames(prevFrames => {
@@ -876,13 +914,20 @@ export default function BoundaryWorkflow() {
             return newFrames
           })
 
-          // Update chunk cache with LRU eviction
+          // Move chunks from requested to loaded
           const loadedChunks = loadedChunksRef.current
+          // Reuse requestedChunks declared above
           for (const chunk of batch) {
             const chunkSize = 32 * chunk.modulo
             const chunkStart = Math.floor(chunk.frames[0]! / chunkSize) * chunkSize
 
-            // Get or create cache array for this modulo
+            // Remove from requested
+            const inFlight = requestedChunks.get(chunk.modulo)
+            if (inFlight) {
+              inFlight.delete(chunkStart)
+            }
+
+            // Add to loaded cache
             let cache = loadedChunks.get(chunk.modulo)
             if (!cache) {
               cache = []
@@ -896,11 +941,10 @@ export default function BoundaryWorkflow() {
               // Evict oldest if exceeds limit
               if (cache.length > MAX_CHUNKS_PER_MODULO) {
                 const evicted = cache.shift()!
-                const chunkSize = 32 * chunk.modulo
                 const evictedEnd = evicted + chunkSize - 1
-                console.log(
-                  `[Frame Cache] Evicted chunk %${chunk.modulo}[${evicted}-${evictedEnd}]`
-                )
+                // console.log(
+                //   `[Frame Cache] Evicted chunk %${chunk.modulo}[${evicted}-${evictedEnd}]`
+                // )
               }
             }
           }
@@ -911,6 +955,11 @@ export default function BoundaryWorkflow() {
     }
 
     loadFrameHierarchy()
+
+    // Cleanup: cancel this load if frame changes
+    return () => {
+      cancelled = true
+    }
   }, [currentFrameIndex, totalFrames, videoId, isLoadingMetadata])
 
   // Find annotation(s) for a given frame
@@ -1014,12 +1063,33 @@ export default function BoundaryWorkflow() {
                     if (testFrame) {
                       frame = testFrame
                       alignedFrameIndex = testIndex
+                      // Stop if we found the exact frame requested
+                      if (alignedFrameIndex === framePosition) break
                       // Continue checking for finer frames
                     } else {
                       // Missing this level, finer levels won't exist - stop checking
                       break
                     }
                   }
+                }
+
+                // Determine highest modulo that includes this frame index
+                let usedModulo = 1
+                if (frame) {
+                  for (const modulo of [32, 16, 8, 4, 2]) {
+                    if (alignedFrameIndex % modulo === 0) {
+                      usedModulo = modulo
+                      break
+                    }
+                  }
+                }
+
+                // Log modulo changes across any frame display
+                if (frame && usedModulo !== displayModuloRef.current) {
+                  // console.log(
+                  //   `[Display] Modulo changed: ${displayModuloRef.current} → ${usedModulo}`
+                  // )
+                  displayModuloRef.current = usedModulo
                 }
 
                 // Current indicator based on position, not aligned frame
