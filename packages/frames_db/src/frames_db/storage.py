@@ -164,14 +164,9 @@ def write_frames_batch(
                     progress_callback(i + 1, len(frames))
 
         else:  # cropped_frames
-            # Delete existing frames for this crop_bounds_version to avoid UNIQUE constraint errors
-            cursor.execute(
-                """
-                DELETE FROM cropped_frames
-                WHERE crop_bounds_version = ?
-                """,
-                (crop_bounds_version,),
-            )
+            # Delete ALL existing cropped frames to avoid UNIQUE constraint errors
+            # (frame_index is PRIMARY KEY, so only one set of cropped frames can exist)
+            cursor.execute("DELETE FROM cropped_frames")
 
             crop_left, crop_top, crop_right, crop_bottom = crop_bounds
             for i, (frame_index, image_data, width, height) in enumerate(frames):
