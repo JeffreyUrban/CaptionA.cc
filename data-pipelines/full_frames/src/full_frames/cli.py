@@ -16,7 +16,6 @@ from rich.progress import (
 
 from . import __version__
 from .analysis import (
-    analyze_subtitle_region,
     create_analysis_visualization,
     load_ocr_annotations,
     save_analysis_text,
@@ -218,13 +217,12 @@ def analyze(
             console.print(f"  [green]✓[/green] Removed empty directory")
         console.print()
 
-        # Step 3/3: Analyze region and write to database
-        console.print("[bold]Step 3/3: Analyzing subtitle region[/bold]")
-        annotations = load_ocr_annotations_from_database(db_path)
-        region = analyze_subtitle_region(annotations, width, height)
+        # Step 3/3: Create minimal layout config
+        console.print("[bold]Step 3/3: Creating initial layout config[/bold]")
+        console.print("  Layout analysis will be performed by ML model in web app...")
 
-        # Write layout config to database
-        console.print("  Writing layout config to database...")
+        # Write minimal layout config with just frame dimensions
+        # Full layout (crop bounds, anchor, etc.) calculated by web app using ML model
         import sqlite3
         conn = sqlite3.connect(db_path)
         try:
@@ -232,35 +230,23 @@ def analyze(
                 INSERT OR REPLACE INTO video_layout_config (
                     id, frame_width, frame_height,
                     crop_left, crop_top, crop_right, crop_bottom,
-                    vertical_position, vertical_std,
-                    box_height, box_height_std,
-                    anchor_type, anchor_position,
                     crop_bounds_version
-                ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-            """, (
-                width, height,
-                int(region.crop_left), int(region.crop_top),
-                int(region.crop_right), int(region.crop_bottom),
-                region.vertical_position, region.vertical_std,
-                region.box_height, region.height_std,
-                region.anchor_type, region.anchor_position
-            ))
+                ) VALUES (1, ?, ?, 0, 0, ?, ?, 1)
+            """, (width, height, width, height))
             conn.commit()
         finally:
             conn.close()
 
-        console.print(f"  [green]✓[/green] Analysis complete")
+        console.print(f"  [green]✓[/green] Initial config created")
         console.print()
 
         # Print final summary
         console.print("[bold green]Pipeline Complete![/bold green]")
         console.print()
-        console.print("[bold cyan]Subtitle Layout Summary:[/bold cyan]")
-        console.print(f"  Boxes analyzed: {region.total_boxes}")
-        console.print(f"  Vertical position: {region.vertical_position:.3f}")
-        console.print(f"  Box height: {region.box_height:.3f}")
-        console.print(f"  Anchor: {region.anchor_type} at {region.anchor_position:.3f}")
-        console.print(f"  Recommended crop: [{region.crop_left:.3f}, {region.crop_top:.3f}, {region.crop_right:.3f}, {region.crop_bottom:.3f}]")
+        console.print("[bold cyan]Summary:[/bold cyan]")
+        console.print(f"  Extracted and analyzed {frames_written} frames")
+        console.print(f"  Frame dimensions: {width}×{height}")
+        console.print(f"  Layout analysis: Will be performed by ML model in web app")
 
     except (RuntimeError, FileNotFoundError, ValueError) as e:
         console.print(f"[red]Error:[/red] {e}")
@@ -465,73 +451,32 @@ def analyze_region(
         help="Directory for analysis output files",
     ),
 ) -> None:
-    """Analyze subtitle region characteristics from OCR data.
+    """DEPRECATED: Analyze subtitle region characteristics from OCR data.
 
-    Analyzes OCR bounding boxes to determine:
-    - Vertical position and height of subtitle region
-    - Horizontal anchoring (left/center/right)
-    - Crop coordinates for future processing
+    This command is deprecated because it used hardcoded heuristics (e.g., assuming
+    subtitles are in the bottom third of the frame) which are not valid for all videos.
 
-    Requires either --video path or both --width and --height to get video dimensions.
+    Layout analysis is now performed by the ML box classification model in the web app.
 
-    Outputs:
-    - subtitle_analysis.txt: Statistical summary
-    - subtitle_analysis.png: Visualization with detected bounds
+    Migration path:
+    1. Use 'full_frames analyze' command to process your video
+    2. Open the video in the web app (http://localhost:5173)
+    3. The ML model will automatically classify OCR boxes and calculate layout
     """
-    console.print(f"[bold]Analyzing subtitle region from {ocr_file.name}[/bold]")
-    console.print(f"Output: {output_dir}")
+    console.print("[yellow]⚠ DEPRECATED COMMAND[/yellow]")
     console.print()
-
-    # Create output directory
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    try:
-        # Get video dimensions
-        if video:
-            width, height = get_video_dimensions(video)
-            console.print(f"Video dimensions: {width}×{height}")
-        elif width and height:
-            console.print(f"Using provided dimensions: {width}×{height}")
-        else:
-            console.print("[red]Error:[/red] Must provide either --video or both --width and --height")
-            raise typer.Exit(1)
-
-        # Load OCR annotations
-        console.print("Loading OCR annotations...")
-        annotations = load_ocr_annotations(ocr_file)
-        console.print(f"Loaded {len(annotations)} frames with OCR data")
-        console.print()
-
-        # Analyze subtitle region
-        console.print("Analyzing subtitle region characteristics...")
-        region = analyze_subtitle_region(annotations, width, height)
-
-        # Save text analysis
-        text_output = output_dir / "subtitle_analysis.txt"
-        save_analysis_text(region, text_output)
-        console.print(f"[green]✓[/green] Analysis saved to {text_output}")
-
-        # Create visualization
-        console.print("Creating analysis visualization...")
-        viz_output = output_dir / "subtitle_analysis.png"
-        create_analysis_visualization(region, annotations, viz_output)
-        console.print(f"[green]✓[/green] Visualization saved to {viz_output}")
-
-        # Print summary
-        console.print()
-        console.print("[bold cyan]Analysis Summary:[/bold cyan]")
-        console.print(f"  Boxes analyzed: {region.total_boxes}")
-        console.print(f"  Vertical position: {region.vertical_position:.3f}")
-        console.print(f"  Box height: {region.box_height:.3f}")
-        console.print(f"  Anchor: {region.anchor_type} at {region.anchor_position:.3f}")
-        console.print(f"  Crop: [{region.crop_left:.3f}, {region.crop_top:.3f}, {region.crop_right:.3f}, {region.crop_bottom:.3f}]")
-
-    except (ValueError, FileNotFoundError) as e:
-        console.print(f"[red]Error:[/red] {e}")
-        raise typer.Exit(1)
-    except Exception as e:
-        console.print(f"[red]Error:[/red] {e}")
-        raise typer.Exit(1)
+    console.print("This command has been deprecated because it relied on hardcoded heuristics")
+    console.print("(e.g., assuming subtitles are in the bottom third of frame) which are")
+    console.print("not valid for all videos.")
+    console.print()
+    console.print("[bold cyan]New Workflow:[/bold cyan]")
+    console.print("1. Run: full_frames analyze <video> --output-dir <dir>")
+    console.print("2. Open video in web app: http://localhost:5173")
+    console.print("3. ML model automatically classifies boxes and calculates layout")
+    console.print()
+    console.print("The ML model uses 26 features and is trained on real data,")
+    console.print("providing more accurate layout analysis than hardcoded rules.")
+    raise typer.Exit(1)
 
 
 if __name__ == "__main__":

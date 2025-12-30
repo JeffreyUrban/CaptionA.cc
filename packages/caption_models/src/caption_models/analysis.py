@@ -153,15 +153,19 @@ def analyze_subtitle_region(
     ocr_annotations: list[dict],
     width: int,
     height: int,
-    min_overlap: float = 0.75,
+    min_overlap: float = 0.75,  # Deprecated parameter, kept for compatibility
 ) -> SubtitleRegion:
     """Analyze OCR boxes to determine subtitle region characteristics.
+
+    Creates an initial layout config from ALL detected OCR boxes without
+    assuming their position. The ML box classification model will later
+    refine this by classifying boxes as captions vs noise.
 
     Args:
         ocr_annotations: List of OCR result dictionaries from load_ocr_annotations()
         width: Video frame width in pixels
         height: Video frame height in pixels
-        min_overlap: Minimum overlap fraction to consider a box (0-1)
+        min_overlap: Deprecated (kept for compatibility, no longer used)
 
     Returns:
         SubtitleRegion with analyzed characteristics
@@ -172,11 +176,8 @@ def analyze_subtitle_region(
     img_width = width
     img_height = height
 
-    # Default initial region: bottom third of frame
-    region_bounds = [0, int(img_height * 0.67), img_width, img_height]
-
-    # Process OCR annotations and filter by overlap
-    valid_boxes = []
+    # Process ALL OCR annotations (no position filtering)
+    all_boxes = []
     total_boxes = 0
 
     for entry in ocr_annotations:
@@ -184,57 +185,46 @@ def analyze_subtitle_region(
         for text, confidence, frac_bounds in entry["annotations"]:
             # Convert fractional bounds to pixels
             box = convert_fractional_bounds_to_pixels(frac_bounds, img_width, img_height)
-            overlap = box_overlap_fraction(box, region_bounds)
+            all_boxes.append(box)
 
-            if overlap >= min_overlap:
-                valid_boxes.append(box)
+    if not all_boxes:
+        raise ValueError(f"No OCR boxes found (expected at least some text detection)")
 
-    if not valid_boxes:
-        raise ValueError(f"No valid boxes found (total boxes: {total_boxes})")
+    # Calculate bounding box of ALL detected text (no position assumptions)
+    margin = 10  # pixels
+    all_lefts = [box[0] for box in all_boxes]
+    all_tops = [box[1] for box in all_boxes]
+    all_rights = [box[2] for box in all_boxes]
+    all_bottoms = [box[3] for box in all_boxes]
 
-    # Calculate mode of top and bottom boundaries
-    top_edges = [box[1] for box in valid_boxes]
-    bottom_edges = [box[3] for box in valid_boxes]
-    top_mode = mode(top_edges)
-    bottom_mode = mode(bottom_edges)
+    crop_left = max(0, min(all_lefts) - margin)
+    crop_right = min(img_width, max(all_rights) + margin)
+    crop_top = max(0, min(all_tops) - margin)
+    crop_bottom = min(img_height, max(all_bottoms) + margin)
 
-    # Filter boxes with top/bottom approximately equal to modes
+    # Calculate mode of top and bottom boundaries for typical boxes
+    top_mode = mode(all_tops)
+    bottom_mode = mode(all_bottoms)
+
+    # Filter boxes with top/bottom approximately equal to modes to find "typical" caption boxes
     tolerance = 5  # pixels
     typical_boxes = [
         box
-        for box in valid_boxes
+        for box in all_boxes
         if abs(box[1] - top_mode) <= tolerance and abs(box[3] - bottom_mode) <= tolerance
     ]
 
+    # Fallback: if no typical boxes found, use all boxes
     if not typical_boxes:
-        typical_boxes = valid_boxes
+        typical_boxes = all_boxes
 
-    # Find left/right bounds from typical boxes
-    margin = 10  # pixels
-    left_edges = [box[0] for box in typical_boxes]
-    right_edges = [box[2] for box in typical_boxes]
-
-    left_mode = mode(left_edges)
-    right_max = max(right_edges)
-
-    crop_left = max(0, left_mode - margin)
-    crop_right = min(img_width, right_max + margin)
-    crop_top = max(0, top_mode - margin)
-    crop_bottom = min(img_height, bottom_mode + margin)
-
-    # Determine anchor type and position
+    # Determine anchor type and position from typical boxes
+    # Note: We create a region_bounds from our calculated crop for compatibility
+    region_bounds = [crop_left, crop_top, crop_right, crop_bottom]
     anchor_type = determine_anchor_type(typical_boxes, region_bounds)
     anchor_position = get_anchor_position(typical_boxes, anchor_type, crop_left, crop_right)
 
-    # Adjust crop bounds for center-aligned text
-    if anchor_type == "center":
-        left_dist = anchor_position - crop_left
-        right_dist = crop_right - anchor_position
-        max_dist = max(left_dist, right_dist)
-        crop_left = max(0, anchor_position - max_dist)
-        crop_right = min(img_width, anchor_position + max_dist)
-
-    # Calculate statistics
+    # Calculate statistics from typical boxes
     heights = [box[3] - box[1] for box in typical_boxes]
     vertical_positions = [(box[1] + box[3]) // 2 for box in typical_boxes]
 
@@ -249,5 +239,5 @@ def analyze_subtitle_region(
         crop_top=crop_top,
         crop_right=crop_right,
         crop_bottom=crop_bottom,
-        total_boxes=len(valid_boxes),
+        total_boxes=len(all_boxes),
     )
