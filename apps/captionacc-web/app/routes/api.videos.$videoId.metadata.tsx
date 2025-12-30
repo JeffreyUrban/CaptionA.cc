@@ -161,13 +161,12 @@ export async function loader({ params }: LoaderFunctionArgs) {
   let totalFrames = 0
 
   try {
-    // Query max frame_index from cropped_frames table
-    const result = db.prepare('SELECT MAX(frame_index) as max_index FROM cropped_frames').get() as {
-      max_index: number | null
+    // Count total number of frames in cropped_frames table
+    const result = db.prepare('SELECT COUNT(*) as count FROM cropped_frames').get() as {
+      count: number
     }
 
-    // frame_index is 0-based, so max_index + 1 = total frames
-    totalFrames = result.max_index !== null ? result.max_index + 1 : 0
+    totalFrames = result.count
 
     if (totalFrames === 0) {
       db.close()
