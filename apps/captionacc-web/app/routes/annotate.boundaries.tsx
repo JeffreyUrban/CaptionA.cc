@@ -704,67 +704,97 @@ export default function BoundaryWorkflow() {
     loadAnnotations(startFrame, endFrame)
   }, [visibleFrameIndices, loadAnnotations])
 
-  // Load and cache frames: visible frames + ±100 frames around current position
+  // Load and cache frames in groups of 100 (aligned to 100s boundaries)
+  // Keep at least 100 frames before and after current position (minimum 300 frames cached)
   useEffect(() => {
     const loadAndCacheFrames = async () => {
       const encodedVideoId = encodeURIComponent(videoId)
+      const BATCH_SIZE = 100
 
-      // Calculate cache range: current ± 100 frames
-      const CACHE_RADIUS = 100
-      const cacheStartFrame = Math.max(0, currentFrameIndex - CACHE_RADIUS)
-      const cacheEndFrame = Math.min(totalFrames - 1, currentFrameIndex + CACHE_RADIUS)
-
-      // Generate all frame indices in cache range
-      const framesToCache: number[] = []
-      for (let i = cacheStartFrame; i <= cacheEndFrame; i++) {
-        framesToCache.push(i)
-      }
+      // Helper: get group start index (0, 100, 200, etc.) for a frame
+      const getGroupStart = (frameIndex: number) => Math.floor(frameIndex / BATCH_SIZE) * BATCH_SIZE
 
       // Use functional update to avoid stale closure
       setFrames(prevFrames => {
-        // Find frames that need to be loaded
-        const framesToLoad = framesToCache.filter(idx => !prevFrames.has(idx))
-
-        // Find frames that should be cleaned up (outside cache range)
-        const framesToRemove: number[] = []
+        // Track which groups (100s-aligned batches) are currently loaded
+        const loadedGroups = new Set<number>()
         for (const [idx] of prevFrames) {
-          if (idx < cacheStartFrame || idx > cacheEndFrame) {
-            framesToRemove.push(idx)
+          loadedGroups.add(getGroupStart(idx))
+        }
+
+        // Calculate groups needed to cover currentFrame - 100 to currentFrame + 100
+        const groupsToCache = new Set<number>()
+
+        // Groups to cover 100 frames before current
+        const startFrame = Math.max(0, currentFrameIndex - 100)
+        const startGroup = getGroupStart(startFrame)
+
+        // Groups to cover 100 frames after current (add extra group to ensure coverage)
+        const endFrame = Math.min(totalFrames - 1, currentFrameIndex + 100)
+        const endGroup = getGroupStart(endFrame)
+
+        // Add all groups in range
+        for (let group = startGroup; group <= endGroup; group += BATCH_SIZE) {
+          if (group < totalFrames) {
+            groupsToCache.add(group)
           }
         }
 
-        // Clean up old frames (revoke URLs after a delay to avoid React render conflicts)
-        if (framesToRemove.length > 0) {
+        // Find groups to load (not already cached)
+        const groupsToLoad: number[] = []
+        for (const group of groupsToCache) {
+          if (!loadedGroups.has(group)) {
+            groupsToLoad.push(group)
+          }
+        }
+
+        // Find groups to remove (outside cache range)
+        const groupsToRemove: number[] = []
+        for (const group of loadedGroups) {
+          if (!groupsToCache.has(group)) {
+            groupsToRemove.push(group)
+          }
+        }
+
+        // Clean up old groups (revoke URLs after a delay to avoid React render conflicts)
+        if (groupsToRemove.length > 0) {
           setTimeout(() => {
-            for (const idx of framesToRemove) {
-              const frame = prevFrames.get(idx)
-              if (frame?.image_url) {
-                URL.revokeObjectURL(frame.image_url)
+            for (const group of groupsToRemove) {
+              for (let i = group; i < group + BATCH_SIZE; i++) {
+                const frame = prevFrames.get(i)
+                if (frame?.image_url) {
+                  URL.revokeObjectURL(frame.image_url)
+                }
               }
             }
           }, 100)
         }
 
-        // If no frames to load, just clean up and return
-        if (framesToLoad.length === 0) {
-          if (framesToRemove.length > 0) {
+        // If no groups to load, just clean up and return
+        if (groupsToLoad.length === 0) {
+          if (groupsToRemove.length > 0) {
             const newFrames = new Map(prevFrames)
-            for (const idx of framesToRemove) {
-              newFrames.delete(idx)
+            for (const group of groupsToRemove) {
+              for (let i = group; i < group + BATCH_SIZE; i++) {
+                newFrames.delete(i)
+              }
             }
             return newFrames
           }
           return prevFrames
         }
 
-        // Start async load in batches of 100
+        // Load missing groups (each group is 100 frames aligned to 100s boundary)
         ;(async () => {
-          const BATCH_SIZE = 100
-          for (let i = 0; i < framesToLoad.length; i += BATCH_SIZE) {
-            const batch = framesToLoad.slice(i, i + BATCH_SIZE)
-
+          for (const group of groupsToLoad) {
             try {
-              const indicesParam = batch.join(',')
+              // Generate frame indices for this group
+              const groupFrames: number[] = []
+              for (let i = group; i < group + BATCH_SIZE && i < totalFrames; i++) {
+                groupFrames.push(i)
+              }
+
+              const indicesParam = groupFrames.join(',')
               const response = await fetch(
                 `/api/frames/${encodedVideoId}/batch?indices=${indicesParam}`
               )
@@ -794,16 +824,18 @@ export default function BoundaryWorkflow() {
                 return newFrames
               })
             } catch (error) {
-              console.error('Failed to load frame batch:', error)
+              console.error('Failed to load frame group:', error)
             }
           }
         })()
 
         // Remove cleaned up frames from map
-        if (framesToRemove.length > 0) {
+        if (groupsToRemove.length > 0) {
           const newFrames = new Map(prevFrames)
-          for (const idx of framesToRemove) {
-            newFrames.delete(idx)
+          for (const group of groupsToRemove) {
+            for (let i = group; i < group + BATCH_SIZE; i++) {
+              newFrames.delete(i)
+            }
           }
           return newFrames
         }
