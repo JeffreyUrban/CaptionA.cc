@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { useSearchParams, useLoaderData, useNavigate } from 'react-router'
+import { useSearchParams, useLoaderData } from 'react-router'
 import type { LoaderFunctionArgs } from 'react-router'
-
 import { AppLayout } from '~/components/AppLayout'
 
 // Types
@@ -17,11 +16,11 @@ interface Annotation {
   id: number
   start_frame_index: number
   end_frame_index: number
-  boundary_state: AnnotationState
-  boundary_pending: boolean // When true, annotation is treated as pending for workflow purposes
-  boundary_updated_at?: string
+  state: AnnotationState
+  pending: boolean // When true, annotation is treated as pending for workflow purposes
   text: string | null
   created_at?: string
+  updated_at?: string
 }
 
 type FrameSpacing = 'linear' | 'exponential' | 'hybrid'
@@ -62,7 +61,7 @@ function getAnnotationIndexKey(frameIndex: number): number {
 }
 
 function getEffectiveState(annotation: Annotation): 'pending' | AnnotationState {
-  return annotation.boundary_pending ? 'pending' : annotation.boundary_state
+  return annotation.pending ? 'pending' : annotation.state
 }
 
 function getAnnotationBorderColor(annotation: Annotation): string {
@@ -81,7 +80,6 @@ function getAnnotationBorderColor(annotation: Annotation): string {
 
 export default function BoundaryWorkflow() {
   const [searchParams] = useSearchParams()
-  const navigate = useNavigate()
   const loaderData = useLoaderData<typeof loader>()
   const defaultVideoId = loaderData?.defaultVideoId || ''
 
@@ -93,6 +91,8 @@ export default function BoundaryWorkflow() {
   const [currentFrameIndex, setCurrentFrameIndex] = useState(0)
   const [totalFrames, setTotalFrames] = useState(0)
   const [frames, setFrames] = useState<Map<number, Frame>>(new Map())
+  const [cropWidth, setCropWidth] = useState<number>(0)
+  const [cropHeight, setCropHeight] = useState<number>(0)
   const [isLoadingMetadata, setIsLoadingMetadata] = useState(true)
 
   // Annotation management
@@ -145,6 +145,8 @@ export default function BoundaryWorkflow() {
         const metadataResponse = await fetch(`/api/videos/${encodedVideoId}/metadata`)
         const metadataData = await metadataResponse.json()
         setTotalFrames(metadataData.totalFrames)
+        setCropWidth(metadataData.cropWidth || 0)
+        setCropHeight(metadataData.cropHeight || 0)
 
         // Load workflow progress
         const progressResponse = await fetch(`/api/annotations/${encodedVideoId}/progress`)
@@ -234,45 +236,33 @@ export default function BoundaryWorkflow() {
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
-  // Computed: visible frame indices based on window height
-  const visibleFrameIndices = useMemo(() => {
+  // Computed: visible frame positions (always sequential)
+  const visibleFramePositions = useMemo(() => {
     // Calculate available height: total window height minus navbar (64px) and padding
     const navbarHeight = 64
-    // Safety: ensure minimum window height to prevent empty frame list
     const safeWindowHeight = Math.max(windowHeight, 400)
     const availableHeight = Math.max(safeWindowHeight - navbarHeight, 300)
 
-    // Estimate frame height: ~80-120px depending on aspect ratio
-    // Using 90px as conservative estimate to ensure we fill the height
-    const estimatedFrameHeight = 90
+    // Calculate actual frame height based on crop dimensions and container width
+    const containerWidth = (typeof window !== 'undefined' ? window.innerWidth : 1000) * (2 / 3) - 32
+    const frameHeight =
+      cropWidth > 0 && cropHeight > 0 ? (containerWidth * cropHeight) / cropWidth : 90
+    const frameHeightWithGap = frameHeight + 4
 
-    // Calculate how many frames we need to fill the height
-    const framesToFill = Math.max(Math.ceil(availableHeight / estimatedFrameHeight), 3)
+    // Calculate how many slots we need to fill the height
+    const totalSlots = Math.max(Math.ceil(availableHeight / frameHeightWithGap), 3)
 
-    // Get base offsets for the selected spacing
-    const baseOffsets = FRAME_OFFSETS[frameSpacing]
-
-    // Extend offsets to fill the available height
-    const adjustedOffsets = [...baseOffsets]
-    const maxBaseOffset = Math.max(...baseOffsets.map(Math.abs))
-
-    // Add more frames until we have enough to fill the height
-    if (framesToFill > baseOffsets.length) {
-      const additionalFramesNeeded = framesToFill - baseOffsets.length
-      const framesPerSide = Math.ceil(additionalFramesNeeded / 2)
-
-      for (let i = 1; i <= framesPerSide; i++) {
-        const offset = maxBaseOffset + i
-        adjustedOffsets.push(-offset)
-        adjustedOffsets.push(offset)
-      }
-      adjustedOffsets.sort((a, b) => a - b)
+    // Generate sequential frame positions centered on current frame
+    // These positions are always sequential: [..., 98, 99, 100, 101, 102, ...]
+    const positions: number[] = []
+    for (let i = 0; i < totalSlots; i++) {
+      const position = currentFrameIndex + i - Math.floor(totalSlots / 2)
+      const clampedPosition = Math.max(0, Math.min(position, totalFrames - 1))
+      positions.push(clampedPosition)
     }
 
-    return adjustedOffsets
-      .map(offset => currentFrameIndex + offset)
-      .filter(idx => idx >= 0 && idx < totalFrames)
-  }, [currentFrameIndex, frameSpacing, totalFrames, windowHeight])
+    return positions
+  }, [currentFrameIndex, totalFrames, windowHeight, cropWidth, cropHeight])
 
   // Get opacity for frame distance
   const getOpacity = useCallback(
@@ -385,16 +375,16 @@ export default function BoundaryWorkflow() {
 
         // Apply momentum with fractional position tracking
         const initialVelocity = velocityRef.current
-        if (Math.abs(initialVelocity) > 0.05) {
+        if (Math.abs(initialVelocity) > 0.01) {
           let velocity = initialVelocity
           let position = currentFrameIndex // Track fractional position
-          const friction = 0.99 // Friction factor for smooth deceleration
+          const friction = 0.95 // Friction factor for smooth deceleration
 
           const animate = () => {
             velocity *= friction
 
             // Stop when velocity becomes negligible
-            if (Math.abs(velocity) < 0.01) {
+            if (Math.abs(velocity) < 0.001) {
               momentumFrameRef.current = null
               return
             }
@@ -571,11 +561,8 @@ export default function BoundaryWorkflow() {
           id: activeAnnotation.id,
           start_frame_index: markedStart,
           end_frame_index: markedEnd,
-          boundary_state:
-            activeAnnotation.boundary_state === 'gap'
-              ? 'confirmed'
-              : activeAnnotation.boundary_state,
-          boundary_pending: false,
+          state: activeAnnotation.state === 'gap' ? 'confirmed' : activeAnnotation.state,
+          pending: false,
         }),
       })
 
@@ -587,8 +574,8 @@ export default function BoundaryWorkflow() {
       await updateProgress()
 
       // Reload annotations in current visible range to show updated borders
-      const startFrame = Math.min(...visibleFrameIndices)
-      const endFrame = Math.max(...visibleFrameIndices)
+      const startFrame = Math.min(...visibleFramePositions)
+      const endFrame = Math.max(...visibleFramePositions)
       await loadAnnotations(startFrame, endFrame)
 
       // Load next annotation
@@ -622,7 +609,7 @@ export default function BoundaryWorkflow() {
     videoId,
     activeAnnotation,
     updateProgress,
-    visibleFrameIndices,
+    visibleFramePositions,
     loadAnnotations,
   ])
 
@@ -697,65 +684,116 @@ export default function BoundaryWorkflow() {
 
   // Load annotations in visible range
   useEffect(() => {
-    if (visibleFrameIndices.length === 0) return
+    if (visibleFramePositions.length === 0) return
 
-    const startFrame = Math.min(...visibleFrameIndices)
-    const endFrame = Math.max(...visibleFrameIndices)
+    const startFrame = Math.min(...visibleFramePositions)
+    const endFrame = Math.max(...visibleFramePositions)
     loadAnnotations(startFrame, endFrame)
-  }, [visibleFrameIndices, loadAnnotations])
+  }, [visibleFramePositions, loadAnnotations])
 
-  // Load frames for visible indices using batch API
+  // Ref to track loaded frames (avoids stale closure)
+  const framesRef = useRef(frames)
   useEffect(() => {
-    const loadVisibleFrames = async () => {
-      const newFrames = new Map(frames)
+    framesRef.current = frames
+  }, [frames])
+
+  // Load frames with hierarchical preloading: coarse levels first, wide range
+  // Display shows best available frame - no aborts, no reactive adaptation
+  useEffect(() => {
+    const loadFrameHierarchy = async () => {
+      const currentFrames = framesRef.current
       const encodedVideoId = encodeURIComponent(videoId)
+      const CHUNK_SIZE = 100
+      const MAX_CONCURRENT = 6
 
-      // Find frames that aren't loaded yet
-      const framesToLoad = visibleFrameIndices.filter(idx => !newFrames.has(idx))
+      const minVisible = Math.min(...visibleFramePositions)
+      const maxVisible = Math.max(...visibleFramePositions)
+      const centerFrame = Math.round((minVisible + maxVisible) / 2)
 
-      if (framesToLoad.length === 0) return
+      // Helper to load frames at a given modulo level
+      const loadModuloLevel = async (modulo: number, range: number) => {
+        const framesToLoad: number[] = []
+        const rangeStart = Math.max(0, centerFrame - range)
+        const rangeEnd = Math.min(totalFrames - 1, centerFrame + range)
 
-      // Load frames in batch
-      try {
-        const indicesParam = framesToLoad.join(',')
-        const response = await fetch(`/api/frames/${encodedVideoId}/batch?indices=${indicesParam}`)
-        const data = await response.json()
-
-        // Convert base64 to blob URLs
-        for (const frame of data.frames) {
-          const binaryData = atob(frame.image_data)
-          const bytes = new Uint8Array(binaryData.length)
-          for (let i = 0; i < binaryData.length; i++) {
-            bytes[i] = binaryData.charCodeAt(i)
+        // Load frames aligned to this modulo
+        for (let i = rangeStart; i <= rangeEnd; i++) {
+          if (i % modulo === 0 && !currentFrames.has(i)) {
+            framesToLoad.push(i)
           }
-          const blob = new Blob([bytes], { type: 'image/jpeg' })
-          const imageUrl = URL.createObjectURL(blob)
-
-          newFrames.set(frame.frame_index, {
-            frame_index: frame.frame_index,
-            image_url: imageUrl,
-            ocr_text: '', // OCR text not used in boundary workflow
-          })
         }
 
-        setFrames(newFrames)
-      } catch (error) {
+        if (framesToLoad.length === 0) return
+
+        console.log(`[Frame Load] Loading %${modulo} frames: ${framesToLoad.length} frames`)
+
+        const chunks: number[][] = []
+        for (let i = 0; i < framesToLoad.length; i += CHUNK_SIZE) {
+          chunks.push(framesToLoad.slice(i, i + CHUNK_SIZE))
+        }
+
+        const results: Array<{ frames: Array<{ frame_index: number; image_data: string }> }> = []
+        const startTime = performance.now()
+
+        // Process chunks with concurrency limit
+        for (let i = 0; i < chunks.length; i += MAX_CONCURRENT) {
+          const batchChunks = chunks.slice(i, i + MAX_CONCURRENT)
+          const batchPromises = batchChunks.map(async chunk => {
+            const indicesParam = chunk.join(',')
+            const response = await fetch(
+              `/api/frames/${encodedVideoId}/batch?indices=${indicesParam}`
+            )
+            return response.json() as Promise<{
+              frames: Array<{ frame_index: number; image_data: string }>
+            }>
+          })
+
+          const batchResults = await Promise.all(batchPromises)
+          results.push(...batchResults)
+        }
+
+        const loadTime = performance.now() - startTime
+        console.log(`[Frame Load] %${modulo} complete: ${loadTime.toFixed(0)}ms`)
+
+        // Update state with loaded frames
+        setFrames(prevFrames => {
+          const newFrames = new Map(prevFrames)
+          for (const data of results) {
+            for (const frame of data.frames) {
+              const binaryData = atob(frame.image_data)
+              const bytes = new Uint8Array(binaryData.length)
+              for (let i = 0; i < binaryData.length; i++) {
+                bytes[i] = binaryData.charCodeAt(i)
+              }
+              const blob = new Blob([bytes], { type: 'image/jpeg' })
+              const imageUrl = URL.createObjectURL(blob)
+              newFrames.set(frame.frame_index, {
+                frame_index: frame.frame_index,
+                image_url: imageUrl,
+                ocr_text: '',
+              })
+            }
+          }
+          return newFrames
+        })
+      }
+
+      try {
+        // Load in strict priority order: coarsest first, widest range
+        // This ensures we always have SOMETHING to show
+        await loadModuloLevel(32, 1024) // Every 32nd frame, ±1024 frames (~64 frames)
+        await loadModuloLevel(16, 512) // Every 16th frame, ±512 frames (~64 frames)
+        await loadModuloLevel(8, 256) // Every 8th frame, ±256 frames (~64 frames)
+        await loadModuloLevel(4, 128) // Every 4th frame, ±128 frames (~64 frames)
+        await loadModuloLevel(2, 64) // Every 2nd frame, ±64 frames (~64 frames)
+        await loadModuloLevel(1, 32) // Every frame, ±32 frames (64 frames)
+      } catch (error: unknown) {
         console.error('Failed to load frames:', error)
       }
     }
 
-    loadVisibleFrames()
-
-    // Cleanup: Revoke blob URLs when frames are no longer visible
-    return () => {
-      const visibleSet = new Set(visibleFrameIndices)
-      frames.forEach((frame, idx) => {
-        if (!visibleSet.has(idx) && frame.image_url.startsWith('blob:')) {
-          URL.revokeObjectURL(frame.image_url)
-        }
-      })
-    }
-  }, [visibleFrameIndices, videoId])
+    loadFrameHierarchy()
+  }, [visibleFramePositions, totalFrames, videoId])
 
   // Find annotation(s) for a given frame
   const getAnnotationsForFrame = useCallback(
@@ -797,11 +835,6 @@ export default function BoundaryWorkflow() {
     },
     [markedStart, markedEnd]
   )
-
-  // Switch to text correction mode
-  const switchToTextCorrection = () => {
-    navigate(`/annotate/text?videoId=${encodeURIComponent(videoId)}`)
-  }
 
   // Show loading state while metadata loads
   if (isLoadingMetadata) {
@@ -848,16 +881,24 @@ export default function BoundaryWorkflow() {
             onMouseDown={handleDragStart}
           >
             <div className="flex h-full flex-1 flex-col justify-center gap-1 overflow-hidden p-4">
-              {visibleFrameIndices.map((frameIndex, visibleIndex) => {
-                const frame = frames.get(frameIndex)
-                const isCurrent = frameIndex === currentFrameIndex
-                const opacity = getOpacity(frameIndex)
-                const frameAnnotations = getAnnotationsForFrame(frameIndex)
+              {visibleFramePositions.map((framePosition, slotIndex) => {
+                // Find best available frame (finest modulo level loaded)
+                // Check from finest to coarsest: 1, 2, 4, 8, 16, 32
+                let alignedFrameIndex = framePosition
+                let frame = frames.get(alignedFrameIndex)
 
-                // Determine if this is part of the active annotation being edited
-                const isMarkedStart = frameIndex === markedStart
-                const isMarkedEnd = frameIndex === markedEnd
-                const inRange = isInMarkedRange(frameIndex)
+                if (!frame) {
+                  for (const modulo of [2, 4, 8, 16, 32]) {
+                    alignedFrameIndex = Math.round(framePosition / modulo) * modulo
+                    frame = frames.get(alignedFrameIndex)
+                    if (frame) break
+                  }
+                }
+
+                // Current indicator based on position, not aligned frame
+                const isCurrent = framePosition === currentFrameIndex
+                const opacity = getOpacity(framePosition)
+                const frameAnnotations = getAnnotationsForFrame(framePosition)
 
                 // Find the primary annotation to display (prefer active annotation)
                 const primaryAnnotation =
@@ -873,8 +914,8 @@ export default function BoundaryWorkflow() {
                   borderColor = getAnnotationBorderColor(primaryAnnotation)
 
                   // Check if this frame is at the start or end of the annotation
-                  const isAnnotationStart = frameIndex === primaryAnnotation.start_frame_index
-                  const isAnnotationEnd = frameIndex === primaryAnnotation.end_frame_index
+                  const isAnnotationStart = framePosition === primaryAnnotation.start_frame_index
+                  const isAnnotationEnd = framePosition === primaryAnnotation.end_frame_index
 
                   if (borderColor) {
                     // Create continuous border for the annotation
@@ -893,21 +934,21 @@ export default function BoundaryWorkflow() {
                 if (
                   markedStart !== null &&
                   markedEnd !== null &&
-                  frameIndex >= markedStart &&
-                  frameIndex <= markedEnd
+                  framePosition >= markedStart &&
+                  framePosition <= markedEnd
                 ) {
                   // Create continuous orange border around the marked range
                   orangeBorderClasses = 'border-l-4 border-r-4 border-orange-500'
-                  if (frameIndex === markedStart) {
+                  if (framePosition === markedStart) {
                     orangeBorderClasses += ' border-t-4 rounded-t'
                   }
-                  if (frameIndex === markedEnd) {
+                  if (framePosition === markedEnd) {
                     orangeBorderClasses += ' border-b-4 rounded-b'
                   }
                 }
 
                 return (
-                  <div key={frameIndex} className="relative">
+                  <div key={slotIndex} className="relative">
                     {/* Orange border overlay (not affected by opacity) */}
                     {orangeBorderClasses && (
                       <div
@@ -949,28 +990,34 @@ export default function BoundaryWorkflow() {
                     {/* Frame container */}
                     <div
                       onClick={() => {
-                        setMarkedStart(frameIndex)
+                        setMarkedStart(framePosition)
                         // Reset end if it's before the new start
-                        if (markedEnd !== null && frameIndex > markedEnd) {
+                        if (markedEnd !== null && framePosition > markedEnd) {
                           setMarkedEnd(null)
                         }
                       }}
                       onContextMenu={e => {
                         e.preventDefault()
-                        setMarkedEnd(frameIndex)
+                        setMarkedEnd(framePosition)
                         // Reset start if it's after the new end
-                        if (markedStart !== null && frameIndex < markedStart) {
+                        if (markedStart !== null && framePosition < markedStart) {
                           setMarkedStart(null)
                         }
                       }}
-                      style={{ opacity }}
+                      style={{
+                        opacity,
+                        aspectRatio:
+                          cropWidth > 0 && cropHeight > 0
+                            ? `${cropWidth}/${cropHeight}`
+                            : undefined,
+                      }}
                       className={`relative overflow-hidden cursor-pointer ${borderClasses}`}
                     >
                       {/* Frame image */}
                       {frame ? (
                         <img
                           src={frame.image_url}
-                          alt={`Frame ${frameIndex}`}
+                          alt={`Frame ${alignedFrameIndex}`}
                           className="w-full"
                           draggable={false}
                           onError={e => {
@@ -978,23 +1025,23 @@ export default function BoundaryWorkflow() {
                             const target = e.target as HTMLImageElement
                             target.style.display = 'none'
                             target.parentElement!.innerHTML += `
-                                <div class="flex h-24 items-center justify-center bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
-                                  Frame ${frameIndex}
+                                <div class="flex items-center justify-center bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400" style="width: 100%; height: 100%;">
+                                  Frame ${alignedFrameIndex}
                                 </div>
                               `
                           }}
                         />
                       ) : (
-                        <div className="flex h-24 items-center justify-center bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
-                          Loading frame {frameIndex}...
+                        <div className="flex w-full h-full items-center justify-center bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
+                          Loading frame {framePosition}...
                         </div>
                       )}
                     </div>
 
                     {/* Border connector to next frame in marked range */}
                     {orangeBorderClasses &&
-                      frameIndex !== markedEnd &&
-                      visibleIndex < visibleFrameIndices.length - 1 && (
+                      framePosition !== markedEnd &&
+                      slotIndex < visibleFramePositions.length - 1 && (
                         <div
                           className="absolute left-0 right-0 border-l-4 border-r-4 border-orange-500 pointer-events-none"
                           style={{ top: '100%', height: '0.5rem', opacity: 1 }}
@@ -1004,8 +1051,8 @@ export default function BoundaryWorkflow() {
                     {/* Border connector for regular annotation borders */}
                     {primaryAnnotation &&
                       borderColor &&
-                      frameIndex !== primaryAnnotation.end_frame_index &&
-                      visibleIndex < visibleFrameIndices.length - 1 && (
+                      framePosition !== primaryAnnotation.end_frame_index &&
+                      slotIndex < visibleFramePositions.length - 1 && (
                         <div
                           className={`absolute left-0 right-0 border-l-4 border-r-4 ${borderColor} pointer-events-none`}
                           style={{ top: '100%', height: '0.25rem', opacity }}
@@ -1024,10 +1071,7 @@ export default function BoundaryWorkflow() {
               <button className="flex-1 rounded py-2 text-sm font-semibold bg-teal-600 text-white">
                 Boundaries
               </button>
-              <button
-                onClick={switchToTextCorrection}
-                className="flex-1 rounded py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
-              >
+              <button className="flex-1 rounded py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800">
                 Text Correction
               </button>
             </div>
@@ -1243,9 +1287,9 @@ export default function BoundaryWorkflow() {
 
                 <button
                   onClick={deleteAnnotation}
-                  disabled={!activeAnnotation || activeAnnotation.boundary_state === 'gap'}
+                  disabled={!activeAnnotation || activeAnnotation.state === 'gap'}
                   className={`w-full rounded-md border-2 px-4 py-2 text-sm font-semibold ${
-                    activeAnnotation && activeAnnotation.boundary_state !== 'gap'
+                    activeAnnotation && activeAnnotation.state !== 'gap'
                       ? 'border-red-500 text-red-600 hover:bg-red-50 dark:border-red-600 dark:text-red-400 dark:hover:bg-red-950'
                       : 'cursor-not-allowed border-gray-300 text-gray-400 dark:border-gray-700 dark:text-gray-600'
                   }`}
