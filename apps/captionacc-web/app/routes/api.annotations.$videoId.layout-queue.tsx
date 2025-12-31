@@ -5,13 +5,6 @@ import { type LoaderFunctionArgs } from 'react-router'
 
 import { getDbPath } from '~/utils/video-paths'
 
-interface FrameOCR {
-  frame_index: number
-  ocr_text: string
-  ocr_annotations: string // JSON: [[text, conf, [x, y, w, h]], ...]
-  ocr_confidence: number
-}
-
 // Python OCR annotation format: [text, confidence, [x, y, width, height]]
 type PythonOCRAnnotation = [string, number, [number, number, number, number]]
 
@@ -83,7 +76,7 @@ function estimateCaptionBoxCount(
     // OCR annotation format: [text, confidence, [x, y, width, height]]
     // Coordinates are fractional [0-1]
     // IMPORTANT: y is measured from BOTTOM of image, not top
-    const [_text, _conf, [x, y, width, height]] = annotation
+    const [, , [x, y, width, height]] = annotation
 
     // Convert fractional to pixels
     const boxLeft = Math.floor(x * frameWidth)
@@ -274,13 +267,13 @@ export async function loader({ params }: LoaderFunctionArgs) {
       const totalBoxCount = ocrAnnotations.length
       const captionBoxCount = estimateCaptionBoxCount(
         annotationsArray,
-        layoutConfig!.frame_width,
-        layoutConfig!.frame_height,
+        layoutConfig.frame_width,
+        layoutConfig.frame_height,
         {
-          left: layoutConfig!.crop_left,
-          top: layoutConfig!.crop_top,
-          right: layoutConfig!.crop_right,
-          bottom: layoutConfig!.crop_bottom,
+          left: layoutConfig.crop_left,
+          top: layoutConfig.crop_top,
+          right: layoutConfig.crop_right,
+          bottom: layoutConfig.crop_bottom,
         }
       )
 

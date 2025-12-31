@@ -43,9 +43,10 @@ async function findFolders(
     if (subdirs.length > 0) {
       // Add this folder if it's not the root
       if (parentPath) {
+        const folderName = parentPath.split('/').pop()
         folders.push({
           path: parentPath,
-          name: parentPath.split('/').pop()!,
+          name: folderName ?? '',
         })
       }
 
@@ -59,9 +60,10 @@ async function findFolders(
     } else {
       // This is an empty leaf folder - include it
       if (parentPath) {
+        const folderName = parentPath.split('/').pop()
         folders.push({
           path: parentPath,
-          name: parentPath.split('/').pop()!,
+          name: folderName ?? '',
         })
       }
     }
@@ -75,7 +77,7 @@ async function findFolders(
 /**
  * API endpoint that returns list of available folders for upload destination
  */
-export async function loader({ request }: LoaderFunctionArgs) {
+export async function loader(_args: LoaderFunctionArgs) {
   const dataDir = resolve(process.cwd(), '..', '..', 'local', 'data')
 
   if (!existsSync(dataDir)) {

@@ -6,14 +6,6 @@ import sharp from 'sharp'
 
 import { getDbPath } from '~/utils/video-paths'
 
-interface Annotation {
-  id: number
-  start_frame_index: number
-  end_frame_index: number
-  boundary_state: 'predicted' | 'confirmed' | 'gap'
-  boundary_pending: number
-}
-
 function getOrCreateDatabase(videoId: string) {
   const dbPath = getDbPath(videoId)
   if (!dbPath) {

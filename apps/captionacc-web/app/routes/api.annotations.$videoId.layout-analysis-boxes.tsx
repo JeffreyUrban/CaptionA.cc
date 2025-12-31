@@ -163,13 +163,16 @@ export async function loader({ params }: LoaderFunctionArgs) {
       if (!boxesByFrame.has(box.frame_index)) {
         boxesByFrame.set(box.frame_index, [])
       }
-      boxesByFrame.get(box.frame_index)!.push(box)
+      const frameBoxes = boxesByFrame.get(box.frame_index)
+      if (frameBoxes) {
+        frameBoxes.push(box)
+      }
     }
 
     // Convert to box data with predictions (calculate on-the-fly if missing)
     const boxesData: BoxData[] = []
 
-    for (const [frameIndex, frameBoxes] of boxesByFrame) {
+    for (const [, frameBoxes] of boxesByFrame) {
       // Convert all boxes in this frame to BoxBounds for feature extraction
       const allBoxBounds = frameBoxes.map(b => {
         const left = Math.floor(b.x * layoutConfig.frame_width)
@@ -183,11 +186,12 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
       // Process each box in this frame
       for (let i = 0; i < frameBoxes.length; i++) {
-        const box = frameBoxes[i]!
-        const bounds = allBoxBounds[i]!
+        const box = frameBoxes[i]
+        const bounds = allBoxBounds[i]
+        if (!box || !bounds) continue
 
         // Check for user annotation
-        const userLabel = annotationMap.get(`${box.frame_index}-${box.box_index}`) || null
+        const userLabel = annotationMap.get(`${box.frame_index}-${box.box_index}`) ?? null
 
         // Use stored prediction if available, otherwise calculate and store
         let predictedLabel: 'in' | 'out'

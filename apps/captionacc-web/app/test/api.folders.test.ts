@@ -31,7 +31,7 @@ function readFoldersMetadata(): FoldersMetadata {
       const content = readFileSync(FOLDERS_META_PATH, 'utf-8')
       return JSON.parse(content)
     }
-  } catch (error) {
+  } catch {
     // Ignore
   }
   return { emptyFolders: [] }
@@ -56,7 +56,7 @@ describe('Folder API', () => {
           `http://localhost:5173/api/folders/delete?path=${encodeURIComponent(folder)}&confirmed=true`,
           { method: 'DELETE' }
         )
-      } catch (error) {
+      } catch {
         // Ignore cleanup errors
       }
     }
@@ -70,7 +70,7 @@ describe('Folder API', () => {
           `http://localhost:5173/api/folders/delete?path=${encodeURIComponent(folder)}&confirmed=true`,
           { method: 'DELETE' }
         )
-      } catch (error) {
+      } catch {
         // Ignore cleanup errors
       }
     }

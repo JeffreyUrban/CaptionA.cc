@@ -100,7 +100,11 @@ function tryProcessNext(): void {
   }
 
   // Dequeue and process
-  const job = cropFramesQueue.shift()!
+  const job = cropFramesQueue.shift()
+  if (!job) {
+    console.error('[CropFramesQueue] Queue shift returned undefined unexpectedly')
+    return
+  }
   console.log(`[CropFramesQueue] Starting ${job.videoPath} (${cropFramesQueue.length} remaining)`)
 
   processCropFramesJob(job)
@@ -597,8 +601,9 @@ export function recoverStalledCropFrames(videoId: string, videoPath: string): vo
 
         // Check for schema mismatch errors (fixed by package updates)
         const isSchemaMismatch =
-          errorMessage?.error_details?.includes('no column named crop_') ||
-          errorMessage?.error_details?.includes('table cropped_frames has no column')
+          errorMessage?.error_details?.includes('no column named crop_') ??
+          errorMessage?.error_details?.includes('table cropped_frames has no column') ??
+          false
 
         // Check for duplicate frame errors (need to clear existing frames)
         const isDuplicateFrame = errorMessage?.error_details?.includes(

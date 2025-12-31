@@ -108,7 +108,7 @@ export async function action({ params }: ActionFunctionArgs) {
         )
         .get() as { display_path: string } | undefined
 
-      videoPath = metadata?.display_path || videoId
+      videoPath = metadata?.display_path ?? videoId
 
       // Reset status to queued
       db.prepare(

@@ -4,7 +4,7 @@ import Database from 'better-sqlite3'
 import { type ActionFunctionArgs } from 'react-router'
 
 import { queueCropFramesProcessing } from '~/services/crop-frames-processing'
-import { getDbPath, getVideoDir } from '~/utils/video-paths'
+import { getDbPath } from '~/utils/video-paths'
 
 function getDatabase(videoId: string): Database.Database | Response {
   const dbPath = getDbPath(videoId)

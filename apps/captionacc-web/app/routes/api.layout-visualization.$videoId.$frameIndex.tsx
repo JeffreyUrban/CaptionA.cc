@@ -399,7 +399,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
         },
         predictedLabel: prediction.label,
         predictedConfidence: prediction.confidence,
-        userLabel: userAnnotationMap.get(index) || null,
+        userLabel: userAnnotationMap.get(index) ?? null,
       }
     })
 

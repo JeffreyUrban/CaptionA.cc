@@ -126,8 +126,8 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
 
   const videoId = decodeURIComponent(encodedVideoId)
   const url = new URL(request.url)
-  const startFrame = parseInt(url.searchParams.get('start') || '0')
-  const endFrame = parseInt(url.searchParams.get('end') || '1000')
+  const startFrame = parseInt(url.searchParams.get('start') ?? '0')
+  const endFrame = parseInt(url.searchParams.get('end') ?? '1000')
 
   try {
     const db = getOrCreateDatabase(videoId)
@@ -176,7 +176,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
 
     if (request.method === 'PUT') {
       // Update existing annotation with overlap resolution
-      const { id, start_frame_index, end_frame_index, boundary_state, boundary_pending } = body
+      const { id, start_frame_index, end_frame_index, boundary_state } = body
 
       // Get the original annotation to check if range is being reduced
       const original = db.prepare('SELECT * FROM captions WHERE id = ?').get(id) as Annotation
@@ -347,7 +347,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
             boundary_pending = 0
         WHERE id = ?
       `
-      ).run(start_frame_index, end_frame_index, boundary_state || 'confirmed', id)
+      ).run(start_frame_index, end_frame_index, boundary_state ?? 'confirmed', id)
 
       // Regenerate combined image if boundaries changed
       if (
@@ -385,7 +385,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
           end_frame_index,
           boundary_state,
           boundary_pending ? 1 : 0,
-          text || null
+          text ?? null
         )
 
       const annotationId = result.lastInsertRowid as number

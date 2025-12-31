@@ -554,7 +554,7 @@ function migrateModelSchema(db: Database.Database): void {
     db.prepare('SELECT in_normalized_left_mean FROM box_classification_model WHERE id = 1').get()
     // If we get here, 26-feature schema already exists
     return
-  } catch (error) {
+  } catch {
     // Schema needs migration - could be 7-feature or 9-feature schema
     console.log('[migrateModelSchema] Migrating to 26-feature schema (adding 17 new features)')
 
@@ -717,7 +717,7 @@ function migrateVideoPreferencesSchema(db: Database.Database): void {
     db.prepare('SELECT index_framerate_hz FROM video_preferences WHERE id = 1').get()
     // If we get here, column exists - no migration needed
     return
-  } catch (error) {
+  } catch {
     // Column doesn't exist - need to migrate
     console.log('[migrateVideoPreferencesSchema] Adding index_framerate_hz to video_preferences')
 
@@ -743,10 +743,8 @@ function migrateVideoPreferencesSchema(db: Database.Database): void {
  */
 function migrateFullFrameOcrSchema(db: Database.Database): void {
   try {
-    // Check if column exists
-    const testRow = db.prepare('SELECT timestamp_seconds FROM full_frame_ocr LIMIT 1').get() as
-      | { timestamp_seconds: number | null }
-      | undefined
+    // Check if column exists - the query will throw if column doesn't exist
+    db.prepare('SELECT timestamp_seconds FROM full_frame_ocr LIMIT 1').get()
 
     // If we get here, column exists
     // Check if we need to populate it (might be NULL for existing rows)
@@ -762,7 +760,7 @@ function migrateFullFrameOcrSchema(db: Database.Database): void {
     console.log(
       `[migrateFullFrameOcrSchema] Populating timestamp_seconds for ${nullCount.count} rows`
     )
-  } catch (error) {
+  } catch {
     // Column doesn't exist - need to migrate
     console.log('[migrateFullFrameOcrSchema] Adding timestamp_seconds to full_frame_ocr')
 
@@ -958,12 +956,11 @@ function predictBayesian(
   let logLikelihoodOut = 0.0
 
   for (let i = 0; i < 26; i++) {
-    const pdfIn = gaussianPDF(features[i]!, model.in_features[i]!.mean, model.in_features[i]!.std)
-    const pdfOut = gaussianPDF(
-      features[i]!,
-      model.out_features[i]!.mean,
-      model.out_features[i]!.std
-    )
+    const featureValue = features[i] ?? 0
+    const inFeature = model.in_features[i] ?? { mean: 0, std: 1 }
+    const outFeature = model.out_features[i] ?? { mean: 0, std: 1 }
+    const pdfIn = gaussianPDF(featureValue, inFeature.mean, inFeature.std)
+    const pdfOut = gaussianPDF(featureValue, outFeature.mean, outFeature.std)
 
     // Add to log-likelihood (log of product is sum of logs)
     // Use Math.max to avoid log(0) = -Infinity
@@ -1441,11 +1438,14 @@ export function trainModel(db: Database.Database, layoutConfig: VideoLayoutConfi
         frameBoxTextCache.set(`${ann.frame_index}-${box.box_index}`, box.text)
       }
       if (boxes.length > 0) {
-        frameBoxTimestampCache.set(ann.frame_index, boxes[0]!.timestamp_seconds)
+        const firstBox = boxes[0]
+        if (firstBox) {
+          frameBoxTimestampCache.set(ann.frame_index, firstBox.timestamp_seconds)
+        }
       }
     }
 
-    const allBoxes = frameBoxesCache.get(ann.frame_index)!
+    const allBoxes = frameBoxesCache.get(ann.frame_index) ?? []
     const boxBounds: BoxBounds = {
       left: ann.box_left,
       top: ann.box_top,
@@ -1499,8 +1499,8 @@ export function trainModel(db: Database.Database, layoutConfig: VideoLayoutConfi
   const outParams: Array<{ mean: number; std: number }> = []
 
   for (let i = 0; i < 26; i++) {
-    const inFeatureValues = inFeatures.map(f => f[i]!)
-    const outFeatureValues = outFeatures.map(f => f[i]!)
+    const inFeatureValues = inFeatures.map(f => f[i] ?? 0)
+    const outFeatureValues = outFeatures.map(f => f[i] ?? 0)
 
     inParams.push(calculateGaussian(inFeatureValues))
     outParams.push(calculateGaussian(outFeatureValues))

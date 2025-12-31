@@ -59,7 +59,7 @@ function checkExternalLinks(filePath: string): LinkIssue[] {
     const position = match.index
     const lineNumber = content.substring(0, position).split('\n').length
 
-    const hasTarget = TARGET_REGEX.test(attributes || '')
+    const hasTarget = TARGET_REGEX.test(attributes ?? '')
     const relMatch = attributes?.match(REL_REGEX)
     const rel = relMatch ? relMatch[1] : null
 

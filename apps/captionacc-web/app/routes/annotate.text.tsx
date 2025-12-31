@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useSearchParams, useNavigate } from 'react-router'
-import type { LoaderFunctionArgs } from 'react-router'
 
 import { AppLayout } from '~/components/AppLayout'
 
@@ -39,21 +38,20 @@ interface AnnotationData {
 // Loader function to expose environment variables
 export async function loader() {
   return {
-    defaultVideoId: process.env['DEFAULT_VIDEO_ID'] || '',
+    defaultVideoId: process.env['DEFAULT_VIDEO_ID'] ?? '',
   }
 }
 
 export default function AnnotateText() {
-  const [searchParams, setSearchParams] = useSearchParams()
+  const [searchParams] = useSearchParams()
   const navigate = useNavigate()
-  const videoId = searchParams.get('videoId') || ''
+  const videoId = searchParams.get('videoId') ?? ''
 
   const [queue, setQueue] = useState<TextQueueAnnotation[]>([])
   const [queueIndex, setQueueIndex] = useState(0)
   const [currentAnnotation, setCurrentAnnotation] = useState<AnnotationData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [totalFrames, setTotalFrames] = useState(0)
   const [workflowProgress, setWorkflowProgress] = useState(0)
   const [completedAnnotations, setCompletedAnnotations] = useState(0)
   const [showHelpModal, setShowHelpModal] = useState(false)
@@ -110,7 +108,7 @@ export default function AnnotateText() {
   // Mark this video as being worked on for stats refresh
   useEffect(() => {
     if (videoId && typeof window !== 'undefined') {
-      const touchedVideos = new Set(JSON.parse(localStorage.getItem('touched-videos') || '[]'))
+      const touchedVideos = new Set(JSON.parse(localStorage.getItem('touched-videos') ?? '[]'))
       touchedVideos.add(videoId)
       localStorage.setItem('touched-videos', JSON.stringify(Array.from(touchedVideos)))
     }
@@ -147,7 +145,7 @@ export default function AnnotateText() {
       }
     }
 
-    loadPreferences()
+    void loadPreferences()
   }, [videoId])
 
   // Load video metadata and progress
@@ -160,8 +158,8 @@ export default function AnnotateText() {
 
         // Load video metadata
         const metadataResponse = await fetch(`/api/videos/${encodedVideoId}/metadata`)
-        const metadataData = await metadataResponse.json()
-        setTotalFrames(metadataData.totalFrames)
+        // Load metadata but we don't need to store totalFrames
+        await metadataResponse.json()
 
         // Load text workflow progress (we'll need a new endpoint for this)
         // For now, calculate from queue
@@ -171,7 +169,7 @@ export default function AnnotateText() {
 
         // Calculate progress based on annotations with text vs total annotations
         // This is a simplified calculation - you might want a dedicated endpoint
-        const totalAnnotations = queueData.total || queueData.annotations.length
+        const totalAnnotations = queueData.total ?? queueData.annotations.length
         const completedCount = totalAnnotations - queueData.annotations.length
         setCompletedAnnotations(completedCount)
         setWorkflowProgress(totalAnnotations > 0 ? (completedCount / totalAnnotations) * 100 : 0)
@@ -184,7 +182,7 @@ export default function AnnotateText() {
       }
     }
 
-    loadMetadata()
+    void loadMetadata()
   }, [videoId])
 
   // Load current annotation
@@ -206,9 +204,9 @@ export default function AnnotateText() {
         const data = await response.json()
 
         setCurrentAnnotation(data)
-        setText(data.annotation.text || data.annotation.text_ocr_combined || '')
-        setTextStatus(data.annotation.text_status || 'valid_caption')
-        setTextNotes(data.annotation.text_notes || '')
+        setText(data.annotation.text ?? data.annotation.text_ocr_combined ?? '')
+        setTextStatus(data.annotation.text_status ?? 'valid_caption')
+        setTextNotes(data.annotation.text_notes ?? '')
 
         // Set initial frame to start of annotation
         setCurrentFrameIndex(data.annotation.start_frame_index)
@@ -220,7 +218,7 @@ export default function AnnotateText() {
       }
     }
 
-    loadAnnotation()
+    void loadAnnotation()
   }, [videoId, queue, queueIndex])
 
   // Load per-frame OCR data when annotation changes
@@ -236,7 +234,7 @@ export default function AnnotateText() {
         if (!response.ok) throw new Error('Failed to load frame OCR')
         const data = await response.json()
 
-        setPerFrameOCR(data.frames || [])
+        setPerFrameOCR(data.frames ?? [])
         setLoadingFrames(false)
       } catch (err) {
         console.error('Failed to load frame OCR:', err)
@@ -245,7 +243,7 @@ export default function AnnotateText() {
       }
     }
 
-    loadFrameOCR()
+    void loadFrameOCR()
   }, [videoId, currentAnnotation])
 
   // Update progress from server
@@ -257,7 +255,7 @@ export default function AnnotateText() {
       const queueResponse = await fetch(`/api/annotations/${encodedVideoId}/text-queue`)
       const queueData = await queueResponse.json()
 
-      const totalAnnotations = queueData.total || queueData.annotations.length
+      const totalAnnotations = queueData.total ?? queueData.annotations.length
       const completedCount = totalAnnotations - queueData.annotations.length
       setCompletedAnnotations(completedCount)
       setWorkflowProgress(totalAnnotations > 0 ? (completedCount / totalAnnotations) * 100 : 0)
@@ -267,7 +265,7 @@ export default function AnnotateText() {
   }, [videoId])
 
   // Save annotation with text
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     if (!videoId || !currentAnnotation) return
 
     // Validation: prevent saving if text is empty (use Save Empty Caption instead)
@@ -315,10 +313,19 @@ export default function AnnotateText() {
     } catch (err) {
       setError((err as Error).message)
     }
-  }
+  }, [
+    videoId,
+    currentAnnotation,
+    text,
+    textStatus,
+    textNotes,
+    updateProgress,
+    queueIndex,
+    queue.length,
+  ])
 
   // Save annotation with empty caption
-  const handleSaveEmptyCaption = async () => {
+  const handleSaveEmptyCaption = useCallback(async () => {
     if (!videoId || !currentAnnotation) return
 
     try {
@@ -358,21 +365,21 @@ export default function AnnotateText() {
     } catch (err) {
       setError((err as Error).message)
     }
-  }
+  }, [videoId, currentAnnotation, textStatus, textNotes, updateProgress, queueIndex, queue.length])
 
   // Skip to next annotation without saving
-  const handleSkip = () => {
+  const handleSkip = useCallback(() => {
     if (queueIndex < queue.length - 1) {
       setQueueIndex(queueIndex + 1)
     }
-  }
+  }, [queueIndex, queue.length])
 
   // Previous annotation
-  const handlePrevious = () => {
+  const handlePrevious = useCallback(() => {
     if (queueIndex > 0) {
       setQueueIndex(queueIndex - 1)
     }
-  }
+  }, [queueIndex])
 
   // Handle text size change
   const handleTextSizeChange = async (newPercent: number) => {
@@ -499,7 +506,7 @@ export default function AnnotateText() {
 
   // Switch to boundaries mode
   const switchToBoundaries = () => {
-    navigate(`/annotate/boundaries?videoId=${encodeURIComponent(videoId)}`)
+    void navigate(`/annotate/boundaries?videoId=${encodeURIComponent(videoId)}`)
   }
 
   // Frame navigation helpers
@@ -538,28 +545,6 @@ export default function AnnotateText() {
     },
     [currentFrameIndex]
   )
-
-  const handleDragMove = useCallback(
-    (e: React.MouseEvent) => {
-      if (!isDragging || !currentAnnotation) return
-
-      const deltaY = dragStartY - e.clientY
-      const framesDelta = Math.floor(deltaY / 10) // 10 pixels per frame
-
-      const newIndex = dragStartFrame + framesDelta
-      const minFrame = currentAnnotation.annotation.start_frame_index
-      const maxFrame = currentAnnotation.annotation.end_frame_index
-
-      if (newIndex >= minFrame && newIndex <= maxFrame) {
-        setCurrentFrameIndex(newIndex)
-      }
-    },
-    [isDragging, dragStartY, dragStartFrame, currentAnnotation]
-  )
-
-  const handleDragEnd = useCallback(() => {
-    setIsDragging(false)
-  }, [])
 
   // Global mouse handlers for drag
   useEffect(() => {
@@ -604,7 +589,7 @@ export default function AnnotateText() {
       // Ctrl+E for Save Empty Caption (works even when typing)
       if (e.ctrlKey && e.key.toLowerCase() === 'e') {
         e.preventDefault()
-        handleSaveEmptyCaption()
+        void handleSaveEmptyCaption()
         return
       }
 
@@ -624,7 +609,7 @@ export default function AnnotateText() {
       // Annotation navigation
       else if (key === 'enter') {
         e.preventDefault()
-        handleSave()
+        void handleSave()
       } else if (key === 'arrowleft') {
         e.preventDefault()
         handlePrevious()
@@ -775,7 +760,7 @@ export default function AnnotateText() {
                           }}
                           title="Click to copy to Caption Text"
                         >
-                          {perFrameOCR.find(f => f.frameIndex === currentFrameIndex)?.ocrText ||
+                          {perFrameOCR.find(f => f.frameIndex === currentFrameIndex)?.ocrText ??
                             '(No OCR text for this frame)'}
                         </div>
                       )}
@@ -828,7 +813,7 @@ export default function AnnotateText() {
                         }}
                         title="Click to copy to Caption Text"
                       >
-                        {currentAnnotation.annotation.text_ocr_combined ||
+                        {currentAnnotation.annotation.text_ocr_combined ??
                           '(No OCR text available)'}
                       </div>
                     </div>
@@ -969,7 +954,7 @@ export default function AnnotateText() {
                     <div className="flex gap-2">
                       <button
                         type="button"
-                        onClick={() => handleTextAnchorChange('left')}
+                        onClick={() => void handleTextAnchorChange('left')}
                         className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
                           textAnchor === 'left'
                             ? 'bg-blue-600 text-white'
@@ -980,7 +965,7 @@ export default function AnnotateText() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => handleTextAnchorChange('center')}
+                        onClick={() => void handleTextAnchorChange('center')}
                         className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
                           textAnchor === 'center'
                             ? 'bg-blue-600 text-white'
@@ -991,7 +976,7 @@ export default function AnnotateText() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => handleTextAnchorChange('right')}
+                        onClick={() => void handleTextAnchorChange('right')}
                         className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
                           textAnchor === 'right'
                             ? 'bg-blue-600 text-white'
@@ -1016,7 +1001,7 @@ export default function AnnotateText() {
                         max="10.0"
                         step="0.1"
                         value={textSizePercent}
-                        onChange={e => handleTextSizeChange(parseFloat(e.target.value))}
+                        onChange={e => void handleTextSizeChange(parseFloat(e.target.value))}
                         className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
                       />
                       <span className="text-xs text-gray-500 dark:text-gray-400">10%</span>
@@ -1044,7 +1029,7 @@ export default function AnnotateText() {
                           const sliderValue = parseFloat(e.target.value)
                           const actualValue =
                             textAnchor === 'right' ? 2.0 - sliderValue : sliderValue
-                          handlePaddingScaleChange(actualValue)
+                          void handlePaddingScaleChange(actualValue)
                         }}
                         className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
                       />
@@ -1091,7 +1076,7 @@ export default function AnnotateText() {
             {/* Action Buttons */}
             <div className="space-y-2">
               <button
-                onClick={handleSave}
+                onClick={() => void handleSave()}
                 disabled={!currentAnnotation}
                 className={`w-full rounded-md px-4 py-2 text-sm font-semibold text-white ${
                   currentAnnotation
@@ -1103,7 +1088,7 @@ export default function AnnotateText() {
               </button>
 
               <button
-                onClick={handleSaveEmptyCaption}
+                onClick={() => void handleSaveEmptyCaption()}
                 disabled={!currentAnnotation}
                 className={`w-full rounded-md px-4 py-2 text-sm font-semibold ${
                   currentAnnotation
@@ -1220,7 +1205,7 @@ export default function AnnotateText() {
                   <li>Edit the caption text to correct any OCR errors</li>
                   <li>Select the appropriate status for the annotation</li>
                   <li>Add notes if needed (optional)</li>
-                  <li>Click "Save & Next" to save and move to the next annotation</li>
+                  <li>Click &quot;Save &amp; Next&quot; to save and move to the next annotation</li>
                 </ol>
               </section>
 
@@ -1256,7 +1241,7 @@ export default function AnnotateText() {
                 <h3 className="mb-2 text-lg font-semibold text-gray-900 dark:text-white">Tips</h3>
                 <ul className="list-disc space-y-2 pl-5">
                   <li>Use the combined image to verify OCR accuracy</li>
-                  <li>Empty text field means "no caption" (valid for gaps)</li>
+                  <li>Empty text field means &quot;no caption&quot; (valid for gaps)</li>
                   <li>Use notes to explain unusual cases or issues</li>
                   <li>Use keyboard shortcuts for faster navigation</li>
                   <li>Progress tracks completed vs total annotations</li>

@@ -28,7 +28,7 @@ async function cleanupVideo(videoId: string, videoDir: string, pid: string | nul
       } catch {
         // Process already dead, that's fine
       }
-    } catch (error) {
+    } catch {
       console.log(`[VideoDelete] Process ${pid} already terminated or not found`)
     }
   }
@@ -97,7 +97,7 @@ export async function action({ params }: ActionFunctionArgs) {
         )
         .get() as { current_job_id: string | null } | undefined
 
-      pid = status?.current_job_id || null
+      pid = status?.current_job_id ?? null
 
       // Mark as deleted
       db.prepare(
@@ -109,7 +109,7 @@ export async function action({ params }: ActionFunctionArgs) {
       `
       ).run()
 
-      console.log(`[VideoDelete] Marked as deleted: ${videoId} (PID: ${pid || 'none'})`)
+      console.log(`[VideoDelete] Marked as deleted: ${videoId} (PID: ${pid ?? 'none'})`)
     } finally {
       db.close()
     }

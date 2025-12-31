@@ -86,23 +86,6 @@ function getDatabase(videoId: string): Database.Database | Response {
 }
 
 /**
- * Calculate median from array of numbers.
- * More robust than mode for finding central tendency.
- */
-function calculateMedian(values: number[]): number {
-  if (values.length === 0) return 0
-
-  const sorted = [...values].sort((a, b) => a - b)
-  const mid = Math.floor(sorted.length / 2)
-
-  if (sorted.length % 2 === 0) {
-    return Math.round((sorted[mid - 1]! + sorted[mid]!) / 2)
-  } else {
-    return sorted[mid]!
-  }
-}
-
-/**
  * Calculate mode (most common value) from array of numbers.
  * Groups values into bins and finds the bin with highest frequency.
  */
@@ -113,7 +96,7 @@ function calculateMode(values: number[], binSize: number = 5): number {
   const bins = new Map<number, number>()
   for (const value of values) {
     const bin = Math.round(value / binSize) * binSize
-    bins.set(bin, (bins.get(bin) || 0) + 1)
+    bins.set(bin, (bins.get(bin) ?? 0) + 1)
   }
 
   // Find bin with max count
@@ -169,7 +152,7 @@ function analyzeOCRBoxes(
     let ocrAnnotations: PythonOCRAnnotation[] = []
     try {
       ocrAnnotations = JSON.parse(frame.ocr_annotations || '[]')
-    } catch (e) {
+    } catch {
       continue
     }
 
@@ -177,7 +160,7 @@ function analyzeOCRBoxes(
       // OCR annotation format: [text, confidence, [x, y, width, height]]
       // Coordinates are fractional [0-1]
       // IMPORTANT: y is bottom-referenced (0 = bottom, 1 = top)
-      const [_text, _conf, [x, y, width, height]] = annotation
+      const [, , [x, y, width, height]] = annotation
 
       // Convert fractional to pixels (convert y from bottom-referenced to top-referenced)
       const boxLeft = Math.floor(x * frameWidth)
@@ -226,8 +209,8 @@ function analyzeOCRBoxes(
     const sorted = [...values].sort((a, b) => a - b)
     const q1Index = Math.floor(sorted.length * 0.25)
     const q3Index = Math.floor(sorted.length * 0.75)
-    const q1 = sorted[q1Index]!
-    const q3 = sorted[q3Index]!
+    const q1 = sorted[q1Index] ?? 0
+    const q3 = sorted[q3Index] ?? 0
     const iqr = q3 - q1
 
     // Use 3.0 * IQR instead of 1.5 to be less aggressive
@@ -250,7 +233,6 @@ function analyzeOCRBoxes(
 
   const originalLeftCount = stats.leftEdges.length
   const originalRightCount = stats.rightEdges.length
-  const originalCenterXCount = stats.centerXValues.length
 
   const originalLeftEdges = [...stats.leftEdges]
   const originalRightEdges = [...stats.rightEdges]
@@ -289,7 +271,6 @@ function analyzeOCRBoxes(
   const boxHeightStd = calculateStd(stats.heightValues, boxHeight)
 
   const boxWidth = calculateMode(stats.widthValues, 2)
-  const boxWidthStd = calculateStd(stats.widthValues, boxWidth)
 
   // Calculate edge standard deviations for crop bounds
   // CRITICAL: Filter outliers before calculating std dev to get tight bounds around main cluster
@@ -310,9 +291,9 @@ function analyzeOCRBoxes(
   const densityByX = new Array(frameWidth).fill(0)
 
   for (let i = 0; i < stats.leftEdges.length; i++) {
-    const left = stats.leftEdges[i]!
-    const right = stats.rightEdges[i]!
-    const centerY = stats.centerYValues[i]!
+    const left = stats.leftEdges[i] ?? 0
+    const right = stats.rightEdges[i] ?? 0
+    const centerY = stats.centerYValues[i] ?? 0
 
     // Only count boxes near the vertical center (caption region)
     if (Math.abs(centerY - verticalPosition) < verticalStd * 2) {
@@ -323,17 +304,18 @@ function analyzeOCRBoxes(
   }
 
   // Calculate derivatives (change in density)
-  const derivatives = new Array(frameWidth - 1).fill(0)
+  const derivatives: number[] = new Array(frameWidth - 1).fill(0)
   for (let x = 0; x < frameWidth - 1; x++) {
-    derivatives[x] = densityByX[x + 1]! - densityByX[x]!
+    derivatives[x] = (densityByX[x + 1] ?? 0) - (densityByX[x] ?? 0)
   }
 
   // Find highest positive derivative (left edge where density increases)
   let maxPositiveDerivative = 0
   let leftEdgePos = 0
   for (let x = 0; x < derivatives.length; x++) {
-    if (derivatives[x]! > maxPositiveDerivative) {
-      maxPositiveDerivative = derivatives[x]!
+    const deriv = derivatives[x] ?? 0
+    if (deriv > maxPositiveDerivative) {
+      maxPositiveDerivative = deriv
       leftEdgePos = x
     }
   }
@@ -342,8 +324,9 @@ function analyzeOCRBoxes(
   let maxNegativeDerivative = 0
   let rightEdgePos = frameWidth - 1
   for (let x = 0; x < derivatives.length; x++) {
-    if (derivatives[x]! < maxNegativeDerivative) {
-      maxNegativeDerivative = derivatives[x]!
+    const deriv = derivatives[x] ?? 0
+    if (deriv < maxNegativeDerivative) {
+      maxNegativeDerivative = deriv
       rightEdgePos = x
     }
   }
@@ -412,9 +395,8 @@ function analyzeOCRBoxes(
   const densityByY = new Array(frameHeight).fill(0)
 
   for (let i = 0; i < stats.topEdges.length; i++) {
-    const top = stats.topEdges[i]!
-    const bottom = stats.bottomEdges[i]!
-    const centerX = stats.centerXValues[i]!
+    const top = stats.topEdges[i] ?? 0
+    const bottom = stats.bottomEdges[i] ?? 0
 
     // Only count boxes near the horizontal center (caption region)
     // Use a wide horizontal range to capture all caption boxes
@@ -424,17 +406,18 @@ function analyzeOCRBoxes(
   }
 
   // Calculate vertical derivatives (change in density)
-  const verticalDerivatives = new Array(frameHeight - 1).fill(0)
+  const verticalDerivatives: number[] = new Array(frameHeight - 1).fill(0)
   for (let y = 0; y < frameHeight - 1; y++) {
-    verticalDerivatives[y] = densityByY[y + 1]! - densityByY[y]!
+    verticalDerivatives[y] = (densityByY[y + 1] ?? 0) - (densityByY[y] ?? 0)
   }
 
   // Find highest positive derivative (top edge where density increases moving down)
   let maxPositiveVerticalDerivative = 0
   let topEdgePos = 0
   for (let y = 0; y < verticalDerivatives.length; y++) {
-    if (verticalDerivatives[y]! > maxPositiveVerticalDerivative) {
-      maxPositiveVerticalDerivative = verticalDerivatives[y]!
+    const deriv = verticalDerivatives[y] ?? 0
+    if (deriv > maxPositiveVerticalDerivative) {
+      maxPositiveVerticalDerivative = deriv
       topEdgePos = y
     }
   }
@@ -443,8 +426,9 @@ function analyzeOCRBoxes(
   let maxNegativeVerticalDerivative = 0
   let bottomEdgePos = frameHeight - 1
   for (let y = 0; y < verticalDerivatives.length; y++) {
-    if (verticalDerivatives[y]! < maxNegativeVerticalDerivative) {
-      maxNegativeVerticalDerivative = verticalDerivatives[y]!
+    const deriv = verticalDerivatives[y] ?? 0
+    if (deriv < maxNegativeVerticalDerivative) {
+      maxNegativeVerticalDerivative = deriv
       bottomEdgePos = y
     }
   }
@@ -483,143 +467,6 @@ function analyzeOCRBoxes(
   console.log(
     `[Crop Bounds] Vertical - Top padding=${topPadding}px (×${topPaddingMultiplier.toFixed(2)}), Bottom padding=${bottomPadding}px (×${bottomPaddingMultiplier.toFixed(2)})`
   )
-
-  // Helper function: Fit polynomial to find where density reaches zero
-  // Uses simple quadratic fit: y = ax² + bx + c
-  // Only samples the trailing-off region where density is positive
-  function findZeroCrossing(
-    densities: number[],
-    startX: number,
-    endX: number,
-    searchDirection: 'right' | 'left'
-  ): number {
-    const points: Array<{ x: number; y: number }> = []
-    const minDensity = 1 // Stop when density drops below this
-
-    if (searchDirection === 'right') {
-      // Sample points from startX to the right until density drops to near-zero
-      for (let x = startX; x <= endX && x < densities.length; x++) {
-        const density = densities[x]!
-        if (density < minDensity && points.length > 5) {
-          // Found the edge of the trailing region
-          break
-        }
-        if (density >= minDensity) {
-          points.push({ x, y: density })
-        }
-      }
-    } else {
-      // Sample points from startX to the left until density drops to near-zero
-      for (let x = startX; x >= endX && x >= 0; x--) {
-        const density = densities[x]!
-        if (density < minDensity && points.length > 5) {
-          // Found the edge of the trailing region
-          break
-        }
-        if (density >= minDensity) {
-          points.push({ x, y: density })
-        }
-      }
-    }
-
-    if (points.length < 10) {
-      // Not enough points to fit, find the last point with density > 0
-      if (searchDirection === 'right') {
-        for (let x = startX; x <= endX && x < densities.length; x++) {
-          if (densities[x]! === 0) return x - 1
-        }
-        return endX
-      } else {
-        for (let x = startX; x >= endX && x >= 0; x--) {
-          if (densities[x]! === 0) return x + 1
-        }
-        return endX
-      }
-    }
-
-    // Fit quadratic using least squares: y = a*x² + b*x + c
-    // Build normal equations for least squares
-    let sumX = 0,
-      sumX2 = 0,
-      sumX3 = 0,
-      sumX4 = 0
-    let sumY = 0,
-      sumXY = 0,
-      sumX2Y = 0
-    const n = points.length
-
-    for (const p of points) {
-      sumX += p.x
-      sumX2 += p.x * p.x
-      sumX3 += p.x * p.x * p.x
-      sumX4 += p.x * p.x * p.x * p.x
-      sumY += p.y
-      sumXY += p.x * p.y
-      sumX2Y += p.x * p.x * p.y
-    }
-
-    // Solve 3x3 system for a, b, c
-    // [sumX4  sumX3  sumX2] [a]   [sumX2Y]
-    // [sumX3  sumX2  sumX ] [b] = [sumXY ]
-    // [sumX2  sumX   n    ] [c]   [sumY  ]
-
-    // Using Cramer's rule (simplified for this case)
-    const det =
-      sumX4 * (sumX2 * n - sumX * sumX) -
-      sumX3 * (sumX3 * n - sumX * sumX2) +
-      sumX2 * (sumX3 * sumX - sumX2 * sumX2)
-
-    if (Math.abs(det) < 1e-10) {
-      // Singular matrix, use linear fit instead
-      const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX)
-      const intercept = (sumY - slope * sumX) / n
-
-      if (Math.abs(slope) < 1e-10) return searchDirection === 'right' ? endX : endX
-
-      const zeroX = -intercept / slope
-      return Math.round(zeroX)
-    }
-
-    const a =
-      ((sumX2 * n - sumX * sumX) * sumX2Y -
-        (sumX3 * n - sumX * sumX2) * sumXY +
-        (sumX3 * sumX - sumX2 * sumX2) * sumY) /
-      det
-    const b =
-      ((sumX4 * sumXY - sumX3 * sumX2Y) * n -
-        (sumX4 * sumY - sumX2 * sumX2Y) * sumX +
-        (sumX3 * sumY - sumX2 * sumXY) * sumX2) /
-      det
-    const c =
-      (sumX4 * (sumX2 * sumY - sumX * sumXY) -
-        sumX3 * (sumX3 * sumY - sumX * sumX2Y) +
-        sumX2 * (sumX3 * sumXY - sumX2 * sumX2Y)) /
-      det
-
-    // Find zero crossing of quadratic: ax² + bx + c = 0
-    if (Math.abs(a) > 1e-10) {
-      // Quadratic formula
-      const discriminant = b * b - 4 * a * c
-      if (discriminant < 0) {
-        // No real roots, use endpoint
-        return searchDirection === 'right' ? endX : endX
-      }
-
-      const x1 = (-b + Math.sqrt(discriminant)) / (2 * a)
-      const x2 = (-b - Math.sqrt(discriminant)) / (2 * a)
-
-      // Choose the root in the search direction
-      if (searchDirection === 'right') {
-        return Math.round(Math.max(x1, x2))
-      } else {
-        return Math.round(Math.min(x1, x2))
-      }
-    } else {
-      // Linear case
-      if (Math.abs(b) < 1e-10) return searchDirection === 'right' ? endX : endX
-      return Math.round(-c / b)
-    }
-  }
 
   // Horizontal bounds: Use detected anchor/edge position ± padding
   // Dense edges (anchor): adaptive padding based on sharpness

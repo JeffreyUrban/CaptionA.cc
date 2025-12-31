@@ -31,7 +31,7 @@ export default function AdminPage() {
 
   // Load failed videos on mount
   useEffect(() => {
-    loadFailedVideos()
+    void loadFailedVideos()
   }, [])
 
   const loadFailedVideos = async () => {
@@ -39,7 +39,7 @@ export default function AdminPage() {
     try {
       const response = await fetch('/api/admin/failed-crop-frames')
       const data = await response.json()
-      setFailedVideos(data.videos || [])
+      setFailedVideos(data.videos ?? [])
     } catch (error) {
       console.error('Failed to load failed videos:', error)
     } finally {
@@ -129,7 +129,9 @@ export default function AdminPage() {
                 Failed Crop Frames
               </h2>
               <button
-                onClick={loadFailedVideos}
+                onClick={() => {
+                  void loadFailedVideos()
+                }}
                 className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
               >
                 Refresh
@@ -152,7 +154,9 @@ export default function AdminPage() {
                     {failedVideos.length} video{failedVideos.length !== 1 ? 's' : ''} with errors
                   </p>
                   <button
-                    onClick={retryAll}
+                    onClick={() => {
+                      void retryAll()
+                    }}
                     disabled={retryingVideos.size > 0}
                     className="mt-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
@@ -181,7 +185,9 @@ export default function AdminPage() {
                           )}
                         </div>
                         <button
-                          onClick={() => retryVideo(video.videoId)}
+                          onClick={() => {
+                            void retryVideo(video.videoId)
+                          }}
                           disabled={retryingVideos.has(video.videoId)}
                           className="ml-3 px-3 py-1 bg-blue-600 text-white text-xs font-medium rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
@@ -208,7 +214,9 @@ export default function AdminPage() {
             </p>
 
             <button
-              onClick={runModelVersionCheck}
+              onClick={() => {
+                void runModelVersionCheck()
+              }}
               disabled={runningModelCheck}
               className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >

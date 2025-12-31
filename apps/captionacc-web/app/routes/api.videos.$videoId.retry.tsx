@@ -2,7 +2,6 @@
  * Retry failed video processing
  */
 
-import { existsSync } from 'fs'
 import { resolve } from 'path'
 
 import Database from 'better-sqlite3'

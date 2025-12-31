@@ -117,7 +117,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
     const boxesInRectangle: number[] = []
 
     for (const box of ocrBoxes) {
-      const { text, confidence, x, y, width, height } = box
+      const { x, y, width, height } = box
 
       // Convert fractional to pixels (top-referenced)
       const boxLeft = Math.floor(x * layoutConfig.frame_width)

@@ -170,7 +170,7 @@ function calculateLayoutBadge(
       const boxCount = db.prepare(`SELECT COUNT(*) as count FROM full_frame_ocr`).get() as
         | { count: number }
         | undefined
-      const totalBoxes = boxCount?.count || 0
+      const totalBoxes = boxCount?.count ?? 0
 
       if (totalBoxes === 0) {
         // Zero boxes - informational, not an error
@@ -199,7 +199,7 @@ function calculateLayoutBadge(
       color: 'red',
       clickable: true,
       errorDetails: {
-        message: ps.errorMessage || 'Processing failed',
+        message: ps.errorMessage ?? 'Processing failed',
         context: {
           videoId,
           stage: 'layout',
@@ -306,7 +306,7 @@ function calculateBoundariesBadge(
       color: 'red',
       clickable: true,
       errorDetails: {
-        message: cfs.errorMessage || 'Crop frames processing failed',
+        message: cfs.errorMessage ?? 'Crop frames processing failed',
         context: {
           videoId,
           stage: 'boundaries',
@@ -584,7 +584,7 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
       `
         )
         .get() as { covered_frames: number | null }
-      coveredFrames = frameCoverage.covered_frames || 0
+      coveredFrames = frameCoverage.covered_frames ?? 0
     } catch {
       // If this fails, it's likely due to missing boundary_pending column
       // We already tracked that error above, so just use 0 for coveredFrames

@@ -99,7 +99,6 @@ const CHUNK_SIZE = 8 * 1024 * 1024 // 8MB chunks
 const RETRY_DELAYS = [0, 3000, 5000, 10000, 20000, 60000] // Exponential backoff (ms)
 const MAX_RETRIES = 5
 const STALL_TIMEOUT = 60000 // 60s without progress = stalled
-const SESSION_BUFFER = 6 // Create sessions for active + next batch (2x concurrent limit)
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B'
@@ -141,7 +140,7 @@ async function collapseSingleVideoFolders(
   try {
     const response = await fetch('/api/folders')
     const data = await response.json()
-    existingFolders = new Set((data.folders || []).map((f: { path: string }) => f.path))
+    existingFolders = new Set((data.folders ?? []).map((f: { path: string }) => f.path))
     console.log(`[collapseSingleVideoFolders] Found ${existingFolders.size} existing folders`)
   } catch (error) {
     console.error('[collapseSingleVideoFolders] Failed to fetch existing folders:', error)
@@ -162,7 +161,7 @@ async function collapseSingleVideoFolders(
       // Count videos in each folder level
       for (let i = 1; i < pathParts.length; i++) {
         const folderPath = pathParts.slice(0, i).join('/')
-        folderCounts.set(folderPath, (folderCounts.get(folderPath) || 0) + 1)
+        folderCounts.set(folderPath, (folderCounts.get(folderPath) ?? 0) + 1)
       }
     }
 
@@ -203,7 +202,7 @@ async function collapseSingleVideoFolders(
 
 export default function UploadPage() {
   const loaderData = useLoaderData() as { preselectedFolder: string | null }
-  const [searchParams] = useSearchParams()
+  const [_searchParams] = useSearchParams()
 
   const [dragActive, setDragActive] = useState(false)
   const [videoFiles, setVideoFiles] = useState<VideoFilePreview[]>([])
@@ -211,8 +210,7 @@ export default function UploadPage() {
   const [showConfirmation, setShowConfirmation] = useState(false)
   const [showSkipped, setShowSkipped] = useState(false)
   const [uploading, setUploading] = useState(false)
-  const [uploadQueue, setUploadQueue] = useState<string[]>([])
-  const [activeUploads, setActiveUploads] = useState<Map<string, tus.Upload>>(new Map())
+  const [activeUploads] = useState<Map<string, tus.Upload>>(new Map())
   const [selectedFolder, setSelectedFolder] = useState<string>('')
   const [availableFolders, setAvailableFolders] = useState<FolderItem[]>([])
   const [collapseEnabled, setCollapseEnabled] = useState(true)
@@ -231,7 +229,7 @@ export default function UploadPage() {
     fetch('/api/folders')
       .then(res => res.json())
       .then(data => {
-        setAvailableFolders(data.folders || [])
+        setAvailableFolders(data.folders ?? [])
       })
       .catch(err => {
         console.error('Failed to load folders:', err)
@@ -287,7 +285,7 @@ export default function UploadPage() {
 
       for (const file of Array.from(fileList)) {
         if (file.type.startsWith('video/')) {
-          const relativePath = (file as FileWithPath).webkitRelativePath || file.name
+          const relativePath = (file as FileWithPath).webkitRelativePath ?? file.name
           console.log(`[processFiles] Found video: ${relativePath} (${file.type})`)
           videos.push({
             file,
@@ -427,7 +425,7 @@ export default function UploadPage() {
     // Create FileList-like object
     const dt = new DataTransfer()
     files.forEach(file => dt.items.add(file))
-    processFiles(dt.files)
+    void processFiles(dt.files)
   }
 
   async function traverseFileTree(item: FileSystemEntry, path: string, files: File[]) {
@@ -462,7 +460,7 @@ export default function UploadPage() {
   }
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    processFiles(e.target.files)
+    void processFiles(e.target.files)
   }
 
   const toggleFileSelection = (index: number) => {
@@ -489,7 +487,7 @@ export default function UploadPage() {
       setVideoFiles(prev =>
         prev.map(v => ({
           ...v,
-          relativePath: (v.file as FileWithPath).webkitRelativePath || v.file.name,
+          relativePath: (v.file as FileWithPath).webkitRelativePath ?? v.file.name,
         }))
       )
     }
@@ -535,7 +533,7 @@ export default function UploadPage() {
 
       // Start uploads for available slots
       readyToUpload.forEach(({ video, index }) => {
-        startSingleUpload(index, video.retryCount || 0)
+        startSingleUpload(index, video.retryCount ?? 0)
         newFiles[index] = {
           ...video,
           uploadStatus: 'uploading' as const,
@@ -712,7 +710,7 @@ export default function UploadPage() {
 
     // Abort active uploads
     activeUploads.forEach(upload => {
-      upload.abort()
+      void upload.abort()
     })
     activeUploads.clear()
 
@@ -756,6 +754,7 @@ export default function UploadPage() {
     }, 10000) // Check every 10 seconds
 
     return () => clearInterval(interval)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- processUploadQueue uses setVideoFiles with callback pattern
   }, [uploading, videoFiles])
 
   const saveUploadProgress = () => {
@@ -819,7 +818,7 @@ export default function UploadPage() {
 
   // Get original file path (before collapse)
   const getOriginalPath = (video: VideoFilePreview) => {
-    return (video.file as FileWithPath).webkitRelativePath || video.file.name
+    return (video.file as FileWithPath).webkitRelativePath ?? video.file.name
   }
 
   return (
@@ -956,7 +955,7 @@ export default function UploadPage() {
               onDragEnter={handleDragEnter}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
+              onDrop={e => void handleDrop(e)}
             >
               <CloudArrowUpIcon className="mx-auto h-12 w-12 text-gray-400" />
               <div className="mt-4">
@@ -1082,7 +1081,7 @@ export default function UploadPage() {
                     <input
                       type="checkbox"
                       checked={collapseEnabled}
-                      onChange={e => handleCollapseToggle(e.target.checked)}
+                      onChange={e => void handleCollapseToggle(e.target.checked)}
                       className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                     />
                     <span className="text-sm text-gray-700 dark:text-gray-300">
@@ -1212,7 +1211,7 @@ export default function UploadPage() {
                     {skippedFiles.map((file, index) => (
                       <li key={index} className="flex items-center gap-2">
                         <XMarkIcon className="h-4 w-4 text-gray-400" />
-                        {(file as FileWithPath).webkitRelativePath || file.name} (
+                        {(file as FileWithPath).webkitRelativePath ?? file.name} (
                         {file.type || 'unknown'})
                       </li>
                     ))}
@@ -1233,7 +1232,7 @@ export default function UploadPage() {
                   Cancel
                 </button>
                 <button
-                  onClick={startUpload}
+                  onClick={() => void startUpload()}
                   disabled={selectedVideos.length === 0}
                   className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -1355,7 +1354,7 @@ export default function UploadPage() {
                             In Progress ({inProgressVideos.length})
                           </h4>
                           <div className="space-y-4 max-h-96 overflow-y-auto">
-                            {inProgressVideos.map((video, idx) => {
+                            {inProgressVideos.map(video => {
                               const originalIndex = videoFiles.indexOf(video)
                               return (
                                 <div
@@ -1423,7 +1422,7 @@ export default function UploadPage() {
                             Finished ({finishedVideos.length})
                           </h4>
                           <div className="space-y-4 max-h-96 overflow-y-auto">
-                            {finishedVideos.map((video, idx) => {
+                            {finishedVideos.map(video => {
                               const originalIndex = videoFiles.indexOf(video)
                               return (
                                 <div

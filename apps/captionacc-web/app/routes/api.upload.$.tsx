@@ -77,7 +77,7 @@ async function handleCreateUpload(request: Request): Promise<Response> {
   }
 
   // Parse metadata
-  const metadata: UploadMetadata = parseUploadMetadata(uploadMetadata || '')
+  const metadata: UploadMetadata = parseUploadMetadata(uploadMetadata ?? '')
 
   if (!metadata.videoPath || !metadata.filename) {
     return new Response('videoPath and filename metadata required', { status: 400 })
@@ -208,7 +208,7 @@ async function handlePatchRequest(request: Request, uploadId: string): Promise<R
 
   const metadata = await readJSON(metadataPath)
   const uploadPath = resolve(uploadDir, uploadId)
-  const uploadOffset = parseInt(request.headers.get('Upload-Offset') || '0')
+  const uploadOffset = parseInt(request.headers.get('Upload-Offset') ?? '0')
   const currentSize = existsSync(uploadPath) ? statSync(uploadPath).size : 0
 
   if (uploadOffset !== currentSize) {

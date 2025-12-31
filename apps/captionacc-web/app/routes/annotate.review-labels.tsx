@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useSearchParams, useNavigate } from 'react-router'
-import type { LoaderFunctionArgs } from 'react-router'
 
 import { AppLayout } from '~/components/AppLayout'
 
@@ -74,22 +73,20 @@ type ViewMode = 'analysis' | 'frame'
 // Loader function to expose environment variables
 export async function loader() {
   return {
-    defaultVideoId: process.env['DEFAULT_VIDEO_ID'] || '',
+    defaultVideoId: process.env['DEFAULT_VIDEO_ID'] ?? '',
   }
 }
 
 export default function ReviewLabels() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
-  const videoId = searchParams.get('videoId') || ''
+  const videoId = searchParams.get('videoId') ?? ''
 
   // Core state
-  const [mislabels, setMislabels] = useState<PotentialMislabel[]>([])
+  const [, setMislabels] = useState<PotentialMislabel[]>([])
   const [frames, setFrames] = useState<FrameInfo[]>([])
-  const [layoutConfig, setLayoutConfig] = useState<LayoutConfig | null>(null)
-  const [clusterStats, setClusterStats] = useState<{ avgTop: number; avgBottom: number } | null>(
-    null
-  )
+  const [layoutConfig] = useState<LayoutConfig | null>(null)
+  const [, setClusterStats] = useState<{ avgTop: number; avgBottom: number } | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -128,7 +125,7 @@ export default function ReviewLabels() {
   // Mark video as being worked on
   useEffect(() => {
     if (videoId && typeof window !== 'undefined') {
-      const touchedVideos = new Set(JSON.parse(localStorage.getItem('touched-videos') || '[]'))
+      const touchedVideos = new Set(JSON.parse(localStorage.getItem('touched-videos') ?? '[]'))
       touchedVideos.add(videoId)
       localStorage.setItem('touched-videos', JSON.stringify(Array.from(touchedVideos)))
     }
@@ -152,32 +149,32 @@ export default function ReviewLabels() {
 
         if (!response.ok) {
           const errorData = await response.json()
-          throw new Error(errorData.error || 'Failed to load mislabels')
+          throw new Error(errorData.error ?? 'Failed to load mislabels')
         }
 
         const data = await response.json()
 
         console.log(
-          `[Frontend] Received ${data.potentialMislabels?.length || 0} potential mislabels`
+          `[Frontend] Received ${data.potentialMislabels?.length ?? 0} potential mislabels`
         )
 
-        setMislabels(data.potentialMislabels || [])
-        setClusterStats(data.clusterStats || null)
+        setMislabels(data.potentialMislabels ?? [])
+        setClusterStats(data.clusterStats ?? null)
 
         // Get unique frame indices from mislabels
         const frameIndices = (
           Array.from(
-            new Set((data.potentialMislabels || []).map((m: PotentialMislabel) => m.frameIndex))
+            new Set((data.potentialMislabels ?? []).map((m: PotentialMislabel) => m.frameIndex))
           ) as number[]
         ).sort((a: number, b: number) => a - b)
 
         // Create frame info for each unique frame
         const frameInfos: FrameInfo[] = frameIndices.map((frameIndex: number) => ({
           frameIndex,
-          totalBoxCount: (data.potentialMislabels || []).filter(
+          totalBoxCount: (data.potentialMislabels ?? []).filter(
             (m: PotentialMislabel) => m.frameIndex === frameIndex
           ).length,
-          captionBoxCount: (data.potentialMislabels || []).filter(
+          captionBoxCount: (data.potentialMislabels ?? []).filter(
             (m: PotentialMislabel) => m.frameIndex === frameIndex && m.userLabel === 'in'
           ).length,
           minConfidence: 0,
@@ -255,7 +252,7 @@ export default function ReviewLabels() {
     const pollInterval = setInterval(() => {
       console.log('[Polling] Checking processing status...')
       setError(null)
-      loadMislabels(true)
+      void loadMislabels(true)
     }, 3000) // Poll every 3 seconds
 
     return () => {
@@ -299,7 +296,7 @@ export default function ReviewLabels() {
       }
     }
 
-    loadFrameBoxes()
+    void loadFrameBoxes()
   }, [videoId, viewMode, selectedFrameIndex])
 
   // Handle thumbnail click
@@ -549,7 +546,7 @@ export default function ReviewLabels() {
       predicted_out_medium: { border: '#fb923c', background: 'rgba(251,146,60,0.1)' },
       predicted_out_low: { border: '#fdba74', background: 'rgba(253,186,116,0.08)' },
     }
-    return colorMap[colorCode] || { border: '#9ca3af', background: 'rgba(156,163,175,0.1)' }
+    return colorMap[colorCode] ?? { border: '#9ca3af', background: 'rgba(156,163,175,0.1)' }
   }
 
   // Complete selection and annotate boxes
@@ -698,7 +695,7 @@ export default function ReviewLabels() {
       if (clickedBoxIndex !== null) {
         // Clicked on a box - annotate it individually
         const label = e.button === 0 ? 'in' : 'out'
-        handleBoxClick(clickedBoxIndex, label)
+        void handleBoxClick(clickedBoxIndex, label)
       } else {
         // Clicked on empty space - start rectangle selection
         const label = e.button === 0 ? 'in' : 'out'
@@ -708,7 +705,7 @@ export default function ReviewLabels() {
         setSelectionLabel(label)
       }
     },
-    [currentFrameBoxes, canvasSize, isSelecting, completeSelection, handleBoxClick, viewMode]
+    [currentFrameBoxes, canvasSize, isSelecting, completeSelection, handleBoxClick]
   )
 
   // Handle mouse move - update selection rectangle or detect hover
@@ -926,7 +923,7 @@ export default function ReviewLabels() {
                   onClick={() => {
                     setError(null)
                     setLoading(true)
-                    loadMislabels(true)
+                    void loadMislabels(true)
                   }}
                   className="w-full rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                 >
@@ -958,7 +955,7 @@ export default function ReviewLabels() {
                   onClick={() => {
                     setError(null)
                     setLoading(true)
-                    loadMislabels(true)
+                    void loadMislabels(true)
                   }}
                   className="w-full rounded-md bg-gray-600 px-4 py-2 text-white hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
                 >
@@ -1065,7 +1062,9 @@ export default function ReviewLabels() {
             {/* Mode toggle */}
             <div className="flex gap-2 rounded-md border border-gray-200 bg-gray-50 p-1 dark:border-gray-700 dark:bg-gray-950">
               <button
-                onClick={() => navigate(`/annotate/layout?videoId=${encodeURIComponent(videoId)}`)}
+                onClick={() => {
+                  void navigate(`/annotate/layout?videoId=${encodeURIComponent(videoId)}`)
+                }}
                 className="flex-1 rounded py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
               >
                 Layout

@@ -9,13 +9,6 @@ import { getDbPath } from '~/utils/video-paths'
 
 type PythonOCRAnnotation = [string, number, [number, number, number, number]]
 
-interface FrameOCR {
-  frame_index: number
-  ocr_text: string
-  ocr_annotations: string // JSON: [[text, conf, [x, y, w, h]], ...]
-  ocr_confidence: number
-}
-
 interface VideoLayoutConfig {
   frame_width: number
   frame_height: number
@@ -29,19 +22,6 @@ interface VideoLayoutConfig {
   box_height_std: number | null
   anchor_type: 'left' | 'center' | 'right' | null
   anchor_position: number | null
-}
-
-interface BoxAnnotation {
-  box_index: number
-  box_text: string
-  box_left: number
-  box_top: number
-  box_right: number
-  box_bottom: number
-  label: 'in' | 'out'
-  annotation_source: 'user' | 'model'
-  predicted_label: 'in' | 'out' | null
-  predicted_confidence: number | null
 }
 
 interface BoxData {
@@ -75,9 +55,7 @@ function getDatabase(videoId: string): Database.Database | Response {
  */
 function originalToCroppedDisplay(
   boxBounds: { left: number; top: number; right: number; bottom: number },
-  cropBounds: { left: number; top: number; right: number; bottom: number },
-  frameWidth: number,
-  frameHeight: number
+  cropBounds: { left: number; top: number; right: number; bottom: number }
 ): { left: number; top: number; right: number; bottom: number } {
   const cropWidth = cropBounds.right - cropBounds.left
   const cropHeight = cropBounds.bottom - cropBounds.top
@@ -211,7 +189,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
     // Convert all boxes to bounds for feature extraction
     const allBoxBounds = ocrAnnotations.map(annotation => {
-      const [_text, _conf, [x, y, width, height]] = annotation
+      const [, , [x, y, width, height]] = annotation
       const boxLeft = Math.floor(x * layoutConfig.frame_width)
       const boxBottom = Math.floor((1 - y) * layoutConfig.frame_height)
       const boxTop = boxBottom - Math.floor(height * layoutConfig.frame_height)
@@ -224,7 +202,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
       // OCR annotation format: [text, confidence, [x, y, width, height]]
       // Coordinates are fractional [0-1]
       // IMPORTANT: y is measured from BOTTOM of image, not top
-      const [text, _conf, [x, y, width, height]] = annotation
+      const [text, , [x, y, width, height]] = annotation
 
       // Convert fractional to pixels (original frame coords)
       const boxLeft = Math.floor(x * layoutConfig.frame_width)
@@ -246,20 +224,15 @@ export async function loader({ params }: LoaderFunctionArgs) {
       )
 
       // Get user annotation (if exists)
-      const userLabel = userAnnotationMap.get(boxIndex) || null
+      const userLabel = userAnnotationMap.get(boxIndex) ?? null
 
       // Calculate display bounds (fractional in cropped space)
-      const displayBounds = originalToCroppedDisplay(
-        originalBounds,
-        {
-          left: layoutConfig.crop_left,
-          top: layoutConfig.crop_top,
-          right: layoutConfig.crop_right,
-          bottom: layoutConfig.crop_bottom,
-        },
-        layoutConfig.frame_width,
-        layoutConfig.frame_height
-      )
+      const displayBounds = originalToCroppedDisplay(originalBounds, {
+        left: layoutConfig.crop_left,
+        top: layoutConfig.crop_top,
+        right: layoutConfig.crop_right,
+        bottom: layoutConfig.crop_bottom,
+      })
 
       // Determine color code
       const colorCode = getColorCode(prediction.label, prediction.confidence, userLabel)
@@ -401,11 +374,11 @@ export async function action({ params, request }: ActionFunctionArgs) {
     const modelInfo = db
       .prepare('SELECT model_version FROM box_classification_model WHERE id = 1')
       .get() as { model_version: string } | undefined
-    const modelVersion = modelInfo?.model_version || null
+    const modelVersion = modelInfo?.model_version ?? null
 
     // Convert all boxes to bounds for feature extraction
     const allBoxBounds = ocrAnnotations.map(annotation => {
-      const [_text, _conf, [x, y, width, height]] = annotation
+      const [, , [x, y, width, height]] = annotation
       const boxLeft = Math.floor(x * layoutConfig.frame_width)
       const boxBottom = Math.floor((1 - y) * layoutConfig.frame_height)
       const boxTop = boxBottom - Math.floor(height * layoutConfig.frame_height)
@@ -440,7 +413,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
         console.warn(`Annotation not found at index ${boxIndex}`)
         continue
       }
-      const [text, _conf, [x, y, width, height]] = ocrAnnotation
+      const [text, , [x, y, width, height]] = ocrAnnotation
 
       // Convert fractional to pixels
       const boxLeft = Math.floor(x * layoutConfig.frame_width)

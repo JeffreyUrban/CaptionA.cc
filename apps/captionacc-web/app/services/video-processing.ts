@@ -60,7 +60,11 @@ function processNextInQueue(): void {
     return
   }
 
-  const nextVideo = processingQueue.shift()!
+  const nextVideo = processingQueue.shift()
+  if (!nextVideo) {
+    finishProcessing()
+    return
+  }
   console.log(
     `[FullFramesQueue] Starting ${nextVideo.videoPath} (${processingQueue.length} remaining)`
   )
@@ -89,7 +93,7 @@ export async function triggerVideoProcessing(options: ProcessingOptions): Promis
   console.log(`[VideoProcessing] Starting processing for: ${videoPath}`)
 
   // Resolve to actual storage paths (prefer videoId if available)
-  const pathOrId = videoId || videoPath
+  const pathOrId = videoId ?? videoPath
   const dbPath = getDbPath(pathOrId)
   const videoDir = getVideoDir(pathOrId)
 

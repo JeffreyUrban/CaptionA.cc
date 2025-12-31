@@ -58,7 +58,7 @@ export function resolveDisplayPath(displayPath: string): string | null {
             } finally {
               db.close()
             }
-          } catch (error) {
+          } catch {
             // Ignore DB errors, continue scanning
           }
         } else {
@@ -234,7 +234,7 @@ export function getAllVideos(): VideoMetadata[] {
             } finally {
               db.close()
             }
-          } catch (error) {
+          } catch {
             // Ignore DB errors
           }
         } else {

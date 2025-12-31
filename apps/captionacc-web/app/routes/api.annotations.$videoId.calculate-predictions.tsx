@@ -81,7 +81,7 @@ export async function action({ params }: ActionFunctionArgs) {
     const modelRow = db
       .prepare('SELECT model_version FROM box_classification_model WHERE id = 1')
       .get() as { model_version: string } | undefined
-    const modelVersion = modelRow?.model_version || 'heuristic_v1'
+    const modelVersion = modelRow?.model_version ?? 'heuristic_v1'
 
     // Fetch all OCR boxes
     const boxes = db
@@ -128,13 +128,16 @@ export async function action({ params }: ActionFunctionArgs) {
       if (!boxesByFrame.has(box.frame_index)) {
         boxesByFrame.set(box.frame_index, [])
       }
-      boxesByFrame.get(box.frame_index)!.push(box)
+      const frameBoxes = boxesByFrame.get(box.frame_index)
+      if (frameBoxes) {
+        frameBoxes.push(box)
+      }
     }
 
     console.log(`[Calculate Predictions] Processing ${boxesByFrame.size} frames...`)
 
     // Calculate and store predictions frame by frame
-    for (const [frameIndex, frameBoxes] of boxesByFrame) {
+    for (const [, frameBoxes] of boxesByFrame) {
       // Convert all boxes in this frame to BoxBounds for feature extraction
       const allBoxBounds = frameBoxes.map(b => {
         const left = Math.floor(b.x * layoutConfig.frame_width)
@@ -148,8 +151,9 @@ export async function action({ params }: ActionFunctionArgs) {
 
       // Process each box in this frame
       for (let i = 0; i < frameBoxes.length; i++) {
-        const box = frameBoxes[i]!
-        const bounds = allBoxBounds[i]!
+        const box = frameBoxes[i]
+        const bounds = allBoxBounds[i]
+        if (!box || !bounds) continue
 
         // Get prediction with all boxes from this frame
         const prediction = predictBoxLabel(

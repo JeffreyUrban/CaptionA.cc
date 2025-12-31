@@ -116,7 +116,7 @@ async function cleanupDeletedVideo(video: DeletedVideo): Promise<void> {
       } catch {
         // Already dead
       }
-    } catch (error) {
+    } catch {
       console.log(`[Cleanup] Process ${pid} already terminated`)
     }
   }
@@ -234,7 +234,7 @@ async function findStaleProcessing(): Promise<
                 videoId: video.videoId,
               })
               console.log(
-                `[Cleanup] Found stale processing: ${video.displayPath} (PID: ${pid || 'none'}, attempts: ${status.processing_attempts})`
+                `[Cleanup] Found stale processing: ${video.displayPath} (PID: ${pid ?? 'none'}, attempts: ${status.processing_attempts})`
               )
             }
           }
@@ -433,7 +433,7 @@ async function checkDuplicateVideoHashes(): Promise<number> {
 
         if (result?.video_hash && result.video_hash !== '') {
           // Group by hash
-          const existing = hashGroups.get(result.video_hash) || []
+          const existing = hashGroups.get(result.video_hash) ?? []
           existing.push({
             videoId: video.videoId,
             displayPath: result.display_path,
@@ -443,7 +443,7 @@ async function checkDuplicateVideoHashes(): Promise<number> {
       } finally {
         db.close()
       }
-    } catch (error) {
+    } catch {
       // Skip videos with old schema or errors
     }
   }

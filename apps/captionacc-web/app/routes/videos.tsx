@@ -30,7 +30,6 @@ import {
   sortTreeNodes,
   type TreeNode,
   type FolderNode,
-  type VideoNode,
   type VideoInfo,
   type VideoStats,
 } from '~/utils/video-tree'
@@ -45,9 +44,9 @@ function readEmptyFolders(dataDir: string): string[] {
     if (existsSync(foldersMetaPath)) {
       const content = readFileSync(foldersMetaPath, 'utf-8')
       const metadata: FoldersMetadata = JSON.parse(content)
-      return metadata.emptyFolders || []
+      return metadata.emptyFolders ?? []
     }
-  } catch (error) {
+  } catch {
     // If file doesn't exist or is invalid, return empty
   }
   return []
@@ -60,8 +59,6 @@ function insertEmptyFolders(tree: TreeNode[], emptyFolders: string[]): TreeNode[
   for (const folderPath of emptyFolders) {
     const segments = folderPath.split('/')
     let currentLevel = tree
-    let parentFolder: FolderNode | null = null
-
     // Navigate/create the folder structure
     for (let i = 0; i < segments.length; i++) {
       const segment = segments[i]
@@ -102,7 +99,6 @@ function insertEmptyFolders(tree: TreeNode[], emptyFolders: string[]): TreeNode[
 
       // Move to next level
       if (node.type === 'folder') {
-        parentFolder = node
         currentLevel = node.children
       }
     }
@@ -271,7 +267,7 @@ function TreeRow({
   // Only use stats after client-side mount to avoid hydration mismatch
   const stats = isMounted
     ? node.type === 'video'
-      ? videoStatsMap.get(node.videoId) || null
+      ? (videoStatsMap.get(node.videoId) ?? null)
       : calculateFolderStatsFromMap(node, videoStatsMap)
     : null
 
@@ -845,7 +841,7 @@ export default function VideosPage() {
     if (videoStatsMap.size > 0 && typeof window !== 'undefined') {
       // Filter out any invalid stats objects (those with error property)
       const validStats = Array.from(videoStatsMap.entries()).filter(
-        ([_, stats]) => !('error' in stats)
+        ([, stats]) => !('error' in stats)
       )
       if (validStats.length > 0) {
         const cacheObj = Object.fromEntries(validStats)
@@ -869,7 +865,7 @@ export default function VideosPage() {
 
     // Find videos that are currently processing (upload/processing OR crop_frames)
     const processingVideos = Array.from(videoStatsMap.entries())
-      .filter(([_, stats]) => {
+      .filter(([, stats]) => {
         // Poll if upload/processing is in progress
         const hasProcessingStatus =
           stats.processingStatus &&
@@ -882,7 +878,7 @@ export default function VideosPage() {
           (stats.cropFramesStatus.status === 'queued' ||
             stats.cropFramesStatus.status === 'processing')
 
-        return hasProcessingStatus || hasCropFramesProcessing
+        return Boolean(hasProcessingStatus) || Boolean(hasCropFramesProcessing)
       })
       .map(([videoId]) => videoId)
 
@@ -919,7 +915,7 @@ export default function VideosPage() {
 
     // Find videos with error badges in cache and refetch them to validate
     const videosWithErrors = Array.from(videoStatsMap.entries())
-      .filter(([_, stats]) => stats.badges?.some(badge => badge.type === 'error'))
+      .filter(([, stats]) => stats.badges?.some(badge => badge.type === 'error'))
       .map(([videoId]) => videoId)
 
     if (videosWithErrors.length > 0) {
@@ -992,7 +988,7 @@ export default function VideosPage() {
               console.log(`[Videos] Stats loaded for ${videoId}:`, data)
               updateVideoStats(videoId, data)
             } else {
-              console.error(`[Videos] Stats error for ${videoId}:`, data?.error || 'Unknown error')
+              console.error(`[Videos] Stats error for ${videoId}:`, data?.error ?? 'Unknown error')
             }
           })
           .catch(err => console.error(`Failed to load stats for ${videoId}:`, err))
@@ -1075,7 +1071,7 @@ export default function VideosPage() {
       const data = await response.json()
 
       if (!response.ok) {
-        setFolderError(data.error || 'Failed to create folder')
+        setFolderError(data.error ?? 'Failed to create folder')
         setFolderLoading(false)
         return
       }
@@ -1084,19 +1080,21 @@ export default function VideosPage() {
       setFolderLoading(false)
       setCreateFolderModal({ open: false })
       setNewFolderName('')
-      revalidator.revalidate()
-    } catch (error) {
+      void revalidator.revalidate()
+    } catch {
       setFolderError('Network error')
       setFolderLoading(false)
     }
   }
 
   const handleRenameFolder = async () => {
+    if (!renameFolderModal.folderPath) return
+
     setFolderError(null)
     setFolderLoading(true)
 
     try {
-      const oldPath = renameFolderModal.folderPath!
+      const oldPath = renameFolderModal.folderPath
       const pathParts = oldPath.split('/')
       pathParts[pathParts.length - 1] = renamedFolderName
       const newPath = pathParts.join('/')
@@ -1110,7 +1108,7 @@ export default function VideosPage() {
       const data = await response.json()
 
       if (!response.ok) {
-        setFolderError(data.error || 'Failed to rename folder')
+        setFolderError(data.error ?? 'Failed to rename folder')
         setFolderLoading(false)
         return
       }
@@ -1119,21 +1117,23 @@ export default function VideosPage() {
       setFolderLoading(false)
       setRenameFolderModal({ open: false })
       setRenamedFolderName('')
-      revalidator.revalidate()
-    } catch (error) {
+      void revalidator.revalidate()
+    } catch {
       setFolderError('Network error')
       setFolderLoading(false)
     }
   }
 
   const handleDeleteFolder = async () => {
+    if (!deleteFolderModal.folderPath) return
+
     setFolderError(null)
     setFolderLoading(true)
 
     try {
       // Delete with confirmed=true parameter
       const response = await fetch(
-        `/api/folders/delete?path=${encodeURIComponent(deleteFolderModal.folderPath!)}&confirmed=true`,
+        `/api/folders/delete?path=${encodeURIComponent(deleteFolderModal.folderPath)}&confirmed=true`,
         {
           method: 'DELETE',
         }
@@ -1142,7 +1142,7 @@ export default function VideosPage() {
       const data = await response.json()
 
       if (!response.ok) {
-        setFolderError(data.error || 'Failed to delete folder')
+        setFolderError(data.error ?? 'Failed to delete folder')
         setFolderLoading(false)
         return
       }
@@ -1150,8 +1150,8 @@ export default function VideosPage() {
       // Success - close modal and reload
       setFolderLoading(false)
       setDeleteFolderModal({ open: false })
-      revalidator.revalidate()
-    } catch (error) {
+      void revalidator.revalidate()
+    } catch {
       setFolderError('Network error')
       setFolderLoading(false)
     }
@@ -1180,10 +1180,10 @@ export default function VideosPage() {
         })
         setFolderLoading(false)
       } else if (!response.ok) {
-        setFolderError(data.error || 'Failed to check folder')
+        setFolderError(data.error ?? 'Failed to check folder')
         setFolderLoading(false)
       }
-    } catch (error) {
+    } catch {
       setFolderError('Network error')
       setFolderLoading(false)
     }
@@ -1191,11 +1191,13 @@ export default function VideosPage() {
 
   // Video rename handler
   const handleRenameVideo = async () => {
+    if (!renameVideoModal.videoPath) return
+
     setVideoError(null)
     setVideoLoading(true)
 
     try {
-      const oldPath = renameVideoModal.videoPath!
+      const oldPath = renameVideoModal.videoPath
 
       const response = await fetch('/api/videos/rename', {
         method: 'PATCH',
@@ -1206,7 +1208,7 @@ export default function VideosPage() {
       const data = await response.json()
 
       if (!response.ok) {
-        setVideoError(data.error || 'Failed to rename video')
+        setVideoError(data.error ?? 'Failed to rename video')
         setVideoLoading(false)
         return
       }
@@ -1215,19 +1217,21 @@ export default function VideosPage() {
       setVideoLoading(false)
       setRenameVideoModal({ open: false })
       setRenamedVideoName('')
-      revalidator.revalidate()
-    } catch (error) {
+      void revalidator.revalidate()
+    } catch {
       setVideoError('Network error')
       setVideoLoading(false)
     }
   }
 
   const handleDeleteVideo = async () => {
+    if (!deleteVideoModal.videoPath) return
+
     setVideoError(null)
     setVideoLoading(true)
 
     try {
-      const videoPath = deleteVideoModal.videoPath!
+      const videoPath = deleteVideoModal.videoPath
 
       const response = await fetch(`/api/videos/${encodeURIComponent(videoPath)}/delete`, {
         method: 'DELETE',
@@ -1236,7 +1240,7 @@ export default function VideosPage() {
       const data = await response.json()
 
       if (!response.ok) {
-        setVideoError(data.error || 'Failed to delete video')
+        setVideoError(data.error ?? 'Failed to delete video')
         setVideoLoading(false)
         return
       }
@@ -1250,8 +1254,8 @@ export default function VideosPage() {
       newStatsMap.delete(videoPath)
       setVideoStatsMap(newStatsMap)
 
-      revalidator.revalidate()
-    } catch (error) {
+      void revalidator.revalidate()
+    } catch {
       setVideoError('Network error')
       setVideoLoading(false)
     }
@@ -1285,7 +1289,7 @@ export default function VideosPage() {
       const data = await response.json()
 
       if (!response.ok) {
-        setMoveError(data.error || `Failed to move ${itemType}`)
+        setMoveError(data.error ?? `Failed to move ${itemType}`)
         setMoveLoading(false)
         return
       }
@@ -1302,8 +1306,8 @@ export default function VideosPage() {
         setVideoStatsMap(newStatsMap)
       }
 
-      revalidator.revalidate()
-    } catch (error) {
+      void revalidator.revalidate()
+    } catch {
       setMoveError('Network error')
       setMoveLoading(false)
     }
@@ -1436,7 +1440,7 @@ export default function VideosPage() {
       }
 
       // Success - reload tree
-      revalidator.revalidate()
+      void revalidator.revalidate()
     } catch (error) {
       console.error('Network error during root drop:', error)
     } finally {
@@ -1513,7 +1517,7 @@ export default function VideosPage() {
       }
 
       // Success - reload tree
-      revalidator.revalidate()
+      void revalidator.revalidate()
     } catch (error) {
       console.error('Network error during drop:', error)
     } finally {
@@ -1558,11 +1562,11 @@ export default function VideosPage() {
   const allFolders = useMemo(() => {
     const folders: Array<{ path: string; name: string }> = []
 
-    const collectFolders = (nodes: TreeNode[], prefix = '') => {
+    const collectFolders = (nodes: TreeNode[]) => {
       for (const node of nodes) {
         if (node.type === 'folder') {
           folders.push({ path: node.path, name: node.path })
-          collectFolders(node.children, node.path + '/')
+          collectFolders(node.children)
         }
       }
     }
@@ -1665,7 +1669,7 @@ export default function VideosPage() {
                       className="bg-gray-50 dark:bg-gray-800 sticky top-0 z-10"
                       onDragOver={draggedItem ? handleRootDragOver : undefined}
                       onDragLeave={draggedItem ? handleRootDragLeave : undefined}
-                      onDrop={draggedItem ? handleRootDrop : undefined}
+                      onDrop={draggedItem ? e => void handleRootDrop(e) : undefined}
                     >
                       {draggedItem ? (
                         <tr>
@@ -1797,7 +1801,7 @@ export default function VideosPage() {
                             setMoveError(null)
                             setMoveLoading(false)
                           }}
-                          onDeleteFolder={handleDeleteFolderClick}
+                          onDeleteFolder={(path, name) => void handleDeleteFolderClick(path, name)}
                           onRenameVideo={(videoPath, currentName) => {
                             setRenameVideoModal({ open: true, videoPath, currentName })
                             setRenamedVideoName(currentName)
@@ -1825,7 +1829,7 @@ export default function VideosPage() {
                           onDragEnd={handleDragEnd}
                           onDragOver={handleDragOver}
                           onDragLeave={handleDragLeave}
-                          onDrop={handleDrop}
+                          onDrop={(e, path) => void handleDrop(e, path)}
                           dragOverFolder={dragOverFolder}
                         />
                       ))}
@@ -1876,7 +1880,9 @@ export default function VideosPage() {
                   id="folder-name"
                   value={newFolderName}
                   onChange={e => setNewFolderName(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && !folderLoading && handleCreateFolder()}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && !folderLoading) void handleCreateFolder()
+                  }}
                   placeholder="e.g., season_1"
                   className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                   autoFocus
@@ -1894,7 +1900,7 @@ export default function VideosPage() {
                   Cancel
                 </button>
                 <button
-                  onClick={handleCreateFolder}
+                  onClick={() => void handleCreateFolder()}
                   disabled={!newFolderName.trim() || folderLoading}
                   className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -1932,7 +1938,9 @@ export default function VideosPage() {
                   id="renamed-folder-name"
                   value={renamedFolderName}
                   onChange={e => setRenamedFolderName(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && !folderLoading && handleRenameFolder()}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && !folderLoading) void handleRenameFolder()
+                  }}
                   className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                   autoFocus
                 />
@@ -1949,7 +1957,7 @@ export default function VideosPage() {
                   Cancel
                 </button>
                 <button
-                  onClick={handleRenameFolder}
+                  onClick={() => void handleRenameFolder()}
                   disabled={!renamedFolderName.trim() || folderLoading}
                   className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -2033,7 +2041,7 @@ export default function VideosPage() {
                   Cancel
                 </button>
                 <button
-                  onClick={handleDeleteFolder}
+                  onClick={() => void handleDeleteFolder()}
                   disabled={folderLoading}
                   className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -2075,7 +2083,9 @@ export default function VideosPage() {
                   id="renamed-video-name"
                   value={renamedVideoName}
                   onChange={e => setRenamedVideoName(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && !videoLoading && handleRenameVideo()}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && !videoLoading) void handleRenameVideo()
+                  }}
                   className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                   autoFocus
                 />
@@ -2092,7 +2102,7 @@ export default function VideosPage() {
                   Cancel
                 </button>
                 <button
-                  onClick={handleRenameVideo}
+                  onClick={() => void handleRenameVideo()}
                   disabled={!renamedVideoName.trim() || videoLoading}
                   className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -2140,7 +2150,7 @@ export default function VideosPage() {
                   Cancel
                 </button>
                 <button
-                  onClick={handleDeleteVideo}
+                  onClick={() => void handleDeleteVideo()}
                   disabled={videoLoading}
                   className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -2304,7 +2314,7 @@ export default function VideosPage() {
                         return false
                       }
                       // Exclude current parent folder (for both videos and folders)
-                      const itemPathParts = moveModal.itemPath?.split('/') || []
+                      const itemPathParts = moveModal.itemPath?.split('/') ?? []
                       const currentParent =
                         itemPathParts.length > 1 ? itemPathParts.slice(0, -1).join('/') : ''
                       if (f.path === currentParent) {
@@ -2319,7 +2329,7 @@ export default function VideosPage() {
                     ))}
                 </select>
                 <p className="mt-2 text-xs text-gray-500 dark:text-gray-500">
-                  Select a destination folder or choose "Root" to move to the top level.
+                  Select a destination folder or choose &ldquo;Root&rdquo; to move to the top level.
                 </p>
                 {moveError && (
                   <p className="mt-3 text-sm text-red-600 dark:text-red-400">{moveError}</p>
@@ -2334,7 +2344,7 @@ export default function VideosPage() {
                   Cancel
                 </button>
                 <button
-                  onClick={handleMove}
+                  onClick={() => void handleMove()}
                   disabled={moveLoading}
                   className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 >

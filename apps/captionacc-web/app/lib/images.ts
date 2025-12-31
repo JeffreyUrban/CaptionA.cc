@@ -11,12 +11,11 @@
 
 import type { ImageOutput } from './imagetools'
 
-// SVG images - import directly without vite-imagetools
-import placeholderSvg from '~/assets/images/placeholder.svg'
-
 // Raster images - use vite-imagetools for responsive optimization
 // @ts-expect-error - Vite imagetools query parameters not recognized by TypeScript module resolution
 import placeholderImg from '~/assets/images/placeholder.jpg?w=400;800;1200&format=webp&as=picture'
+// SVG images - import directly without vite-imagetools
+import placeholderSvg from '~/assets/images/placeholder.svg'
 
 // Export organized by category with proper types
 export const examples = {
