@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router'
 
+import { UploadProgress } from '~/components/UploadProgress'
+
 const navigation = [
   { name: 'Home', href: '/' },
   { name: 'Videos', href: '/videos' },
@@ -175,8 +177,11 @@ export function AppLayout({ children, fullScreen = false }: AppLayoutProps) {
               </div>
             </div>
 
-            {/* Theme Switcher */}
-            <ThemeSwitcher />
+            {/* Upload Progress & Theme Switcher */}
+            <div className="flex items-center gap-2">
+              <UploadProgress />
+              <ThemeSwitcher />
+            </div>
           </div>
 
           {/* Mobile Navigation */}
