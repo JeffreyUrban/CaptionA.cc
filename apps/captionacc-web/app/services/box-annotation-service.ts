@@ -9,7 +9,7 @@ import type Database from 'better-sqlite3'
 
 import { triggerModelTraining } from '~/services/model-training'
 import { predictBoxLabel, trainModel, initializeSeedModel } from '~/utils/box-prediction'
-import { pixelToCroppedDisplay } from '~/utils/coordinate-utils'
+import { pixelToCroppedDisplay, boundsIntersect } from '~/utils/coordinate-utils'
 import type { PixelBounds, FractionalBounds, CropBounds } from '~/utils/coordinate-utils'
 import { getAnnotationDatabase, getWritableDatabase } from '~/utils/database'
 
@@ -172,6 +172,158 @@ export interface CalculatePredictionsResult {
 
 // =============================================================================
 // Helper Functions
+// =============================================================================
+
+/**
+ * OCR box record with computed pixel bounds.
+ * Used internally for processing boxes with pre-computed coordinates.
+ */
+interface OcrBoxRecord {
+  boxIndex: number
+  text: string
+  bounds: PixelBounds
+}
+
+/**
+ * Result of processing boxes in a single frame.
+ */
+interface ProcessFrameResult {
+  annotatedCount: number
+  newlyAnnotatedCount: number
+  boxIndices: number[]
+}
+
+// =============================================================================
+// Bulk Annotation Helper Functions
+// =============================================================================
+
+/**
+ * Filter OCR boxes that intersect with a rectangle.
+ *
+ * @param boxes - Array of OCR box records with bounds
+ * @param rectangle - Rectangle bounds in pixel coordinates
+ * @returns Array of box records that intersect with the rectangle
+ */
+function filterBoxesInRectangle(boxes: OcrBoxRecord[], rectangle: PixelBounds): OcrBoxRecord[] {
+  return boxes.filter(box => boundsIntersect(box.bounds, rectangle))
+}
+
+/**
+ * Apply annotation action to a single box.
+ *
+ * Handles 'mark_out' (insert/update) and 'clear' (delete) actions.
+ *
+ * @param db - Database connection
+ * @param frameIndex - Frame index
+ * @param box - OCR box record
+ * @param action - Action to apply
+ * @param prediction - Prediction data for the box (for mark_out)
+ * @param modelVersion - Model version string (for mark_out)
+ * @returns true if the box was newly annotated (didn't have a label before)
+ */
+function applyAnnotationAction(
+  db: Database.Database,
+  frameIndex: number,
+  box: OcrBoxRecord,
+  action: 'mark_out' | 'clear',
+  prediction: { label: 'in' | 'out'; confidence: number } | null,
+  modelVersion: string | null
+): boolean {
+  if (action === 'clear') {
+    db.prepare(`DELETE FROM full_frame_box_labels WHERE frame_index = ? AND box_index = ?`).run(
+      frameIndex,
+      box.boxIndex
+    )
+    return false // Clear doesn't count as "newly annotated"
+  }
+
+  // action === 'mark_out'
+  // Check if box already has a label
+  const existing = db
+    .prepare(`SELECT 1 FROM full_frame_box_labels WHERE frame_index = ? AND box_index = ?`)
+    .get(frameIndex, box.boxIndex)
+
+  const isNewlyAnnotated = !existing
+
+  db.prepare(
+    `
+    INSERT INTO full_frame_box_labels (
+      annotation_source, frame_index, box_index, box_text,
+      box_left, box_top, box_right, box_bottom,
+      label, label_source, predicted_label, predicted_confidence, model_version, labeled_at
+    ) VALUES ('full_frame', ?, ?, ?, ?, ?, ?, ?, 'out', 'user', ?, ?, ?, datetime('now'))
+    ON CONFLICT(annotation_source, frame_index, box_index)
+    DO UPDATE SET label = 'out', label_source = 'user', labeled_at = datetime('now')
+  `
+  ).run(
+    frameIndex,
+    box.boxIndex,
+    box.text,
+    box.bounds.left,
+    box.bounds.top,
+    box.bounds.right,
+    box.bounds.bottom,
+    prediction?.label ?? 'out',
+    prediction?.confidence ?? 0.5,
+    modelVersion
+  )
+
+  return isNewlyAnnotated
+}
+
+/**
+ * Process all boxes in a frame that intersect with a rectangle.
+ *
+ * @param db - Database connection
+ * @param frameIndex - Frame index
+ * @param boxes - All OCR box records for the frame
+ * @param rectangle - Rectangle bounds in pixel coordinates
+ * @param action - Action to apply
+ * @param layoutConfig - Layout config for predictions
+ * @param modelVersion - Model version string
+ * @returns Result with counts and affected box indices
+ */
+function processFrameBoxes(
+  db: Database.Database,
+  frameIndex: number,
+  boxes: OcrBoxRecord[],
+  rectangle: PixelBounds,
+  action: 'mark_out' | 'clear',
+  layoutConfig: VideoLayoutConfigRow,
+  modelVersion: string | null
+): ProcessFrameResult {
+  const matchingBoxes = filterBoxesInRectangle(boxes, rectangle)
+
+  if (matchingBoxes.length === 0) {
+    return { annotatedCount: 0, newlyAnnotatedCount: 0, boxIndices: [] }
+  }
+
+  // Pre-compute all bounds for prediction feature extraction
+  const allBounds = boxes.map(b => b.bounds)
+  let newlyAnnotatedCount = 0
+  const boxIndices: number[] = []
+
+  for (const box of matchingBoxes) {
+    // Get prediction for mark_out action
+    const prediction =
+      action === 'mark_out'
+        ? predictBoxLabel(box.bounds, layoutConfig, allBounds, frameIndex, box.boxIndex, db)
+        : null
+
+    const isNew = applyAnnotationAction(db, frameIndex, box, action, prediction, modelVersion)
+    if (isNew) newlyAnnotatedCount++
+    boxIndices.push(box.boxIndex)
+  }
+
+  return {
+    annotatedCount: matchingBoxes.length,
+    newlyAnnotatedCount,
+    boxIndices,
+  }
+}
+
+// =============================================================================
+// Color Code Helper
 // =============================================================================
 
 /**
@@ -670,6 +822,33 @@ export function bulkAnnotateRectangle(
 }
 
 /**
+ * Load OCR boxes for a frame and convert to OcrBoxRecord format.
+ *
+ * @param db - Database connection
+ * @param frameIndex - Frame index to load
+ * @param layoutConfig - Layout config with frame dimensions
+ * @returns Array of OCR box records with computed bounds
+ */
+function loadFrameOcrBoxes(
+  db: Database.Database,
+  frameIndex: number,
+  layoutConfig: VideoLayoutConfigRow
+): OcrBoxRecord[] {
+  const ocrBoxes = db
+    .prepare(
+      `SELECT box_index, text, x, y, width, height
+       FROM full_frame_ocr WHERE frame_index = ? ORDER BY box_index`
+    )
+    .all(frameIndex) as OcrBoxRow[]
+
+  return ocrBoxes.map(box => ({
+    boxIndex: box.box_index,
+    text: box.text,
+    bounds: ocrToPixelBounds(box, layoutConfig.frame_width, layoutConfig.frame_height),
+  }))
+}
+
+/**
  * Bulk annotate all boxes within a rectangular region across ALL frames.
  *
  * This iterates through all analysis frames (0.1Hz) and applies the action
@@ -694,169 +873,50 @@ export function bulkAnnotateRectangleAllFrames(
   const db = result.db
 
   try {
-    // Get layout config for frame dimensions and predictions
+    // Validate inputs and get configuration
     const layoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as
       | VideoLayoutConfigRow
       | undefined
-
     if (!layoutConfig) {
       throw new Error('Layout config not found')
     }
 
-    // Get model version if available
     const modelInfo = db
       .prepare('SELECT model_version FROM box_classification_model WHERE id = 1')
       .get() as { model_version: string } | undefined
     const modelVersion = modelInfo?.model_version ?? null
 
-    // Get all unique frame indices from full_frame_ocr table
+    // Get all frame indices
     const frames = db
       .prepare('SELECT DISTINCT frame_index FROM full_frame_ocr ORDER BY frame_index')
       .all() as Array<{ frame_index: number }>
 
+    // Process each frame and aggregate results
     let totalAnnotatedBoxes = 0
     let newlyAnnotatedBoxes = 0
-    const framesProcessed: number[] = []
+    const affectedFrameIndices: number[] = []
 
-    // Process each frame
     for (const { frame_index: frameIndex } of frames) {
-      // Load OCR boxes for this frame
-      const ocrBoxes = db
-        .prepare(
-          `
-          SELECT box_index, text, confidence, x, y, width, height
-          FROM full_frame_ocr
-          WHERE frame_index = ?
-          ORDER BY box_index
-        `
-        )
-        .all(frameIndex) as OcrBoxRow[]
-
-      // Convert all boxes to bounds for feature extraction
-      const allBoxBounds: PixelBounds[] = ocrBoxes.map(box =>
-        ocrToPixelBounds(box, layoutConfig.frame_width, layoutConfig.frame_height)
+      const boxes = loadFrameOcrBoxes(db, frameIndex, layoutConfig)
+      const frameResult = processFrameBoxes(
+        db,
+        frameIndex,
+        boxes,
+        rectangle,
+        action,
+        layoutConfig,
+        modelVersion
       )
 
-      // Find all boxes that intersect with rectangle
-      const boxesInRectangle: number[] = []
-
-      for (const box of ocrBoxes) {
-        const bounds = ocrToPixelBounds(box, layoutConfig.frame_width, layoutConfig.frame_height)
-
-        // Check if box intersects with rectangle
-        const intersects = !(
-          bounds.right < rectangle.left ||
-          bounds.left > rectangle.right ||
-          bounds.bottom < rectangle.top ||
-          bounds.top > rectangle.bottom
-        )
-
-        if (intersects) {
-          boxesInRectangle.push(box.box_index)
-        }
-      }
-
-      // Apply action to all intersecting boxes in this frame
-      if (boxesInRectangle.length > 0) {
-        if (action === 'clear') {
-          // Delete labels for these boxes
-          const deleteStmt = db.prepare(`
-            DELETE FROM full_frame_box_labels
-            WHERE frame_index = ? AND box_index = ?
-          `)
-
-          for (const boxIndex of boxesInRectangle) {
-            deleteStmt.run(frameIndex, boxIndex)
-          }
-        } else {
-          // action === 'mark_out'
-          // Check which boxes already have labels
-          const existingLabels = new Set(
-            (
-              db
-                .prepare(
-                  `
-                SELECT box_index FROM full_frame_box_labels
-                WHERE frame_index = ? AND box_index IN (${boxesInRectangle.map(() => '?').join(',')})
-              `
-                )
-                .all(frameIndex, ...boxesInRectangle) as Array<{ box_index: number }>
-            ).map(row => row.box_index)
-          )
-
-          // Insert or update labels for these boxes
-          const upsertStmt = db.prepare(`
-            INSERT INTO full_frame_box_labels (
-              annotation_source,
-              frame_index,
-              box_index,
-              box_text,
-              box_left,
-              box_top,
-              box_right,
-              box_bottom,
-              label,
-              label_source,
-              predicted_label,
-              predicted_confidence,
-              model_version,
-              labeled_at
-            ) VALUES ('full_frame', ?, ?, ?, ?, ?, ?, ?, 'out', 'user', ?, ?, ?, datetime('now'))
-            ON CONFLICT(annotation_source, frame_index, box_index)
-            DO UPDATE SET
-              label = 'out',
-              label_source = 'user',
-              labeled_at = datetime('now')
-          `)
-
-          for (const boxIndex of boxesInRectangle) {
-            // Find the box data
-            const box = ocrBoxes.find(b => b.box_index === boxIndex)
-            if (!box) continue
-
-            // Count only if this box didn't already have a label
-            if (!existingLabels.has(boxIndex)) {
-              newlyAnnotatedBoxes++
-            }
-
-            const bounds = ocrToPixelBounds(
-              box,
-              layoutConfig.frame_width,
-              layoutConfig.frame_height
-            )
-
-            // Get prediction for this box
-            const prediction = predictBoxLabel(
-              bounds,
-              layoutConfig,
-              allBoxBounds,
-              frameIndex,
-              boxIndex,
-              db
-            )
-
-            upsertStmt.run(
-              frameIndex,
-              boxIndex,
-              box.text,
-              bounds.left,
-              bounds.top,
-              bounds.right,
-              bounds.bottom,
-              prediction.label,
-              prediction.confidence,
-              modelVersion
-            )
-          }
-        }
-
-        totalAnnotatedBoxes += boxesInRectangle.length
-        framesProcessed.push(frameIndex)
+      if (frameResult.annotatedCount > 0) {
+        totalAnnotatedBoxes += frameResult.annotatedCount
+        newlyAnnotatedBoxes += frameResult.newlyAnnotatedCount
+        affectedFrameIndices.push(frameIndex)
       }
     }
 
     console.log(
-      `Bulk annotated ${totalAnnotatedBoxes} boxes (${newlyAnnotatedBoxes} new) across ${framesProcessed.length} frames`
+      `Bulk annotated ${totalAnnotatedBoxes} boxes (${newlyAnnotatedBoxes} new) across ${affectedFrameIndices.length} frames`
     )
 
     return {
@@ -864,8 +924,8 @@ export function bulkAnnotateRectangleAllFrames(
       action,
       totalAnnotatedBoxes,
       newlyAnnotatedBoxes,
-      framesProcessed: framesProcessed.length,
-      frameIndices: framesProcessed,
+      framesProcessed: affectedFrameIndices.length,
+      frameIndices: affectedFrameIndices,
     }
   } finally {
     db.close()

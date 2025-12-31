@@ -660,6 +660,427 @@ function analyzeOCRBoxes(
 }
 
 // =============================================================================
+// Helper Functions - Config Update
+// =============================================================================
+
+/**
+ * Result of detecting crop bounds changes.
+ */
+interface CropBoundsChangeResult {
+  changed: boolean
+  requiresVersionIncrement: boolean
+}
+
+/**
+ * Detect if crop bounds have changed from current config.
+ *
+ * @param currentConfig - Current layout configuration from database
+ * @param newCropBounds - New crop bounds to compare against
+ * @returns Object indicating if bounds changed and if version increment is needed
+ */
+function detectCropBoundsChanges(
+  currentConfig: VideoLayoutConfigRow,
+  newCropBounds: CropBounds | undefined
+): CropBoundsChangeResult {
+  if (!newCropBounds) {
+    return { changed: false, requiresVersionIncrement: false }
+  }
+
+  const changed =
+    newCropBounds.left !== currentConfig.crop_left ||
+    newCropBounds.top !== currentConfig.crop_top ||
+    newCropBounds.right !== currentConfig.crop_right ||
+    newCropBounds.bottom !== currentConfig.crop_bottom
+
+  return { changed, requiresVersionIncrement: changed }
+}
+
+/**
+ * Invalidate frames when crop bounds change by resetting their crop_bounds_version.
+ *
+ * @param db - Database connection
+ * @param cropBounds - New crop bounds to apply
+ * @returns Number of frames invalidated
+ */
+function invalidateFramesForCropChange(
+  db: import('better-sqlite3').Database,
+  cropBounds: CropBounds
+): number {
+  // Increment crop_bounds_version and update crop bounds
+  db.prepare(
+    `
+    UPDATE video_layout_config
+    SET crop_bounds_version = crop_bounds_version + 1,
+        crop_left = ?,
+        crop_top = ?,
+        crop_right = ?,
+        crop_bottom = ?,
+        updated_at = datetime('now')
+    WHERE id = 1
+  `
+  ).run(cropBounds.left, cropBounds.top, cropBounds.right, cropBounds.bottom)
+
+  // Invalidate all frames (set crop_bounds_version to 0)
+  const invalidateResult = db
+    .prepare(
+      `
+    UPDATE frames_ocr
+    SET crop_bounds_version = 0
+  `
+    )
+    .run()
+
+  return invalidateResult.changes
+}
+
+/**
+ * Layout parameters input for database update.
+ */
+interface LayoutParamsInput {
+  verticalPosition: number
+  verticalStd: number
+  boxHeight: number
+  boxHeightStd: number
+  anchorType: 'left' | 'center' | 'right'
+  anchorPosition: number
+}
+
+/**
+ * Update layout parameters (Bayesian priors) in the database.
+ * Also clears the trained model since it was trained with different parameters.
+ *
+ * @param db - Database connection
+ * @param layoutParams - New layout parameters
+ * @returns True if parameters were updated
+ */
+function updateLayoutParameters(
+  db: import('better-sqlite3').Database,
+  layoutParams: LayoutParamsInput
+): boolean {
+  db.prepare(
+    `
+    UPDATE video_layout_config
+    SET vertical_position = ?,
+        vertical_std = ?,
+        box_height = ?,
+        box_height_std = ?,
+        anchor_type = ?,
+        anchor_position = ?,
+        updated_at = datetime('now')
+    WHERE id = 1
+  `
+  ).run(
+    layoutParams.verticalPosition,
+    layoutParams.verticalStd,
+    layoutParams.boxHeight,
+    layoutParams.boxHeightStd,
+    layoutParams.anchorType,
+    layoutParams.anchorPosition
+  )
+
+  // Clear the trained model since it was trained with different layout parameters
+  // Predictions will fall back to heuristics until model is retrained
+  db.prepare(`DELETE FROM box_classification_model WHERE id = 1`).run()
+  console.log(
+    `[Layout Config] Layout parameters changed, cleared trained model (will use heuristics until retrained)`
+  )
+
+  return true
+}
+
+/**
+ * Update selection bounds and mode in the database.
+ *
+ * @param db - Database connection
+ * @param selectionBounds - Optional new selection bounds
+ * @param selectionMode - Optional new selection mode
+ */
+function updateSelectionConfig(
+  db: import('better-sqlite3').Database,
+  selectionBounds: SelectionBounds | undefined,
+  selectionMode: 'hard' | 'soft' | 'disabled' | undefined
+): void {
+  if (selectionBounds === undefined && selectionMode === undefined) {
+    return
+  }
+
+  const updates: string[] = []
+  const values: (number | string)[] = []
+
+  if (selectionBounds !== undefined) {
+    updates.push(
+      'selection_left = ?',
+      'selection_top = ?',
+      'selection_right = ?',
+      'selection_bottom = ?'
+    )
+    values.push(
+      selectionBounds.left,
+      selectionBounds.top,
+      selectionBounds.right,
+      selectionBounds.bottom
+    )
+  }
+
+  if (selectionMode !== undefined) {
+    updates.push('selection_mode = ?')
+    values.push(selectionMode)
+  }
+
+  updates.push("updated_at = datetime('now')")
+
+  db.prepare(
+    `
+    UPDATE video_layout_config
+    SET ${updates.join(', ')}
+    WHERE id = 1
+  `
+  ).run(...values)
+}
+
+/**
+ * Trigger async prediction recalculation after layout parameter changes.
+ *
+ * @param videoId - Video identifier
+ */
+function triggerPredictionRecalculation(videoId: string): void {
+  console.log(
+    `[Layout Config] Layout parameters changed, triggering prediction recalculation for ${videoId}`
+  )
+  fetch(
+    `http://localhost:5173/api/annotations/${encodeURIComponent(videoId)}/calculate-predictions`,
+    { method: 'POST' }
+  )
+    .then(response => response.json())
+    .then(result => {
+      console.log(`[Layout Config] Predictions recalculated after layout change:`, result)
+    })
+    .catch(err => {
+      console.error(`[Layout Config] Failed to recalculate predictions:`, err.message)
+    })
+}
+
+// =============================================================================
+// Helper Functions - Reset Crop Bounds
+// =============================================================================
+
+/**
+ * Raw box data from database query.
+ */
+interface RawBoxData {
+  box_text: string
+  box_left: number
+  box_top: number
+  box_right: number
+  box_bottom: number
+}
+
+/**
+ * SQL query strings for caption box retrieval.
+ */
+const CAPTION_BOX_QUERIES = {
+  allBoxes: `
+    SELECT
+      text as box_text,
+      FLOOR(x * ?) as box_left,
+      FLOOR((1 - y) * ?) - FLOOR(height * ?) as box_top,
+      FLOOR(x * ?) + FLOOR(width * ?) as box_right,
+      FLOOR((1 - y) * ?) as box_bottom
+    FROM full_frame_ocr
+    WHERE frame_index = ?
+    ORDER BY box_index
+  `,
+  captionBoxesOnly: `
+    SELECT
+      o.text as box_text,
+      FLOOR(o.x * ?) as box_left,
+      FLOOR((1 - o.y) * ?) - FLOOR(o.height * ?) as box_top,
+      FLOOR(o.x * ?) + FLOOR(o.width * ?) as box_right,
+      FLOOR((1 - o.y) * ?) as box_bottom
+    FROM full_frame_ocr o
+    LEFT JOIN full_frame_box_labels l
+      ON o.frame_index = l.frame_index
+      AND o.box_index = l.box_index
+      AND l.annotation_source = 'full_frame'
+    WHERE o.frame_index = ?
+      AND (
+        (l.label IS NULL AND o.predicted_label = 'in')
+        OR (l.label_source = 'user' AND l.label = 'in')
+      )
+    ORDER BY o.box_index
+  `,
+} as const
+
+/**
+ * Caption frame info result from getCaptionFrameInfo.
+ */
+interface CaptionFrameInfo {
+  useAllBoxesFallback: boolean
+  frameIndices: Array<{ frame_index: number }>
+}
+
+/**
+ * Get caption frame info: count caption boxes and determine frame indices.
+ *
+ * @param db - Database connection
+ * @returns Caption frame info with fallback flag and frame indices
+ */
+function getCaptionFrameInfo(db: import('better-sqlite3').Database): CaptionFrameInfo {
+  // Get unique frame indices
+  const allFrameIndices = db
+    .prepare('SELECT DISTINCT frame_index FROM full_frame_ocr ORDER BY frame_index')
+    .all() as Array<{ frame_index: number }>
+
+  if (allFrameIndices.length === 0) {
+    throw new Error('No OCR data found')
+  }
+
+  // Count caption boxes
+  const captionBoxCount = db
+    .prepare(
+      `
+      SELECT COUNT(*) as count
+      FROM full_frame_ocr o
+      LEFT JOIN full_frame_box_labels l
+        ON o.frame_index = l.frame_index
+        AND o.box_index = l.box_index
+        AND l.annotation_source = 'full_frame'
+      WHERE (
+        (l.label IS NULL AND o.predicted_label = 'in')
+        OR (l.label_source = 'user' AND l.label = 'in')
+      )
+    `
+    )
+    .get() as { count: number }
+
+  const useAllBoxesFallback = captionBoxCount.count === 0
+
+  // Get frame indices with caption boxes
+  const frameIndices = db
+    .prepare(
+      useAllBoxesFallback
+        ? 'SELECT DISTINCT frame_index FROM full_frame_ocr ORDER BY frame_index'
+        : `
+          SELECT DISTINCT o.frame_index
+          FROM full_frame_ocr o
+          LEFT JOIN full_frame_box_labels l
+            ON o.frame_index = l.frame_index
+            AND o.box_index = l.box_index
+            AND l.annotation_source = 'full_frame'
+          WHERE (
+            (l.label IS NULL AND o.predicted_label = 'in')
+            OR (l.label_source = 'user' AND l.label = 'in')
+          )
+          ORDER BY o.frame_index
+        `
+    )
+    .all() as Array<{ frame_index: number }>
+
+  return { useAllBoxesFallback, frameIndices }
+}
+
+/**
+ * Build caption box frames from frame indices.
+ *
+ * @param db - Database connection
+ * @param frameIndices - Frame indices to process
+ * @param layoutConfig - Layout configuration
+ * @param useAllBoxesFallback - Whether to use all boxes (no caption predictions)
+ * @returns Array of frames in legacy FrameOCR format for analysis
+ */
+function buildCaptionBoxFrames(
+  db: import('better-sqlite3').Database,
+  frameIndices: Array<{ frame_index: number }>,
+  layoutConfig: VideoLayoutConfigRow,
+  useAllBoxesFallback: boolean
+): FrameOCR[] {
+  const queryStr = useAllBoxesFallback
+    ? CAPTION_BOX_QUERIES.allBoxes
+    : CAPTION_BOX_QUERIES.captionBoxesOnly
+  const stmt = db.prepare(queryStr)
+
+  return frameIndices.map(({ frame_index }) => {
+    const boxes = stmt.all(
+      layoutConfig.frame_width,
+      layoutConfig.frame_height,
+      layoutConfig.frame_height,
+      layoutConfig.frame_width,
+      layoutConfig.frame_width,
+      layoutConfig.frame_height,
+      frame_index
+    ) as RawBoxData[]
+
+    // Convert to legacy OCR format
+    const ocrAnnotations = boxes.map(box => [
+      box.box_text,
+      1.0,
+      [
+        box.box_left / layoutConfig.frame_width,
+        (layoutConfig.frame_height - box.box_bottom) / layoutConfig.frame_height,
+        (box.box_right - box.box_left) / layoutConfig.frame_width,
+        (box.box_bottom - box.box_top) / layoutConfig.frame_height,
+      ],
+    ])
+
+    return {
+      frame_index,
+      ocr_text: boxes.map(b => b.box_text).join(' '),
+      ocr_annotations: JSON.stringify(ocrAnnotations),
+      ocr_confidence: 1.0,
+    }
+  })
+}
+
+/**
+ * Save analysis results to the database.
+ *
+ * @param db - Database connection
+ * @param analysis - OCR analysis result
+ * @param modelVersion - Current model version (if any)
+ */
+function saveAnalysisResults(
+  db: import('better-sqlite3').Database,
+  analysis: OCRAnalysisResult,
+  modelVersion: string | null
+): void {
+  db.prepare(
+    `
+    UPDATE video_layout_config
+    SET crop_left = ?,
+        crop_top = ?,
+        crop_right = ?,
+        crop_bottom = ?,
+        crop_bounds_version = crop_bounds_version + 1,
+        analysis_model_version = ?,
+        vertical_position = ?,
+        vertical_std = ?,
+        box_height = ?,
+        box_height_std = ?,
+        anchor_type = ?,
+        anchor_position = ?,
+        top_edge_std = ?,
+        bottom_edge_std = ?,
+        updated_at = datetime('now')
+    WHERE id = 1
+  `
+  ).run(
+    analysis.cropBounds.left,
+    analysis.cropBounds.top,
+    analysis.cropBounds.right,
+    analysis.cropBounds.bottom,
+    modelVersion,
+    analysis.layoutParams.verticalPosition,
+    analysis.layoutParams.verticalStd,
+    analysis.layoutParams.boxHeight,
+    analysis.layoutParams.boxHeightStd,
+    analysis.layoutParams.anchorType,
+    analysis.layoutParams.anchorPosition,
+    analysis.layoutParams.topEdgeStd,
+    analysis.layoutParams.bottomEdgeStd
+  )
+}
+
+// =============================================================================
 // Helper Functions - Transform
 // =============================================================================
 
@@ -748,7 +1169,6 @@ export function updateLayoutConfig(
   const db = result.db
 
   try {
-    // Get current config to detect changes
     const currentConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as
       | VideoLayoutConfigRow
       | undefined
@@ -757,130 +1177,30 @@ export function updateLayoutConfig(
       throw new Error('Layout config not found')
     }
 
-    // Check if crop bounds changed
     const { cropBounds, selectionBounds, selectionMode, layoutParams } = input
-    const cropBoundsChanged =
-      cropBounds !== undefined &&
-      (cropBounds.left !== currentConfig.crop_left ||
-        cropBounds.top !== currentConfig.crop_top ||
-        cropBounds.right !== currentConfig.crop_right ||
-        cropBounds.bottom !== currentConfig.crop_bottom)
-
+    const boundsChange = detectCropBoundsChanges(currentConfig, cropBounds)
     let framesInvalidated = 0
 
-    // Begin transaction
     db.prepare('BEGIN TRANSACTION').run()
 
     try {
-      // Update crop bounds and increment version if changed
-      if (cropBoundsChanged && cropBounds) {
-        // Increment crop_bounds_version
-        db.prepare(
-          `
-          UPDATE video_layout_config
-          SET crop_bounds_version = crop_bounds_version + 1,
-              crop_left = ?,
-              crop_top = ?,
-              crop_right = ?,
-              crop_bottom = ?,
-              updated_at = datetime('now')
-          WHERE id = 1
-        `
-        ).run(cropBounds.left, cropBounds.top, cropBounds.right, cropBounds.bottom)
-
-        // Invalidate all frames (set crop_bounds_version to 0)
-        const invalidateResult = db
-          .prepare(
-            `
-          UPDATE frames_ocr
-          SET crop_bounds_version = 0
-        `
-          )
-          .run()
-
-        framesInvalidated = invalidateResult.changes
-
+      // Handle crop bounds changes
+      if (boundsChange.changed && cropBounds) {
+        framesInvalidated = invalidateFramesForCropChange(db, cropBounds)
         console.log(`Crop bounds changed: invalidated ${framesInvalidated} frames`)
       } else if (cropBounds) {
-        // Update crop bounds without incrementing version (no actual change)
+        // Update crop bounds without invalidation (no actual change)
         db.prepare(
-          `
-          UPDATE video_layout_config
-          SET crop_left = ?,
-              crop_top = ?,
-              crop_right = ?,
-              crop_bottom = ?,
-              updated_at = datetime('now')
-          WHERE id = 1
-        `
+          `UPDATE video_layout_config SET crop_left = ?, crop_top = ?, crop_right = ?, crop_bottom = ?, updated_at = datetime('now') WHERE id = 1`
         ).run(cropBounds.left, cropBounds.top, cropBounds.right, cropBounds.bottom)
       }
 
-      // Update selection bounds and mode
-      if (selectionBounds !== undefined || selectionMode !== undefined) {
-        const updates: string[] = []
-        const values: (number | string)[] = []
+      // Update selection config
+      updateSelectionConfig(db, selectionBounds, selectionMode)
 
-        if (selectionBounds !== undefined) {
-          updates.push(
-            'selection_left = ?',
-            'selection_top = ?',
-            'selection_right = ?',
-            'selection_bottom = ?'
-          )
-          values.push(
-            selectionBounds.left,
-            selectionBounds.top,
-            selectionBounds.right,
-            selectionBounds.bottom
-          )
-        }
-
-        if (selectionMode !== undefined) {
-          updates.push('selection_mode = ?')
-          values.push(selectionMode)
-        }
-
-        updates.push("updated_at = datetime('now')")
-
-        db.prepare(
-          `
-          UPDATE video_layout_config
-          SET ${updates.join(', ')}
-          WHERE id = 1
-        `
-        ).run(...values)
-      }
-
-      // Update layout parameters (Bayesian priors)
+      // Update layout parameters
       if (layoutParams) {
-        db.prepare(
-          `
-          UPDATE video_layout_config
-          SET vertical_position = ?,
-              vertical_std = ?,
-              box_height = ?,
-              box_height_std = ?,
-              anchor_type = ?,
-              anchor_position = ?,
-              updated_at = datetime('now')
-          WHERE id = 1
-        `
-        ).run(
-          layoutParams.verticalPosition,
-          layoutParams.verticalStd,
-          layoutParams.boxHeight,
-          layoutParams.boxHeightStd,
-          layoutParams.anchorType,
-          layoutParams.anchorPosition
-        )
-
-        // Clear the trained model since it was trained with different layout parameters
-        // Predictions will fall back to heuristics until model is retrained
-        db.prepare(`DELETE FROM box_classification_model WHERE id = 1`).run()
-        console.log(
-          `[Layout Config] Layout parameters changed, cleared trained model (will use heuristics until retrained)`
-        )
+        updateLayoutParameters(db, layoutParams)
       }
 
       db.prepare('COMMIT').run()
@@ -889,30 +1209,14 @@ export function updateLayoutConfig(
       throw error
     }
 
-    // Trigger prediction recalculation if layout parameters changed
-    // (predictions depend on these parameters, so they need to be recalculated)
+    // Trigger async prediction recalculation if layout parameters changed
     if (layoutParams) {
-      console.log(
-        `[Layout Config] Layout parameters changed, triggering prediction recalculation for ${videoId}`
-      )
-      fetch(
-        `http://localhost:5173/api/annotations/${encodeURIComponent(videoId)}/calculate-predictions`,
-        {
-          method: 'POST',
-        }
-      )
-        .then(response => response.json())
-        .then(result => {
-          console.log(`[Layout Config] Predictions recalculated after layout change:`, result)
-        })
-        .catch(err => {
-          console.error(`[Layout Config] Failed to recalculate predictions:`, err.message)
-        })
+      triggerPredictionRecalculation(videoId)
     }
 
     return {
       success: true,
-      boundsChanged: cropBoundsChanged,
+      boundsChanged: boundsChange.changed,
       framesInvalidated,
       layoutParamsChanged: !!layoutParams,
     }
@@ -950,127 +1254,11 @@ export function resetCropBounds(videoId: string): ResetCropBoundsResult {
       throw new Error('Layout config not found')
     }
 
-    // Get unique frame indices
-    const frameIndices = db
-      .prepare('SELECT DISTINCT frame_index FROM full_frame_ocr ORDER BY frame_index')
-      .all() as Array<{ frame_index: number }>
-
-    if (frameIndices.length === 0) {
-      throw new Error('No OCR data found')
-    }
-
-    // Count caption boxes
-    const captionBoxCount = db
-      .prepare(
-        `
-        SELECT COUNT(*) as count
-        FROM full_frame_ocr o
-        LEFT JOIN full_frame_box_labels l
-          ON o.frame_index = l.frame_index
-          AND o.box_index = l.box_index
-          AND l.annotation_source = 'full_frame'
-        WHERE (
-          (l.label IS NULL AND o.predicted_label = 'in')
-          OR (l.label_source = 'user' AND l.label = 'in')
-        )
-      `
-      )
-      .get() as { count: number }
-
-    const useAllBoxesFallback = captionBoxCount.count === 0
-
-    // Get frame indices with caption boxes
-    const captionFrameIndices = db
-      .prepare(
-        useAllBoxesFallback
-          ? 'SELECT DISTINCT frame_index FROM full_frame_ocr ORDER BY frame_index'
-          : `
-            SELECT DISTINCT o.frame_index
-            FROM full_frame_ocr o
-            LEFT JOIN full_frame_box_labels l
-              ON o.frame_index = l.frame_index
-              AND o.box_index = l.box_index
-              AND l.annotation_source = 'full_frame'
-            WHERE (
-              (l.label IS NULL AND o.predicted_label = 'in')
-              OR (l.label_source = 'user' AND l.label = 'in')
-            )
-            ORDER BY o.frame_index
-          `
-      )
-      .all() as Array<{ frame_index: number }>
+    // Get caption frame info (handles fallback logic)
+    const { useAllBoxesFallback, frameIndices } = getCaptionFrameInfo(db)
 
     // Build frames with caption boxes
-    const frames: FrameOCR[] = captionFrameIndices.map(({ frame_index }) => {
-      const boxes = db
-        .prepare(
-          useAllBoxesFallback
-            ? `
-              SELECT
-                text as box_text,
-                FLOOR(x * ?) as box_left,
-                FLOOR((1 - y) * ?) - FLOOR(height * ?) as box_top,
-                FLOOR(x * ?) + FLOOR(width * ?) as box_right,
-                FLOOR((1 - y) * ?) as box_bottom
-              FROM full_frame_ocr
-              WHERE frame_index = ?
-              ORDER BY box_index
-            `
-            : `
-              SELECT
-                o.text as box_text,
-                FLOOR(o.x * ?) as box_left,
-                FLOOR((1 - o.y) * ?) - FLOOR(o.height * ?) as box_top,
-                FLOOR(o.x * ?) + FLOOR(o.width * ?) as box_right,
-                FLOOR((1 - o.y) * ?) as box_bottom
-              FROM full_frame_ocr o
-              LEFT JOIN full_frame_box_labels l
-                ON o.frame_index = l.frame_index
-                AND o.box_index = l.box_index
-                AND l.annotation_source = 'full_frame'
-              WHERE o.frame_index = ?
-                AND (
-                  (l.label IS NULL AND o.predicted_label = 'in')
-                  OR (l.label_source = 'user' AND l.label = 'in')
-                )
-              ORDER BY o.box_index
-            `
-        )
-        .all(
-          layoutConfig.frame_width,
-          layoutConfig.frame_height,
-          layoutConfig.frame_height,
-          layoutConfig.frame_width,
-          layoutConfig.frame_width,
-          layoutConfig.frame_height,
-          frame_index
-        ) as Array<{
-        box_text: string
-        box_left: number
-        box_top: number
-        box_right: number
-        box_bottom: number
-      }>
-
-      // Convert to legacy OCR format
-      const ocrAnnotations = boxes.map(box => [
-        box.box_text,
-        1.0,
-        [
-          box.box_left / layoutConfig.frame_width,
-          (layoutConfig.frame_height - box.box_bottom) / layoutConfig.frame_height,
-          (box.box_right - box.box_left) / layoutConfig.frame_width,
-          (box.box_bottom - box.box_top) / layoutConfig.frame_height,
-        ],
-      ])
-
-      return {
-        frame_index,
-        ocr_text: boxes.map(b => b.box_text).join(' '),
-        ocr_annotations: JSON.stringify(ocrAnnotations),
-        ocr_confidence: 1.0,
-      }
-    })
+    const frames = buildCaptionBoxFrames(db, frameIndices, layoutConfig, useAllBoxesFallback)
 
     // Analyze OCR boxes
     const analysis = analyzeOCRBoxes(frames, layoutConfig.frame_width, layoutConfig.frame_height)
@@ -1080,42 +1268,8 @@ export function resetCropBounds(videoId: string): ResetCropBoundsResult {
       .prepare('SELECT model_version FROM box_classification_model WHERE id = 1')
       .get() as { model_version: string } | undefined
 
-    // Update database
-    db.prepare(
-      `
-      UPDATE video_layout_config
-      SET crop_left = ?,
-          crop_top = ?,
-          crop_right = ?,
-          crop_bottom = ?,
-          crop_bounds_version = crop_bounds_version + 1,
-          analysis_model_version = ?,
-          vertical_position = ?,
-          vertical_std = ?,
-          box_height = ?,
-          box_height_std = ?,
-          anchor_type = ?,
-          anchor_position = ?,
-          top_edge_std = ?,
-          bottom_edge_std = ?,
-          updated_at = datetime('now')
-      WHERE id = 1
-    `
-    ).run(
-      analysis.cropBounds.left,
-      analysis.cropBounds.top,
-      analysis.cropBounds.right,
-      analysis.cropBounds.bottom,
-      modelInfo?.model_version ?? null,
-      analysis.layoutParams.verticalPosition,
-      analysis.layoutParams.verticalStd,
-      analysis.layoutParams.boxHeight,
-      analysis.layoutParams.boxHeightStd,
-      analysis.layoutParams.anchorType,
-      analysis.layoutParams.anchorPosition,
-      analysis.layoutParams.topEdgeStd,
-      analysis.layoutParams.bottomEdgeStd
-    )
+    // Save analysis results to database
+    saveAnalysisResults(db, analysis, modelInfo?.model_version ?? null)
 
     return {
       newCropBounds: analysis.cropBounds,

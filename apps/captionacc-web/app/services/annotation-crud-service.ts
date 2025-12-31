@@ -167,6 +167,225 @@ async function regenerateCombinedImageForAnnotation(
 }
 
 /**
+ * Represents a modified annotation with its new frame range.
+ */
+interface ModifiedAnnotationInfo {
+  id: number
+  startFrame: number
+  endFrame: number
+}
+
+/**
+ * Result of splitting overlapping annotations.
+ */
+interface SplitResult {
+  deletedIds: number[]
+  modifiedAnnotations: ModifiedAnnotationInfo[]
+}
+
+/**
+ * Detect annotations that overlap with a given frame range.
+ *
+ * @param db - Database connection
+ * @param startFrameIndex - Start frame of the range to check
+ * @param endFrameIndex - End frame of the range to check
+ * @param excludeId - Optional annotation ID to exclude from results
+ * @returns Array of overlapping annotation rows
+ */
+function detectOverlaps(
+  db: Database.Database,
+  startFrameIndex: number,
+  endFrameIndex: number,
+  excludeId?: number
+): AnnotationRow[] {
+  if (excludeId !== undefined) {
+    return db
+      .prepare(
+        `
+        SELECT * FROM captions
+        WHERE id != ?
+        AND NOT (end_frame_index < ? OR start_frame_index > ?)
+      `
+      )
+      .all(excludeId, startFrameIndex, endFrameIndex) as AnnotationRow[]
+  }
+
+  return db
+    .prepare(
+      `
+      SELECT * FROM captions
+      WHERE NOT (end_frame_index < ? OR start_frame_index > ?)
+    `
+    )
+    .all(startFrameIndex, endFrameIndex) as AnnotationRow[]
+}
+
+/**
+ * Split overlapping annotations at the boundaries of a new annotation.
+ *
+ * Handles three cases:
+ * - Completely contained: delete the overlapping annotation
+ * - New annotation contained within existing: split into left and right parts
+ * - Partial overlap: trim the overlapping annotation
+ *
+ * @param db - Database connection
+ * @param videoId - Video identifier for image cleanup
+ * @param overlaps - Array of overlapping annotations to resolve
+ * @param startFrameIndex - Start frame of the new annotation
+ * @param endFrameIndex - End frame of the new annotation
+ * @returns IDs of deleted annotations and info about modified annotations
+ */
+function splitOverlappingAnnotations(
+  db: Database.Database,
+  videoId: string,
+  overlaps: AnnotationRow[],
+  startFrameIndex: number,
+  endFrameIndex: number
+): SplitResult {
+  const deletedIds: number[] = []
+  const modifiedAnnotations: ModifiedAnnotationInfo[] = []
+
+  for (const overlap of overlaps) {
+    if (overlap.start_frame_index >= startFrameIndex && overlap.end_frame_index <= endFrameIndex) {
+      // Completely contained - delete it and its combined image
+      deleteCombinedImage(videoId, overlap.id)
+      db.prepare('DELETE FROM captions WHERE id = ?').run(overlap.id)
+      deletedIds.push(overlap.id)
+    } else if (
+      overlap.start_frame_index < startFrameIndex &&
+      overlap.end_frame_index > endFrameIndex
+    ) {
+      // New annotation is contained within existing - split the existing
+      // Keep the left part, set to pending
+      db.prepare(
+        `
+        UPDATE captions
+        SET end_frame_index = ?, boundary_pending = 1
+        WHERE id = ?
+      `
+      ).run(startFrameIndex - 1, overlap.id)
+      modifiedAnnotations.push({
+        id: overlap.id,
+        startFrame: overlap.start_frame_index,
+        endFrame: startFrameIndex - 1,
+      })
+
+      // Create right part as pending
+      const rightResult = db
+        .prepare(
+          `
+          INSERT INTO captions (start_frame_index, end_frame_index, boundary_state, boundary_pending, text)
+          VALUES (?, ?, ?, 1, ?)
+        `
+        )
+        .run(endFrameIndex + 1, overlap.end_frame_index, overlap.boundary_state, overlap.text)
+      modifiedAnnotations.push({
+        id: rightResult.lastInsertRowid as number,
+        startFrame: endFrameIndex + 1,
+        endFrame: overlap.end_frame_index,
+      })
+    } else if (overlap.start_frame_index < startFrameIndex) {
+      // Overlaps on the left - trim it
+      db.prepare(
+        `
+        UPDATE captions
+        SET end_frame_index = ?, boundary_pending = 1
+        WHERE id = ?
+      `
+      ).run(startFrameIndex - 1, overlap.id)
+      modifiedAnnotations.push({
+        id: overlap.id,
+        startFrame: overlap.start_frame_index,
+        endFrame: startFrameIndex - 1,
+      })
+    } else {
+      // Overlaps on the right - trim it
+      db.prepare(
+        `
+        UPDATE captions
+        SET start_frame_index = ?, boundary_pending = 1
+        WHERE id = ?
+      `
+      ).run(endFrameIndex + 1, overlap.id)
+      modifiedAnnotations.push({
+        id: overlap.id,
+        startFrame: endFrameIndex + 1,
+        endFrame: overlap.end_frame_index,
+      })
+    }
+  }
+
+  return { deletedIds, modifiedAnnotations }
+}
+
+/**
+ * Create gap annotations to fill uncovered ranges when an annotation shrinks.
+ *
+ * @param db - Database connection
+ * @param original - Original annotation before update
+ * @param startFrameIndex - New start frame
+ * @param endFrameIndex - New end frame
+ * @returns Array of created gap annotation rows
+ */
+function createGapAnnotations(
+  db: Database.Database,
+  original: AnnotationRow,
+  startFrameIndex: number,
+  endFrameIndex: number
+): AnnotationRow[] {
+  const createdGaps: AnnotationRow[] = []
+
+  if (startFrameIndex > original.start_frame_index) {
+    const gap = createOrMergeGap(db, original.start_frame_index, startFrameIndex - 1)
+    if (gap) createdGaps.push(gap)
+  }
+
+  if (endFrameIndex < original.end_frame_index) {
+    const gap = createOrMergeGap(db, endFrameIndex + 1, original.end_frame_index)
+    if (gap) createdGaps.push(gap)
+  }
+
+  return createdGaps
+}
+
+/**
+ * Regenerate combined images for a list of annotations.
+ *
+ * @param videoId - Video identifier
+ * @param annotations - Array of annotation info with frame ranges
+ * @param db - Database connection
+ */
+async function regenerateAnnotationImages(
+  videoId: string,
+  annotations: ModifiedAnnotationInfo[],
+  db: Database.Database
+): Promise<void> {
+  for (const ann of annotations) {
+    await regenerateCombinedImageForAnnotation(videoId, ann.id, ann.startFrame, ann.endFrame, db)
+  }
+}
+
+/**
+ * Fetch annotations by their IDs and transform to domain objects.
+ *
+ * @param db - Database connection
+ * @param ids - Array of annotation IDs to fetch
+ * @returns Array of transformed Annotation objects
+ */
+function fetchAnnotationsByIds(db: Database.Database, ids: Array<{ id: number }>): Annotation[] {
+  const results: Annotation[] = []
+  for (const item of ids) {
+    const ann = db.prepare('SELECT * FROM captions WHERE id = ?').get(item.id) as
+      | AnnotationRow
+      | undefined
+    if (ann) {
+      results.push(transformAnnotation(ann))
+    }
+  }
+  return results
+}
+
+/**
  * Create or merge a gap annotation.
  *
  * Finds adjacent gap annotations and merges them with the new gap
@@ -405,117 +624,21 @@ export async function updateAnnotationWithOverlapResolution(
       throw new Error('Annotation not found')
     }
 
-    // Find overlapping annotations (excluding the one being updated)
-    const overlapping = db
-      .prepare(
-        `
-        SELECT * FROM captions
-        WHERE id != ?
-        AND NOT (end_frame_index < ? OR start_frame_index > ?)
-      `
-      )
-      .all(id, startFrameIndex, endFrameIndex) as AnnotationRow[]
-
-    // Track results
-    const deletedAnnotations: number[] = []
-    const modifiedAnnotations: Array<{ id: number; startFrame: number; endFrame: number }> = []
-    const createdGaps: AnnotationRow[] = []
-
-    // Resolve overlaps
-    for (const overlap of overlapping) {
-      if (
-        overlap.start_frame_index >= startFrameIndex &&
-        overlap.end_frame_index <= endFrameIndex
-      ) {
-        // Completely contained - delete it and its combined image
-        deleteCombinedImage(videoId, overlap.id)
-        db.prepare('DELETE FROM captions WHERE id = ?').run(overlap.id)
-        deletedAnnotations.push(overlap.id)
-      } else if (
-        overlap.start_frame_index < startFrameIndex &&
-        overlap.end_frame_index > endFrameIndex
-      ) {
-        // New annotation is contained within existing - split the existing
-        // Keep the left part, set to pending
-        db.prepare(
-          `
-          UPDATE captions
-          SET end_frame_index = ?, boundary_pending = 1
-          WHERE id = ?
-        `
-        ).run(startFrameIndex - 1, overlap.id)
-        modifiedAnnotations.push({
-          id: overlap.id,
-          startFrame: overlap.start_frame_index,
-          endFrame: startFrameIndex - 1,
-        })
-
-        // Create right part as pending
-        const rightResult = db
-          .prepare(
-            `
-            INSERT INTO captions (start_frame_index, end_frame_index, boundary_state, boundary_pending, text)
-            VALUES (?, ?, ?, 1, ?)
-          `
-          )
-          .run(endFrameIndex + 1, overlap.end_frame_index, overlap.boundary_state, overlap.text)
-        modifiedAnnotations.push({
-          id: rightResult.lastInsertRowid as number,
-          startFrame: endFrameIndex + 1,
-          endFrame: overlap.end_frame_index,
-        })
-      } else if (overlap.start_frame_index < startFrameIndex) {
-        // Overlaps on the left - trim it
-        db.prepare(
-          `
-          UPDATE captions
-          SET end_frame_index = ?, boundary_pending = 1
-          WHERE id = ?
-        `
-        ).run(startFrameIndex - 1, overlap.id)
-        modifiedAnnotations.push({
-          id: overlap.id,
-          startFrame: overlap.start_frame_index,
-          endFrame: startFrameIndex - 1,
-        })
-      } else {
-        // Overlaps on the right - trim it
-        db.prepare(
-          `
-          UPDATE captions
-          SET start_frame_index = ?, boundary_pending = 1
-          WHERE id = ?
-        `
-        ).run(endFrameIndex + 1, overlap.id)
-        modifiedAnnotations.push({
-          id: overlap.id,
-          startFrame: endFrameIndex + 1,
-          endFrame: overlap.end_frame_index,
-        })
-      }
-    }
+    // Detect and resolve overlaps
+    const overlapping = detectOverlaps(db, startFrameIndex, endFrameIndex, id)
+    const { deletedIds, modifiedAnnotations } = splitOverlappingAnnotations(
+      db,
+      videoId,
+      overlapping,
+      startFrameIndex,
+      endFrameIndex
+    )
 
     // Regenerate combined images for all modified overlapping annotations
-    for (const modified of modifiedAnnotations) {
-      await regenerateCombinedImageForAnnotation(
-        videoId,
-        modified.id,
-        modified.startFrame,
-        modified.endFrame,
-        db
-      )
-    }
+    await regenerateAnnotationImages(videoId, modifiedAnnotations, db)
 
-    // Create gap annotations for uncovered ranges when annotation is reduced
-    if (startFrameIndex > original.start_frame_index) {
-      const gap = createOrMergeGap(db, original.start_frame_index, startFrameIndex - 1)
-      if (gap) createdGaps.push(gap)
-    }
-
-    if (endFrameIndex < original.end_frame_index) {
-      const gap = createOrMergeGap(db, endFrameIndex + 1, original.end_frame_index)
-      if (gap) createdGaps.push(gap)
-    }
+    // Create gap annotations for uncovered ranges when annotation shrinks
+    const createdGaps = createGapAnnotations(db, original, startFrameIndex, endFrameIndex)
 
     // Update the annotation and mark as confirmed
     db.prepare(
@@ -530,10 +653,10 @@ export async function updateAnnotationWithOverlapResolution(
     ).run(startFrameIndex, endFrameIndex, boundaryState ?? 'confirmed', id)
 
     // Regenerate combined image if boundaries changed
-    if (
-      startFrameIndex !== original.start_frame_index ||
-      endFrameIndex !== original.end_frame_index
-    ) {
+    const boundariesChanged =
+      startFrameIndex !== original.start_frame_index || endFrameIndex !== original.end_frame_index
+
+    if (boundariesChanged) {
       await regenerateCombinedImageForAnnotation(videoId, id, startFrameIndex, endFrameIndex, db)
     }
 
@@ -546,21 +669,10 @@ export async function updateAnnotationWithOverlapResolution(
       throw new Error('Failed to retrieve updated annotation')
     }
 
-    // Get all modified annotations for return
-    const modifiedResults: Annotation[] = []
-    for (const modified of modifiedAnnotations) {
-      const ann = db.prepare('SELECT * FROM captions WHERE id = ?').get(modified.id) as
-        | AnnotationRow
-        | undefined
-      if (ann) {
-        modifiedResults.push(transformAnnotation(ann))
-      }
-    }
-
     return {
       annotation: transformAnnotation(updatedAnnotation),
-      deletedAnnotations,
-      modifiedAnnotations: modifiedResults,
+      deletedAnnotations: deletedIds,
+      modifiedAnnotations: fetchAnnotationsByIds(db, modifiedAnnotations),
       createdGaps: createdGaps.map(transformAnnotation),
     }
   } finally {
