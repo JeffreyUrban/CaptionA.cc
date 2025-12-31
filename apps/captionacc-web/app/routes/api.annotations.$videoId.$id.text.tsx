@@ -197,7 +197,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
           text_pending = 0
       WHERE id = ?
     `
-    ).run(text !== undefined ? text : null, text_status || null, text_notes || null, annotationId)
+    ).run(text !== undefined ? text : null, text_status ?? null, text_notes ?? null, annotationId)
 
     // Get updated annotation
     const annotation = db.prepare('SELECT * FROM captions WHERE id = ?').get(annotationId)

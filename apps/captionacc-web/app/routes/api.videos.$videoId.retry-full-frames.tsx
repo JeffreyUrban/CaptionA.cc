@@ -75,7 +75,7 @@ export async function action({ params }: ActionFunctionArgs) {
         )
         .get() as { display_path: string } | undefined
 
-      videoPath = metadata?.display_path || videoId
+      videoPath = metadata?.display_path ?? videoId
 
       // Find video file
       const videoDir = getVideoDir(videoId)
@@ -120,7 +120,7 @@ export async function action({ params }: ActionFunctionArgs) {
         .get() as { error_details: string | undefined } | undefined
 
       const isDuplicateFrame =
-        errorInfo?.error_details?.includes('UNIQUE constraint failed: full_frames.frame_index') ||
+        errorInfo?.error_details?.includes('UNIQUE constraint failed: full_frames.frame_index') ??
         false
 
       if (isDuplicateFrame) {

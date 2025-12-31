@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { LinkChecker } from 'linkinator'
 
-const SITE_URL = process.env['SITE_URL'] || 'https://mysitename.url'
+const SITE_URL = process.env['SITE_URL'] ?? 'https://mysitename.url'
 
 interface CheckLinksOptions {
   url: string
@@ -18,7 +18,7 @@ async function checkLinks(options: CheckLinksOptions = { url: SITE_URL }) {
   const checker = new LinkChecker()
 
   checker.on('link', result => {
-    const status = result.status || 0
+    const status = result.status ?? 0
     const state = result.state
 
     if (state === 'BROKEN') {
@@ -79,4 +79,4 @@ async function checkLinks(options: CheckLinksOptions = { url: SITE_URL }) {
 
 // Allow running with custom URL from command line
 const customUrl = process.argv[2]
-checkLinks({ url: customUrl || SITE_URL })
+void checkLinks({ url: customUrl ?? SITE_URL })

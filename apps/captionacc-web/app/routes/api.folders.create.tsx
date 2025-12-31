@@ -24,7 +24,7 @@ async function readFoldersMetadata(): Promise<FoldersMetadata> {
       const content = await readFile(foldersMetaPath, 'utf-8')
       return JSON.parse(content)
     }
-  } catch (error) {
+  } catch {
     // If file doesn't exist or is invalid, return empty
   }
   return { emptyFolders: [] }

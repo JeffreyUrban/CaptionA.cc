@@ -47,7 +47,6 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   // Check if any video would conflict with existing paths in new location
-  const newPathPrefix = trimmedNewPath + '/'
   for (const video of videosInFolder) {
     // Calculate new display path for this video
     let newDisplayPath: string

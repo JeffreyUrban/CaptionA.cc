@@ -191,11 +191,11 @@ export function calculateExpansion(
 ): number {
   // Vertical expansion (top/bottom)
   if (edge === 'top') {
-    return STDDEV_MULTIPLE * (topEdgeStd || 10)
+    return STDDEV_MULTIPLE * (topEdgeStd ?? 10)
   }
 
   if (edge === 'bottom') {
-    return STDDEV_MULTIPLE * (bottomEdgeStd || 10)
+    return STDDEV_MULTIPLE * (bottomEdgeStd ?? 10)
   }
 
   // Horizontal expansion (left/right)

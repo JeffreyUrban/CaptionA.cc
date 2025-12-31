@@ -1,5 +1,4 @@
 import { existsSync } from 'fs'
-import { readdir } from 'fs/promises'
 import { resolve } from 'path'
 
 import Database from 'better-sqlite3'
@@ -187,7 +186,7 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
       )
       .get() as { covered_frames: number | null }
 
-    const coveredFrames = frameCoverage.covered_frames || 0
+    const coveredFrames = frameCoverage.covered_frames ?? 0
     const progress = totalFrames > 0 ? Math.round((coveredFrames / totalFrames) * 100) : 0
 
     return {
