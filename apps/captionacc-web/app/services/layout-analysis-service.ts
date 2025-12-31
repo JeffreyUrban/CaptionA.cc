@@ -140,7 +140,24 @@ export interface UpdateLayoutConfigInput {
   cropBounds?: CropBounds
   selectionBounds?: SelectionBounds
   selectionMode?: 'hard' | 'soft' | 'disabled'
-  layoutParams?: Partial<LayoutParams>
+  layoutParams?: {
+    verticalPosition: number
+    verticalStd: number
+    boxHeight: number
+    boxHeightStd: number
+    anchorType: 'left' | 'center' | 'right'
+    anchorPosition: number
+  }
+}
+
+/**
+ * Result from updating layout configuration.
+ */
+export interface UpdateLayoutConfigResult {
+  success: boolean
+  boundsChanged: boolean
+  framesInvalidated: number
+  layoutParamsChanged: boolean
 }
 
 /**
@@ -710,15 +727,19 @@ export function getLayoutConfig(videoId: string): LayoutConfig | null {
 /**
  * Update the layout configuration.
  *
- * Increments the crop_bounds_version when crop bounds change to track
- * which model version was used for analysis.
+ * Handles crop bounds changes with versioning, frame invalidation, and layout parameter updates.
+ * When crop bounds change, increments the version and invalidates all frames.
+ * When layout parameters change, clears the trained model and triggers prediction recalculation.
  *
  * @param videoId - Video identifier
  * @param input - Layout configuration updates
- * @returns Updated layout configuration
- * @throws Error if database is not found
+ * @returns Result indicating what changed
+ * @throws Error if database or config is not found
  */
-export function updateLayoutConfig(videoId: string, input: UpdateLayoutConfigInput): LayoutConfig {
+export function updateLayoutConfig(
+  videoId: string,
+  input: UpdateLayoutConfigInput
+): UpdateLayoutConfigResult {
   const result = getWritableDatabase(videoId)
   if (!result.success) {
     throw new Error('Database not found')
@@ -727,93 +748,174 @@ export function updateLayoutConfig(videoId: string, input: UpdateLayoutConfigInp
   const db = result.db
 
   try {
-    // Build update query dynamically
-    const updates: string[] = []
-    const values: unknown[] = []
-
-    if (input.cropBounds) {
-      updates.push('crop_left = ?', 'crop_top = ?', 'crop_right = ?', 'crop_bottom = ?')
-      values.push(
-        input.cropBounds.left,
-        input.cropBounds.top,
-        input.cropBounds.right,
-        input.cropBounds.bottom
-      )
-      updates.push('crop_bounds_version = crop_bounds_version + 1')
-    }
-
-    if (input.selectionBounds) {
-      updates.push(
-        'selection_left = ?',
-        'selection_top = ?',
-        'selection_right = ?',
-        'selection_bottom = ?'
-      )
-      values.push(
-        input.selectionBounds.left,
-        input.selectionBounds.top,
-        input.selectionBounds.right,
-        input.selectionBounds.bottom
-      )
-    }
-
-    if (input.selectionMode) {
-      updates.push('selection_mode = ?')
-      values.push(input.selectionMode)
-    }
-
-    if (input.layoutParams) {
-      const lp = input.layoutParams
-      if (lp.verticalPosition !== undefined) {
-        updates.push('vertical_position = ?')
-        values.push(lp.verticalPosition)
-      }
-      if (lp.verticalStd !== undefined) {
-        updates.push('vertical_std = ?')
-        values.push(lp.verticalStd)
-      }
-      if (lp.boxHeight !== undefined) {
-        updates.push('box_height = ?')
-        values.push(lp.boxHeight)
-      }
-      if (lp.boxHeightStd !== undefined) {
-        updates.push('box_height_std = ?')
-        values.push(lp.boxHeightStd)
-      }
-      if (lp.anchorType !== undefined) {
-        updates.push('anchor_type = ?')
-        values.push(lp.anchorType)
-      }
-      if (lp.anchorPosition !== undefined) {
-        updates.push('anchor_position = ?')
-        values.push(lp.anchorPosition)
-      }
-      if (lp.topEdgeStd !== undefined) {
-        updates.push('top_edge_std = ?')
-        values.push(lp.topEdgeStd)
-      }
-      if (lp.bottomEdgeStd !== undefined) {
-        updates.push('bottom_edge_std = ?')
-        values.push(lp.bottomEdgeStd)
-      }
-    }
-
-    updates.push("updated_at = datetime('now')")
-
-    if (updates.length > 1) {
-      const sql = `UPDATE video_layout_config SET ${updates.join(', ')} WHERE id = 1`
-      db.prepare(sql).run(...values)
-    }
-
-    const layoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as
+    // Get current config to detect changes
+    const currentConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as
       | VideoLayoutConfigRow
       | undefined
 
-    if (!layoutConfig) {
-      throw new Error('Layout config not found after update')
+    if (!currentConfig) {
+      throw new Error('Layout config not found')
     }
 
-    return transformLayoutConfig(layoutConfig)
+    // Check if crop bounds changed
+    const { cropBounds, selectionBounds, selectionMode, layoutParams } = input
+    const cropBoundsChanged =
+      cropBounds !== undefined &&
+      (cropBounds.left !== currentConfig.crop_left ||
+        cropBounds.top !== currentConfig.crop_top ||
+        cropBounds.right !== currentConfig.crop_right ||
+        cropBounds.bottom !== currentConfig.crop_bottom)
+
+    let framesInvalidated = 0
+
+    // Begin transaction
+    db.prepare('BEGIN TRANSACTION').run()
+
+    try {
+      // Update crop bounds and increment version if changed
+      if (cropBoundsChanged && cropBounds) {
+        // Increment crop_bounds_version
+        db.prepare(
+          `
+          UPDATE video_layout_config
+          SET crop_bounds_version = crop_bounds_version + 1,
+              crop_left = ?,
+              crop_top = ?,
+              crop_right = ?,
+              crop_bottom = ?,
+              updated_at = datetime('now')
+          WHERE id = 1
+        `
+        ).run(cropBounds.left, cropBounds.top, cropBounds.right, cropBounds.bottom)
+
+        // Invalidate all frames (set crop_bounds_version to 0)
+        const invalidateResult = db
+          .prepare(
+            `
+          UPDATE frames_ocr
+          SET crop_bounds_version = 0
+        `
+          )
+          .run()
+
+        framesInvalidated = invalidateResult.changes
+
+        console.log(`Crop bounds changed: invalidated ${framesInvalidated} frames`)
+      } else if (cropBounds) {
+        // Update crop bounds without incrementing version (no actual change)
+        db.prepare(
+          `
+          UPDATE video_layout_config
+          SET crop_left = ?,
+              crop_top = ?,
+              crop_right = ?,
+              crop_bottom = ?,
+              updated_at = datetime('now')
+          WHERE id = 1
+        `
+        ).run(cropBounds.left, cropBounds.top, cropBounds.right, cropBounds.bottom)
+      }
+
+      // Update selection bounds and mode
+      if (selectionBounds !== undefined || selectionMode !== undefined) {
+        const updates: string[] = []
+        const values: (number | string)[] = []
+
+        if (selectionBounds !== undefined) {
+          updates.push(
+            'selection_left = ?',
+            'selection_top = ?',
+            'selection_right = ?',
+            'selection_bottom = ?'
+          )
+          values.push(
+            selectionBounds.left,
+            selectionBounds.top,
+            selectionBounds.right,
+            selectionBounds.bottom
+          )
+        }
+
+        if (selectionMode !== undefined) {
+          updates.push('selection_mode = ?')
+          values.push(selectionMode)
+        }
+
+        updates.push("updated_at = datetime('now')")
+
+        db.prepare(
+          `
+          UPDATE video_layout_config
+          SET ${updates.join(', ')}
+          WHERE id = 1
+        `
+        ).run(...values)
+      }
+
+      // Update layout parameters (Bayesian priors)
+      if (layoutParams) {
+        db.prepare(
+          `
+          UPDATE video_layout_config
+          SET vertical_position = ?,
+              vertical_std = ?,
+              box_height = ?,
+              box_height_std = ?,
+              anchor_type = ?,
+              anchor_position = ?,
+              updated_at = datetime('now')
+          WHERE id = 1
+        `
+        ).run(
+          layoutParams.verticalPosition,
+          layoutParams.verticalStd,
+          layoutParams.boxHeight,
+          layoutParams.boxHeightStd,
+          layoutParams.anchorType,
+          layoutParams.anchorPosition
+        )
+
+        // Clear the trained model since it was trained with different layout parameters
+        // Predictions will fall back to heuristics until model is retrained
+        db.prepare(`DELETE FROM box_classification_model WHERE id = 1`).run()
+        console.log(
+          `[Layout Config] Layout parameters changed, cleared trained model (will use heuristics until retrained)`
+        )
+      }
+
+      db.prepare('COMMIT').run()
+    } catch (error) {
+      db.prepare('ROLLBACK').run()
+      throw error
+    }
+
+    // Trigger prediction recalculation if layout parameters changed
+    // (predictions depend on these parameters, so they need to be recalculated)
+    if (layoutParams) {
+      console.log(
+        `[Layout Config] Layout parameters changed, triggering prediction recalculation for ${videoId}`
+      )
+      fetch(
+        `http://localhost:5173/api/annotations/${encodeURIComponent(videoId)}/calculate-predictions`,
+        {
+          method: 'POST',
+        }
+      )
+        .then(response => response.json())
+        .then(result => {
+          console.log(`[Layout Config] Predictions recalculated after layout change:`, result)
+        })
+        .catch(err => {
+          console.error(`[Layout Config] Failed to recalculate predictions:`, err.message)
+        })
+    }
+
+    return {
+      success: true,
+      boundsChanged: cropBoundsChanged,
+      framesInvalidated,
+      layoutParamsChanged: !!layoutParams,
+    }
   } finally {
     db.close()
   }
@@ -1067,6 +1169,140 @@ export function setLayoutApproved(videoId: string, approved: boolean): void {
 }
 
 /**
+ * Box data for layout analysis visualization.
+ */
+export interface LayoutAnalysisBox {
+  boxIndex: number
+  text: string
+  originalBounds: { left: number; top: number; right: number; bottom: number }
+  displayBounds: { left: number; top: number; right: number; bottom: number }
+  predictedLabel: 'in' | 'out'
+  predictedConfidence: number
+  userLabel: 'in' | 'out' | null
+  colorCode: string
+}
+
+/** Raw OCR box from database. */
+interface OcrBoxRow {
+  id: number
+  frame_index: number
+  box_index: number
+  text: string
+  x: number
+  y: number
+  width: number
+  height: number
+  predicted_label: 'in' | 'out' | null
+  predicted_confidence: number | null
+}
+
+/** Box bounds in pixel coordinates. */
+interface BoxBounds {
+  left: number
+  top: number
+  right: number
+  bottom: number
+}
+
+/** Type for predict function imported lazily. */
+type PredictBoxLabelFn = (
+  boxBounds: BoxBounds,
+  layoutConfig: VideoLayoutConfigRow,
+  allBoxes: BoxBounds[],
+  frameIndex: number,
+  boxIndex: number,
+  db?: import('better-sqlite3').Database
+) => { label: 'in' | 'out'; confidence: number }
+
+/**
+ * Generate color code for a box based on its labels.
+ *
+ * Color scheme:
+ * - User labeled "in": teal (#14b8a6)
+ * - User labeled "out": red (#dc2626)
+ * - Predicted "in": blue (#3b82f6)
+ * - Predicted "out": orange (#f97316)
+ */
+function getBoxColorCode(userLabel: 'in' | 'out' | null, predictedLabel: 'in' | 'out'): string {
+  if (userLabel === 'in') return '#14b8a6' // teal
+  if (userLabel === 'out') return '#dc2626' // red
+  if (predictedLabel === 'in') return '#3b82f6' // blue
+  return '#f97316' // orange
+}
+
+/** Convert fractional OCR coordinates to pixel bounds. */
+function convertToPixelBounds(box: OcrBoxRow, config: VideoLayoutConfigRow): BoxBounds {
+  const left = Math.floor(box.x * config.frame_width)
+  const bottom = Math.floor((1 - box.y) * config.frame_height)
+  const boxWidth = Math.floor(box.width * config.frame_width)
+  const boxHeight = Math.floor(box.height * config.frame_height)
+  return { left, top: bottom - boxHeight, right: left + boxWidth, bottom }
+}
+
+/** Group boxes by frame index. */
+function groupBoxesByFrame(boxes: OcrBoxRow[]): Map<number, OcrBoxRow[]> {
+  const byFrame = new Map<number, OcrBoxRow[]>()
+  for (const box of boxes) {
+    const frameBoxes = byFrame.get(box.frame_index) ?? []
+    frameBoxes.push(box)
+    byFrame.set(box.frame_index, frameBoxes)
+  }
+  return byFrame
+}
+
+/** Build annotation lookup map from annotations. */
+function buildAnnotationMap(
+  annotations: Array<{ frame_index: number; box_index: number; label: 'in' | 'out' }>
+): Map<string, 'in' | 'out'> {
+  const map = new Map<string, 'in' | 'out'>()
+  for (const ann of annotations) {
+    map.set(`${ann.frame_index}-${ann.box_index}`, ann.label)
+  }
+  return map
+}
+
+/** Process a single box and return its visualization data. */
+function processBox(
+  box: OcrBoxRow,
+  bounds: BoxBounds,
+  layoutConfig: VideoLayoutConfigRow,
+  allBounds: BoxBounds[],
+  annotationMap: Map<string, 'in' | 'out'>,
+  updateStmt: import('better-sqlite3').Statement,
+  predictBoxLabel: PredictBoxLabelFn,
+  db: import('better-sqlite3').Database
+): LayoutAnalysisBox {
+  const userLabel = annotationMap.get(`${box.frame_index}-${box.box_index}`) ?? null
+  let predictedLabel: 'in' | 'out' = box.predicted_label ?? 'out'
+  let predictedConfidence = box.predicted_confidence ?? 0
+
+  if (!box.predicted_label || box.predicted_confidence === null) {
+    const prediction = predictBoxLabel(
+      bounds,
+      layoutConfig,
+      allBounds,
+      box.frame_index,
+      box.box_index,
+      db
+    )
+    predictedLabel = prediction.label
+    predictedConfidence = prediction.confidence
+    updateStmt.run(predictedLabel, predictedConfidence, box.id)
+  }
+
+  return {
+    boxIndex: box.box_index,
+    text: box.text,
+    originalBounds: bounds,
+    displayBounds: bounds,
+    predictedLabel,
+    predictedConfidence,
+    userLabel,
+    colorCode: getBoxColorCode(userLabel, predictedLabel),
+  }
+}
+
+/**
  * Get all OCR boxes for visualization in the layout editor.
  *
  * @param videoId - Video identifier
@@ -1074,85 +1310,83 @@ export function setLayoutApproved(videoId: string, approved: boolean): void {
  * @returns Array of box data for visualization
  * @throws Error if database is not found
  */
-export function getLayoutAnalysisBoxes(
-  videoId: string,
-  frameIndex?: number
-): Array<{
-  frameIndex: number
-  boxIndex: number
-  text: string
-  bounds: { left: number; top: number; right: number; bottom: number }
-  predictedLabel: 'in' | 'out' | null
-  userLabel: 'in' | 'out' | null
-}> {
-  const result = getAnnotationDatabase(videoId)
-  if (!result.success) {
-    throw new Error('Database not found')
+export function getLayoutAnalysisBoxes(videoId: string, frameIndex?: number): LayoutAnalysisBox[] {
+  // Import predictBoxLabel lazily to avoid circular dependencies
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { predictBoxLabel } = require('~/utils/box-prediction') as {
+    predictBoxLabel: PredictBoxLabelFn
   }
 
+  const result = getWritableDatabase(videoId)
+  if (!result.success) throw new Error('Database not found')
   const db = result.db
 
   try {
-    // Get layout config for dimensions
-    const layoutConfig = db
-      .prepare('SELECT frame_width, frame_height FROM video_layout_config WHERE id = 1')
-      .get() as { frame_width: number; frame_height: number } | undefined
+    const layoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as
+      | VideoLayoutConfigRow
+      | undefined
+    if (!layoutConfig) throw new Error('Layout config not found')
 
-    if (!layoutConfig) {
-      throw new Error('Layout config not found')
+    // Log model version mismatch for background recalculation
+    const analysisVersion = layoutConfig.analysis_model_version ?? null
+    const modelInfo = db
+      .prepare('SELECT model_version FROM box_classification_model WHERE id = 1')
+      .get() as { model_version: string } | undefined
+    if (analysisVersion !== (modelInfo?.model_version ?? null)) {
+      console.log(`[LayoutAnalysisBoxes] Model version mismatch for ${videoId}`)
     }
 
-    // Build query
-    const whereClause = frameIndex !== undefined ? 'WHERE o.frame_index = ?' : ''
+    // Fetch OCR boxes and annotations
+    const whereClause = frameIndex !== undefined ? 'WHERE frame_index = ?' : ''
     const params = frameIndex !== undefined ? [frameIndex] : []
 
     const boxes = db
       .prepare(
         `
-        SELECT
-          o.frame_index,
-          o.box_index,
-          o.text,
-          o.x, o.y, o.width, o.height,
-          o.predicted_label,
-          l.label as user_label
-        FROM full_frame_ocr o
-        LEFT JOIN full_frame_box_labels l
-          ON o.frame_index = l.frame_index
-          AND o.box_index = l.box_index
-          AND l.annotation_source = 'full_frame'
-          AND l.label_source = 'user'
-        ${whereClause}
-        ORDER BY o.frame_index, o.box_index
-      `
+      SELECT id, frame_index, box_index, text, x, y, width, height, predicted_label, predicted_confidence
+      FROM full_frame_ocr ${whereClause} ORDER BY frame_index, box_index
+    `
       )
-      .all(...params) as Array<{
-      frame_index: number
-      box_index: number
-      text: string
-      x: number
-      y: number
-      width: number
-      height: number
-      predicted_label: 'in' | 'out' | null
-      user_label: 'in' | 'out' | null
-    }>
+      .all(...params) as OcrBoxRow[]
 
-    return boxes.map(box => {
-      const boxLeft = Math.floor(box.x * layoutConfig.frame_width)
-      const boxBottom = Math.floor((1 - box.y) * layoutConfig.frame_height)
-      const boxTop = boxBottom - Math.floor(box.height * layoutConfig.frame_height)
-      const boxRight = boxLeft + Math.floor(box.width * layoutConfig.frame_width)
+    const annotations = db
+      .prepare(
+        `
+      SELECT frame_index, box_index, label FROM full_frame_box_labels
+      ${frameIndex !== undefined ? 'WHERE frame_index = ?' : ''}
+    `
+      )
+      .all(...params) as Array<{ frame_index: number; box_index: number; label: 'in' | 'out' }>
 
-      return {
-        frameIndex: box.frame_index,
-        boxIndex: box.box_index,
-        text: box.text,
-        bounds: { left: boxLeft, top: boxTop, right: boxRight, bottom: boxBottom },
-        predictedLabel: box.predicted_label,
-        userLabel: box.user_label,
+    const annotationMap = buildAnnotationMap(annotations)
+    const updateStmt = db.prepare(
+      `UPDATE full_frame_ocr SET predicted_label = ?, predicted_confidence = ?, predicted_at = datetime('now') WHERE id = ?`
+    )
+
+    // Process boxes by frame
+    const boxesData: LayoutAnalysisBox[] = []
+    for (const [, frameBoxes] of groupBoxesByFrame(boxes)) {
+      const allBounds = frameBoxes.map(b => convertToPixelBounds(b, layoutConfig))
+      for (let i = 0; i < frameBoxes.length; i++) {
+        const box = frameBoxes[i]
+        const bounds = allBounds[i]
+        if (box && bounds) {
+          boxesData.push(
+            processBox(
+              box,
+              bounds,
+              layoutConfig,
+              allBounds,
+              annotationMap,
+              updateStmt,
+              predictBoxLabel,
+              db
+            )
+          )
+        }
       }
-    })
+    }
+    return boxesData
   } finally {
     db.close()
   }

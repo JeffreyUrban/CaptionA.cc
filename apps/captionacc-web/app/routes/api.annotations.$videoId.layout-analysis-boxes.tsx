@@ -1,258 +1,63 @@
-import { existsSync } from 'fs'
+/**
+ * API route for fetching layout analysis boxes.
+ *
+ * GET /api/annotations/:videoId/layout-analysis-boxes
+ *
+ * Returns all OCR boxes with predictions and color codes for visualization
+ * in the layout editor. Supports optional frameIndex query parameter for
+ * filtering to a specific frame.
+ */
 
-import Database from 'better-sqlite3'
 import { type LoaderFunctionArgs } from 'react-router'
 
-import { predictBoxLabel } from '~/utils/box-prediction'
-import { getDbPath } from '~/utils/video-paths'
+import { getLayoutAnalysisBoxes } from '~/services/layout-analysis-service'
+import {
+  extractVideoId,
+  jsonResponse,
+  errorResponse,
+  notFoundResponse,
+} from '~/utils/api-responses'
 
-interface VideoLayoutConfig {
-  frame_width: number
-  frame_height: number
-  crop_left: number
-  crop_top: number
-  crop_right: number
-  crop_bottom: number
-  selection_left: number | null
-  selection_top: number | null
-  selection_right: number | null
-  selection_bottom: number | null
-  vertical_position: number | null
-  vertical_std: number | null
-  box_height: number | null
-  box_height_std: number | null
-  anchor_type: 'left' | 'center' | 'right' | null
-  anchor_position: number | null
-  analysis_model_version: string | null
-}
-
-interface BoxData {
-  boxIndex: number
-  text: string
-  originalBounds: { left: number; top: number; right: number; bottom: number }
-  displayBounds: { left: number; top: number; right: number; bottom: number }
-  predictedLabel: 'in' | 'out'
-  predictedConfidence: number
-  userLabel: 'in' | 'out' | null
-  colorCode: string
-}
-
-function getDatabase(videoId: string): Database.Database | Response {
-  const dbPath = getDbPath(videoId)
-  if (!dbPath) {
-    return new Response('Video not found', { status: 404 })
+/**
+ * GET - Fetch all OCR boxes for analysis view.
+ *
+ * Query parameters:
+ * - frameIndex (optional): Filter to specific frame index
+ *
+ * Response:
+ * - boxes: Array of box data with predictions and color codes
+ */
+export async function loader({ params, request }: LoaderFunctionArgs) {
+  // Extract and validate videoId
+  const videoIdResult = extractVideoId(params)
+  if (!videoIdResult.success) {
+    return videoIdResult.response
   }
+  const videoId = videoIdResult.value
 
-  if (!existsSync(dbPath)) {
-    throw new Error(`Database not found for video: ${videoId}`)
+  // Parse optional frameIndex query parameter
+  const url = new URL(request.url)
+  const frameIndexParam = url.searchParams.get('frameIndex')
+  const frameIndex = frameIndexParam ? parseInt(frameIndexParam, 10) : undefined
+
+  // Validate frameIndex if provided
+  if (frameIndex !== undefined && (isNaN(frameIndex) || frameIndex < 0)) {
+    return errorResponse('Invalid frameIndex parameter', 400)
   }
-
-  return new Database(dbPath)
-}
-
-// GET - Fetch all OCR boxes for analysis view
-export async function loader({ params }: LoaderFunctionArgs) {
-  const { videoId: encodedVideoId } = params
-
-  if (!encodedVideoId) {
-    return new Response(JSON.stringify({ error: 'Missing videoId' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' },
-    })
-  }
-
-  const videoId = decodeURIComponent(encodedVideoId)
 
   try {
-    const db = getDatabase(videoId)
-    if (db instanceof Response) return db
-
-    // Get layout config
-    const layoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as
-      | VideoLayoutConfig
-      | undefined
-
-    if (!layoutConfig) {
-      db.close()
-      return new Response(JSON.stringify({ error: 'Layout config not found' }), {
-        status: 404,
-        headers: { 'Content-Type': 'application/json' },
-      })
-    }
-
-    // Check for model version mismatch (detection only - background job handles recalculation)
-    const analysisVersion = layoutConfig.analysis_model_version ?? null
-    const modelInfo = db
-      .prepare('SELECT model_version FROM box_classification_model WHERE id = 1')
-      .get() as { model_version: string } | undefined
-    const currentVersion = modelInfo?.model_version ?? null
-
-    if (analysisVersion !== currentVersion) {
-      console.log(
-        `[LayoutAnalysisBoxes] Model version mismatch detected for ${videoId}: ` +
-          `${analysisVersion ?? 'null'} → ${currentVersion}. Background check will recalculate.`
-      )
-      // Note: Actual recalculation happens via background monitor, not blocking page load
-    }
-
-    // Fetch all OCR boxes from full_frame_ocr table with predictions
-    const boxes = db
-      .prepare(
-        `
-      SELECT
-        id,
-        frame_index,
-        box_index,
-        text,
-        x, y, width, height,
-        predicted_label,
-        predicted_confidence
-      FROM full_frame_ocr
-      ORDER BY frame_index, box_index
-    `
-      )
-      .all() as Array<{
-      id: number
-      frame_index: number
-      box_index: number
-      text: string
-      x: number
-      y: number
-      width: number
-      height: number
-      predicted_label: 'in' | 'out' | null
-      predicted_confidence: number | null
-    }>
-
-    // Fetch user annotations (full_frame_box_labels)
-    const annotations = db
-      .prepare(
-        `
-      SELECT
-        frame_index,
-        box_index,
-        label
-      FROM full_frame_box_labels
-    `
-      )
-      .all() as Array<{
-      frame_index: number
-      box_index: number
-      label: 'in' | 'out'
-    }>
-
-    // Create annotation map for fast lookup
-    const annotationMap = new Map<string, 'in' | 'out'>()
-    for (const ann of annotations) {
-      annotationMap.set(`${ann.frame_index}-${ann.box_index}`, ann.label)
-    }
-
-    // Prepare statement to update predictions if missing
-    const updatePredictionStmt = db.prepare(`
-      UPDATE full_frame_ocr
-      SET
-        predicted_label = ?,
-        predicted_confidence = ?,
-        predicted_at = datetime('now')
-      WHERE id = ?
-    `)
-
-    // Group boxes by frame for local feature extraction
-    const boxesByFrame = new Map<number, typeof boxes>()
-    for (const box of boxes) {
-      if (!boxesByFrame.has(box.frame_index)) {
-        boxesByFrame.set(box.frame_index, [])
-      }
-      const frameBoxes = boxesByFrame.get(box.frame_index)
-      if (frameBoxes) {
-        frameBoxes.push(box)
-      }
-    }
-
-    // Convert to box data with predictions (calculate on-the-fly if missing)
-    const boxesData: BoxData[] = []
-
-    for (const [, frameBoxes] of boxesByFrame) {
-      // Convert all boxes in this frame to BoxBounds for feature extraction
-      const allBoxBounds = frameBoxes.map(b => {
-        const left = Math.floor(b.x * layoutConfig.frame_width)
-        const bottom = Math.floor((1 - b.y) * layoutConfig.frame_height)
-        const boxWidth = Math.floor(b.width * layoutConfig.frame_width)
-        const boxHeight = Math.floor(b.height * layoutConfig.frame_height)
-        const top = bottom - boxHeight
-        const right = left + boxWidth
-        return { left, top, right, bottom }
-      })
-
-      // Process each box in this frame
-      for (let i = 0; i < frameBoxes.length; i++) {
-        const box = frameBoxes[i]
-        const bounds = allBoxBounds[i]
-        if (!box || !bounds) continue
-
-        // Check for user annotation
-        const userLabel = annotationMap.get(`${box.frame_index}-${box.box_index}`) ?? null
-
-        // Use stored prediction if available, otherwise calculate and store
-        let predictedLabel: 'in' | 'out'
-        let predictedConfidence: number
-
-        if (box.predicted_label && box.predicted_confidence !== null) {
-          // Use stored prediction
-          predictedLabel = box.predicted_label
-          predictedConfidence = box.predicted_confidence
-        } else {
-          // Calculate prediction on-the-fly
-          const prediction = predictBoxLabel(
-            bounds,
-            layoutConfig,
-            allBoxBounds,
-            box.frame_index,
-            box.box_index,
-            db
-          )
-          predictedLabel = prediction.label
-          predictedConfidence = prediction.confidence
-
-          // Store for next time
-          updatePredictionStmt.run(predictedLabel, predictedConfidence, box.id)
-        }
-
-        // Generate color code based on label
-        let colorCode: string
-        if (userLabel === 'in') {
-          colorCode = '#14b8a6' // teal
-        } else if (userLabel === 'out') {
-          colorCode = '#dc2626' // red
-        } else if (predictedLabel === 'in') {
-          colorCode = '#3b82f6' // blue
-        } else {
-          colorCode = '#f97316' // orange
-        }
-
-        boxesData.push({
-          boxIndex: box.box_index,
-          text: box.text,
-          originalBounds: bounds,
-          displayBounds: bounds, // Same as original for analysis view
-          predictedLabel,
-          predictedConfidence,
-          userLabel,
-          colorCode,
-        })
-      }
-    }
-
-    db.close()
-
-    return new Response(JSON.stringify({ boxes: boxesData }), {
-      headers: { 'Content-Type': 'application/json' },
-    })
+    const boxes = getLayoutAnalysisBoxes(videoId, frameIndex)
+    return jsonResponse({ boxes })
   } catch (error) {
     console.error('Error fetching layout analysis boxes:', error)
-    return new Response(JSON.stringify({ error: String(error) }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    })
+
+    const message = error instanceof Error ? error.message : 'Unknown error'
+
+    // Return 404 for "not found" errors, 500 for others
+    if (message.includes('not found')) {
+      return notFoundResponse(message)
+    }
+
+    return errorResponse(message)
   }
 }

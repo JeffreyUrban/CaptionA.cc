@@ -140,6 +140,28 @@ export interface BulkAnnotateAllResult {
 }
 
 /**
+ * Action for bulk annotating boxes in rectangle across all frames.
+ */
+export type BulkAnnotateRectangleAllAction = 'mark_out' | 'clear'
+
+/**
+ * Result of bulk annotating boxes in rectangle across all frames.
+ */
+export interface BulkAnnotateRectangleAllResult {
+  success: boolean
+  /** The action that was performed */
+  action: BulkAnnotateRectangleAllAction
+  /** Total number of boxes annotated/affected across all frames */
+  totalAnnotatedBoxes: number
+  /** Number of boxes that were newly annotated (didn't have labels before) */
+  newlyAnnotatedBoxes: number
+  /** Number of frames that were processed */
+  framesProcessed: number
+  /** Frame indices that were affected */
+  frameIndices: number[]
+}
+
+/**
  * Result of calculating predictions.
  */
 export interface CalculatePredictionsResult {
@@ -641,6 +663,209 @@ export function bulkAnnotateRectangle(
       action: input.action,
       annotatedCount: boxesInRectangle.length,
       boxIndices: boxesInRectangle,
+    }
+  } finally {
+    db.close()
+  }
+}
+
+/**
+ * Bulk annotate all boxes within a rectangular region across ALL frames.
+ *
+ * This iterates through all analysis frames (0.1Hz) and applies the action
+ * to any boxes that intersect with the given rectangle.
+ *
+ * @param videoId - Video identifier
+ * @param rectangle - Rectangle bounds in pixel coordinates (full frame space)
+ * @param action - Action to apply ('mark_out' or 'clear')
+ * @returns Result with counts of affected boxes and frames
+ * @throws Error if database or layout config is not found
+ */
+export function bulkAnnotateRectangleAllFrames(
+  videoId: string,
+  rectangle: PixelBounds,
+  action: BulkAnnotateRectangleAllAction
+): BulkAnnotateRectangleAllResult {
+  const result = getWritableDatabase(videoId)
+  if (!result.success) {
+    throw new Error('Database not found')
+  }
+
+  const db = result.db
+
+  try {
+    // Get layout config for frame dimensions and predictions
+    const layoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as
+      | VideoLayoutConfigRow
+      | undefined
+
+    if (!layoutConfig) {
+      throw new Error('Layout config not found')
+    }
+
+    // Get model version if available
+    const modelInfo = db
+      .prepare('SELECT model_version FROM box_classification_model WHERE id = 1')
+      .get() as { model_version: string } | undefined
+    const modelVersion = modelInfo?.model_version ?? null
+
+    // Get all unique frame indices from full_frame_ocr table
+    const frames = db
+      .prepare('SELECT DISTINCT frame_index FROM full_frame_ocr ORDER BY frame_index')
+      .all() as Array<{ frame_index: number }>
+
+    let totalAnnotatedBoxes = 0
+    let newlyAnnotatedBoxes = 0
+    const framesProcessed: number[] = []
+
+    // Process each frame
+    for (const { frame_index: frameIndex } of frames) {
+      // Load OCR boxes for this frame
+      const ocrBoxes = db
+        .prepare(
+          `
+          SELECT box_index, text, confidence, x, y, width, height
+          FROM full_frame_ocr
+          WHERE frame_index = ?
+          ORDER BY box_index
+        `
+        )
+        .all(frameIndex) as OcrBoxRow[]
+
+      // Convert all boxes to bounds for feature extraction
+      const allBoxBounds: PixelBounds[] = ocrBoxes.map(box =>
+        ocrToPixelBounds(box, layoutConfig.frame_width, layoutConfig.frame_height)
+      )
+
+      // Find all boxes that intersect with rectangle
+      const boxesInRectangle: number[] = []
+
+      for (const box of ocrBoxes) {
+        const bounds = ocrToPixelBounds(box, layoutConfig.frame_width, layoutConfig.frame_height)
+
+        // Check if box intersects with rectangle
+        const intersects = !(
+          bounds.right < rectangle.left ||
+          bounds.left > rectangle.right ||
+          bounds.bottom < rectangle.top ||
+          bounds.top > rectangle.bottom
+        )
+
+        if (intersects) {
+          boxesInRectangle.push(box.box_index)
+        }
+      }
+
+      // Apply action to all intersecting boxes in this frame
+      if (boxesInRectangle.length > 0) {
+        if (action === 'clear') {
+          // Delete labels for these boxes
+          const deleteStmt = db.prepare(`
+            DELETE FROM full_frame_box_labels
+            WHERE frame_index = ? AND box_index = ?
+          `)
+
+          for (const boxIndex of boxesInRectangle) {
+            deleteStmt.run(frameIndex, boxIndex)
+          }
+        } else {
+          // action === 'mark_out'
+          // Check which boxes already have labels
+          const existingLabels = new Set(
+            (
+              db
+                .prepare(
+                  `
+                SELECT box_index FROM full_frame_box_labels
+                WHERE frame_index = ? AND box_index IN (${boxesInRectangle.map(() => '?').join(',')})
+              `
+                )
+                .all(frameIndex, ...boxesInRectangle) as Array<{ box_index: number }>
+            ).map(row => row.box_index)
+          )
+
+          // Insert or update labels for these boxes
+          const upsertStmt = db.prepare(`
+            INSERT INTO full_frame_box_labels (
+              annotation_source,
+              frame_index,
+              box_index,
+              box_text,
+              box_left,
+              box_top,
+              box_right,
+              box_bottom,
+              label,
+              label_source,
+              predicted_label,
+              predicted_confidence,
+              model_version,
+              labeled_at
+            ) VALUES ('full_frame', ?, ?, ?, ?, ?, ?, ?, 'out', 'user', ?, ?, ?, datetime('now'))
+            ON CONFLICT(annotation_source, frame_index, box_index)
+            DO UPDATE SET
+              label = 'out',
+              label_source = 'user',
+              labeled_at = datetime('now')
+          `)
+
+          for (const boxIndex of boxesInRectangle) {
+            // Find the box data
+            const box = ocrBoxes.find(b => b.box_index === boxIndex)
+            if (!box) continue
+
+            // Count only if this box didn't already have a label
+            if (!existingLabels.has(boxIndex)) {
+              newlyAnnotatedBoxes++
+            }
+
+            const bounds = ocrToPixelBounds(
+              box,
+              layoutConfig.frame_width,
+              layoutConfig.frame_height
+            )
+
+            // Get prediction for this box
+            const prediction = predictBoxLabel(
+              bounds,
+              layoutConfig,
+              allBoxBounds,
+              frameIndex,
+              boxIndex,
+              db
+            )
+
+            upsertStmt.run(
+              frameIndex,
+              boxIndex,
+              box.text,
+              bounds.left,
+              bounds.top,
+              bounds.right,
+              bounds.bottom,
+              prediction.label,
+              prediction.confidence,
+              modelVersion
+            )
+          }
+        }
+
+        totalAnnotatedBoxes += boxesInRectangle.length
+        framesProcessed.push(frameIndex)
+      }
+    }
+
+    console.log(
+      `Bulk annotated ${totalAnnotatedBoxes} boxes (${newlyAnnotatedBoxes} new) across ${framesProcessed.length} frames`
+    )
+
+    return {
+      success: true,
+      action,
+      totalAnnotatedBoxes,
+      newlyAnnotatedBoxes,
+      framesProcessed: framesProcessed.length,
+      frameIndices: framesProcessed,
     }
   } finally {
     db.close()
