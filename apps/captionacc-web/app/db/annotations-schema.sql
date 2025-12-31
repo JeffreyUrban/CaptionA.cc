@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS captions (
     -- Text annotation fields
     text TEXT,  -- NULL = not annotated, empty string = annotated as "no caption"
     text_pending INTEGER NOT NULL DEFAULT 0 CHECK(text_pending IN (0, 1)),
-    text_status TEXT CHECK(text_status IN ('valid_caption', 'ocr_error', 'partial_caption', 'text_unclear', 'other_issue')),
+    text_status TEXT CHECK(text_status IN ('valid_caption', 'ocr_error', 'partial_caption', 'text_unclear', 'other_issue', 'confirmed')),
     text_notes TEXT,
     text_ocr_combined TEXT,  -- Cached OCR result from combined image
     text_updated_at TEXT,  -- NULL until first text annotation save
