@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { useSearchParams, useNavigate } from 'react-router'
 
 import { AppLayout } from '~/components/AppLayout'
+import { useKeyboardShortcuts } from '~/hooks/useKeyboardShortcuts'
+import { useVideoTouched } from '~/hooks/useVideoTouched'
 
 interface TextQueueAnnotation {
   id: number
@@ -106,13 +108,7 @@ export default function AnnotateText() {
   const [dragStartFrame, setDragStartFrame] = useState(0)
 
   // Mark this video as being worked on for stats refresh
-  useEffect(() => {
-    if (videoId && typeof window !== 'undefined') {
-      const touchedVideos = new Set(JSON.parse(localStorage.getItem('touched-videos') ?? '[]'))
-      touchedVideos.add(videoId)
-      localStorage.setItem('touched-videos', JSON.stringify(Array.from(touchedVideos)))
-    }
-  }, [videoId])
+  useVideoTouched(videoId)
 
   // Load preferences (text size and padding)
   useEffect(() => {
@@ -579,13 +575,8 @@ export default function AnnotateText() {
   }, [isDragging, dragStartY, dragStartFrame, currentAnnotation])
 
   // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Skip if typing in input/textarea, unless it's a global shortcut (Ctrl+E)
-      const isTyping =
-        document.activeElement?.tagName === 'INPUT' ||
-        document.activeElement?.tagName === 'TEXTAREA'
-
+  useKeyboardShortcuts(
+    e => {
       // Ctrl+E for Save Empty Caption (works even when typing)
       if (e.ctrlKey && e.key.toLowerCase() === 'e') {
         e.preventDefault()
@@ -593,7 +584,9 @@ export default function AnnotateText() {
         return
       }
 
-      // Other shortcuts don't work when typing
+      // Skip if typing in input/textarea for other shortcuts
+      const isTyping =
+        e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement
       if (isTyping) return
 
       const key = e.key.toLowerCase()
@@ -617,11 +610,10 @@ export default function AnnotateText() {
         e.preventDefault()
         handleSkip()
       }
-    }
-
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [handleSave, handleSaveEmptyCaption, handlePrevious, handleSkip, navigateFrame])
+    },
+    [handleSave, handleSaveEmptyCaption, handlePrevious, handleSkip, navigateFrame],
+    { skipWhenTyping: false } // Handle typing check manually for Ctrl+E
+  )
 
   // Show loading state while metadata loads
   if (loading && queue.length === 0) {

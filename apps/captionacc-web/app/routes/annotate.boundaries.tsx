@@ -2,6 +2,10 @@ import { useState, useEffect, useMemo, useCallback, useRef, startTransition } fr
 import { useSearchParams } from 'react-router'
 
 import { AppLayout } from '~/components/AppLayout'
+import { useKeyboardShortcuts } from '~/hooks/useKeyboardShortcuts'
+import { useVideoMetadata } from '~/hooks/useVideoMetadata'
+import { useVideoTouched } from '~/hooks/useVideoTouched'
+import { useWorkflowProgress } from '~/hooks/useWorkflowProgress'
 
 // Types
 interface Frame {
@@ -64,10 +68,19 @@ export default function BoundaryWorkflow() {
 
   // State
   const [videoId] = useState(videoIdFromUrl)
-  const [totalFrames, setTotalFrames] = useState(0)
-  const [cropWidth, setCropWidth] = useState<number>(0)
-  const [cropHeight, setCropHeight] = useState<number>(0)
-  const [isLoadingMetadata, setIsLoadingMetadata] = useState(true)
+
+  // Load video metadata and workflow progress using hooks
+  const { metadata, loading: isLoadingMetadata } = useVideoMetadata(videoId)
+  const {
+    workflowProgress: workflowProgressHook,
+    completedFrames: completedFramesHook,
+    updateProgress,
+  } = useWorkflowProgress(videoId)
+
+  // Extract metadata values (with defaults for loading state)
+  const totalFrames = metadata?.totalFrames ?? 0
+  const cropWidth = metadata?.cropWidth ?? 0
+  const cropHeight = metadata?.cropHeight ?? 0
 
   // Internal state (refs - updated by events, never trigger renders)
   const currentFrameIndexRef = useRef(0)
@@ -135,25 +148,20 @@ export default function BoundaryWorkflow() {
     }
   }, [])
 
-  // Load video metadata and initial annotation on mount
+  // Sync hook values to refs (for RAF loop)
   useEffect(() => {
-    const loadMetadata = async () => {
+    workflowProgressRef.current = workflowProgressHook
+    completedFramesRef.current = completedFramesHook
+  }, [workflowProgressHook, completedFramesHook])
+
+  // Load initial annotation on mount (metadata and progress loaded by hooks)
+  useEffect(() => {
+    if (!videoId) return
+
+    const loadInitialAnnotation = async () => {
       try {
         // URL encode the videoId to handle slashes
         const encodedVideoId = encodeURIComponent(videoId)
-
-        // Load video metadata
-        const metadataResponse = await fetch(`/api/videos/${encodedVideoId}/metadata`)
-        const metadataData = await metadataResponse.json()
-        setTotalFrames(metadataData.totalFrames)
-        setCropWidth(metadataData.cropWidth ?? 0)
-        setCropHeight(metadataData.cropHeight ?? 0)
-
-        // Load workflow progress
-        const progressResponse = await fetch(`/api/annotations/${encodedVideoId}/progress`)
-        const progressData = await progressResponse.json()
-        workflowProgressRef.current = progressData.progress_percent
-        completedFramesRef.current = progressData.completed_frames
 
         // Load next annotation to work on
         const nextResponse = await fetch(`/api/annotations/${encodedVideoId}/next`)
@@ -176,27 +184,11 @@ export default function BoundaryWorkflow() {
             allAnnotationsData.annotations && allAnnotationsData.annotations.length > 1
           hasNextAnnotationRef.current = false
         }
-
-        setIsLoadingMetadata(false)
       } catch (error) {
-        console.error('Failed to load video metadata:', error)
-        setIsLoadingMetadata(false)
+        console.error('Failed to load initial annotation:', error)
       }
     }
-    void loadMetadata()
-  }, [videoId])
-
-  // Helper: Update progress from database
-  const updateProgress = useCallback(async () => {
-    try {
-      const encodedVideoId = encodeURIComponent(videoId)
-      const progressResponse = await fetch(`/api/annotations/${encodedVideoId}/progress`)
-      const progressData = await progressResponse.json()
-      workflowProgressRef.current = progressData.progress_percent
-      completedFramesRef.current = progressData.completed_frames
-    } catch (error) {
-      console.error('Failed to update progress:', error)
-    }
+    void loadInitialAnnotation()
   }, [videoId])
 
   // Helper: Load annotations for visible range
@@ -218,13 +210,7 @@ export default function BoundaryWorkflow() {
   )
 
   // Mark this video as being worked on for stats refresh on Videos page
-  useEffect(() => {
-    if (videoId && typeof window !== 'undefined') {
-      const touchedVideos = new Set(JSON.parse(localStorage.getItem('touched-videos') ?? '[]'))
-      touchedVideos.add(videoId)
-      localStorage.setItem('touched-videos', JSON.stringify(Array.from(touchedVideos)))
-    }
-  }, [videoId])
+  useVideoTouched(videoId)
 
   // Track window height for dynamic frame count
   useEffect(() => {
@@ -623,16 +609,8 @@ export default function BoundaryWorkflow() {
   ])
 
   // Keyboard event handler
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Skip if typing in input/textarea
-      if (
-        document.activeElement?.tagName === 'INPUT' ||
-        document.activeElement?.tagName === 'TEXTAREA'
-      ) {
-        return
-      }
-
+  useKeyboardShortcuts(
+    e => {
       const key = e.key.toLowerCase()
 
       // Navigation
@@ -645,7 +623,6 @@ export default function BoundaryWorkflow() {
         const jump = e.ctrlKey ? 50 : e.shiftKey ? 10 : 1
         navigateFrame(-jump)
       }
-
       // Marking
       else if (key === 'a') {
         e.preventDefault()
@@ -660,7 +637,6 @@ export default function BoundaryWorkflow() {
         e.preventDefault()
         jumpToEnd()
       }
-
       // Actions
       else if (key === 'enter') {
         e.preventDefault()
@@ -669,11 +645,9 @@ export default function BoundaryWorkflow() {
         e.preventDefault()
         clearMarks()
       }
-    }
-
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [navigateFrame, markStart, markEnd, jumpToStart, jumpToEnd, saveAnnotation, clearMarks])
+    },
+    [navigateFrame, markStart, markEnd, jumpToStart, jumpToEnd, saveAnnotation, clearMarks]
+  )
 
   // Mouse wheel handler for frame navigation
   useEffect(() => {

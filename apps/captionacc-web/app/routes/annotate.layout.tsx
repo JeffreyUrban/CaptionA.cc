@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useSearchParams, useNavigate } from 'react-router'
 
 import { AppLayout } from '~/components/AppLayout'
+import { useKeyboardShortcuts } from '~/hooks/useKeyboardShortcuts'
+import { useVideoTouched } from '~/hooks/useVideoTouched'
 
 interface FrameInfo {
   frameIndex: number
@@ -170,15 +172,7 @@ export default function AnnotateLayout() {
   } | null>(null)
 
   // Mark video as being worked on
-  useEffect(() => {
-    if (videoId && typeof window !== 'undefined') {
-      const touchedVideos = new Set(
-        JSON.parse(localStorage.getItem('touched-videos') ?? '[]') as string[]
-      )
-      touchedVideos.add(videoId)
-      localStorage.setItem('touched-videos', JSON.stringify(Array.from(touchedVideos)))
-    }
-  }, [videoId])
+  useVideoTouched(videoId)
 
   // Load layout queue (top frames + config)
   const loadQueue = useCallback(
@@ -1313,13 +1307,8 @@ export default function AnnotateLayout() {
   }, [])
 
   // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore if typing in input field
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
-        return
-      }
-
+  useKeyboardShortcuts(
+    e => {
       switch (e.key) {
         case 'ArrowLeft':
           e.preventDefault()
@@ -1418,20 +1407,18 @@ export default function AnnotateLayout() {
           handleThumbnailClick('analysis')
           break
       }
-    }
-
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [
-    viewMode,
-    selectedFrameIndex,
-    frames,
-    hoveredBoxIndex,
-    currentFrameBoxes,
-    isSelecting,
-    handleThumbnailClick,
-    handleBoxClick,
-  ])
+    },
+    [
+      viewMode,
+      selectedFrameIndex,
+      frames,
+      hoveredBoxIndex,
+      currentFrameBoxes,
+      isSelecting,
+      handleThumbnailClick,
+      handleBoxClick,
+    ]
+  )
 
   // Show error prominently, but don't block UI for loading
   if (error) {
