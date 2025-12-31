@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+
 import type { FrameInfo, PotentialMislabel, FrameBoxesData, ViewMode } from '~/types/review-labels'
 
 interface UseReviewLabelsDataParams {

@@ -10,7 +10,7 @@ import {
 import { CloudArrowUpIcon } from '@heroicons/react/20/solid'
 import { FolderIcon, DocumentIcon, XMarkIcon, ChevronDownIcon } from '@heroicons/react/24/outline'
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { useLoaderData, useSearchParams, Link } from 'react-router'
+import { useLoaderData } from 'react-router'
 import type { LoaderFunctionArgs } from 'react-router'
 import * as tus from 'tus-js-client'
 
@@ -416,52 +416,6 @@ function UploadStatsCards({
         <div className="text-sm font-medium text-gray-500 dark:text-gray-400">Est. Time</div>
         <div className="mt-1 text-2xl font-semibold text-gray-900 dark:text-gray-200">
           ~{formatDuration(estimatedSeconds)}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-/**
- * Upload complete success banner
- */
-function UploadCompleteNotification({ videoCount }: { videoCount: number }) {
-  return (
-    <div className="mt-6 rounded-lg bg-green-50 dark:bg-green-900/20 p-6 border border-green-200 dark:border-green-800">
-      <div className="flex items-start">
-        <div className="flex-shrink-0">
-          <svg
-            className="h-6 w-6 text-green-600 dark:text-green-400"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-            />
-          </svg>
-        </div>
-        <div className="ml-3 flex-1">
-          <h3 className="text-sm font-medium text-green-800 dark:text-green-300">
-            Upload complete!
-          </h3>
-          <div className="mt-2 text-sm text-green-700 dark:text-green-400">
-            <p>
-              Successfully uploaded {videoCount} video{videoCount !== 1 ? 's' : ''}. Frame
-              extraction and OCR processing will begin automatically.
-            </p>
-          </div>
-          <div className="mt-4">
-            <Link
-              to="/videos"
-              className="inline-flex items-center rounded-md bg-green-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green-600"
-            >
-              View Videos
-            </Link>
-          </div>
         </div>
       </div>
     </div>

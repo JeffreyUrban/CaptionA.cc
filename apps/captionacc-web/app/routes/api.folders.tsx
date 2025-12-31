@@ -2,8 +2,6 @@ import { existsSync } from 'fs'
 import { readdir } from 'fs/promises'
 import { resolve } from 'path'
 
-import type { LoaderFunctionArgs } from 'react-router'
-
 interface FolderItem {
   path: string
   name: string

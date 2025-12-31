@@ -35,7 +35,7 @@ interface UploadMetadata {
 async function handleTusRequest(request: Request): Promise<Response> {
   const method = request.method
   const url = new URL(request.url)
-  const uploadId = url.pathname.split('/').pop() || ''
+  const uploadId = url.pathname.split('/').pop() ?? ''
 
   console.log(`[tus] ${method} ${url.pathname}`)
 

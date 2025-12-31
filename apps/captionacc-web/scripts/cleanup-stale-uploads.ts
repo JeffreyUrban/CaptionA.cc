@@ -59,7 +59,7 @@ function cleanupStaleUploads() {
           metadata?: { videoPath?: string; storagePath?: string }
           uploadLength?: number
         } | null
-        const videoPath = metadataObj?.metadata?.videoPath || uploadId
+        const videoPath = metadataObj?.metadata?.videoPath ?? uploadId
         const progress =
           metadataObj && existsSync(uploadPath) && metadataObj.uploadLength
             ? Math.round((statSync(uploadPath).size / metadataObj.uploadLength) * 100)

@@ -1,4 +1,5 @@
 import { useKeyboardShortcuts } from './useKeyboardShortcuts'
+
 import type { FrameInfo, FrameBoxesData, ViewMode } from '~/types/review-labels'
 
 interface KeyboardShortcutsParams {
