@@ -11,6 +11,7 @@
 import { readFileSync, writeFileSync } from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
+
 import semver from 'semver'
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))

@@ -16,9 +16,6 @@ import { getDbPath, getVideoDir } from './video-paths'
 // Image quality constant
 const COMBINED_IMAGE_QUALITY = 95
 
-// Maximum number of frames to use for combined image (to prevent memory issues)
-const MAX_FRAMES_FOR_COMBINED_IMAGE = 30
-
 /**
  * Generate a combined image from a sequence of frames using median pixel values.
  *

@@ -118,7 +118,12 @@ export default function Contact() {
       intro="Have a question or want to work together? Send me a message and I'll get back to you as soon as possible."
     >
       <div className="mt-16 sm:mt-20">
-        <form onSubmit={handleSubmit(handleFormSubmit)} className="max-w-2xl">
+        <form
+          onSubmit={e => {
+            void handleSubmit(handleFormSubmit)(e)
+          }}
+          className="max-w-2xl"
+        >
           <div className="isolate -space-y-px rounded-2xl bg-white/50 dark:bg-zinc-800/50">
             <TextInput label="Name" {...register('name', { required: true })} autoComplete="name" />
             <TextInput

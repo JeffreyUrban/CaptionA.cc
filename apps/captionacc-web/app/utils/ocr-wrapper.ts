@@ -142,14 +142,14 @@ print(json.dumps(result, ensure_ascii=False))
         console.log(`[${reqId}] JSON parsed successfully, keys:`, Object.keys(result))
 
         // Extract clean text from annotations
-        const text = extractTextFromAnnotations(result.annotations || [])
+        const text = extractTextFromAnnotations(result.annotations ?? [])
 
         const resolvedObj: OCRResult & { __debug_reqId?: string; __debug_textLength?: number } = {
           imagePath: result.image_path,
           framework: result.framework,
           languagePreference: result.language_preference,
           text: text, // Explicit property name
-          annotations: result.annotations || [],
+          annotations: result.annotations ?? [],
           error: result.error,
           __debug_reqId: reqId, // Debug marker
           __debug_textLength: text?.length,
@@ -198,10 +198,10 @@ export function extractTextFromAnnotations(annotations: OCRAnnotationInput[]): s
     .map(ann => {
       if (Array.isArray(ann)) {
         // Array format: [text, confidence, bbox]
-        return ann[0] || ''
+        return ann[0] ?? ''
       } else if (typeof ann === 'object' && ann !== null && 'text' in ann) {
         // Object format: {text: "..."}
-        return (ann as { text?: string }).text || ''
+        return (ann as { text?: string }).text ?? ''
       } else {
         return ''
       }
@@ -433,9 +433,9 @@ export async function runOCROnCombinedImage(
         // Convert to OCRResult format
         const ocrResult: OCRResult = {
           imagePath,
-          framework: result.framework || 'unknown',
-          languagePreference: result.language || language,
-          text: result.text || '',
+          framework: result.framework ?? 'unknown',
+          languagePreference: result.language ?? language,
+          text: result.text ?? '',
           annotations: [],
           error: result.error,
         }

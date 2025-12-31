@@ -35,20 +35,20 @@ export async function loader() {
 
         // Check if upload file exists and get current size
         const currentSize = existsSync(uploadPath) ? statSync(uploadPath).size : 0
-        const uploadLength = metadata.uploadLength || 0
+        const uploadLength = metadata.uploadLength ?? 0
         const progress = uploadLength > 0 ? currentSize / uploadLength : 0
 
         // Only include if not complete
         if (progress < 1.0) {
           incompleteUploads.push({
             uploadId,
-            videoId: metadata.metadata?.videoId || uploadId,
-            videoPath: metadata.metadata?.videoPath || 'Unknown',
-            filename: metadata.metadata?.filename || 'Unknown',
+            videoId: metadata.metadata?.videoId ?? uploadId,
+            videoPath: metadata.metadata?.videoPath ?? 'Unknown',
+            filename: metadata.metadata?.filename ?? 'Unknown',
             uploadLength,
             currentSize,
             progress,
-            createdAt: metadata.createdAt || new Date().toISOString(),
+            createdAt: metadata.createdAt ?? new Date().toISOString(),
           })
         }
       } catch (error) {

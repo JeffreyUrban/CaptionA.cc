@@ -106,6 +106,118 @@ function updateBoundsAndMarkPending(
   ).run()
 }
 
+interface VideoModelInfo {
+  metadata: { video_id: string; display_path: string }
+  analysisVersion: string | null
+  currentVersion: string
+  oldBounds: { crop_left: number; crop_top: number; crop_right: number; crop_bottom: number } | null
+}
+
+interface RecalculationDecision {
+  shouldRecalculate: boolean
+  reason: 'up_to_date' | 'never_calculated' | 'version_changed'
+}
+
+/**
+ * Query video model version and layout info from database
+ */
+function getVideoModelInfo(db: Database.Database): VideoModelInfo | null {
+  const metadata = db
+    .prepare('SELECT video_id, display_path FROM video_metadata WHERE id = 1')
+    .get() as { video_id: string; display_path: string } | undefined
+
+  if (!metadata) {
+    return null
+  }
+
+  const layoutConfig = db
+    .prepare(
+      'SELECT analysis_model_version, crop_left, crop_top, crop_right, crop_bottom FROM video_layout_config WHERE id = 1'
+    )
+    .get() as {
+    analysis_model_version: string | null
+    crop_left: number
+    crop_top: number
+    crop_right: number
+    crop_bottom: number
+  } | null
+
+  const modelInfo = db
+    .prepare('SELECT model_version FROM box_classification_model WHERE id = 1')
+    .get() as { model_version: string } | undefined
+
+  return {
+    metadata,
+    analysisVersion: layoutConfig?.analysis_model_version ?? null,
+    currentVersion: modelInfo?.model_version ?? 'unknown',
+    oldBounds: layoutConfig
+      ? {
+          crop_left: layoutConfig.crop_left,
+          crop_top: layoutConfig.crop_top,
+          crop_right: layoutConfig.crop_right,
+          crop_bottom: layoutConfig.crop_bottom,
+        }
+      : null,
+  }
+}
+
+/**
+ * Determine if predictions need recalculation based on version comparison
+ */
+function shouldRecalculatePredictions(
+  analysisVersion: string | null,
+  currentVersion: string
+): RecalculationDecision {
+  if (analysisVersion === null) {
+    return { shouldRecalculate: true, reason: 'never_calculated' }
+  }
+
+  if (analysisVersion !== currentVersion) {
+    return { shouldRecalculate: true, reason: 'version_changed' }
+  }
+
+  return { shouldRecalculate: false, reason: 'up_to_date' }
+}
+
+/**
+ * Update model version without changing bounds
+ */
+function updateModelVersionOnly(db: Database.Database, currentVersion: string): void {
+  db.prepare('UPDATE video_layout_config SET analysis_model_version = ? WHERE id = 1').run(
+    currentVersion
+  )
+}
+
+/**
+ * Check if bounds have changed
+ */
+function haveBoundsChanged(
+  oldBounds: { crop_left: number; crop_top: number; crop_right: number; crop_bottom: number },
+  newBounds: { crop_left: number; crop_top: number; crop_right: number; crop_bottom: number }
+): boolean {
+  return (
+    newBounds.crop_left !== oldBounds.crop_left ||
+    newBounds.crop_top !== oldBounds.crop_top ||
+    newBounds.crop_right !== oldBounds.crop_right ||
+    newBounds.crop_bottom !== oldBounds.crop_bottom
+  )
+}
+
+/**
+ * Build a RecalculationResult object
+ */
+function buildResult(
+  videoId: string,
+  displayPath: string,
+  recalculated: boolean,
+  boundsChanged: boolean,
+  oldVersion: string | null,
+  newVersion: string,
+  error?: string
+): RecalculationResult {
+  return { videoId, displayPath, recalculated, boundsChanged, oldVersion, newVersion, error }
+}
+
 /**
  * Check a single video for model version mismatch
  */
@@ -113,133 +225,91 @@ function checkVideoModelVersion(dbPath: string): RecalculationResult | null {
   try {
     const db = new Database(dbPath)
 
-    // Get video metadata
-    const metadata = db
-      .prepare('SELECT video_id, display_path FROM video_metadata WHERE id = 1')
-      .get() as { video_id: string; display_path: string } | undefined
-
-    if (!metadata) {
+    const videoInfo = getVideoModelInfo(db)
+    if (!videoInfo) {
       db.close()
       return null
     }
 
-    // Get current and analysis model versions
-    const layoutConfig = db
-      .prepare('SELECT analysis_model_version FROM video_layout_config WHERE id = 1')
-      .get() as { analysis_model_version: string | null } | undefined
+    const { metadata, analysisVersion, currentVersion, oldBounds } = videoInfo
+    const decision = shouldRecalculatePredictions(analysisVersion, currentVersion)
 
-    const modelInfo = db
-      .prepare('SELECT model_version FROM box_classification_model WHERE id = 1')
-      .get() as { model_version: string } | undefined
-
-    const analysisVersion = layoutConfig?.analysis_model_version ?? null
-    const currentVersion = modelInfo?.model_version ?? 'unknown'
-
-    // Check if calculation/recalculation needed
-    const needsCalculation = analysisVersion === null // Never calculated
-    const needsRecalculation = analysisVersion !== null && analysisVersion !== currentVersion // Model changed
-
-    if (!needsCalculation && !needsRecalculation) {
-      // Already up to date
+    if (!decision.shouldRecalculate) {
       db.close()
-      return {
-        videoId: metadata.video_id,
-        displayPath: metadata.display_path,
-        recalculated: false,
-        boundsChanged: false,
-        oldVersion: analysisVersion,
-        newVersion: currentVersion,
-      }
-    }
-
-    // Get old bounds for comparison
-    const oldBounds = db
-      .prepare(
-        'SELECT crop_left, crop_top, crop_right, crop_bottom FROM video_layout_config WHERE id = 1'
+      return buildResult(
+        metadata.video_id,
+        metadata.display_path,
+        false,
+        false,
+        analysisVersion,
+        currentVersion
       )
-      .get() as
-      | { crop_left: number; crop_top: number; crop_right: number; crop_bottom: number }
-      | undefined
+    }
 
     if (!oldBounds) {
       db.close()
-      return {
-        videoId: metadata.video_id,
-        displayPath: metadata.display_path,
-        recalculated: false,
-        boundsChanged: false,
-        oldVersion: analysisVersion,
-        newVersion: currentVersion,
-        error: 'No layout config found',
-      }
+      return buildResult(
+        metadata.video_id,
+        metadata.display_path,
+        false,
+        false,
+        analysisVersion,
+        currentVersion,
+        'No layout config found'
+      )
     }
 
-    // Calculate new bounds from boxes
     const newBounds = calculateBoundsFromBoxes(db)
 
     if (!newBounds) {
-      // No boxes to calculate from - just update version
-      db.prepare('UPDATE video_layout_config SET analysis_model_version = ? WHERE id = 1').run(
+      updateModelVersionOnly(db, currentVersion)
+      db.close()
+      return buildResult(
+        metadata.video_id,
+        metadata.display_path,
+        true,
+        false,
+        analysisVersion,
         currentVersion
       )
-      db.close()
-
-      return {
-        videoId: metadata.video_id,
-        displayPath: metadata.display_path,
-        recalculated: true,
-        boundsChanged: false,
-        oldVersion: analysisVersion,
-        newVersion: currentVersion,
-      }
     }
 
-    // Check if bounds changed
-    const boundsChanged =
-      newBounds.crop_left !== oldBounds.crop_left ||
-      newBounds.crop_top !== oldBounds.crop_top ||
-      newBounds.crop_right !== oldBounds.crop_right ||
-      newBounds.crop_bottom !== oldBounds.crop_bottom
+    const boundsChanged = haveBoundsChanged(oldBounds, newBounds)
 
     if (!boundsChanged) {
-      // Bounds unchanged - just update version
-      db.prepare('UPDATE video_layout_config SET analysis_model_version = ? WHERE id = 1').run(
+      updateModelVersionOnly(db, currentVersion)
+      db.close()
+      return buildResult(
+        metadata.video_id,
+        metadata.display_path,
+        true,
+        false,
+        analysisVersion,
         currentVersion
       )
-      db.close()
-
-      return {
-        videoId: metadata.video_id,
-        displayPath: metadata.display_path,
-        recalculated: true,
-        boundsChanged: false,
-        oldVersion: analysisVersion,
-        newVersion: currentVersion,
-      }
     }
 
-    // Bounds changed - update config and mark captions pending
     updateBoundsAndMarkPending(db, newBounds, currentVersion)
     db.close()
 
-    return {
-      videoId: metadata.video_id,
-      displayPath: metadata.display_path,
-      recalculated: true,
-      boundsChanged: true,
-      oldVersion: analysisVersion,
-      newVersion: currentVersion,
-    }
+    return buildResult(
+      metadata.video_id,
+      metadata.display_path,
+      true,
+      true,
+      analysisVersion,
+      currentVersion
+    )
   } catch (error) {
-    return {
-      videoId: 'unknown',
-      displayPath: dbPath,
-      recalculated: false,
-      boundsChanged: false,
-      oldVersion: null,
-      newVersion: 'unknown',
-      error: error instanceof Error ? error.message : String(error),
-    }
+    return buildResult(
+      'unknown',
+      dbPath,
+      false,
+      false,
+      null,
+      'unknown',
+      error instanceof Error ? error.message : String(error)
+    )
   }
 }
 

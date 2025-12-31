@@ -77,7 +77,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
       if (!frameMap.has(box.frameIndex)) {
         frameMap.set(box.frameIndex, [])
       }
-      frameMap.get(box.frameIndex)!.push(box)
+      const frameBoxes = frameMap.get(box.frameIndex)
+      if (frameBoxes) {
+        frameBoxes.push(box)
+      }
     }
 
     const frames: FrameWithBoxes[] = Array.from(frameMap.entries())
@@ -86,7 +89,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
     return {
       videoId,
-      displayPath: metadata?.display_path || videoId,
+      displayPath: metadata?.display_path ?? videoId,
       totalBoxes: boxes.length,
       totalFrames: frames.length,
       frames,
@@ -108,7 +111,9 @@ export default function LayoutReview() {
         {/* Header */}
         <div className="mb-8">
           <button
-            onClick={() => navigate('/videos')}
+            onClick={() => {
+              void navigate('/videos')
+            }}
             className="text-blue-600 hover:text-blue-800 mb-4"
           >
             ← Back to Videos
@@ -136,7 +141,7 @@ export default function LayoutReview() {
               <div className="mt-2 text-sm text-yellow-700">
                 <p>
                   OCR detected <strong>{data.totalBoxes} text boxes</strong> across{' '}
-                  <strong>{data.totalFrames} frames</strong>, but they don't form a consistent
+                  <strong>{data.totalFrames} frames</strong>, but they don&apos;t form a consistent
                   subtitle region pattern.
                 </p>
                 <p className="mt-2">This usually means:</p>
@@ -203,7 +208,7 @@ export default function LayoutReview() {
             <li>• If this video should have subtitles, check the source video quality</li>
             <li>• If subtitles are present but not detected, the format may be incompatible</li>
             <li>• Manual layout annotation is not currently available for this case</li>
-            <li>• You can skip this video if subtitle extraction isn't critical</li>
+            <li>• You can skip this video if subtitle extraction isn&apos;t critical</li>
           </ul>
         </div>
       </div>
