@@ -10,7 +10,7 @@ import {
 import { CloudArrowUpIcon } from '@heroicons/react/20/solid'
 import { FolderIcon, DocumentIcon, XMarkIcon, ChevronDownIcon } from '@heroicons/react/24/outline'
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { useLoaderData, useSearchParams } from 'react-router'
+import { useLoaderData, useSearchParams, Link } from 'react-router'
 import type { LoaderFunctionArgs } from 'react-router'
 import * as tus from 'tus-js-client'
 
@@ -119,6 +119,356 @@ function formatDuration(seconds: number): string {
 }
 
 /**
+ * Render the upload status breakdown (uploading, retrying, pending, stalled, error counts)
+ */
+function UploadStatusBreakdown({
+  uploadingCount,
+  retryingCount,
+  pendingCount,
+  stalledCount,
+  errorCount,
+}: {
+  uploadingCount: number
+  retryingCount: number
+  pendingCount: number
+  stalledCount: number
+  errorCount: number
+}) {
+  return (
+    <div className="mt-3 flex flex-wrap gap-3 text-xs">
+      {uploadingCount > 0 && (
+        <span className="text-blue-600 dark:text-blue-400">↑ {uploadingCount} uploading</span>
+      )}
+      {retryingCount > 0 && (
+        <span className="text-yellow-600 dark:text-yellow-400">⟳ {retryingCount} retrying</span>
+      )}
+      {pendingCount > 0 && (
+        <span className="text-gray-500 dark:text-gray-400">⋯ {pendingCount} pending</span>
+      )}
+      {stalledCount > 0 && (
+        <span className="text-orange-600 dark:text-orange-400">⏸ {stalledCount} stalled</span>
+      )}
+      {errorCount > 0 && (
+        <span className="text-red-600 dark:text-red-400">✗ {errorCount} failed</span>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Render incomplete uploads notification banner
+ */
+function IncompleteUploadsNotification({
+  uploads,
+  onDismiss,
+}: {
+  uploads: IncompleteUpload[]
+  onDismiss: () => void
+}) {
+  return (
+    <div className="mt-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md p-4">
+      <div className="flex">
+        <div className="flex-shrink-0">
+          <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+            <path
+              fillRule="evenodd"
+              d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z"
+              clipRule="evenodd"
+            />
+          </svg>
+        </div>
+        <div className="ml-3 flex-1">
+          <h3 className="text-sm font-medium text-blue-800 dark:text-blue-200">
+            Cleared {uploads.length} interrupted upload{uploads.length !== 1 ? 's' : ''}
+          </h3>
+          <div className="mt-2 text-sm text-blue-700 dark:text-blue-300">
+            <p className="mb-2">
+              These uploads were interrupted when the page was closed and have been automatically
+              cleared:
+            </p>
+            <details className="mt-2">
+              <summary className="cursor-pointer font-medium hover:text-blue-800 dark:hover:text-blue-200">
+                View list ({uploads.length} videos)
+              </summary>
+              <ul className="mt-2 space-y-1 ml-4 text-xs max-h-48 overflow-y-auto">
+                {uploads.map((upload: IncompleteUpload) => (
+                  <li key={upload.uploadId} className="flex justify-between">
+                    <span className="font-mono">{upload.videoPath}</span>
+                    <span className="text-blue-600 dark:text-blue-400 ml-2">
+                      {Math.round(upload.progress * 100)}% complete
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          </div>
+          <div className="mt-4">
+            <button
+              onClick={onDismiss}
+              className="text-sm font-semibold text-blue-800 dark:text-blue-200 hover:text-blue-900 dark:hover:text-blue-100"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Video status badge in the upload progress table
+ */
+function VideoStatusBadge({ video }: { video: VideoFilePreview }) {
+  const { uploadStatus, uploadProgress, error } = video
+
+  if (uploadStatus === 'uploading') {
+    return (
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
+        Uploading {Math.round(uploadProgress)}%
+      </span>
+    )
+  }
+
+  if (uploadStatus === 'retrying') {
+    return (
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
+        Retrying...
+      </span>
+    )
+  }
+
+  if (uploadStatus === 'stalled') {
+    return (
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400">
+        Stalled
+      </span>
+    )
+  }
+
+  if (uploadStatus === 'pending') {
+    return (
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400">
+        Pending
+      </span>
+    )
+  }
+
+  if (uploadStatus === 'complete') {
+    return (
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+        ✓ Complete
+      </span>
+    )
+  }
+
+  if (uploadStatus === 'error') {
+    return (
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">
+        {error === 'Cancelled by user' ? 'Cancelled' : 'Error'}
+      </span>
+    )
+  }
+
+  return null
+}
+
+/**
+ * Single video card in the upload progress section
+ */
+function VideoProgressCard({
+  video,
+  showProgress,
+}: {
+  video: VideoFilePreview
+  showProgress: boolean
+}) {
+  return (
+    <div className="border border-gray-200 dark:border-gray-700 rounded-md p-4">
+      <div className="flex items-center justify-between">
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-gray-900 dark:text-gray-200 truncate">
+            {video.relativePath}
+          </p>
+          <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+            {formatBytes(video.size)} • {video.type}
+          </p>
+        </div>
+        <div className="ml-4">
+          <VideoStatusBadge video={video} />
+        </div>
+      </div>
+
+      {showProgress && video.uploadStatus === 'uploading' && (
+        <div className="mt-2 w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
+          <div
+            className="bg-indigo-600 h-1.5 rounded-full transition-all"
+            style={{ width: `${video.uploadProgress}%` }}
+          />
+        </div>
+      )}
+
+      {video.error && video.uploadStatus !== 'error' && (
+        <p className="mt-2 text-xs text-red-600 dark:text-red-400">{video.error}</p>
+      )}
+
+      {video.error && video.uploadStatus === 'error' && (
+        <p className="mt-2 text-xs text-red-600 dark:text-red-400">{video.error}</p>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Check if a video is in an active upload state (not finished)
+ */
+function isVideoInProgress(video: VideoFilePreview): boolean {
+  return (
+    video.uploadStatus === 'uploading' ||
+    video.uploadStatus === 'retrying' ||
+    video.uploadStatus === 'pending' ||
+    video.uploadStatus === 'stalled'
+  )
+}
+
+/**
+ * Check if a video is finished (complete or error)
+ */
+function isVideoFinished(video: VideoFilePreview): boolean {
+  return video.uploadStatus === 'complete' || video.uploadStatus === 'error'
+}
+
+/**
+ * Duplicate path warning banner in confirmation section
+ */
+function DuplicateWarning({
+  duplicateCount,
+  onDeselectAll,
+}: {
+  duplicateCount: number
+  onDeselectAll: () => void
+}) {
+  return (
+    <div className="mt-4 rounded-md bg-yellow-50 dark:bg-yellow-900/20 p-4 border border-yellow-200 dark:border-yellow-800">
+      <div className="flex">
+        <div className="flex-shrink-0">
+          <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+            <path
+              fillRule="evenodd"
+              d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z"
+              clipRule="evenodd"
+            />
+          </svg>
+        </div>
+        <div className="ml-3 flex-1">
+          <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-300">
+            Path conflict detected
+          </h3>
+          <div className="mt-2 text-sm text-yellow-700 dark:text-yellow-400">
+            <p>
+              {duplicateCount} video{duplicateCount !== 1 ? 's target' : ' targets'} the same path
+              as existing {duplicateCount !== 1 ? 'videos' : 'video'}. Uploading will overwrite the
+              existing video and all annotation data at{' '}
+              {duplicateCount !== 1 ? 'these paths' : 'this path'}.
+            </p>
+          </div>
+          <div className="mt-3">
+            <button
+              onClick={onDeselectAll}
+              className="text-sm font-medium text-yellow-800 dark:text-yellow-300 hover:text-yellow-700 dark:hover:text-yellow-200 underline"
+            >
+              Deselect all duplicates
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Upload stats cards (selected count, total size, estimated time)
+ */
+function UploadStatsCards({
+  selectedCount,
+  totalSize,
+  estimatedSeconds,
+}: {
+  selectedCount: number
+  totalSize: number
+  estimatedSeconds: number
+}) {
+  return (
+    <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="bg-gray-50 dark:bg-gray-900 px-4 py-3 rounded-md">
+        <div className="text-sm font-medium text-gray-500 dark:text-gray-400">Selected Videos</div>
+        <div className="mt-1 text-2xl font-semibold text-gray-900 dark:text-gray-200">
+          {selectedCount}
+        </div>
+      </div>
+      <div className="bg-gray-50 dark:bg-gray-900 px-4 py-3 rounded-md">
+        <div className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Size</div>
+        <div className="mt-1 text-2xl font-semibold text-gray-900 dark:text-gray-200">
+          {formatBytes(totalSize)}
+        </div>
+      </div>
+      <div className="bg-gray-50 dark:bg-gray-900 px-4 py-3 rounded-md">
+        <div className="text-sm font-medium text-gray-500 dark:text-gray-400">Est. Time</div>
+        <div className="mt-1 text-2xl font-semibold text-gray-900 dark:text-gray-200">
+          ~{formatDuration(estimatedSeconds)}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Upload complete success banner
+ */
+function UploadCompleteNotification({ videoCount }: { videoCount: number }) {
+  return (
+    <div className="mt-6 rounded-lg bg-green-50 dark:bg-green-900/20 p-6 border border-green-200 dark:border-green-800">
+      <div className="flex items-start">
+        <div className="flex-shrink-0">
+          <svg
+            className="h-6 w-6 text-green-600 dark:text-green-400"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
+          </svg>
+        </div>
+        <div className="ml-3 flex-1">
+          <h3 className="text-sm font-medium text-green-800 dark:text-green-300">
+            Upload complete!
+          </h3>
+          <div className="mt-2 text-sm text-green-700 dark:text-green-400">
+            <p>
+              Successfully uploaded {videoCount} video{videoCount !== 1 ? 's' : ''}. Frame
+              extraction and OCR processing will begin automatically.
+            </p>
+          </div>
+          <div className="mt-4">
+            <Link
+              to="/videos"
+              className="inline-flex items-center rounded-md bg-green-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green-600"
+            >
+              View Videos
+            </Link>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/**
  * Collapse single-video folders to avoid unnecessary nesting
  * Only collapses if the target folder doesn't already exist in local/data
  * Stops collapsing when reaching an existing folder
@@ -202,7 +552,6 @@ async function collapseSingleVideoFolders(
 
 export default function UploadPage() {
   const loaderData = useLoaderData() as { preselectedFolder: string | null }
-  const [_searchParams] = useSearchParams()
 
   const [dragActive, setDragActive] = useState(false)
   const [videoFiles, setVideoFiles] = useState<VideoFilePreview[]>([])
@@ -838,54 +1187,10 @@ export default function UploadPage() {
 
         {/* Interrupted uploads notification */}
         {showIncompletePrompt && incompleteUploads.length > 0 && (
-          <div className="mt-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md p-4">
-            <div className="flex">
-              <div className="flex-shrink-0">
-                <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
-                  <path
-                    fillRule="evenodd"
-                    d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-              </div>
-              <div className="ml-3 flex-1">
-                <h3 className="text-sm font-medium text-blue-800 dark:text-blue-200">
-                  Cleared {incompleteUploads.length} interrupted upload
-                  {incompleteUploads.length !== 1 ? 's' : ''}
-                </h3>
-                <div className="mt-2 text-sm text-blue-700 dark:text-blue-300">
-                  <p className="mb-2">
-                    These uploads were interrupted when the page was closed and have been
-                    automatically cleared:
-                  </p>
-                  <details className="mt-2">
-                    <summary className="cursor-pointer font-medium hover:text-blue-800 dark:hover:text-blue-200">
-                      View list ({incompleteUploads.length} videos)
-                    </summary>
-                    <ul className="mt-2 space-y-1 ml-4 text-xs max-h-48 overflow-y-auto">
-                      {incompleteUploads.map((upload: IncompleteUpload) => (
-                        <li key={upload.uploadId} className="flex justify-between">
-                          <span className="font-mono">{upload.videoPath}</span>
-                          <span className="text-blue-600 dark:text-blue-400 ml-2">
-                            {Math.round(upload.progress * 100)}% complete
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  </details>
-                </div>
-                <div className="mt-4">
-                  <button
-                    onClick={() => setShowIncompletePrompt(false)}
-                    className="text-sm font-semibold text-blue-800 dark:text-blue-200 hover:text-blue-900 dark:hover:text-blue-100"
-                  >
-                    Dismiss
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
+          <IncompleteUploadsNotification
+            uploads={incompleteUploads}
+            onDismiss={() => setShowIncompletePrompt(false)}
+          />
         )}
 
         {!showConfirmation && !uploading && videoFiles.length === 0 && (
@@ -1023,55 +1328,14 @@ export default function UploadPage() {
 
               {/* Duplicate Warning */}
               {videoFiles.some(v => v.isDuplicate) && (
-                <div className="mt-4 rounded-md bg-yellow-50 dark:bg-yellow-900/20 p-4 border border-yellow-200 dark:border-yellow-800">
-                  <div className="flex">
-                    <div className="flex-shrink-0">
-                      <svg
-                        className="h-5 w-5 text-yellow-400"
-                        viewBox="0 0 20 20"
-                        fill="currentColor"
-                      >
-                        <path
-                          fillRule="evenodd"
-                          d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
-                    </div>
-                    <div className="ml-3 flex-1">
-                      <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-300">
-                        Path conflict detected
-                      </h3>
-                      <div className="mt-2 text-sm text-yellow-700 dark:text-yellow-400">
-                        <p>
-                          {videoFiles.filter(v => v.isDuplicate).length} video
-                          {videoFiles.filter(v => v.isDuplicate).length !== 1
-                            ? 's target'
-                            : ' targets'}{' '}
-                          the same path as existing{' '}
-                          {videoFiles.filter(v => v.isDuplicate).length !== 1 ? 'videos' : 'video'}.
-                          Uploading will overwrite the existing video and all annotation data at{' '}
-                          {videoFiles.filter(v => v.isDuplicate).length !== 1
-                            ? 'these paths'
-                            : 'this path'}
-                          .
-                        </p>
-                      </div>
-                      <div className="mt-3">
-                        <button
-                          onClick={() => {
-                            setVideoFiles(prev =>
-                              prev.map(f => (f.isDuplicate ? { ...f, selected: false } : f))
-                            )
-                          }}
-                          className="text-sm font-medium text-yellow-800 dark:text-yellow-300 hover:text-yellow-700 dark:hover:text-yellow-200 underline"
-                        >
-                          Deselect all duplicates
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                <DuplicateWarning
+                  duplicateCount={videoFiles.filter(v => v.isDuplicate).length}
+                  onDeselectAll={() => {
+                    setVideoFiles(prev =>
+                      prev.map(f => (f.isDuplicate ? { ...f, selected: false } : f))
+                    )
+                  }}
+                />
               )}
 
               {/* Folder Collapse Toggle */}
@@ -1095,32 +1359,11 @@ export default function UploadPage() {
               )}
 
               {/* Stats */}
-              <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
-                <div className="bg-gray-50 dark:bg-gray-900 px-4 py-3 rounded-md">
-                  <div className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                    Selected Videos
-                  </div>
-                  <div className="mt-1 text-2xl font-semibold text-gray-900 dark:text-gray-200">
-                    {selectedVideos.length}
-                  </div>
-                </div>
-                <div className="bg-gray-50 dark:bg-gray-900 px-4 py-3 rounded-md">
-                  <div className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                    Total Size
-                  </div>
-                  <div className="mt-1 text-2xl font-semibold text-gray-900 dark:text-gray-200">
-                    {formatBytes(totalSize)}
-                  </div>
-                </div>
-                <div className="bg-gray-50 dark:bg-gray-900 px-4 py-3 rounded-md">
-                  <div className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                    Est. Time
-                  </div>
-                  <div className="mt-1 text-2xl font-semibold text-gray-900 dark:text-gray-200">
-                    ~{formatDuration(estimatedSeconds)}
-                  </div>
-                </div>
-              </div>
+              <UploadStatsCards
+                selectedCount={selectedVideos.length}
+                totalSize={totalSize}
+                estimatedSeconds={estimatedSeconds}
+              />
 
               {/* File List */}
               <div className="mt-6">
@@ -1279,31 +1522,13 @@ export default function UploadPage() {
                   pendingCount > 0 ||
                   stalledCount > 0 ||
                   errorCount > 0) && (
-                  <div className="mt-3 flex flex-wrap gap-3 text-xs">
-                    {uploadingCount > 0 && (
-                      <span className="text-blue-600 dark:text-blue-400">
-                        ↑ {uploadingCount} uploading
-                      </span>
-                    )}
-                    {retryingCount > 0 && (
-                      <span className="text-yellow-600 dark:text-yellow-400">
-                        ⟳ {retryingCount} retrying
-                      </span>
-                    )}
-                    {pendingCount > 0 && (
-                      <span className="text-gray-500 dark:text-gray-400">
-                        ⋯ {pendingCount} pending
-                      </span>
-                    )}
-                    {stalledCount > 0 && (
-                      <span className="text-orange-600 dark:text-orange-400">
-                        ⏸ {stalledCount} stalled
-                      </span>
-                    )}
-                    {errorCount > 0 && (
-                      <span className="text-red-600 dark:text-red-400">✗ {errorCount} failed</span>
-                    )}
-                  </div>
+                  <UploadStatusBreakdown
+                    uploadingCount={uploadingCount}
+                    retryingCount={retryingCount}
+                    pendingCount={pendingCount}
+                    stalledCount={stalledCount}
+                    errorCount={errorCount}
+                  />
                 )}
 
               {/* Cancel buttons */}
@@ -1333,17 +1558,9 @@ export default function UploadPage() {
               {/* File List - Two Section Layout */}
               <div className="mt-6 space-y-6">
                 {(() => {
-                  const selectedVideos = videoFiles.filter(v => v.selected)
-                  const inProgressVideos = selectedVideos.filter(
-                    v =>
-                      v.uploadStatus === 'uploading' ||
-                      v.uploadStatus === 'retrying' ||
-                      v.uploadStatus === 'pending' ||
-                      v.uploadStatus === 'stalled'
-                  )
-                  const finishedVideos = selectedVideos.filter(
-                    v => v.uploadStatus === 'complete' || v.uploadStatus === 'error'
-                  )
+                  const filteredSelectedVideos = videoFiles.filter(v => v.selected)
+                  const inProgressVideos = filteredSelectedVideos.filter(isVideoInProgress)
+                  const finishedVideos = filteredSelectedVideos.filter(isVideoFinished)
 
                   return (
                     <>
@@ -1354,63 +1571,13 @@ export default function UploadPage() {
                             In Progress ({inProgressVideos.length})
                           </h4>
                           <div className="space-y-4 max-h-96 overflow-y-auto">
-                            {inProgressVideos.map(video => {
-                              const originalIndex = videoFiles.indexOf(video)
-                              return (
-                                <div
-                                  key={originalIndex}
-                                  className="border border-gray-200 dark:border-gray-700 rounded-md p-4"
-                                >
-                                  <div className="flex items-center justify-between">
-                                    <div className="flex-1 min-w-0">
-                                      <p className="text-sm font-medium text-gray-900 dark:text-gray-200 truncate">
-                                        {video.relativePath}
-                                      </p>
-                                      <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                                        {formatBytes(video.size)} • {video.type}
-                                      </p>
-                                    </div>
-                                    <div className="ml-4">
-                                      {video.uploadStatus === 'uploading' && (
-                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
-                                          Uploading {Math.round(video.uploadProgress)}%
-                                        </span>
-                                      )}
-                                      {video.uploadStatus === 'retrying' && (
-                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
-                                          Retrying...
-                                        </span>
-                                      )}
-                                      {video.uploadStatus === 'stalled' && (
-                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400">
-                                          Stalled
-                                        </span>
-                                      )}
-                                      {video.uploadStatus === 'pending' && (
-                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400">
-                                          Pending
-                                        </span>
-                                      )}
-                                    </div>
-                                  </div>
-
-                                  {video.uploadStatus === 'uploading' && (
-                                    <div className="mt-2 w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
-                                      <div
-                                        className="bg-indigo-600 h-1.5 rounded-full transition-all"
-                                        style={{ width: `${video.uploadProgress}%` }}
-                                      />
-                                    </div>
-                                  )}
-
-                                  {video.error && video.uploadStatus !== 'error' && (
-                                    <p className="mt-2 text-xs text-red-600 dark:text-red-400">
-                                      {video.error}
-                                    </p>
-                                  )}
-                                </div>
-                              )
-                            })}
+                            {inProgressVideos.map(video => (
+                              <VideoProgressCard
+                                key={videoFiles.indexOf(video)}
+                                video={video}
+                                showProgress={true}
+                              />
+                            ))}
                           </div>
                         </div>
                       )}
@@ -1422,46 +1589,13 @@ export default function UploadPage() {
                             Finished ({finishedVideos.length})
                           </h4>
                           <div className="space-y-4 max-h-96 overflow-y-auto">
-                            {finishedVideos.map(video => {
-                              const originalIndex = videoFiles.indexOf(video)
-                              return (
-                                <div
-                                  key={originalIndex}
-                                  className="border border-gray-200 dark:border-gray-700 rounded-md p-4"
-                                >
-                                  <div className="flex items-center justify-between">
-                                    <div className="flex-1 min-w-0">
-                                      <p className="text-sm font-medium text-gray-900 dark:text-gray-200 truncate">
-                                        {video.relativePath}
-                                      </p>
-                                      <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                                        {formatBytes(video.size)} • {video.type}
-                                      </p>
-                                    </div>
-                                    <div className="ml-4">
-                                      {video.uploadStatus === 'complete' && (
-                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
-                                          ✓ Complete
-                                        </span>
-                                      )}
-                                      {video.uploadStatus === 'error' && (
-                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">
-                                          {video.error === 'Cancelled by user'
-                                            ? 'Cancelled'
-                                            : 'Error'}
-                                        </span>
-                                      )}
-                                    </div>
-                                  </div>
-
-                                  {video.error && (
-                                    <p className="mt-2 text-xs text-red-600 dark:text-red-400">
-                                      {video.error}
-                                    </p>
-                                  )}
-                                </div>
-                              )
-                            })}
+                            {finishedVideos.map(video => (
+                              <VideoProgressCard
+                                key={videoFiles.indexOf(video)}
+                                video={video}
+                                showProgress={false}
+                              />
+                            ))}
                           </div>
                         </div>
                       )}

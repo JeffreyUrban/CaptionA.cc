@@ -68,6 +68,546 @@ interface FrameBoxesData {
 
 type ViewMode = 'analysis' | 'frame'
 
+// --- Canvas Drawing Types ---
+interface BoxRenderParams {
+  box: BoxData
+  boxIndex: number
+  scale: number
+  hoveredBoxIndex: number | null
+  boxHighlightMode: boolean
+  pulseValue: number
+  pulseIntensity: number
+}
+
+interface SelectionRenderParams {
+  selectionStart: { x: number; y: number }
+  selectionCurrent: { x: number; y: number }
+  selectionLabel: 'in' | 'out' | 'clear'
+  viewMode: ViewMode
+}
+
+// --- Canvas Drawing Helpers ---
+
+/** Get box colors based on color code */
+function getBoxColors(colorCode: string): { border: string; background: string } {
+  const colorMap: Record<string, { border: string; background: string }> = {
+    annotated_in: { border: '#14b8a6', background: 'rgba(20,184,166,0.25)' },
+    annotated_out: { border: '#dc2626', background: 'rgba(220,38,38,0.25)' },
+    predicted_in_high: { border: '#3b82f6', background: 'rgba(59,130,246,0.15)' },
+    predicted_in_medium: { border: '#60a5fa', background: 'rgba(96,165,250,0.1)' },
+    predicted_in_low: { border: '#93c5fd', background: 'rgba(147,197,253,0.08)' },
+    predicted_out_high: { border: '#f97316', background: 'rgba(249,115,22,0.15)' },
+    predicted_out_medium: { border: '#fb923c', background: 'rgba(251,146,60,0.1)' },
+    predicted_out_low: { border: '#fdba74', background: 'rgba(253,186,116,0.08)' },
+  }
+  return colorMap[colorCode] ?? { border: '#9ca3af', background: 'rgba(156,163,175,0.1)' }
+}
+
+/** Get fill color for analysis box based on label and prediction */
+function getAnalysisBoxFillColor(box: BoxData): string {
+  if (box.userLabel === 'in') {
+    return 'rgba(20,184,166,0.05)'
+  }
+  if (box.userLabel === 'out') {
+    return 'rgba(220,38,38,0.05)'
+  }
+  if (box.predictedLabel === 'in') {
+    if (box.predictedConfidence >= 0.75) return 'rgba(59,130,246,0.03)'
+    if (box.predictedConfidence >= 0.5) return 'rgba(96,165,250,0.02)'
+    return 'rgba(147,197,253,0.015)'
+  }
+  // Predicted out
+  if (box.predictedConfidence >= 0.75) return 'rgba(249,115,22,0.03)'
+  if (box.predictedConfidence >= 0.5) return 'rgba(251,146,60,0.02)'
+  return 'rgba(253,186,116,0.015)'
+}
+
+/** Draw a single box in frame mode with optional pulsing highlight */
+function drawFrameBox(ctx: CanvasRenderingContext2D, params: BoxRenderParams): void {
+  const { box, boxIndex, scale, hoveredBoxIndex, boxHighlightMode, pulseValue, pulseIntensity } =
+    params
+
+  const boxX = box.originalBounds.left * scale
+  const boxY = box.originalBounds.top * scale
+  const boxWidth = (box.originalBounds.right - box.originalBounds.left) * scale
+  const boxHeight = (box.originalBounds.bottom - box.originalBounds.top) * scale
+
+  const colors = getBoxColors(box.colorCode)
+  ctx.fillStyle = colors.background
+
+  // Determine line width with pulsing effect for unannotated boxes
+  const isUnannotated = box.userLabel === null
+  let lineWidth = 2
+  if (hoveredBoxIndex === boxIndex) {
+    lineWidth = 3
+  } else if (boxHighlightMode && isUnannotated) {
+    lineWidth = 2 + pulseValue * pulseIntensity * 3
+  }
+  ctx.lineWidth = lineWidth
+
+  ctx.fillRect(boxX, boxY, boxWidth, boxHeight)
+
+  // Draw border with shadow/glow for unannotated boxes in highlight mode
+  if (boxHighlightMode && isUnannotated && hoveredBoxIndex !== boxIndex) {
+    const shadowIntensity = pulseValue * pulseIntensity
+    if (shadowIntensity > 0.1) {
+      ctx.shadowBlur = 8 * shadowIntensity
+      ctx.shadowColor = `rgba(255, 255, 255, ${0.9 * shadowIntensity})`
+      ctx.strokeStyle = colors.border
+      ctx.lineWidth = lineWidth
+      ctx.strokeRect(boxX, boxY, boxWidth, boxHeight)
+
+      ctx.shadowColor = `rgba(0, 0, 0, ${0.9 * shadowIntensity})`
+      ctx.strokeRect(boxX, boxY, boxWidth, boxHeight)
+      ctx.shadowBlur = 0
+    } else {
+      ctx.strokeStyle = colors.border
+      ctx.lineWidth = lineWidth
+      ctx.strokeRect(boxX, boxY, boxWidth, boxHeight)
+    }
+  } else {
+    ctx.strokeStyle = colors.border
+    ctx.strokeRect(boxX, boxY, boxWidth, boxHeight)
+  }
+
+  // Draw text label if hovered
+  if (hoveredBoxIndex === boxIndex) {
+    drawBoxLabel(ctx, box, boxX, boxY, boxWidth, boxHeight)
+  }
+}
+
+/** Draw box text label when hovered */
+function drawBoxLabel(
+  ctx: CanvasRenderingContext2D,
+  box: BoxData,
+  boxX: number,
+  boxY: number,
+  boxWidth: number,
+  boxHeight: number
+): void {
+  const fontSize = Math.max(Math.floor(boxHeight), 10)
+  const labelHeight = fontSize + 8
+
+  ctx.font = `${fontSize}px monospace`
+  const textWidth = ctx.measureText(box.text).width
+  const labelWidth = Math.max(boxWidth, textWidth + 8)
+
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.75)'
+  ctx.fillRect(boxX, boxY - labelHeight, labelWidth, labelHeight)
+
+  ctx.fillStyle = '#ffffff'
+  ctx.textBaseline = 'middle'
+  ctx.textAlign = 'center'
+  ctx.fillText(box.text, boxX + labelWidth / 2, boxY - labelHeight / 2)
+
+  ctx.textBaseline = 'alphabetic'
+  ctx.textAlign = 'left'
+}
+
+/** Draw layout parameter overlays (crop bounds, selection rect, guidelines) */
+function drawLayoutOverlays(
+  ctx: CanvasRenderingContext2D,
+  layoutConfig: LayoutConfig,
+  scale: number,
+  canvasWidth: number,
+  canvasHeight: number
+): void {
+  // Crop bounds (red, dashed)
+  ctx.strokeStyle = '#ef4444'
+  ctx.lineWidth = 2
+  ctx.setLineDash([15, 5])
+  const cropX = layoutConfig.cropLeft * scale
+  const cropY = layoutConfig.cropTop * scale
+  const cropW = (layoutConfig.cropRight - layoutConfig.cropLeft) * scale
+  const cropH = (layoutConfig.cropBottom - layoutConfig.cropTop) * scale
+  ctx.strokeRect(cropX, cropY, cropW, cropH)
+  ctx.setLineDash([])
+
+  // Selection rectangle (blue, dashed)
+  if (
+    layoutConfig.selectionLeft !== null &&
+    layoutConfig.selectionTop !== null &&
+    layoutConfig.selectionRight !== null &&
+    layoutConfig.selectionBottom !== null
+  ) {
+    ctx.strokeStyle = '#3b82f6'
+    ctx.lineWidth = 3
+    ctx.setLineDash([10, 5])
+    const selX = layoutConfig.selectionLeft * scale
+    const selY = layoutConfig.selectionTop * scale
+    const selW = (layoutConfig.selectionRight - layoutConfig.selectionLeft) * scale
+    const selH = (layoutConfig.selectionBottom - layoutConfig.selectionTop) * scale
+    ctx.strokeRect(selX, selY, selW, selH)
+    ctx.setLineDash([])
+  }
+
+  // Vertical center line (purple, dashed)
+  if (layoutConfig.verticalPosition !== null) {
+    ctx.strokeStyle = '#8b5cf6'
+    ctx.lineWidth = 2
+    ctx.setLineDash([5, 3])
+    const lineY = layoutConfig.verticalPosition * scale
+    ctx.beginPath()
+    ctx.moveTo(0, lineY)
+    ctx.lineTo(canvasWidth, lineY)
+    ctx.stroke()
+    ctx.setLineDash([])
+  }
+
+  // Anchor line (orange, dashed)
+  if (layoutConfig.anchorType !== null && layoutConfig.anchorPosition !== null) {
+    ctx.strokeStyle = '#f59e0b'
+    ctx.lineWidth = 2
+    ctx.setLineDash([5, 3])
+    const lineX = layoutConfig.anchorPosition * scale
+    ctx.beginPath()
+    ctx.moveTo(lineX, 0)
+    ctx.lineTo(lineX, canvasHeight)
+    ctx.stroke()
+    ctx.setLineDash([])
+  }
+}
+
+/** Draw selection rectangle during drag operation */
+function drawSelectionRectangle(
+  ctx: CanvasRenderingContext2D,
+  params: SelectionRenderParams
+): void {
+  const { selectionStart, selectionCurrent, selectionLabel, viewMode } = params
+
+  const selLeft = Math.min(selectionStart.x, selectionCurrent.x)
+  const selTop = Math.min(selectionStart.y, selectionCurrent.y)
+  const selWidth = Math.abs(selectionCurrent.x - selectionStart.x)
+  const selHeight = Math.abs(selectionCurrent.y - selectionStart.y)
+
+  let selColor: string
+  let selBgColor: string
+
+  if (viewMode === 'analysis') {
+    selColor = selectionLabel === 'clear' ? '#6b7280' : '#ef4444'
+    selBgColor = selectionLabel === 'clear' ? 'rgba(107,114,128,0.15)' : 'rgba(239,68,68,0.15)'
+  } else {
+    selColor = selectionLabel === 'in' ? '#10b981' : '#ef4444'
+    selBgColor = selectionLabel === 'in' ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)'
+  }
+
+  ctx.strokeStyle = selColor
+  ctx.fillStyle = selBgColor
+  ctx.lineWidth = 3
+  ctx.setLineDash([5, 5])
+
+  ctx.fillRect(selLeft, selTop, selWidth, selHeight)
+  ctx.strokeRect(selLeft, selTop, selWidth, selHeight)
+
+  ctx.setLineDash([])
+}
+
+// --- Keyboard Shortcut Handlers ---
+
+interface KeyboardShortcutContext {
+  viewMode: ViewMode
+  selectedFrameIndex: number | null
+  frames: FrameInfo[]
+  hoveredBoxIndex: number | null
+  currentFrameBoxes: FrameBoxesData | null
+  isSelecting: boolean
+  handleThumbnailClick: (frameIndex: number | 'analysis') => void
+  handleBoxClick: (boxIndex: number, label: 'in' | 'out') => Promise<void>
+  cancelSelection: () => void
+}
+
+function handleArrowLeft(ctx: KeyboardShortcutContext): void {
+  if (ctx.viewMode === 'frame' && ctx.selectedFrameIndex !== null) {
+    const currentIndex = ctx.frames.findIndex(f => f.frameIndex === ctx.selectedFrameIndex)
+    if (currentIndex > 0) {
+      const prevFrame = ctx.frames[currentIndex - 1]
+      if (prevFrame) {
+        ctx.handleThumbnailClick(prevFrame.frameIndex)
+      }
+    }
+  }
+}
+
+function handleArrowRight(ctx: KeyboardShortcutContext): void {
+  if (ctx.viewMode === 'frame' && ctx.selectedFrameIndex !== null) {
+    const currentIndex = ctx.frames.findIndex(f => f.frameIndex === ctx.selectedFrameIndex)
+    if (currentIndex < ctx.frames.length - 1) {
+      const nextFrame = ctx.frames[currentIndex + 1]
+      if (nextFrame) {
+        ctx.handleThumbnailClick(nextFrame.frameIndex)
+      }
+    }
+  } else if (ctx.viewMode === 'analysis' && ctx.frames.length > 0) {
+    const firstFrame = ctx.frames[0]
+    if (firstFrame) {
+      ctx.handleThumbnailClick(firstFrame.frameIndex)
+    }
+  }
+}
+
+function handleEscape(ctx: KeyboardShortcutContext): void {
+  if (ctx.isSelecting) {
+    ctx.cancelSelection()
+  } else {
+    ctx.handleThumbnailClick('analysis')
+  }
+}
+
+function handleMarkIn(ctx: KeyboardShortcutContext): void {
+  if (ctx.hoveredBoxIndex !== null && ctx.currentFrameBoxes) {
+    const box = ctx.currentFrameBoxes.boxes[ctx.hoveredBoxIndex]
+    if (box) {
+      void ctx.handleBoxClick(box.boxIndex, 'in')
+    }
+  }
+}
+
+function handleMarkOut(ctx: KeyboardShortcutContext): void {
+  if (ctx.hoveredBoxIndex !== null && ctx.currentFrameBoxes) {
+    const box = ctx.currentFrameBoxes.boxes[ctx.hoveredBoxIndex]
+    if (box) {
+      void ctx.handleBoxClick(box.boxIndex, 'out')
+    }
+  }
+}
+
+function handleNumberKey(ctx: KeyboardShortcutContext, key: string): void {
+  const frameNum = parseInt(key) - 1
+  if (frameNum < ctx.frames.length) {
+    const targetFrame = ctx.frames[frameNum]
+    if (targetFrame) {
+      ctx.handleThumbnailClick(targetFrame.frameIndex)
+    }
+  }
+}
+
+function handleAnalysisViewShortcut(ctx: KeyboardShortcutContext): void {
+  ctx.handleThumbnailClick('analysis')
+}
+
+/** Dispatch keyboard shortcut to appropriate handler. Returns true if handled. */
+function dispatchKeyboardShortcut(key: string, ctx: KeyboardShortcutContext): boolean {
+  // Arrow navigation
+  if (key === 'ArrowLeft') {
+    handleArrowLeft(ctx)
+    return true
+  }
+  if (key === 'ArrowRight') {
+    handleArrowRight(ctx)
+    return true
+  }
+
+  // Escape
+  if (key === 'Escape') {
+    handleEscape(ctx)
+    return true
+  }
+
+  // Mark in/out
+  if (key === 'i' || key === 'I') {
+    handleMarkIn(ctx)
+    return true
+  }
+  if (key === 'o' || key === 'O') {
+    handleMarkOut(ctx)
+    return true
+  }
+
+  // Number keys 1-9 for frame navigation
+  if (key >= '1' && key <= '9') {
+    handleNumberKey(ctx, key)
+    return true
+  }
+
+  // 0 for analysis view
+  if (key === '0') {
+    handleAnalysisViewShortcut(ctx)
+    return true
+  }
+
+  return false
+}
+
+// --- Selection Completion Helpers ---
+
+interface SelectionRectangle {
+  left: number
+  top: number
+  right: number
+  bottom: number
+}
+
+function calculateCanvasSelectionRect(
+  selectionStart: { x: number; y: number },
+  selectionCurrent: { x: number; y: number }
+): SelectionRectangle {
+  return {
+    left: Math.min(selectionStart.x, selectionCurrent.x),
+    top: Math.min(selectionStart.y, selectionCurrent.y),
+    right: Math.max(selectionStart.x, selectionCurrent.x),
+    bottom: Math.max(selectionStart.y, selectionCurrent.y),
+  }
+}
+
+function convertToFrameCoordinates(
+  canvasRect: SelectionRectangle,
+  scaleX: number,
+  scaleY: number
+): SelectionRectangle {
+  return {
+    left: Math.floor(canvasRect.left * scaleX),
+    top: Math.floor(canvasRect.top * scaleY),
+    right: Math.floor(canvasRect.right * scaleX),
+    bottom: Math.floor(canvasRect.bottom * scaleY),
+  }
+}
+
+function findEnclosedBoxes(
+  boxes: BoxData[],
+  selectionRect: SelectionRectangle,
+  scale: number
+): { enclosedBoxes: number[]; newlyAnnotatedCount: number } {
+  const enclosedBoxes: number[] = []
+  let newlyAnnotatedCount = 0
+
+  boxes.forEach(box => {
+    const boxX = box.originalBounds.left * scale
+    const boxY = box.originalBounds.top * scale
+    const boxRight = box.originalBounds.right * scale
+    const boxBottom = box.originalBounds.bottom * scale
+
+    const isEnclosed =
+      boxX >= selectionRect.left &&
+      boxY >= selectionRect.top &&
+      boxRight <= selectionRect.right &&
+      boxBottom <= selectionRect.bottom
+
+    if (isEnclosed) {
+      enclosedBoxes.push(box.boxIndex)
+      if (box.userLabel === null) {
+        newlyAnnotatedCount++
+      }
+    }
+  })
+
+  return { enclosedBoxes, newlyAnnotatedCount }
+}
+
+// --- Click Handler Helpers ---
+
+function findClickedBox(boxes: BoxData[], x: number, y: number, scale: number): number | null {
+  for (let i = boxes.length - 1; i >= 0; i--) {
+    const box = boxes[i]
+    if (!box) continue
+
+    const boxX = box.originalBounds.left * scale
+    const boxY = box.originalBounds.top * scale
+    const boxWidth = (box.originalBounds.right - box.originalBounds.left) * scale
+    const boxHeight = (box.originalBounds.bottom - box.originalBounds.top) * scale
+
+    if (x >= boxX && x <= boxX + boxWidth && y >= boxY && y <= boxY + boxHeight) {
+      return box.boxIndex
+    }
+  }
+  return null
+}
+
+function findHoveredBoxIndex(boxes: BoxData[], x: number, y: number, scale: number): number | null {
+  for (let i = boxes.length - 1; i >= 0; i--) {
+    const box = boxes[i]
+    if (!box) continue
+
+    const boxX = box.originalBounds.left * scale
+    const boxY = box.originalBounds.top * scale
+    const boxWidth = (box.originalBounds.right - box.originalBounds.left) * scale
+    const boxHeight = (box.originalBounds.bottom - box.originalBounds.top) * scale
+
+    if (x >= boxX && x <= boxX + boxWidth && y >= boxY && y <= boxY + boxHeight) {
+      return i
+    }
+  }
+  return null
+}
+
+// --- Layout Config State Update Helpers ---
+
+interface LayoutQueueResponse {
+  frames?: FrameInfo[]
+  layoutConfig?: LayoutConfig
+  layoutApproved?: boolean
+}
+
+interface EditStateUpdaters {
+  setCropBoundsEdit: (
+    value: { left: number; top: number; right: number; bottom: number } | null
+  ) => void
+  setSelectionRectEdit: (
+    value: { left: number; top: number; right: number; bottom: number } | null
+  ) => void
+  setLayoutParamsEdit: (
+    value: {
+      verticalPosition: number | null
+      verticalStd: number | null
+      boxHeight: number | null
+      boxHeightStd: number | null
+      anchorType: 'left' | 'center' | 'right' | null
+      anchorPosition: number | null
+    } | null
+  ) => void
+}
+
+function updateEditStateFromConfig(layoutConfig: LayoutConfig, updaters: EditStateUpdaters): void {
+  updaters.setCropBoundsEdit({
+    left: layoutConfig.cropLeft,
+    top: layoutConfig.cropTop,
+    right: layoutConfig.cropRight,
+    bottom: layoutConfig.cropBottom,
+  })
+
+  const hasSelection =
+    layoutConfig.selectionLeft !== null &&
+    layoutConfig.selectionTop !== null &&
+    layoutConfig.selectionRight !== null &&
+    layoutConfig.selectionBottom !== null
+
+  if (hasSelection) {
+    updaters.setSelectionRectEdit({
+      left: layoutConfig.selectionLeft as number,
+      top: layoutConfig.selectionTop as number,
+      right: layoutConfig.selectionRight as number,
+      bottom: layoutConfig.selectionBottom as number,
+    })
+  } else {
+    updaters.setSelectionRectEdit(null)
+  }
+
+  updaters.setLayoutParamsEdit({
+    verticalPosition: layoutConfig.verticalPosition,
+    verticalStd: layoutConfig.verticalStd,
+    boxHeight: layoutConfig.boxHeight,
+    boxHeightStd: layoutConfig.boxHeightStd,
+    anchorType: layoutConfig.anchorType,
+    anchorPosition: layoutConfig.anchorPosition,
+  })
+}
+
+function handleLoadQueueResponse(
+  data: LayoutQueueResponse,
+  skipEditStateUpdate: boolean,
+  setFrames: (frames: FrameInfo[]) => void,
+  setLayoutConfig: (config: LayoutConfig | null) => void,
+  setLayoutApproved: (approved: boolean) => void,
+  editUpdaters: EditStateUpdaters
+): void {
+  setFrames(data.frames ?? [])
+  setLayoutConfig(data.layoutConfig ?? null)
+  setLayoutApproved(data.layoutApproved ?? false)
+
+  if (data.layoutConfig && !skipEditStateUpdate) {
+    updateEditStateFromConfig(data.layoutConfig, editUpdaters)
+  }
+}
+
 // Loader function to expose environment variables
 export async function loader() {
   return {
@@ -181,6 +721,16 @@ export default function AnnotateLayout() {
   // Mark video as being worked on
   useVideoTouched(videoId)
 
+  // Edit state updaters for loadQueue
+  const editUpdaters: EditStateUpdaters = useMemo(
+    () => ({
+      setCropBoundsEdit,
+      setSelectionRectEdit,
+      setLayoutParamsEdit,
+    }),
+    []
+  )
+
   // Load layout queue (top frames + config)
   const loadQueue = useCallback(
     async (showLoading = true, skipEditStateUpdate = false) => {
@@ -190,7 +740,6 @@ export default function AnnotateLayout() {
         `[Frontend] loadQueue called (showLoading=${showLoading}, skipEditStateUpdate=${skipEditStateUpdate})`
       )
 
-      // Don't block UI with loading screen
       if (showLoading) {
         setError(null)
       }
@@ -200,57 +749,27 @@ export default function AnnotateLayout() {
 
         if (!response.ok) {
           const errorData = await response.json()
-
-          // Handle processing status errors specially
           if (response.status === 425 && errorData.processingStatus) {
             throw new Error(`Processing: ${errorData.processingStatus}`)
           }
-
           throw new Error(errorData.error ?? 'Failed to load layout queue')
         }
 
-        const data = await response.json()
+        const data: LayoutQueueResponse = await response.json()
 
         console.log(
           `[Frontend] Received ${data.frames?.length ?? 0} frames:`,
           data.frames?.map((f: FrameInfo) => f.frameIndex)
         )
 
-        setFrames(data.frames ?? [])
-
-        // Always update layout config (not just on initial load)
-        setLayoutConfig(data.layoutConfig ?? null)
-        setLayoutApproved(data.layoutApproved ?? false)
-
-        // Update edit state from config
-        // BUT: Skip updating edit state if this is after an auto-recalculation
-        // so user can see the changes and choose to apply them
-        if (data.layoutConfig && !skipEditStateUpdate) {
-          setCropBoundsEdit({
-            left: data.layoutConfig.cropLeft,
-            top: data.layoutConfig.cropTop,
-            right: data.layoutConfig.cropRight,
-            bottom: data.layoutConfig.cropBottom,
-          })
-          setSelectionRectEdit(
-            data.layoutConfig.selectionLeft !== null
-              ? {
-                  left: data.layoutConfig.selectionLeft,
-                  top: data.layoutConfig.selectionTop,
-                  right: data.layoutConfig.selectionRight,
-                  bottom: data.layoutConfig.selectionBottom,
-                }
-              : null
-          )
-          setLayoutParamsEdit({
-            verticalPosition: data.layoutConfig.verticalPosition,
-            verticalStd: data.layoutConfig.verticalStd,
-            boxHeight: data.layoutConfig.boxHeight,
-            boxHeightStd: data.layoutConfig.boxHeightStd,
-            anchorType: data.layoutConfig.anchorType,
-            anchorPosition: data.layoutConfig.anchorPosition,
-          })
-        }
+        handleLoadQueueResponse(
+          data,
+          skipEditStateUpdate,
+          setFrames,
+          setLayoutConfig,
+          setLayoutApproved,
+          editUpdaters
+        )
 
         if (showLoading) {
           setLoading(false)
@@ -263,7 +782,7 @@ export default function AnnotateLayout() {
         }
       }
     },
-    [videoId]
+    [videoId, editUpdaters]
   )
 
   // Prefetch frame boxes for all frames in queue (after queue loads)
@@ -676,240 +1195,54 @@ export default function AnnotateLayout() {
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height)
 
-    // Only draw boxes in frame mode
+    // Draw boxes based on view mode
     if (viewMode === 'frame' && currentFrameBoxes) {
-      // Calculate scale factor from original frame to displayed image
       const scale = canvasSize.width / currentFrameBoxes.frameWidth
 
-      // Calculate pulsing line width for highlight mode
-      const pulsePhase = (Date.now() % 1000) / 1000 // 0-1 over 1 second
-      const pulseValue = Math.sin(pulsePhase * Math.PI * 2) * 0.5 + 0.5 // Oscillates 0-1
-
-      // Calculate pulse intensity ramp (gradually increases over 10 seconds)
+      // Calculate pulse animation values
+      const pulsePhase = (Date.now() % 1000) / 1000
+      const pulseValue = Math.sin(pulsePhase * Math.PI * 2) * 0.5 + 0.5
       const elapsedSeconds = (Date.now() - pulseStartTime) / 1000
-      const pulseIntensity = Math.min(elapsedSeconds / 10, 1) // 0 to 1 over 10 seconds
+      const pulseIntensity = Math.min(elapsedSeconds / 10, 1)
 
-      // Draw boxes using original bounds
+      // Draw each box using helper function
       currentFrameBoxes.boxes.forEach((box, index) => {
-        // Convert original pixel bounds to canvas coordinates
-        const boxX = box.originalBounds.left * scale
-        const boxY = box.originalBounds.top * scale
-        const boxWidth = (box.originalBounds.right - box.originalBounds.left) * scale
-        const boxHeight = (box.originalBounds.bottom - box.originalBounds.top) * scale
-
-        // Get color based on color code
-        const colors = getBoxColors(box.colorCode)
-
-        // Draw box
-        ctx.fillStyle = colors.background
-
-        // Determine line width with pulsing effect when highlight mode is active
-        // Only pulse unannotated boxes (boxes without a user label)
-        const isUnannotated = box.userLabel === null
-        let lineWidth = 2
-        if (hoveredBoxIndex === index) {
-          lineWidth = 3
-        } else if (boxHighlightMode && isUnannotated) {
-          // Pulse between 2 and 5 pixels for unannotated boxes only
-          // Scale pulse by intensity (ramps up over 10 seconds)
-          lineWidth = 2 + pulseValue * pulseIntensity * 3
-        }
-        ctx.lineWidth = lineWidth
-
-        ctx.fillRect(boxX, boxY, boxWidth, boxHeight)
-
-        // Draw border with shadow/glow for better visibility when highlight mode is active
-        // Only apply to unannotated boxes
-        if (boxHighlightMode && isUnannotated && hoveredBoxIndex !== index) {
-          // Scale shadow effect with pulse and ramp intensity
-          const shadowIntensity = pulseValue * pulseIntensity // Ramps up over 10 seconds
-
-          if (shadowIntensity > 0.1) {
-            // Add a contrasting shadow/glow effect
-            ctx.shadowBlur = 8 * shadowIntensity
-            ctx.shadowColor = `rgba(255, 255, 255, ${0.9 * shadowIntensity})`
-            ctx.strokeStyle = colors.border
-            ctx.lineWidth = lineWidth
-            ctx.strokeRect(boxX, boxY, boxWidth, boxHeight)
-
-            // Draw a second time with dark shadow for better contrast on light backgrounds
-            ctx.shadowColor = `rgba(0, 0, 0, ${0.9 * shadowIntensity})`
-            ctx.strokeRect(boxX, boxY, boxWidth, boxHeight)
-
-            // Clear shadow for future drawing
-            ctx.shadowBlur = 0
-          } else {
-            // At minimum pulse, render like normal (no shadow)
-            ctx.strokeStyle = colors.border
-            ctx.lineWidth = lineWidth
-            ctx.strokeRect(boxX, boxY, boxWidth, boxHeight)
-          }
-        } else {
-          // Normal rendering without highlight or for hovered boxes
-          ctx.strokeStyle = colors.border
-          ctx.strokeRect(boxX, boxY, boxWidth, boxHeight)
-        }
-
-        // Draw text label if hovered
-        if (hoveredBoxIndex === index) {
-          // Scale font size to match box height
-          const fontSize = Math.max(Math.floor(boxHeight), 10)
-          const labelHeight = fontSize + 8
-
-          // Set font before measuring text
-          ctx.font = `${fontSize}px monospace`
-          const textWidth = ctx.measureText(box.text).width
-          const labelWidth = Math.max(boxWidth, textWidth + 8)
-
-          // Draw background
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.75)'
-          ctx.fillRect(boxX, boxY - labelHeight, labelWidth, labelHeight)
-
-          // Draw centered text
-          ctx.fillStyle = '#ffffff'
-          ctx.textBaseline = 'middle'
-          ctx.textAlign = 'center'
-          ctx.fillText(box.text, boxX + labelWidth / 2, boxY - labelHeight / 2)
-
-          // Reset to defaults
-          ctx.textBaseline = 'alphabetic'
-          ctx.textAlign = 'left'
-        }
+        drawFrameBox(ctx, {
+          box,
+          boxIndex: index,
+          scale,
+          hoveredBoxIndex,
+          boxHighlightMode,
+          pulseValue,
+          pulseIntensity,
+        })
       })
     } else if (viewMode === 'analysis' && analysisBoxes && layoutConfig) {
-      // Analysis mode: Draw all OCR boxes from all frames with additive transparency
       const scale = canvasSize.width / layoutConfig.frameWidth
 
-      // Draw all boxes with transparency for additive effect
+      // Draw analysis boxes with transparency
       analysisBoxes.forEach(box => {
         const boxX = box.originalBounds.left * scale
         const boxY = box.originalBounds.top * scale
         const boxWidth = (box.originalBounds.right - box.originalBounds.left) * scale
         const boxHeight = (box.originalBounds.bottom - box.originalBounds.top) * scale
 
-        // Determine fill color based on user label or prediction (matching frame view palette)
-        let fillColor: string
-
-        if (box.userLabel === 'in') {
-          // User annotated as in (Teal)
-          fillColor = 'rgba(20,184,166,0.05)' // Very transparent for additive effect
-        } else if (box.userLabel === 'out') {
-          // User annotated as out (Red)
-          fillColor = 'rgba(220,38,38,0.05)' // Very transparent for additive effect
-        } else if (box.predictedLabel === 'in') {
-          // Predicted in - use confidence levels (blue)
-          if (box.predictedConfidence >= 0.75) {
-            fillColor = 'rgba(59,130,246,0.03)'
-          } else if (box.predictedConfidence >= 0.5) {
-            fillColor = 'rgba(96,165,250,0.02)'
-          } else {
-            fillColor = 'rgba(147,197,253,0.015)'
-          }
-        } else {
-          // Predicted out - use confidence levels (orange)
-          if (box.predictedConfidence >= 0.75) {
-            fillColor = 'rgba(249,115,22,0.03)'
-          } else if (box.predictedConfidence >= 0.5) {
-            fillColor = 'rgba(251,146,60,0.02)'
-          } else {
-            fillColor = 'rgba(253,186,116,0.015)'
-          }
-        }
-
-        // Draw box as solid fill (no outline)
-        ctx.fillStyle = fillColor
+        ctx.fillStyle = getAnalysisBoxFillColor(box)
         ctx.fillRect(boxX, boxY, boxWidth, boxHeight)
       })
 
-      // Draw layout parameter overlays
-      // Crop bounds (red, dashed)
-      ctx.strokeStyle = '#ef4444'
-      ctx.lineWidth = 2
-      ctx.setLineDash([15, 5])
-      const cropX = layoutConfig.cropLeft * scale
-      const cropY = layoutConfig.cropTop * scale
-      const cropW = (layoutConfig.cropRight - layoutConfig.cropLeft) * scale
-      const cropH = (layoutConfig.cropBottom - layoutConfig.cropTop) * scale
-      ctx.strokeRect(cropX, cropY, cropW, cropH)
-      ctx.setLineDash([])
-
-      // Selection rectangle (blue, dashed)
-      if (
-        layoutConfig.selectionLeft !== null &&
-        layoutConfig.selectionTop !== null &&
-        layoutConfig.selectionRight !== null &&
-        layoutConfig.selectionBottom !== null
-      ) {
-        ctx.strokeStyle = '#3b82f6'
-        ctx.lineWidth = 3
-        ctx.setLineDash([10, 5])
-        const selX = layoutConfig.selectionLeft * scale
-        const selY = layoutConfig.selectionTop * scale
-        const selW = (layoutConfig.selectionRight - layoutConfig.selectionLeft) * scale
-        const selH = (layoutConfig.selectionBottom - layoutConfig.selectionTop) * scale
-        ctx.strokeRect(selX, selY, selW, selH)
-        ctx.setLineDash([])
-      }
-
-      // Vertical center line (purple, dashed)
-      if (layoutConfig.verticalPosition !== null) {
-        ctx.strokeStyle = '#8b5cf6'
-        ctx.lineWidth = 2
-        ctx.setLineDash([5, 3])
-        const lineY = layoutConfig.verticalPosition * scale
-        ctx.beginPath()
-        ctx.moveTo(0, lineY)
-        ctx.lineTo(canvasSize.width, lineY)
-        ctx.stroke()
-        ctx.setLineDash([])
-      }
-
-      // Anchor line (orange, dashed)
-      if (layoutConfig.anchorType !== null && layoutConfig.anchorPosition !== null) {
-        ctx.strokeStyle = '#f59e0b'
-        ctx.lineWidth = 2
-        ctx.setLineDash([5, 3])
-        const lineX = layoutConfig.anchorPosition * scale
-        ctx.beginPath()
-        ctx.moveTo(lineX, 0)
-        ctx.lineTo(lineX, canvasSize.height)
-        ctx.stroke()
-        ctx.setLineDash([])
-      }
+      // Draw layout overlays
+      drawLayoutOverlays(ctx, layoutConfig, scale, canvasSize.width, canvasSize.height)
     }
 
-    // Draw selection rectangle (click-to-start, click-to-end)
+    // Draw selection rectangle if active
     if (isSelecting && selectionStart && selectionCurrent && selectionLabel) {
-      const selLeft = Math.min(selectionStart.x, selectionCurrent.x)
-      const selTop = Math.min(selectionStart.y, selectionCurrent.y)
-      const selWidth = Math.abs(selectionCurrent.x - selectionStart.x)
-      const selHeight = Math.abs(selectionCurrent.y - selectionStart.y)
-
-      // Color based on selection label and view mode
-      // Frame mode: in=green, out=red
-      // Analysis mode: clear=gray, out=red
-      let selColor: string
-      let selBgColor: string
-
-      if (viewMode === 'analysis') {
-        // Analysis mode: left=clear (gray), right=out (red)
-        selColor = selectionLabel === 'clear' ? '#6b7280' : '#ef4444'
-        selBgColor = selectionLabel === 'clear' ? 'rgba(107,114,128,0.15)' : 'rgba(239,68,68,0.15)'
-      } else {
-        // Frame mode: left=in (green), right=out (red)
-        selColor = selectionLabel === 'in' ? '#10b981' : '#ef4444'
-        selBgColor = selectionLabel === 'in' ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)'
-      }
-
-      ctx.strokeStyle = selColor
-      ctx.fillStyle = selBgColor
-      ctx.lineWidth = 3
-      ctx.setLineDash([5, 5])
-
-      ctx.fillRect(selLeft, selTop, selWidth, selHeight)
-      ctx.strokeRect(selLeft, selTop, selWidth, selHeight)
-
-      ctx.setLineDash([])
+      drawSelectionRectangle(ctx, {
+        selectionStart,
+        selectionCurrent,
+        selectionLabel,
+        viewMode,
+      })
     }
   }, [
     canvasSize,
@@ -949,54 +1282,15 @@ export default function AnnotateLayout() {
     }
   }, [boxHighlightMode, viewMode, drawCanvas])
 
-  // Get box colors based on color code
-  const getBoxColors = (colorCode: string): { border: string; background: string } => {
-    const colorMap: Record<string, { border: string; background: string }> = {
-      annotated_in: { border: '#14b8a6', background: 'rgba(20,184,166,0.25)' },
-      annotated_out: { border: '#dc2626', background: 'rgba(220,38,38,0.25)' },
-      predicted_in_high: { border: '#3b82f6', background: 'rgba(59,130,246,0.15)' },
-      predicted_in_medium: { border: '#60a5fa', background: 'rgba(96,165,250,0.1)' },
-      predicted_in_low: { border: '#93c5fd', background: 'rgba(147,197,253,0.08)' },
-      predicted_out_high: { border: '#f97316', background: 'rgba(249,115,22,0.15)' },
-      predicted_out_medium: { border: '#fb923c', background: 'rgba(251,146,60,0.1)' },
-      predicted_out_low: { border: '#fdba74', background: 'rgba(253,186,116,0.08)' },
-    }
-    return colorMap[colorCode] ?? { border: '#9ca3af', background: 'rgba(156,163,175,0.1)' }
-  }
-
-  // Complete selection and annotate boxes
-  const completeSelection = useCallback(async () => {
-    if (!isSelecting || !selectionStart || !selectionCurrent || !selectionLabel) return
-
-    // Calculate selection rectangle in canvas coordinates
-    const selRectCanvas = {
-      left: Math.min(selectionStart.x, selectionCurrent.x),
-      top: Math.min(selectionStart.y, selectionCurrent.y),
-      right: Math.max(selectionStart.x, selectionCurrent.x),
-      bottom: Math.max(selectionStart.y, selectionCurrent.y),
-    }
-
-    // Reset selection state immediately so rectangle disappears
-    setIsSelecting(false)
-    setSelectionStart(null)
-    setSelectionCurrent(null)
-    setSelectionLabel(null)
-
-    if (viewMode === 'analysis') {
-      // Analysis mode: Bulk annotate across ALL 0.1Hz frames
+  // Handle analysis mode bulk annotation
+  const handleAnalysisModeSelection = useCallback(
+    async (selRectCanvas: SelectionRectangle, label: 'in' | 'out' | 'clear') => {
       if (!layoutConfig) return
 
       const scaleX = layoutConfig.frameWidth / canvasSize.width
       const scaleY = layoutConfig.frameHeight / canvasSize.height
-
-      const rectangleFrameCoords = {
-        left: Math.floor(selRectCanvas.left * scaleX),
-        top: Math.floor(selRectCanvas.top * scaleY),
-        right: Math.floor(selRectCanvas.right * scaleX),
-        bottom: Math.floor(selRectCanvas.bottom * scaleY),
-      }
-
-      const action = selectionLabel === 'clear' ? 'clear' : 'mark_out'
+      const rectangleFrameCoords = convertToFrameCoordinates(selRectCanvas, scaleX, scaleY)
+      const action = label === 'clear' ? 'clear' : 'mark_out'
 
       try {
         const response = await fetch(
@@ -1004,10 +1298,7 @@ export default function AnnotateLayout() {
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              rectangle: rectangleFrameCoords,
-              action,
-            }),
+            body: JSON.stringify({ rectangle: rectangleFrameCoords, action }),
           }
         )
 
@@ -1015,20 +1306,13 @@ export default function AnnotateLayout() {
 
         if (!response.ok || result.error) {
           console.error('Bulk annotate all failed:', result.error ?? `HTTP ${response.status}`)
-          console.error('Error details:', result)
           throw new Error(result.error ?? 'Failed to bulk annotate')
         }
 
-        // Reload analysis boxes to reflect the changes
         await loadAnalysisBoxes()
-
-        // Clear frame boxes cache so they reload with updated annotations
         frameBoxesCache.current.clear()
-
-        // Mark that we have unsynced annotations
         setHasUnsyncedAnnotations(true)
 
-        // Only increment counter for newly annotated boxes, not changes to existing ones
         if (result.newlyAnnotatedBoxes && result.newlyAnnotatedBoxes > 0) {
           const newCount = annotationsSinceRecalc + result.newlyAnnotatedBoxes
           setAnnotationsSinceRecalc(newCount)
@@ -1043,104 +1327,115 @@ export default function AnnotateLayout() {
       } catch (err) {
         console.error('Failed to bulk annotate all frames:', err)
       }
-    } else if (viewMode === 'frame' && currentFrameBoxes) {
-      // Frame mode: Use individual box annotation API
+    },
+    [
+      layoutConfig,
+      canvasSize,
+      videoId,
+      loadAnalysisBoxes,
+      annotationsSinceRecalc,
+      RECALC_THRESHOLD,
+      recalculateCropBounds,
+    ]
+  )
+
+  // Handle frame mode selection annotation
+  const handleFrameModeSelection = useCallback(
+    async (selRectCanvas: SelectionRectangle, label: 'in' | 'out') => {
+      if (!currentFrameBoxes) return
+
       const scale = canvasSize.width / currentFrameBoxes.frameWidth
+      const { enclosedBoxes, newlyAnnotatedCount } = findEnclosedBoxes(
+        currentFrameBoxes.boxes,
+        selRectCanvas,
+        scale
+      )
 
-      // Find all boxes fully enclosed by selection rectangle
-      const enclosedBoxes: number[] = []
-      const newlyAnnotatedCount = { count: 0 } // Track only new annotations
+      if (enclosedBoxes.length === 0) return
 
-      currentFrameBoxes.boxes.forEach(box => {
-        const boxX = box.originalBounds.left * scale
-        const boxY = box.originalBounds.top * scale
-        const boxRight = box.originalBounds.right * scale
-        const boxBottom = box.originalBounds.bottom * scale
+      const annotations = enclosedBoxes.map(boxIndex => ({ boxIndex, label }))
 
-        // Check if box is fully enclosed
-        if (
-          boxX >= selRectCanvas.left &&
-          boxY >= selRectCanvas.top &&
-          boxRight <= selRectCanvas.right &&
-          boxBottom <= selRectCanvas.bottom
-        ) {
-          enclosedBoxes.push(box.boxIndex)
-          // Count only if this box doesn't already have a user label
-          if (box.userLabel === null) {
-            newlyAnnotatedCount.count++
+      try {
+        await fetch(
+          `/api/annotations/${encodeURIComponent(videoId)}/frames/${currentFrameBoxes.frameIndex}/boxes`,
+          {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ annotations }),
           }
+        )
+
+        // Invalidate cache and reload frame boxes
+        if (selectedFrameIndex !== null) {
+          frameBoxesCache.current.delete(selectedFrameIndex)
         }
-      })
+        const response = await fetch(
+          `/api/annotations/${encodeURIComponent(videoId)}/frames/${selectedFrameIndex}/boxes`
+        )
+        const data = await response.json()
+        setCurrentFrameBoxes(data)
 
-      // Annotate all enclosed boxes
-      if (enclosedBoxes.length > 0 && (selectionLabel === 'in' || selectionLabel === 'out')) {
-        const annotations = enclosedBoxes.map(boxIndex => ({ boxIndex, label: selectionLabel }))
-
-        try {
-          await fetch(
-            `/api/annotations/${encodeURIComponent(videoId)}/frames/${currentFrameBoxes.frameIndex}/boxes`,
-            {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ annotations }),
-            }
-          )
-
-          // Invalidate cache and reload frame boxes to get updated colors
-          if (selectedFrameIndex !== null) {
-            frameBoxesCache.current.delete(selectedFrameIndex)
-          }
-          const response = await fetch(
-            `/api/annotations/${encodeURIComponent(videoId)}/frames/${selectedFrameIndex}/boxes`
-          )
-          const data = await response.json()
-          setCurrentFrameBoxes(data)
-
-          // Cache the fresh data
-          if (selectedFrameIndex !== null) {
-            frameBoxesCache.current.set(selectedFrameIndex, data)
-          }
-
-          // Mark that we have unsynced annotations
-          setHasUnsyncedAnnotations(true)
-
-          // Only increment counter for newly annotated boxes, not changes to existing ones
-          // Check if recalculation is needed after updating counter
-          const shouldRecalculate =
-            newlyAnnotatedCount.count > 0 &&
-            annotationsSinceRecalc + newlyAnnotatedCount.count >= RECALC_THRESHOLD
-
-          if (newlyAnnotatedCount.count > 0) {
-            const newCount = annotationsSinceRecalc + newlyAnnotatedCount.count
-            setAnnotationsSinceRecalc(newCount)
-          }
-
-          if (shouldRecalculate) {
-            console.log(
-              `[Layout] Reached threshold annotations, triggering crop bounds recalculation`
-            )
-            await recalculateCropBounds()
-          }
-        } catch (err) {
-          console.error('Failed to save annotations:', err)
+        if (selectedFrameIndex !== null) {
+          frameBoxesCache.current.set(selectedFrameIndex, data)
         }
+
+        setHasUnsyncedAnnotations(true)
+
+        // Check if recalculation is needed
+        const shouldRecalculate =
+          newlyAnnotatedCount > 0 &&
+          annotationsSinceRecalc + newlyAnnotatedCount >= RECALC_THRESHOLD
+
+        if (newlyAnnotatedCount > 0) {
+          setAnnotationsSinceRecalc(annotationsSinceRecalc + newlyAnnotatedCount)
+        }
+
+        if (shouldRecalculate) {
+          console.log(
+            `[Layout] Reached threshold annotations, triggering crop bounds recalculation`
+          )
+          await recalculateCropBounds()
+        }
+      } catch (err) {
+        console.error('Failed to save annotations:', err)
       }
+    },
+    [
+      currentFrameBoxes,
+      canvasSize,
+      videoId,
+      selectedFrameIndex,
+      annotationsSinceRecalc,
+      RECALC_THRESHOLD,
+      recalculateCropBounds,
+    ]
+  )
+
+  // Complete selection and annotate boxes
+  const completeSelection = useCallback(async () => {
+    if (!isSelecting || !selectionStart || !selectionCurrent || !selectionLabel) return
+
+    const selRectCanvas = calculateCanvasSelectionRect(selectionStart, selectionCurrent)
+
+    // Reset selection state immediately
+    setIsSelecting(false)
+    setSelectionStart(null)
+    setSelectionCurrent(null)
+    setSelectionLabel(null)
+
+    if (viewMode === 'analysis') {
+      await handleAnalysisModeSelection(selRectCanvas, selectionLabel)
+    } else if (viewMode === 'frame' && (selectionLabel === 'in' || selectionLabel === 'out')) {
+      await handleFrameModeSelection(selRectCanvas, selectionLabel)
     }
   }, [
     isSelecting,
     selectionStart,
     selectionCurrent,
     selectionLabel,
-    currentFrameBoxes,
-    canvasSize,
-    videoId,
-    selectedFrameIndex,
     viewMode,
-    layoutConfig,
-    loadAnalysisBoxes,
-    annotationsSinceRecalc,
-    RECALC_THRESHOLD,
-    recalculateCropBounds,
+    handleAnalysisModeSelection,
+    handleFrameModeSelection,
   ])
 
   // Helper function to convert interaction area coordinates to canvas coordinates
@@ -1167,18 +1462,21 @@ export default function AnnotateLayout() {
     return { x, y }
   }, [])
 
+  // Start a new selection rectangle
+  const startSelection = useCallback((x: number, y: number, label: 'in' | 'out' | 'clear') => {
+    setIsSelecting(true)
+    setSelectionStart({ x, y })
+    setSelectionCurrent({ x, y })
+    setSelectionLabel(label)
+  }, [])
+
   // Handle canvas click - individual box annotation, or start/complete selection
   const handleCanvasClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
       if (!canvasRef.current || canvasSize.width === 0) return
-
-      // Disable annotations during recalculation
       if (annotationsSinceRecalc >= RECALC_THRESHOLD) return
-
-      // Only handle left and right button
       if (e.button !== 0 && e.button !== 2) return
 
-      // Prevent context menu on right click
       if (e.button === 2) {
         e.preventDefault()
         e.stopPropagation()
@@ -1188,57 +1486,30 @@ export default function AnnotateLayout() {
       if (!coords) return
       const { x, y } = coords
 
+      // Complete existing selection on second click
       if (isSelecting) {
-        // Already selecting - second click completes selection
         void completeSelection()
         return
       }
 
-      // In analysis mode, only do area selection (no individual boxes)
+      // Analysis mode: area selection only
       if (viewMode === 'analysis') {
-        // Start rectangle selection
-        // Left click = 'clear', Right click = 'out'
         const label = e.button === 0 ? 'clear' : 'out'
-        setIsSelecting(true)
-        setSelectionStart({ x, y })
-        setSelectionCurrent({ x, y })
-        setSelectionLabel(label)
+        startSelection(x, y, label)
         return
       }
 
-      // Frame mode - unchanged from original behavior
+      // Frame mode: box click or area selection
       if (!currentFrameBoxes) return
 
-      // Check if clicking on a box
       const scale = canvasSize.width / currentFrameBoxes.frameWidth
-      let clickedBoxIndex: number | null = null
-
-      for (let i = currentFrameBoxes.boxes.length - 1; i >= 0; i--) {
-        const box = currentFrameBoxes.boxes[i]
-        if (!box) continue
-
-        const boxX = box.originalBounds.left * scale
-        const boxY = box.originalBounds.top * scale
-        const boxWidth = (box.originalBounds.right - box.originalBounds.left) * scale
-        const boxHeight = (box.originalBounds.bottom - box.originalBounds.top) * scale
-
-        if (x >= boxX && x <= boxX + boxWidth && y >= boxY && y <= boxY + boxHeight) {
-          clickedBoxIndex = box.boxIndex
-          break
-        }
-      }
+      const clickedBoxIndex = findClickedBox(currentFrameBoxes.boxes, x, y, scale)
+      const label = e.button === 0 ? 'in' : 'out'
 
       if (clickedBoxIndex !== null) {
-        // Clicked on a box - annotate it individually
-        const label = e.button === 0 ? 'in' : 'out'
         void handleBoxClick(clickedBoxIndex, label)
       } else {
-        // Clicked on empty space - start rectangle selection
-        const label = e.button === 0 ? 'in' : 'out'
-        setIsSelecting(true)
-        setSelectionStart({ x, y })
-        setSelectionCurrent({ x, y })
-        setSelectionLabel(label)
+        startSelection(x, y, label)
       }
     },
     [
@@ -1251,6 +1522,7 @@ export default function AnnotateLayout() {
       getCanvasCoordinates,
       annotationsSinceRecalc,
       RECALC_THRESHOLD,
+      startSelection,
     ]
   )
 
@@ -1258,15 +1530,12 @@ export default function AnnotateLayout() {
   const handleCanvasMouseMove = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
       if (!canvasRef.current || canvasSize.width === 0) return
-
-      // Disable annotations during recalculation
       if (annotationsSinceRecalc >= RECALC_THRESHOLD) return
 
       const coords = getCanvasCoordinates(e)
       if (!coords) return
       const { x, y } = coords
 
-      // Update selection current position if selecting
       if (isSelecting) {
         setSelectionCurrent({ x, y })
         return
@@ -1274,26 +1543,8 @@ export default function AnnotateLayout() {
 
       // Box hover detection only in frame mode
       if (viewMode === 'frame' && currentFrameBoxes) {
-        // Calculate scale factor
         const scale = canvasSize.width / currentFrameBoxes.frameWidth
-
-        // Find hovered box using original bounds
-        let foundIndex: number | null = null
-        for (let i = currentFrameBoxes.boxes.length - 1; i >= 0; i--) {
-          const box = currentFrameBoxes.boxes[i]
-          if (!box) continue
-
-          const boxX = box.originalBounds.left * scale
-          const boxY = box.originalBounds.top * scale
-          const boxWidth = (box.originalBounds.right - box.originalBounds.left) * scale
-          const boxHeight = (box.originalBounds.bottom - box.originalBounds.top) * scale
-
-          if (x >= boxX && x <= boxX + boxWidth && y >= boxY && y <= boxY + boxHeight) {
-            foundIndex = i
-            break
-          }
-        }
-
+        const foundIndex = findHoveredBoxIndex(currentFrameBoxes.boxes, x, y, scale)
         setHoveredBoxIndex(foundIndex)
       }
     },
@@ -1313,108 +1564,27 @@ export default function AnnotateLayout() {
     e.stopPropagation()
   }, [])
 
-  // Keyboard shortcuts
-  useKeyboardShortcuts(
-    e => {
-      switch (e.key) {
-        case 'ArrowLeft':
-          e.preventDefault()
-          // Previous frame
-          if (viewMode === 'frame' && selectedFrameIndex !== null) {
-            const currentIndex = frames.findIndex(f => f.frameIndex === selectedFrameIndex)
-            if (currentIndex > 0) {
-              const prevFrame = frames[currentIndex - 1]
-              if (prevFrame) {
-                handleThumbnailClick(prevFrame.frameIndex)
-              }
-            }
-          }
-          break
+  // Cancel selection helper
+  const cancelSelection = useCallback(() => {
+    setIsSelecting(false)
+    setSelectionStart(null)
+    setSelectionCurrent(null)
+    setSelectionLabel(null)
+  }, [])
 
-        case 'ArrowRight':
-          e.preventDefault()
-          // Next frame
-          if (viewMode === 'frame' && selectedFrameIndex !== null) {
-            const currentIndex = frames.findIndex(f => f.frameIndex === selectedFrameIndex)
-            if (currentIndex < frames.length - 1) {
-              const nextFrame = frames[currentIndex + 1]
-              if (nextFrame) {
-                handleThumbnailClick(nextFrame.frameIndex)
-              }
-            }
-          } else if (viewMode === 'analysis' && frames.length > 0) {
-            const firstFrame = frames[0]
-            if (firstFrame) {
-              handleThumbnailClick(firstFrame.frameIndex)
-            }
-          }
-          break
-
-        case 'Escape':
-          e.preventDefault()
-          // Cancel selection if selecting, otherwise return to analysis view
-          if (isSelecting) {
-            setIsSelecting(false)
-            setSelectionStart(null)
-            setSelectionCurrent(null)
-            setSelectionLabel(null)
-          } else {
-            handleThumbnailClick('analysis')
-          }
-          break
-
-        case 'i':
-        case 'I':
-          e.preventDefault()
-          // Mark hovered box as "in"
-          if (hoveredBoxIndex !== null && currentFrameBoxes) {
-            const box = currentFrameBoxes.boxes[hoveredBoxIndex]
-            if (box) {
-              void handleBoxClick(box.boxIndex, 'in')
-            }
-          }
-          break
-
-        case 'o':
-        case 'O':
-          e.preventDefault()
-          // Mark hovered box as "out"
-          if (hoveredBoxIndex !== null && currentFrameBoxes) {
-            const box = currentFrameBoxes.boxes[hoveredBoxIndex]
-            if (box) {
-              void handleBoxClick(box.boxIndex, 'out')
-            }
-          }
-          break
-
-        case '1':
-        case '2':
-        case '3':
-        case '4':
-        case '5':
-        case '6':
-        case '7':
-        case '8':
-        case '9': {
-          e.preventDefault()
-          // Quick jump to frame (1-based index)
-          const frameNum = parseInt(e.key) - 1
-          if (frameNum < frames.length) {
-            const targetFrame = frames[frameNum]
-            if (targetFrame) {
-              handleThumbnailClick(targetFrame.frameIndex)
-            }
-          }
-          break
-        }
-
-        case '0':
-          e.preventDefault()
-          // Jump to analysis view
-          handleThumbnailClick('analysis')
-          break
-      }
-    },
+  // Keyboard shortcut context for handler functions
+  const keyboardContext: KeyboardShortcutContext = useMemo(
+    () => ({
+      viewMode,
+      selectedFrameIndex,
+      frames,
+      hoveredBoxIndex,
+      currentFrameBoxes,
+      isSelecting,
+      handleThumbnailClick,
+      handleBoxClick,
+      cancelSelection,
+    }),
     [
       viewMode,
       selectedFrameIndex,
@@ -1424,7 +1594,18 @@ export default function AnnotateLayout() {
       isSelecting,
       handleThumbnailClick,
       handleBoxClick,
+      cancelSelection,
     ]
+  )
+
+  // Keyboard shortcuts
+  useKeyboardShortcuts(
+    e => {
+      if (dispatchKeyboardShortcut(e.key, keyboardContext)) {
+        e.preventDefault()
+      }
+    },
+    [keyboardContext]
   )
 
   // Show error prominently, but don't block UI for loading

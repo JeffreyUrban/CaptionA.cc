@@ -122,14 +122,81 @@ function calculateStd(values: number[], mean: number): number {
   return Math.sqrt(variance)
 }
 
+// ============================================================================
+// Helper types for OCR box analysis
+// ============================================================================
+
+/** Result of density derivative analysis for edge detection */
+interface DensityAnalysisResult {
+  density: number[]
+  derivatives: number[]
+  maxPositiveDerivative: number
+  maxNegativeDerivative: number
+  positiveEdgePos: number
+  negativeEdgePos: number
+}
+
+/** Detected anchor information */
+interface AnchorInfo {
+  anchorType: 'left' | 'center' | 'right'
+  anchorPosition: number
+  leftEdgeSharpness: number
+  rightEdgeSharpness: number
+}
+
+/** Crop bounds with padding info for logging */
+interface CropBoundsResult {
+  cropLeft: number
+  cropRight: number
+  cropTop: number
+  cropBottom: number
+}
+
+// ============================================================================
+// Helper functions for OCR box analysis
+// ============================================================================
+
 /**
- * Analyze all OCR boxes to determine optimal crop bounds and layout parameters.
+ * Filter outliers from an array using IQR (Interquartile Range) method.
+ * Uses k=3.0 (less aggressive than standard 1.5) to keep more valid boxes.
  */
-function analyzeOCRBoxes(
+function filterOutliers(values: number[]): number[] {
+  if (values.length < 10) return values // Need sufficient values for meaningful filtering
+
+  const sorted = [...values].sort((a, b) => a - b)
+  const q1Index = Math.floor(sorted.length * 0.25)
+  const q3Index = Math.floor(sorted.length * 0.75)
+  const q1 = sorted[q1Index] ?? 0
+  const q3 = sorted[q3Index] ?? 0
+  const iqr = q3 - q1
+
+  // Use 3.0 * IQR instead of 1.5 to be less aggressive
+  const k = 3.0
+  const lowerBound = q1 - k * iqr
+  const upperBound = q3 + k * iqr
+
+  const filtered = values.filter(v => v >= lowerBound && v <= upperBound)
+
+  // Safety: if we filter out more than 10% of values, keep original
+  if (filtered.length < values.length * 0.9) {
+    console.log(
+      `[Outlier Filtering] Filtered too many (${values.length - filtered.length}), keeping original`
+    )
+    return values
+  }
+
+  return filtered
+}
+
+/**
+ * Collect box statistics from OCR frames.
+ * Returns box statistics and count of valid boxes.
+ */
+function collectBoxStatistics(
   frames: FrameOCR[],
   frameWidth: number,
   frameHeight: number
-): OCRAnalysisResult {
+): { stats: BoxStats; totalBoxes: number } {
   const stats: BoxStats = {
     minTop: frameHeight,
     maxBottom: 0,
@@ -147,7 +214,6 @@ function analyzeOCRBoxes(
 
   let totalBoxes = 0
 
-  // Collect all box statistics
   for (const frame of frames) {
     let ocrAnnotations: PythonOCRAnnotation[] = []
     try {
@@ -196,41 +262,13 @@ function analyzeOCRBoxes(
     }
   }
 
-  if (totalBoxes === 0) {
-    throw new Error('No OCR boxes found in video')
-  }
+  return { stats, totalBoxes }
+}
 
-  // Filter outliers from horizontal edges to handle occasional mispredictions
-  // Use IQR (Interquartile Range) method: remove values > Q3 + k*IQR or < Q1 - k*IQR
-  // Use k=3.0 (less aggressive than standard 1.5) to keep more valid boxes
-  function filterOutliers(values: number[]): number[] {
-    if (values.length < 10) return values // Need sufficient values for meaningful filtering
-
-    const sorted = [...values].sort((a, b) => a - b)
-    const q1Index = Math.floor(sorted.length * 0.25)
-    const q3Index = Math.floor(sorted.length * 0.75)
-    const q1 = sorted[q1Index] ?? 0
-    const q3 = sorted[q3Index] ?? 0
-    const iqr = q3 - q1
-
-    // Use 3.0 * IQR instead of 1.5 to be less aggressive
-    const k = 3.0
-    const lowerBound = q1 - k * iqr
-    const upperBound = q3 + k * iqr
-
-    const filtered = values.filter(v => v >= lowerBound && v <= upperBound)
-
-    // Safety: if we filter out more than 10% of values, keep original
-    if (filtered.length < values.length * 0.9) {
-      console.log(
-        `[Outlier Filtering] Filtered too many (${values.length - filtered.length}), keeping original`
-      )
-      return values
-    }
-
-    return filtered
-  }
-
+/**
+ * Apply outlier filtering to horizontal edge statistics and restore if filtering is too aggressive.
+ */
+function applyHorizontalOutlierFiltering(stats: BoxStats): void {
   const originalLeftCount = stats.leftEdges.length
   const originalRightCount = stats.rightEdges.length
 
@@ -262,87 +300,78 @@ function analyzeOCRBoxes(
   console.log(
     `[Outlier Filtering] Right edges: ${originalRightCount} → ${stats.rightEdges.length} (removed ${originalRightCount - stats.rightEdges.length})`
   )
+}
 
-  // Calculate modes and standard deviations
-  const verticalPosition = calculateMode(stats.centerYValues, 5)
-  const verticalStd = calculateStd(stats.centerYValues, verticalPosition)
-
-  const boxHeight = calculateMode(stats.heightValues, 2)
-  const boxHeightStd = calculateStd(stats.heightValues, boxHeight)
-
-  const boxWidth = calculateMode(stats.widthValues, 2)
-
-  // Calculate edge standard deviations for crop bounds
-  // CRITICAL: Filter outliers before calculating std dev to get tight bounds around main cluster
-  const topMode = calculateMode(stats.topEdges, 5)
-  const topEdgesFiltered = stats.topEdges.filter(val => Math.abs(val - topMode) < 100) // Remove outliers >100px from mode
-  const topEdgeStd = calculateStd(topEdgesFiltered, topMode)
-
-  const bottomMode = calculateMode(stats.bottomEdges, 5)
-  const bottomEdgesFiltered = stats.bottomEdges.filter(val => Math.abs(val - bottomMode) < 100)
-  const bottomEdgeStd = calculateStd(bottomEdgesFiltered, bottomMode)
-
-  // Determine anchor type by finding edges of box clusters using derivative analysis
-  // Left anchor: point with highest positive derivative (boxes start piling up)
-  // Right anchor: point with highest negative derivative (boxes stop piling up)
-  // Center anchor: symmetric density around center
-
-  // Calculate box density at each horizontal position (count boxes at vertical centerline)
-  const densityByX = new Array(frameWidth).fill(0)
-
-  for (let i = 0; i < stats.leftEdges.length; i++) {
-    const left = stats.leftEdges[i] ?? 0
-    const right = stats.rightEdges[i] ?? 0
-    const centerY = stats.centerYValues[i] ?? 0
-
-    // Only count boxes near the vertical center (caption region)
-    if (Math.abs(centerY - verticalPosition) < verticalStd * 2) {
-      for (let x = Math.max(0, left); x <= Math.min(frameWidth - 1, right); x++) {
-        densityByX[x]++
-      }
-    }
-  }
+/**
+ * Calculate density distribution and derivatives for edge detection.
+ * Used for both horizontal (X) and vertical (Y) analysis.
+ */
+function calculateDensityAndDerivatives(
+  size: number,
+  fillDensity: (density: number[]) => void,
+  defaultNegativeEdgePos: number
+): DensityAnalysisResult {
+  const density = new Array(size).fill(0) as number[]
+  fillDensity(density)
 
   // Calculate derivatives (change in density)
-  const derivatives: number[] = new Array(frameWidth - 1).fill(0)
-  for (let x = 0; x < frameWidth - 1; x++) {
-    derivatives[x] = (densityByX[x + 1] ?? 0) - (densityByX[x] ?? 0)
+  const derivatives = new Array(size - 1).fill(0) as number[]
+  for (let i = 0; i < size - 1; i++) {
+    derivatives[i] = (density[i + 1] ?? 0) - (density[i] ?? 0)
   }
 
-  // Find highest positive derivative (left edge where density increases)
+  // Find highest positive derivative (edge where density increases)
   let maxPositiveDerivative = 0
-  let leftEdgePos = 0
-  for (let x = 0; x < derivatives.length; x++) {
-    const deriv = derivatives[x] ?? 0
+  let positiveEdgePos = 0
+  for (let i = 0; i < derivatives.length; i++) {
+    const deriv = derivatives[i] ?? 0
     if (deriv > maxPositiveDerivative) {
       maxPositiveDerivative = deriv
-      leftEdgePos = x
+      positiveEdgePos = i
     }
   }
 
-  // Find highest negative derivative (right edge where density decreases)
+  // Find highest negative derivative (edge where density decreases)
   let maxNegativeDerivative = 0
-  let rightEdgePos = frameWidth - 1
-  for (let x = 0; x < derivatives.length; x++) {
-    const deriv = derivatives[x] ?? 0
+  let negativeEdgePos = defaultNegativeEdgePos
+  for (let i = 0; i < derivatives.length; i++) {
+    const deriv = derivatives[i] ?? 0
     if (deriv < maxNegativeDerivative) {
       maxNegativeDerivative = deriv
-      rightEdgePos = x
+      negativeEdgePos = i
     }
   }
 
+  return {
+    density,
+    derivatives,
+    maxPositiveDerivative,
+    maxNegativeDerivative,
+    positiveEdgePos,
+    negativeEdgePos,
+  }
+}
+
+/**
+ * Determine anchor type and position based on horizontal density analysis.
+ */
+function determineAnchorType(
+  horizontalAnalysis: DensityAnalysisResult,
+  stats: BoxStats,
+  frameWidth: number,
+  boxWidth: number
+): AnchorInfo {
   // Calculate center of mass for center detection
   const meanCenterX =
     stats.centerXValues.reduce((sum, val) => sum + val, 0) / stats.centerXValues.length
   const frameCenterX = frameWidth / 2
 
-  // Determine anchor type
+  const centerOfMassNearFrameCenter = Math.abs(meanCenterX - frameCenterX) < boxWidth * 1.0
+  const leftEdgeStrength = horizontalAnalysis.maxPositiveDerivative
+  const rightEdgeStrength = Math.abs(horizontalAnalysis.maxNegativeDerivative)
+
   let anchorType: 'left' | 'center' | 'right'
   let anchorPosition: number
-
-  const centerOfMassNearFrameCenter = Math.abs(meanCenterX - frameCenterX) < boxWidth * 1.0
-  const leftEdgeStrength = maxPositiveDerivative
-  const rightEdgeStrength = Math.abs(maxNegativeDerivative)
 
   if (
     centerOfMassNearFrameCenter &&
@@ -354,105 +383,76 @@ function analyzeOCRBoxes(
   } else if (leftEdgeStrength > rightEdgeStrength * 1.2) {
     // Strong left edge = left anchor
     anchorType = 'left'
-    anchorPosition = leftEdgePos
+    anchorPosition = horizontalAnalysis.positiveEdgePos
   } else if (rightEdgeStrength > leftEdgeStrength * 1.2) {
     // Strong right edge = right anchor
     anchorType = 'right'
-    anchorPosition = rightEdgePos
+    anchorPosition = horizontalAnalysis.negativeEdgePos
   } else {
     // Default to stronger edge
     if (leftEdgeStrength >= rightEdgeStrength) {
       anchorType = 'left'
-      anchorPosition = leftEdgePos
+      anchorPosition = horizontalAnalysis.positiveEdgePos
     } else {
       anchorType = 'right'
-      anchorPosition = rightEdgePos
+      anchorPosition = horizontalAnalysis.negativeEdgePos
     }
   }
 
+  // Log anchor detection details
   console.log(
-    `[Anchor Detection] Horizontal - Left edge at x=${leftEdgePos} (derivative=${maxPositiveDerivative})`
+    `[Anchor Detection] Horizontal - Left edge at x=${horizontalAnalysis.positiveEdgePos} (derivative=${horizontalAnalysis.maxPositiveDerivative})`
   )
   console.log(
-    `[Anchor Detection] Horizontal - Right edge at x=${rightEdgePos} (derivative=${maxNegativeDerivative})`
+    `[Anchor Detection] Horizontal - Right edge at x=${horizontalAnalysis.negativeEdgePos} (derivative=${horizontalAnalysis.maxNegativeDerivative})`
   )
   console.log(
     `[Anchor Detection] Horizontal - Center of mass: ${Math.round(meanCenterX)}, frame center: ${frameCenterX}`
   )
   console.log(`[Anchor Detection] Horizontal - Chosen: ${anchorType} at ${anchorPosition}`)
 
-  // Calculate horizontal edge sharpness for adaptive padding
-  const maxHorizontalDensity = Math.max(...densityByX)
-  const leftEdgeSharpness = maxPositiveDerivative / maxHorizontalDensity
-  const rightEdgeSharpness = Math.abs(maxNegativeDerivative) / maxHorizontalDensity
+  // Calculate edge sharpness
+  const maxHorizontalDensity = Math.max(...horizontalAnalysis.density)
+  const leftEdgeSharpness = horizontalAnalysis.maxPositiveDerivative / maxHorizontalDensity
+  const rightEdgeSharpness =
+    Math.abs(horizontalAnalysis.maxNegativeDerivative) / maxHorizontalDensity
 
   console.log(
     `[Anchor Detection] Horizontal - Left sharpness=${leftEdgeSharpness.toFixed(3)}, Right sharpness=${rightEdgeSharpness.toFixed(3)}`
   )
 
-  // Apply same derivative method for vertical bounds (top/bottom of caption region)
-  // Calculate box density at each vertical position
-  const densityByY = new Array(frameHeight).fill(0)
+  return { anchorType, anchorPosition, leftEdgeSharpness, rightEdgeSharpness }
+}
 
-  for (let i = 0; i < stats.topEdges.length; i++) {
-    const top = stats.topEdges[i] ?? 0
-    const bottom = stats.bottomEdges[i] ?? 0
+/**
+ * Calculate final crop bounds based on detected edges and anchor type.
+ */
+function calculateCropBounds(
+  anchorInfo: AnchorInfo,
+  verticalAnalysis: DensityAnalysisResult,
+  stats: BoxStats,
+  frameWidth: number,
+  frameHeight: number,
+  boxWidth: number,
+  boxHeight: number
+): CropBoundsResult {
+  const PADDING_FRACTION = 0.1 // Base padding: 1/10 of box dimension
+  const SHARPNESS_FACTOR = 2.0 // How much to increase padding for gradual edges
 
-    // Only count boxes near the horizontal center (caption region)
-    // Use a wide horizontal range to capture all caption boxes
-    for (let y = Math.max(0, top); y <= Math.min(frameHeight - 1, bottom); y++) {
-      densityByY[y]++
-    }
-  }
-
-  // Calculate vertical derivatives (change in density)
-  const verticalDerivatives: number[] = new Array(frameHeight - 1).fill(0)
-  for (let y = 0; y < frameHeight - 1; y++) {
-    verticalDerivatives[y] = (densityByY[y + 1] ?? 0) - (densityByY[y] ?? 0)
-  }
-
-  // Find highest positive derivative (top edge where density increases moving down)
-  let maxPositiveVerticalDerivative = 0
-  let topEdgePos = 0
-  for (let y = 0; y < verticalDerivatives.length; y++) {
-    const deriv = verticalDerivatives[y] ?? 0
-    if (deriv > maxPositiveVerticalDerivative) {
-      maxPositiveVerticalDerivative = deriv
-      topEdgePos = y
-    }
-  }
-
-  // Find highest negative derivative (bottom edge where density decreases moving down)
-  let maxNegativeVerticalDerivative = 0
-  let bottomEdgePos = frameHeight - 1
-  for (let y = 0; y < verticalDerivatives.length; y++) {
-    const deriv = verticalDerivatives[y] ?? 0
-    if (deriv < maxNegativeVerticalDerivative) {
-      maxNegativeVerticalDerivative = deriv
-      bottomEdgePos = y
-    }
-  }
+  // Calculate vertical edge sharpness
+  const maxVerticalDensity = Math.max(...verticalAnalysis.density)
+  const topEdgeSharpness = verticalAnalysis.maxPositiveDerivative / maxVerticalDensity
+  const bottomEdgeSharpness = Math.abs(verticalAnalysis.maxNegativeDerivative) / maxVerticalDensity
 
   console.log(
-    `[Anchor Detection] Vertical - Top edge at y=${topEdgePos} (derivative=${maxPositiveVerticalDerivative})`
+    `[Anchor Detection] Vertical - Top edge at y=${verticalAnalysis.positiveEdgePos} (derivative=${verticalAnalysis.maxPositiveDerivative})`
   )
   console.log(
-    `[Anchor Detection] Vertical - Bottom edge at y=${bottomEdgePos} (derivative=${maxNegativeVerticalDerivative})`
+    `[Anchor Detection] Vertical - Bottom edge at y=${verticalAnalysis.negativeEdgePos} (derivative=${verticalAnalysis.maxNegativeDerivative})`
   )
-
-  // Calculate vertical edge sharpness for adaptive padding
-  const maxVerticalDensity = Math.max(...densityByY)
-  const topEdgeSharpness = maxPositiveVerticalDerivative / maxVerticalDensity
-  const bottomEdgeSharpness = Math.abs(maxNegativeVerticalDerivative) / maxVerticalDensity
-
   console.log(
     `[Anchor Detection] Vertical - Top sharpness=${topEdgeSharpness.toFixed(3)}, Bottom sharpness=${bottomEdgeSharpness.toFixed(3)}`
   )
-
-  // Calculate crop bounds: detected edge position ± adaptive padding
-  // Padding increases when edges are less sharp (less consistent positions)
-  const PADDING_FRACTION = 0.1 // Base padding: 1/10 of box dimension
-  const SHARPNESS_FACTOR = 2.0 // How much to increase padding for gradual edges
 
   // Adaptive vertical padding: padding × (1 + factor × (1 - sharpness))
   const topPaddingMultiplier = 1 + SHARPNESS_FACTOR * (1 - Math.min(1, topEdgeSharpness))
@@ -461,61 +461,76 @@ function analyzeOCRBoxes(
   const topPadding = Math.ceil(boxHeight * PADDING_FRACTION * topPaddingMultiplier)
   const bottomPadding = Math.ceil(boxHeight * PADDING_FRACTION * bottomPaddingMultiplier)
 
-  let cropTop = Math.max(0, topEdgePos - topPadding)
-  let cropBottom = Math.min(frameHeight, bottomEdgePos + bottomPadding)
+  const cropTop = Math.max(0, verticalAnalysis.positiveEdgePos - topPadding)
+  const cropBottom = Math.min(frameHeight, verticalAnalysis.negativeEdgePos + bottomPadding)
 
   console.log(
     `[Crop Bounds] Vertical - Top padding=${topPadding}px (×${topPaddingMultiplier.toFixed(2)}), Bottom padding=${bottomPadding}px (×${bottomPaddingMultiplier.toFixed(2)})`
   )
 
-  // Horizontal bounds: Use detected anchor/edge position ± padding
-  // Dense edges (anchor): adaptive padding based on sharpness
-  // Sparse far sides: use actual filtered box extents with fixed padding
-  let cropLeft: number
-  let cropRight: number
+  // Horizontal bounds calculation
+  const leftAnchorPaddingMultiplier =
+    1 + SHARPNESS_FACTOR * (1 - Math.min(1, anchorInfo.leftEdgeSharpness))
+  const rightAnchorPaddingMultiplier =
+    1 + SHARPNESS_FACTOR * (1 - Math.min(1, anchorInfo.rightEdgeSharpness))
 
-  // Adaptive padding for dense edges (anchor side)
-  const leftAnchorPaddingMultiplier = 1 + SHARPNESS_FACTOR * (1 - Math.min(1, leftEdgeSharpness))
-  const rightAnchorPaddingMultiplier = 1 + SHARPNESS_FACTOR * (1 - Math.min(1, rightEdgeSharpness))
+  const baseDensePadding = boxWidth * PADDING_FRACTION
+  const fixedSparsePadding = Math.ceil(boxWidth * 2)
 
-  const baseDensePadding = boxWidth * PADDING_FRACTION // Base padding for dense edges
-  const fixedSparsePadding = Math.ceil(boxWidth * 2) // Fixed padding for sparse far sides
-
-  // For sparse data, use actual box extents instead of polynomial fitting
   const minLeft = Math.min(...stats.leftEdges)
   const maxRight = Math.max(...stats.rightEdges)
 
-  if (anchorType === 'center') {
-    // For center anchors: use filtered box extents with padding
+  let cropLeft: number
+  let cropRight: number
+
+  if (anchorInfo.anchorType === 'center') {
     cropLeft = Math.max(0, minLeft - fixedSparsePadding)
     cropRight = Math.min(frameWidth, maxRight + fixedSparsePadding)
-
     console.log(
-      `[Crop Bounds] Horizontal - Center anchor at ${anchorPosition}: using box extents ${minLeft}-${maxRight} with ±${fixedSparsePadding}px padding`
+      `[Crop Bounds] Horizontal - Center anchor at ${anchorInfo.anchorPosition}: using box extents ${minLeft}-${maxRight} with ±${fixedSparsePadding}px padding`
     )
-  } else if (anchorType === 'left') {
-    // For left anchors: adaptive padding on dense anchor side (left), box extent on far side (right)
+  } else if (anchorInfo.anchorType === 'left') {
     const leftPadding = Math.ceil(baseDensePadding * leftAnchorPaddingMultiplier)
-    cropLeft = Math.max(0, anchorPosition - leftPadding)
-
+    cropLeft = Math.max(0, anchorInfo.anchorPosition - leftPadding)
     cropRight = Math.min(frameWidth, maxRight + fixedSparsePadding)
-
     console.log(
-      `[Crop Bounds] Horizontal - Left anchor at ${anchorPosition}: left=${cropLeft} (anchor-${leftPadding}px, ×${leftAnchorPaddingMultiplier.toFixed(2)}), right=${cropRight} (extent=${maxRight}+${fixedSparsePadding}px)`
+      `[Crop Bounds] Horizontal - Left anchor at ${anchorInfo.anchorPosition}: left=${cropLeft} (anchor-${leftPadding}px, ×${leftAnchorPaddingMultiplier.toFixed(2)}), right=${cropRight} (extent=${maxRight}+${fixedSparsePadding}px)`
     )
   } else {
-    // For right anchors: box extent on far side (left), adaptive padding on dense anchor side (right)
     cropLeft = Math.max(0, minLeft - fixedSparsePadding)
-
     const rightPadding = Math.ceil(baseDensePadding * rightAnchorPaddingMultiplier)
-    cropRight = Math.min(frameWidth, anchorPosition + rightPadding)
-
+    cropRight = Math.min(frameWidth, anchorInfo.anchorPosition + rightPadding)
     console.log(
-      `[Crop Bounds] Horizontal - Right anchor at ${anchorPosition}: left=${cropLeft} (extent=${minLeft}-${fixedSparsePadding}px), right=${cropRight} (anchor+${rightPadding}px, ×${rightAnchorPaddingMultiplier.toFixed(2)})`
+      `[Crop Bounds] Horizontal - Right anchor at ${anchorInfo.anchorPosition}: left=${cropLeft} (extent=${minLeft}-${fixedSparsePadding}px), right=${cropRight} (anchor+${rightPadding}px, ×${rightAnchorPaddingMultiplier.toFixed(2)})`
     )
   }
 
-  // Safety: Guard against NaN values (can happen with edge cases in density calculation)
+  // Apply NaN safety fallback if needed
+  const result = applyNaNSafetyFallback(
+    { cropLeft, cropRight, cropTop, cropBottom },
+    stats,
+    frameWidth,
+    frameHeight
+  )
+
+  console.log(
+    `[Crop Bounds] Final bounds: [${result.cropLeft}, ${result.cropTop}] - [${result.cropRight}, ${result.cropBottom}] with adaptive padding (sharpness factor=${SHARPNESS_FACTOR})`
+  )
+
+  return result
+}
+
+/**
+ * Apply fallback bounds when NaN values are detected.
+ */
+function applyNaNSafetyFallback(
+  bounds: CropBoundsResult,
+  stats: BoxStats,
+  frameWidth: number,
+  frameHeight: number
+): CropBoundsResult {
+  let { cropLeft, cropRight, cropTop, cropBottom } = bounds
+
   if (isNaN(cropLeft) || isNaN(cropRight) || isNaN(cropTop) || isNaN(cropBottom)) {
     console.error(
       `[Crop Bounds] ERROR: NaN values detected - cropLeft=${cropLeft}, cropTop=${cropTop}, cropRight=${cropRight}, cropBottom=${cropBottom}`
@@ -537,29 +552,117 @@ function analyzeOCRBoxes(
     )
   }
 
-  console.log(
-    `[Crop Bounds] Final bounds: [${cropLeft}, ${cropTop}] - [${cropRight}, ${cropBottom}] with adaptive padding (sharpness factor=${SHARPNESS_FACTOR})`
+  return { cropLeft, cropRight, cropTop, cropBottom }
+}
+
+// ============================================================================
+// Main analysis function
+// ============================================================================
+
+/**
+ * Analyze all OCR boxes to determine optimal crop bounds and layout parameters.
+ */
+function analyzeOCRBoxes(
+  frames: FrameOCR[],
+  frameWidth: number,
+  frameHeight: number
+): OCRAnalysisResult {
+  // Step 1: Collect box statistics from all frames
+  const { stats, totalBoxes } = collectBoxStatistics(frames, frameWidth, frameHeight)
+
+  if (totalBoxes === 0) {
+    throw new Error('No OCR boxes found in video')
+  }
+
+  // Step 2: Filter outliers from horizontal edges
+  applyHorizontalOutlierFiltering(stats)
+
+  // Step 3: Calculate modes and standard deviations
+  const verticalPosition = calculateMode(stats.centerYValues, 5)
+  const verticalStd = calculateStd(stats.centerYValues, verticalPosition)
+  const boxHeight = calculateMode(stats.heightValues, 2)
+  const boxHeightStd = calculateStd(stats.heightValues, boxHeight)
+  const boxWidth = calculateMode(stats.widthValues, 2)
+
+  // Calculate edge standard deviations (filter outliers >100px from mode)
+  const topMode = calculateMode(stats.topEdges, 5)
+  const topEdgesFiltered = stats.topEdges.filter(val => Math.abs(val - topMode) < 100)
+  const topEdgeStd = calculateStd(topEdgesFiltered, topMode)
+
+  const bottomMode = calculateMode(stats.bottomEdges, 5)
+  const bottomEdgesFiltered = stats.bottomEdges.filter(val => Math.abs(val - bottomMode) < 100)
+  const bottomEdgeStd = calculateStd(bottomEdgesFiltered, bottomMode)
+
+  // Step 4: Calculate horizontal density and detect anchor
+  const horizontalAnalysis = calculateDensityAndDerivatives(
+    frameWidth,
+    density => {
+      for (let i = 0; i < stats.leftEdges.length; i++) {
+        const left = stats.leftEdges[i] ?? 0
+        const right = stats.rightEdges[i] ?? 0
+        const centerY = stats.centerYValues[i] ?? 0
+
+        // Only count boxes near the vertical center (caption region)
+        if (Math.abs(centerY - verticalPosition) < verticalStd * 2) {
+          for (let x = Math.max(0, left); x <= Math.min(frameWidth - 1, right); x++) {
+            // Safe: density array was initialized with size=frameWidth, and x is bounded to [0, frameWidth-1]
+            ;(density[x] as number)++
+          }
+        }
+      }
+    },
+    frameWidth - 1
   )
 
-  // Count caption boxes (those near the vertical mode)
+  const anchorInfo = determineAnchorType(horizontalAnalysis, stats, frameWidth, boxWidth)
+
+  // Step 5: Calculate vertical density for top/bottom edge detection
+  const verticalAnalysis = calculateDensityAndDerivatives(
+    frameHeight,
+    density => {
+      for (let i = 0; i < stats.topEdges.length; i++) {
+        const top = stats.topEdges[i] ?? 0
+        const bottom = stats.bottomEdges[i] ?? 0
+
+        for (let y = Math.max(0, top); y <= Math.min(frameHeight - 1, bottom); y++) {
+          // Safe: density array was initialized with size=frameHeight, and y is bounded to [0, frameHeight-1]
+          ;(density[y] as number)++
+        }
+      }
+    },
+    frameHeight - 1
+  )
+
+  // Step 6: Calculate final crop bounds
+  const cropBounds = calculateCropBounds(
+    anchorInfo,
+    verticalAnalysis,
+    stats,
+    frameWidth,
+    frameHeight,
+    boxWidth,
+    boxHeight
+  )
+
+  // Step 7: Count caption boxes (those near the vertical mode)
   const captionBoxCount = stats.centerYValues.filter(
     y => Math.abs(y - verticalPosition) < verticalStd * 2
   ).length
 
   return {
     cropBounds: {
-      left: cropLeft,
-      top: cropTop,
-      right: cropRight,
-      bottom: cropBottom,
+      left: cropBounds.cropLeft,
+      top: cropBounds.cropTop,
+      right: cropBounds.cropRight,
+      bottom: cropBounds.cropBottom,
     },
     layoutParams: {
       verticalPosition,
       verticalStd,
       boxHeight,
       boxHeightStd,
-      anchorType,
-      anchorPosition,
+      anchorType: anchorInfo.anchorType,
+      anchorPosition: anchorInfo.anchorPosition,
       topEdgeStd,
       bottomEdgeStd,
     },

@@ -180,114 +180,252 @@ interface CharacterSets {
 }
 
 /**
+ * Unicode range definition for a character set.
+ * Each range is defined as [start, end] inclusive.
+ */
+type UnicodeRange = [number, number]
+
+/**
+ * Check if a character code falls within any of the provided Unicode ranges.
+ */
+function isInRanges(code: number, ranges: UnicodeRange[]): boolean {
+  return ranges.some(([start, end]) => code >= start && code <= end)
+}
+
+/**
+ * Check if character is Roman (Latin alphabet).
+ * Includes: Basic Latin, Latin-1 Supplement, Latin Extended-A, Latin Extended-B
+ */
+function isRomanChar(code: number): boolean {
+  const ranges: UnicodeRange[] = [
+    [0x0041, 0x005a], // A-Z
+    [0x0061, 0x007a], // a-z
+    [0x00c0, 0x00ff], // Latin-1 Supplement (accented chars)
+    [0x0100, 0x017f], // Latin Extended-A
+    [0x0180, 0x024f], // Latin Extended-B
+  ]
+  return isInRanges(code, ranges)
+}
+
+/**
+ * Check if character is Hanzi (Chinese).
+ * Includes: CJK Unified Ideographs, CJK Extension A
+ */
+function isHanziChar(code: number): boolean {
+  const ranges: UnicodeRange[] = [
+    [0x4e00, 0x9fff], // CJK Unified Ideographs
+    [0x3400, 0x4dbf], // CJK Extension A
+  ]
+  return isInRanges(code, ranges)
+}
+
+/**
+ * Check if character is Arabic.
+ * Includes: Arabic, Arabic Supplement
+ */
+function isArabicChar(code: number): boolean {
+  const ranges: UnicodeRange[] = [
+    [0x0600, 0x06ff], // Arabic
+    [0x0750, 0x077f], // Arabic Supplement
+  ]
+  return isInRanges(code, ranges)
+}
+
+/**
+ * Check if character is Korean (Hangul).
+ * Includes: Hangul Syllables, Hangul Jamo
+ */
+function isKoreanChar(code: number): boolean {
+  const ranges: UnicodeRange[] = [
+    [0xac00, 0xd7af], // Hangul Syllables
+    [0x1100, 0x11ff], // Hangul Jamo
+  ]
+  return isInRanges(code, ranges)
+}
+
+/** Check if character is Hiragana. */
+function isHiraganaChar(code: number): boolean {
+  return code >= 0x3040 && code <= 0x309f
+}
+
+/** Check if character is Katakana. */
+function isKatakanaChar(code: number): boolean {
+  return code >= 0x30a0 && code <= 0x30ff
+}
+
+/** Check if character is Cyrillic. */
+function isCyrillicChar(code: number): boolean {
+  return code >= 0x0400 && code <= 0x04ff
+}
+
+/** Check if character is Devanagari. */
+function isDevanagariChar(code: number): boolean {
+  return code >= 0x0900 && code <= 0x097f
+}
+
+/** Check if character is Thai. */
+function isThaiChar(code: number): boolean {
+  return code >= 0x0e00 && code <= 0x0e7f
+}
+
+/** Check if character is an ASCII digit. */
+function isDigitChar(code: number): boolean {
+  return code >= 0x0030 && code <= 0x0039
+}
+
+/**
+ * Check if character is ASCII punctuation.
+ * Includes: ! " # $ % & ' ( ) * + , - . / : ; < = > ? @ [ \ ] ^ _ ` { | } ~
+ */
+function isPunctuationChar(code: number): boolean {
+  const ranges: UnicodeRange[] = [
+    [0x0021, 0x002f], // ! " # $ % & ' ( ) * + , - . /
+    [0x003a, 0x0040], // : ; < = > ? @
+    [0x005b, 0x0060], // [ \ ] ^ _ `
+    [0x007b, 0x007e], // { | } ~
+  ]
+  return isInRanges(code, ranges)
+}
+
+/**
  * Detect character sets in text using Unicode character code ranges.
  * Returns binary indicators (1.0 or 0.0) for each character set.
  * Non-exclusive: "Season 2 第二季" returns {isRoman: 1.0, isHanzi: 1.0, isDigits: 1.0, ...}
  */
 function detectCharacterSets(text: string): CharacterSets {
-  let isRoman = 0.0
-  let isHanzi = 0.0
-  let isArabic = 0.0
-  let isKorean = 0.0
-  let isHiragana = 0.0
-  let isKatakana = 0.0
-  let isCyrillic = 0.0
-  let isDevanagari = 0.0
-  let isThai = 0.0
-  let isDigits = 0.0
-  let isPunctuation = 0.0
+  const result: CharacterSets = {
+    isRoman: 0.0,
+    isHanzi: 0.0,
+    isArabic: 0.0,
+    isKorean: 0.0,
+    isHiragana: 0.0,
+    isKatakana: 0.0,
+    isCyrillic: 0.0,
+    isDevanagari: 0.0,
+    isThai: 0.0,
+    isDigits: 0.0,
+    isPunctuation: 0.0,
+  }
 
   for (let i = 0; i < text.length; i++) {
     const code = text.charCodeAt(i)
 
-    // Roman (Latin): Basic Latin, Latin-1 Supplement, Latin Extended-A, Latin Extended-B
-    if (
-      (code >= 0x0041 && code <= 0x005a) || // A-Z
-      (code >= 0x0061 && code <= 0x007a) || // a-z
-      (code >= 0x00c0 && code <= 0x00ff) || // Latin-1 Supplement (À-ÿ)
-      (code >= 0x0100 && code <= 0x017f) || // Latin Extended-A
-      (code >= 0x0180 && code <= 0x024f) // Latin Extended-B
-    ) {
-      isRoman = 1.0
-    }
-
-    // Hanzi (Chinese): CJK Unified Ideographs + Extension A
-    if (
-      (code >= 0x4e00 && code <= 0x9fff) || // CJK Unified Ideographs
-      (code >= 0x3400 && code <= 0x4dbf) // CJK Extension A
-    ) {
-      isHanzi = 1.0
-    }
-
-    // Arabic: Arabic + Arabic Supplement
-    if (
-      (code >= 0x0600 && code <= 0x06ff) || // Arabic
-      (code >= 0x0750 && code <= 0x077f) // Arabic Supplement
-    ) {
-      isArabic = 1.0
-    }
-
-    // Korean (Hangul): Hangul Syllables + Hangul Jamo
-    if (
-      (code >= 0xac00 && code <= 0xd7af) || // Hangul Syllables
-      (code >= 0x1100 && code <= 0x11ff) // Hangul Jamo
-    ) {
-      isKorean = 1.0
-    }
-
-    // Hiragana
-    if (code >= 0x3040 && code <= 0x309f) {
-      isHiragana = 1.0
-    }
-
-    // Katakana
-    if (code >= 0x30a0 && code <= 0x30ff) {
-      isKatakana = 1.0
-    }
-
-    // Cyrillic
-    if (code >= 0x0400 && code <= 0x04ff) {
-      isCyrillic = 1.0
-    }
-
-    // Devanagari
-    if (code >= 0x0900 && code <= 0x097f) {
-      isDevanagari = 1.0
-    }
-
-    // Thai
-    if (code >= 0x0e00 && code <= 0x0e7f) {
-      isThai = 1.0
-    }
-
-    // Digits (ASCII digits)
-    if (code >= 0x0030 && code <= 0x0039) {
-      isDigits = 1.0
-    }
-
-    // Punctuation (ASCII punctuation)
-    if (
-      (code >= 0x0021 && code <= 0x002f) || // ! " # $ % & ' ( ) * + , - . /
-      (code >= 0x003a && code <= 0x0040) || // : ; < = > ? @
-      (code >= 0x005b && code <= 0x0060) || // [ \ ] ^ _ `
-      (code >= 0x007b && code <= 0x007e) // { | } ~
-    ) {
-      isPunctuation = 1.0
-    }
+    if (isRomanChar(code)) result.isRoman = 1.0
+    if (isHanziChar(code)) result.isHanzi = 1.0
+    if (isArabicChar(code)) result.isArabic = 1.0
+    if (isKoreanChar(code)) result.isKorean = 1.0
+    if (isHiraganaChar(code)) result.isHiragana = 1.0
+    if (isKatakanaChar(code)) result.isKatakana = 1.0
+    if (isCyrillicChar(code)) result.isCyrillic = 1.0
+    if (isDevanagariChar(code)) result.isDevanagari = 1.0
+    if (isThaiChar(code)) result.isThai = 1.0
+    if (isDigitChar(code)) result.isDigits = 1.0
+    if (isPunctuationChar(code)) result.isPunctuation = 1.0
   }
 
-  return {
-    isRoman,
-    isHanzi,
-    isArabic,
-    isKorean,
-    isHiragana,
-    isKatakana,
-    isCyrillic,
-    isDevanagari,
-    isThai,
-    isDigits,
-    isPunctuation,
+  return result
+}
+
+/**
+ * Compute k-nearest-neighbors alignment score using a simple distance function.
+ * Returns deviation from mean in standard deviation units.
+ *
+ * @param otherBoxes - Boxes to compare against (excluding current box)
+ * @param k - Number of nearest neighbors to use
+ * @param distanceFn - Function to compute distance from current box
+ * @param valueFn - Function to extract the value to compare from neighbor
+ * @param currentValue - The value from the current box to compare against neighbor mean
+ */
+function computeKnnAlignmentScore(
+  otherBoxes: BoxBounds[],
+  k: number,
+  distanceFn: (b: BoxBounds) => number,
+  valueFn: (b: BoxBounds) => number,
+  currentValue: number
+): number {
+  if (otherBoxes.length === 0) return 0.0
+
+  const sorted = otherBoxes
+    .map(b => ({ box: b, distance: distanceFn(b) }))
+    .sort((a, b) => a.distance - b.distance)
+    .slice(0, Math.min(k, otherBoxes.length))
+
+  if (sorted.length <= 1) return 0.0
+
+  const values = sorted.map(item => valueFn(item.box))
+  const mean = values.reduce((sum, val) => sum + val, 0) / values.length
+  const variance = values.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / values.length
+  const std = Math.sqrt(variance)
+
+  return std > 0 ? Math.abs(currentValue - mean) / std : 0
+}
+
+/**
+ * Compute horizontal clustering score using weighted distance.
+ * Combines vertical and horizontal distance with configurable weights.
+ */
+function computeHorizontalClusteringScore(
+  otherBoxes: BoxBounds[],
+  k: number,
+  boxCenterX: number,
+  boxBottom: number
+): number {
+  if (otherBoxes.length === 0) return 0.0
+
+  const verticalWeight = 0.7
+  const horizontalWeight = 0.3
+
+  const sorted = otherBoxes
+    .map(b => {
+      const bCenterX = (b.left + b.right) / 2
+      const verticalDist = Math.abs(b.bottom - boxBottom)
+      const horizontalDist = Math.abs(bCenterX - boxCenterX)
+      const combinedDist = verticalWeight * verticalDist + horizontalWeight * horizontalDist
+      return { centerX: bCenterX, distance: combinedDist }
+    })
+    .sort((a, b) => a.distance - b.distance)
+    .slice(0, Math.min(k, otherBoxes.length))
+
+  if (sorted.length <= 1) return 0.0
+
+  const centerXs = sorted.map(item => item.centerX)
+  const mean = centerXs.reduce((sum, val) => sum + val, 0) / centerXs.length
+  const variance = centerXs.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / centerXs.length
+  const std = Math.sqrt(variance)
+
+  return std > 0 ? Math.abs(boxCenterX - mean) / std : 0
+}
+
+/**
+ * Query user annotation from database for a box.
+ * Returns {isIn: number, isOut: number} indicators.
+ */
+function queryUserAnnotation(
+  db: Database.Database | null,
+  frameIndex: number,
+  boxIndex: number
+): { isIn: number; isOut: number } {
+  if (!db) return { isIn: 0.0, isOut: 0.0 }
+
+  try {
+    const annotation = db
+      .prepare(
+        `
+      SELECT label
+      FROM full_frame_box_labels
+      WHERE annotation_source = 'full_frame'
+        AND frame_index = ?
+        AND box_index = ?
+        AND label_source = 'user'
+    `
+      )
+      .get(frameIndex, boxIndex) as { label: 'in' | 'out' } | undefined
+
+    if (!annotation) return { isIn: 0.0, isOut: 0.0 }
+    return annotation.label === 'in' ? { isIn: 1.0, isOut: 0.0 } : { isIn: 0.0, isOut: 1.0 }
+  } catch (error) {
+    console.warn('[extractFeatures] Failed to lookup user annotation:', error)
+    return { isIn: 0.0, isOut: 0.0 }
   }
 }
 
@@ -336,153 +474,61 @@ function extractFeatures(
       )
   )
 
-  // Feature 1a: Top edge vertical alignment
-  // Among k boxes with nearest top positions, measure alignment variance
-  let topAlignmentScore = 0.0
-  if (otherBoxes.length > 0) {
-    const sortedByTop = otherBoxes
-      .map(b => ({ box: b, distance: Math.abs(b.top - box.top) }))
-      .sort((a, b) => a.distance - b.distance)
-      .slice(0, Math.min(k, otherBoxes.length))
+  // Features 1a-1b: Vertical alignment scores (top and bottom edges)
+  const topAlignmentScore = computeKnnAlignmentScore(
+    otherBoxes,
+    k,
+    b => Math.abs(b.top - box.top),
+    b => b.top,
+    box.top
+  )
+  const bottomAlignmentScore = computeKnnAlignmentScore(
+    otherBoxes,
+    k,
+    b => Math.abs(b.bottom - box.bottom),
+    b => b.bottom,
+    box.bottom
+  )
 
-    if (sortedByTop.length > 1) {
-      const topPositions = sortedByTop.map(item => item.box.top)
-      const mean = topPositions.reduce((sum, val) => sum + val, 0) / topPositions.length
-      const variance =
-        topPositions.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / topPositions.length
-      const std = Math.sqrt(variance)
-      topAlignmentScore = std > 0 ? Math.abs(box.top - mean) / std : 0
-    }
-  }
-
-  // Feature 1b: Bottom edge vertical alignment
-  // Among k boxes with nearest bottom positions, measure alignment variance
-  let bottomAlignmentScore = 0.0
-  if (otherBoxes.length > 0) {
-    const sortedByBottom = otherBoxes
-      .map(b => ({ box: b, distance: Math.abs(b.bottom - box.bottom) }))
-      .sort((a, b) => a.distance - b.distance)
-      .slice(0, Math.min(k, otherBoxes.length))
-
-    if (sortedByBottom.length > 1) {
-      const bottomPositions = sortedByBottom.map(item => item.box.bottom)
-      const mean = bottomPositions.reduce((sum, val) => sum + val, 0) / bottomPositions.length
-      const variance =
-        bottomPositions.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) /
-        bottomPositions.length
-      const std = Math.sqrt(variance)
-      bottomAlignmentScore = std > 0 ? Math.abs(box.bottom - mean) / std : 0
-    }
-  }
-
-  // Feature 2: Height similarity
-  // Among k boxes with nearest bottom positions, measure height variance
-  let heightSimilarityScore = 0.0
-  if (otherBoxes.length > 0) {
-    const sortedByBottom = otherBoxes
-      .map(b => ({ box: b, distance: Math.abs(b.bottom - box.bottom) }))
-      .sort((a, b) => a.distance - b.distance)
-      .slice(0, Math.min(k, otherBoxes.length))
-
-    if (sortedByBottom.length > 1) {
-      const heights = sortedByBottom.map(item => item.box.bottom - item.box.top)
-      const mean = heights.reduce((sum, val) => sum + val, 0) / heights.length
-      const variance =
-        heights.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / heights.length
-      const std = Math.sqrt(variance)
-      heightSimilarityScore = std > 0 ? Math.abs(boxHeight - mean) / std : 0
-    }
-  }
+  // Feature 2: Height similarity (among vertically-aligned neighbors)
+  const heightSimilarityScore = computeKnnAlignmentScore(
+    otherBoxes,
+    k,
+    b => Math.abs(b.bottom - box.bottom),
+    b => b.bottom - b.top,
+    boxHeight
+  )
 
   // Feature 3: Horizontal clustering
-  // Among k boxes nearest by weighted combination of vertical (bottom) and horizontal (center) distance,
-  // measure horizontal center distance variance
-  let horizontalClusteringScore = 0.0
-  if (otherBoxes.length > 0) {
-    const verticalWeight = 0.7 // Weight for vertical proximity
-    const horizontalWeight = 0.3 // Weight for horizontal proximity
+  const horizontalClusteringScore = computeHorizontalClusteringScore(
+    otherBoxes,
+    k,
+    boxCenterX,
+    box.bottom
+  )
 
-    const sortedByCombined = otherBoxes
-      .map(b => {
-        const bCenterX = (b.left + b.right) / 2
-        const verticalDist = Math.abs(b.bottom - box.bottom)
-        const horizontalDist = Math.abs(bCenterX - boxCenterX)
-        const combinedDist = verticalWeight * verticalDist + horizontalWeight * horizontalDist
-        return { box: b, distance: combinedDist, centerX: bCenterX }
-      })
-      .sort((a, b) => a.distance - b.distance)
-      .slice(0, Math.min(k, otherBoxes.length))
-
-    if (sortedByCombined.length > 1) {
-      const centerXs = sortedByCombined.map(item => item.centerX)
-      const mean = centerXs.reduce((sum, val) => sum + val, 0) / centerXs.length
-      const variance =
-        centerXs.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / centerXs.length
-      const std = Math.sqrt(variance)
-      horizontalClusteringScore = std > 0 ? Math.abs(boxCenterX - mean) / std : 0
-    }
-  }
-
-  // Feature 4: Aspect ratio (unchanged)
+  // Features 4-6: Simple spatial features
   const aspectRatio = boxHeight > 0 ? boxWidth / boxHeight : 0.0
-
-  // Feature 5: Normalized Y position (unchanged)
   const normalizedYPosition = layout.frame_height > 0 ? boxCenterY / layout.frame_height : 0.0
-
-  // Feature 6: Normalized area (unchanged)
   const normalizedArea = frameArea > 0 ? boxArea / frameArea : 0.0
 
-  // Features 8-9: User annotations as binary indicators
-  // We use TWO features instead of one to avoid the "neutral value" problem:
-  // - With one feature (0.0=out, 0.5=unannotated, 1.0=in), the model never sees 0.5 during training
-  //   (all boxes are annotated), causing numerical issues when predicting unannotated boxes
-  // - With two binary features, unannotated boxes are (0,0) which the model learns during training
-  //   from boxes of the opposite class (e.g., "in" boxes have isUserAnnotatedOut=0)
-  let isUserAnnotatedIn = 0.0
-  let isUserAnnotatedOut = 0.0
-
-  if (db) {
-    try {
-      const annotation = db
-        .prepare(
-          `
-        SELECT label
-        FROM full_frame_box_labels
-        WHERE annotation_source = 'full_frame'
-          AND frame_index = ?
-          AND box_index = ?
-          AND label_source = 'user'
-      `
-        )
-        .get(frameIndex, boxIndex) as { label: 'in' | 'out' } | undefined
-
-      if (annotation) {
-        if (annotation.label === 'in') {
-          isUserAnnotatedIn = 1.0
-        } else {
-          isUserAnnotatedOut = 1.0
-        }
-      }
-    } catch (error) {
-      // If table doesn't exist or query fails, features remain 0.0
-      console.warn('[extractFeatures] Failed to lookup user annotation:', error)
-    }
-  }
+  // Features 8-9: User annotations (binary indicators)
+  const { isIn: isUserAnnotatedIn, isOut: isUserAnnotatedOut } = queryUserAnnotation(
+    db,
+    frameIndex,
+    boxIndex
+  )
 
   // Features 10-13: Edge positions (normalized to [0-1] range)
-  // Robust to aspect ratio and resolution changes
   const normalizedLeft = layout.frame_width > 0 ? box.left / layout.frame_width : 0.0
   const normalizedTop = layout.frame_height > 0 ? box.top / layout.frame_height : 0.0
   const normalizedRight = layout.frame_width > 0 ? box.right / layout.frame_width : 0.0
   const normalizedBottom = layout.frame_height > 0 ? box.bottom / layout.frame_height : 0.0
 
   // Features 14-24: Character sets (11 binary indicators, non-exclusive)
-  // Detects script/character type using Unicode ranges
   const charSets = detectCharacterSets(boxText)
 
-  // Features 25-26: Temporal features (absolute time in seconds)
-  // Time from start helps detect opening titles
-  // Time from end helps detect closing credits
+  // Features 25-26: Temporal features
   const timeFromStart = timestampSeconds
   const timeFromEnd = durationSeconds - timestampSeconds
 

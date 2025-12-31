@@ -1,5 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 import typographyPlugin from '@tailwindcss/typography'
+
 import typographyStyles from './typography'
 
 export default {

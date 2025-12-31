@@ -77,7 +77,7 @@ async function findFolders(
 /**
  * API endpoint that returns list of available folders for upload destination
  */
-export async function loader(_args: LoaderFunctionArgs) {
+export async function loader() {
   const dataDir = resolve(process.cwd(), '..', '..', 'local', 'data')
 
   if (!existsSync(dataDir)) {
