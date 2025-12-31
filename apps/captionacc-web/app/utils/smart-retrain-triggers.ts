@@ -57,8 +57,7 @@ export function shouldTriggerFullRetrain(state: RetrainState): RetrainTriggerRes
 
   // Calculate annotation rate (per minute)
   const minutesSinceRetrain = secondsSinceRetrain / 60
-  const annotationRatePerMinute =
-    minutesSinceRetrain > 0 ? newAnnotations / minutesSinceRetrain : 0
+  const annotationRatePerMinute = minutesSinceRetrain > 0 ? newAnnotations / minutesSinceRetrain : 0
 
   // Check 1: Not enough total annotations yet
   if (state.currentAnnotationCount < RETRAIN_TRIGGER_CONFIG.MIN_ANNOTATIONS_FOR_RETRAIN) {

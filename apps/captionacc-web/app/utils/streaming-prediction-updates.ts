@@ -157,9 +157,7 @@ export function identifyAffectedBoxes(
  */
 export async function adaptiveRecalculation(
   candidates: Array<BoxWithPrediction & { changeProb: number }>,
-  predictAndUpdate: (
-    batch: Array<BoxWithPrediction & { changeProb: number }>
-  ) => Promise<
+  predictAndUpdate: (batch: Array<BoxWithPrediction & { changeProb: number }>) => Promise<
     Array<{
       box: BoxWithPrediction & { changeProb: number }
       oldLabel: 'in' | 'out'

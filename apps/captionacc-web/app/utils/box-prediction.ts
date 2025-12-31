@@ -14,7 +14,9 @@ import {
   invertCovarianceMatrix,
   shouldCalculateFeatureImportance,
   type ClassSamples,
+  type GaussianParams as FeatureGaussianParams,
 } from './feature-importance'
+import { type FeatureImportanceMetrics } from './streaming-prediction-config'
 
 interface VideoLayoutConfig {
   frame_width: number
@@ -50,6 +52,9 @@ interface ModelParams {
   prior_out: number
   in_features: GaussianParams[] // 26 features
   out_features: GaussianParams[] // 26 features
+  feature_importance: FeatureImportanceMetrics[] | null // Fisher scores (26 features)
+  covariance_matrix: number[] | null // Pooled covariance (676 values: 26×26 row-major)
+  covariance_inverse: number[] | null // Inverted covariance (676 values, pre-computed)
 }
 
 interface ModelRow {
@@ -166,6 +171,10 @@ interface ModelRow {
   out_time_from_start_std: number
   out_time_from_end_mean: number
   out_time_from_end_std: number
+  // Streaming prediction metrics (JSON columns)
+  feature_importance: string | null // JSON array of FeatureImportanceMetrics
+  covariance_matrix: string | null // JSON array of 676 values (26×26 row-major)
+  covariance_inverse: string | null // JSON array of 676 values
 }
 
 /**
@@ -784,9 +793,7 @@ function migrateStreamingPredictionSchema(db: Database.Database): void {
 
     try {
       // Add feature importance column (JSON array of 26 Fisher scores)
-      db.prepare(
-        'ALTER TABLE box_classification_model ADD COLUMN feature_importance TEXT'
-      ).run()
+      db.prepare('ALTER TABLE box_classification_model ADD COLUMN feature_importance TEXT').run()
 
       // Add pooled covariance matrix (JSON array of 676 values, row-major 26×26)
       db.prepare('ALTER TABLE box_classification_model ADD COLUMN covariance_matrix TEXT').run()
@@ -989,6 +996,35 @@ function loadModelFromDB(db: Database.Database): ModelParams | null {
     { mean: row.out_time_from_end_mean, std: row.out_time_from_end_std },
   ]
 
+  // Parse streaming prediction metrics from JSON columns
+  let featureImportance: FeatureImportanceMetrics[] | null = null
+  let covarianceMatrix: number[] | null = null
+  let covarianceInverse: number[] | null = null
+
+  if (row.feature_importance) {
+    try {
+      featureImportance = JSON.parse(row.feature_importance) as FeatureImportanceMetrics[]
+    } catch (error) {
+      console.warn('[loadModelFromDB] Failed to parse feature_importance:', error)
+    }
+  }
+
+  if (row.covariance_matrix) {
+    try {
+      covarianceMatrix = JSON.parse(row.covariance_matrix) as number[]
+    } catch (error) {
+      console.warn('[loadModelFromDB] Failed to parse covariance_matrix:', error)
+    }
+  }
+
+  if (row.covariance_inverse) {
+    try {
+      covarianceInverse = JSON.parse(row.covariance_inverse) as number[]
+    } catch (error) {
+      console.warn('[loadModelFromDB] Failed to parse covariance_inverse:', error)
+    }
+  }
+
   return {
     model_version: row.model_version,
     n_training_samples: row.n_training_samples,
@@ -996,6 +1032,9 @@ function loadModelFromDB(db: Database.Database): ModelParams | null {
     prior_out: row.prior_out,
     in_features: inFeatures,
     out_features: outFeatures,
+    feature_importance: featureImportance,
+    covariance_matrix: covarianceMatrix,
+    covariance_inverse: covarianceInverse,
   }
 }
 

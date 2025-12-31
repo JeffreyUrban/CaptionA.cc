@@ -51,7 +51,7 @@ export function calculateFeatureImportance(
     // Fisher score: mean difference squared / variance sum
     const meanDiff = Math.abs(inParam.mean - outParam.mean)
     const varianceSum = inParam.std ** 2 + outParam.std ** 2
-    const fisherScore = varianceSum > 0 ? (meanDiff ** 2) / varianceSum : 0
+    const fisherScore = varianceSum > 0 ? meanDiff ** 2 / varianceSum : 0
 
     return {
       featureIndex: idx,
