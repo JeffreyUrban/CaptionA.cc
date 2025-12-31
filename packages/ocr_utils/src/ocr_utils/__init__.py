@@ -1,5 +1,11 @@
 """Shared OCR processing utilities using macOS LiveText."""
 
+from ocr_utils.database import (
+    ensure_ocr_table,
+    load_ocr_for_frame,
+    load_ocr_for_frame_range,
+    write_ocr_result_to_database,
+)
 from ocr_utils.processing import (
     OCRTimeoutError,
     process_frame_ocr_with_retry,
@@ -22,4 +28,8 @@ __all__ = [
     "process_frames_directory",
     "process_frames_streaming",
     "create_ocr_visualization",
+    "ensure_ocr_table",
+    "write_ocr_result_to_database",
+    "load_ocr_for_frame",
+    "load_ocr_for_frame_range",
 ]
