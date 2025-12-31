@@ -52,6 +52,7 @@ app/
 ## Usage
 
 ### Start Upload
+
 ```typescript
 const { startUpload } = useUploadManager()
 
@@ -59,11 +60,12 @@ await startUpload(file, {
   fileName: file.name,
   fileType: file.type,
   targetFolder: '/videos/2024',
-  relativePath: file.webkitRelativePath
+  relativePath: file.webkitRelativePath,
 })
 ```
 
 ### Monitor Progress
+
 ```typescript
 const activeUploads = useAppStore(selectActiveUploads)
 
@@ -71,6 +73,7 @@ activeUploads.map(u => `${u.fileName}: ${u.progress}%`)
 ```
 
 ### Resume Detection
+
 ```typescript
 const { incompleteUploads } = useIncompleteUploadDetection()
 // Automatically detects on mount, prompts user to resume
@@ -89,20 +92,30 @@ const { incompleteUploads } = useIncompleteUploadDetection()
 
 ## Development Status
 
-### Complete ✅
+### Phase 1 & 2 Complete ✅
+
 - Zustand store with localStorage persistence
 - Upload Manager singleton service
-- React integration hooks
+- React integration hooks (useUploadManager, useIncompleteUploadDetection)
 - Navbar progress indicator
 - Redux DevTools integration
 - TypeScript types
 
-### In Progress 🔄
-- Upload page integration with new hooks
-- Incomplete upload detection UI
-- Testing
+### Phase 3 Complete ✅
+
+- Upload page integration with new hooks (useUploadQueueV2)
+- Incomplete upload detection UI (useIncompleteUploadsV2)
+- Compatibility layer for gradual migration
+
+### Ready for Testing 🧪
+
+- Upload flow with navigation
+- Resume after browser refresh
+- Navbar progress updates across pages
+- Incomplete upload detection on mount
 
 ### Future ⏸️
+
 - Pipeline state tracking (video processing stages)
 - User notifications
 - Performance optimization
