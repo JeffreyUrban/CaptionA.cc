@@ -1,6 +1,7 @@
 """Database operations for crop_frames pipeline.
 
 Writes cropped frame images to the cropped_frames table in annotations.db.
+Writes OCR results to the cropped_frame_ocr table with normalized schema.
 """
 
 from pathlib import Path
