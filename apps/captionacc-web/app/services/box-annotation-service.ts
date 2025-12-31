@@ -401,7 +401,6 @@ function shouldTriggerRetraining(db: Database.Database): boolean {
 // - Run adaptive recalculation with reversal rate stopping
 // For now, full retrain triggers the standard calculatePredictions()
 
-
 // =============================================================================
 // Service Functions
 // =============================================================================
