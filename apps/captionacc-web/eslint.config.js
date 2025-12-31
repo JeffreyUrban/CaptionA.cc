@@ -73,15 +73,26 @@ export default tseslint.config(
         },
       ],
 
-      // Complexity limits
-      complexity: ['warn', 15],
-      'max-depth': ['warn', 4],
+      // Complexity limits - enforce the standards we just achieved
+      complexity: ['warn', 15], // Keep at warning for gradual improvements
+      'max-depth': ['warn', 4], // Enforce clean nesting
       'max-lines-per-function': ['warn', { max: 150, skipBlankLines: true, skipComments: true }],
 
-      // Make other rules warnings (don't block commits)
-      'no-console': 'off',
+      // Code quality - prevent common issues
+      'no-console': 'off', // Allow console for server-side logging
       'no-undef': 'off', // TypeScript handles this, and causes false positives with React
-      '@typescript-eslint/no-unused-vars': 'warn',
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        {
+          argsIgnorePattern: '^_', // Allow _unused parameters
+          varsIgnorePattern: '^_', // Allow _unused variables
+          caughtErrorsIgnorePattern: '^_', // Allow _error in catch blocks
+        },
+      ],
+
+      // Prevent anti-patterns that we just cleaned up
+      'no-duplicate-imports': 'error', // Use import grouping instead
+      'prefer-const': 'warn', // Encourage immutability
     },
   },
   {
