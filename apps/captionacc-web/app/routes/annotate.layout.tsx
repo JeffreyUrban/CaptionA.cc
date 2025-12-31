@@ -2,6 +2,13 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useSearchParams, useNavigate } from 'react-router'
 
 import { AppLayout } from '~/components/AppLayout'
+import { LayoutActionButtons } from '~/components/annotation/LayoutActionButtons'
+import { LayoutAnnotationProgress } from '~/components/annotation/LayoutAnnotationProgress'
+import { LayoutColorLegend } from '~/components/annotation/LayoutColorLegend'
+import { LayoutCurrentFrameInfo } from '~/components/annotation/LayoutCurrentFrameInfo'
+import { LayoutInstructionsPanel } from '~/components/annotation/LayoutInstructionsPanel'
+import { LayoutParametersDisplay } from '~/components/annotation/LayoutParametersDisplay'
+import { LayoutThumbnailGrid } from '~/components/annotation/LayoutThumbnailGrid'
 import { useKeyboardShortcuts } from '~/hooks/useKeyboardShortcuts'
 import { useVideoTouched } from '~/hooks/useVideoTouched'
 
@@ -1635,72 +1642,14 @@ export default function AnnotateLayout() {
             </div>
 
             {/* Thumbnail panel */}
-            <div
-              className="grid w-full h-0 flex-1 auto-rows-min gap-3 overflow-y-auto rounded-lg border border-gray-300 bg-gray-200 p-3 dark:border-gray-600 dark:bg-gray-700"
-              style={{
-                gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-              }}
-            >
-              {/* Subtitle analysis thumbnail */}
-              <button
-                onClick={() => handleThumbnailClick('analysis')}
-                className={`flex w-full flex-col overflow-hidden rounded border-2 ${
-                  viewMode === 'analysis'
-                    ? 'border-teal-600'
-                    : 'border-gray-300 dark:border-gray-700'
-                }`}
-              >
-                <div className="aspect-video w-full bg-black">
-                  {analysisThumbnailUrl ? (
-                    <img
-                      src={analysisThumbnailUrl}
-                      alt="Analysis view"
-                      className="h-full w-full object-contain"
-                    />
-                  ) : (
-                    <div className="flex h-full items-center justify-center text-xs text-gray-500">
-                      Loading...
-                    </div>
-                  )}
-                </div>
-                <div className="flex h-11 flex-col items-center justify-center bg-gray-100 px-2 py-1 text-xs text-gray-900 dark:bg-gray-800 dark:text-gray-100">
-                  Analysis
-                </div>
-              </button>
-
-              {/* Loading indicator while frames load */}
-              {loading && frames.length === 0 && (
-                <div className="col-span-full flex items-center justify-center py-8 text-gray-500 dark:text-gray-400">
-                  Loading frames...
-                </div>
-              )}
-
-              {/* Frame thumbnails */}
-              {frames.map(frame => (
-                <button
-                  key={frame.frameIndex}
-                  onClick={() => handleThumbnailClick(frame.frameIndex)}
-                  className={`flex w-full flex-col overflow-hidden rounded border-2 ${
-                    viewMode === 'frame' && selectedFrameIndex === frame.frameIndex
-                      ? 'border-teal-600'
-                      : 'border-gray-300 dark:border-gray-700'
-                  }`}
-                >
-                  <div className="aspect-video w-full bg-black">
-                    <img
-                      src={frame.imageUrl}
-                      alt={`Frame ${frame.frameIndex}`}
-                      className="h-full w-full object-contain"
-                    />
-                  </div>
-                  <div className="flex h-11 flex-col items-center justify-center bg-gray-100 px-2 py-1 text-xs text-gray-900 dark:bg-gray-800 dark:text-gray-100">
-                    Frame {frame.frameIndex}
-                    <br />
-                    Min conf: {frame.minConfidence?.toFixed(2) ?? 'N/A'}
-                  </div>
-                </button>
-              ))}
-            </div>
+            <LayoutThumbnailGrid
+              frames={frames}
+              viewMode={viewMode}
+              selectedFrameIndex={selectedFrameIndex}
+              analysisThumbnailUrl={analysisThumbnailUrl}
+              loading={loading}
+              onThumbnailClick={handleThumbnailClick}
+            />
           </div>
 
           {/* Right: Controls (1/3 width) */}
@@ -1723,122 +1672,22 @@ export default function AnnotateLayout() {
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Layout Controls</h2>
 
             {/* Instructions */}
-            <div className="rounded-md bg-blue-50 p-3 text-sm text-blue-900 dark:bg-blue-950 dark:text-blue-100">
-              <strong>Mouse Controls:</strong>
-              <ul className="mt-1 list-inside list-disc space-y-1">
-                <li>Left-click box → mark as caption (in)</li>
-                <li>Right-click box → mark as noise (out)</li>
-                <li>Hover over box to see text</li>
-              </ul>
-              <strong className="mt-2 block">Keyboard Shortcuts:</strong>
-              <ul className="mt-1 list-inside list-disc space-y-1">
-                <li>Arrow keys → navigate frames</li>
-                <li>Esc → return to analysis view</li>
-                <li>I → mark hovered box as caption</li>
-                <li>O → mark hovered box as noise</li>
-                <li>1-9 → jump to frame 1-9</li>
-                <li>0 → jump to analysis view</li>
-              </ul>
-            </div>
+            <LayoutInstructionsPanel />
 
             {/* Annotation Progress Indicator */}
-            {boxStats?.captionBoxes === 0 ? (
-              // Alert when no caption boxes - using all boxes as fallback
-              <div className="rounded-md border-2 border-blue-500 bg-blue-50 p-3 dark:border-blue-600 dark:bg-blue-900/20">
-                <div className="flex items-center gap-2">
-                  <span className="text-xl">ℹ️</span>
-                  <div className="text-sm font-semibold text-blue-800 dark:text-blue-300">
-                    No Caption Boxes Identified Yet
-                  </div>
-                </div>
-                <div className="mt-2 text-xs text-blue-700 dark:text-blue-400">
-                  Using all {boxStats.totalBoxes} boxes for initial layout analysis
-                </div>
-                <div className="mt-2 text-xs text-blue-800 dark:text-blue-300 font-medium">
-                  Label caption boxes to improve accuracy.
-                  <br />
-                  Left-click boxes or press &apos;I&apos; while hovering to mark as captions.
-                </div>
-              </div>
-            ) : (
-              <div className="rounded-md border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-950">
-                <div className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                  Crop Bounds Auto-Update
-                </div>
-                {annotationsSinceRecalc >= RECALC_THRESHOLD ? (
-                  <>
-                    <div className="mt-1 text-xs text-blue-600 dark:text-blue-400 font-semibold">
-                      Calculating...
-                    </div>
-                    <div className="mt-2 h-2 w-full rounded-full bg-gray-200 dark:bg-gray-700">
-                      <div
-                        className="h-2 rounded-full bg-blue-500 animate-pulse"
-                        style={{ width: '100%' }}
-                      />
-                    </div>
-                    <div className="mt-1 text-xs text-gray-500 dark:text-gray-500">
-                      Recalculating crop bounds and predictions
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="mt-1 text-xs text-gray-600 dark:text-gray-400">
-                      {annotationsSinceRecalc} / {RECALC_THRESHOLD} annotations
-                      {boxStats && (
-                        <span className="ml-2">({boxStats.captionBoxes} caption boxes)</span>
-                      )}
-                    </div>
-                    <div className="mt-2 h-2 w-full rounded-full bg-gray-200 dark:bg-gray-700">
-                      <div
-                        className="h-2 rounded-full bg-blue-500 transition-all duration-300"
-                        style={{
-                          width: `${Math.min(100, (annotationsSinceRecalc / RECALC_THRESHOLD) * 100)}%`,
-                        }}
-                      />
-                    </div>
-                    <div className="mt-1 text-xs text-gray-500 dark:text-gray-500">
-                      Crop bounds will recalculate automatically after{' '}
-                      {RECALC_THRESHOLD - annotationsSinceRecalc} more annotations
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
+            <LayoutAnnotationProgress
+              boxStats={boxStats}
+              annotationsSinceRecalc={annotationsSinceRecalc}
+              recalcThreshold={RECALC_THRESHOLD}
+            />
 
-            {/* Mark Layout Complete Button */}
-            <button
-              onClick={() => setShowApproveModal(true)}
-              disabled={
-                // If not approved yet: always enabled (allow approval)
-                // If approved: only disabled when bounds haven't changed
-                !!(
-                  layoutApproved &&
-                  layoutConfig &&
-                  cropBoundsEdit &&
-                  layoutConfig.cropLeft === cropBoundsEdit.left &&
-                  layoutConfig.cropTop === cropBoundsEdit.top &&
-                  layoutConfig.cropRight === cropBoundsEdit.right &&
-                  layoutConfig.cropBottom === cropBoundsEdit.bottom
-                )
-              }
-              className={`w-full px-4 py-2 text-sm font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 ${
-                layoutApproved &&
-                layoutConfig &&
-                cropBoundsEdit &&
-                layoutConfig.cropLeft === cropBoundsEdit.left &&
-                layoutConfig.cropTop === cropBoundsEdit.top &&
-                layoutConfig.cropRight === cropBoundsEdit.right &&
-                layoutConfig.cropBottom === cropBoundsEdit.bottom
-                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed dark:bg-gray-700 dark:text-gray-500'
-                  : 'text-white bg-green-600 hover:bg-green-700 dark:bg-green-600 dark:hover:bg-green-700 focus:ring-green-500'
-              }`}
-            >
-              {layoutApproved ? 'Update Layout & Re-crop' : 'Approve Layout'}
-            </button>
-
-            {/* Clear All Annotations Button */}
-            <button
-              onClick={() => {
+            {/* Layout Action Buttons */}
+            <LayoutActionButtons
+              layoutApproved={layoutApproved}
+              layoutConfig={layoutConfig}
+              cropBoundsEdit={cropBoundsEdit}
+              onApprove={() => setShowApproveModal(true)}
+              onClearAll={() => {
                 const confirmMessage =
                   'Clear all layout annotations? This will:\n\n' +
                   '• Delete all user annotations\n' +
@@ -1849,51 +1698,35 @@ export default function AnnotateLayout() {
                 if (confirm(confirmMessage)) {
                   void (async () => {
                     try {
-                      // Clear all annotations
                       const response = await fetch(
                         `/api/annotations/${encodeURIComponent(videoId)}/clear-all`,
-                        {
-                          method: 'POST',
-                        }
+                        { method: 'POST' }
                       )
-
                       if (!response.ok) throw new Error('Failed to clear annotations')
-
                       const result = await response.json()
                       console.log(`[Clear All] Deleted ${result.deletedCount} annotations`)
 
-                      // Recalculate predictions (will reset to seed model)
                       await fetch(
                         `/api/annotations/${encodeURIComponent(videoId)}/calculate-predictions`,
-                        {
-                          method: 'POST',
-                        }
+                        { method: 'POST' }
                       )
 
-                      // Recalculate crop bounds (may fail if no caption boxes after clear)
                       const cropBoundsResponse = await fetch(
                         `/api/annotations/${encodeURIComponent(videoId)}/reset-crop-bounds`,
-                        {
-                          method: 'POST',
-                        }
+                        { method: 'POST' }
                       )
-
                       if (!cropBoundsResponse.ok) {
                         const cropBoundsResult = await cropBoundsResponse.json()
                         console.warn(
                           '[Clear All] Could not recalculate crop bounds:',
                           cropBoundsResult.message
                         )
-                        // This is expected if all boxes were cleared - not an error
                       }
 
-                      // Reload everything
-                      // Skip edit state update so user can see the recalculated changes
                       await loadQueue(false, true)
                       await loadAnalysisBoxes()
                       frameBoxesCache.current.clear()
 
-                      // Reload current frame if in frame view
                       if (viewMode === 'frame' && selectedFrameIndex !== null) {
                         const frameResponse = await fetch(
                           `/api/annotations/${encodeURIComponent(videoId)}/frames/${selectedFrameIndex}/boxes`
@@ -1905,9 +1738,7 @@ export default function AnnotateLayout() {
                         }
                       }
 
-                      // Reset annotation counter
                       setAnnotationsSinceRecalc(0)
-
                       alert(
                         `Successfully cleared ${result.deletedCount} annotations and reset to seed model.`
                       )
@@ -1918,104 +1749,18 @@ export default function AnnotateLayout() {
                   })()
                 }
               }}
-              className="w-full px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-            >
-              Clear All Annotations
-            </button>
+            />
 
             {/* Current view info */}
-            {viewMode === 'frame' && currentFrameBoxes && (
-              <div className="rounded-md border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-950">
-                <div className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                  Frame {currentFrameBoxes.frameIndex}
-                </div>
-                <div className="mt-1 text-xs text-gray-600 dark:text-gray-400">
-                  {currentFrameBoxes.boxes.length} total boxes
-                  <br />
-                  {currentFrameBoxes.boxes.filter(b => b.userLabel === 'in').length} annotated as
-                  caption
-                  <br />
-                  {currentFrameBoxes.boxes.filter(b => b.userLabel === 'out').length} annotated as
-                  noise
-                </div>
-              </div>
+            {viewMode === 'frame' && (
+              <LayoutCurrentFrameInfo currentFrameBoxes={currentFrameBoxes} />
             )}
 
             {/* Color legend */}
-            <div>
-              <div className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                Color Legend
-              </div>
-              <div className="mt-2 space-y-1 text-xs">
-                <div className="flex items-center gap-2">
-                  <div
-                    className="h-4 w-4 rounded border-2"
-                    style={{
-                      borderColor: '#14b8a6',
-                      backgroundColor: 'rgba(20,184,166,0.25)',
-                    }}
-                  />
-                  <span className="text-gray-700 dark:text-gray-300">Annotated: Caption</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div
-                    className="h-4 w-4 rounded border-2"
-                    style={{
-                      borderColor: '#dc2626',
-                      backgroundColor: 'rgba(220,38,38,0.25)',
-                    }}
-                  />
-                  <span className="text-gray-700 dark:text-gray-300">Annotated: Noise</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div
-                    className="h-4 w-4 rounded border-2"
-                    style={{
-                      borderColor: '#3b82f6',
-                      backgroundColor: 'rgba(59,130,246,0.15)',
-                    }}
-                  />
-                  <span className="text-gray-700 dark:text-gray-300">Predicted: Caption</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div
-                    className="h-4 w-4 rounded border-2"
-                    style={{
-                      borderColor: '#f97316',
-                      backgroundColor: 'rgba(249,115,22,0.15)',
-                    }}
-                  />
-                  <span className="text-gray-700 dark:text-gray-300">Predicted: Noise</span>
-                </div>
-              </div>
-            </div>
+            <LayoutColorLegend />
 
             {/* Layout parameters (read-only for now) */}
-            {layoutConfig && (
-              <div>
-                <div className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                  Layout Parameters
-                </div>
-                <div className="mt-2 space-y-1 text-xs text-gray-600 dark:text-gray-400">
-                  <div>
-                    Vertical Position: {layoutConfig.verticalPosition ?? 'N/A'}
-                    px (±{layoutConfig.verticalStd ?? 'N/A'})
-                  </div>
-                  <div>
-                    Box Height: {layoutConfig.boxHeight ?? 'N/A'}px (±
-                    {layoutConfig.boxHeightStd ?? 'N/A'})
-                  </div>
-                  <div>
-                    Anchor: {layoutConfig.anchorType ?? 'N/A'} (
-                    {layoutConfig.anchorPosition ?? 'N/A'}px)
-                  </div>
-                  <div>
-                    Crop: [{layoutConfig.cropLeft}, {layoutConfig.cropTop}] - [
-                    {layoutConfig.cropRight}, {layoutConfig.cropBottom}]
-                  </div>
-                </div>
-              </div>
-            )}
+            <LayoutParametersDisplay layoutConfig={layoutConfig} />
           </div>
         </div>
       </div>
