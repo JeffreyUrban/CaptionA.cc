@@ -261,16 +261,22 @@ function buildFrameInfos(potentialMislabels: PotentialMislabel[], videoId: strin
     Array.from(new Set(potentialMislabels.map(m => m.frameIndex))) as number[]
   ).sort((a, b) => a - b)
 
-  return frameIndices.map(frameIndex => ({
-    frameIndex,
-    totalBoxCount: potentialMislabels.filter(m => m.frameIndex === frameIndex).length,
-    captionBoxCount: potentialMislabels.filter(
-      m => m.frameIndex === frameIndex && m.userLabel === 'in'
-    ).length,
-    minConfidence: 0,
-    hasAnnotations: true,
-    imageUrl: `/api/full-frames/${encodeURIComponent(videoId)}/${frameIndex}.jpg`,
-  }))
+  return frameIndices.map(frameIndex => {
+    const frameMislabels = potentialMislabels.filter(m => m.frameIndex === frameIndex)
+    const confidenceValues = frameMislabels
+      .map(m => m.predictedConfidence)
+      .filter((c): c is number => c !== null)
+    const minConfidence = confidenceValues.length > 0 ? Math.min(...confidenceValues) : 0
+
+    return {
+      frameIndex,
+      totalBoxCount: frameMislabels.length,
+      captionBoxCount: frameMislabels.filter(m => m.userLabel === 'in').length,
+      minConfidence,
+      hasAnnotations: true,
+      imageUrl: `/api/full-frames/${encodeURIComponent(videoId)}/${frameIndex}.jpg`,
+    }
+  })
 }
 
 async function prefetchFrameBoxes(
