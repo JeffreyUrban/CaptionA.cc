@@ -3,6 +3,7 @@
 Loads frame pairs, OCR visualizations, and metadata for training the boundary predictor.
 """
 
+import subprocess
 from pathlib import Path
 from typing import Literal
 
@@ -15,6 +16,27 @@ from torch.utils.data import Dataset
 
 from caption_boundaries.data.transforms import AnchorAwareResize, NormalizeImageNet, ResizeStrategy
 from caption_boundaries.database import FontEmbedding, TrainingSample, get_training_db
+
+
+def get_git_root() -> Path:
+    """Get the git repository root directory.
+
+    Returns:
+        Path to git repository root
+
+    Raises:
+        RuntimeError: If not in a git repository
+    """
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return Path(result.stdout.strip())
+    except subprocess.CalledProcessError:
+        raise RuntimeError("Not in a git repository")
 
 
 class CaptionBoundaryDataset(Dataset):
@@ -217,6 +239,12 @@ class CaptionBoundaryDataset(Dataset):
 
             # Construct annotations.db path from video path
             video_path = Path(video.video_path)
+
+            # Resolve relative paths from git root (for worktree compatibility)
+            if not video_path.is_absolute():
+                git_root = get_git_root()
+                video_path = git_root / video_path
+
             db_path = video_path.parent / "annotations.db"
 
             if not db_path.exists():

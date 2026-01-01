@@ -382,10 +382,8 @@ def batch_extract_embeddings(
                 force_recompute=force_recompute,
             )
 
-
-            # Get video hash for result dict
-            metadata = get_video_metadata(video_db_path.parent / "video.mp4")
-            results[metadata["video_hash"]] = embedding
+            # Get video hash from embedding (it's already stored there)
+            results[embedding.video_hash] = embedding
 
         except Exception as e:
             print(f"Failed to extract embedding for {video_db_path}: {e}")
