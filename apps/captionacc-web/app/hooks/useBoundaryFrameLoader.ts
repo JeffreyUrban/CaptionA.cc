@@ -14,11 +14,8 @@ interface UseBoundaryFrameLoaderParams {
   videoId: string
   currentFrameIndex: number
   totalFrames: number
+  framesRef: React.RefObject<Map<number, Frame>> // Now passed from parent
   isReady: boolean // Only start loading when metadata is loaded
-}
-
-interface UseBoundaryFrameLoaderReturn {
-  framesRef: React.RefObject<Map<number, Frame>>
 }
 
 // LRU cache configuration
@@ -202,9 +199,9 @@ export function useBoundaryFrameLoader({
   videoId,
   currentFrameIndex,
   totalFrames,
+  framesRef,
   isReady,
-}: UseBoundaryFrameLoaderParams): UseBoundaryFrameLoaderReturn {
-  const framesRef = useRef<Map<number, Frame>>(new Map())
+}: UseBoundaryFrameLoaderParams): void {
   const loadedChunksRef = useRef<Map<number, number[]>>(new Map())
   const requestedChunksRef = useRef<Map<number, Set<number>>>(new Map())
 
@@ -288,6 +285,4 @@ export function useBoundaryFrameLoader({
       cancelled = true
     }
   }, [currentFrameIndex, totalFrames, videoId, isReady])
-
-  return { framesRef }
 }

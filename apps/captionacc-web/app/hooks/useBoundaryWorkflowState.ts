@@ -98,15 +98,11 @@ export function useBoundaryWorkflowState({
     completedFramesRef.current = completedFramesHook
   }, [workflowProgressHook, completedFramesHook])
 
+  // Create framesRef in parent to break circular dependency
+  const framesRef = useRef<Map<number, import('~/types/boundaries').Frame>>(new Map())
+
   // Core hooks
   const annotationData = useBoundaryAnnotationData({ videoId, updateProgress })
-
-  const { framesRef } = useBoundaryFrameLoader({
-    videoId,
-    currentFrameIndex: currentFrameIndexRef.current,
-    totalFrames,
-    isReady: !isLoadingMetadata,
-  })
 
   const { cursorStyleRef, handleDragStart } = useBoundaryDragScroll({
     currentFrameIndex: currentFrameIndexRef.current,
@@ -116,7 +112,7 @@ export function useBoundaryWorkflowState({
     },
   })
 
-  // Display sync hook
+  // Display sync hook (runs first to get reactive currentFrameIndex)
   const { displayState } = useBoundaryDisplaySync({
     refs: {
       currentFrameIndexRef,
@@ -134,6 +130,15 @@ export function useBoundaryWorkflowState({
   })
 
   const { currentFrameIndex, annotations, markedStart, markedEnd } = displayState
+
+  // Frame loader hook (uses reactive currentFrameIndex from displayState)
+  useBoundaryFrameLoader({
+    videoId,
+    currentFrameIndex, // Now receives reactive state value instead of static ref value
+    totalFrames,
+    framesRef, // Pass ref created in parent
+    isReady: !isLoadingMetadata,
+  })
 
   // UI state
   const [frameSpacing, setFrameSpacing] = useState<FrameSpacing>('linear')
