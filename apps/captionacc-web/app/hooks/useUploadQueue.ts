@@ -6,13 +6,13 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import * as tus from 'tus-js-client'
 
-import type { VideoFilePreview } from '~/types/upload'
 import {
   CONCURRENT_UPLOADS,
   CHUNK_SIZE,
   RETRY_DELAYS,
   MAX_RETRIES,
   STALL_TIMEOUT,
+  type VideoFilePreview,
 } from '~/types/upload'
 import { isRetryableError } from '~/utils/upload-helpers'
 

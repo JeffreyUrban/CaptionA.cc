@@ -9,8 +9,13 @@ import type Database from 'better-sqlite3'
 
 import { triggerModelTraining } from '~/services/model-training'
 import { predictBoxLabel, trainModel, initializeSeedModel } from '~/utils/box-prediction'
-import { pixelToCroppedDisplay, boundsIntersect } from '~/utils/coordinate-utils'
-import type { PixelBounds, FractionalBounds, CropBounds } from '~/utils/coordinate-utils'
+import {
+  pixelToCroppedDisplay,
+  boundsIntersect,
+  type PixelBounds,
+  type FractionalBounds,
+  type CropBounds,
+} from '~/utils/coordinate-utils'
 import { getAnnotationDatabase, getWritableDatabase } from '~/utils/database'
 import {
   shouldTriggerFullRetrain,

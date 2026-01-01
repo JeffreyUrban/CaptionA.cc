@@ -18,6 +18,16 @@ import {
 } from './feature-importance'
 import { type FeatureImportanceMetrics } from './streaming-prediction-config'
 
+/** SQLite error with code property */
+interface SqliteError extends Error {
+  code: string
+}
+
+/** Type guard for SQLite errors */
+function isSqliteError(error: unknown): error is SqliteError {
+  return error instanceof Error && 'code' in error
+}
+
 interface VideoLayoutConfig {
   frame_width: number
   frame_height: number
@@ -765,6 +775,10 @@ function migrateModelSchema(db: Database.Database): void {
         '[migrateModelSchema] WARNING: Model needs retraining to learn proper parameters for new features'
       )
     } catch (migrationError) {
+      // If readonly, silently skip migration
+      if (isSqliteError(migrationError) && migrationError.code === 'SQLITE_READONLY') {
+        return
+      }
       console.error('[migrateModelSchema] Migration failed:', migrationError)
       throw new Error('Failed to migrate model schema - model will need to be retrained')
     }
@@ -803,6 +817,10 @@ function migrateStreamingPredictionSchema(db: Database.Database): void {
 
       console.log('[migrateStreamingPredictionSchema] Migration completed successfully')
     } catch (migrationError) {
+      // If readonly, silently skip migration
+      if (isSqliteError(migrationError) && migrationError.code === 'SQLITE_READONLY') {
+        return
+      }
       console.error('[migrateStreamingPredictionSchema] Migration failed:', migrationError)
       throw new Error('Failed to migrate streaming prediction schema')
     }
@@ -832,6 +850,10 @@ function migrateVideoPreferencesSchema(db: Database.Database): void {
 
       console.log('[migrateVideoPreferencesSchema] Migration completed successfully')
     } catch (migrationError) {
+      // If readonly, silently skip migration
+      if (isSqliteError(migrationError) && migrationError.code === 'SQLITE_READONLY') {
+        return
+      }
       console.error('[migrateVideoPreferencesSchema] Migration failed:', migrationError)
       throw new Error('Failed to migrate video_preferences schema')
     }
@@ -868,6 +890,10 @@ function migrateFullFrameOcrSchema(db: Database.Database): void {
     try {
       db.prepare('ALTER TABLE full_frame_ocr ADD COLUMN timestamp_seconds REAL').run()
     } catch (migrationError) {
+      // If readonly, silently skip migration
+      if (isSqliteError(migrationError) && migrationError.code === 'SQLITE_READONLY') {
+        return
+      }
       console.error('[migrateFullFrameOcrSchema] Failed to add column:', migrationError)
       throw new Error('Failed to migrate full_frame_ocr schema')
     }
@@ -893,6 +919,10 @@ function migrateFullFrameOcrSchema(db: Database.Database): void {
 
     console.log('[migrateFullFrameOcrSchema] Timestamps populated successfully')
   } catch (migrationError) {
+    // If readonly, silently skip migration
+    if (isSqliteError(migrationError) && migrationError.code === 'SQLITE_READONLY') {
+      return
+    }
     console.error('[migrateFullFrameOcrSchema] Failed to populate timestamps:', migrationError)
     throw new Error('Failed to populate timestamps in full_frame_ocr')
   }

@@ -5,20 +5,20 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 
-import type {
-  FrameInfo,
-  LayoutConfig,
-  BoxData,
-  FrameBoxesData,
-  ViewMode,
-  LayoutQueueResponse,
-  BoxStats,
-  CropBoundsEdit,
-  SelectionRectEdit,
-  LayoutParamsEdit,
-  EditStateUpdaters,
+import {
+  RECALC_THRESHOLD,
+  type FrameInfo,
+  type LayoutConfig,
+  type BoxData,
+  type FrameBoxesData,
+  type ViewMode,
+  type LayoutQueueResponse,
+  type BoxStats,
+  type CropBoundsEdit,
+  type SelectionRectEdit,
+  type LayoutParamsEdit,
+  type EditStateUpdaters,
 } from '~/types/layout'
-import { RECALC_THRESHOLD } from '~/types/layout'
 import {
   fetchLayoutQueue,
   fetchAnalysisBoxes,
