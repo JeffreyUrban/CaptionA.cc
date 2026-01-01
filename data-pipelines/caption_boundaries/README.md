@@ -29,7 +29,14 @@ caption_boundaries create-dataset my_dataset local/data/*/01
 ### 2. Train Model
 
 ```bash
-caption_boundaries train 1 --name 00_00_01_added_ocr_viz --epochs 3
+# Basic training
+caption_boundaries train 1 --name exp_baseline --epochs 50
+
+# With custom balanced sampling ratio
+caption_boundaries train 1 --name exp_aggressive --epochs 50 --sampling-ratio 2.0
+
+# Disable balanced sampling (use full dataset each epoch)
+caption_boundaries train 1 --name exp_full --epochs 50 --no-balanced-sampling
 ```
 
 ### 3. Run Inference
@@ -59,6 +66,36 @@ The pipeline uses a multi-frame architecture:
 **Output:**
 - 5-way classification: `same`, `different`, `empty_empty`, `empty_valid`, `valid_empty`
 
+## Training Features
+
+### Class Imbalance Handling
+
+The pipeline implements multiple strategies to handle class imbalance:
+
+1. **Balanced Sampling (Default)**: Dynamically resamples majority classes each epoch
+   - Different random subset of majority class each epoch
+   - Configurable via `--sampling-ratio` (default: 3.0)
+   - Provides training speedup while maintaining data diversity
+   - Over many epochs, model sees all data
+
+2. **Class Weights**: Inverse frequency weighting in loss function
+   - Minority classes get higher loss contribution
+   - Automatically computed from training data
+
+3. **Macro F1 Metric**: Treats all classes equally regardless of size
+   - Primary metric for model selection
+   - Better indicator of minority class performance than weighted F1
+
+4. **Per-Class Metrics**: Individual precision, recall, F1 for each class
+   - Logged to W&B for detailed monitoring
+   - Helps identify which classes need attention
+
+### Advanced Training
+
+- **Learning Rate Scheduler**: ReduceLROnPlateau (factor=0.5, patience=2)
+- **Early Stopping**: Patience=5 epochs on validation loss
+- **Differential Learning Rates**: Classifier gets 10x higher LR than feature extractor
+
 ## Development
 
 ```bash
@@ -71,7 +108,3 @@ pyright
 # Run linting
 ruff check .
 ```
-
-## Documentation
-
-See `/Users/jurban/.claude/plans/proud-dancing-shannon.md` for the complete implementation plan.

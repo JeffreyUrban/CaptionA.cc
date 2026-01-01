@@ -51,6 +51,16 @@ def train(
         "--checkpoint-dir",
         help="Directory to save checkpoints"
     ),
+    balanced_sampling: bool = typer.Option(
+        True,
+        "--balanced-sampling/--no-balanced-sampling",
+        help="Use balanced sampling to undersample majority classes per epoch"
+    ),
+    sampling_ratio: float = typer.Option(
+        3.0,
+        "--sampling-ratio",
+        help="Max ratio of majority to minority class (higher = more data per epoch)"
+    ),
 ):
     """Train caption boundary detection model with W&B tracking.
 
@@ -97,6 +107,8 @@ def train(
             device=device,
             wandb_project=wandb_project,
             checkpoint_dir=checkpoint_dir,
+            balanced_sampling=balanced_sampling,
+            sampling_ratio=sampling_ratio,
         )
 
         # Run training

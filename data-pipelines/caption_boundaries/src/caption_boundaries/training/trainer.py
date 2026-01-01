@@ -5,6 +5,8 @@ and checkpoint management.
 """
 
 import json
+import random
+from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
@@ -16,7 +18,7 @@ import wandb
 from rich.console import Console
 from rich.progress import track
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, f1_score
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Sampler
 
 from caption_boundaries.data.dataset import CaptionBoundaryDataset
 from caption_boundaries.data.transforms import ResizeStrategy
@@ -24,6 +26,69 @@ from caption_boundaries.database import Experiment, TrainingDataset, get_trainin
 from caption_boundaries.models.architecture import create_model
 
 console = Console(stderr=True)
+
+
+class BalancedBatchSampler(Sampler):
+    """Sampler that undersamples majority classes each epoch for training efficiency.
+
+    Each epoch samples:
+    - All samples from minority classes
+    - Random subset from majority classes (controlled by ratio)
+    - Different subset each epoch for better data coverage
+
+    This improves training efficiency by reducing redundant majority class examples
+    while ensuring the model still sees all data over multiple epochs.
+
+    Args:
+        dataset: CaptionBoundaryDataset to sample from
+        majority_ratio: Max ratio of majority to minority class size (default: 3.0)
+                       Higher = more majority samples per epoch (slower but more data)
+                       Lower = fewer majority samples per epoch (faster but less data)
+
+    Example:
+        With minority class of 6,364 samples and ratio=3.0:
+        - Minority classes: all 6,364 samples per epoch
+        - Majority classes: max 19,092 samples per epoch (random subset)
+    """
+
+    def __init__(self, dataset: CaptionBoundaryDataset, majority_ratio: float = 3.0):
+        self.dataset = dataset
+        self.majority_ratio = majority_ratio
+
+        # Group indices by label
+        self.label_to_indices = defaultdict(list)
+        for idx in range(len(dataset)):
+            label = dataset[idx]["label"]
+            self.label_to_indices[label].append(idx)
+
+        # Find minority class size and set threshold
+        self.class_sizes = {label: len(indices) for label, indices in self.label_to_indices.items()}
+        self.min_class_size = min(self.class_sizes.values())
+        self.max_samples_per_class = int(self.min_class_size * majority_ratio)
+
+        # Calculate epoch size
+        self.epoch_size = sum(
+            min(len(indices), self.max_samples_per_class) for indices in self.label_to_indices.values()
+        )
+
+    def __iter__(self):
+        """Sample indices for this epoch."""
+        epoch_indices = []
+
+        for label, indices in self.label_to_indices.items():
+            if len(indices) <= self.max_samples_per_class:
+                # Use all samples for minority/medium classes
+                epoch_indices.extend(indices)
+            else:
+                # Random subset for majority classes (different each epoch!)
+                epoch_indices.extend(random.sample(indices, self.max_samples_per_class))
+
+        # Shuffle the combined indices
+        random.shuffle(epoch_indices)
+        return iter(epoch_indices)
+
+    def __len__(self):
+        return self.epoch_size
 
 
 class CaptionBoundaryTrainer:
@@ -62,6 +127,8 @@ class CaptionBoundaryTrainer:
         wandb_project: str = "caption-boundary-detection",
         checkpoint_dir: Path = Path("checkpoints"),
         save_every_n_epochs: int = 5,
+        balanced_sampling: bool = True,
+        sampling_ratio: float = 3.0,
     ):
         self.dataset_id = dataset_id
         self.experiment_name = experiment_name
@@ -76,6 +143,10 @@ class CaptionBoundaryTrainer:
         # Organize checkpoints by experiment name
         self.checkpoint_dir = Path(checkpoint_dir) / experiment_name / "checkpoints"
         self.save_every_n_epochs = save_every_n_epochs
+
+        # Balanced sampling configuration
+        self.balanced_sampling = balanced_sampling
+        self.sampling_ratio = sampling_ratio
 
         # Early stopping configuration
         self.early_stopping_patience = 5
@@ -125,19 +196,49 @@ class CaptionBoundaryTrainer:
             transform_strategy=self.transform_strategy,
         )
 
-        # Data loaders
         # Adjust num_workers based on device (MPS has issues with multiprocessing)
         num_workers = 0 if self.device == "mps" else 4
 
-        self.train_loader = DataLoader(
-            self.train_dataset,
-            batch_size=self.batch_size,
-            shuffle=True,
-            num_workers=num_workers,
-            collate_fn=CaptionBoundaryDataset.collate_fn,
-            pin_memory=(self.device == "cuda"),
-        )
+        # Create train loader with optional balanced sampling
+        if self.balanced_sampling:
+            train_sampler = BalancedBatchSampler(self.train_dataset, majority_ratio=self.sampling_ratio)
 
+            self.train_loader = DataLoader(
+                self.train_dataset,
+                batch_size=self.batch_size,
+                sampler=train_sampler,  # Use balanced sampler instead of shuffle
+                num_workers=num_workers,
+                collate_fn=CaptionBoundaryDataset.collate_fn,
+                pin_memory=(self.device == "cuda"),
+            )
+
+            # Log sampling statistics
+            console.print(f"[cyan]Balanced sampling enabled (ratio={self.sampling_ratio}):[/cyan]")
+            console.print(f"  Total train samples: {len(self.train_dataset)}")
+            console.print(f"  Samples per epoch: {len(train_sampler)}")
+            speedup = len(self.train_dataset) / len(train_sampler)
+            console.print(f"  Speedup: {speedup:.2f}x faster epochs")
+
+            # Show per-class sampling
+            for label in range(len(CaptionBoundaryDataset.LABELS)):
+                label_name = CaptionBoundaryDataset.LABELS[label]
+                original_count = train_sampler.class_sizes.get(label, 0)
+                sampled_count = min(original_count, train_sampler.max_samples_per_class)
+                if original_count > 0:
+                    pct = (sampled_count / original_count) * 100
+                    console.print(f"    {label_name}: {sampled_count}/{original_count} ({pct:.0f}%)")
+        else:
+            self.train_loader = DataLoader(
+                self.train_dataset,
+                batch_size=self.batch_size,
+                shuffle=True,
+                num_workers=num_workers,
+                collate_fn=CaptionBoundaryDataset.collate_fn,
+                pin_memory=(self.device == "cuda"),
+            )
+            console.print(f"[green]✓[/green] Train samples: {len(self.train_dataset)}")
+
+        # Val loader (no sampling - always use all validation data)
         self.val_loader = DataLoader(
             self.val_dataset,
             batch_size=self.batch_size,
@@ -147,7 +248,6 @@ class CaptionBoundaryTrainer:
             pin_memory=(self.device == "cuda"),
         )
 
-        console.print(f"[green]✓[/green] Train samples: {len(self.train_dataset)}")
         console.print(f"[green]✓[/green] Val samples: {len(self.val_dataset)}")
 
     def _compute_class_weights(self) -> torch.Tensor:
@@ -248,6 +348,8 @@ class CaptionBoundaryTrainer:
                 # Training config
                 "epochs": self.epochs,
                 "batch_size": self.batch_size,
+                "balanced_sampling": self.balanced_sampling,
+                "sampling_ratio": self.sampling_ratio,
                 "learning_rate": self.learning_rate,
                 "optimizer": "AdamW",
                 # Data config
