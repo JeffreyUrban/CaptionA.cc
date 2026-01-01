@@ -19,7 +19,7 @@ from PIL import Image
 from transformers import AutoModel, AutoProcessor
 
 from caption_boundaries.data.reference_selection import ReferenceFrameCandidate, select_reference_frame
-from caption_boundaries.database import FontEmbedding, VideoRegistry, get_training_db
+from caption_boundaries.database import FontEmbedding, VideoRegistry, get_dataset_db
 from video_utils import get_video_metadata
 
 
@@ -281,8 +281,8 @@ def get_or_create_font_embedding(
 
     model_version = model.get_model_version()
 
-    # Check cache in training database
-    with next(get_training_db(training_db_path)) as db:
+    # Check cache in dataset database
+    with next(get_dataset_db(training_db_path)) as db:
         if not force_recompute:
             cached = (
                 db.query(FontEmbedding)
@@ -407,7 +407,7 @@ def get_font_embedding(
     Returns:
         FontEmbedding if found in cache, None otherwise
     """
-    from caption_boundaries.database import get_training_db
+    from caption_boundaries.database import get_dataset_db
     from caption_boundaries.data.dataset_builder import compute_video_hash
 
     # Compute video hash
@@ -418,7 +418,7 @@ def get_font_embedding(
     video_hash = compute_video_hash(video_file)
 
     # Check cache
-    with next(get_training_db(training_db_path)) as db:
+    with next(get_dataset_db(training_db_path)) as db:
         from caption_boundaries.database import FontEmbedding
 
         embedding = db.query(FontEmbedding).filter(FontEmbedding.video_hash == video_hash).first()

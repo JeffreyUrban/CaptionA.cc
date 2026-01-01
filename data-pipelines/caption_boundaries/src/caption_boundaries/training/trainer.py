@@ -265,8 +265,10 @@ class CaptionBoundaryTrainer:
         """
         from collections import Counter
 
-        # Extract labels from training dataset
-        labels = [self.train_dataset[i]["label"] for i in range(len(self.train_dataset))]
+        # Extract labels from training dataset (access samples directly, don't call __getitem__)
+        # Convert string labels to integer indices using dataset's LABEL_TO_IDX mapping
+        label_to_idx = self.train_dataset.LABEL_TO_IDX
+        labels = [label_to_idx[sample.label] for sample in self.train_dataset.samples]
         label_counts = Counter(labels)
 
         # Compute weights: total_samples / class_count
@@ -326,7 +328,6 @@ class CaptionBoundaryTrainer:
             mode="min",
             factor=0.5,
             patience=2,
-            verbose=True,
         )
 
         # Compute class weights from training data to handle imbalance

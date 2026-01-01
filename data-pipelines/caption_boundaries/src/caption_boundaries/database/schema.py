@@ -9,7 +9,7 @@ Database location: local/caption_boundaries_training.db
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import JSON, CheckConstraint, DateTime, Float, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import JSON, LargeBinary, CheckConstraint, DateTime, Float, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -213,6 +213,61 @@ class OCRVisualization(Base):
         CheckConstraint("variant IN ('boundaries', 'centers', 'both', '3d_channels')", name="check_variant"),
         # One visualization per video per variant per OCR version
         Index("idx_unique_ocr_viz", "video_hash", "variant", "ocr_version", unique=True),
+    )
+
+
+class TrainingFrame(Base):
+    """Consolidated frame storage for training datasets.
+
+    Stores actual frame image data (BLOBs) copied from video databases
+    to enable self-contained training without opening multiple databases.
+    """
+
+    __tablename__ = "training_frames"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    video_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    frame_index: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    # Frame data
+    image_data: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    width: Mapped[int] = mapped_column(Integer, nullable=False)
+    height: Mapped[int] = mapped_column(Integer, nullable=False)
+    file_size: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    # Provenance
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=lambda: datetime.now(UTC))
+
+    __table_args__ = (
+        # One frame per (video_hash, frame_index) combination
+        Index("idx_unique_training_frame", "video_hash", "frame_index", unique=True),
+        # Fast lookup for dataset loading
+        Index("idx_training_frame_video", "video_hash"),
+    )
+
+
+class TrainingOCRVisualization(Base):
+    """Consolidated OCR visualizations for training datasets.
+
+    Stores OCR visualization BLOBs for each video variant used in training.
+    """
+
+    __tablename__ = "training_ocr_visualizations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    video_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    variant: Mapped[str] = mapped_column(String(50), nullable=False)
+
+    # Visualization data
+    image_data: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+
+    # Provenance
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=lambda: datetime.now(UTC))
+
+    __table_args__ = (
+        CheckConstraint("variant IN ('boundaries', 'centers', 'both', '3d_channels')", name="check_training_ocr_variant"),
+        # One visualization per (video_hash, variant) combination
+        Index("idx_unique_training_ocr_viz", "video_hash", "variant", unique=True),
     )
 
 

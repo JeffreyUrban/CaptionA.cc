@@ -16,13 +16,8 @@ console = Console(stderr=True)
 
 @app.command()
 def train(
-    dataset_id: int = typer.Argument(..., help="Training dataset ID"),
+    dataset_name: str = typer.Argument(..., help="Dataset name (e.g., 'my_dataset')"),
     experiment_name: str = typer.Option(..., "--name", "-n", help="Experiment name for W&B"),
-    training_db: Path = typer.Option(
-        Path("../../local/models/caption_boundaries/training.db"),
-        "--db",
-        help="Central training database"
-    ),
     epochs: int = typer.Option(50, "--epochs", "-e", help="Number of training epochs"),
     batch_size: int = typer.Option(32, "--batch-size", "-b", help="Training batch size"),
     lr_features: float = typer.Option(1e-3, "--lr-features", help="Learning rate for feature extractor"),
@@ -67,16 +62,28 @@ def train(
 
     Examples:
         # Basic training
-        caption_boundaries train 1 --name exp_baseline --epochs 50
+        caption_boundaries train my_dataset --name exp_baseline --epochs 50
 
         # Custom configuration
-        caption_boundaries train 1 --name exp_3d_viz --ocr-viz 3d_channels --epochs 100
+        caption_boundaries train my_dataset --name exp_3d_viz --ocr-viz 3d_channels --epochs 100
 
         # Small batch for MPS (Mac M2)
-        caption_boundaries train 1 --name exp_mps --batch-size 16 --device mps
+        caption_boundaries train my_dataset --name exp_mps --batch-size 16 --device mps
     """
     from caption_boundaries.data.transforms import ResizeStrategy
+    from caption_boundaries.database import get_dataset_db_path
     from caption_boundaries.training import CaptionBoundaryTrainer
+
+    # Get dataset database path
+    dataset_db_path = get_dataset_db_path(dataset_name)
+    if not dataset_db_path.exists():
+        console.print(f"[red]✗[/red] Dataset '{dataset_name}' not found at {dataset_db_path}")
+        console.print("Available datasets:")
+        datasets_dir = dataset_db_path.parent
+        if datasets_dir.exists():
+            for db_file in datasets_dir.glob("*.db"):
+                console.print(f"  - {db_file.stem}")
+        raise typer.Exit(code=1)
 
     # Validate transform strategy
     try:
@@ -96,9 +103,8 @@ def train(
     try:
         # Initialize trainer
         trainer = CaptionBoundaryTrainer(
-            dataset_id=dataset_id,
+            dataset_db_path=dataset_db_path,
             experiment_name=experiment_name,
-            training_db_path=training_db if training_db != Path("local/caption_boundaries_training.db") else None,
             transform_strategy=strategy,
             ocr_viz_variant=ocr_viz_variant,
             use_font_embedding=True,
@@ -258,13 +264,8 @@ def analyze(
 
 @app.command()
 def create_dataset(
-    name: str = typer.Argument(..., help="Dataset name"),
+    name: str = typer.Argument(..., help="Dataset name (will be used as database filename)"),
     video_dirs: list[Path] = typer.Argument(..., help="Paths to video directories (glob patterns supported)"),
-    training_db: Path = typer.Option(
-        Path("../../local/models/caption_boundaries/training.db"),
-        "--db",
-        help="Central training database"
-    ),
     split_strategy: str = typer.Option(
         "random",
         "--split",
@@ -330,19 +331,16 @@ def create_dataset(
     console.print(f"Found {len(video_db_paths)} video databases")
 
     try:
-        dataset_id = create_training_dataset(
+        dataset_db_path = create_training_dataset(
             name=name,
             video_db_paths=video_db_paths,
-            training_db_path=training_db if training_db != Path("local/caption_boundaries_training.db") else None,
             split_strategy=split_strategy,
             train_split_ratio=train_ratio,
             random_seed=random_seed,
             description=description,
         )
 
-        console.print(f"\n[green]✓ Dataset created successfully![/green]")
-        console.print(f"Dataset ID: {dataset_id}")
-        console.print(f"Database: {training_db}")
+        # Success message already printed by create_training_dataset
 
     except Exception as e:
         console.print(f"[red]✗ Failed to create dataset:[/red] {e}")

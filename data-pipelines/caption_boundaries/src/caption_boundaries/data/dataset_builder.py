@@ -15,7 +15,14 @@ from rich.console import Console
 from rich.progress import track
 from sqlalchemy.orm import Session
 
-from caption_boundaries.database import TrainingDataset, TrainingSample, VideoRegistry, get_training_db, init_training_db
+from caption_boundaries.database import (
+    TrainingDataset,
+    TrainingSample,
+    VideoRegistry,
+    get_dataset_db,
+    get_dataset_db_path,
+    init_dataset_db,
+)
 from video_utils import get_video_metadata
 
 console = Console(stderr=True)
@@ -311,34 +318,164 @@ def get_ocr_text_for_frame(db_path: Path, frame_index: int) -> str:
         return ""
 
 
+def _copy_frames_for_video(db, video_db_path: Path, video_hash: str, video_samples: list[dict]) -> None:
+    """Copy frames needed by samples from video DB to training DB.
+
+    Args:
+        db: Training database session
+        video_db_path: Path to video's annotations.db
+        video_hash: Video hash
+        video_samples: List of samples for this video
+    """
+    import sqlite3
+    from caption_boundaries.database import TrainingFrame
+
+    # Collect unique frames needed for this video
+    frames_needed = set()
+    for sample in video_samples:
+        frames_needed.add(sample["frame1_index"])
+        frames_needed.add(sample["frame2_index"])
+
+    # Check which frames already exist in training DB
+    existing_frames = set()
+    for frame_index in frames_needed:
+        existing = (
+            db.query(TrainingFrame)
+            .filter(TrainingFrame.video_hash == video_hash, TrainingFrame.frame_index == frame_index)
+            .first()
+        )
+        if existing:
+            existing_frames.add(frame_index)
+
+    frames_to_copy = frames_needed - existing_frames
+
+    if not frames_to_copy:
+        return  # All frames already exist
+
+    # Copy frames from video DB
+    conn = sqlite3.connect(video_db_path)
+    try:
+        cursor = conn.cursor()
+
+        for frame_index in frames_to_copy:
+            cursor.execute(
+                """
+                SELECT image_data, width, height, file_size
+                FROM cropped_frames
+                WHERE frame_index = ?
+                """,
+                (frame_index,),
+            )
+
+            row = cursor.fetchone()
+            if not row:
+                console.print(
+                    f"[yellow]⚠ Frame {frame_index} not found in {video_db_path}, skipping[/yellow]"
+                )
+                continue
+
+            # Create training frame record
+            training_frame = TrainingFrame(
+                video_hash=video_hash,
+                frame_index=frame_index,
+                image_data=row[0],
+                width=row[1],
+                height=row[2],
+                file_size=row[3],
+            )
+            db.add(training_frame)
+
+    finally:
+        conn.close()
+
+
+def _copy_ocr_viz_for_video(db, video_db_path: Path, video_hash: str, variant: str = "boundaries") -> None:
+    """Copy OCR visualization from video DB to training DB.
+
+    Args:
+        db: Training database session
+        video_db_path: Path to video's annotations.db
+        video_hash: Video hash
+        variant: OCR visualization variant (default: 'boundaries')
+    """
+    import sqlite3
+    from caption_boundaries.database import TrainingOCRVisualization
+
+    # Check if visualization already exists
+    existing = (
+        db.query(TrainingOCRVisualization)
+        .filter(TrainingOCRVisualization.video_hash == video_hash, TrainingOCRVisualization.variant == variant)
+        .first()
+    )
+
+    if existing:
+        return  # Already exists
+
+    # Copy from video DB
+    conn = sqlite3.connect(video_db_path)
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT ocr_visualization_image FROM video_layout_config WHERE id = 1")
+
+        row = cursor.fetchone()
+        if not row or not row[0]:
+            console.print(f"[yellow]⚠ OCR visualization not found in {video_db_path}, skipping[/yellow]")
+            return
+
+        # Create training OCR visualization record
+        training_ocr_viz = TrainingOCRVisualization(
+            video_hash=video_hash, variant=variant, image_data=row[0]
+        )
+        db.add(training_ocr_viz)
+
+    finally:
+        conn.close()
+
+
 def create_training_dataset(
     name: str,
     video_db_paths: list[Path],
-    training_db_path: Path | None = None,
     split_strategy: Literal["random", "show_based"] = "random",
     train_split_ratio: float = 0.8,
     random_seed: int = 42,
     description: str | None = None,
-) -> int:
+) -> Path:
     """Create training dataset from annotated videos.
 
+    Creates a self-contained dataset database with all necessary data:
+    - Dataset metadata and samples
+    - Frame image BLOBs
+    - OCR visualization BLOBs
+    - Video registry
+
     Args:
-        name: Dataset name (must be unique)
+        name: Dataset name (will be used as database filename)
         video_db_paths: List of paths to video annotations.db files
-        training_db_path: Path to training database (uses default if None)
         split_strategy: 'random' or 'show_based' splitting
         train_split_ratio: Fraction of data for training (default: 0.8)
         random_seed: Random seed for reproducibility
         description: Optional dataset description
 
     Returns:
-        Dataset ID
+        Path to created dataset database
 
     Raises:
-        ValueError: If dataset name already exists or no valid samples found
+        ValueError: If dataset already exists or no valid samples found
     """
-    # Initialize training database
-    init_training_db(training_db_path)
+    from collections import defaultdict
+
+    # Get dataset database path from name
+    dataset_db_path = get_dataset_db_path(name)
+
+    # Check if dataset already exists (fail fast)
+    if dataset_db_path.exists():
+        console.print(f"[red]✗ Dataset '{name}' already exists at {dataset_db_path}[/red]")
+        console.print("[yellow]Delete the existing dataset or choose a different name:[/yellow]")
+        console.print(f"  rm {dataset_db_path}")
+        raise ValueError(f"Dataset '{name}' already exists")
+
+    # Initialize dataset database
+    init_dataset_db(dataset_db_path)
 
     console.print(f"[cyan]Creating dataset:[/cyan] {name}")
     console.print(f"Processing {len(video_db_paths)} videos...")
@@ -427,17 +564,15 @@ def create_training_dataset(
         }
         crop_bounds_versions[video_hash] = layout_meta["crop_bounds_version"]
 
-        # Create video registry record (keep relative paths for worktree compatibility)
-        video_registry_records.append(
-            VideoRegistry(
-                video_hash=video_hash,
-                video_path=str(video_file),
-                file_size_bytes=metadata["file_size_bytes"],
-                duration_seconds=metadata.get("duration_seconds"),
-                width=metadata.get("width"),
-                height=metadata.get("height"),
-            )
-        )
+        # Store video registry data (will create objects in database session)
+        video_registry_records.append({
+            "video_hash": video_hash,
+            "video_path": str(video_file),
+            "file_size_bytes": metadata["file_size_bytes"],
+            "duration_seconds": metadata.get("duration_seconds"),
+            "width": metadata.get("width"),
+            "height": metadata.get("height"),
+        })
 
     if not all_samples:
         raise ValueError("No valid samples found in any video")
@@ -496,9 +631,9 @@ def create_training_dataset(
     avg_ocr_confidence = sum(all_confidences) / len(all_confidences) if all_confidences else None
     min_samples_per_class = min(label_counts.values()) if label_counts else 0
 
-    # Store in database
-    with next(get_training_db(training_db_path)) as db:
-        # Create dataset record
+    # Create dataset record and get ID
+    console.print("[cyan]Creating dataset record...[/cyan]")
+    with next(get_dataset_db(dataset_db_path)) as db:
         dataset = TrainingDataset(
             name=name,
             description=description,
@@ -517,46 +652,100 @@ def create_training_dataset(
 
         db.add(dataset)
         db.flush()  # Get dataset ID
-
-        # Create sample records
-        sample_records = []
-        for sample_data in all_samples:
-            sample = TrainingSample(
-                dataset_id=dataset.id,
-                video_hash=sample_data["video_hash"],
-                frame1_index=sample_data["frame1_index"],
-                frame2_index=sample_data["frame2_index"],
-                label=sample_data["label"],
-                split=sample_data["split"],
-                crop_bounds_version=sample_data["crop_bounds_version"],
-                source_caption_annotation_id=sample_data["source_caption_annotation_id"],
-                ocr_confidence_frame1=sample_data["ocr_confidence_frame1"],
-                ocr_confidence_frame2=sample_data["ocr_confidence_frame2"],
-                ocr_text_frame1=sample_data["ocr_text_frame1"],
-                ocr_text_frame2=sample_data["ocr_text_frame2"],
-                levenshtein_distance=sample_data["levenshtein_distance"],
-            )
-            sample_records.append(sample)
-
-        db.add_all(sample_records)
-
-        # Add/update video registry
-        for video_record in video_registry_records:
-            existing = db.query(VideoRegistry).filter(VideoRegistry.video_hash == video_record.video_hash).first()
-
-            if existing:
-                # Update last_seen_at
-                from datetime import UTC, datetime
-
-                existing.last_seen_at = datetime.now(UTC)
-                existing.video_path = video_record.video_path  # Update path in case it moved
-            else:
-                db.add(video_record)
-
+        dataset_id = dataset.id
         db.commit()
 
-        console.print(f"\n[green]✓[/green] Dataset created with ID: {dataset.id}")
-        console.print(f"  Train samples: {sum(1 for s in all_samples if s['split'] == 'train')}")
-        console.print(f"  Val samples: {sum(1 for s in all_samples if s['split'] == 'val')}")
+    console.print(f"[green]✓[/green] Dataset record created with ID: {dataset_id}")
 
-        return dataset.id
+    # Extract font embeddings for all videos
+    console.print(f"\n[cyan]Extracting font embeddings for {len(video_db_paths)} videos...[/cyan]")
+    from caption_boundaries.data.font_embeddings import batch_extract_embeddings
+
+    try:
+        embeddings = batch_extract_embeddings(
+            video_db_paths=video_db_paths,
+            training_db_path=dataset_db_path,
+            force_recompute=False,
+        )
+        console.print(f"[green]✓[/green] Extracted {len(embeddings)} font embeddings")
+    except Exception as e:
+        console.print(f"[yellow]⚠ Font embedding extraction failed: {e}[/yellow]")
+        console.print("  Dataset will be created without font embeddings")
+
+    # Group samples by video for per-video processing
+    samples_by_video = defaultdict(list)
+    for sample in all_samples:
+        samples_by_video[sample["video_hash"]].append(sample)
+
+    # Find video DB path mapping
+    video_db_map = {}
+    for video_db_path in video_db_paths:
+        try:
+            video_file = find_video_file(video_db_path)
+            if video_file:
+                metadata = get_video_metadata(video_file)
+                video_db_map[metadata["video_hash"]] = video_db_path
+        except Exception:
+            continue
+
+    # Process each video: copy frames, copy OCR viz, insert samples
+    console.print(f"\n[cyan]Consolidating {len(samples_by_video)} videos to training database...[/cyan]")
+    for video_hash in track(samples_by_video.keys(), description="Copying frame data"):
+        video_samples = samples_by_video[video_hash]
+        video_db_path = video_db_map.get(video_hash)
+
+        if not video_db_path:
+            console.print(f"[yellow]⚠ Could not find video DB for {video_hash}, skipping frame copy[/yellow]")
+            continue
+
+        with next(get_dataset_db(dataset_db_path)) as db:
+            # Copy frames for this video
+            _copy_frames_for_video(db, video_db_path, video_hash, video_samples)
+
+            # Copy OCR visualization for this video
+            _copy_ocr_viz_for_video(db, video_db_path, video_hash)
+
+            # Insert samples for this video
+            for sample_data in video_samples:
+                sample = TrainingSample(
+                    dataset_id=dataset_id,
+                    video_hash=sample_data["video_hash"],
+                    frame1_index=sample_data["frame1_index"],
+                    frame2_index=sample_data["frame2_index"],
+                    label=sample_data["label"],
+                    split=sample_data["split"],
+                    crop_bounds_version=sample_data["crop_bounds_version"],
+                    source_caption_annotation_id=sample_data["source_caption_annotation_id"],
+                    ocr_confidence_frame1=sample_data["ocr_confidence_frame1"],
+                    ocr_confidence_frame2=sample_data["ocr_confidence_frame2"],
+                    ocr_text_frame1=sample_data["ocr_text_frame1"],
+                    ocr_text_frame2=sample_data["ocr_text_frame2"],
+                    levenshtein_distance=sample_data["levenshtein_distance"],
+                )
+                db.add(sample)
+
+            # Add/update video registry
+            for video_record_data in video_registry_records:
+                if video_record_data["video_hash"] != video_hash:
+                    continue
+
+                existing = db.query(VideoRegistry).filter(VideoRegistry.video_hash == video_record_data["video_hash"]).first()
+
+                if existing:
+                    from datetime import UTC, datetime
+                    existing.last_seen_at = datetime.now(UTC)
+                    existing.video_path = video_record_data["video_path"]
+                else:
+                    # Create VideoRegistry object from dict
+                    video_record = VideoRegistry(**video_record_data)
+                    db.add(video_record)
+
+            db.commit()
+
+    console.print(f"\n[green]✓[/green] Dataset created successfully!")
+    console.print(f"  Name: {name}")
+    console.print(f"  Database: {dataset_db_path}")
+    console.print(f"  Train samples: {sum(1 for s in all_samples if s['split'] == 'train')}")
+    console.print(f"  Val samples: {sum(1 for s in all_samples if s['split'] == 'val')}")
+
+    return dataset_db_path

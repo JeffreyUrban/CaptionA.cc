@@ -29,14 +29,14 @@ caption_boundaries create-dataset my_dataset local/data/*/01
 ### 2. Train Model
 
 ```bash
-# Basic training
-caption_boundaries train 1 --name exp_baseline --epochs 50
+# Basic training (using dataset name)
+caption_boundaries train my_dataset --name exp_baseline --epochs 50
 
 # With custom balanced sampling ratio
-caption_boundaries train 1 --name exp_aggressive --epochs 50 --sampling-ratio 2.0
+caption_boundaries train my_dataset --name exp_aggressive --epochs 50 --sampling-ratio 2.0
 
 # Disable balanced sampling (use full dataset each epoch)
-caption_boundaries train 1 --name exp_full --epochs 50 --no-balanced-sampling
+caption_boundaries train my_dataset --name exp_full --epochs 50 --no-balanced-sampling
 ```
 
 ### 3. Run Inference
@@ -65,6 +65,28 @@ The pipeline uses a multi-frame architecture:
 
 **Output:**
 - 5-way classification: `same`, `different`, `empty_empty`, `empty_valid`, `valid_empty`
+
+### Dataset Storage
+
+Each dataset is stored in a **self-contained SQLite database** at:
+```
+local/models/caption_boundaries/datasets/{dataset_name}.db
+```
+
+**What's included:**
+- Training samples (frame pairs with labels)
+- Frame images (cropped captions as PNG blobs)
+- OCR visualizations (one per video)
+- Font embeddings (512-dim FontCLIP features)
+- Video metadata and provenance
+
+**Benefits:**
+- ✓ Self-contained and portable
+- ✓ Easy to delete/archive individual datasets
+- ✓ Fast loading during training (no distributed database queries)
+- ✓ Complete provenance tracking
+
+**Note:** Font embeddings are extracted automatically during dataset creation using a fallback CLIP model (openai/clip-vit-base-patch32) if VecGlypher/fontclip_weight is not accessible.
 
 ## Training Features
 
