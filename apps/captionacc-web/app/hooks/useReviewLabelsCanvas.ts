@@ -1,7 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 
-import type { FrameBoxesData, LayoutConfig, ViewMode } from '~/types/review-labels'
-import { getBoxColors } from '~/types/review-labels'
+import {
+  getBoxColors,
+  type FrameBoxesData,
+  type LayoutConfig,
+  type ViewMode,
+} from '~/types/review-labels'
 import {
   getCanvasCoordinates,
   findBoxAtPosition,

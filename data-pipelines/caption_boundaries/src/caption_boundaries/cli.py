@@ -113,28 +113,133 @@ def train(
 def infer(
     video_db: Path = typer.Argument(..., help="Path to video annotations.db"),
     checkpoint: Path = typer.Option(..., "--checkpoint", "-c", help="Model checkpoint path"),
-    model_version: str = typer.Option("v1.0", "--version", help="Model version identifier"),
-    batch_size: int = typer.Option(64, "--batch-size", "-b", help="Inference batch size"),
+    confidence_threshold: float = typer.Option(0.8, "--confidence", help="Minimum prediction confidence"),
+    ocr_confidence_min: float = typer.Option(0.7, "--ocr-min", help="Minimum OCR confidence"),
+    output_json: Path = typer.Option(None, "--output", "-o", help="Save results to JSON file"),
+    show_all_transitions: bool = typer.Option(False, "--all", help="Show all transitions (not just boundaries)"),
 ):
-    """Run boundary prediction inference on a video."""
-    console.print(f"[cyan]Running inference on:[/cyan] {video_db}")
-    console.print(f"Model: {checkpoint} (version: {model_version})")
+    """Run boundary prediction inference on a video.
 
-    # TODO: Implement inference pipeline
-    console.print("[yellow]⚠[/yellow] Inference not yet implemented")
+    Examples:
+        # Basic inference
+        caption_boundaries infer local/data/61/61c3*/annotations.db --checkpoint local/models/caption_boundaries/experiments/production_baseline/checkpoints/best.pt
+
+        # With quality checks
+        caption_boundaries infer local/data/61/61c3*/annotations.db --checkpoint best.pt --confidence 0.9 --ocr-min 0.8
+
+        # Save results to file
+        caption_boundaries infer video.db --checkpoint best.pt --output results.json
+    """
+    from caption_boundaries.inference import BoundaryPredictor
+
+    try:
+        console.print(f"\n[cyan]Running inference on:[/cyan] {video_db}")
+        console.print(f"[cyan]Model:[/cyan] {checkpoint}")
+        console.print(f"[cyan]Confidence threshold:[/cyan] {confidence_threshold}")
+
+        # Initialize predictor
+        predictor = BoundaryPredictor(checkpoint_path=checkpoint)
+
+        # Run prediction with quality checks
+        results = predictor.predict_with_quality_checks(
+            video_db_path=video_db,
+            confidence_threshold=confidence_threshold,
+            ocr_confidence_min=ocr_confidence_min,
+        )
+
+        # Display results
+        console.print(f"\n[green]✓[/green] Found {results['num_boundaries']} boundaries")
+        console.print(f"[yellow]⚠[/yellow] Flagged {results['num_flagged']} for quality issues")
+
+        # Show boundaries
+        if results['boundaries']:
+            console.print("\n[cyan]Predicted Boundaries:[/cyan]")
+            for i, boundary in enumerate(results['boundaries'], 1):
+                console.print(
+                    f"  {i}. Frames {boundary['frame1_index']} → {boundary['frame2_index']}: "
+                    f"{boundary['predicted_label']} (conf={boundary['confidence']:.3f})"
+                )
+
+        # Show flagged boundaries
+        if results['quality']['flagged_boundaries']:
+            console.print("\n[yellow]Flagged Boundaries:[/yellow]")
+            for boundary in results['quality']['flagged_boundaries']:
+                console.print(
+                    f"  Frames {boundary['frame1_index']} → {boundary['frame2_index']}: "
+                    f"{', '.join(boundary['flags'])}"
+                )
+
+        # Save to file if requested
+        if output_json:
+            import json
+            with open(output_json, 'w') as f:
+                # Convert to JSON-serializable format
+                json_results = {
+                    'boundaries': results['boundaries'],
+                    'quality_stats': results['quality']['quality_stats'],
+                    'num_boundaries': results['num_boundaries'],
+                    'num_flagged': results['num_flagged'],
+                }
+                json.dump(json_results, f, indent=2)
+            console.print(f"\n[green]✓[/green] Results saved to {output_json}")
+
+    except Exception as e:
+        console.print(f"[red]✗ Inference failed:[/red] {e}")
+        import traceback
+        traceback.print_exc()
+        raise typer.Exit(code=1)
 
 
 @app.command()
 def analyze(
-    video_db: Path = typer.Argument(..., help="Path to video annotations.db"),
-    confidence_threshold: float = typer.Option(0.7, "--threshold", "-t", help="Low confidence threshold"),
+    predictions_json: Path = typer.Argument(..., help="Path to predictions JSON file"),
+    video_db: Path = typer.Option(..., "--video-db", help="Path to video annotations.db"),
+    ocr_confidence_min: float = typer.Option(0.7, "--ocr-min", help="Minimum OCR confidence"),
 ):
-    """Run quality checks on boundary predictions."""
-    console.print(f"[cyan]Analyzing predictions in:[/cyan] {video_db}")
-    console.print(f"Confidence threshold: {confidence_threshold}")
+    """Run quality checks on existing boundary predictions.
 
-    # TODO: Implement quality checks
-    console.print("[yellow]⚠[/yellow] Analysis not yet implemented")
+    Examples:
+        # Analyze predictions from file
+        caption_boundaries analyze predictions.json --video-db local/data/61/61c3*/annotations.db
+    """
+    from caption_boundaries.inference.quality_checks import run_quality_checks
+    import json
+
+    try:
+        console.print(f"\n[cyan]Analyzing predictions from:[/cyan] {predictions_json}")
+
+        # Load predictions
+        with open(predictions_json, 'r') as f:
+            data = json.load(f)
+            boundaries = data.get('boundaries', [])
+
+        if not boundaries:
+            console.print("[yellow]⚠[/yellow] No boundaries found in file")
+            return
+
+        # Run quality checks
+        quality_results = run_quality_checks(
+            video_db_path=video_db,
+            boundaries=boundaries,
+            ocr_confidence_min=ocr_confidence_min,
+        )
+
+        # Display detailed results
+        console.print(f"\n[cyan]Quality Analysis Results:[/cyan]")
+        console.print(f"  Pass rate: {quality_results['pass_rate']*100:.1f}%")
+
+        if quality_results['flagged_boundaries']:
+            console.print(f"\n[yellow]Detailed Flags:[/yellow]")
+            for boundary in quality_results['flagged_boundaries']:
+                console.print(f"\n  Frames {boundary['frame1_index']} → {boundary['frame2_index']}:")
+                for flag in boundary['flags']:
+                    console.print(f"    • {flag}")
+
+    except Exception as e:
+        console.print(f"[red]✗ Analysis failed:[/red] {e}")
+        import traceback
+        traceback.print_exc()
+        raise typer.Exit(code=1)
 
 
 @app.command()

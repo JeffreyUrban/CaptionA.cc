@@ -6,8 +6,7 @@
  */
 
 import Database from 'better-sqlite3'
-import { type LoaderFunctionArgs } from 'react-router'
-import { useLoaderData, useNavigate } from 'react-router'
+import { useLoaderData, useNavigate, type LoaderFunctionArgs } from 'react-router'
 
 import { getDbPath } from '~/utils/video-paths'
 

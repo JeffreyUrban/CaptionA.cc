@@ -11,7 +11,6 @@ import numpy as np
 import torch
 from frames_db import get_frame_from_db
 from PIL import Image
-from sqlalchemy.orm import Session
 from torch.utils.data import Dataset
 
 from caption_boundaries.data.transforms import AnchorAwareResize, NormalizeImageNet, ResizeStrategy
@@ -35,8 +34,8 @@ def get_git_root() -> Path:
             check=True,
         )
         return Path(result.stdout.strip())
-    except subprocess.CalledProcessError:
-        raise RuntimeError("Not in a git repository")
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError("Not in a git repository") from e
 
 
 class CaptionBoundaryDataset(Dataset):
@@ -167,9 +166,8 @@ class CaptionBoundaryDataset(Dataset):
         frame1_image = self._load_frame(video_db_path, sample.frame1_index)
         frame2_image = self._load_frame(video_db_path, sample.frame2_index)
 
-        # Load OCR visualization (TODO: implement OCR viz loading)
-        # For now, create a blank visualization
-        ocr_viz_image = Image.new("RGB", (self.target_width, self.target_height))
+        # Load OCR visualization
+        ocr_viz_image = self._load_ocr_visualization(video_db_path)
 
         # Get spatial metadata
         spatial_features = self._get_spatial_metadata(sample.video_hash)
@@ -283,6 +281,40 @@ class CaptionBoundaryDataset(Dataset):
 
         return frame_data.to_pil_image()
 
+    def _load_ocr_visualization(self, video_db_path: Path) -> Image.Image:
+        """Load OCR visualization from video database.
+
+        Args:
+            video_db_path: Path to video's annotations.db
+
+        Returns:
+            PIL Image of OCR visualization
+
+        Raises:
+            ValueError: If OCR visualization not found in database
+        """
+        import sqlite3
+        from io import BytesIO
+
+        conn = sqlite3.connect(video_db_path)
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT ocr_visualization_image FROM video_layout_config WHERE id = 1")
+        result = cursor.fetchone()
+        conn.close()
+
+        if not result or result[0] is None:
+            raise ValueError(
+                f"OCR visualization not found in {video_db_path}\n"
+                f"Ensure layout analysis has been run and OCR visualization generated."
+            )
+
+        # Load image from bytes
+        image_bytes = result[0]
+        image = Image.open(BytesIO(image_bytes))
+
+        return image
+
     def _get_spatial_metadata(self, video_hash: str) -> np.ndarray:
         """Get spatial metadata for video.
 
@@ -384,3 +416,82 @@ class CaptionBoundaryDataset(Dataset):
             "label": torch.tensor([s["label"] for s in batch], dtype=torch.long),
             "sample_id": [s["sample_id"] for s in batch],  # Keep as list for debugging
         }
+
+
+# Helper functions for inference
+
+def _get_video_metadata(video_db_path: Path) -> dict:
+    """Get video metadata from annotations database.
+
+    Args:
+        video_db_path: Path to video's annotations.db
+
+    Returns:
+        Dict with video metadata
+    """
+    import sqlite3
+
+    conn = sqlite3.connect(video_db_path)
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT * FROM video_layout_config LIMIT 1")
+    result = cursor.fetchone()
+    conn.close()
+
+    if result:
+        columns = [desc[0] for desc in cursor.description]
+        return dict(zip(columns, result, strict=True))
+    else:
+        return {}
+
+
+def _get_spatial_features(video_db_path: Path, frame1_index: int, frame2_index: int) -> list[float]:
+    """Extract spatial features for frame pair.
+
+    Args:
+        video_db_path: Path to video's annotations.db
+        frame1_index: First frame index
+        frame2_index: Second frame index
+
+    Returns:
+        List of spatial features (anchor type encoding, position, size)
+    """
+    import sqlite3
+
+    conn = sqlite3.connect(video_db_path)
+    cursor = conn.cursor()
+
+    # Get video layout metadata
+    cursor.execute("""
+        SELECT anchor_type, crop_left, crop_top, crop_right, crop_bottom, frame_width, frame_height
+        FROM video_layout_config LIMIT 1
+    """)
+    layout = cursor.fetchone()
+
+    conn.close()
+
+    if not layout:
+        # Default values if no layout found
+        anchor_encoding = [0.0, 0.0, 0.0]  # center
+        x_norm, y_norm, w_norm = 0.5, 0.9, 0.5
+    else:
+        anchor_type, crop_left, crop_top, crop_right, crop_bottom, frame_width, frame_height = layout
+
+        # Encode anchor type (one-hot)
+        anchor_map = {"left": [1.0, 0.0, 0.0], "center": [0.0, 1.0, 0.0], "right": [0.0, 0.0, 1.0]}
+        anchor_encoding = anchor_map.get(anchor_type, [0.0, 1.0, 0.0])
+
+        # Calculate normalized crop bounds
+        crop_width = crop_right - crop_left
+        crop_height = crop_bottom - crop_top
+
+        # Normalize to [0, 1] based on frame dimensions
+        x_norm = (crop_left + crop_width / 2) / frame_width if frame_width else 0.5
+        y_norm = (crop_top + crop_height / 2) / frame_height if frame_height else 0.9
+        w_norm = crop_width / frame_width if frame_width else 0.5
+
+    # Combine features: [anchor_left, anchor_center, anchor_right, x, y, w]
+    # Note: Model expects 6 features total (3 anchor + 3 spatial)
+    features = anchor_encoding + [x_norm, y_norm, w_norm]
+
+    return features

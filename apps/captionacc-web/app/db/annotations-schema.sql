@@ -160,6 +160,10 @@ CREATE TABLE IF NOT EXISTS video_layout_config (
     -- Invalidation tracking
     crop_bounds_version INTEGER NOT NULL DEFAULT 1,
     analysis_model_version TEXT,  -- Model version used for current crop bounds analysis
+
+    -- OCR visualization (cropped to caption bounds)
+    ocr_visualization_image BLOB,  -- PNG image showing OCR boxes, cropped to crop bounds
+
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 

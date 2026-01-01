@@ -8,8 +8,12 @@
 
 import { useState, useEffect, startTransition } from 'react'
 
-import type { Annotation, BoundaryDisplayState, Frame } from '~/types/boundaries'
-import { INITIAL_DISPLAY_STATE } from '~/types/boundaries'
+import {
+  INITIAL_DISPLAY_STATE,
+  type Annotation,
+  type BoundaryDisplayState,
+  type Frame,
+} from '~/types/boundaries'
 
 // Target frame rate for display updates
 const TARGET_FPS = 60
