@@ -373,6 +373,7 @@ class CaptionBoundaryTrainer:
                 name=self.experiment_name,
                 config=config,
                 dir="../../local/models/caption_boundaries/wandb",
+                mode="online",  # Default to online reporting to wandb.ai
             )
 
             # Save W&B run ID for experiment tracking
