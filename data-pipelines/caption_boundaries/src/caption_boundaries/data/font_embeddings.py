@@ -382,13 +382,45 @@ def batch_extract_embeddings(
                 force_recompute=force_recompute,
             )
 
-
-            # Get video hash for result dict
-            metadata = get_video_metadata(video_db_path.parent / "video.mp4")
-            results[metadata["video_hash"]] = embedding
+            # Get video hash from embedding (it's already stored there)
+            results[embedding.video_hash] = embedding
 
         except Exception as e:
             print(f"Failed to extract embedding for {video_db_path}: {e}")
             continue
 
     return results
+
+
+def get_font_embedding(
+    video_db_path: Path,
+    training_db_path: Path | None = None,
+) -> FontEmbedding | None:
+    """Get cached font embedding for a video (read-only, no creation).
+
+    For inference use - retrieves existing embedding without creating new ones.
+
+    Args:
+        video_db_path: Path to video's annotations.db
+        training_db_path: Path to training database (uses default if None)
+
+    Returns:
+        FontEmbedding if found in cache, None otherwise
+    """
+    from caption_boundaries.database import get_training_db
+    from caption_boundaries.data.dataset_builder import compute_video_hash
+
+    # Compute video hash
+    video_file = find_video_file(video_db_path)
+    if not video_file:
+        return None
+
+    video_hash = compute_video_hash(video_file)
+
+    # Check cache
+    with next(get_training_db(training_db_path)) as db:
+        from caption_boundaries.database import FontEmbedding
+
+        embedding = db.query(FontEmbedding).filter(FontEmbedding.video_hash == video_hash).first()
+
+        return embedding
