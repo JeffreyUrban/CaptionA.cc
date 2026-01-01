@@ -12,7 +12,7 @@ import type { Frame } from '~/types/boundaries'
 
 interface UseBoundaryFrameLoaderParams {
   videoId: string
-  currentFrameIndex: number
+  currentFrameIndexRef: React.RefObject<number> // Pass ref, read inside effect
   totalFrames: number
   framesRef: React.RefObject<Map<number, Frame>> // Now passed from parent
   isReady: boolean // Only start loading when metadata is loaded
@@ -197,7 +197,7 @@ function updateCacheAfterLoad(
  */
 export function useBoundaryFrameLoader({
   videoId,
-  currentFrameIndex,
+  currentFrameIndexRef,
   totalFrames,
   framesRef,
   isReady,
@@ -209,9 +209,21 @@ export function useBoundaryFrameLoader({
     if (!isReady || !videoId || totalFrames === 0) return
 
     let cancelled = false
+    let lastLoadedFrame = -1000 // Track last frame we loaded around
 
     const loadFrameHierarchy = async () => {
       if (cancelled) return
+
+      // Read current frame from ref (always gets latest value)
+      const currentFrameIndex = currentFrameIndexRef.current ?? 0
+
+      // Only reload if we've moved significantly (more than 16 frames)
+      // This prevents constant reloading while still responding to navigation
+      if (Math.abs(currentFrameIndex - lastLoadedFrame) < 16) {
+        return
+      }
+
+      lastLoadedFrame = currentFrameIndex
       const encodedVideoId = encodeURIComponent(videoId)
 
       try {
@@ -279,10 +291,19 @@ export function useBoundaryFrameLoader({
       }
     }
 
+    // Poll every 100ms to check if we need to load more frames
+    const pollInterval = setInterval(() => {
+      void loadFrameHierarchy()
+    }, 100)
+
+    // Initial load
     void loadFrameHierarchy()
 
     return () => {
       cancelled = true
+      clearInterval(pollInterval)
     }
-  }, [currentFrameIndex, totalFrames, videoId, isReady])
+    // Note: currentFrameIndexRef is NOT in dependencies - we read from it via polling
+    // This allows continuous monitoring without effect re-triggering
+  }, [totalFrames, videoId, isReady])
 }

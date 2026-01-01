@@ -104,6 +104,15 @@ export function useBoundaryWorkflowState({
   // Core hooks
   const annotationData = useBoundaryAnnotationData({ videoId, updateProgress })
 
+  // Frame loader hook (reads from currentFrameIndexRef inside effect, no dependency)
+  useBoundaryFrameLoader({
+    videoId,
+    currentFrameIndexRef, // Pass ref itself, not .current value
+    totalFrames,
+    framesRef,
+    isReady: !isLoadingMetadata,
+  })
+
   const { cursorStyleRef, handleDragStart } = useBoundaryDragScroll({
     currentFrameIndex: currentFrameIndexRef.current,
     totalFrames,
@@ -112,7 +121,7 @@ export function useBoundaryWorkflowState({
     },
   })
 
-  // Display sync hook (runs first to get reactive currentFrameIndex)
+  // Display sync hook
   const { displayState } = useBoundaryDisplaySync({
     refs: {
       currentFrameIndexRef,
@@ -130,15 +139,6 @@ export function useBoundaryWorkflowState({
   })
 
   const { currentFrameIndex, annotations, markedStart, markedEnd } = displayState
-
-  // Frame loader hook (uses reactive currentFrameIndex from displayState)
-  useBoundaryFrameLoader({
-    videoId,
-    currentFrameIndex, // Now receives reactive state value instead of static ref value
-    totalFrames,
-    framesRef, // Pass ref created in parent
-    isReady: !isLoadingMetadata,
-  })
 
   // UI state
   const [frameSpacing, setFrameSpacing] = useState<FrameSpacing>('linear')
@@ -257,11 +257,20 @@ export function useBoundaryWorkflowState({
     [annotationData, currentFrameIndex]
   )
 
-  // Load annotations in visible range
+  // Load annotations in visible range (with deduplication to prevent infinite loops)
+  const lastAnnotationRangeRef = useRef<{ start: number; end: number } | null>(null)
   useEffect(() => {
     if (visibleFramePositions.length === 0) return
     const startFrame = Math.min(...visibleFramePositions)
     const endFrame = Math.max(...visibleFramePositions)
+
+    // Only load if range actually changed (prevents infinite loop from array recreation)
+    const lastRange = lastAnnotationRangeRef.current
+    if (lastRange && lastRange.start === startFrame && lastRange.end === endFrame) {
+      return
+    }
+
+    lastAnnotationRangeRef.current = { start: startFrame, end: endFrame }
     void annotationData.loadAnnotationsForRange(startFrame, endFrame)
   }, [visibleFramePositions, annotationData])
 
