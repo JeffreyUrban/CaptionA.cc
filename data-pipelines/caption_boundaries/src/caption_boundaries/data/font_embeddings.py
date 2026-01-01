@@ -16,6 +16,7 @@ import numpy as np
 import torch
 from frames_db import get_frame_from_db
 from PIL import Image
+from rich import print as rprint
 from transformers import AutoModel, AutoProcessor
 
 from caption_boundaries.data.reference_selection import ReferenceFrameCandidate, select_reference_frame
@@ -113,7 +114,7 @@ class FontCLIPModel:
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore")
             try:
-                self.processor = AutoProcessor.from_pretrained(model_name)
+                self.processor = AutoProcessor.from_pretrained(model_name, use_fast=True)
                 self.model = AutoModel.from_pretrained(model_name)
             except Exception as e:
                 # If FontCLIP weights not accessible, fall back to base CLIP
@@ -125,7 +126,7 @@ class FontCLIPModel:
                     self.model_name = fallback_model
                     self.used_fallback = True
 
-                    self.processor = AutoProcessor.from_pretrained(fallback_model)
+                    self.processor = AutoProcessor.from_pretrained(fallback_model, use_fast=True)
                     self.model = AutoModel.from_pretrained(fallback_model)
                 else:
                     raise
@@ -415,8 +416,8 @@ def batch_extract_embeddings(
     model_info = f"Using font embedding model: {model.model_name}"
     if model.used_fallback:
         model_info += " (fallback from VecGlypher/fontclip_weight)"
-    print(f"[cyan]{model_info}[/cyan]")
-    print(f"Model version: {model.get_model_version()}")
+    rprint(f"[cyan]{model_info}[/cyan]")
+    rprint(f"[cyan]Model version: {model.get_model_version()}[/cyan]")
 
     results = {}
 
