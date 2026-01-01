@@ -105,11 +105,14 @@ class CaptionBoundaryTrainer:
         use_font_embedding: Whether to use font embeddings
         epochs: Number of training epochs
         batch_size: Training batch size
-        learning_rate: Learning rate
+        lr_features: Learning rate for feature extractor
+        lr_classifier: Learning rate for classifier head
         device: Device to train on ('cuda', 'mps', 'cpu', or None for auto-detect)
         wandb_project: W&B project name
         checkpoint_dir: Directory to save checkpoints
         save_every_n_epochs: Save checkpoint every N epochs
+        balanced_sampling: Whether to use balanced sampling
+        sampling_ratio: Max ratio of majority to minority class size
     """
 
     def __init__(
@@ -122,7 +125,8 @@ class CaptionBoundaryTrainer:
         use_font_embedding: bool = True,
         epochs: int = 50,
         batch_size: int = 32,
-        learning_rate: float = 1e-4,
+        lr_features: float = 1e-3,
+        lr_classifier: float = 1e-2,
         device: str | None = None,
         wandb_project: str = "caption-boundary-detection",
         checkpoint_dir: Path = Path("checkpoints"),
@@ -138,7 +142,8 @@ class CaptionBoundaryTrainer:
         self.use_font_embedding = use_font_embedding
         self.epochs = epochs
         self.batch_size = batch_size
-        self.learning_rate = learning_rate
+        self.lr_features = lr_features
+        self.lr_classifier = lr_classifier
         self.wandb_project = wandb_project
         # Organize checkpoints by experiment name
         self.checkpoint_dir = Path(checkpoint_dir) / experiment_name / "checkpoints"
@@ -300,12 +305,12 @@ class CaptionBoundaryTrainer:
         param_groups = [
             {
                 "params": [p for n, p in self.model.named_parameters() if "classifier" in n],
-                "lr": self.learning_rate * 10,  # 10x higher for classifier
+                "lr": self.lr_classifier,
                 "name": "classifier",
             },
             {
                 "params": [p for n, p in self.model.named_parameters() if "classifier" not in n],
-                "lr": self.learning_rate,  # Base LR for feature extractor
+                "lr": self.lr_features,
                 "name": "features",
             },
         ]
@@ -313,8 +318,8 @@ class CaptionBoundaryTrainer:
         self.optimizer = optim.AdamW(param_groups)
 
         console.print(f"[cyan]Learning rates:[/cyan]")
-        console.print(f"  Classifier: {self.learning_rate * 10:.2e}")
-        console.print(f"  Features: {self.learning_rate:.2e}")
+        console.print(f"  Classifier: {self.lr_classifier:.2e}")
+        console.print(f"  Features: {self.lr_features:.2e}")
 
         # Learning rate scheduler - reduce LR on plateau
         self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
@@ -350,7 +355,8 @@ class CaptionBoundaryTrainer:
                 "batch_size": self.batch_size,
                 "balanced_sampling": self.balanced_sampling,
                 "sampling_ratio": self.sampling_ratio,
-                "learning_rate": self.learning_rate,
+                "lr_features": self.lr_features,
+                "lr_classifier": self.lr_classifier,
                 "optimizer": "AdamW",
                 # Data config
                 "dataset_id": self.dataset_id,
