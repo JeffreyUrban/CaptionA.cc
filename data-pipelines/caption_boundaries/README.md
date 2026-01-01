@@ -29,7 +29,7 @@ caption_boundaries create-dataset my_dataset local/data/*/01
 ### 2. Train Model
 
 ```bash
-caption_boundaries train 1 --name exp_baseline --epochs 50
+caption_boundaries train 1 --name 00_00_01_added_ocr_viz --epochs 3
 ```
 
 ### 3. Run Inference
