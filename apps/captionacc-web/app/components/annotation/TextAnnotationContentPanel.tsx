@@ -11,7 +11,6 @@ interface TextAnnotationContentPanelProps {
 
   // Frame navigation
   currentFrameIndex: number
-  onWheel: (e: React.WheelEvent) => void
   onMouseDown: (e: React.MouseEvent) => void
   imageContainerRef: (node: HTMLDivElement | null) => (() => void) | undefined
 
@@ -34,7 +33,6 @@ export function TextAnnotationContentPanel({
   currentAnnotation,
   queueLength,
   currentFrameIndex,
-  onWheel,
   onMouseDown,
   imageContainerRef,
   perFrameOCR,
@@ -63,7 +61,6 @@ export function TextAnnotationContentPanel({
           startFrameIndex={currentAnnotation.annotation.start_frame_index}
           endFrameIndex={currentAnnotation.annotation.end_frame_index}
           imageContainerRef={imageContainerRef}
-          onWheel={onWheel}
           onMouseDown={onMouseDown}
         />
 
