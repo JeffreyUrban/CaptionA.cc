@@ -3,8 +3,13 @@
  * Handles rendering of frame/analysis views with overlays.
  */
 
-import type { FrameBoxesData, LayoutConfig, BoxData, ViewMode } from '~/types/layout'
-import { RECALC_THRESHOLD } from '~/types/layout'
+import {
+  RECALC_THRESHOLD,
+  type FrameBoxesData,
+  type LayoutConfig,
+  type BoxData,
+  type ViewMode,
+} from '~/types/layout'
 
 interface LayoutMainCanvasProps {
   viewMode: ViewMode

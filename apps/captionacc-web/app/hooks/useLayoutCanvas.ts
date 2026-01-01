@@ -5,16 +5,16 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 
-import type {
-  FrameBoxesData,
-  LayoutConfig,
-  BoxData,
-  ViewMode,
-  CanvasPoint,
-  SelectionLabel,
-  SelectionRectangle,
+import {
+  RECALC_THRESHOLD,
+  type FrameBoxesData,
+  type LayoutConfig,
+  type BoxData,
+  type ViewMode,
+  type CanvasPoint,
+  type SelectionLabel,
+  type SelectionRectangle,
 } from '~/types/layout'
-import { RECALC_THRESHOLD } from '~/types/layout'
 import { bulkAnnotateAll, fetchFrameBoxes, saveBoxAnnotations } from '~/utils/layout-api'
 import {
   drawFrameBox,

@@ -3,15 +3,15 @@
  * Pure functions for rendering boxes, overlays, and selection rectangles.
  */
 
-import type {
-  BoxData,
-  LayoutConfig,
-  BoxRenderParams,
-  SelectionRenderParams,
-  SelectionRectangle,
-  CanvasPoint,
+import {
+  getBoxColors,
+  type BoxData,
+  type LayoutConfig,
+  type BoxRenderParams,
+  type SelectionRenderParams,
+  type SelectionRectangle,
+  type CanvasPoint,
 } from '~/types/layout'
-import { getBoxColors } from '~/types/layout'
 
 /**
  * Get fill color for analysis box based on label and prediction

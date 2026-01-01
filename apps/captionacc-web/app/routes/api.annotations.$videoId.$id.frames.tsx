@@ -73,12 +73,12 @@ export async function loader({ params }: LoaderFunctionArgs) {
       frameIndices.push(i)
     }
 
-    // Fetch existing OCR data from frames_ocr table
+    // Fetch existing OCR data from cropped_frame_ocr table
     const existingOCRData = db
       .prepare(
         `
       SELECT frame_index, ocr_text, ocr_annotations, ocr_confidence
-      FROM frames_ocr
+      FROM cropped_frame_ocr
       WHERE frame_index BETWEEN ? AND ?
       ORDER BY frame_index
     `
@@ -111,7 +111,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
     const framesDir = resolve(videoDir, 'crop_frames')
 
     const insertStmt = db.prepare(`
-      INSERT OR REPLACE INTO frames_ocr (frame_index, ocr_text, ocr_annotations, ocr_confidence, created_at)
+      INSERT OR REPLACE INTO cropped_frame_ocr (frame_index, ocr_text, ocr_annotations, ocr_confidence, created_at)
       VALUES (?, ?, ?, ?, datetime('now'))
     `)
 
@@ -120,9 +120,10 @@ export async function loader({ params }: LoaderFunctionArgs) {
       console.log(`Running OCR on ${framesToOCR.length} frames using Python service`)
 
       const pythonScript = resolve(process.cwd(), 'scripts', 'run-frame-ocr.py')
+      const pythonPath = resolve(process.cwd(), '..', '..', '.venv', 'bin', 'python3')
       const args = [pythonScript, framesDir, 'zh-Hans', ...framesToOCR.map(String)]
 
-      const python = spawn('python3', args)
+      const python = spawn(pythonPath, args)
 
       let stdout = ''
       let stderr = ''

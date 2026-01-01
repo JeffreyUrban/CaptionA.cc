@@ -21,6 +21,7 @@ interface BoundaryFrameStackProps {
   visibleFramePositions: number[]
   frames: Map<number, Frame>
   currentFrameIndex: number
+  totalFrames: number
   markedStart: number | null
   markedEnd: number | null
   activeAnnotation: Annotation | null
@@ -39,6 +40,7 @@ export function BoundaryFrameStack({
   visibleFramePositions,
   frames,
   currentFrameIndex,
+  totalFrames,
   markedStart,
   markedEnd,
   activeAnnotation,
@@ -59,6 +61,11 @@ export function BoundaryFrameStack({
     >
       <div className="flex h-full flex-1 flex-col justify-center gap-1 overflow-hidden p-4">
         {visibleFramePositions.map((framePosition, slotIndex) => {
+          // Skip out-of-bounds positions (show visual gaps at boundaries)
+          if (framePosition < 0 || framePosition >= totalFrames) {
+            return null
+          }
+
           // Find finest available frame by checking coarsest to finest
           // Check coarsest first (loads first, widest coverage) but keep finest found
           let alignedFrameIndex = framePosition
