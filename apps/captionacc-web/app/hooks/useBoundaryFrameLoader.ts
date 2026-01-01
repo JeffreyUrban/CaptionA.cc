@@ -223,11 +223,46 @@ export function useBoundaryFrameLoader({
         return
       }
 
-      lastLoadedFrame = currentFrameIndex
       const encodedVideoId = encodeURIComponent(videoId)
 
       try {
-        // Progressive loading: start with coarsest modulo, move to finer levels
+        // Check if this is a jump beyond largest cache range (modulo=32, range=1024)
+        const isJump = Math.abs(currentFrameIndex - lastLoadedFrame) > 1024
+
+        // If jumping, load exact visible frames FIRST and WAIT for them (modulo=1, level 5)
+        if (isJump) {
+          let finestQueue = buildQueueForModulo(
+            currentFrameIndex,
+            5, // Level 5 = modulo 1 (finest, exact frames)
+            totalFrames,
+            loadedChunksRef.current,
+            requestedChunksRef.current
+          )
+
+          // Load ALL finest frames before starting progressive loading
+          while (finestQueue.length > 0) {
+            if (cancelled) return
+
+            const batch = finestQueue.splice(0, MAX_CONCURRENT_REQUESTS)
+            markChunksAsRequested(batch, requestedChunksRef.current)
+
+            const batchPromises = batch.map(async chunk => {
+              const indicesParam = chunk.frames.join(',')
+              const response = await fetch(
+                `/api/frames/${encodedVideoId}/batch?indices=${indicesParam}`
+              )
+              return response.json() as Promise<{
+                frames: Array<{ frame_index: number; image_data: string }>
+              }>
+            })
+
+            const results = await Promise.all(batchPromises)
+            processLoadedFrames(results, framesRef.current)
+            updateCacheAfterLoad(batch, loadedChunksRef.current, requestedChunksRef.current)
+          }
+        }
+
+        // Now do normal progressive loading (coarsest to finest)
         let currentModuloLevel = 0
         let queue = buildQueueForModulo(
           currentFrameIndex,
@@ -286,6 +321,9 @@ export function useBoundaryFrameLoader({
           // Update cache
           updateCacheAfterLoad(batch, loadedChunksRef.current, requestedChunksRef.current)
         }
+
+        // Update lastLoadedFrame after successful load
+        lastLoadedFrame = currentFrameIndex
       } catch (error: unknown) {
         console.error('Failed to load frames:', error)
       }

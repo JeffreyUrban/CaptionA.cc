@@ -378,12 +378,6 @@ export function useBoundaryAnnotationData({
     }
   }, [])
 
-  // Load initial annotation on mount
-  useEffect(() => {
-    if (!videoId) return
-    void loadInitialAnnotation()
-  }, [videoId, loadInitialAnnotation])
-
   return {
     // State refs
     activeAnnotationRef,

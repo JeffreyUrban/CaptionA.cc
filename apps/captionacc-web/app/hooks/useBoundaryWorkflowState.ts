@@ -28,6 +28,7 @@ interface UseBoundaryWorkflowStateParams {
 interface UseBoundaryWorkflowStateReturn {
   // Loading state
   isLoadingMetadata: boolean
+  isInitialized: boolean
 
   // Display state (synced from refs at 60fps)
   displayState: BoundaryDisplayState
@@ -73,6 +74,9 @@ export function useBoundaryWorkflowState({
 }: UseBoundaryWorkflowStateParams): UseBoundaryWorkflowStateReturn {
   // Load video metadata and workflow progress
   const { metadata, loading: isLoadingMetadata } = useVideoMetadata(videoId)
+
+  // Track if we've initialized the starting frame position
+  const [isInitialized, setIsInitialized] = useState(false)
   const {
     workflowProgress: workflowProgressHook,
     completedFrames: completedFramesHook,
@@ -104,13 +108,25 @@ export function useBoundaryWorkflowState({
   // Core hooks
   const annotationData = useBoundaryAnnotationData({ videoId, updateProgress })
 
-  // Frame loader hook (reads from currentFrameIndexRef inside effect, no dependency)
+  // Load initial annotation and navigate to it BEFORE starting frame loader
+  useEffect(() => {
+    const loadInitial = async () => {
+      const startFrame = await annotationData.loadInitialAnnotation()
+      if (startFrame !== null && startFrame !== undefined) {
+        currentFrameIndexRef.current = startFrame
+      }
+      setIsInitialized(true)
+    }
+    void loadInitial()
+  }, [annotationData])
+
+  // Frame loader hook (only starts after initial position is set)
   useBoundaryFrameLoader({
     videoId,
     currentFrameIndexRef, // Pass ref itself, not .current value
     totalFrames,
     framesRef,
-    isReady: !isLoadingMetadata,
+    isReady: !isLoadingMetadata && isInitialized,
   })
 
   const { cursorStyleRef, handleDragStart } = useBoundaryDragScroll({
@@ -300,6 +316,7 @@ export function useBoundaryWorkflowState({
 
   return {
     isLoadingMetadata,
+    isInitialized,
     displayState,
     visibleFramePositions,
     canSave,
