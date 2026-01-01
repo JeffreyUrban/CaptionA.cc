@@ -4,6 +4,7 @@ Extracts frame pairs from confirmed caption boundaries and stores them in the
 central training database with comprehensive provenance tracking.
 """
 
+import gc
 import hashlib
 import sqlite3
 from collections import defaultdict
@@ -318,16 +319,15 @@ def get_ocr_text_for_frame(db_path: Path, frame_index: int) -> str:
         return ""
 
 
-def _copy_frames_for_video(db, video_db_path: Path, video_hash: str, video_samples: list[dict]) -> None:
+def _copy_frames_for_video(db, video_conn, video_hash: str, video_samples: list[dict]) -> None:
     """Copy frames needed by samples from video DB to training DB.
 
     Args:
         db: Training database session
-        video_db_path: Path to video's annotations.db
+        video_conn: Open SQLite connection to video's annotations.db
         video_hash: Video hash
         video_samples: List of samples for this video
     """
-    import sqlite3
     from caption_boundaries.database import TrainingFrame
 
     # Collect unique frames needed for this video
@@ -352,53 +352,47 @@ def _copy_frames_for_video(db, video_db_path: Path, video_hash: str, video_sampl
     if not frames_to_copy:
         return  # All frames already exist
 
-    # Copy frames from video DB
-    conn = sqlite3.connect(video_db_path)
-    try:
-        cursor = conn.cursor()
+    # Copy frames from video DB using provided connection
+    cursor = video_conn.cursor()
 
-        for frame_index in frames_to_copy:
-            cursor.execute(
-                """
-                SELECT image_data, width, height, file_size
-                FROM cropped_frames
-                WHERE frame_index = ?
-                """,
-                (frame_index,),
+    for frame_index in frames_to_copy:
+        cursor.execute(
+            """
+            SELECT image_data, width, height, file_size
+            FROM cropped_frames
+            WHERE frame_index = ?
+            """,
+            (frame_index,),
+        )
+
+        row = cursor.fetchone()
+        if not row:
+            console.print(
+                f"[yellow]⚠ Frame {frame_index} not found, skipping[/yellow]"
             )
+            continue
 
-            row = cursor.fetchone()
-            if not row:
-                console.print(
-                    f"[yellow]⚠ Frame {frame_index} not found in {video_db_path}, skipping[/yellow]"
-                )
-                continue
-
-            # Create training frame record
-            training_frame = TrainingFrame(
-                video_hash=video_hash,
-                frame_index=frame_index,
-                image_data=row[0],
-                width=row[1],
-                height=row[2],
-                file_size=row[3],
-            )
-            db.add(training_frame)
-
-    finally:
-        conn.close()
+        # Create training frame record
+        training_frame = TrainingFrame(
+            video_hash=video_hash,
+            frame_index=frame_index,
+            image_data=row[0],
+            width=row[1],
+            height=row[2],
+            file_size=row[3],
+        )
+        db.add(training_frame)
 
 
-def _copy_ocr_viz_for_video(db, video_db_path: Path, video_hash: str, variant: str = "boundaries") -> None:
+def _copy_ocr_viz_for_video(db, video_conn, video_hash: str, variant: str = "boundaries") -> None:
     """Copy OCR visualization from video DB to training DB.
 
     Args:
         db: Training database session
-        video_db_path: Path to video's annotations.db
+        video_conn: Open SQLite connection to video's annotations.db
         video_hash: Video hash
         variant: OCR visualization variant (default: 'boundaries')
     """
-    import sqlite3
     from caption_boundaries.database import TrainingOCRVisualization
 
     # Check if visualization already exists
@@ -411,25 +405,20 @@ def _copy_ocr_viz_for_video(db, video_db_path: Path, video_hash: str, variant: s
     if existing:
         return  # Already exists
 
-    # Copy from video DB
-    conn = sqlite3.connect(video_db_path)
-    try:
-        cursor = conn.cursor()
-        cursor.execute("SELECT ocr_visualization_image FROM video_layout_config WHERE id = 1")
+    # Copy from video DB using provided connection
+    cursor = video_conn.cursor()
+    cursor.execute("SELECT ocr_visualization_image FROM video_layout_config WHERE id = 1")
 
-        row = cursor.fetchone()
-        if not row or not row[0]:
-            console.print(f"[yellow]⚠ OCR visualization not found in {video_db_path}, skipping[/yellow]")
-            return
+    row = cursor.fetchone()
+    if not row or not row[0]:
+        console.print(f"[yellow]⚠ OCR visualization not found, skipping[/yellow]")
+        return
 
-        # Create training OCR visualization record
-        training_ocr_viz = TrainingOCRVisualization(
-            video_hash=video_hash, variant=variant, image_data=row[0]
-        )
-        db.add(training_ocr_viz)
-
-    finally:
-        conn.close()
+    # Create training OCR visualization record
+    training_ocr_viz = TrainingOCRVisualization(
+        video_hash=video_hash, variant=variant, image_data=row[0]
+    )
+    db.add(training_ocr_viz)
 
 
 def create_training_dataset(
@@ -689,58 +678,76 @@ def create_training_dataset(
             continue
 
     # Process each video: copy frames, copy OCR viz, insert samples
+    # Use a single database session for all videos to avoid creating too many engines
+    # Process in batches to limit simultaneous open connections
     console.print(f"\n[cyan]Consolidating {len(samples_by_video)} videos to training database...[/cyan]")
-    for video_hash in track(samples_by_video.keys(), description="Copying frame data"):
-        video_samples = samples_by_video[video_hash]
-        video_db_path = video_db_map.get(video_hash)
 
-        if not video_db_path:
-            console.print(f"[yellow]⚠ Could not find video DB for {video_hash}, skipping frame copy[/yellow]")
-            continue
+    BATCH_SIZE = 50  # Maximum simultaneous connections to video databases
+    video_hashes = list(samples_by_video.keys())
 
-        with next(get_dataset_db(dataset_db_path)) as db:
-            # Copy frames for this video
-            _copy_frames_for_video(db, video_db_path, video_hash, video_samples)
+    with next(get_dataset_db(dataset_db_path)) as db:
+        # Process videos in batches to limit open file descriptors
+        for batch_start in range(0, len(video_hashes), BATCH_SIZE):
+            batch_end = min(batch_start + BATCH_SIZE, len(video_hashes))
+            batch_hashes = video_hashes[batch_start:batch_end]
 
-            # Copy OCR visualization for this video
-            _copy_ocr_viz_for_video(db, video_db_path, video_hash)
+            for video_hash in track(batch_hashes, description=f"Copying batch {batch_start//BATCH_SIZE + 1}/{(len(video_hashes) + BATCH_SIZE - 1)//BATCH_SIZE}"):
+                video_samples = samples_by_video[video_hash]
+                video_db_path = video_db_map.get(video_hash)
 
-            # Insert samples for this video
-            for sample_data in video_samples:
-                sample = TrainingSample(
-                    dataset_id=dataset_id,
-                    video_hash=sample_data["video_hash"],
-                    frame1_index=sample_data["frame1_index"],
-                    frame2_index=sample_data["frame2_index"],
-                    label=sample_data["label"],
-                    split=sample_data["split"],
-                    crop_bounds_version=sample_data["crop_bounds_version"],
-                    source_caption_annotation_id=sample_data["source_caption_annotation_id"],
-                    ocr_confidence_frame1=sample_data["ocr_confidence_frame1"],
-                    ocr_confidence_frame2=sample_data["ocr_confidence_frame2"],
-                    ocr_text_frame1=sample_data["ocr_text_frame1"],
-                    ocr_text_frame2=sample_data["ocr_text_frame2"],
-                    levenshtein_distance=sample_data["levenshtein_distance"],
-                )
-                db.add(sample)
-
-            # Add/update video registry
-            for video_record_data in video_registry_records:
-                if video_record_data["video_hash"] != video_hash:
+                if not video_db_path:
+                    console.print(f"[yellow]⚠ Could not find video DB for {video_hash}, skipping frame copy[/yellow]")
                     continue
 
-                existing = db.query(VideoRegistry).filter(VideoRegistry.video_hash == video_record_data["video_hash"]).first()
+                # Open video database once for both operations
+                video_conn = sqlite3.connect(video_db_path)
+                try:
+                    # Copy frames for this video
+                    _copy_frames_for_video(db, video_conn, video_hash, video_samples)
 
-                if existing:
-                    from datetime import UTC, datetime
-                    existing.last_seen_at = datetime.now(UTC)
-                    existing.video_path = video_record_data["video_path"]
-                else:
-                    # Create VideoRegistry object from dict
-                    video_record = VideoRegistry(**video_record_data)
-                    db.add(video_record)
+                    # Copy OCR visualization for this video
+                    _copy_ocr_viz_for_video(db, video_conn, video_hash)
+                finally:
+                    video_conn.close()
 
+                # Insert samples for this video
+                for sample_data in video_samples:
+                    sample = TrainingSample(
+                        dataset_id=dataset_id,
+                        video_hash=sample_data["video_hash"],
+                        frame1_index=sample_data["frame1_index"],
+                        frame2_index=sample_data["frame2_index"],
+                        label=sample_data["label"],
+                        split=sample_data["split"],
+                        crop_bounds_version=sample_data["crop_bounds_version"],
+                        source_caption_annotation_id=sample_data["source_caption_annotation_id"],
+                        ocr_confidence_frame1=sample_data["ocr_confidence_frame1"],
+                        ocr_confidence_frame2=sample_data["ocr_confidence_frame2"],
+                        ocr_text_frame1=sample_data["ocr_text_frame1"],
+                        ocr_text_frame2=sample_data["ocr_text_frame2"],
+                        levenshtein_distance=sample_data["levenshtein_distance"],
+                    )
+                    db.add(sample)
+
+                # Add/update video registry
+                for video_record_data in video_registry_records:
+                    if video_record_data["video_hash"] != video_hash:
+                        continue
+
+                    existing = db.query(VideoRegistry).filter(VideoRegistry.video_hash == video_record_data["video_hash"]).first()
+
+                    if existing:
+                        from datetime import UTC, datetime
+                        existing.last_seen_at = datetime.now(UTC)
+                        existing.video_path = video_record_data["video_path"]
+                    else:
+                        # Create VideoRegistry object from dict
+                        video_record = VideoRegistry(**video_record_data)
+                        db.add(video_record)
+
+            # Commit batch and force cleanup before next batch
             db.commit()
+            gc.collect()
 
     console.print(f"\n[green]✓[/green] Dataset created successfully!")
     console.print(f"  Name: {name}")

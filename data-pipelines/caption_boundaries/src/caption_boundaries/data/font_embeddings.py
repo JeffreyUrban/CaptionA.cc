@@ -316,8 +316,12 @@ def get_or_create_font_embedding(
         # Convert to PIL Image for embedding extraction
         frame_image = frame_data.to_pil_image()
 
-        # Extract embedding
-        embedding, _ = extract_font_embedding(video_db_path, frame_image, reference_frame, model)
+        try:
+            # Extract embedding
+            embedding, _ = extract_font_embedding(video_db_path, frame_image, reference_frame, model)
+        finally:
+            # Explicitly close the image to free file descriptors
+            frame_image.close()
 
         # Create database record
         embedding_record = FontEmbedding(
@@ -356,6 +360,7 @@ def batch_extract_embeddings(
     """Batch extract font embeddings for multiple videos.
 
     More efficient than individual extraction because model is loaded once.
+    Processes videos in batches to limit simultaneous database connections.
 
     Args:
         video_db_paths: List of paths to video annotations.db files
@@ -370,24 +375,35 @@ def batch_extract_embeddings(
         >>> embeddings = batch_extract_embeddings(video_dbs)
         >>> print(f"Extracted {len(embeddings)} embeddings")
     """
+    import gc
+
     model = FontCLIPModel()
     results = {}
 
-    for video_db_path in video_db_paths:
-        try:
-            embedding = get_or_create_font_embedding(
-                video_db_path,
-                training_db_path=training_db_path,
-                model=model,
-                force_recompute=force_recompute,
-            )
+    # Process in batches to limit file descriptor usage
+    BATCH_SIZE = 50
+    for batch_start in range(0, len(video_db_paths), BATCH_SIZE):
+        batch_end = min(batch_start + BATCH_SIZE, len(video_db_paths))
+        batch = video_db_paths[batch_start:batch_end]
 
-            # Get video hash from embedding (it's already stored there)
-            results[embedding.video_hash] = embedding
+        for video_db_path in batch:
+            try:
+                embedding = get_or_create_font_embedding(
+                    video_db_path,
+                    training_db_path=training_db_path,
+                    model=model,
+                    force_recompute=force_recompute,
+                )
 
-        except Exception as e:
-            print(f"Failed to extract embedding for {video_db_path}: {e}")
-            continue
+                # Get video hash from embedding (it's already stored there)
+                results[embedding.video_hash] = embedding
+
+            except Exception as e:
+                print(f"Failed to extract embedding for {video_db_path}: {e}")
+                continue
+
+        # Force cleanup between batches
+        gc.collect()
 
     return results
 
