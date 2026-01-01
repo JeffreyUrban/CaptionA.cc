@@ -294,7 +294,7 @@ export const useAppStore = create<AppState>()(
     ),
     {
       name: 'CaptionA.cc Store', // DevTools name
-      enabled: process.env['NODE_ENV'] === 'development',
+      enabled: import.meta.env.DEV,
     }
   )
 )

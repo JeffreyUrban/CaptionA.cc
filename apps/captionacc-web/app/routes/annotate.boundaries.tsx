@@ -21,14 +21,14 @@ export default function BoundaryWorkflow() {
 
   const workflow = useBoundaryWorkflowState({ videoId })
 
-  // Loading state
-  if (workflow.isLoadingMetadata) {
+  // Loading state - wait for metadata AND initial position
+  if (workflow.isLoadingMetadata || !workflow.isInitialized) {
     return (
       <AppLayout fullScreen>
         <div className="flex h-[calc(100vh-4rem)] items-center justify-center">
           <div className="text-center">
             <div className="text-lg font-semibold text-gray-900 dark:text-white">
-              Loading video metadata...
+              {workflow.isLoadingMetadata ? 'Loading video metadata...' : 'Loading annotations...'}
             </div>
             <div className="mt-2 text-sm text-gray-600 dark:text-gray-400">{videoId}</div>
           </div>
@@ -50,6 +50,7 @@ export default function BoundaryWorkflow() {
             visibleFramePositions={visibleFramePositions}
             frames={displayState.frames}
             currentFrameIndex={displayState.currentFrameIndex}
+            totalFrames={totalFrames}
             markedStart={displayState.markedStart}
             markedEnd={displayState.markedEnd}
             activeAnnotation={displayState.activeAnnotation}

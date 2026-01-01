@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 
-import type { TextAnchor, TextStyle } from '~/types/text-annotation'
-import { getTextStyle } from '~/types/text-annotation'
+import { getTextStyle, type TextAnchor, type TextStyle } from '~/types/text-annotation'
 
 interface UseTextAnnotationPreferencesParams {
   videoId: string

@@ -1,5 +1,4 @@
 import '~/styles/tailwind.css'
-import type { LinksFunction } from 'react-router'
 import {
   isRouteErrorResponse,
   Meta,
@@ -8,6 +7,7 @@ import {
   ScrollRestoration,
   Outlet,
   useRouteError,
+  type LinksFunction,
 } from 'react-router'
 
 import { NotFound, NotFoundProps } from '~/components/NotFound'

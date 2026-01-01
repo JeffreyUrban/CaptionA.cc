@@ -7,8 +7,11 @@
 
 import { type LoaderFunctionArgs, type ActionFunctionArgs } from 'react-router'
 
-import { getFrameBoxes, saveBoxAnnotations } from '~/services/box-annotation-service'
-import type { BoxAnnotationInput } from '~/services/box-annotation-service'
+import {
+  getFrameBoxes,
+  saveBoxAnnotations,
+  type BoxAnnotationInput,
+} from '~/services/box-annotation-service'
 import {
   jsonResponse,
   errorResponse,

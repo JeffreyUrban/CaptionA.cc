@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import { useSearchParams, useNavigate } from 'react-router'
 
 import { AppLayout } from '~/components/AppLayout'
@@ -28,6 +28,9 @@ export default function AnnotateText() {
   // Help modal state
   const [showHelpModal, setShowHelpModal] = useState(false)
   const [jumpToAnnotationInput, setJumpToAnnotationInput] = useState('')
+
+  // Ref for frame viewer container (used for wheel event listener)
+  const frameContainerRef = useRef<HTMLDivElement>(null)
 
   // Mark this video as being worked on for stats refresh
   useVideoTouched(videoId)
@@ -65,17 +68,31 @@ export default function AnnotateText() {
     textControlsExpanded,
     setTextControlsExpanded,
     textStyle,
-    imageContainerRef,
+    imageContainerRef: preferencesContainerRef,
     handleTextSizeChange,
     handlePaddingScaleChange,
     handleTextAnchorChange,
   } = useTextAnnotationPreferences({ videoId })
 
   // Frame navigation hook
-  const { currentFrameIndex, handleWheel, handleDragStart, navigateFrame } =
-    useTextAnnotationFrameNav({
-      annotation: currentAnnotation?.annotation ?? null,
-    })
+  const { currentFrameIndex, handleDragStart, navigateFrame } = useTextAnnotationFrameNav({
+    annotation: currentAnnotation?.annotation ?? null,
+    containerRef: frameContainerRef,
+  })
+
+  // Combined ref callback that handles both preferences ResizeObserver and regular ref
+  const combinedContainerRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      // Set the regular ref for wheel event listener
+      if (frameContainerRef.current !== node) {
+        ;(frameContainerRef as React.MutableRefObject<HTMLDivElement | null>).current = node
+      }
+
+      // Call the preferences callback ref for ResizeObserver
+      return preferencesContainerRef(node)
+    },
+    [preferencesContainerRef]
+  )
 
   // Keyboard shortcuts hook
   useTextAnnotationKeyboard({
@@ -127,9 +144,8 @@ export default function AnnotateText() {
             currentAnnotation={currentAnnotation}
             queueLength={queue.length}
             currentFrameIndex={currentFrameIndex}
-            onWheel={handleWheel}
             onMouseDown={handleDragStart}
-            imageContainerRef={imageContainerRef}
+            imageContainerRef={combinedContainerRef}
             perFrameOCR={perFrameOCR}
             loadingFrames={loadingFrames}
             text={text}

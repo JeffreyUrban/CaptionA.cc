@@ -103,24 +103,28 @@ export default function ReviewLabels() {
         <Header videoId={videoId} />
 
         <div className="flex flex-1 min-h-0 gap-4 overflow-hidden">
-          <CanvasSection
-            currentFrameBoxes={currentFrameBoxes}
-            loadingFrame={loadingFrame}
-            imageRef={imageRef}
-            canvasRef={canvasRef}
-            handleCanvasClick={handleCanvasClick}
-            handleCanvasMouseMove={handleCanvasMouseMove}
-            handleCanvasContextMenu={handleCanvasContextMenu}
-          />
+          {/* Left: Canvas + Thumbnails (2/3 width) */}
+          <div className="flex min-h-0 w-2/3 flex-col gap-4">
+            <CanvasSection
+              currentFrameBoxes={currentFrameBoxes}
+              loadingFrame={loadingFrame}
+              imageRef={imageRef}
+              canvasRef={canvasRef}
+              handleCanvasClick={handleCanvasClick}
+              handleCanvasMouseMove={handleCanvasMouseMove}
+              handleCanvasContextMenu={handleCanvasContextMenu}
+            />
 
-          <ThumbnailSection
-            loading={loading}
-            frames={frames}
-            viewMode={viewMode}
-            selectedFrameIndex={selectedFrameIndex}
-            handleThumbnailClick={handleThumbnailClick}
-          />
+            <ThumbnailSection
+              loading={loading}
+              frames={frames}
+              viewMode={viewMode}
+              selectedFrameIndex={selectedFrameIndex}
+              handleThumbnailClick={handleThumbnailClick}
+            />
+          </div>
 
+          {/* Right: Controls (1/3 width) */}
           <ControlsPanel
             videoId={videoId}
             viewMode={viewMode}
@@ -173,7 +177,7 @@ function CanvasSection({
   handleCanvasContextMenu,
 }: CanvasSectionProps) {
   return (
-    <div className="flex min-h-0 w-2/3 flex-col gap-4">
+    <div className="flex flex-shrink-0 flex-col gap-4">
       <div className="relative flex flex-shrink-0 items-center justify-center rounded-lg border border-gray-300 bg-gray-900 dark:border-gray-600 dark:bg-gray-800 p-4">
         {currentFrameBoxes ? (
           <div className="relative inline-block max-w-full max-h-full">

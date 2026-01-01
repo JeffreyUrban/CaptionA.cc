@@ -23,6 +23,12 @@ interface UploadProgressProps {
 }
 
 // ============================================================================
+// Selectors
+// ============================================================================
+
+const selectUploads = (state: ReturnType<typeof useAppStore.getState>) => state.uploads
+
+// ============================================================================
 // Helper Functions
 // ============================================================================
 
@@ -205,7 +211,8 @@ function ExpandedPanel({ uploads }: { uploads: UploadMetadata[] }) {
 export function UploadProgress({ expanded = false }: UploadProgressProps) {
   // Subscribe to store
   const activeOperationCount = useAppStore(selectActiveOperationCount)
-  const allUploads = useAppStore(state => Object.values(state.uploads))
+  const uploads = useAppStore(selectUploads)
+  const allUploads = Object.values(uploads)
 
   // Render compact badge if not expanded
   if (!expanded) {

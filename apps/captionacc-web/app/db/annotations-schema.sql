@@ -273,6 +273,9 @@ ON cropped_frames(crop_bounds_version);
 CREATE TABLE IF NOT EXISTS video_preferences (
     id INTEGER PRIMARY KEY CHECK(id = 1),
     layout_approved INTEGER NOT NULL DEFAULT 0 CHECK(layout_approved IN (0, 1)),
+    text_size REAL DEFAULT 3.0,  -- Text size as percentage of image width (1.0-10.0)
+    padding_scale REAL DEFAULT 0.75,  -- Padding scale multiplier (0.0-2.0)
+    text_anchor TEXT DEFAULT 'left' CHECK(text_anchor IN ('left', 'center', 'right')),  -- Text alignment
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 

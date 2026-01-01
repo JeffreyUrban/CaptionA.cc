@@ -5,6 +5,7 @@
  * layout parameters, and anchor types for caption detection.
  */
 
+import { predictBoxLabel } from '~/utils/box-prediction'
 import { getAnnotationDatabase, getWritableDatabase } from '~/utils/database'
 
 // =============================================================================
@@ -1465,12 +1466,6 @@ function processBox(
  * @throws Error if database is not found
  */
 export function getLayoutAnalysisBoxes(videoId: string, frameIndex?: number): LayoutAnalysisBox[] {
-  // Import predictBoxLabel lazily to avoid circular dependencies
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { predictBoxLabel } = require('~/utils/box-prediction') as {
-    predictBoxLabel: PredictBoxLabelFn
-  }
-
   const result = getWritableDatabase(videoId)
   if (!result.success) throw new Error('Database not found')
   const db = result.db

@@ -88,8 +88,9 @@ export async function runOCR(
     )
     console.log(`[${reqId}] scriptPath =`, scriptPath)
 
-    // Spawn Python process
-    const python = spawn('python3', [
+    // Spawn Python process using virtual environment
+    const pythonPath = path.resolve(process.cwd(), '..', '..', '.venv', 'bin', 'python3')
+    const python = spawn(pythonPath, [
       '-c',
       `
 import sys

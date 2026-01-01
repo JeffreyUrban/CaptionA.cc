@@ -7,6 +7,8 @@
  * - Annotation rate (adapt to user pace)
  */
 
+import type Database from 'better-sqlite3'
+
 import { RETRAIN_TRIGGER_CONFIG } from './streaming-prediction-config'
 
 /**
@@ -144,9 +146,7 @@ export function shouldTriggerFullRetrain(state: RetrainState): RetrainTriggerRes
  * @param db - Database connection
  * @returns Current retrain state
  */
-export function getRetrainState(
-  db: any // Database.Database type
-): RetrainState {
+export function getRetrainState(db: Database.Database): RetrainState {
   // Get model info
   const modelInfo = db
     .prepare('SELECT trained_at, n_training_samples FROM box_classification_model WHERE id = 1')

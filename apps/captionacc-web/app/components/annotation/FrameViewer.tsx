@@ -6,7 +6,6 @@ interface FrameViewerProps {
   imageContainerRef?:
     | ((node: HTMLDivElement | null) => (() => void) | undefined)
     | React.RefObject<HTMLDivElement>
-  onWheel: (e: React.WheelEvent<HTMLDivElement>) => void
   onMouseDown: (e: React.MouseEvent<HTMLDivElement>) => void
 }
 
@@ -16,7 +15,6 @@ export function FrameViewer({
   startFrameIndex,
   endFrameIndex,
   imageContainerRef,
-  onWheel,
   onMouseDown,
 }: FrameViewerProps) {
   const framePosition = currentFrameIndex - startFrameIndex + 1
@@ -36,7 +34,6 @@ export function FrameViewer({
       <div
         ref={imageContainerRef}
         className="active:cursor-grabbing cursor-grab overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-800"
-        onWheel={onWheel}
         onMouseDown={onMouseDown}
         style={{ userSelect: 'none' }}
       >
