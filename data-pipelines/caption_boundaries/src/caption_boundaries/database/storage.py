@@ -13,6 +13,7 @@ Each dataset database is fully self-contained with all necessary data:
 - Experiment records (training runs on this dataset)
 """
 
+import subprocess
 from collections.abc import Generator
 from pathlib import Path
 
@@ -21,8 +22,23 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from caption_boundaries.database.schema import Base
 
-# Default database directory
-DEFAULT_DATASET_DIR = Path("local/models/caption_boundaries/datasets")
+
+def get_git_root() -> Path:
+    """Get the git repository root directory."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return Path(result.stdout.strip())
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError("Not in a git repository") from e
+
+
+# Default database directory (relative to git root)
+DEFAULT_DATASET_DIR = get_git_root() / "local" / "models" / "caption_boundaries" / "datasets"
 
 
 def get_dataset_db_path(dataset_name: str) -> Path:

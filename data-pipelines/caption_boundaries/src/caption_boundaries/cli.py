@@ -52,23 +52,31 @@ def train(
         "--balanced-sampling/--no-balanced-sampling",
         help="Use balanced sampling to undersample majority classes per epoch"
     ),
+    max_samples_per_class: int = typer.Option(
+        None,
+        "--max-samples",
+        help="Max samples per class per epoch (recommended for scaling). Overrides --sampling-ratio."
+    ),
     sampling_ratio: float = typer.Option(
         3.0,
         "--sampling-ratio",
-        help="Max ratio of majority to minority class (higher = more data per epoch)"
+        help="Max ratio of majority to minority class (legacy, for backward compat)"
     ),
 ):
     """Train caption boundary detection model with W&B tracking.
 
     Examples:
-        # Basic training
-        caption_boundaries train my_dataset --name exp_baseline --epochs 50
+        # Cap-based sampling (recommended for scaling)
+        caption_boundaries train my_dataset --name exp_baseline --max-samples 10000
 
-        # Custom configuration
-        caption_boundaries train my_dataset --name exp_3d_viz --ocr-viz 3d_channels --epochs 100
+        # Quick experiment (fast epochs)
+        caption_boundaries train my_dataset --name quick_test --max-samples 5000 --epochs 10
 
-        # Small batch for MPS (Mac M2)
-        caption_boundaries train my_dataset --name exp_mps --batch-size 16 --device mps
+        # Ratio-based sampling (legacy)
+        caption_boundaries train my_dataset --name exp_ratio --sampling-ratio 3.0 --epochs 50
+
+        # Disable balanced sampling (use all data)
+        caption_boundaries train my_dataset --name exp_full --no-balanced-sampling --epochs 50
     """
     from caption_boundaries.data.transforms import ResizeStrategy
     from caption_boundaries.database import get_dataset_db_path
@@ -116,6 +124,7 @@ def train(
             wandb_project=wandb_project,
             checkpoint_dir=checkpoint_dir,
             balanced_sampling=balanced_sampling,
+            max_samples_per_class=max_samples_per_class,
             sampling_ratio=sampling_ratio,
         )
 

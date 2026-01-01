@@ -29,14 +29,20 @@ caption_boundaries create-dataset my_dataset local/data/*/01
 ### 2. Train Model
 
 ```bash
-# Basic training (using dataset name)
-caption_boundaries train my_dataset --name exp_baseline --epochs 50
+# Cap-based sampling (recommended for scaling - constant epoch time)
+caption_boundaries train my_dataset --name exp_baseline --max-samples 10000
 
-# With custom balanced sampling ratio
-caption_boundaries train my_dataset --name exp_aggressive --epochs 50 --sampling-ratio 2.0
+# Quick experiments (faster epochs)
+caption_boundaries train my_dataset --name quick_test --max-samples 5000 --epochs 10
+
+# Production training (more data per epoch)
+caption_boundaries train my_dataset --name production --max-samples 20000 --epochs 50
+
+# Ratio-based sampling (legacy - epoch time grows with data)
+caption_boundaries train my_dataset --name exp_ratio --sampling-ratio 3.0 --epochs 50
 
 # Disable balanced sampling (use full dataset each epoch)
-caption_boundaries train my_dataset --name exp_full --epochs 50 --no-balanced-sampling
+caption_boundaries train my_dataset --name exp_full --no-balanced-sampling --epochs 50
 ```
 
 ### 3. Run Inference
@@ -94,11 +100,26 @@ local/models/caption_boundaries/datasets/{dataset_name}.db
 
 The pipeline implements multiple strategies to handle class imbalance:
 
-1. **Balanced Sampling (Default)**: Dynamically resamples majority classes each epoch
-   - Different random subset of majority class each epoch
-   - Configurable via `--sampling-ratio` (default: 3.0)
-   - Provides training speedup while maintaining data diversity
-   - Over many epochs, model sees all data
+1. **Balanced Sampling (Default)**: Supports two modes for undersampling majority classes
+
+   **Cap-Based (Recommended for Scaling)**:
+   - Fixed absolute cap on samples per class per epoch
+   - Example: `--max-samples 10000` = max 10K samples per class
+   - **Constant epoch time** regardless of dataset size
+   - Predictable training schedule as data grows
+   - Usage: `--max-samples 10000`
+
+   **Ratio-Based (Legacy)**:
+   - Cap based on minority class size × ratio
+   - Example: `--sampling-ratio 3.0` = max 3× minority class per class
+   - Epoch time grows with dataset size
+   - Useful for small datasets
+   - Usage: `--sampling-ratio 3.0`
+
+   **Benefits**:
+   - Different random subset each epoch for data diversity
+   - Model sees all data over multiple epochs
+   - Significant training speedup
 
 2. **Class Weights**: Inverse frequency weighting in loss function
    - Minority classes get higher loss contribution
@@ -111,6 +132,12 @@ The pipeline implements multiple strategies to handle class imbalance:
 4. **Per-Class Metrics**: Individual precision, recall, F1 for each class
    - Logged to W&B for detailed monitoring
    - Helps identify which classes need attention
+
+**Recommended Settings**:
+- Quick experiments: `--max-samples 5000`
+- Hyperparameter tuning: `--max-samples 10000`
+- Production training: `--max-samples 20000`
+- See all data: `--no-balanced-sampling`
 
 ### Advanced Training
 
