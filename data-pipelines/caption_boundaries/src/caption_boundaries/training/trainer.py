@@ -77,6 +77,11 @@ class CaptionBoundaryTrainer:
         self.checkpoint_dir = Path(checkpoint_dir) / experiment_name / "checkpoints"
         self.save_every_n_epochs = save_every_n_epochs
 
+        # Early stopping configuration
+        self.early_stopping_patience = 5
+        self.early_stopping_counter = 0
+        self.early_stopping_min_delta = 1e-4
+
         # Auto-detect device
         if device is None:
             if torch.cuda.is_available():
@@ -145,6 +150,42 @@ class CaptionBoundaryTrainer:
         console.print(f"[green]✓[/green] Train samples: {len(self.train_dataset)}")
         console.print(f"[green]✓[/green] Val samples: {len(self.val_dataset)}")
 
+    def _compute_class_weights(self) -> torch.Tensor:
+        """Compute class weights from training dataset to handle class imbalance.
+
+        Uses inverse frequency weighting: weight = total_samples / class_count
+        This ensures minority classes get higher loss contributions.
+
+        Returns:
+            Tensor of class weights for CrossEntropyLoss
+        """
+        from collections import Counter
+
+        # Extract labels from training dataset
+        labels = [self.train_dataset[i]["label"] for i in range(len(self.train_dataset))]
+        label_counts = Counter(labels)
+
+        # Compute weights: total_samples / class_count
+        total_samples = len(labels)
+        num_classes = len(label_counts)
+        class_weights = torch.zeros(num_classes, dtype=torch.float32)
+
+        for class_idx, count in label_counts.items():
+            class_weights[class_idx] = total_samples / count
+
+        # Move to device and log
+        class_weights = class_weights.to(self.device)
+
+        console.print("[cyan]Class weights (inverse frequency):[/cyan]")
+        label_names = ["same", "different", "empty_empty", "empty_valid", "valid_empty"]
+        for class_idx in range(num_classes):
+            count = label_counts.get(class_idx, 0)
+            weight = class_weights[class_idx].item()
+            label_name = label_names[class_idx] if class_idx < len(label_names) else f"class_{class_idx}"
+            console.print(f"  {label_name}: {count} samples, weight={weight:.2f}")
+
+        return class_weights
+
     def _setup_model(self):
         """Initialize model, optimizer, and loss function."""
         console.print("[cyan]Initializing model...[/cyan]")
@@ -154,11 +195,41 @@ class CaptionBoundaryTrainer:
         console.print(f"[green]✓[/green] Total params: {self.model.get_num_total_params():,}")
         console.print(f"[green]✓[/green] Trainable params: {self.model.get_num_trainable_params():,}")
 
-        # Optimizer
-        self.optimizer = optim.AdamW(self.model.parameters(), lr=self.learning_rate)
+        # Optimizer with different learning rates for different components
+        # Higher LR for newly added classifier, lower LR for pretrained feature extractor
+        param_groups = [
+            {
+                "params": [p for n, p in self.model.named_parameters() if "classifier" in n],
+                "lr": self.learning_rate * 10,  # 10x higher for classifier
+                "name": "classifier",
+            },
+            {
+                "params": [p for n, p in self.model.named_parameters() if "classifier" not in n],
+                "lr": self.learning_rate,  # Base LR for feature extractor
+                "name": "features",
+            },
+        ]
 
-        # Loss function (cross-entropy for multi-class classification)
-        self.criterion = nn.CrossEntropyLoss()
+        self.optimizer = optim.AdamW(param_groups)
+
+        console.print(f"[cyan]Learning rates:[/cyan]")
+        console.print(f"  Classifier: {self.learning_rate * 10:.2e}")
+        console.print(f"  Features: {self.learning_rate:.2e}")
+
+        # Learning rate scheduler - reduce LR on plateau
+        self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+            self.optimizer,
+            mode="min",
+            factor=0.5,
+            patience=2,
+            verbose=True,
+        )
+
+        # Compute class weights from training data to handle imbalance
+        class_weights = self._compute_class_weights()
+
+        # Loss function with class weighting (cross-entropy for multi-class classification)
+        self.criterion = nn.CrossEntropyLoss(weight=class_weights)
 
     def _setup_wandb(self):
         """Initialize W&B tracking."""
@@ -250,12 +321,14 @@ class CaptionBoundaryTrainer:
         # Compute epoch metrics
         avg_loss = total_loss / len(self.train_loader)
         accuracy = accuracy_score(all_labels, all_preds)
-        f1 = f1_score(all_labels, all_preds, average="weighted")
+        f1_weighted = f1_score(all_labels, all_preds, average="weighted", zero_division=0)
+        f1_macro = f1_score(all_labels, all_preds, average="macro", zero_division=0)
 
         return {
             "train/loss": avg_loss,
             "train/accuracy": accuracy,
-            "train/f1": f1,
+            "train/f1_weighted": f1_weighted,
+            "train/f1_macro": f1_macro,
         }
 
     def validate(self, epoch: int) -> dict[str, Any]:
@@ -297,7 +370,8 @@ class CaptionBoundaryTrainer:
         # Compute validation metrics
         avg_loss = total_loss / len(self.val_loader)
         accuracy = accuracy_score(all_labels, all_preds)
-        f1 = f1_score(all_labels, all_preds, average="weighted")
+        f1_weighted = f1_score(all_labels, all_preds, average="weighted", zero_division=0)
+        f1_macro = f1_score(all_labels, all_preds, average="macro", zero_division=0)
 
         # Confusion matrix
         cm = confusion_matrix(all_labels, all_preds)
@@ -315,10 +389,18 @@ class CaptionBoundaryTrainer:
         metrics = {
             "val/loss": avg_loss,
             "val/accuracy": accuracy,
-            "val/f1": f1,
+            "val/f1_weighted": f1_weighted,
+            "val/f1_macro": f1_macro,
             "val/confusion_matrix": cm,
             "val/classification_report": class_report,
         }
+
+        # Add per-class metrics for W&B logging
+        for label_name in CaptionBoundaryDataset.LABELS:
+            if label_name in class_report:
+                metrics[f"val/precision_{label_name}"] = class_report[label_name]["precision"]
+                metrics[f"val/recall_{label_name}"] = class_report[label_name]["recall"]
+                metrics[f"val/f1_{label_name}"] = class_report[label_name]["f1-score"]
 
         # Log confusion matrix to W&B every 5 epochs
         if epoch % 5 == 0:
@@ -371,7 +453,8 @@ class CaptionBoundaryTrainer:
 
             # Log to W&B
             wandb.run.summary["best_epoch"] = epoch
-            wandb.run.summary["best_val_f1"] = metrics["val/f1"]
+            wandb.run.summary["best_val_f1_macro"] = metrics["val/f1_macro"]
+            wandb.run.summary["best_val_f1_weighted"] = metrics["val/f1_weighted"]
             wandb.run.summary["best_val_accuracy"] = metrics["val/accuracy"]
 
     def train(self):
@@ -383,8 +466,8 @@ class CaptionBoundaryTrainer:
         self._setup_model()
         self._setup_wandb()
 
-        # Track best model
-        best_val_f1 = 0.0
+        # Track best model (use macro F1 for imbalanced datasets)
+        best_val_f1_macro = 0.0
 
         # Training loop
         for epoch in range(1, self.epochs + 1):
@@ -407,17 +490,31 @@ class CaptionBoundaryTrainer:
             console.print(
                 f"\nEpoch {epoch}/{self.epochs} - "
                 f"Train Loss: {train_metrics['train/loss']:.4f}, "
-                f"Train F1: {train_metrics['train/f1']:.4f} | "
+                f"Train F1 (macro): {train_metrics['train/f1_macro']:.4f} | "
                 f"Val Loss: {val_metrics['val/loss']:.4f}, "
-                f"Val F1: {val_metrics['val/f1']:.4f}"
+                f"Val F1 (macro): {val_metrics['val/f1_macro']:.4f}"
             )
 
-            # Save checkpoint
-            is_best = val_metrics["val/f1"] > best_val_f1
+            # Step learning rate scheduler based on validation loss
+            self.scheduler.step(val_metrics["val/loss"])
+
+            # Save checkpoint (use macro F1 for best model selection)
+            is_best = val_metrics["val/f1_macro"] > best_val_f1_macro
             if is_best:
-                best_val_f1 = val_metrics["val/f1"]
+                best_val_f1_macro = val_metrics["val/f1_macro"]
+                self.early_stopping_counter = 0  # Reset early stopping
+            else:
+                self.early_stopping_counter += 1
 
             self.save_checkpoint(epoch, val_metrics, is_best=is_best)
+
+            # Early stopping check
+            if self.early_stopping_counter >= self.early_stopping_patience:
+                console.print(
+                    f"\n[yellow]Early stopping triggered after {epoch} epochs "
+                    f"(no improvement for {self.early_stopping_patience} epochs)[/yellow]"
+                )
+                break
 
         # Save final checkpoint
         final_path = self.checkpoint_dir / "final.pt"
@@ -432,7 +529,7 @@ class CaptionBoundaryTrainer:
         )
 
         # Save experiment to database
-        self._save_experiment_to_db(best_val_f1, val_metrics["val/accuracy"])
+        self._save_experiment_to_db(best_val_f1_macro, val_metrics["val/accuracy"])
 
         # Finish W&B
         wandb.finish()

@@ -23,24 +23,35 @@ def get_ocr_data_for_frame(video_db_path: Path, frame_index: int) -> dict[str, A
     Returns:
         Dict with ocr_confidence and ocr_text
     """
-    conn = sqlite3.connect(video_db_path)
-    cursor = conn.cursor()
+    # TODO: Currently gracefully handles missing/incompatible OCR data.
+    # Should enforce normalized schema once all DBs migrated via backfill_ocr.py.
+    try:
+        conn = sqlite3.connect(video_db_path)
+        cursor = conn.cursor()
 
-    cursor.execute("""
-        SELECT ocr_confidence, ocr_text
-        FROM cropped_frame_ocr
-        WHERE frame_index = ?
-    """, (frame_index,))
+        # Query normalized schema (one row per OCR box)
+        cursor.execute("""
+            SELECT AVG(confidence), GROUP_CONCAT(text, '')
+            FROM cropped_frame_ocr
+            WHERE frame_index = ?
+        """, (frame_index,))
 
-    result = cursor.fetchone()
-    conn.close()
+        result = cursor.fetchone()
+        conn.close()
 
-    if result:
-        return {
-            "ocr_confidence": result[0] if result[0] is not None else 0.0,
-            "ocr_text": result[1] or "",
-        }
-    else:
+        if result and result[0] is not None:
+            return {
+                "ocr_confidence": result[0],
+                "ocr_text": result[1] or "",
+            }
+        else:
+            return {
+                "ocr_confidence": 0.0,
+                "ocr_text": "",
+            }
+
+    except Exception:
+        # Gracefully handle missing table, wrong schema, or any DB errors
         return {
             "ocr_confidence": 0.0,
             "ocr_text": "",

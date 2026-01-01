@@ -373,11 +373,6 @@ export function TreeRow({
       : calculateFolderStatsFromMap(node, videoStatsMap)
     : null
 
-  // Debug logging for video nodes
-  if (node.type === 'video' && isMounted) {
-    console.log(`[TreeRow] Video ${node.videoId}: stats =`, stats)
-  }
-
   if (node.type === 'folder') {
     return (
       <FolderRow

@@ -232,62 +232,83 @@ def extract_frame_pairs_from_captions(db_path: Path) -> list[dict]:
 def get_ocr_confidence_for_frame(db_path: Path, frame_index: int) -> float | None:
     """Get OCR confidence for a specific frame.
 
+    TODO: Currently returns None for missing/incompatible OCR data to allow dataset
+    creation before backfill completes. Should enforce normalized schema once all
+    databases are migrated via backfill_ocr.py.
+
     Args:
         db_path: Path to video's annotations.db
         frame_index: Frame index to query
 
     Returns:
-        OCR confidence, or None if no OCR data
+        Average OCR confidence, or None if no OCR data or incompatible schema
     """
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-
     try:
-        # Query cropped_frame_ocr table (frame-level aggregated OCR)
-        cursor.execute(
-            """
-            SELECT ocr_confidence
-            FROM cropped_frame_ocr
-            WHERE frame_index = ?
-        """,
-            (frame_index,),
-        )
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
 
-        row = cursor.fetchone()
-        return row[0] if row and row[0] is not None else None
+        try:
+            # Query normalized schema: one row per OCR box
+            cursor.execute(
+                """
+                SELECT AVG(confidence)
+                FROM cropped_frame_ocr
+                WHERE frame_index = ?
+            """,
+                (frame_index,),
+            )
 
-    finally:
-        conn.close()
+            row = cursor.fetchone()
+            return row[0] if row and row[0] is not None else None
+
+        finally:
+            conn.close()
+
+    except Exception:
+        # Gracefully handle missing table, wrong schema, or any DB errors
+        # TODO: Remove try/except once all DBs migrated to normalized schema
+        return None
 
 
 def get_ocr_text_for_frame(db_path: Path, frame_index: int) -> str:
     """Get OCR text for a specific frame.
 
+    TODO: Currently returns empty string for missing/incompatible OCR data to allow
+    dataset creation before backfill completes. Should enforce normalized schema once
+    all databases are migrated via backfill_ocr.py.
+
     Args:
         db_path: Path to video's annotations.db
         frame_index: Frame index to query
 
     Returns:
-        OCR text for the frame
+        Concatenated OCR text for the frame, or empty string if unavailable
     """
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-
     try:
-        cursor.execute(
-            """
-            SELECT ocr_text
-            FROM cropped_frame_ocr
-            WHERE frame_index = ?
-        """,
-            (frame_index,),
-        )
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
 
-        row = cursor.fetchone()
-        return row[0] if row and row[0] else ""
+        try:
+            # Query normalized schema: concatenate all box text
+            cursor.execute(
+                """
+                SELECT GROUP_CONCAT(text, '')
+                FROM cropped_frame_ocr
+                WHERE frame_index = ?
+            """,
+                (frame_index,),
+            )
 
-    finally:
-        conn.close()
+            row = cursor.fetchone()
+            return row[0] if row and row[0] else ""
+
+        finally:
+            conn.close()
+
+    except Exception:
+        # Gracefully handle missing table, wrong schema, or any DB errors
+        # TODO: Remove try/except once all DBs migrated to normalized schema
+        return ""
 
 
 def create_training_dataset(
