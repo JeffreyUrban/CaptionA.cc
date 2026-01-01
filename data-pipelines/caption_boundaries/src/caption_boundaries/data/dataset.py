@@ -3,6 +3,7 @@
 Loads frame pairs, OCR visualizations, and metadata for training the boundary predictor.
 """
 
+import sqlite3
 import subprocess
 from pathlib import Path
 from typing import Literal
@@ -106,6 +107,34 @@ class CaptionBoundaryDataset(Dataset):
         self._video_db_cache = {}
         self._spatial_metadata_cache = {}
         self._font_embedding_cache = {}
+
+        # Cache database connections to avoid file descriptor exhaustion
+        self._db_connections = {}
+
+    def __del__(self):
+        """Close all cached database connections."""
+        for conn in self._db_connections.values():
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+    def _get_db_connection(self, db_path: Path) -> sqlite3.Connection:
+        """Get or create a cached database connection.
+
+        Args:
+            db_path: Path to database file
+
+        Returns:
+            Cached or new SQLite connection
+        """
+        db_path_str = str(db_path)
+        if db_path_str not in self._db_connections:
+            # Create new connection with check_same_thread=False for caching
+            self._db_connections[db_path_str] = sqlite3.connect(
+                db_path, check_same_thread=False
+            )
+        return self._db_connections[db_path_str]
 
     def _load_samples(self) -> list[TrainingSample]:
         """Load training samples from database for this dataset and split.
@@ -255,7 +284,7 @@ class CaptionBoundaryDataset(Dataset):
             return db_path
 
     def _load_frame(self, video_db_path: Path, frame_index: int) -> Image.Image:
-        """Load frame from video database.
+        """Load frame from video database using cached connection.
 
         Args:
             video_db_path: Path to video's annotations.db
@@ -267,22 +296,34 @@ class CaptionBoundaryDataset(Dataset):
         Raises:
             ValueError: If frame not found in database
         """
-        frame_data = get_frame_from_db(
-            db_path=video_db_path,
-            frame_index=frame_index,
-            table="cropped_frames",
+        # Use cached connection to avoid file descriptor exhaustion
+        conn = self._get_db_connection(video_db_path)
+        cursor = conn.cursor()
+
+        cursor.execute(
+            """
+            SELECT frame_index, image_data, width, height, file_size, created_at
+            FROM cropped_frames
+            WHERE frame_index = ?
+            """,
+            (frame_index,),
         )
 
-        if frame_data is None:
+        row = cursor.fetchone()
+        if row is None:
             raise ValueError(
                 f"Frame {frame_index} not found in {video_db_path}\n"
                 f"Ensure cropped_frames pipeline has been run on this video."
             )
 
-        return frame_data.to_pil_image()
+        # Convert to PIL Image (same logic as frames_db.FrameData.to_pil_image)
+        import io
+
+        image_data = row[1]  # BLOB data
+        return Image.open(io.BytesIO(image_data))
 
     def _load_ocr_visualization(self, video_db_path: Path) -> Image.Image:
-        """Load OCR visualization from video database.
+        """Load OCR visualization from video database using cached connection.
 
         Args:
             video_db_path: Path to video's annotations.db
@@ -293,15 +334,14 @@ class CaptionBoundaryDataset(Dataset):
         Raises:
             ValueError: If OCR visualization not found in database
         """
-        import sqlite3
         from io import BytesIO
 
-        conn = sqlite3.connect(video_db_path)
+        # Use cached connection to avoid file descriptor exhaustion
+        conn = self._get_db_connection(video_db_path)
         cursor = conn.cursor()
 
         cursor.execute("SELECT ocr_visualization_image FROM video_layout_config WHERE id = 1")
         result = cursor.fetchone()
-        conn.close()
 
         if not result or result[0] is None:
             raise ValueError(
