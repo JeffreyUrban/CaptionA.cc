@@ -707,7 +707,65 @@ function invalidateFramesForCropChange(
   db: import('better-sqlite3').Database,
   cropBounds: CropBounds
 ): number {
-  // Increment crop_bounds_version and update crop bounds
+  // Get layout config for frame dimensions
+  const layoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as
+    | VideoLayoutConfigRow
+    | undefined
+
+  if (!layoutConfig) {
+    throw new Error('Layout config not found')
+  }
+
+  // Get all OCR boxes for visualization
+  const boxes = db
+    .prepare(
+      `
+    SELECT id, frame_index, box_index, text, x, y, width, height, predicted_label, predicted_confidence
+    FROM full_frame_ocr ORDER BY frame_index, box_index
+  `
+    )
+    .all() as OcrBoxRow[]
+
+  const analysisBoxes: LayoutAnalysisBox[] = []
+  for (const box of boxes) {
+    const bounds = convertToPixelBounds(box, layoutConfig)
+    const predictedLabel: 'in' | 'out' = box.predicted_label ?? 'out'
+    const predictedConfidence = box.predicted_confidence ?? 0
+    const userLabel = null
+
+    analysisBoxes.push({
+      boxIndex: box.box_index,
+      text: box.text,
+      originalBounds: bounds,
+      displayBounds: bounds,
+      predictedLabel,
+      predictedConfidence,
+      userLabel,
+      colorCode: getBoxColorCode(userLabel, predictedLabel),
+    })
+  }
+
+  // Generate OCR visualization image with layout annotations
+  const layoutParams =
+    layoutConfig.anchor_type &&
+    layoutConfig.anchor_position !== null &&
+    layoutConfig.vertical_position !== null
+      ? {
+          anchorType: layoutConfig.anchor_type,
+          anchorPosition: layoutConfig.anchor_position,
+          verticalPosition: layoutConfig.vertical_position,
+        }
+      : undefined
+
+  const ocrVisualizationImage = generateOCRVisualization(
+    analysisBoxes,
+    cropBounds,
+    layoutConfig.frame_width,
+    layoutConfig.frame_height,
+    layoutParams
+  )
+
+  // Increment crop_bounds_version and update crop bounds with OCR visualization
   db.prepare(
     `
     UPDATE video_layout_config
@@ -716,10 +774,11 @@ function invalidateFramesForCropChange(
         crop_top = ?,
         crop_right = ?,
         crop_bottom = ?,
+        ocr_visualization_image = ?,
         updated_at = datetime('now')
     WHERE id = 1
   `
-  ).run(cropBounds.left, cropBounds.top, cropBounds.right, cropBounds.bottom)
+  ).run(cropBounds.left, cropBounds.top, cropBounds.right, cropBounds.bottom, ocrVisualizationImage)
 
   // Invalidate all frames (set crop_bounds_version to 0)
   const invalidateResult = db
@@ -1038,11 +1097,13 @@ function buildCaptionBoxFrames(
  * @param db - Database connection
  * @param analysis - OCR analysis result
  * @param modelVersion - Current model version (if any)
+ * @param ocrVisualizationImage - OCR visualization PNG image buffer
  */
 function saveAnalysisResults(
   db: import('better-sqlite3').Database,
   analysis: OCRAnalysisResult,
-  modelVersion: string | null
+  modelVersion: string | null,
+  ocrVisualizationImage: Buffer
 ): void {
   db.prepare(
     `
@@ -1061,6 +1122,7 @@ function saveAnalysisResults(
         anchor_position = ?,
         top_edge_std = ?,
         bottom_edge_std = ?,
+        ocr_visualization_image = ?,
         updated_at = datetime('now')
     WHERE id = 1
   `
@@ -1077,8 +1139,279 @@ function saveAnalysisResults(
     analysis.layoutParams.anchorType,
     analysis.layoutParams.anchorPosition,
     analysis.layoutParams.topEdgeStd,
-    analysis.layoutParams.bottomEdgeStd
+    analysis.layoutParams.bottomEdgeStd,
+    ocrVisualizationImage
   )
+}
+
+// =============================================================================
+// Helper Functions - OCR Visualization
+// =============================================================================
+
+/**
+ * Generate OCR visualization image for boundary detection model.
+ *
+ * Creates a PNG image showing OCR boxes cropped to the caption bounds using additive
+ * darkening. Boxes from all frames are overlaid, with overlapping areas appearing darker.
+ *
+ * @param analysisBoxes - All OCR boxes from the video
+ * @param cropBounds - Crop bounds to apply
+ * @param frameWidth - Original frame width
+ * @param frameHeight - Original frame height
+ * @param layoutParams - Optional layout parameters for annotations (anchor type, position, etc.)
+ * @returns PNG image as Buffer
+ */
+/**
+ * Count box edges at each pixel.
+ */
+function countBoxEdges(
+  edgeCount: Uint16Array,
+  croppedWidth: number,
+  clampedX1: number,
+  clampedY1: number,
+  clampedX2: number,
+  clampedY2: number
+): void {
+  // Top and bottom edges
+  for (let x = clampedX1; x <= clampedX2; x++) {
+    const topIdx = clampedY1 * croppedWidth + x
+    const bottomIdx = clampedY2 * croppedWidth + x
+    edgeCount[topIdx] = (edgeCount[topIdx] ?? 0) + 1
+    edgeCount[bottomIdx] = (edgeCount[bottomIdx] ?? 0) + 1
+  }
+  // Left and right edges
+  for (let y = clampedY1; y <= clampedY2; y++) {
+    const leftIdx = y * croppedWidth + clampedX1
+    const rightIdx = y * croppedWidth + clampedX2
+    edgeCount[leftIdx] = (edgeCount[leftIdx] ?? 0) + 1
+    edgeCount[rightIdx] = (edgeCount[rightIdx] ?? 0) + 1
+  }
+}
+
+/**
+ * Count box overlaps at each pixel for normalized darkening.
+ */
+function countBoxOverlaps(
+  analysisBoxes: LayoutAnalysisBox[],
+  cropBounds: CropBounds,
+  croppedWidth: number,
+  croppedHeight: number
+): {
+  edgeCount: Uint16Array
+  fillCount: Uint16Array
+  maxEdgeCount: number
+  maxFillCount: number
+} {
+  const edgeCount = new Uint16Array(croppedWidth * croppedHeight)
+  const fillCount = new Uint16Array(croppedWidth * croppedHeight)
+
+  for (const box of analysisBoxes) {
+    if (box.predictedLabel !== 'in') continue
+
+    const x1 = box.originalBounds.left - cropBounds.left
+    const y1 = box.originalBounds.top - cropBounds.top
+    const x2 = box.originalBounds.right - cropBounds.left
+    const y2 = box.originalBounds.bottom - cropBounds.top
+
+    // Skip boxes outside crop region
+    if (x2 < 0 || x1 >= croppedWidth || y2 < 0 || y1 >= croppedHeight) continue
+
+    const clampedX1 = Math.max(0, Math.min(x1, croppedWidth - 1))
+    const clampedY1 = Math.max(0, Math.min(y1, croppedHeight - 1))
+    const clampedX2 = Math.max(0, Math.min(x2, croppedWidth - 1))
+    const clampedY2 = Math.max(0, Math.min(y2, croppedHeight - 1))
+
+    // Count fill pixels
+    for (let y = clampedY1 + 1; y < clampedY2; y++) {
+      for (let x = clampedX1 + 1; x < clampedX2; x++) {
+        const idx = y * croppedWidth + x
+        fillCount[idx] = (fillCount[idx] ?? 0) + 1
+      }
+    }
+
+    // Count edge pixels
+    countBoxEdges(edgeCount, croppedWidth, clampedX1, clampedY1, clampedX2, clampedY2)
+  }
+
+  // Find maximum overlaps
+  let maxEdgeCount = 0
+  let maxFillCount = 0
+  for (let i = 0; i < edgeCount.length; i++) {
+    const edge = edgeCount[i] ?? 0
+    const fill = fillCount[i] ?? 0
+    if (edge > maxEdgeCount) maxEdgeCount = edge
+    if (fill > maxFillCount) maxFillCount = fill
+  }
+
+  return { edgeCount, fillCount, maxEdgeCount, maxFillCount }
+}
+
+/**
+ * Apply edge darkening (black) to image data.
+ */
+function applyEdgeDarkening(
+  data: Uint8ClampedArray,
+  croppedWidth: number,
+  croppedHeight: number,
+  edgeCount: Uint16Array,
+  maxEdgeCount: number
+): void {
+  for (let y = 0; y < croppedHeight; y++) {
+    for (let x = 0; x < croppedWidth; x++) {
+      const idx = y * croppedWidth + x
+      const count = edgeCount[idx] ?? 0
+      if (count > 0) {
+        const darknessAmount = Math.round((count / maxEdgeCount) * 255)
+        const pixelIdx = idx * 4
+        data[pixelIdx] = Math.max(0, (data[pixelIdx] ?? 255) - darknessAmount)
+        data[pixelIdx + 1] = Math.max(0, (data[pixelIdx + 1] ?? 255) - darknessAmount)
+        data[pixelIdx + 2] = Math.max(0, (data[pixelIdx + 2] ?? 255) - darknessAmount)
+      }
+    }
+  }
+}
+
+/**
+ * Apply fill darkening (green tint) to image data.
+ */
+function applyFillDarkening(
+  data: Uint8ClampedArray,
+  croppedWidth: number,
+  croppedHeight: number,
+  fillCount: Uint16Array,
+  maxFillCount: number
+): void {
+  for (let y = 0; y < croppedHeight; y++) {
+    for (let x = 0; x < croppedWidth; x++) {
+      const idx = y * croppedWidth + x
+      const count = fillCount[idx] ?? 0
+      if (count > 0) {
+        const darknessAmount = Math.round((count / maxFillCount) * 180)
+        const pixelIdx = idx * 4
+        data[pixelIdx] = Math.max(0, (data[pixelIdx] ?? 255) - darknessAmount)
+        data[pixelIdx + 2] = Math.max(0, (data[pixelIdx + 2] ?? 255) - darknessAmount)
+      }
+    }
+  }
+}
+
+/**
+ * Apply normalized darkening to image data.
+ */
+function applyNormalizedDarkening(
+  ctx: CanvasRenderingContext2D,
+  croppedWidth: number,
+  croppedHeight: number,
+  edgeCount: Uint16Array,
+  fillCount: Uint16Array,
+  maxEdgeCount: number,
+  maxFillCount: number
+): void {
+  const imageData = ctx.getImageData(0, 0, croppedWidth, croppedHeight)
+  const data = imageData.data
+
+  if (maxEdgeCount > 0) {
+    applyEdgeDarkening(data, croppedWidth, croppedHeight, edgeCount, maxEdgeCount)
+  }
+
+  if (maxFillCount > 0) {
+    applyFillDarkening(data, croppedWidth, croppedHeight, fillCount, maxFillCount)
+  }
+
+  ctx.putImageData(imageData, 0, 0)
+}
+
+/**
+ * Draw colored layout annotations (anchor line, vertical position line).
+ */
+function drawLayoutAnnotations(
+  ctx: CanvasRenderingContext2D,
+  layoutParams: {
+    anchorType: 'left' | 'center' | 'right'
+    anchorPosition: number
+    verticalPosition: number
+  },
+  cropBounds: CropBounds,
+  croppedWidth: number,
+  croppedHeight: number
+): void {
+  // Draw vertical anchor line
+  const anchorX = layoutParams.anchorPosition - cropBounds.left
+  if (anchorX >= 0 && anchorX <= croppedWidth) {
+    const anchorColors = {
+      left: 'rgb(0, 0, 255)',
+      right: 'rgb(255, 0, 0)',
+      center: 'rgb(0, 255, 255)',
+    }
+    ctx.strokeStyle = anchorColors[layoutParams.anchorType]
+    ctx.lineWidth = 2
+    ctx.beginPath()
+    ctx.moveTo(anchorX, 0)
+    ctx.lineTo(anchorX, croppedHeight)
+    ctx.stroke()
+  }
+
+  // Draw horizontal vertical position line
+  const verticalY = layoutParams.verticalPosition - cropBounds.top
+  if (verticalY >= 0 && verticalY <= croppedHeight) {
+    ctx.strokeStyle = 'rgb(255, 255, 0)'
+    ctx.lineWidth = 2
+    ctx.beginPath()
+    ctx.moveTo(0, verticalY)
+    ctx.lineTo(croppedWidth, verticalY)
+    ctx.stroke()
+  }
+}
+
+function generateOCRVisualization(
+  analysisBoxes: LayoutAnalysisBox[],
+  cropBounds: CropBounds,
+  frameWidth: number,
+  frameHeight: number,
+  layoutParams?: {
+    anchorType: 'left' | 'center' | 'right'
+    anchorPosition: number
+    verticalPosition: number
+  }
+): Buffer {
+  // @ts-expect-error - canvas module is dynamically loaded
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { createCanvas } = require('canvas') as typeof import('canvas')
+
+  const croppedWidth = cropBounds.right - cropBounds.left
+  const croppedHeight = cropBounds.bottom - cropBounds.top
+
+  const canvas = createCanvas(croppedWidth, croppedHeight)
+  const ctx = canvas.getContext('2d')
+
+  ctx.fillStyle = 'rgb(255, 255, 255)'
+  ctx.fillRect(0, 0, croppedWidth, croppedHeight)
+
+  // Count box overlaps
+  const { edgeCount, fillCount, maxEdgeCount, maxFillCount } = countBoxOverlaps(
+    analysisBoxes,
+    cropBounds,
+    croppedWidth,
+    croppedHeight
+  )
+
+  // Apply normalized darkening
+  applyNormalizedDarkening(
+    ctx,
+    croppedWidth,
+    croppedHeight,
+    edgeCount,
+    fillCount,
+    maxEdgeCount,
+    maxFillCount
+  )
+
+  // Draw annotations
+  if (layoutParams) {
+    drawLayoutAnnotations(ctx, layoutParams, cropBounds, croppedWidth, croppedHeight)
+  }
+
+  return canvas.toBuffer('image/png')
 }
 
 // =============================================================================
@@ -1269,8 +1602,52 @@ export function resetCropBounds(videoId: string): ResetCropBoundsResult {
       .prepare('SELECT model_version FROM box_classification_model WHERE id = 1')
       .get() as { model_version: string } | undefined
 
+    // Get all OCR boxes for visualization (inline to reuse db connection)
+    const boxes = db
+      .prepare(
+        `
+      SELECT id, frame_index, box_index, text, x, y, width, height, predicted_label, predicted_confidence
+      FROM full_frame_ocr ORDER BY frame_index, box_index
+    `
+      )
+      .all() as OcrBoxRow[]
+
+    const analysisBoxes: LayoutAnalysisBox[] = []
+    for (const box of boxes) {
+      const bounds = convertToPixelBounds(box, layoutConfig)
+      const predictedLabel: 'in' | 'out' = box.predicted_label ?? 'out'
+      const predictedConfidence = box.predicted_confidence ?? 0
+      const userLabel = null // No user labels at this stage
+
+      analysisBoxes.push({
+        boxIndex: box.box_index,
+        text: box.text,
+        originalBounds: bounds,
+        displayBounds: bounds,
+        predictedLabel,
+        predictedConfidence,
+        userLabel,
+        colorCode: getBoxColorCode(userLabel, predictedLabel),
+      })
+    }
+
+    // Generate OCR visualization image with layout annotations
+    const layoutParams = {
+      anchorType: analysis.layoutParams.anchorType,
+      anchorPosition: analysis.layoutParams.anchorPosition,
+      verticalPosition: analysis.layoutParams.verticalPosition,
+    }
+
+    const ocrVisualizationImage = generateOCRVisualization(
+      analysisBoxes,
+      analysis.cropBounds,
+      layoutConfig.frame_width,
+      layoutConfig.frame_height,
+      layoutParams
+    )
+
     // Save analysis results to database
-    saveAnalysisResults(db, analysis, modelInfo?.model_version ?? null)
+    saveAnalysisResults(db, analysis, modelInfo?.model_version ?? null, ocrVisualizationImage)
 
     return {
       newCropBounds: analysis.cropBounds,
