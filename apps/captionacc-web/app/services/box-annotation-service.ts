@@ -17,6 +17,11 @@ import {
   type CropBounds,
 } from '~/utils/coordinate-utils'
 import { getAnnotationDatabase, getWritableDatabase } from '~/utils/database'
+import {
+  shouldTriggerFullRetrain,
+  getRetrainState,
+  formatRetrainTriggerLog,
+} from '~/utils/smart-retrain-triggers'
 
 // =============================================================================
 // Type Definitions
@@ -375,30 +380,31 @@ function ocrToPixelBounds(
 }
 
 /**
- * Check if annotation thresholds have been reached for auto-retraining.
+ * Check if smart retrain triggers have been reached for auto-retraining.
+ *
+ * Uses multi-condition logic that adapts to user annotation pace:
+ * - Standard: 100 new annotations + 20s elapsed
+ * - High-rate: 20+ annotations/minute with 30+ new annotations
+ * - Time-based: 5 minutes elapsed with any new annotations
  *
  * @param db - Database connection
  * @returns Whether retraining should be triggered
  */
 function shouldTriggerRetraining(db: Database.Database): boolean {
-  const annotationStats = db
-    .prepare(
-      `
-      SELECT
-        COUNT(*) as total_annotations,
-        COALESCE((SELECT n_training_samples FROM box_classification_model WHERE id = 1), 0) as last_model_count
-      FROM full_frame_box_labels
-      WHERE label_source = 'user'
-    `
-    )
-    .get() as { total_annotations: number; last_model_count: number }
+  const retrainState = getRetrainState(db)
+  const triggerResult = shouldTriggerFullRetrain(retrainState)
 
-  const newAnnotationsSinceLastTrain =
-    annotationStats.total_annotations - annotationStats.last_model_count
+  console.log(formatRetrainTriggerLog(triggerResult))
 
-  // Auto-retrain after every 20 new annotations
-  return newAnnotationsSinceLastTrain >= 20
+  return triggerResult.shouldRetrain
 }
+
+// TODO: Implement streaming prediction updates
+// This will replace batch recalculation with intelligent scope detection:
+// - Load covariance_inverse from model
+// - Identify affected boxes using Mahalanobis distance and prediction uncertainty
+// - Run adaptive recalculation with reversal rate stopping
+// For now, full retrain triggers the standard calculatePredictions()
 
 // =============================================================================
 // Service Functions

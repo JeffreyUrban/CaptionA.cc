@@ -351,8 +351,250 @@ log P(class|features) = log P(features|class) + log P(class)
 - Model stored in `box_classification_model` table
 - 2 parameters per feature per class (mean, std) = 104 columns (26 features × 2 params × 2 classes)
 - Plus: model version, training timestamp, prior probabilities, sample count
+- Feature importance metrics (26 Fisher scores + normalized weights)
+- Pooled covariance matrix (26×26 = 676 values) for Mahalanobis distance
+- Covariance inverse (pre-computed, 676 values) for efficient similarity computation
 
 **Performance**:
 - Training: ~50ms for 10,000 annotations
 - Prediction: ~3.5s for 12,000 boxes (real-time viable)
 - Memory: Model parameters fit in single database row
+
+## Streaming Prediction Updates (2025-12)
+
+### The Performance Challenge
+
+**Problem:** Full recalculation of all predictions causes 3.5s blocking delay every 20 annotations, disrupting the annotation workflow.
+
+**User impact:** Annotation → wait → annotation → wait creates a frustrating cycle that slows down the user's work.
+
+### Design: Intelligent Streaming Updates
+
+**Core insight:** When a user annotates box A, only boxes with similar features need recalculation. Most boxes are unaffected by any single annotation.
+
+**Solution:** Replace batch recalculation with continuous streaming updates:
+1. **Feature similarity detection** - Use Mahalanobis distance to identify affected boxes
+2. **Probabilistic scope** - Model the likelihood that each box's prediction will change
+3. **Adaptive processing** - Recalculate in order of change probability, stop when reversal rate drops
+4. **Background streaming** - Non-blocking updates, UI remains responsive
+
+### Feature Importance Tracking
+
+**Purpose:** Identify which features matter most for this video's caption detection.
+
+**Method:** Fisher score (variance ratio between classes)
+```
+Fisher_i = (μ_in,i - μ_out,i)² / (σ²_in,i + σ²_out,i)
+```
+
+High Fisher score = feature strongly discriminates "in" vs "out" boxes.
+
+**Uses:**
+1. **Weighted similarity** - Important features count more in Mahalanobis distance
+2. **Debugging insights** - Shows which features the model relies on
+3. **Future optimization** - Could reduce features to most important subset
+
+**Storage:** Calculated during training, stored as JSON array in model row.
+
+### Mahalanobis Distance for Similarity
+
+**Why not Euclidean distance?**
+
+Features have wildly different scales:
+- `aspect_ratio`: 1-5
+- `normalized_y`: 0-1
+- `time_from_start`: 0-3600 seconds
+
+Euclidean distance would be dominated by large-scale features.
+
+**Mahalanobis distance solution:**
+```
+D_M(x, y) = sqrt((x - y)ᵀ × Σ⁻¹ × (x - y))
+```
+
+where Σ = pooled covariance matrix (single 26×26 matrix across both classes).
+
+**Benefits:**
+1. **Scale-invariant** - Normalizes by feature variance
+2. **Correlation-aware** - Accounts for correlated features (e.g., top/bottom edges)
+3. **Automatic weighting** - High-variance features naturally weighted less
+4. **Statistically sound** - Standard approach in LDA and discriminant analysis
+
+**Implementation choice: Pooled covariance**
+- Combines both "in" and "out" samples: `Σ = (n_in × Σ_in + n_out × Σ_out) / (n_in + n_out)`
+- More sample-efficient than per-class covariance
+- Simpler: one covariance structure instead of two
+- Used only for similarity detection, not classification (Naive Bayes remains diagonal)
+
+### Prediction Change Probability
+
+**Instead of fixed thresholds,** model the actual probability that a box's prediction will flip:
+
+```typescript
+P(prediction changes) = f(uncertainty, similarity, boundary_proximity)
+```
+
+**Three factors:**
+
+1. **Uncertainty** (1 - confidence)
+   - Low confidence predictions more likely to flip
+   - Weight: 0.4
+
+2. **Feature similarity** (Mahalanobis distance)
+   - Similar boxes affected by annotation
+   - Exponential decay: `exp(-distance²/2σ²)`
+   - Weight: 0.4
+
+3. **Decision boundary proximity** (|confidence - 0.5|)
+   - Boxes near 50% confidence on decision boundary
+   - Weight: 0.2
+
+**Why these weights?**
+- Uncertainty and similarity are primary signals (equal importance)
+- Boundary proximity is secondary (refinement signal)
+- Chosen based on classification theory, not arbitrary
+- Could be learned from data in future iteration
+
+### Adaptive Recalculation Strategy
+
+**Key innovation:** Stop recalculating when reversal rate drops below threshold.
+
+**Algorithm:**
+1. Compute change probability for all boxes
+2. Sort by probability (highest first)
+3. Process in batches of 50
+4. Track rolling reversal rate (window size: 100)
+5. Stop when reversal rate < 2% (configurable)
+
+**Why this works:**
+- High-probability boxes processed first (most likely to change)
+- As we move down the list, fewer predictions actually flip
+- When reversal rate drops, remaining boxes unlikely to change
+- Adaptive: stops early on small changes, continues on large model updates
+
+**Configuration (global constants):**
+```typescript
+const ADAPTIVE_RECALC_CONFIG = {
+  MAX_BOXES_PER_UPDATE: 2000,        // Safety limit
+  MIN_CHANGE_PROBABILITY: 0.05,      // Skip boxes below 5% chance
+  TARGET_REVERSAL_RATE: 0.02,        // Stop at 2% reversal rate
+  REVERSAL_WINDOW_SIZE: 100,         // Rolling window
+  MIN_BOXES_BEFORE_CHECK: 50,        // Need data for statistics
+  BATCH_SIZE: 50,                    // UI responsiveness
+}
+```
+
+**No magic numbers:** All thresholds extracted to clear, documented constants with statistical justification.
+
+### Smart Retrain Triggers
+
+**Problem with old approach:** Fixed "every 20 annotations" ignores annotation rate and time.
+
+**New approach:** Trigger on count AND time AND rate.
+
+**Rules:**
+1. **Minimum threshold:** 20 annotations before first train
+2. **Standard trigger:** 100 new annotations AND 20+ seconds since last train
+3. **High-rate trigger:** 20+ annotations/minute with 30+ new annotations
+4. **Time-based trigger:** 5 minutes elapsed with any new annotations
+
+**Why multiple triggers?**
+- **Prevent thrashing:** 20-second minimum prevents retrain per individual annotation
+- **Adapt to user pace:** Fast annotators (bulk tools: 2000 boxes/min) get frequent updates
+- **Ensure freshness:** 5-minute max keeps model fresh during active sessions
+- **Sample size:** Always require minimum annotations for statistical validity
+
+**Configuration (global constants):**
+```typescript
+const RETRAIN_TRIGGER_CONFIG = {
+  MIN_ANNOTATIONS_FOR_RETRAIN: 20,
+  ANNOTATION_COUNT_THRESHOLD: 100,
+  MIN_RETRAIN_INTERVAL_SECONDS: 20,      // 20 seconds
+  HIGH_ANNOTATION_RATE_PER_MINUTE: 20,
+  HIGH_RATE_MIN_ANNOTATIONS: 30,
+  MAX_RETRAIN_INTERVAL_SECONDS: 300,     // 5 minutes
+}
+```
+
+### Architecture: From Batch to Stream
+
+**Old (batch):**
+```
+Every 20 annotations:
+  Train model (50ms)
+  Recalculate ALL boxes (3.5s - BLOCKING)
+  Update database
+```
+
+**New (streaming):**
+```
+After EVERY annotation:
+  1. Immediate: Update annotated box UI
+  2. Background: Compute feature similarity
+  3. Background: Identify affected boxes (Mahalanobis distance)
+  4. Background: Stream updates in priority order
+  5. Background: Stop when reversal rate < 2%
+
+When retrain triggered (smart conditions):
+  6. Background: Full retrain
+  7. Background: Recalculate remaining low-probability boxes
+```
+
+**Benefits:**
+- ✅ No blocking delays (all background)
+- ✅ Immediate feedback on annotated boxes
+- ✅ Progressive improvements (streaming)
+- ✅ Adaptive scope (similarity-based)
+- ✅ Early stopping (reversal rate)
+- ✅ Smarter retraining (count + time + rate)
+
+### Design Rationale: Why This Approach?
+
+**Question: Is this the right solution vs a workaround?**
+
+Answer: This is the principled ML solution:
+1. **Mahalanobis distance** - Standard metric for multivariate similarity (LDA, anomaly detection)
+2. **Fisher score** - Classical feature importance metric (variance ratio)
+3. **Probabilistic scope** - Model-based, not arbitrary thresholds
+4. **Adaptive stopping** - Data-driven (reversal rate), not fixed limits
+5. **Pooled covariance** - Standard statistical approach for efficiency
+
+**Question: If building from scratch, would we design it this way?**
+
+Answer: Yes, with these components:
+1. **Smart scope detection** - Only recalculate affected boxes (not all 12,000)
+2. **Priority ordering** - Process high-probability changes first
+3. **Early stopping** - Stop when marginal benefit drops
+4. **Non-blocking** - Background processing, responsive UI
+5. **Adaptive triggers** - Retrain based on data, not fixed intervals
+
+**Question: Could we simplify the model instead?**
+
+Answer: Not yet - we want more annotation data first:
+- Current 26 features chosen based on domain knowledge
+- Need data to identify which features are actually important
+- Feature importance tracking enables future simplification
+- Better to optimize workflow now, simplify model later with evidence
+
+### Implementation Status
+
+**Completed:**
+- 26-feature Gaussian Naive Bayes with log-space calculations
+- Feature extraction (spatial, character sets, temporal, annotations)
+- Incremental training with schema migration
+- Database storage of model parameters
+
+**In Progress (2025-12-31):**
+- Feature importance calculation (Fisher scores)
+- Pooled covariance matrix computation
+- Mahalanobis distance similarity detection
+- Prediction change probability estimation
+- Adaptive recalculation with reversal rate
+- Smart retrain triggers (count + time + rate)
+- Streaming update architecture
+
+**Future Enhancements:**
+- Feature reduction based on importance analysis
+- Learned weights for change probability factors
+- Per-video tuning of reversal rate threshold (if needed)
+- Parallel processing for very large videos (>50k boxes)

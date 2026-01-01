@@ -4,6 +4,7 @@ import type { Annotation } from '~/types/text-annotation'
 
 interface UseTextAnnotationFrameNavParams {
   annotation: Annotation | null
+  containerRef: React.RefObject<HTMLDivElement | null> | null
 }
 
 interface UseTextAnnotationFrameNavReturn {
@@ -15,7 +16,6 @@ interface UseTextAnnotationFrameNavReturn {
   isDragging: boolean
 
   // Event handlers
-  handleWheel: (e: React.WheelEvent) => void
   handleDragStart: (e: React.MouseEvent) => void
   navigateFrame: (delta: number) => void
 }
@@ -26,6 +26,7 @@ interface UseTextAnnotationFrameNavReturn {
  */
 export function useTextAnnotationFrameNav({
   annotation,
+  containerRef,
 }: UseTextAnnotationFrameNavParams): UseTextAnnotationFrameNavReturn {
   // Frame navigation state
   const [currentFrameIndex, setCurrentFrameIndex] = useState(0)
@@ -58,15 +59,20 @@ export function useTextAnnotationFrameNav({
     [currentFrameIndex, annotation]
   )
 
-  // Mouse wheel handler for frame navigation
-  const handleWheel = useCallback(
-    (e: React.WheelEvent) => {
+  // Native wheel event handler for frame navigation (with passive: false to allow preventDefault)
+  useEffect(() => {
+    const container = containerRef?.current
+    if (!container) return
+
+    const handleWheel = (e: WheelEvent) => {
       e.preventDefault()
       const delta = e.deltaY > 0 ? 1 : -1
       navigateFrame(delta)
-    },
-    [navigateFrame]
-  )
+    }
+
+    container.addEventListener('wheel', handleWheel, { passive: false })
+    return () => container.removeEventListener('wheel', handleWheel)
+  }, [containerRef, navigateFrame])
 
   // Drag start handler
   const handleDragStart = useCallback(
@@ -115,7 +121,6 @@ export function useTextAnnotationFrameNav({
     currentFrameIndex,
     setCurrentFrameIndex,
     isDragging,
-    handleWheel,
     handleDragStart,
     navigateFrame,
   }

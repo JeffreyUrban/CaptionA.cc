@@ -28,6 +28,7 @@ interface UseBoundaryWorkflowStateParams {
 interface UseBoundaryWorkflowStateReturn {
   // Loading state
   isLoadingMetadata: boolean
+  isInitialized: boolean
 
   // Display state (synced from refs at 60fps)
   displayState: BoundaryDisplayState
@@ -73,6 +74,9 @@ export function useBoundaryWorkflowState({
 }: UseBoundaryWorkflowStateParams): UseBoundaryWorkflowStateReturn {
   // Load video metadata and workflow progress
   const { metadata, loading: isLoadingMetadata } = useVideoMetadata(videoId)
+
+  // Track if we've initialized the starting frame position
+  const [isInitialized, setIsInitialized] = useState(false)
   const {
     workflowProgress: workflowProgressHook,
     completedFrames: completedFramesHook,
@@ -91,6 +95,8 @@ export function useBoundaryWorkflowState({
   const workflowProgressRef = useRef(0)
   const completedFramesRef = useRef(0)
   const currentFrameIndexRef = useRef(0)
+  const jumpRequestedRef = useRef(false) // Signal to frame loader to load exact frames
+  const jumpTargetRef = useRef<number | null>(null) // Pending jump destination (null = no pending jump)
 
   // Sync hook values to refs
   useEffect(() => {
@@ -98,14 +104,41 @@ export function useBoundaryWorkflowState({
     completedFramesRef.current = completedFramesHook
   }, [workflowProgressHook, completedFramesHook])
 
-  // Core hooks
-  const annotationData = useBoundaryAnnotationData({ videoId, updateProgress })
+  // Create framesRef in parent to break circular dependency
+  const framesRef = useRef<Map<number, import('~/types/boundaries').Frame>>(new Map())
 
-  const { framesRef } = useBoundaryFrameLoader({
+  // Core hooks
+  const annotationData = useBoundaryAnnotationData({
     videoId,
-    currentFrameIndex: currentFrameIndexRef.current,
+    jumpRequestedRef,
+    jumpTargetRef,
+    updateProgress,
+  })
+
+  // Load initial annotation and navigate to it BEFORE starting frame loader
+  // Only run once per videoId to avoid infinite loop
+  useEffect(() => {
+    const loadInitial = async () => {
+      const startFrame = await annotationData.loadInitialAnnotation()
+      if (startFrame !== null && startFrame !== undefined) {
+        jumpTargetRef.current = startFrame // Set pending jump target
+        jumpRequestedRef.current = true // Signal frame loader: load exact frames, then jump
+      }
+      setIsInitialized(true)
+    }
+    void loadInitial()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [videoId])
+
+  // Frame loader hook (only starts after initial position is set)
+  useBoundaryFrameLoader({
+    videoId,
+    currentFrameIndexRef, // Pass ref itself, not .current value
+    jumpRequestedRef, // Signal when user explicitly jumps
+    jumpTargetRef, // Pending jump destination
     totalFrames,
-    isReady: !isLoadingMetadata,
+    framesRef,
+    isReady: !isLoadingMetadata && isInitialized,
   })
 
   const { cursorStyleRef, handleDragStart } = useBoundaryDragScroll({
@@ -209,11 +242,17 @@ export function useBoundaryWorkflowState({
   )
 
   const jumpToStart = useCallback(() => {
-    if (markedStart !== null) currentFrameIndexRef.current = markedStart
+    if (markedStart !== null) {
+      jumpTargetRef.current = markedStart // Set pending jump target
+      jumpRequestedRef.current = true // Signal frame loader: load exact frames, then jump
+    }
   }, [markedStart])
 
   const jumpToEnd = useCallback(() => {
-    if (markedEnd !== null) currentFrameIndexRef.current = markedEnd
+    if (markedEnd !== null) {
+      jumpTargetRef.current = markedEnd // Set pending jump target
+      jumpRequestedRef.current = true // Signal frame loader: load exact frames, then jump
+    }
   }, [markedEnd])
 
   // Annotation actions
@@ -233,8 +272,10 @@ export function useBoundaryWorkflowState({
   )
 
   const navigateToAnnotation = useCallback(
-    async (direction: 'prev' | 'next') =>
-      annotationData.navigateToAnnotation(direction, currentFrameIndexRef),
+    async (direction: 'prev' | 'next') => {
+      await annotationData.navigateToAnnotation(direction, currentFrameIndexRef)
+      jumpRequestedRef.current = true // Signal frame loader: this is a jump
+    },
     [annotationData]
   )
 
@@ -244,7 +285,10 @@ export function useBoundaryWorkflowState({
       totalFrames,
       currentFrameIndexRef
     )
-    if (success) setJumpToFrameInput('')
+    if (success) {
+      jumpRequestedRef.current = true // Signal frame loader: this is a jump
+      setJumpToFrameInput('')
+    }
   }, [jumpToFrameInput, totalFrames, annotationData])
 
   const activateCurrentFrameAnnotation = useCallback(
@@ -252,11 +296,20 @@ export function useBoundaryWorkflowState({
     [annotationData, currentFrameIndex]
   )
 
-  // Load annotations in visible range
+  // Load annotations in visible range (with deduplication to prevent infinite loops)
+  const lastAnnotationRangeRef = useRef<{ start: number; end: number } | null>(null)
   useEffect(() => {
     if (visibleFramePositions.length === 0) return
     const startFrame = Math.min(...visibleFramePositions)
     const endFrame = Math.max(...visibleFramePositions)
+
+    // Only load if range actually changed (prevents infinite loop from array recreation)
+    const lastRange = lastAnnotationRangeRef.current
+    if (lastRange && lastRange.start === startFrame && lastRange.end === endFrame) {
+      return
+    }
+
+    lastAnnotationRangeRef.current = { start: startFrame, end: endFrame }
     void annotationData.loadAnnotationsForRange(startFrame, endFrame)
   }, [visibleFramePositions, annotationData])
 
@@ -286,6 +339,7 @@ export function useBoundaryWorkflowState({
 
   return {
     isLoadingMetadata,
+    isInitialized,
     displayState,
     visibleFramePositions,
     canSave,

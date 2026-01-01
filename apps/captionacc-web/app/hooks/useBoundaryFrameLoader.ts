@@ -12,13 +12,12 @@ import type { Frame } from '~/types/boundaries'
 
 interface UseBoundaryFrameLoaderParams {
   videoId: string
-  currentFrameIndex: number
+  currentFrameIndexRef: React.RefObject<number> // Pass ref, read inside effect
+  jumpRequestedRef: React.RefObject<boolean> // True when user explicitly jumps (not scroll/drag)
+  jumpTargetRef: React.RefObject<number | null> // Pending jump destination (null = no pending jump)
   totalFrames: number
+  framesRef: React.RefObject<Map<number, Frame>> // Now passed from parent
   isReady: boolean // Only start loading when metadata is loaded
-}
-
-interface UseBoundaryFrameLoaderReturn {
-  framesRef: React.RefObject<Map<number, Frame>>
 }
 
 // LRU cache configuration
@@ -200,11 +199,13 @@ function updateCacheAfterLoad(
  */
 export function useBoundaryFrameLoader({
   videoId,
-  currentFrameIndex,
+  currentFrameIndexRef,
+  jumpRequestedRef,
+  jumpTargetRef,
   totalFrames,
+  framesRef,
   isReady,
-}: UseBoundaryFrameLoaderParams): UseBoundaryFrameLoaderReturn {
-  const framesRef = useRef<Map<number, Frame>>(new Map())
+}: UseBoundaryFrameLoaderParams): void {
   const loadedChunksRef = useRef<Map<number, number[]>>(new Map())
   const requestedChunksRef = useRef<Map<number, Set<number>>>(new Map())
 
@@ -212,16 +213,75 @@ export function useBoundaryFrameLoader({
     if (!isReady || !videoId || totalFrames === 0) return
 
     let cancelled = false
+    let lastLoadedFrame = -1000 // Track last frame we loaded around
+    let isLoading = false // Prevent concurrent executions
 
     const loadFrameHierarchy = async () => {
-      if (cancelled) return
+      if (cancelled || isLoading) return
+
+      // Check for pending jump FIRST (before debouncing)
+      const isJump = jumpRequestedRef.current ?? false
+      const jumpTarget = jumpTargetRef.current
+
+      // Read current frame from ref (always gets latest value)
+      const currentFrameIndex = currentFrameIndexRef.current ?? 0
+
+      // Only reload if we've moved significantly (more than 16 frames)
+      // Skip this check if there's a pending jump
+      if (!isJump && Math.abs(currentFrameIndex - lastLoadedFrame) < 16) {
+        return
+      }
+
+      isLoading = true
+      const targetFrameIndex = currentFrameIndex // Capture at start, not end
+
       const encodedVideoId = encodeURIComponent(videoId)
 
       try {
-        // Progressive loading: start with coarsest modulo, move to finer levels
+        // If jumping, load exact frames around jump target FIRST, then navigate
+        if (isJump && jumpTarget !== null) {
+          jumpRequestedRef.current = false // Clear flag after reading
+
+          let finestQueue = buildQueueForModulo(
+            jumpTarget, // Load around target, not current position
+            5, // Level 5 = modulo 1 (finest, exact frames)
+            totalFrames,
+            loadedChunksRef.current,
+            requestedChunksRef.current
+          )
+
+          // Load ALL finest frames before jumping
+          while (finestQueue.length > 0) {
+            if (cancelled) return
+
+            const batch = finestQueue.splice(0, MAX_CONCURRENT_REQUESTS)
+            markChunksAsRequested(batch, requestedChunksRef.current)
+
+            const batchPromises = batch.map(async chunk => {
+              const indicesParam = chunk.frames.join(',')
+              const response = await fetch(
+                `/api/frames/${encodedVideoId}/batch?indices=${indicesParam}`
+              )
+              return response.json() as Promise<{
+                frames: Array<{ frame_index: number; image_data: string }>
+              }>
+            })
+
+            const results = await Promise.all(batchPromises)
+            processLoadedFrames(results, framesRef.current)
+            updateCacheAfterLoad(batch, loadedChunksRef.current, requestedChunksRef.current)
+          }
+
+          // All exact frames loaded - NOW jump to target
+          currentFrameIndexRef.current = jumpTarget
+          jumpTargetRef.current = null // Clear pending jump
+          lastLoadedFrame = jumpTarget // Update tracking
+        }
+
+        // Now do normal progressive loading (coarsest to finest)
         let currentModuloLevel = 0
         let queue = buildQueueForModulo(
-          currentFrameIndex,
+          targetFrameIndex,
           currentModuloLevel,
           totalFrames,
           loadedChunksRef.current,
@@ -236,7 +296,7 @@ export function useBoundaryFrameLoader({
           if (queue.length === 0) {
             currentModuloLevel++
             queue = buildQueueForModulo(
-              currentFrameIndex,
+              targetFrameIndex,
               currentModuloLevel,
               totalFrames,
               loadedChunksRef.current,
@@ -247,8 +307,8 @@ export function useBoundaryFrameLoader({
 
           if (queue.length === 0) break
 
-          // Filter to drop entire chunks outside range of current frame
-          queue = filterQueueByRange(queue, currentFrameIndex)
+          // Filter to drop entire chunks outside range of target frame
+          queue = filterQueueByRange(queue, targetFrameIndex)
 
           if (queue.length === 0) break
 
@@ -277,17 +337,29 @@ export function useBoundaryFrameLoader({
           // Update cache
           updateCacheAfterLoad(batch, loadedChunksRef.current, requestedChunksRef.current)
         }
+
+        // Update lastLoadedFrame after successful load (use captured target, not current)
+        lastLoadedFrame = targetFrameIndex
       } catch (error: unknown) {
         console.error('Failed to load frames:', error)
+      } finally {
+        isLoading = false
       }
     }
 
+    // Poll every 100ms to check if we need to load more frames
+    const pollInterval = setInterval(() => {
+      void loadFrameHierarchy()
+    }, 100)
+
+    // Initial load
     void loadFrameHierarchy()
 
     return () => {
       cancelled = true
+      clearInterval(pollInterval)
     }
-  }, [currentFrameIndex, totalFrames, videoId, isReady])
-
-  return { framesRef }
+    // Note: currentFrameIndexRef is NOT in dependencies - we read from it via polling
+    // This allows continuous monitoring without effect re-triggering
+  }, [totalFrames, videoId, isReady])
 }

@@ -80,11 +80,12 @@ export function calculateVisibleFramePositions(
   const totalSlots = Math.max(Math.ceil(availableHeight / frameHeightWithGap), 3)
 
   // Generate sequential frame positions centered on current frame
+  // Don't clamp positions - let them be negative or beyond totalFrames
+  // Rendering component will skip out-of-bounds frames
   const positions: number[] = []
   for (let i = 0; i < totalSlots; i++) {
     const position = currentFrameIndex + i - Math.floor(totalSlots / 2)
-    const clampedPosition = Math.max(0, Math.min(position, totalFrames - 1))
-    positions.push(clampedPosition)
+    positions.push(position)
   }
 
   return positions

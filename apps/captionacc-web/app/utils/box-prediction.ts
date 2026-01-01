@@ -8,6 +8,26 @@
 
 import type Database from 'better-sqlite3'
 
+import {
+  calculateFeatureImportance,
+  computePooledCovariance,
+  invertCovarianceMatrix,
+  shouldCalculateFeatureImportance,
+  type ClassSamples,
+  type GaussianParams as FeatureGaussianParams,
+} from './feature-importance'
+import { type FeatureImportanceMetrics } from './streaming-prediction-config'
+
+/** SQLite error with code property */
+interface SqliteError extends Error {
+  code: string
+}
+
+/** Type guard for SQLite errors */
+function isSqliteError(error: unknown): error is SqliteError {
+  return error instanceof Error && 'code' in error
+}
+
 interface VideoLayoutConfig {
   frame_width: number
   frame_height: number
@@ -42,6 +62,9 @@ interface ModelParams {
   prior_out: number
   in_features: GaussianParams[] // 26 features
   out_features: GaussianParams[] // 26 features
+  feature_importance: FeatureImportanceMetrics[] | null // Fisher scores (26 features)
+  covariance_matrix: number[] | null // Pooled covariance (676 values: 26×26 row-major)
+  covariance_inverse: number[] | null // Inverted covariance (676 values, pre-computed)
 }
 
 interface ModelRow {
@@ -158,6 +181,10 @@ interface ModelRow {
   out_time_from_start_std: number
   out_time_from_end_mean: number
   out_time_from_end_std: number
+  // Streaming prediction metrics (JSON columns)
+  feature_importance: string | null // JSON array of FeatureImportanceMetrics
+  covariance_matrix: string | null // JSON array of 676 values (26×26 row-major)
+  covariance_inverse: string | null // JSON array of 676 values
 }
 
 /**
@@ -748,8 +775,54 @@ function migrateModelSchema(db: Database.Database): void {
         '[migrateModelSchema] WARNING: Model needs retraining to learn proper parameters for new features'
       )
     } catch (migrationError) {
+      // If readonly, silently skip migration
+      if (isSqliteError(migrationError) && migrationError.code === 'SQLITE_READONLY') {
+        return
+      }
       console.error('[migrateModelSchema] Migration failed:', migrationError)
       throw new Error('Failed to migrate model schema - model will need to be retrained')
+    }
+  }
+}
+
+/**
+ * Migrate box_classification_model to add streaming prediction columns.
+ *
+ * Adds columns for intelligent scope detection and feature importance:
+ * - feature_importance: JSON array of Fisher scores (26 features)
+ * - covariance_matrix: JSON array of pooled covariance (26×26 = 676 values)
+ * - covariance_inverse: JSON array of inverted covariance (676 values, pre-computed)
+ */
+function migrateStreamingPredictionSchema(db: Database.Database): void {
+  try {
+    // Check if streaming prediction schema exists
+    db.prepare('SELECT feature_importance FROM box_classification_model WHERE id = 1').get()
+    // If we get here, schema already exists
+    return
+  } catch {
+    // Schema needs migration
+    console.log(
+      '[migrateStreamingPredictionSchema] Adding feature importance and covariance columns'
+    )
+
+    try {
+      // Add feature importance column (JSON array of 26 Fisher scores)
+      db.prepare('ALTER TABLE box_classification_model ADD COLUMN feature_importance TEXT').run()
+
+      // Add pooled covariance matrix (JSON array of 676 values, row-major 26×26)
+      db.prepare('ALTER TABLE box_classification_model ADD COLUMN covariance_matrix TEXT').run()
+
+      // Add inverted covariance (JSON array of 676 values, pre-computed for efficiency)
+      db.prepare('ALTER TABLE box_classification_model ADD COLUMN covariance_inverse TEXT').run()
+
+      console.log('[migrateStreamingPredictionSchema] Migration completed successfully')
+    } catch (migrationError) {
+      // If readonly, silently skip migration
+      if (isSqliteError(migrationError) && migrationError.code === 'SQLITE_READONLY') {
+        return
+      }
+      console.error('[migrateStreamingPredictionSchema] Migration failed:', migrationError)
+      throw new Error('Failed to migrate streaming prediction schema')
     }
   }
 }
@@ -777,6 +850,10 @@ function migrateVideoPreferencesSchema(db: Database.Database): void {
 
       console.log('[migrateVideoPreferencesSchema] Migration completed successfully')
     } catch (migrationError) {
+      // If readonly, silently skip migration
+      if (isSqliteError(migrationError) && migrationError.code === 'SQLITE_READONLY') {
+        return
+      }
       console.error('[migrateVideoPreferencesSchema] Migration failed:', migrationError)
       throw new Error('Failed to migrate video_preferences schema')
     }
@@ -813,6 +890,10 @@ function migrateFullFrameOcrSchema(db: Database.Database): void {
     try {
       db.prepare('ALTER TABLE full_frame_ocr ADD COLUMN timestamp_seconds REAL').run()
     } catch (migrationError) {
+      // If readonly, silently skip migration
+      if (isSqliteError(migrationError) && migrationError.code === 'SQLITE_READONLY') {
+        return
+      }
       console.error('[migrateFullFrameOcrSchema] Failed to add column:', migrationError)
       throw new Error('Failed to migrate full_frame_ocr schema')
     }
@@ -838,6 +919,10 @@ function migrateFullFrameOcrSchema(db: Database.Database): void {
 
     console.log('[migrateFullFrameOcrSchema] Timestamps populated successfully')
   } catch (migrationError) {
+    // If readonly, silently skip migration
+    if (isSqliteError(migrationError) && migrationError.code === 'SQLITE_READONLY') {
+      return
+    }
     console.error('[migrateFullFrameOcrSchema] Failed to populate timestamps:', migrationError)
     throw new Error('Failed to populate timestamps in full_frame_ocr')
   }
@@ -852,6 +937,7 @@ function migrateFullFrameOcrSchema(db: Database.Database): void {
 function loadModelFromDB(db: Database.Database): ModelParams | null {
   // Migrate schemas if needed
   migrateModelSchema(db)
+  migrateStreamingPredictionSchema(db)
   migrateVideoPreferencesSchema(db)
   migrateFullFrameOcrSchema(db)
   const row = db.prepare('SELECT * FROM box_classification_model WHERE id = 1').get() as
@@ -940,6 +1026,35 @@ function loadModelFromDB(db: Database.Database): ModelParams | null {
     { mean: row.out_time_from_end_mean, std: row.out_time_from_end_std },
   ]
 
+  // Parse streaming prediction metrics from JSON columns
+  let featureImportance: FeatureImportanceMetrics[] | null = null
+  let covarianceMatrix: number[] | null = null
+  let covarianceInverse: number[] | null = null
+
+  if (row.feature_importance) {
+    try {
+      featureImportance = JSON.parse(row.feature_importance) as FeatureImportanceMetrics[]
+    } catch (error) {
+      console.warn('[loadModelFromDB] Failed to parse feature_importance:', error)
+    }
+  }
+
+  if (row.covariance_matrix) {
+    try {
+      covarianceMatrix = JSON.parse(row.covariance_matrix) as number[]
+    } catch (error) {
+      console.warn('[loadModelFromDB] Failed to parse covariance_matrix:', error)
+    }
+  }
+
+  if (row.covariance_inverse) {
+    try {
+      covarianceInverse = JSON.parse(row.covariance_inverse) as number[]
+    } catch (error) {
+      console.warn('[loadModelFromDB] Failed to parse covariance_inverse:', error)
+    }
+  }
+
   return {
     model_version: row.model_version,
     n_training_samples: row.n_training_samples,
@@ -947,6 +1062,9 @@ function loadModelFromDB(db: Database.Database): ModelParams | null {
     prior_out: row.prior_out,
     in_features: inFeatures,
     out_features: outFeatures,
+    feature_importance: featureImportance,
+    covariance_matrix: covarianceMatrix,
+    covariance_inverse: covarianceInverse,
   }
 }
 
@@ -1557,7 +1675,44 @@ export function trainModel(db: Database.Database, layoutConfig: VideoLayoutConfi
   const priorIn = inFeatures.length / total
   const priorOut = outFeatures.length / total
 
-  // Store model in database (26 features = 104 columns + metadata)
+  // Calculate feature importance (Fisher scores)
+  let featureImportanceJson: string | null = null
+  if (shouldCalculateFeatureImportance(total)) {
+    const featureImportance = calculateFeatureImportance(inParams, outParams)
+    featureImportanceJson = JSON.stringify(featureImportance)
+    console.log(
+      `[trainModel] Calculated feature importance (top 5): ${featureImportance
+        .sort((a, b) => b.fisherScore - a.fisherScore)
+        .slice(0, 5)
+        .map(f => `${f.featureName}=${f.fisherScore.toFixed(2)}`)
+        .join(', ')}`
+    )
+  }
+
+  // Calculate pooled covariance matrix and its inverse
+  let covarianceMatrixJson: string | null = null
+  let covarianceInverseJson: string | null = null
+
+  if (inFeatures.length >= 2 && outFeatures.length >= 2) {
+    const inSamples: ClassSamples = {
+      n: inFeatures.length,
+      features: inFeatures,
+    }
+    const outSamples: ClassSamples = {
+      n: outFeatures.length,
+      features: outFeatures,
+    }
+
+    const covarianceMatrix = computePooledCovariance(inSamples, outSamples)
+    const covarianceInverse = invertCovarianceMatrix(covarianceMatrix)
+
+    covarianceMatrixJson = JSON.stringify(covarianceMatrix)
+    covarianceInverseJson = JSON.stringify(covarianceInverse)
+
+    console.log(`[trainModel] Computed pooled covariance matrix (26×26 = 676 values)`)
+  }
+
+  // Store model in database (26 features = 104 columns + metadata + streaming prediction data)
   db.prepare(
     `
     INSERT OR REPLACE INTO box_classification_model (
@@ -1618,14 +1773,18 @@ export function trainModel(db: Database.Database, layoutConfig: VideoLayoutConfi
       out_is_digits_mean, out_is_digits_std,
       out_is_punctuation_mean, out_is_punctuation_std,
       out_time_from_start_mean, out_time_from_start_std,
-      out_time_from_end_mean, out_time_from_end_std
+      out_time_from_end_mean, out_time_from_end_std,
+      feature_importance,
+      covariance_matrix,
+      covariance_inverse
     ) VALUES (
       1,
       'naive_bayes_v2',
       datetime('now'),
       ?,
       ?, ?,
-      ${Array(104).fill('?').join(', ')}
+      ${Array(104).fill('?').join(', ')},
+      ?, ?, ?
     )
   `
   ).run(
@@ -1633,7 +1792,10 @@ export function trainModel(db: Database.Database, layoutConfig: VideoLayoutConfi
     priorIn,
     priorOut,
     ...inParams.flatMap(p => [p.mean, p.std]),
-    ...outParams.flatMap(p => [p.mean, p.std])
+    ...outParams.flatMap(p => [p.mean, p.std]),
+    featureImportanceJson,
+    covarianceMatrixJson,
+    covarianceInverseJson
   )
 
   console.log(

@@ -4,11 +4,10 @@ Writes OCR results directly to the full_frame_ocr table in the video's annotatio
 Writes frame images to full_frames table for blob storage.
 """
 
-import json
 import sqlite3
 from pathlib import Path
-from typing import Optional
 
+from ocr_utils import ensure_ocr_table, write_ocr_result_to_database
 from PIL import Image
 
 
@@ -31,101 +30,8 @@ def get_database_path(output_dir: Path) -> Path:
     return video_dir / "annotations.db"
 
 
-def ensure_full_frame_ocr_table(db_path: Path) -> None:
-    """Ensure full_frame_ocr table exists in database.
-
-    Creates the table if it doesn't exist.
-
-    Args:
-        db_path: Path to annotations.db file
-    """
-    conn = sqlite3.connect(db_path)
-    try:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS full_frame_ocr (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                frame_index INTEGER NOT NULL,
-                box_index INTEGER NOT NULL,
-                text TEXT NOT NULL,
-                confidence REAL NOT NULL,
-                x REAL NOT NULL,
-                y REAL NOT NULL,
-                width REAL NOT NULL,
-                height REAL NOT NULL,
-                created_at TEXT NOT NULL DEFAULT (datetime('now')),
-                UNIQUE(frame_index, box_index)
-            )
-        """)
-        conn.execute("""
-            CREATE INDEX IF NOT EXISTS idx_full_frame_ocr_frame
-            ON full_frame_ocr(frame_index)
-        """)
-        conn.commit()
-    finally:
-        conn.close()
-
-
-def write_ocr_to_database(
-    ocr_result: dict,
-    db_path: Path,
-    progress_callback: Optional[callable] = None,
-) -> int:
-    """Write OCR result to full_frame_ocr table.
-
-    Args:
-        ocr_result: OCR result dictionary from process_frame_ocr_with_retry
-        db_path: Path to annotations.db file
-        progress_callback: Optional callback for progress updates
-
-    Returns:
-        Number of boxes inserted
-
-    OCR Result Format:
-        {
-            "image_path": "full_frames/frame_0000000100.jpg",
-            "framework": "livetext",
-            "language_preference": "zh-Hans",
-            "annotations": [
-                ["你", 0.95, [0.1, 0.8, 0.02, 0.03]],
-                ["好", 0.98, [0.12, 0.8, 0.02, 0.03]],
-                ...
-            ]
-        }
-    """
-    # Extract frame index from image path
-    image_path = Path(ocr_result["image_path"])
-    frame_name = image_path.name  # e.g., "frame_0000000100.jpg"
-    frame_index = int(frame_name.split("_")[1].split(".")[0])  # Extract 100 from "frame_0000000100.jpg"
-
-    annotations = ocr_result.get("annotations", [])
-    if not annotations:
-        return 0
-
-    # Connect and insert boxes
-    conn = sqlite3.connect(db_path)
-    try:
-        cursor = conn.cursor()
-        inserted = 0
-
-        for box_index, annotation in enumerate(annotations):
-            text, confidence, bbox = annotation
-            x, y, width, height = bbox
-
-            # Insert with ON CONFLICT DO NOTHING to handle re-runs
-            cursor.execute("""
-                INSERT INTO full_frame_ocr (frame_index, box_index, text, confidence, x, y, width, height)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(frame_index, box_index) DO NOTHING
-            """, (frame_index, box_index, text, confidence, x, y, width, height))
-
-            if cursor.rowcount > 0:
-                inserted += 1
-
-        conn.commit()
-        return inserted
-
-    finally:
-        conn.close()
+# These functions have been moved to ocr_utils package
+# Use ensure_ocr_table and write_ocr_result_to_database from ocr_utils instead
 
 
 def load_ocr_annotations_from_database(db_path: Path) -> list[dict]:
@@ -164,12 +70,15 @@ def load_ocr_annotations_from_database(db_path: Path) -> list[dict]:
         annotations = []
         for frame_index in frame_indices:
             # Get all boxes for this frame
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT box_index, text, confidence, x, y, width, height
                 FROM full_frame_ocr
                 WHERE frame_index = ?
                 ORDER BY box_index
-            """, (frame_index,))
+            """,
+                (frame_index,),
+            )
 
             boxes = []
             for row in cursor.fetchall():
@@ -177,10 +86,7 @@ def load_ocr_annotations_from_database(db_path: Path) -> list[dict]:
                 boxes.append([text, confidence, [x, y, width, height]])
 
             # Create annotation entry in same format as JSONL
-            annotations.append({
-                "image_path": f"full_frames/frame_{frame_index:010d}.jpg",
-                "annotations": boxes
-            })
+            annotations.append({"image_path": f"full_frames/frame_{frame_index:010d}.jpg", "annotations": boxes})
 
         return annotations
 
@@ -191,7 +97,7 @@ def load_ocr_annotations_from_database(db_path: Path) -> list[dict]:
 def write_frames_to_database(
     frames_dir: Path,
     db_path: Path,
-    progress_callback: Optional[callable] = None,
+    progress_callback: callable | None = None,
     delete_after_write: bool = True,
 ) -> int:
     """Write all frame images from directory to database.
@@ -264,7 +170,7 @@ def process_frames_to_database(
     frames_dir: Path,
     db_path: Path,
     language: str = "zh-Hans",
-    progress_callback: Optional[callable] = None,
+    progress_callback: callable | None = None,
     max_workers: int = 1,
 ) -> int:
     """Process all frames in a directory with OCR and write to database.
@@ -285,10 +191,11 @@ def process_frames_to_database(
         Total number of OCR boxes inserted into database
     """
     from concurrent.futures import ProcessPoolExecutor, as_completed
+
     from ocr_utils import process_frame_ocr_with_retry
 
-    # Ensure table exists
-    ensure_full_frame_ocr_table(db_path)
+    # Ensure table exists using shared function
+    ensure_ocr_table(db_path, table_name="full_frame_ocr", include_crop_version=False)
 
     # Find all frame images
     frame_files = sorted(frames_dir.glob("frame_*.jpg"))
@@ -313,8 +220,13 @@ def process_frames_to_database(
             try:
                 ocr_result = future.result()
 
-                # Write to database
-                boxes_inserted = write_ocr_to_database(ocr_result, db_path)
+                # Write to database using shared function
+                boxes_inserted = write_ocr_result_to_database(
+                    ocr_result=ocr_result,
+                    db_path=db_path,
+                    table_name="full_frame_ocr",
+                    crop_bounds_version=None,  # full_frame_ocr doesn't use crop_bounds_version
+                )
                 total_boxes += boxes_inserted
 
                 completed_count += 1

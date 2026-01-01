@@ -21,11 +21,11 @@ import {
   UploadProgressSection,
   IncompleteUploadsNotification,
 } from '~/components/upload/UploadProgressSection'
-import { useIncompleteUploads } from '~/hooks/useIncompleteUploads'
+import { useIncompleteUploadsV2 } from '~/hooks/useIncompleteUploadsV2'
 import { useUploadDragDrop } from '~/hooks/useUploadDragDrop'
 import { useUploadFiles } from '~/hooks/useUploadFiles'
 import { useUploadFolders } from '~/hooks/useUploadFolders'
-import { useUploadQueue } from '~/hooks/useUploadQueue'
+import { useUploadQueueV2 } from '~/hooks/useUploadQueueV2'
 import { calculateUploadStats } from '~/utils/upload-helpers'
 
 // ============================================================================
@@ -55,9 +55,13 @@ export default function UploadPage() {
     loaderData.preselectedFolder
   )
   const { incompleteUploads, showIncompletePrompt, dismissIncompletePrompt } =
-    useIncompleteUploads()
+    useIncompleteUploadsV2()
   const fileState = useUploadFiles(false)
-  const uploadQueue = useUploadQueue(fileState.videoFiles, fileState.setVideoFiles, selectedFolder)
+  const uploadQueue = useUploadQueueV2(
+    fileState.videoFiles,
+    fileState.setVideoFiles,
+    selectedFolder
+  )
 
   // Drag-and-drop with file processing callback
   const handleFilesDropped = useCallback(
