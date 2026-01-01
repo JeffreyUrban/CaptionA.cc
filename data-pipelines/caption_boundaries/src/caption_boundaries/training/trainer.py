@@ -55,11 +55,10 @@ class BalancedBatchSampler(Sampler):
         self.dataset = dataset
         self.majority_ratio = majority_ratio
 
-        # Group indices by label
+        # Group indices by label (access samples directly, don't call __getitem__)
         self.label_to_indices = defaultdict(list)
-        for idx in range(len(dataset)):
-            label = dataset[idx]["label"]
-            self.label_to_indices[label].append(idx)
+        for idx, sample in enumerate(dataset.samples):
+            self.label_to_indices[sample.label].append(idx)
 
         # Find minority class size and set threshold
         self.class_sizes = {label: len(indices) for label, indices in self.label_to_indices.items()}
