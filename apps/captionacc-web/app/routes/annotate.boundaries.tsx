@@ -50,6 +50,7 @@ export default function BoundaryWorkflow() {
             visibleFramePositions={visibleFramePositions}
             frames={displayState.frames}
             currentFrameIndex={displayState.currentFrameIndex}
+            totalFrames={totalFrames}
             markedStart={displayState.markedStart}
             markedEnd={displayState.markedEnd}
             activeAnnotation={displayState.activeAnnotation}
