@@ -40,6 +40,7 @@ interface BoundaryControlsPanelProps {
   // Active annotation
   activeAnnotation: Annotation | null
   canSave: boolean
+  isSaving: boolean
   hasPrevAnnotation: boolean
   hasNextAnnotation: boolean
   onSave: () => void
@@ -75,6 +76,7 @@ export function BoundaryControlsPanel({
   onClearMarks,
   activeAnnotation,
   canSave,
+  isSaving,
   hasPrevAnnotation,
   hasNextAnnotation,
   onSave,
@@ -135,6 +137,7 @@ export function BoundaryControlsPanel({
           {/* Actions */}
           <BoundaryActionButtons
             canSave={canSave}
+            isSaving={isSaving}
             hasPrevAnnotation={hasPrevAnnotation}
             hasNextAnnotation={hasNextAnnotation}
             activeAnnotation={activeAnnotation}
