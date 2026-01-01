@@ -476,12 +476,13 @@ def create_training_dataset(
     video_metadata_map = {}
     crop_bounds_versions = {}
     label_counts = defaultdict(int)
+    skipped_videos = []  # Collect warnings to display after progress bar
 
     for video_db_path in track(video_db_paths, description="Extracting frame pairs"):
         # Find video file
         video_file = find_video_file(video_db_path)
         if not video_file:
-            console.print(f"[yellow]⚠ No video file found for {video_db_path}, skipping[/yellow]")
+            skipped_videos.append((video_db_path, "No video file found"))
             continue
 
         # Get video hash
@@ -489,25 +490,25 @@ def create_training_dataset(
             metadata = get_video_metadata(video_file)
             video_hash = metadata["video_hash"]
         except Exception as e:
-            console.print(f"[yellow]⚠ Failed to get metadata for {video_file}: {e}, skipping[/yellow]")
+            skipped_videos.append((video_db_path, f"Failed to get metadata: {e}"))
             continue
 
         # Get layout metadata
         try:
             layout_meta = get_video_layout_metadata(video_db_path)
         except Exception as e:
-            console.print(f"[yellow]⚠ Failed to get layout metadata for {video_db_path}: {e}, skipping[/yellow]")
+            skipped_videos.append((video_db_path, f"Failed to get layout metadata: {e}"))
             continue
 
         # Extract frame pairs
         try:
             pairs = extract_frame_pairs_from_captions(video_db_path)
         except Exception as e:
-            console.print(f"[yellow]⚠ Failed to extract pairs from {video_db_path}: {e}, skipping[/yellow]")
+            skipped_videos.append((video_db_path, f"Failed to extract pairs: {e}"))
             continue
 
         if not pairs:
-            console.print(f"[yellow]⚠ No confirmed captions in {video_db_path}, skipping[/yellow]")
+            skipped_videos.append((video_db_path, "No confirmed captions"))
             continue
 
         # Add video hash to each pair
@@ -570,6 +571,14 @@ def create_training_dataset(
     console.print(f"[cyan]Label distribution:[/cyan]")
     for label, count in sorted(label_counts.items()):
         console.print(f"  {label}: {count}")
+
+    # Display skipped videos if any
+    if skipped_videos:
+        console.print(f"\n[yellow]⚠ Skipped {len(skipped_videos)} videos:[/yellow]")
+        for video_path, reason in skipped_videos[:10]:  # Show first 10
+            console.print(f"  {video_path.parent.name}: {reason}")
+        if len(skipped_videos) > 10:
+            console.print(f"  ... and {len(skipped_videos) - 10} more")
 
     # Deduplicate samples (same video_hash + frame pair)
     seen_pairs = set()
@@ -646,13 +655,39 @@ def create_training_dataset(
 
     console.print(f"[green]✓[/green] Dataset record created with ID: {dataset_id}")
 
-    # Extract font embeddings for all videos
-    console.print(f"\n[cyan]Extracting font embeddings for {len(video_db_paths)} videos...[/cyan]")
+    # Group samples by video for per-video processing
+    samples_by_video = defaultdict(list)
+    for sample in all_samples:
+        samples_by_video[sample["video_hash"]].append(sample)
+
+    # Build video DB path mapping for videos that have samples
+    # Read video_hash from database instead of video file
+    video_db_map = {}
+    for video_db_path in video_db_paths:
+        try:
+            conn = sqlite3.connect(video_db_path)
+            try:
+                cursor = conn.cursor()
+                cursor.execute("SELECT video_hash FROM video_metadata LIMIT 1")
+                row = cursor.fetchone()
+                if row:
+                    video_hash = row[0]
+                    # Only include videos that contributed samples
+                    if video_hash in samples_by_video:
+                        video_db_map[video_hash] = video_db_path
+            finally:
+                conn.close()
+        except Exception:
+            continue
+
+    # Extract font embeddings only for videos with samples
+    videos_with_samples = list(video_db_map.values())
+    console.print(f"\n[cyan]Extracting font embeddings for {len(videos_with_samples)} videos with samples...[/cyan]")
     from caption_boundaries.data.font_embeddings import batch_extract_embeddings
 
     try:
         embeddings = batch_extract_embeddings(
-            video_db_paths=video_db_paths,
+            video_db_paths=videos_with_samples,
             training_db_path=dataset_db_path,
             force_recompute=False,
         )
@@ -660,22 +695,6 @@ def create_training_dataset(
     except Exception as e:
         console.print(f"[yellow]⚠ Font embedding extraction failed: {e}[/yellow]")
         console.print("  Dataset will be created without font embeddings")
-
-    # Group samples by video for per-video processing
-    samples_by_video = defaultdict(list)
-    for sample in all_samples:
-        samples_by_video[sample["video_hash"]].append(sample)
-
-    # Find video DB path mapping
-    video_db_map = {}
-    for video_db_path in video_db_paths:
-        try:
-            video_file = find_video_file(video_db_path)
-            if video_file:
-                metadata = get_video_metadata(video_file)
-                video_db_map[metadata["video_hash"]] = video_db_path
-        except Exception:
-            continue
 
     # Process each video: copy frames, copy OCR viz, insert samples
     # Use a single database session for all videos to avoid creating too many engines
@@ -754,5 +773,17 @@ def create_training_dataset(
     console.print(f"  Database: {dataset_db_path}")
     console.print(f"  Train samples: {sum(1 for s in all_samples if s['split'] == 'train')}")
     console.print(f"  Val samples: {sum(1 for s in all_samples if s['split'] == 'val')}")
+
+    # Show font embedding model info
+    from caption_boundaries.data.font_embeddings import get_dataset_model_info
+
+    try:
+        model_info = get_dataset_model_info(dataset_db_path)
+        if model_info:
+            console.print(f"\n[cyan]Font embedding models:[/cyan]")
+            for model_version, count in model_info.items():
+                console.print(f"  {model_version}: {count} videos")
+    except Exception:
+        pass  # Don't fail if model info query fails
 
     return dataset_db_path
