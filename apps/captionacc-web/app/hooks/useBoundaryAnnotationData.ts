@@ -9,6 +9,8 @@ import type { Annotation } from '~/types/boundaries'
 
 interface UseBoundaryAnnotationDataParams {
   videoId: string
+  jumpRequestedRef: React.RefObject<boolean> // Signal to frame loader when navigation is a jump
+  jumpTargetRef: React.RefObject<number | null> // Pending jump destination
   updateProgress: () => Promise<void>
   /** Callback when annotation changes require reloading visible annotations */
   onAnnotationsChanged?: (startFrame: number, endFrame: number) => Promise<void>
@@ -55,6 +57,8 @@ interface UseBoundaryAnnotationDataReturn {
  */
 export function useBoundaryAnnotationData({
   videoId,
+  jumpRequestedRef,
+  jumpTargetRef,
   updateProgress,
 }: UseBoundaryAnnotationDataParams): UseBoundaryAnnotationDataReturn {
   // State refs
@@ -189,7 +193,8 @@ export function useBoundaryAnnotationData({
 
         if (nextData.annotation) {
           activeAnnotationRef.current = nextData.annotation
-          currentFrameIndexRef.current = nextData.annotation.start_frame_index
+          jumpTargetRef.current = nextData.annotation.start_frame_index // Set pending jump target
+          jumpRequestedRef.current = true // Signal frame loader: Save & Next is a jump
           markedStartRef.current = nextData.annotation.start_frame_index
           markedEndRef.current = nextData.annotation.end_frame_index
           hasPrevAnnotationRef.current = true
@@ -236,7 +241,8 @@ export function useBoundaryAnnotationData({
 
         if (nextData.annotation) {
           activeAnnotationRef.current = nextData.annotation
-          currentFrameIndexRef.current = nextData.annotation.start_frame_index
+          jumpTargetRef.current = nextData.annotation.start_frame_index // Set pending jump target
+          jumpRequestedRef.current = true // Signal frame loader: Delete Caption is a jump
           markedStartRef.current = nextData.annotation.start_frame_index
           markedEndRef.current = nextData.annotation.end_frame_index
           hasPrevAnnotationRef.current = true
@@ -271,7 +277,7 @@ export function useBoundaryAnnotationData({
 
         if (data.annotation) {
           activeAnnotationRef.current = data.annotation
-          currentFrameIndexRef.current = data.annotation.start_frame_index
+          jumpTargetRef.current = data.annotation.start_frame_index // Set pending jump target
           markedStartRef.current = data.annotation.start_frame_index
           markedEndRef.current = data.annotation.end_frame_index
 
@@ -308,7 +314,7 @@ export function useBoundaryAnnotationData({
         if (data.annotations && data.annotations.length > 0) {
           const annotation = data.annotations[0]
           activeAnnotationRef.current = annotation
-          currentFrameIndexRef.current = frameNumber
+          jumpTargetRef.current = frameNumber // Set pending jump target
           markedStartRef.current = annotation.start_frame_index
           markedEndRef.current = annotation.end_frame_index
 

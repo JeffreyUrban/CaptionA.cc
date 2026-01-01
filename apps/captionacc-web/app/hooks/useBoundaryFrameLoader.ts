@@ -13,6 +13,8 @@ import type { Frame } from '~/types/boundaries'
 interface UseBoundaryFrameLoaderParams {
   videoId: string
   currentFrameIndexRef: React.RefObject<number> // Pass ref, read inside effect
+  jumpRequestedRef: React.RefObject<boolean> // True when user explicitly jumps (not scroll/drag)
+  jumpTargetRef: React.RefObject<number | null> // Pending jump destination (null = no pending jump)
   totalFrames: number
   framesRef: React.RefObject<Map<number, Frame>> // Now passed from parent
   isReady: boolean // Only start loading when metadata is loaded
@@ -198,6 +200,8 @@ function updateCacheAfterLoad(
 export function useBoundaryFrameLoader({
   videoId,
   currentFrameIndexRef,
+  jumpRequestedRef,
+  jumpTargetRef,
   totalFrames,
   framesRef,
   isReady,
@@ -210,36 +214,43 @@ export function useBoundaryFrameLoader({
 
     let cancelled = false
     let lastLoadedFrame = -1000 // Track last frame we loaded around
+    let isLoading = false // Prevent concurrent executions
 
     const loadFrameHierarchy = async () => {
-      if (cancelled) return
+      if (cancelled || isLoading) return
+
+      // Check for pending jump FIRST (before debouncing)
+      const isJump = jumpRequestedRef.current ?? false
+      const jumpTarget = jumpTargetRef.current
 
       // Read current frame from ref (always gets latest value)
       const currentFrameIndex = currentFrameIndexRef.current ?? 0
 
       // Only reload if we've moved significantly (more than 16 frames)
-      // This prevents constant reloading while still responding to navigation
-      if (Math.abs(currentFrameIndex - lastLoadedFrame) < 16) {
+      // Skip this check if there's a pending jump
+      if (!isJump && Math.abs(currentFrameIndex - lastLoadedFrame) < 16) {
         return
       }
+
+      isLoading = true
+      const targetFrameIndex = currentFrameIndex // Capture at start, not end
 
       const encodedVideoId = encodeURIComponent(videoId)
 
       try {
-        // Check if this is a jump beyond largest cache range (modulo=32, range=1024)
-        const isJump = Math.abs(currentFrameIndex - lastLoadedFrame) > 1024
+        // If jumping, load exact frames around jump target FIRST, then navigate
+        if (isJump && jumpTarget !== null) {
+          jumpRequestedRef.current = false // Clear flag after reading
 
-        // If jumping, load exact visible frames FIRST and WAIT for them (modulo=1, level 5)
-        if (isJump) {
           let finestQueue = buildQueueForModulo(
-            currentFrameIndex,
+            jumpTarget, // Load around target, not current position
             5, // Level 5 = modulo 1 (finest, exact frames)
             totalFrames,
             loadedChunksRef.current,
             requestedChunksRef.current
           )
 
-          // Load ALL finest frames before starting progressive loading
+          // Load ALL finest frames before jumping
           while (finestQueue.length > 0) {
             if (cancelled) return
 
@@ -260,12 +271,17 @@ export function useBoundaryFrameLoader({
             processLoadedFrames(results, framesRef.current)
             updateCacheAfterLoad(batch, loadedChunksRef.current, requestedChunksRef.current)
           }
+
+          // All exact frames loaded - NOW jump to target
+          currentFrameIndexRef.current = jumpTarget
+          jumpTargetRef.current = null // Clear pending jump
+          lastLoadedFrame = jumpTarget // Update tracking
         }
 
         // Now do normal progressive loading (coarsest to finest)
         let currentModuloLevel = 0
         let queue = buildQueueForModulo(
-          currentFrameIndex,
+          targetFrameIndex,
           currentModuloLevel,
           totalFrames,
           loadedChunksRef.current,
@@ -280,7 +296,7 @@ export function useBoundaryFrameLoader({
           if (queue.length === 0) {
             currentModuloLevel++
             queue = buildQueueForModulo(
-              currentFrameIndex,
+              targetFrameIndex,
               currentModuloLevel,
               totalFrames,
               loadedChunksRef.current,
@@ -291,8 +307,8 @@ export function useBoundaryFrameLoader({
 
           if (queue.length === 0) break
 
-          // Filter to drop entire chunks outside range of current frame
-          queue = filterQueueByRange(queue, currentFrameIndex)
+          // Filter to drop entire chunks outside range of target frame
+          queue = filterQueueByRange(queue, targetFrameIndex)
 
           if (queue.length === 0) break
 
@@ -322,10 +338,12 @@ export function useBoundaryFrameLoader({
           updateCacheAfterLoad(batch, loadedChunksRef.current, requestedChunksRef.current)
         }
 
-        // Update lastLoadedFrame after successful load
-        lastLoadedFrame = currentFrameIndex
+        // Update lastLoadedFrame after successful load (use captured target, not current)
+        lastLoadedFrame = targetFrameIndex
       } catch (error: unknown) {
         console.error('Failed to load frames:', error)
+      } finally {
+        isLoading = false
       }
     }
 
