@@ -1,6 +1,8 @@
-import { existsSync } from 'fs'
-import { readdir } from 'fs/promises'
+import { existsSync, readFileSync } from 'fs'
 import { resolve } from 'path'
+
+import type { FoldersMetadata } from '~/types/videos'
+import { getAllVideos } from '~/utils/video-paths'
 
 interface FolderItem {
   path: string
@@ -8,94 +10,78 @@ interface FolderItem {
 }
 
 /**
- * Recursively find all folders in the data directory
- * Returns folders that either:
- * - Contain video subdirectories
- * - Are empty leaf folders
+ * Extract unique folder paths from video display paths
+ * For example, "a_bite_of_china/1/1a" yields:
+ * - "a_bite_of_china"
+ * - "a_bite_of_china/1"
  */
-async function findFolders(
-  dir: string,
-  baseDir: string,
-  parentPath: string = ''
-): Promise<FolderItem[]> {
-  const folders: FolderItem[] = []
+function extractFoldersFromVideos(videos: ReturnType<typeof getAllVideos>): FolderItem[] {
+  const folderSet = new Set<string>()
 
-  try {
-    const entries = await readdir(dir, { withFileTypes: true })
-
-    // Check if this directory has an annotations.db file
-    const hasAnnotationsDb = entries.some(
-      entry => entry.isFile() && entry.name === 'annotations.db'
-    )
-
-    if (hasAnnotationsDb) {
-      // This is a video directory - don't include it or descend into it
-      return folders
+  // Extract all folder paths from video display paths
+  for (const video of videos) {
+    const parts = video.displayPath.split('/')
+    // Generate all parent folder paths
+    for (let i = 0; i < parts.length - 1; i++) {
+      const folderPath = parts.slice(0, i + 1).join('/')
+      folderSet.add(folderPath)
     }
-
-    // Skip known data directories
-    const skipDirs = new Set(['crop_frames', 'full_frames'])
-    const subdirs = entries.filter(entry => entry.isDirectory() && !skipDirs.has(entry.name))
-
-    // If this directory has subdirectories, include it as a folder and recurse
-    if (subdirs.length > 0) {
-      // Add this folder if it's not the root
-      if (parentPath) {
-        const folderName = parentPath.split('/').pop()
-        folders.push({
-          path: parentPath,
-          name: folderName ?? '',
-        })
-      }
-
-      // Recurse into subdirectories
-      for (const entry of subdirs) {
-        const fullPath = resolve(dir, entry.name)
-        const newParentPath = parentPath ? `${parentPath}/${entry.name}` : entry.name
-        const subFolders = await findFolders(fullPath, baseDir, newParentPath)
-        folders.push(...subFolders)
-      }
-    } else {
-      // This is an empty leaf folder - include it
-      if (parentPath) {
-        const folderName = parentPath.split('/').pop()
-        folders.push({
-          path: parentPath,
-          name: folderName ?? '',
-        })
-      }
-    }
-  } catch (error) {
-    console.error(`Error scanning directory ${dir}:`, error)
   }
+
+  // Convert to FolderItem array
+  const folders: FolderItem[] = Array.from(folderSet).map(path => ({
+    path,
+    name: path.split('/').pop() ?? '',
+  }))
 
   return folders
 }
 
 /**
- * API endpoint that returns list of available folders for upload destination
+ * Read empty folders from metadata file
+ * These are folders that don't contain any videos yet
  */
-export async function loader() {
+function getEmptyFolders(): string[] {
   const dataDir = resolve(process.cwd(), '..', '..', 'local', 'data')
+  const foldersMetaPath = resolve(dataDir, '.folders.json')
 
-  if (!existsSync(dataDir)) {
-    return new Response(JSON.stringify({ folders: [] }), {
-      headers: { 'Content-Type': 'application/json' },
-    })
+  try {
+    if (existsSync(foldersMetaPath)) {
+      const content = readFileSync(foldersMetaPath, 'utf-8')
+      const metadata: FoldersMetadata = JSON.parse(content)
+      return metadata.emptyFolders ?? []
+    }
+  } catch {
+    // If file doesn't exist or is invalid, return empty
   }
 
-  // Find all folders
-  const folders = await findFolders(dataDir, dataDir)
+  return []
+}
+
+/**
+ * API endpoint that returns list of available folders for upload destination
+ * Uses virtual folder paths (display_path) from the database, not physical storage paths
+ */
+export async function loader() {
+  // Get all videos and extract their folder paths
+  const videos = getAllVideos()
+  const folders = extractFoldersFromVideos(videos)
+
+  // Add empty folders from metadata
+  const emptyFolders = getEmptyFolders()
+  for (const folderPath of emptyFolders) {
+    if (!folders.some(f => f.path === folderPath)) {
+      folders.push({
+        path: folderPath,
+        name: folderPath.split('/').pop() ?? '',
+      })
+    }
+  }
 
   // Sort folders alphabetically
   folders.sort((a, b) => a.path.localeCompare(b.path))
 
-  // Remove duplicates (in case a folder was found multiple times)
-  const uniqueFolders = folders.filter(
-    (folder, index, self) => index === self.findIndex(f => f.path === folder.path)
-  )
-
-  return new Response(JSON.stringify({ folders: uniqueFolders }), {
+  return new Response(JSON.stringify({ folders }), {
     headers: { 'Content-Type': 'application/json' },
   })
 }
