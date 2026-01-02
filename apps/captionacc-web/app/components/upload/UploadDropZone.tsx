@@ -80,21 +80,26 @@ export function UploadDropZone({
       </div>
 
       {/* Action Buttons */}
-      <div className="mt-6 flex gap-3 justify-center">
-        <button
-          onClick={() => folderInputRef.current?.click()}
-          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
-        >
-          <FolderIcon className="h-5 w-5" />
-          Upload Folder
-        </button>
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
-        >
-          <DocumentIcon className="h-5 w-5" />
-          Upload Files
-        </button>
+      <div className="mt-6 space-y-3">
+        <div className="flex gap-3 justify-center">
+          <button
+            onClick={() => folderInputRef.current?.click()}
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
+          >
+            <FolderIcon className="h-5 w-5" />
+            Upload Folder
+          </button>
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
+          >
+            <DocumentIcon className="h-5 w-5" />
+            Upload Files
+          </button>
+        </div>
+        <p className="text-xs text-center text-gray-500 dark:text-gray-400">
+          Note: Your browser may ask for permission to access folders
+        </p>
       </div>
     </>
   )
