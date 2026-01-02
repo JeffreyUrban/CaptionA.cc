@@ -41,6 +41,37 @@ class UploadManager {
   private lastProgressTime = new Map<string, number>()
   private stallCheckInterval: NodeJS.Timeout | null = null
 
+  // Track if we've done initial cleanup (avoid circular dependency in constructor)
+  private hasCleanedOrphans = false
+
+  /**
+   * Clean up uploads that can't be resumed (no file available)
+   * This happens when page refreshes or navigates - sessionStorage persists
+   * but File objects don't, so we can't resume these uploads
+   *
+   * Called lazily on first operation to avoid circular dependency issues
+   */
+  private cleanupOrphanedUploads(): void {
+    if (this.hasCleanedOrphans) return
+    this.hasCleanedOrphans = true
+
+    const store = useUploadStore.getState()
+    const activeUploads = Object.values(store.activeUploads)
+
+    // Find uploads without files (can't be resumed)
+    const orphanedUploads = activeUploads.filter(upload => !this.uploadFiles.has(upload.id))
+
+    if (orphanedUploads.length > 0) {
+      console.log(
+        `[UploadManager] Cleaning up ${orphanedUploads.length} orphaned uploads from sessionStorage`
+      )
+      orphanedUploads.forEach(upload => {
+        console.log(`[UploadManager] Removing orphaned upload: ${upload.fileName}`)
+        store.removeUpload(upload.id)
+      })
+    }
+  }
+
   /**
    * Initialize upload for a file
    */
@@ -53,6 +84,9 @@ class UploadManager {
       relativePath: string
     }
   ): Promise<string> {
+    // Clean up orphaned uploads on first use (lazy initialization)
+    this.cleanupOrphanedUploads()
+
     const store = useUploadStore.getState()
 
     // Add upload to store (returns generated ID)
@@ -120,13 +154,29 @@ class UploadManager {
         videoPath,
       },
 
-      onError: error => {
-        console.error(`[UploadManager] Failed ${uploadMetadata.relativePath}:`, error)
+      onError: (error: Error | tus.DetailedError) => {
+        // Log full error details for debugging
+        const detailedError = error as tus.DetailedError
+        console.error(`[UploadManager] Failed ${uploadMetadata.relativePath}:`, {
+          message: error.message,
+          error: error,
+          originalRequest: detailedError.originalRequest,
+          originalResponse: detailedError.originalResponse,
+        })
 
         // Special handling for 404 errors (upload not found on server)
         // This happens when metadata was cleaned up after completion
-        // Silently remove from store instead of showing an error
-        if (error.message.includes('404') || error.message.includes('not found')) {
+        // Check multiple properties as TUS errors can be formatted differently
+        const errorStr = String(error).toLowerCase()
+        const messageStr = (error.message || '').toLowerCase()
+        const is404 =
+          messageStr.includes('404') ||
+          messageStr.includes('not found') ||
+          errorStr.includes('404') ||
+          errorStr.includes('not found') ||
+          detailedError.originalResponse?.getStatus?.() === 404
+
+        if (is404) {
           console.log(
             `[UploadManager] Upload ${uploadId} not found on server - cleaning up from store`
           )
