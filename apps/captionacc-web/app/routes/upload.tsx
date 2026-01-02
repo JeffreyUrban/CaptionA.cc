@@ -59,6 +59,8 @@ export default function UploadPage() {
   // Preview modal state
   const [showPreviewModal, setShowPreviewModal] = useState(false)
   const [pendingFiles, setPendingFiles] = useState<UploadFile[]>([])
+  const [isProcessingDrop, setIsProcessingDrop] = useState(false)
+  const [processingStatus, setProcessingStatus] = useState('')
 
   // Folder selector
   const { selectedFolder, setSelectedFolder, availableFolders } = useUploadFolders(
@@ -208,23 +210,37 @@ export default function UploadPage() {
     async (e: React.DragEvent) => {
       e.preventDefault()
       setIsDragActive(false)
+      setIsProcessingDrop(true)
+      setProcessingStatus('Scanning files...')
 
-      const items = Array.from(e.dataTransfer.items)
-      const allFiles: UploadFile[] = []
+      try {
+        const items = Array.from(e.dataTransfer.items)
+        const allFiles: UploadFile[] = []
 
-      // Process each dropped item (could be files or directories)
-      for (const item of items) {
-        const entry = item.webkitGetAsEntry()
-        if (entry) {
-          const files = await collectFilesFromEntry(entry)
-          allFiles.push(...files)
+        // Process each dropped item (could be files or directories)
+        for (const item of items) {
+          const entry = item.webkitGetAsEntry()
+          if (entry) {
+            setProcessingStatus(`Scanning ${entry.name}...`)
+            const files = await collectFilesFromEntry(entry)
+            allFiles.push(...files)
+            setProcessingStatus(`Found ${allFiles.length} video files...`)
+          }
         }
+
+        console.log(`[UploadPage] Collected ${allFiles.length} files from drop`)
+
+        setProcessingStatus('Preparing preview...')
+
+        // Small delay to show final status
+        await new Promise(resolve => setTimeout(resolve, 100))
+
+        // Show preview modal
+        showUploadPreview(allFiles)
+      } finally {
+        setIsProcessingDrop(false)
+        setProcessingStatus('')
       }
-
-      console.log(`[UploadPage] Collected ${allFiles.length} files from drop`)
-
-      // Show preview modal
-      showUploadPreview(allFiles)
     },
     [collectFilesFromEntry, showUploadPreview]
   )
@@ -411,6 +427,23 @@ export default function UploadPage() {
           </>
         )}
       </div>
+
+      {/* Processing Overlay */}
+      {isProcessingDrop && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl px-8 py-6 flex flex-col items-center gap-4">
+            {/* Spinner */}
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600"></div>
+            {/* Status Text */}
+            <div className="text-center">
+              <p className="text-lg font-medium text-gray-900 dark:text-gray-100">
+                Processing Files
+              </p>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{processingStatus}</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Upload Preview Modal */}
       {showPreviewModal && (
