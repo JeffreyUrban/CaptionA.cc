@@ -282,6 +282,9 @@ interface ProgressBarProps {
 }
 
 export function ProgressBar({ progress }: ProgressBarProps) {
+  // Round progress to integer for display
+  const displayProgress = Math.round(progress)
+
   return (
     <div className="flex items-center gap-2">
       <div className="w-24 bg-gray-300 dark:bg-gray-700 rounded-full h-2">
@@ -290,7 +293,7 @@ export function ProgressBar({ progress }: ProgressBarProps) {
           style={{ width: `${progress}%` }}
         />
       </div>
-      <span className="text-xs">{progress}%</span>
+      <span className="text-xs">{displayProgress}%</span>
     </div>
   )
 }

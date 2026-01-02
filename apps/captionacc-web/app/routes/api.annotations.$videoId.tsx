@@ -39,9 +39,11 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
   const url = new URL(request.url)
   const startFrame = parseInt(url.searchParams.get('start') ?? '0')
   const endFrame = parseInt(url.searchParams.get('end') ?? '1000')
+  const workableOnly = url.searchParams.get('workable') === 'true'
+  const limit = url.searchParams.get('limit') ? parseInt(url.searchParams.get('limit')!) : undefined
 
   try {
-    const annotations = listAnnotations(videoId, startFrame, endFrame)
+    const annotations = listAnnotations(videoId, startFrame, endFrame, workableOnly, limit)
     // Convert to snake_case for API compatibility
     return jsonResponse({ annotations: annotations.map(toSnakeCase) })
   } catch (error) {

@@ -3,7 +3,7 @@ interface CompletionBannerProps {
 }
 
 export function CompletionBanner({ workflowProgress }: CompletionBannerProps) {
-  if (workflowProgress < 100) return null
+  if ((workflowProgress ?? 0) < 100) return null
 
   return (
     <div className="mb-4 rounded-lg border-2 border-green-500 bg-green-50 p-4 dark:border-green-600 dark:bg-green-950">
