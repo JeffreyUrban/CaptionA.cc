@@ -110,8 +110,6 @@ export default function UploadPage() {
         // Only include video files
         if (isVideoFile(file)) {
           results.push({ file, path: path + file.name })
-        } else {
-          console.log(`[UploadPage] Skipping non-video file: ${path + file.name}`)
         }
       } else if (entry.isDirectory) {
         const dirEntry = entry as FileSystemDirectoryEntry
@@ -140,13 +138,7 @@ export default function UploadPage() {
       console.log(`[UploadPage] Processing ${fileList.length} files`)
 
       // Filter to only video files
-      const files = Array.from(fileList).filter(file => {
-        const isVideo = isVideoFile(file)
-        if (!isVideo) {
-          console.log(`[UploadPage] Skipping non-video file: ${file.name}`)
-        }
-        return isVideo
-      })
+      const files = Array.from(fileList).filter(file => isVideoFile(file))
 
       console.log(`[UploadPage] Starting upload for ${files.length} video files`)
 
