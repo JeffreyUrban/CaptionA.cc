@@ -11,7 +11,7 @@ interface VideoPreferences {
   text_anchor: 'left' | 'center' | 'right'
 }
 
-function getDatabase(videoId: string): Database.Database | Response {
+function getDatabase(videoId: string): { db: Database.Database; path: string } | Response {
   const dbPath = getDbPath(videoId)
   if (!dbPath) {
     return new Response('Video not found', { status: 404 })
@@ -21,7 +21,7 @@ function getDatabase(videoId: string): Database.Database | Response {
     throw new Error(`Database not found for video: ${videoId}`)
   }
 
-  return new Database(dbPath)
+  return { db: new Database(dbPath), path: dbPath }
 }
 
 // GET - Fetch video preferences
@@ -38,8 +38,67 @@ export async function loader({ params }: LoaderFunctionArgs) {
   const videoId = decodeURIComponent(encodedVideoId)
 
   try {
-    const db = getDatabase(videoId)
-    if (db instanceof Response) return db
+    const result = getDatabase(videoId)
+    if (result instanceof Response) return result
+    const { db, path: dbPath } = result
+
+    // Check if video_preferences table exists and has required columns
+    const columns = db
+      .prepare("SELECT name FROM pragma_table_info('video_preferences')")
+      .all() as Array<{ name: string }>
+    const columnNames = new Set(columns.map(c => c.name))
+
+    const hasTextSize = columnNames.has('text_size')
+    const hasPaddingScale = columnNames.has('padding_scale')
+    const hasTextAnchor = columnNames.has('text_anchor')
+
+    // Detect schema issues and fix them by running migrations
+    if (!hasTextSize || !hasPaddingScale || !hasTextAnchor) {
+      console.error(
+        `[Preferences] Schema mismatch for ${videoId}: text_size=${hasTextSize}, padding_scale=${hasPaddingScale}, text_anchor=${hasTextAnchor}`
+      )
+      console.error('[Preferences] Attempting to fix by running migrations...')
+
+      try {
+        // Import and run migrations
+        db.close()
+
+        const { migrateDatabase } = await import('~/db/migrate')
+        migrateDatabase(dbPath)
+
+        // Reopen database and try again
+        const result2 = getDatabase(videoId)
+        if (result2 instanceof Response) return result2
+        const { db: db2 } = result2
+
+        const prefs = db2
+          .prepare(
+            'SELECT text_size, padding_scale, text_anchor FROM video_preferences WHERE id = 1'
+          )
+          .get() as VideoPreferences | undefined
+
+        db2.close()
+
+        if (!prefs) {
+          return Response.json({ text_size: 3.0, padding_scale: 0.75, text_anchor: 'left' })
+        }
+
+        console.log(`[Preferences] Successfully fixed schema for ${videoId}`)
+        return Response.json(prefs)
+      } catch (migrationError) {
+        console.error('[Preferences] Failed to fix schema:', migrationError)
+        return new Response(
+          JSON.stringify({
+            error: 'Database schema is outdated. Please contact support.',
+          }),
+          {
+            status: 500,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
+      }
+    }
+
     const prefs = db
       .prepare('SELECT text_size, padding_scale, text_anchor FROM video_preferences WHERE id = 1')
       .get() as VideoPreferences | undefined
@@ -53,6 +112,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
     return Response.json(prefs)
   } catch (error) {
+    console.error(`[Preferences] Error loading preferences for ${videoId}:`, error)
     return new Response(JSON.stringify({ error: (error as Error).message }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
@@ -116,8 +176,9 @@ export async function action({ params, request }: ActionFunctionArgs) {
       )
     }
 
-    const db = getDatabase(videoId)
-    if (db instanceof Response) return db
+    const result = getDatabase(videoId)
+    if (result instanceof Response) return result
+    const { db, path: dbPath } = result
 
     // Build update query dynamically based on which fields are provided
     const updates: string[] = []
@@ -140,19 +201,49 @@ export async function action({ params, request }: ActionFunctionArgs) {
 
     if (updates.length > 0) {
       updates.push("updated_at = datetime('now')")
-      db.prepare(
+
+      try {
+        db.prepare(
+          `
+          UPDATE video_preferences
+          SET ${updates.join(', ')}
+          WHERE id = 1
         `
-        UPDATE video_preferences
-        SET ${updates.join(', ')}
-        WHERE id = 1
-      `
-      ).run(...values)
+        ).run(...values)
+      } catch (_updateError) {
+        // If update fails (likely due to missing columns), try running migrations
+        console.error(`[Preferences] Update failed for ${videoId}, attempting migrations...`)
+        db.close()
+
+        const { migrateDatabase } = await import('~/db/migrate')
+        migrateDatabase(dbPath)
+
+        // Retry the update
+        const result2 = getDatabase(videoId)
+        if (result2 instanceof Response) return result2
+        const { db: db2 } = result2
+
+        db2
+          .prepare(
+            `
+          UPDATE video_preferences
+          SET ${updates.join(', ')}
+          WHERE id = 1
+        `
+          )
+          .run(...values)
+        db2.close()
+
+        console.log(`[Preferences] Successfully fixed schema and updated ${videoId}`)
+        return Response.json({ success: true })
+      }
     }
 
     db.close()
 
     return Response.json({ success: true })
   } catch (error) {
+    console.error(`[Preferences] Error updating preferences for ${videoId}:`, error)
     return new Response(JSON.stringify({ error: (error as Error).message }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
