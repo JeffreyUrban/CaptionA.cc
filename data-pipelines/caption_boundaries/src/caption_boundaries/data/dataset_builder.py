@@ -4,18 +4,25 @@ Extracts frame pairs from confirmed caption boundaries and stores them in the
 central training database with comprehensive provenance tracking.
 """
 
+import gc
 import hashlib
 import sqlite3
 from collections import defaultdict
 from pathlib import Path
 from typing import Literal
 
-import Levenshtein
 from rich.console import Console
 from rich.progress import track
 from sqlalchemy.orm import Session
 
-from caption_boundaries.database import TrainingDataset, TrainingSample, VideoRegistry, get_training_db, init_training_db
+from caption_boundaries.database import (
+    TrainingDataset,
+    TrainingSample,
+    VideoRegistry,
+    get_dataset_db,
+    get_dataset_db_path,
+    init_dataset_db,
+)
 from video_utils import get_video_metadata
 
 console = Console(stderr=True)
@@ -229,95 +236,152 @@ def extract_frame_pairs_from_captions(db_path: Path) -> list[dict]:
         conn.close()
 
 
-def get_ocr_confidence_for_frame(db_path: Path, frame_index: int) -> float | None:
-    """Get OCR confidence for a specific frame.
+def _copy_frames_for_video(db, video_conn, video_hash: str, video_samples: list[dict]) -> None:
+    """Copy frames needed by samples from video DB to training DB.
 
     Args:
-        db_path: Path to video's annotations.db
-        frame_index: Frame index to query
-
-    Returns:
-        OCR confidence, or None if no OCR data
+        db: Training database session
+        video_conn: Open SQLite connection to video's annotations.db
+        video_hash: Video hash
+        video_samples: List of samples for this video
     """
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
+    from caption_boundaries.database import TrainingFrame
 
-    try:
-        # Query cropped_frame_ocr table (frame-level aggregated OCR)
+    # Collect unique frames needed for this video
+    frames_needed = set()
+    for sample in video_samples:
+        frames_needed.add(sample["frame1_index"])
+        frames_needed.add(sample["frame2_index"])
+
+    # Check which frames already exist in training DB
+    existing_frames = set()
+    for frame_index in frames_needed:
+        existing = (
+            db.query(TrainingFrame)
+            .filter(TrainingFrame.video_hash == video_hash, TrainingFrame.frame_index == frame_index)
+            .first()
+        )
+        if existing:
+            existing_frames.add(frame_index)
+
+    frames_to_copy = frames_needed - existing_frames
+
+    if not frames_to_copy:
+        return  # All frames already exist
+
+    # Copy frames from video DB using provided connection
+    cursor = video_conn.cursor()
+
+    for frame_index in frames_to_copy:
         cursor.execute(
             """
-            SELECT ocr_confidence
-            FROM cropped_frame_ocr
+            SELECT image_data, width, height, file_size
+            FROM cropped_frames
             WHERE frame_index = ?
-        """,
+            """,
             (frame_index,),
         )
 
         row = cursor.fetchone()
-        return row[0] if row and row[0] is not None else None
+        if not row:
+            console.print(
+                f"[yellow]⚠ Frame {frame_index} not found, skipping[/yellow]"
+            )
+            continue
 
-    finally:
-        conn.close()
+        # Create training frame record
+        training_frame = TrainingFrame(
+            video_hash=video_hash,
+            frame_index=frame_index,
+            image_data=row[0],
+            width=row[1],
+            height=row[2],
+            file_size=row[3],
+        )
+        db.add(training_frame)
 
 
-def get_ocr_text_for_frame(db_path: Path, frame_index: int) -> str:
-    """Get OCR text for a specific frame.
+def _copy_ocr_viz_for_video(db, video_conn, video_hash: str, variant: str = "boundaries") -> None:
+    """Copy OCR visualization from video DB to training DB.
 
     Args:
-        db_path: Path to video's annotations.db
-        frame_index: Frame index to query
-
-    Returns:
-        OCR text for the frame
+        db: Training database session
+        video_conn: Open SQLite connection to video's annotations.db
+        video_hash: Video hash
+        variant: OCR visualization variant (default: 'boundaries')
     """
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
+    from caption_boundaries.database import TrainingOCRVisualization
 
-    try:
-        cursor.execute(
-            """
-            SELECT ocr_text
-            FROM cropped_frame_ocr
-            WHERE frame_index = ?
-        """,
-            (frame_index,),
-        )
+    # Check if visualization already exists
+    existing = (
+        db.query(TrainingOCRVisualization)
+        .filter(TrainingOCRVisualization.video_hash == video_hash, TrainingOCRVisualization.variant == variant)
+        .first()
+    )
 
-        row = cursor.fetchone()
-        return row[0] if row and row[0] else ""
+    if existing:
+        return  # Already exists
 
-    finally:
-        conn.close()
+    # Copy from video DB using provided connection
+    cursor = video_conn.cursor()
+    cursor.execute("SELECT ocr_visualization_image FROM video_layout_config WHERE id = 1")
+
+    row = cursor.fetchone()
+    if not row or not row[0]:
+        console.print(f"[yellow]⚠ OCR visualization not found, skipping[/yellow]")
+        return
+
+    # Create training OCR visualization record
+    training_ocr_viz = TrainingOCRVisualization(
+        video_hash=video_hash, variant=variant, image_data=row[0]
+    )
+    db.add(training_ocr_viz)
 
 
 def create_training_dataset(
     name: str,
     video_db_paths: list[Path],
-    training_db_path: Path | None = None,
     split_strategy: Literal["random", "show_based"] = "random",
     train_split_ratio: float = 0.8,
     random_seed: int = 42,
     description: str | None = None,
-) -> int:
+) -> Path:
     """Create training dataset from annotated videos.
 
+    Creates a self-contained dataset database with all necessary data:
+    - Dataset metadata and samples
+    - Frame image BLOBs
+    - OCR visualization BLOBs
+    - Video registry
+
     Args:
-        name: Dataset name (must be unique)
+        name: Dataset name (will be used as database filename)
         video_db_paths: List of paths to video annotations.db files
-        training_db_path: Path to training database (uses default if None)
         split_strategy: 'random' or 'show_based' splitting
         train_split_ratio: Fraction of data for training (default: 0.8)
         random_seed: Random seed for reproducibility
         description: Optional dataset description
 
     Returns:
-        Dataset ID
+        Path to created dataset database
 
     Raises:
-        ValueError: If dataset name already exists or no valid samples found
+        ValueError: If dataset already exists or no valid samples found
     """
-    # Initialize training database
-    init_training_db(training_db_path)
+    from collections import defaultdict
+
+    # Get dataset database path from name
+    dataset_db_path = get_dataset_db_path(name)
+
+    # Check if dataset already exists (fail fast)
+    if dataset_db_path.exists():
+        console.print(f"[red]✗ Dataset '{name}' already exists at {dataset_db_path}[/red]")
+        console.print("[yellow]Delete the existing dataset or choose a different name:[/yellow]")
+        console.print(f"  rm {dataset_db_path}")
+        raise ValueError(f"Dataset '{name}' already exists")
+
+    # Initialize dataset database
+    init_dataset_db(dataset_db_path)
 
     console.print(f"[cyan]Creating dataset:[/cyan] {name}")
     console.print(f"Processing {len(video_db_paths)} videos...")
@@ -329,12 +393,13 @@ def create_training_dataset(
     video_metadata_map = {}
     crop_bounds_versions = {}
     label_counts = defaultdict(int)
+    skipped_videos = []  # Collect warnings to display after progress bar
 
     for video_db_path in track(video_db_paths, description="Extracting frame pairs"):
         # Find video file
         video_file = find_video_file(video_db_path)
         if not video_file:
-            console.print(f"[yellow]⚠ No video file found for {video_db_path}, skipping[/yellow]")
+            skipped_videos.append((video_db_path, "No video file found"))
             continue
 
         # Get video hash
@@ -342,41 +407,29 @@ def create_training_dataset(
             metadata = get_video_metadata(video_file)
             video_hash = metadata["video_hash"]
         except Exception as e:
-            console.print(f"[yellow]⚠ Failed to get metadata for {video_file}: {e}, skipping[/yellow]")
+            skipped_videos.append((video_db_path, f"Failed to get metadata: {e}"))
             continue
 
         # Get layout metadata
         try:
             layout_meta = get_video_layout_metadata(video_db_path)
         except Exception as e:
-            console.print(f"[yellow]⚠ Failed to get layout metadata for {video_db_path}: {e}, skipping[/yellow]")
+            skipped_videos.append((video_db_path, f"Failed to get layout metadata: {e}"))
             continue
 
         # Extract frame pairs
         try:
             pairs = extract_frame_pairs_from_captions(video_db_path)
         except Exception as e:
-            console.print(f"[yellow]⚠ Failed to extract pairs from {video_db_path}: {e}, skipping[/yellow]")
+            skipped_videos.append((video_db_path, f"Failed to extract pairs: {e}"))
             continue
 
         if not pairs:
-            console.print(f"[yellow]⚠ No confirmed captions in {video_db_path}, skipping[/yellow]")
+            skipped_videos.append((video_db_path, "No confirmed captions"))
             continue
 
         # Add video hash to each pair
         for pair in pairs:
-            # Get OCR confidence and text for quality metadata
-            ocr_conf_1 = get_ocr_confidence_for_frame(video_db_path, pair["frame1_index"])
-            ocr_conf_2 = get_ocr_confidence_for_frame(video_db_path, pair["frame2_index"])
-
-            ocr_text_1 = get_ocr_text_for_frame(video_db_path, pair["frame1_index"])
-            ocr_text_2 = get_ocr_text_for_frame(video_db_path, pair["frame2_index"])
-
-            # Calculate Levenshtein distance for "same" labels (to catch OCR mismatches)
-            levenshtein_dist = None
-            if pair["label"] == "same" and ocr_text_1 and ocr_text_2:
-                levenshtein_dist = Levenshtein.distance(ocr_text_1, ocr_text_2)
-
             all_samples.append(
                 {
                     "video_hash": video_hash,
@@ -385,11 +438,6 @@ def create_training_dataset(
                     "label": pair["label"],
                     "crop_bounds_version": layout_meta["crop_bounds_version"],
                     "source_caption_annotation_id": pair["caption_id"],
-                    "ocr_confidence_frame1": ocr_conf_1,
-                    "ocr_confidence_frame2": ocr_conf_2,
-                    "ocr_text_frame1": ocr_text_1,
-                    "ocr_text_frame2": ocr_text_2,
-                    "levenshtein_distance": levenshtein_dist,
                 }
             )
 
@@ -406,17 +454,15 @@ def create_training_dataset(
         }
         crop_bounds_versions[video_hash] = layout_meta["crop_bounds_version"]
 
-        # Create video registry record (keep relative paths for worktree compatibility)
-        video_registry_records.append(
-            VideoRegistry(
-                video_hash=video_hash,
-                video_path=str(video_file),
-                file_size_bytes=metadata["file_size_bytes"],
-                duration_seconds=metadata.get("duration_seconds"),
-                width=metadata.get("width"),
-                height=metadata.get("height"),
-            )
-        )
+        # Store video registry data (will create objects in database session)
+        video_registry_records.append({
+            "video_hash": video_hash,
+            "video_path": str(video_file),
+            "file_size_bytes": metadata["file_size_bytes"],
+            "duration_seconds": metadata.get("duration_seconds"),
+            "width": metadata.get("width"),
+            "height": metadata.get("height"),
+        })
 
     if not all_samples:
         raise ValueError("No valid samples found in any video")
@@ -425,6 +471,14 @@ def create_training_dataset(
     console.print(f"[cyan]Label distribution:[/cyan]")
     for label, count in sorted(label_counts.items()):
         console.print(f"  {label}: {count}")
+
+    # Display skipped videos if any
+    if skipped_videos:
+        console.print(f"\n[yellow]⚠ Skipped {len(skipped_videos)} videos:[/yellow]")
+        for video_path, reason in skipped_videos[:10]:  # Show first 10
+            console.print(f"  {video_path.parent.name}: {reason}")
+        if len(skipped_videos) > 10:
+            console.print(f"  ... and {len(skipped_videos) - 10} more")
 
     # Deduplicate samples (same video_hash + frame pair)
     seen_pairs = set()
@@ -475,9 +529,9 @@ def create_training_dataset(
     avg_ocr_confidence = sum(all_confidences) / len(all_confidences) if all_confidences else None
     min_samples_per_class = min(label_counts.values()) if label_counts else 0
 
-    # Store in database
-    with next(get_training_db(training_db_path)) as db:
-        # Create dataset record
+    # Create dataset record and get ID
+    console.print("[cyan]Creating dataset record...[/cyan]")
+    with next(get_dataset_db(dataset_db_path)) as db:
         dataset = TrainingDataset(
             name=name,
             description=description,
@@ -496,46 +550,140 @@ def create_training_dataset(
 
         db.add(dataset)
         db.flush()  # Get dataset ID
-
-        # Create sample records
-        sample_records = []
-        for sample_data in all_samples:
-            sample = TrainingSample(
-                dataset_id=dataset.id,
-                video_hash=sample_data["video_hash"],
-                frame1_index=sample_data["frame1_index"],
-                frame2_index=sample_data["frame2_index"],
-                label=sample_data["label"],
-                split=sample_data["split"],
-                crop_bounds_version=sample_data["crop_bounds_version"],
-                source_caption_annotation_id=sample_data["source_caption_annotation_id"],
-                ocr_confidence_frame1=sample_data["ocr_confidence_frame1"],
-                ocr_confidence_frame2=sample_data["ocr_confidence_frame2"],
-                ocr_text_frame1=sample_data["ocr_text_frame1"],
-                ocr_text_frame2=sample_data["ocr_text_frame2"],
-                levenshtein_distance=sample_data["levenshtein_distance"],
-            )
-            sample_records.append(sample)
-
-        db.add_all(sample_records)
-
-        # Add/update video registry
-        for video_record in video_registry_records:
-            existing = db.query(VideoRegistry).filter(VideoRegistry.video_hash == video_record.video_hash).first()
-
-            if existing:
-                # Update last_seen_at
-                from datetime import UTC, datetime
-
-                existing.last_seen_at = datetime.now(UTC)
-                existing.video_path = video_record.video_path  # Update path in case it moved
-            else:
-                db.add(video_record)
-
+        dataset_id = dataset.id
         db.commit()
 
-        console.print(f"\n[green]✓[/green] Dataset created with ID: {dataset.id}")
-        console.print(f"  Train samples: {sum(1 for s in all_samples if s['split'] == 'train')}")
-        console.print(f"  Val samples: {sum(1 for s in all_samples if s['split'] == 'val')}")
+    console.print(f"[green]✓[/green] Dataset record created with ID: {dataset_id}")
 
-        return dataset.id
+    # Group samples by video for per-video processing
+    samples_by_video = defaultdict(list)
+    for sample in all_samples:
+        samples_by_video[sample["video_hash"]].append(sample)
+
+    # Build video DB path mapping for videos that have samples
+    # Read video_hash from database instead of video file
+    video_db_map = {}
+    for video_db_path in video_db_paths:
+        try:
+            conn = sqlite3.connect(video_db_path)
+            try:
+                cursor = conn.cursor()
+                cursor.execute("SELECT video_hash FROM video_metadata LIMIT 1")
+                row = cursor.fetchone()
+                if row:
+                    video_hash = row[0]
+                    # Only include videos that contributed samples
+                    if video_hash in samples_by_video:
+                        video_db_map[video_hash] = video_db_path
+            finally:
+                conn.close()
+        except Exception:
+            continue
+
+    # Extract font embeddings only for videos with samples
+    videos_with_samples = list(video_db_map.values())
+    console.print(f"\n[cyan]Extracting font embeddings for {len(videos_with_samples)} videos with samples...[/cyan]")
+    from caption_boundaries.data.font_embeddings import batch_extract_embeddings
+
+    try:
+        embeddings = batch_extract_embeddings(
+            video_db_paths=videos_with_samples,
+            training_db_path=dataset_db_path,
+            force_recompute=False,
+        )
+        console.print(f"[green]✓[/green] Extracted {len(embeddings)} font embeddings")
+    except Exception as e:
+        console.print(f"[yellow]⚠ Font embedding extraction failed: {e}[/yellow]")
+        console.print("  Dataset will be created without font embeddings")
+
+    # Process each video: copy frames, copy OCR viz, insert samples
+    # Use a single database session for all videos to avoid creating too many engines
+    # Process in batches to limit simultaneous open connections
+    console.print(f"\n[cyan]Consolidating {len(samples_by_video)} videos to training database...[/cyan]")
+
+    BATCH_SIZE = 50  # Maximum simultaneous connections to video databases
+    video_hashes = list(samples_by_video.keys())
+
+    with next(get_dataset_db(dataset_db_path)) as db:
+        # Process videos in batches to limit open file descriptors
+        for batch_start in range(0, len(video_hashes), BATCH_SIZE):
+            batch_end = min(batch_start + BATCH_SIZE, len(video_hashes))
+            batch_hashes = video_hashes[batch_start:batch_end]
+
+            for video_hash in track(batch_hashes, description=f"Copying batch {batch_start//BATCH_SIZE + 1}/{(len(video_hashes) + BATCH_SIZE - 1)//BATCH_SIZE}"):
+                video_samples = samples_by_video[video_hash]
+                video_db_path = video_db_map.get(video_hash)
+
+                if not video_db_path:
+                    console.print(f"[yellow]⚠ Could not find video DB for {video_hash}, skipping frame copy[/yellow]")
+                    continue
+
+                # Open video database once for both operations
+                video_conn = sqlite3.connect(video_db_path)
+                try:
+                    # Copy frames for this video
+                    _copy_frames_for_video(db, video_conn, video_hash, video_samples)
+
+                    # Copy OCR visualization for this video
+                    _copy_ocr_viz_for_video(db, video_conn, video_hash)
+                finally:
+                    video_conn.close()
+
+                # Insert samples for this video
+                for sample_data in video_samples:
+                    sample = TrainingSample(
+                        dataset_id=dataset_id,
+                        video_hash=sample_data["video_hash"],
+                        frame1_index=sample_data["frame1_index"],
+                        frame2_index=sample_data["frame2_index"],
+                        label=sample_data["label"],
+                        split=sample_data["split"],
+                        crop_bounds_version=sample_data["crop_bounds_version"],
+                        source_caption_annotation_id=sample_data["source_caption_annotation_id"],
+                        ocr_confidence_frame1=sample_data["ocr_confidence_frame1"],
+                        ocr_confidence_frame2=sample_data["ocr_confidence_frame2"],
+                        ocr_text_frame1=sample_data["ocr_text_frame1"],
+                        ocr_text_frame2=sample_data["ocr_text_frame2"],
+                        levenshtein_distance=sample_data["levenshtein_distance"],
+                    )
+                    db.add(sample)
+
+                # Add/update video registry
+                for video_record_data in video_registry_records:
+                    if video_record_data["video_hash"] != video_hash:
+                        continue
+
+                    existing = db.query(VideoRegistry).filter(VideoRegistry.video_hash == video_record_data["video_hash"]).first()
+
+                    if existing:
+                        from datetime import UTC, datetime
+                        existing.last_seen_at = datetime.now(UTC)
+                        existing.video_path = video_record_data["video_path"]
+                    else:
+                        # Create VideoRegistry object from dict
+                        video_record = VideoRegistry(**video_record_data)
+                        db.add(video_record)
+
+            # Commit batch and force cleanup before next batch
+            db.commit()
+            gc.collect()
+
+    console.print(f"\n[green]✓[/green] Dataset created successfully!")
+    console.print(f"  Name: {name}")
+    console.print(f"  Database: {dataset_db_path}")
+    console.print(f"  Train samples: {sum(1 for s in all_samples if s['split'] == 'train')}")
+    console.print(f"  Val samples: {sum(1 for s in all_samples if s['split'] == 'val')}")
+
+    # Show font embedding model info
+    from caption_boundaries.data.font_embeddings import get_dataset_model_info
+
+    try:
+        model_info = get_dataset_model_info(dataset_db_path)
+        if model_info:
+            console.print(f"\n[cyan]Font embedding models:[/cyan]")
+            for model_version, count in model_info.items():
+                console.print(f"  {model_version}: {count} videos")
+    except Exception:
+        pass  # Don't fail if model info query fails
+
+    return dataset_db_path

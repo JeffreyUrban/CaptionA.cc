@@ -1,34 +1,24 @@
 """Database operations for OCR results.
 
 Provides generic functions for writing OCR results to annotations.db tables.
-Supports both full_frame_ocr and cropped_frame_ocr table schemas.
+Currently used with full_frame_ocr table.
 """
 
 import sqlite3
 from pathlib import Path
-from typing import Optional
 
 
-def ensure_ocr_table(db_path: Path, table_name: str, include_crop_version: bool = False) -> None:
+def ensure_ocr_table(db_path: Path, table_name: str) -> None:
     """Ensure OCR table exists in database with normalized schema.
 
     Creates a normalized table schema with one row per OCR box.
 
     Args:
         db_path: Path to annotations.db file
-        table_name: Table name ('full_frame_ocr' or 'cropped_frame_ocr')
-        include_crop_version: If True, add crop_bounds_version column (for cropped_frame_ocr)
+        table_name: Table name (e.g., 'full_frame_ocr')
     """
     conn = sqlite3.connect(db_path)
     try:
-        # Base schema: one row per box
-        if include_crop_version:
-            unique_constraint = "UNIQUE(frame_index, box_index, crop_bounds_version)"
-            crop_version_col = "crop_bounds_version INTEGER NOT NULL,"
-        else:
-            unique_constraint = "UNIQUE(frame_index, box_index)"
-            crop_version_col = ""
-
         conn.execute(f"""
             CREATE TABLE IF NOT EXISTS {table_name} (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -40,9 +30,8 @@ def ensure_ocr_table(db_path: Path, table_name: str, include_crop_version: bool 
                 y REAL NOT NULL,
                 width REAL NOT NULL,
                 height REAL NOT NULL,
-                {crop_version_col}
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
-                {unique_constraint}
+                UNIQUE(frame_index, box_index)
             )
         """)
 
@@ -51,13 +40,6 @@ def ensure_ocr_table(db_path: Path, table_name: str, include_crop_version: bool 
             CREATE INDEX IF NOT EXISTS idx_{table_name}_frame
             ON {table_name}(frame_index)
         """)
-
-        # Create index on crop_bounds_version if applicable
-        if include_crop_version:
-            conn.execute(f"""
-                CREATE INDEX IF NOT EXISTS idx_{table_name}_crop_version
-                ON {table_name}(crop_bounds_version)
-            """)
 
         conn.commit()
     finally:
@@ -68,15 +50,13 @@ def write_ocr_result_to_database(
     ocr_result: dict,
     db_path: Path,
     table_name: str,
-    crop_bounds_version: Optional[int] = None,
 ) -> int:
     """Write OCR result to database table.
 
     Args:
         ocr_result: OCR result dictionary from process_frame_ocr_with_retry
         db_path: Path to annotations.db file
-        table_name: Table name ('full_frame_ocr' or 'cropped_frame_ocr')
-        crop_bounds_version: Crop bounds version (required for cropped_frame_ocr)
+        table_name: Table name (e.g., 'full_frame_ocr')
 
     Returns:
         Number of boxes inserted
@@ -112,29 +92,15 @@ def write_ocr_result_to_database(
             text, confidence, bbox = annotation
             x, y, width, height = bbox
 
-            # Build INSERT statement based on table type
-            if crop_bounds_version is not None:
-                # cropped_frame_ocr table
-                cursor.execute(
-                    f"""
-                    INSERT INTO {table_name}
-                    (frame_index, box_index, text, confidence, x, y, width, height, crop_bounds_version)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(frame_index, box_index, crop_bounds_version) DO NOTHING
-                """,
-                    (frame_index, box_index, text, confidence, x, y, width, height, crop_bounds_version),
-                )
-            else:
-                # full_frame_ocr table
-                cursor.execute(
-                    f"""
-                    INSERT INTO {table_name}
-                    (frame_index, box_index, text, confidence, x, y, width, height)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(frame_index, box_index) DO NOTHING
-                """,
-                    (frame_index, box_index, text, confidence, x, y, width, height),
-                )
+            cursor.execute(
+                f"""
+                INSERT INTO {table_name}
+                (frame_index, box_index, text, confidence, x, y, width, height)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(frame_index, box_index) DO NOTHING
+            """,
+                (frame_index, box_index, text, confidence, x, y, width, height),
+            )
 
             if cursor.rowcount > 0:
                 inserted += 1
@@ -150,15 +116,13 @@ def load_ocr_for_frame(
     db_path: Path,
     frame_index: int,
     table_name: str,
-    crop_bounds_version: Optional[int] = None,
 ) -> list[tuple[str, float, list[float]]]:
     """Load OCR annotations for a specific frame.
 
     Args:
         db_path: Path to annotations.db file
         frame_index: Frame index to load
-        table_name: Table name ('full_frame_ocr' or 'cropped_frame_ocr')
-        crop_bounds_version: Crop bounds version (for cropped_frame_ocr)
+        table_name: Table name (e.g., 'full_frame_ocr')
 
     Returns:
         List of OCR annotations: [[text, confidence, [x, y, width, height]], ...]
@@ -167,27 +131,15 @@ def load_ocr_for_frame(
     try:
         cursor = conn.cursor()
 
-        # Build query based on table type
-        if crop_bounds_version is not None:
-            cursor.execute(
-                f"""
-                SELECT text, confidence, x, y, width, height
-                FROM {table_name}
-                WHERE frame_index = ? AND crop_bounds_version = ?
-                ORDER BY box_index
-            """,
-                (frame_index, crop_bounds_version),
-            )
-        else:
-            cursor.execute(
-                f"""
-                SELECT text, confidence, x, y, width, height
-                FROM {table_name}
-                WHERE frame_index = ?
-                ORDER BY box_index
-            """,
-                (frame_index,),
-            )
+        cursor.execute(
+            f"""
+            SELECT text, confidence, x, y, width, height
+            FROM {table_name}
+            WHERE frame_index = ?
+            ORDER BY box_index
+        """,
+            (frame_index,),
+        )
 
         annotations = []
         for row in cursor.fetchall():
@@ -205,7 +157,6 @@ def load_ocr_for_frame_range(
     start_frame: int,
     end_frame: int,
     table_name: str,
-    crop_bounds_version: Optional[int] = None,
 ) -> list[dict]:
     """Load OCR annotations for a range of frames.
 
@@ -213,8 +164,7 @@ def load_ocr_for_frame_range(
         db_path: Path to annotations.db file
         start_frame: Start frame index (inclusive)
         end_frame: End frame index (inclusive)
-        table_name: Table name ('full_frame_ocr' or 'cropped_frame_ocr')
-        crop_bounds_version: Crop bounds version (for cropped_frame_ocr)
+        table_name: Table name (e.g., 'full_frame_ocr')
 
     Returns:
         List of dictionaries with frame_index and ocr_annotations:
@@ -231,52 +181,30 @@ def load_ocr_for_frame_range(
         cursor = conn.cursor()
 
         # Get all frames in range
-        if crop_bounds_version is not None:
-            cursor.execute(
-                f"""
-                SELECT DISTINCT frame_index
-                FROM {table_name}
-                WHERE frame_index >= ? AND frame_index <= ? AND crop_bounds_version = ?
-                ORDER BY frame_index
-            """,
-                (start_frame, end_frame, crop_bounds_version),
-            )
-        else:
-            cursor.execute(
-                f"""
-                SELECT DISTINCT frame_index
-                FROM {table_name}
-                WHERE frame_index >= ? AND frame_index <= ?
-                ORDER BY frame_index
-            """,
-                (start_frame, end_frame),
-            )
+        cursor.execute(
+            f"""
+            SELECT DISTINCT frame_index
+            FROM {table_name}
+            WHERE frame_index >= ? AND frame_index <= ?
+            ORDER BY frame_index
+        """,
+            (start_frame, end_frame),
+        )
 
         frame_indices = [row[0] for row in cursor.fetchall()]
 
         results = []
         for frame_index in frame_indices:
             # Get all boxes for this frame
-            if crop_bounds_version is not None:
-                cursor.execute(
-                    f"""
-                    SELECT text, confidence, x, y, width, height
-                    FROM {table_name}
-                    WHERE frame_index = ? AND crop_bounds_version = ?
-                    ORDER BY box_index
-                """,
-                    (frame_index, crop_bounds_version),
-                )
-            else:
-                cursor.execute(
-                    f"""
-                    SELECT text, confidence, x, y, width, height
-                    FROM {table_name}
-                    WHERE frame_index = ?
-                    ORDER BY box_index
-                """,
-                    (frame_index,),
-                )
+            cursor.execute(
+                f"""
+                SELECT text, confidence, x, y, width, height
+                FROM {table_name}
+                WHERE frame_index = ?
+                ORDER BY box_index
+            """,
+                (frame_index,),
+            )
 
             annotations = []
             for row in cursor.fetchall():

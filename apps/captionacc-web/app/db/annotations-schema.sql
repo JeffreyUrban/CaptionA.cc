@@ -22,17 +22,6 @@ CREATE TABLE IF NOT EXISTS captions (
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
--- Cropped frame OCR table for per-frame OCR data (10Hz frames, cropped)
--- Independent of annotations, invalidated when crop bounds change
-CREATE TABLE IF NOT EXISTS cropped_frame_ocr (
-    frame_index INTEGER PRIMARY KEY,
-    ocr_text TEXT,
-    ocr_annotations TEXT,  -- JSON: [[text, conf, [x, y, w, h]], ...]
-    ocr_confidence REAL,
-    crop_bounds_version INTEGER DEFAULT 1,  -- Invalidation tracking
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
-
 -- Full frame OCR boxes (0.1Hz sampled frames)
 -- Stores raw OCR detection results from full (uncropped) frames
 CREATE TABLE IF NOT EXISTS full_frame_ocr (
@@ -70,8 +59,8 @@ CREATE TABLE IF NOT EXISTS full_frame_box_labels (
 
     -- Source identification
     annotation_source TEXT NOT NULL DEFAULT 'full_frame' CHECK(annotation_source IN ('full_frame', 'cropped_frame')),
-    frame_index INTEGER NOT NULL,  -- References full_frame_ocr.frame_index or cropped_frame_ocr.frame_index
-    box_index INTEGER NOT NULL,    -- References box_index in respective OCR table
+    frame_index INTEGER NOT NULL,  -- References full_frame_ocr.frame_index
+    box_index INTEGER NOT NULL,    -- References box_index in OCR table
 
     -- Box identification (absolute pixel coords in original/full frame)
     box_text TEXT NOT NULL,
@@ -239,12 +228,6 @@ ON captions(text_pending, start_frame_index);
 -- Index for finding captions needing text (NULL text or text_pending)
 CREATE INDEX IF NOT EXISTS idx_captions_text_null
 ON captions((text IS NULL), text_pending, start_frame_index);
-
--- Indexes for cropped_frame_ocr table
-
--- Index for invalidation queries
-CREATE INDEX IF NOT EXISTS idx_cropped_frame_ocr_crop_version
-ON cropped_frame_ocr(crop_bounds_version);
 
 -- Indexes for full_frame_ocr table
 

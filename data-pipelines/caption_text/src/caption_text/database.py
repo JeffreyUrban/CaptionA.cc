@@ -7,8 +7,6 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-from ocr_utils import load_ocr_for_frame, load_ocr_for_frame_range
-
 
 def get_database_path(video_dir: Path) -> Path:
     """Get annotations.db path from video directory.
@@ -92,60 +90,6 @@ def get_captions_needing_text(db_path: Path, limit: int | None = None) -> list[d
     return [dict(row) for row in rows]
 
 
-def get_cropped_frame_ocr(db_path: Path, frame_index: int) -> dict[str, Any] | None:
-    """Get cropped frame OCR data.
-
-    Args:
-        db_path: Path to annotations.db
-        frame_index: Frame index to query
-
-    Returns:
-        Dictionary with frame_index and ocr_annotations list or None if not found
-    """
-    # Get current crop_bounds_version from layout config
-    layout = get_layout_config(db_path)
-    crop_bounds_version = layout.get("crop_bounds_version", 1)
-
-    # Load OCR annotations using shared function
-    annotations = load_ocr_for_frame(
-        db_path=db_path,
-        frame_index=frame_index,
-        table_name="cropped_frame_ocr",
-        crop_bounds_version=crop_bounds_version,
-    )
-
-    if not annotations:
-        return None
-
-    return {
-        "frame_index": frame_index,
-        "ocr_annotations": annotations,
-    }
-
-
-def get_ocr_for_caption_range(db_path: Path, start_frame: int, end_frame: int) -> list[dict[str, Any]]:
-    """Get all cropped frame OCR data for a caption's frame range.
-
-    Args:
-        db_path: Path to annotations.db
-        start_frame: Start frame index (inclusive)
-        end_frame: End frame index (inclusive)
-
-    Returns:
-        List of OCR data dictionaries sorted by frame_index
-    """
-    # Get current crop_bounds_version from layout config
-    layout = get_layout_config(db_path)
-    crop_bounds_version = layout.get("crop_bounds_version", 1)
-
-    # Load OCR annotations using shared function
-    return load_ocr_for_frame_range(
-        db_path=db_path,
-        start_frame=start_frame,
-        end_frame=end_frame,
-        table_name="cropped_frame_ocr",
-        crop_bounds_version=crop_bounds_version,
-    )
 
 
 def update_caption_text(

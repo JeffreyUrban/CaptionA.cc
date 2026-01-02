@@ -7,6 +7,12 @@ name = "captionacc-workspace"
 version = "0.1.0"
 description = "Captures hard-coded captions from video with accurate timing and content by establishing and leveraging priors and context"
 requires-python = ">=3.14"
+dependencies = [
+    "tqdm>=4.67.1",
+    "pillow>=11.0.0",
+    "crop_frames",
+    "caption_boundaries",
+]
 
 [tool.uv.workspace]
 members = [
@@ -30,6 +36,10 @@ override-dependencies = [
     # "sqlalchemy>=2.0.36,<3.0",
     # "pydantic>=2.9.0,<3.0",
 ]
+
+[tool.uv.sources]
+crop_frames = { workspace = true }
+caption-boundaries = { workspace = true }
 
 # Common tool settings shared across all workspace members
 [tool.ruff]

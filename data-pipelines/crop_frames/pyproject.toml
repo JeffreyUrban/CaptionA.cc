@@ -15,6 +15,7 @@ dependencies = [
     "frames_db",
     "image_utils",
     "video_utils",
+    "ocr_utils",
 ]
 
 

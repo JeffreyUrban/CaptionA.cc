@@ -10,7 +10,7 @@ from typing import Any
 from PIL import Image
 from tqdm import tqdm
 
-from .database import get_database_path, get_layout_config, get_ocr_for_caption_range
+from .database import get_database_path, get_layout_config
 
 
 @dataclass
@@ -154,20 +154,11 @@ def collect_training_sample(
         print(f"Warning: Failed to get layout config for {video_dir}: {e}")
         return None
 
-    # Get OCR annotations for this caption's frame range
+    # OCR annotations are no longer available (cropped_frame_ocr table removed)
+    # Using empty list to maintain compatibility with existing code
     start_frame = caption["start_frame_index"]
     end_frame = caption["end_frame_index"]
-
-    ocr_data = get_ocr_for_caption_range(db_path, start_frame, end_frame)
-    if not ocr_data:
-        print(f"Warning: No OCR data for {video_dir} frames {start_frame}-{end_frame}")
-        return None
-
-    # Use first frame's OCR (or could aggregate)
-    ocr_annotations = ocr_data[0].get("ocr_annotations", [])
-    if not ocr_annotations:
-        print(f"Warning: Empty OCR annotations for {video_dir} frames {start_frame}-{end_frame}")
-        return None
+    ocr_annotations: list[list[Any]] = []
 
     # Load main image (use start frame)
     main_image = load_frame_from_db(db_path, start_frame)
