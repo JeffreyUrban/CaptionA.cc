@@ -26,11 +26,11 @@ export function BoundaryVideoInfo({
       <div className="text-sm font-semibold text-gray-500 dark:text-gray-400">Video</div>
       <div className="text-lg font-bold text-gray-900 dark:text-white">{videoId}</div>
       <div className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-        Frame: {currentFrameIndex.toLocaleString()} / {totalFrames.toLocaleString()}
+        Frame: {(currentFrameIndex ?? 0).toLocaleString()} / {(totalFrames ?? 0).toLocaleString()}
       </div>
       <div className="mt-1 text-xs text-gray-500 dark:text-gray-500">
-        Progress: {workflowProgress.toFixed(2)}% ({completedFrames.toLocaleString()} /{' '}
-        {totalFrames.toLocaleString()} completed)
+        Progress: {(workflowProgress ?? 0).toFixed(2)}% ({(completedFrames ?? 0).toLocaleString()} /{' '}
+        {(totalFrames ?? 0).toLocaleString()} completed)
       </div>
 
       {/* Jump to frame */}

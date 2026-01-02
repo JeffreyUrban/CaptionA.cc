@@ -86,6 +86,7 @@ export default function BoundaryWorkflow() {
             onClearMarks={workflow.clearMarks}
             activeAnnotation={displayState.activeAnnotation}
             canSave={canSave}
+            isSaving={workflow.isSaving}
             hasPrevAnnotation={displayState.hasPrevAnnotation}
             hasNextAnnotation={displayState.hasNextAnnotation}
             onSave={() => void workflow.saveAnnotation()}
