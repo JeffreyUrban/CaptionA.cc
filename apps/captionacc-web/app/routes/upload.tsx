@@ -1,8 +1,9 @@
 /**
- * Upload Page - Video file upload workflow with drag-and-drop support (V2)
+ * Upload Page - Video file upload workflow with drag-and-drop support (V3)
  *
  * This page allows users to:
  * - Drag and drop folders or individual video files
+ * - Preview and configure folder structure before upload
  * - Select a target folder for uploads
  * - Monitor upload progress with TUS resumable uploads
  * - Resolve duplicate videos
@@ -10,6 +11,7 @@
  *
  * Architecture:
  * - Uses upload-store (sessionStorage persistence, survives navigation)
+ * - Preview modal for folder structure configuration
  * - Three sections: Active Uploads, Pending Duplicates, Upload History
  * - Zero polling - pure Zustand subscriptions
  */
@@ -23,9 +25,15 @@ import { UploadDropZone } from '~/components/upload/UploadDropZone'
 import { UploadDuplicatesSection } from '~/components/upload/UploadDuplicatesSection'
 import { UploadFolderSelector } from '~/components/upload/UploadFolderSelector'
 import { UploadHistorySection } from '~/components/upload/UploadHistorySection'
+import { UploadPreviewModal } from '~/components/upload/UploadPreviewModal'
 import { useUploadFolders } from '~/hooks/useUploadFolders'
 import { uploadManager } from '~/services/upload-manager'
 import { useUploadStore } from '~/stores/upload-store'
+import {
+  type UploadFile,
+  type UploadOptions,
+  processUploadFiles,
+} from '~/utils/upload-folder-structure'
 
 // ============================================================================
 // Loader
@@ -47,6 +55,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
 export default function UploadPage() {
   const loaderData = useLoaderData() as { preselectedFolder: string | null }
   const [isDragActive, setIsDragActive] = useState(false)
+
+  // Preview modal state
+  const [showPreviewModal, setShowPreviewModal] = useState(false)
+  const [pendingFiles, setPendingFiles] = useState<UploadFile[]>([])
 
   // Folder selector
   const { selectedFolder, setSelectedFolder, availableFolders } = useUploadFolders(
@@ -98,8 +110,8 @@ export default function UploadPage() {
 
   // Helper to recursively collect files from directory entries
   const collectFilesFromEntry = useCallback(
-    async (entry: FileSystemEntry, path = ''): Promise<Array<{ file: File; path: string }>> => {
-      const results: Array<{ file: File; path: string }> = []
+    async (entry: FileSystemEntry, path = ''): Promise<UploadFile[]> => {
+      const results: UploadFile[] = []
 
       if (entry.isFile) {
         const fileEntry = entry as FileSystemFileEntry
@@ -109,7 +121,7 @@ export default function UploadPage() {
 
         // Only include video files
         if (isVideoFile(file)) {
-          results.push({ file, path: path + file.name })
+          results.push({ file, relativePath: path + file.name })
         }
       } else if (entry.isDirectory) {
         const dirEntry = entry as FileSystemDirectoryEntry
@@ -130,38 +142,49 @@ export default function UploadPage() {
     [isVideoFile]
   )
 
-  // Process dropped or selected files
-  const processFiles = useCallback(
-    async (fileList: FileList | null) => {
-      if (!fileList || fileList.length === 0) return
+  // Collect files and show preview modal
+  const showUploadPreview = useCallback((files: UploadFile[]) => {
+    if (files.length === 0) {
+      console.log('[UploadPage] No video files found to upload')
+      return
+    }
 
-      console.log(`[UploadPage] Processing ${fileList.length} files`)
+    console.log(`[UploadPage] Showing preview for ${files.length} video files`)
+    setPendingFiles(files)
+    setShowPreviewModal(true)
+  }, [])
 
-      // Filter to only video files
-      const files = Array.from(fileList).filter(file => isVideoFile(file))
+  // Handle modal confirmation - process and upload files
+  const handleUploadConfirm = useCallback(async (files: UploadFile[], options: UploadOptions) => {
+    setShowPreviewModal(false)
 
-      console.log(`[UploadPage] Starting upload for ${files.length} video files`)
+    console.log(`[UploadPage] Processing ${files.length} files with options:`, options)
 
-      // Start each file upload via upload manager
-      for (const file of files) {
-        // Determine relative path from webkitRelativePath or just filename
-        const webkitFile = file as File & { webkitRelativePath?: string }
-        const relativePath = webkitFile.webkitRelativePath || file.name
+    // Process files according to options
+    const processed = await processUploadFiles(files, options)
 
-        try {
-          await uploadManager.startUpload(file, {
-            fileName: file.name,
-            fileType: file.type,
-            targetFolder: selectedFolder,
-            relativePath,
-          })
-        } catch (error) {
-          console.error(`[UploadPage] Failed to start upload for ${relativePath}:`, error)
-        }
+    console.log(`[UploadPage] Starting upload for ${processed.length} processed files`)
+
+    // Start each upload
+    for (const upload of processed) {
+      try {
+        await uploadManager.startUpload(upload.file, {
+          fileName: upload.fileName,
+          fileType: upload.file.type,
+          targetFolder: null, // Already included in finalPath
+          relativePath: upload.finalPath,
+        })
+      } catch (error) {
+        console.error(`[UploadPage] Failed to start upload for ${upload.finalPath}:`, error)
       }
-    },
-    [selectedFolder, isVideoFile]
-  )
+    }
+  }, [])
+
+  // Handle modal cancellation
+  const handleUploadCancel = useCallback(() => {
+    setShowPreviewModal(false)
+    setPendingFiles([])
+  }, [])
 
   // Drag-and-drop handlers
   const handleDragEnter = useCallback((e: React.DragEvent) => {
@@ -187,7 +210,7 @@ export default function UploadPage() {
       setIsDragActive(false)
 
       const items = Array.from(e.dataTransfer.items)
-      const allFiles: Array<{ file: File; path: string }> = []
+      const allFiles: UploadFile[] = []
 
       // Process each dropped item (could be files or directories)
       for (const item of items) {
@@ -200,31 +223,36 @@ export default function UploadPage() {
 
       console.log(`[UploadPage] Collected ${allFiles.length} files from drop`)
 
-      // Upload each collected file
-      for (const { file, path } of allFiles) {
-        try {
-          await uploadManager.startUpload(file, {
-            fileName: file.name,
-            fileType: file.type,
-            targetFolder: selectedFolder,
-            relativePath: path,
-          })
-        } catch (error) {
-          console.error(`[UploadPage] Failed to start upload for ${path}:`, error)
-        }
-      }
+      // Show preview modal
+      showUploadPreview(allFiles)
     },
-    [collectFilesFromEntry, selectedFolder]
+    [collectFilesFromEntry, showUploadPreview]
   )
 
   // File input handler
   const handleFileSelect = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      void processFiles(e.target.files)
+      const fileList = e.target.files
+      if (!fileList || fileList.length === 0) return
+
+      // Convert FileList to UploadFile array
+      const files = Array.from(fileList)
+        .filter(file => isVideoFile(file))
+        .map(file => {
+          const webkitFile = file as File & { webkitRelativePath?: string }
+          return {
+            file,
+            relativePath: webkitFile.webkitRelativePath || file.name,
+          }
+        })
+
+      // Show preview modal
+      showUploadPreview(files)
+
       // Reset input so same file can be selected again
       e.target.value = ''
     },
-    [processFiles]
+    [isVideoFile, showUploadPreview]
   )
 
   // Duplicate resolution handler
@@ -383,6 +411,17 @@ export default function UploadPage() {
           </>
         )}
       </div>
+
+      {/* Upload Preview Modal */}
+      {showPreviewModal && (
+        <UploadPreviewModal
+          files={pendingFiles}
+          availableFolders={availableFolders}
+          defaultTargetFolder={selectedFolder}
+          onConfirm={handleUploadConfirm}
+          onCancel={handleUploadCancel}
+        />
+      )}
     </AppLayout>
   )
 }
