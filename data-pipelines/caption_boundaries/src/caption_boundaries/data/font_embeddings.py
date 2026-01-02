@@ -16,10 +16,11 @@ import numpy as np
 import torch
 from frames_db import get_frame_from_db
 from PIL import Image
+from rich import print as rprint
 from transformers import AutoModel, AutoProcessor
 
 from caption_boundaries.data.reference_selection import ReferenceFrameCandidate, select_reference_frame
-from caption_boundaries.database import FontEmbedding, VideoRegistry, get_training_db
+from caption_boundaries.database import FontEmbedding, VideoRegistry, get_dataset_db
 from video_utils import get_video_metadata
 
 
@@ -108,25 +109,27 @@ class FontCLIPModel:
         self.requested_model = model_name
         self.used_fallback = False
 
-        # Load model and processor
-        try:
-            self.processor = AutoProcessor.from_pretrained(model_name)
-            self.model = AutoModel.from_pretrained(model_name)
-        except Exception as e:
-            # If FontCLIP weights not accessible, fall back to base CLIP
-            if "VecGlypher/fontclip_weight" in model_name:
-                print(f"Warning: Could not load {model_name}: {e}")
-                print("Falling back to base CLIP model: openai/clip-vit-base-patch32")
-                fallback_model = "openai/clip-vit-base-patch32"
+        # Load model and processor (suppress verbose warnings)
+        import warnings
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore")
+            try:
+                self.processor = AutoProcessor.from_pretrained(model_name, use_fast=True)
+                self.model = AutoModel.from_pretrained(model_name)
+            except Exception as e:
+                # If FontCLIP weights not accessible, fall back to base CLIP
+                if "VecGlypher/fontclip_weight" in model_name:
+                    # Silently fall back - will be logged during batch_extract_embeddings
+                    fallback_model = "openai/clip-vit-base-patch32"
 
-                # Update model_name to actual model used (ensures correct metadata tracking)
-                self.model_name = fallback_model
-                self.used_fallback = True
+                    # Update model_name to actual model used (ensures correct metadata tracking)
+                    self.model_name = fallback_model
+                    self.used_fallback = True
 
-                self.processor = AutoProcessor.from_pretrained(fallback_model)
-                self.model = AutoModel.from_pretrained(fallback_model)
-            else:
-                raise
+                    self.processor = AutoProcessor.from_pretrained(fallback_model, use_fast=True)
+                    self.model = AutoModel.from_pretrained(fallback_model)
+                else:
+                    raise
 
         # Freeze all parameters (feature extraction only)
         for param in self.model.parameters():
@@ -254,7 +257,7 @@ def get_or_create_font_embedding(
         FontEmbedding record with embedding data
 
     Raises:
-        ValueError: If video has no suitable reference frames
+        ValueError: If video has no suitable reference frames or metadata
 
     Example:
         >>> video_db = Path("path/to/video/annotations.db")
@@ -263,17 +266,47 @@ def get_or_create_font_embedding(
         >>> print(f"Embedding shape: {embedding_array.shape}")
         Embedding shape: (512,)
     """
-    # Find video file in database directory
-    video_path = find_video_file(video_db_path)
-    if video_path is None:
-        raise FileNotFoundError(
-            f"No video file found in {video_db_path.parent}. "
-            f"Expected video file with extensions: .mp4, .mkv, .avi, .mov"
-        )
+    import sqlite3
 
-    # Get video metadata for identification
-    metadata = get_video_metadata(video_path)
-    video_hash = metadata["video_hash"]
+    # Get video metadata from database (no video file needed!)
+    conn = sqlite3.connect(video_db_path)
+    try:
+        cursor = conn.cursor()
+
+        # Get video_hash (minimum required)
+        cursor.execute("SELECT video_hash FROM video_metadata LIMIT 1")
+        row = cursor.fetchone()
+
+        if not row:
+            raise ValueError(
+                f"No video metadata found in {video_db_path}. "
+                f"Ensure the video has been processed through the annotation pipeline."
+            )
+
+        video_hash = row[0]
+
+        # Get optional metadata fields (with fallbacks)
+        metadata = {"video_hash": video_hash}
+
+        # Try to get additional fields if they exist
+        for field in ["display_path", "file_size_bytes", "duration_seconds", "width", "height"]:
+            try:
+                cursor.execute(f"SELECT {field} FROM video_metadata LIMIT 1")
+                field_row = cursor.fetchone()
+                if field_row and field_row[0] is not None:
+                    metadata[field] = field_row[0]
+            except sqlite3.OperationalError:
+                # Column doesn't exist, skip it
+                pass
+
+        # Use display_path as video_path fallback
+        if "display_path" in metadata:
+            metadata["video_path"] = metadata["display_path"]
+        else:
+            metadata["video_path"] = str(video_db_path.parent.name)
+
+    finally:
+        conn.close()
 
     # Create model if not provided
     if model is None:
@@ -281,8 +314,8 @@ def get_or_create_font_embedding(
 
     model_version = model.get_model_version()
 
-    # Check cache in training database
-    with next(get_training_db(training_db_path)) as db:
+    # Check cache in dataset database
+    with next(get_dataset_db(training_db_path)) as db:
         if not force_recompute:
             cached = (
                 db.query(FontEmbedding)
@@ -316,8 +349,12 @@ def get_or_create_font_embedding(
         # Convert to PIL Image for embedding extraction
         frame_image = frame_data.to_pil_image()
 
-        # Extract embedding
-        embedding, _ = extract_font_embedding(video_db_path, frame_image, reference_frame, model)
+        try:
+            # Extract embedding
+            embedding, _ = extract_font_embedding(video_db_path, frame_image, reference_frame, model)
+        finally:
+            # Explicitly close the image to free file descriptors
+            frame_image.close()
 
         # Create database record
         embedding_record = FontEmbedding(
@@ -356,6 +393,7 @@ def batch_extract_embeddings(
     """Batch extract font embeddings for multiple videos.
 
     More efficient than individual extraction because model is loaded once.
+    Processes videos in batches to limit simultaneous database connections.
 
     Args:
         video_db_paths: List of paths to video annotations.db files
@@ -370,26 +408,71 @@ def batch_extract_embeddings(
         >>> embeddings = batch_extract_embeddings(video_dbs)
         >>> print(f"Extracted {len(embeddings)} embeddings")
     """
+    import gc
+
     model = FontCLIPModel()
+
+    # Log which model is actually being used
+    model_info = f"Using font embedding model: {model.model_name}"
+    if model.used_fallback:
+        model_info += " (fallback from VecGlypher/fontclip_weight)"
+    rprint(f"[cyan]{model_info}[/cyan]")
+    rprint(f"[cyan]Model version: {model.get_model_version()}[/cyan]")
+
     results = {}
 
-    for video_db_path in video_db_paths:
-        try:
-            embedding = get_or_create_font_embedding(
-                video_db_path,
-                training_db_path=training_db_path,
-                model=model,
-                force_recompute=force_recompute,
-            )
+    # Process in batches to limit file descriptor usage
+    BATCH_SIZE = 50
+    for batch_start in range(0, len(video_db_paths), BATCH_SIZE):
+        batch_end = min(batch_start + BATCH_SIZE, len(video_db_paths))
+        batch = video_db_paths[batch_start:batch_end]
 
-            # Get video hash from embedding (it's already stored there)
-            results[embedding.video_hash] = embedding
+        for video_db_path in batch:
+            try:
+                embedding = get_or_create_font_embedding(
+                    video_db_path,
+                    training_db_path=training_db_path,
+                    model=model,
+                    force_recompute=force_recompute,
+                )
 
-        except Exception as e:
-            print(f"Failed to extract embedding for {video_db_path}: {e}")
-            continue
+                # Get video hash from embedding (it's already stored there)
+                results[embedding.video_hash] = embedding
+
+            except Exception as e:
+                print(f"Failed to extract embedding for {video_db_path}: {e}")
+                continue
+
+        # Force cleanup between batches
+        gc.collect()
 
     return results
+
+
+def get_dataset_model_info(dataset_db_path: Path) -> dict[str, int]:
+    """Get summary of font embedding models used in a dataset.
+
+    Args:
+        dataset_db_path: Path to dataset database
+
+    Returns:
+        Dict mapping model version to count of embeddings
+
+    Example:
+        >>> model_info = get_dataset_model_info(Path("my_dataset.db"))
+        >>> print(model_info)
+        {'openai-clip-vit-base-patch32-v1.0-fallback': 242}
+    """
+    from caption_boundaries.database import FontEmbedding, get_dataset_db
+
+    with next(get_dataset_db(dataset_db_path)) as db:
+        results = (
+            db.query(FontEmbedding.fontclip_model_version, db.func.count())
+            .group_by(FontEmbedding.fontclip_model_version)
+            .all()
+        )
+
+        return {model_version: count for model_version, count in results}
 
 
 def get_font_embedding(
@@ -407,20 +490,25 @@ def get_font_embedding(
     Returns:
         FontEmbedding if found in cache, None otherwise
     """
-    from caption_boundaries.database import get_training_db
-    from caption_boundaries.data.dataset_builder import compute_video_hash
+    import sqlite3
+    from caption_boundaries.database import FontEmbedding, get_dataset_db
 
-    # Compute video hash
-    video_file = find_video_file(video_db_path)
-    if not video_file:
+    # Get video hash from database (no video file needed)
+    try:
+        conn = sqlite3.connect(video_db_path)
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT video_hash FROM video_metadata LIMIT 1")
+            row = cursor.fetchone()
+            if not row:
+                return None
+            video_hash = row[0]
+        finally:
+            conn.close()
+    except Exception:
         return None
 
-    video_hash = compute_video_hash(video_file)
-
     # Check cache
-    with next(get_training_db(training_db_path)) as db:
-        from caption_boundaries.database import FontEmbedding
-
+    with next(get_dataset_db(training_db_path)) as db:
         embedding = db.query(FontEmbedding).filter(FontEmbedding.video_hash == video_hash).first()
-
         return embedding

@@ -6,20 +6,30 @@ from caption_boundaries.database.schema import (
     FontEmbedding,
     OCRVisualization,
     TrainingDataset,
+    TrainingFrame,
+    TrainingOCRVisualization,
     TrainingSample,
     VideoRegistry,
 )
-from caption_boundaries.database.storage import create_session, get_training_db, init_training_db
+from caption_boundaries.database.storage import (
+    create_dataset_session,
+    get_dataset_db,
+    get_dataset_db_path,
+    init_dataset_db,
+)
 
 __all__ = [
     "Base",
     "VideoRegistry",
     "TrainingDataset",
     "TrainingSample",
+    "TrainingFrame",
+    "TrainingOCRVisualization",
     "FontEmbedding",
     "OCRVisualization",
     "Experiment",
-    "init_training_db",
-    "get_training_db",
-    "create_session",
+    "init_dataset_db",
+    "get_dataset_db",
+    "get_dataset_db_path",
+    "create_dataset_session",
 ]

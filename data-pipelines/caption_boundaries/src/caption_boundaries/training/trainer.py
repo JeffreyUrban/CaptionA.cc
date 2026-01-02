@@ -5,6 +5,8 @@ and checkpoint management.
 """
 
 import json
+import random
+from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
@@ -16,14 +18,107 @@ import wandb
 from rich.console import Console
 from rich.progress import track
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, f1_score
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Sampler
 
 from caption_boundaries.data.dataset import CaptionBoundaryDataset
 from caption_boundaries.data.transforms import ResizeStrategy
-from caption_boundaries.database import Experiment, TrainingDataset, get_training_db
+from caption_boundaries.database import Experiment, TrainingDataset, get_dataset_db
 from caption_boundaries.models.architecture import create_model
 
 console = Console(stderr=True)
+
+
+class BalancedBatchSampler(Sampler):
+    """Sampler that undersamples majority classes each epoch for training efficiency.
+
+    Each epoch samples:
+    - All samples from minority classes (up to cap)
+    - Random subset from majority classes (controlled by cap or ratio)
+    - Different subset each epoch for better data coverage
+
+    This improves training efficiency by reducing redundant majority class examples
+    while ensuring the model still sees all data over multiple epochs.
+
+    Supports two modes:
+    1. Cap-based (recommended for scaling): Fixed max samples per class
+    2. Ratio-based (legacy): Max samples = minority_size × ratio
+
+    Args:
+        dataset: CaptionBoundaryDataset to sample from
+        max_samples_per_class: Absolute cap on samples per class (recommended)
+                              Example: 10000 = max 10K samples per class per epoch
+        majority_ratio: Ratio-based cap (legacy, for backward compatibility)
+                       Example: 3.0 = max 3× minority class size per class
+
+    Note: If both specified, max_samples_per_class takes precedence.
+
+    Example (cap-based, recommended):
+        With max_samples_per_class=10000:
+        - Each class: max 10,000 samples per epoch
+        - Total epoch size: ~50,000 samples (5 classes)
+        - Epoch time: constant regardless of dataset size
+
+    Example (ratio-based, legacy):
+        With minority class of 6,364 samples and ratio=3.0:
+        - Minority classes: all 6,364 samples per epoch
+        - Majority classes: max 19,092 samples per epoch
+        - Epoch time: grows with dataset size
+    """
+
+    def __init__(
+        self,
+        dataset: CaptionBoundaryDataset,
+        max_samples_per_class: int | None = None,
+        majority_ratio: float | None = None,
+    ):
+        self.dataset = dataset
+        self.max_samples_per_class_param = max_samples_per_class
+        self.majority_ratio = majority_ratio
+
+        # Group indices by label (access samples directly, don't call __getitem__)
+        self.label_to_indices = defaultdict(list)
+        for idx, sample in enumerate(dataset.samples):
+            self.label_to_indices[sample.label].append(idx)
+
+        # Calculate class sizes
+        self.class_sizes = {label: len(indices) for label, indices in self.label_to_indices.items()}
+
+        # Determine sampling cap (cap-based takes precedence over ratio-based)
+        if max_samples_per_class is not None:
+            # Cap-based mode (recommended)
+            self.max_samples_per_class = max_samples_per_class
+            self.sampling_mode = "cap"
+        elif majority_ratio is not None:
+            # Ratio-based mode (legacy)
+            self.min_class_size = min(self.class_sizes.values())
+            self.max_samples_per_class = int(self.min_class_size * majority_ratio)
+            self.sampling_mode = "ratio"
+        else:
+            raise ValueError("Must specify either max_samples_per_class or majority_ratio")
+
+        # Calculate epoch size
+        self.epoch_size = sum(
+            min(len(indices), self.max_samples_per_class) for indices in self.label_to_indices.values()
+        )
+
+    def __iter__(self):
+        """Sample indices for this epoch."""
+        epoch_indices = []
+
+        for label, indices in self.label_to_indices.items():
+            if len(indices) <= self.max_samples_per_class:
+                # Use all samples for minority/medium classes
+                epoch_indices.extend(indices)
+            else:
+                # Random subset for majority classes (different each epoch!)
+                epoch_indices.extend(random.sample(indices, self.max_samples_per_class))
+
+        # Shuffle the combined indices
+        random.shuffle(epoch_indices)
+        return iter(epoch_indices)
+
+    def __len__(self):
+        return self.epoch_size
 
 
 class CaptionBoundaryTrainer:
@@ -32,50 +127,66 @@ class CaptionBoundaryTrainer:
     Handles training loop, validation, metrics tracking, and checkpointing.
 
     Args:
-        dataset_id: Training dataset ID
+        dataset_db_path: Path to dataset database file
         experiment_name: Name for this experiment (for W&B)
-        training_db_path: Path to training database
         transform_strategy: Transform strategy for variable-sized crops
         ocr_viz_variant: OCR visualization variant to use
         use_font_embedding: Whether to use font embeddings
         epochs: Number of training epochs
         batch_size: Training batch size
-        learning_rate: Learning rate
+        lr_features: Learning rate for feature extractor
+        lr_classifier: Learning rate for classifier head
         device: Device to train on ('cuda', 'mps', 'cpu', or None for auto-detect)
         wandb_project: W&B project name
         checkpoint_dir: Directory to save checkpoints
         save_every_n_epochs: Save checkpoint every N epochs
+        balanced_sampling: Whether to use balanced sampling
+        max_samples_per_class: Absolute cap on samples per class (recommended for scaling)
+        sampling_ratio: Ratio-based cap (legacy, for backward compatibility)
     """
 
     def __init__(
         self,
-        dataset_id: int,
+        dataset_db_path: Path,
         experiment_name: str,
-        training_db_path: Path | None = None,
         transform_strategy: ResizeStrategy = ResizeStrategy.MIRROR_TILE,
         ocr_viz_variant: str = "boundaries",
         use_font_embedding: bool = True,
         epochs: int = 50,
         batch_size: int = 32,
-        learning_rate: float = 1e-4,
+        lr_features: float = 1e-3,
+        lr_classifier: float = 1e-2,
         device: str | None = None,
         wandb_project: str = "caption-boundary-detection",
         checkpoint_dir: Path = Path("checkpoints"),
         save_every_n_epochs: int = 5,
+        balanced_sampling: bool = True,
+        max_samples_per_class: int | None = None,
+        sampling_ratio: float | None = 3.0,
     ):
-        self.dataset_id = dataset_id
+        self.dataset_db_path = dataset_db_path
         self.experiment_name = experiment_name
-        self.training_db_path = training_db_path
         self.transform_strategy = transform_strategy
         self.ocr_viz_variant = ocr_viz_variant
         self.use_font_embedding = use_font_embedding
         self.epochs = epochs
         self.batch_size = batch_size
-        self.learning_rate = learning_rate
+        self.lr_features = lr_features
+        self.lr_classifier = lr_classifier
         self.wandb_project = wandb_project
         # Organize checkpoints by experiment name
         self.checkpoint_dir = Path(checkpoint_dir) / experiment_name / "checkpoints"
         self.save_every_n_epochs = save_every_n_epochs
+
+        # Balanced sampling configuration
+        self.balanced_sampling = balanced_sampling
+        self.max_samples_per_class = max_samples_per_class
+        self.sampling_ratio = sampling_ratio
+
+        # Early stopping configuration
+        self.early_stopping_patience = 5
+        self.early_stopping_counter = 0
+        self.early_stopping_min_delta = 1e-4
 
         # Auto-detect device
         if device is None:
@@ -106,33 +217,68 @@ class CaptionBoundaryTrainer:
 
         # Train dataset
         self.train_dataset = CaptionBoundaryDataset(
-            dataset_id=self.dataset_id,
+            dataset_db_path=self.dataset_db_path,
             split="train",
-            training_db_path=self.training_db_path,
             transform_strategy=self.transform_strategy,
         )
 
         # Val dataset
         self.val_dataset = CaptionBoundaryDataset(
-            dataset_id=self.dataset_id,
+            dataset_db_path=self.dataset_db_path,
             split="val",
-            training_db_path=self.training_db_path,
             transform_strategy=self.transform_strategy,
         )
 
-        # Data loaders
         # Adjust num_workers based on device (MPS has issues with multiprocessing)
         num_workers = 0 if self.device == "mps" else 4
 
-        self.train_loader = DataLoader(
-            self.train_dataset,
-            batch_size=self.batch_size,
-            shuffle=True,
-            num_workers=num_workers,
-            collate_fn=CaptionBoundaryDataset.collate_fn,
-            pin_memory=(self.device == "cuda"),
-        )
+        # Create train loader with optional balanced sampling
+        if self.balanced_sampling:
+            train_sampler = BalancedBatchSampler(
+                self.train_dataset,
+                max_samples_per_class=self.max_samples_per_class,
+                majority_ratio=self.sampling_ratio,
+            )
 
+            self.train_loader = DataLoader(
+                self.train_dataset,
+                batch_size=self.batch_size,
+                sampler=train_sampler,  # Use balanced sampler instead of shuffle
+                num_workers=num_workers,
+                collate_fn=CaptionBoundaryDataset.collate_fn,
+                pin_memory=(self.device == "cuda"),
+            )
+
+            # Log sampling statistics
+            if self.max_samples_per_class is not None:
+                console.print(f"[cyan]Balanced sampling enabled (cap={self.max_samples_per_class:,} samples/class):[/cyan]")
+            else:
+                console.print(f"[cyan]Balanced sampling enabled (ratio={self.sampling_ratio}):[/cyan]")
+            console.print(f"  Total train samples: {len(self.train_dataset)}")
+            console.print(f"  Samples per epoch: {len(train_sampler)}")
+            speedup = len(self.train_dataset) / len(train_sampler)
+            console.print(f"  Speedup: {speedup:.2f}x faster epochs")
+
+            # Show per-class sampling
+            for label in range(len(CaptionBoundaryDataset.LABELS)):
+                label_name = CaptionBoundaryDataset.LABELS[label]
+                original_count = train_sampler.class_sizes.get(label, 0)
+                sampled_count = min(original_count, train_sampler.max_samples_per_class)
+                if original_count > 0:
+                    pct = (sampled_count / original_count) * 100
+                    console.print(f"    {label_name}: {sampled_count}/{original_count} ({pct:.0f}%)")
+        else:
+            self.train_loader = DataLoader(
+                self.train_dataset,
+                batch_size=self.batch_size,
+                shuffle=True,
+                num_workers=num_workers,
+                collate_fn=CaptionBoundaryDataset.collate_fn,
+                pin_memory=(self.device == "cuda"),
+            )
+            console.print(f"[green]✓[/green] Train samples: {len(self.train_dataset)}")
+
+        # Val loader (no sampling - always use all validation data)
         self.val_loader = DataLoader(
             self.val_dataset,
             batch_size=self.batch_size,
@@ -142,8 +288,45 @@ class CaptionBoundaryTrainer:
             pin_memory=(self.device == "cuda"),
         )
 
-        console.print(f"[green]✓[/green] Train samples: {len(self.train_dataset)}")
         console.print(f"[green]✓[/green] Val samples: {len(self.val_dataset)}")
+
+    def _compute_class_weights(self) -> torch.Tensor:
+        """Compute class weights from training dataset to handle class imbalance.
+
+        Uses inverse frequency weighting: weight = total_samples / class_count
+        This ensures minority classes get higher loss contributions.
+
+        Returns:
+            Tensor of class weights for CrossEntropyLoss
+        """
+        from collections import Counter
+
+        # Extract labels from training dataset (access samples directly, don't call __getitem__)
+        # Convert string labels to integer indices using dataset's LABEL_TO_IDX mapping
+        label_to_idx = self.train_dataset.LABEL_TO_IDX
+        labels = [label_to_idx[sample.label] for sample in self.train_dataset.samples]
+        label_counts = Counter(labels)
+
+        # Compute weights: total_samples / class_count
+        total_samples = len(labels)
+        num_classes = len(label_counts)
+        class_weights = torch.zeros(num_classes, dtype=torch.float32)
+
+        for class_idx, count in label_counts.items():
+            class_weights[class_idx] = total_samples / count
+
+        # Move to device and log
+        class_weights = class_weights.to(self.device)
+
+        console.print("[cyan]Class weights (inverse frequency):[/cyan]")
+        label_names = ["same", "different", "empty_empty", "empty_valid", "valid_empty"]
+        for class_idx in range(num_classes):
+            count = label_counts.get(class_idx, 0)
+            weight = class_weights[class_idx].item()
+            label_name = label_names[class_idx] if class_idx < len(label_names) else f"class_{class_idx}"
+            console.print(f"  {label_name}: {count} samples, weight={weight:.2f}")
+
+        return class_weights
 
     def _setup_model(self):
         """Initialize model, optimizer, and loss function."""
@@ -154,20 +337,49 @@ class CaptionBoundaryTrainer:
         console.print(f"[green]✓[/green] Total params: {self.model.get_num_total_params():,}")
         console.print(f"[green]✓[/green] Trainable params: {self.model.get_num_trainable_params():,}")
 
-        # Optimizer
-        self.optimizer = optim.AdamW(self.model.parameters(), lr=self.learning_rate)
+        # Optimizer with different learning rates for different components
+        # Higher LR for newly added classifier, lower LR for pretrained feature extractor
+        param_groups = [
+            {
+                "params": [p for n, p in self.model.named_parameters() if "classifier" in n],
+                "lr": self.lr_classifier,
+                "name": "classifier",
+            },
+            {
+                "params": [p for n, p in self.model.named_parameters() if "classifier" not in n],
+                "lr": self.lr_features,
+                "name": "features",
+            },
+        ]
 
-        # Loss function (cross-entropy for multi-class classification)
-        self.criterion = nn.CrossEntropyLoss()
+        self.optimizer = optim.AdamW(param_groups)
+
+        console.print(f"[cyan]Learning rates:[/cyan]")
+        console.print(f"  Classifier: {self.lr_classifier:.2e}")
+        console.print(f"  Features: {self.lr_features:.2e}")
+
+        # Learning rate scheduler - reduce LR on plateau
+        self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+            self.optimizer,
+            mode="min",
+            factor=0.5,
+            patience=2,
+        )
+
+        # Compute class weights from training data to handle imbalance
+        class_weights = self._compute_class_weights()
+
+        # Loss function with class weighting (cross-entropy for multi-class classification)
+        self.criterion = nn.CrossEntropyLoss(weight=class_weights)
 
     def _setup_wandb(self):
         """Initialize W&B tracking."""
         # Get dataset info for W&B config
-        with next(get_training_db(self.training_db_path)) as db:
-            dataset = db.query(TrainingDataset).filter(TrainingDataset.id == self.dataset_id).first()
+        with next(get_dataset_db(self.dataset_db_path)) as db:
+            dataset = db.query(TrainingDataset).first()
 
             if not dataset:
-                raise ValueError(f"Dataset {self.dataset_id} not found")
+                raise ValueError(f"No dataset found in {self.dataset_db_path}")
 
             config = {
                 # Model config
@@ -177,11 +389,14 @@ class CaptionBoundaryTrainer:
                 # Training config
                 "epochs": self.epochs,
                 "batch_size": self.batch_size,
-                "learning_rate": self.learning_rate,
+                "balanced_sampling": self.balanced_sampling,
+                "sampling_ratio": self.sampling_ratio,
+                "lr_features": self.lr_features,
+                "lr_classifier": self.lr_classifier,
                 "optimizer": "AdamW",
                 # Data config
-                "dataset_id": self.dataset_id,
                 "dataset_name": dataset.name,
+                "dataset_db_path": str(self.dataset_db_path),
                 "num_train_samples": len(self.train_dataset),
                 "num_val_samples": len(self.val_dataset),
                 "transform_strategy": self.transform_strategy.value,
@@ -200,6 +415,7 @@ class CaptionBoundaryTrainer:
                 name=self.experiment_name,
                 config=config,
                 dir="../../local/models/caption_boundaries/wandb",
+                mode="online",  # Default to online reporting to wandb.ai
             )
 
             # Save W&B run ID for experiment tracking
@@ -250,12 +466,14 @@ class CaptionBoundaryTrainer:
         # Compute epoch metrics
         avg_loss = total_loss / len(self.train_loader)
         accuracy = accuracy_score(all_labels, all_preds)
-        f1 = f1_score(all_labels, all_preds, average="weighted")
+        f1_weighted = f1_score(all_labels, all_preds, average="weighted", zero_division=0)
+        f1_macro = f1_score(all_labels, all_preds, average="macro", zero_division=0)
 
         return {
             "train/loss": avg_loss,
             "train/accuracy": accuracy,
-            "train/f1": f1,
+            "train/f1_weighted": f1_weighted,
+            "train/f1_macro": f1_macro,
         }
 
     def validate(self, epoch: int) -> dict[str, Any]:
@@ -297,7 +515,8 @@ class CaptionBoundaryTrainer:
         # Compute validation metrics
         avg_loss = total_loss / len(self.val_loader)
         accuracy = accuracy_score(all_labels, all_preds)
-        f1 = f1_score(all_labels, all_preds, average="weighted")
+        f1_weighted = f1_score(all_labels, all_preds, average="weighted", zero_division=0)
+        f1_macro = f1_score(all_labels, all_preds, average="macro", zero_division=0)
 
         # Confusion matrix
         cm = confusion_matrix(all_labels, all_preds)
@@ -315,10 +534,18 @@ class CaptionBoundaryTrainer:
         metrics = {
             "val/loss": avg_loss,
             "val/accuracy": accuracy,
-            "val/f1": f1,
+            "val/f1_weighted": f1_weighted,
+            "val/f1_macro": f1_macro,
             "val/confusion_matrix": cm,
             "val/classification_report": class_report,
         }
+
+        # Add per-class metrics for W&B logging
+        for label_name in CaptionBoundaryDataset.LABELS:
+            if label_name in class_report:
+                metrics[f"val/precision_{label_name}"] = class_report[label_name]["precision"]
+                metrics[f"val/recall_{label_name}"] = class_report[label_name]["recall"]
+                metrics[f"val/f1_{label_name}"] = class_report[label_name]["f1-score"]
 
         # Log confusion matrix to W&B every 5 epochs
         if epoch % 5 == 0:
@@ -350,7 +577,7 @@ class CaptionBoundaryTrainer:
             "optimizer_state_dict": self.optimizer.state_dict(),
             "metrics": metrics,
             "config": {
-                "dataset_id": self.dataset_id,
+                "dataset_db_path": str(self.dataset_db_path),
                 "transform_strategy": self.transform_strategy.value,
                 "ocr_viz_variant": self.ocr_viz_variant,
                 "use_font_embedding": self.use_font_embedding,
@@ -371,7 +598,8 @@ class CaptionBoundaryTrainer:
 
             # Log to W&B
             wandb.run.summary["best_epoch"] = epoch
-            wandb.run.summary["best_val_f1"] = metrics["val/f1"]
+            wandb.run.summary["best_val_f1_macro"] = metrics["val/f1_macro"]
+            wandb.run.summary["best_val_f1_weighted"] = metrics["val/f1_weighted"]
             wandb.run.summary["best_val_accuracy"] = metrics["val/accuracy"]
 
     def train(self):
@@ -383,8 +611,28 @@ class CaptionBoundaryTrainer:
         self._setup_model()
         self._setup_wandb()
 
-        # Track best model
-        best_val_f1 = 0.0
+        # Evaluate untrained model (epoch 0 baseline)
+        console.print("[cyan]Evaluating untrained model (epoch 0)...[/cyan]")
+        epoch_0_metrics = self.validate(epoch=0)
+
+        # Log epoch 0 to W&B
+        wandb_metrics = {
+            k: v for k, v in epoch_0_metrics.items()
+            if not isinstance(v, (np.ndarray, dict))
+        }
+        wandb_metrics["epoch"] = 0
+        wandb.log(wandb_metrics, step=0)
+
+        # Print epoch 0 results
+        console.print(
+            f"\n[yellow]Epoch 0/{self.epochs} (untrained)[/yellow] - "
+            f"Val Loss: {epoch_0_metrics['val/loss']:.4f}, "
+            f"Val F1 (macro): {epoch_0_metrics['val/f1_macro']:.4f}, "
+            f"Val Accuracy: {epoch_0_metrics['val/accuracy']:.4f}\n"
+        )
+
+        # Track best model (use macro F1 for imbalanced datasets)
+        best_val_f1_macro = 0.0
 
         # Training loop
         for epoch in range(1, self.epochs + 1):
@@ -407,17 +655,31 @@ class CaptionBoundaryTrainer:
             console.print(
                 f"\nEpoch {epoch}/{self.epochs} - "
                 f"Train Loss: {train_metrics['train/loss']:.4f}, "
-                f"Train F1: {train_metrics['train/f1']:.4f} | "
+                f"Train F1 (macro): {train_metrics['train/f1_macro']:.4f} | "
                 f"Val Loss: {val_metrics['val/loss']:.4f}, "
-                f"Val F1: {val_metrics['val/f1']:.4f}"
+                f"Val F1 (macro): {val_metrics['val/f1_macro']:.4f}"
             )
 
-            # Save checkpoint
-            is_best = val_metrics["val/f1"] > best_val_f1
+            # Step learning rate scheduler based on validation loss
+            self.scheduler.step(val_metrics["val/loss"])
+
+            # Save checkpoint (use macro F1 for best model selection)
+            is_best = val_metrics["val/f1_macro"] > best_val_f1_macro
             if is_best:
-                best_val_f1 = val_metrics["val/f1"]
+                best_val_f1_macro = val_metrics["val/f1_macro"]
+                self.early_stopping_counter = 0  # Reset early stopping
+            else:
+                self.early_stopping_counter += 1
 
             self.save_checkpoint(epoch, val_metrics, is_best=is_best)
+
+            # Early stopping check
+            if self.early_stopping_counter >= self.early_stopping_patience:
+                console.print(
+                    f"\n[yellow]Early stopping triggered after {epoch} epochs "
+                    f"(no improvement for {self.early_stopping_patience} epochs)[/yellow]"
+                )
+                break
 
         # Save final checkpoint
         final_path = self.checkpoint_dir / "final.pt"
@@ -432,18 +694,23 @@ class CaptionBoundaryTrainer:
         )
 
         # Save experiment to database
-        self._save_experiment_to_db(best_val_f1, val_metrics["val/accuracy"])
+        self._save_experiment_to_db(best_val_f1_macro, val_metrics["val/accuracy"])
 
         # Finish W&B
         wandb.finish()
 
         console.print(f"\n[green]✓ Training complete![/green]")
-        console.print(f"Best Val F1: {best_val_f1:.4f}")
+        console.print(f"Best Val F1 (macro): {best_val_f1_macro:.4f}")
         console.print(f"Checkpoints saved to: {self.checkpoint_dir}")
 
     def _save_experiment_to_db(self, best_val_f1: float, best_val_accuracy: float):
         """Save experiment metadata to database."""
-        with next(get_training_db(self.training_db_path)) as db:
+        with next(get_dataset_db(self.dataset_db_path)) as db:
+            # Get dataset ID for foreign key
+            dataset = db.query(TrainingDataset).first()
+            if not dataset:
+                raise ValueError(f"No dataset found in {self.dataset_db_path}")
+
             # Get git info if available
             try:
                 import subprocess
@@ -456,14 +723,17 @@ class CaptionBoundaryTrainer:
 
             experiment = Experiment(
                 name=self.experiment_name,
-                dataset_id=self.dataset_id,
+                dataset_id=dataset.id,
                 wandb_run_id=self.wandb_run_id,
                 wandb_project=self.wandb_project,
                 model_architecture={"type": "CaptionBoundaryPredictor", "pretrained": True},
                 hyperparameters={
                     "epochs": self.epochs,
                     "batch_size": self.batch_size,
-                    "learning_rate": self.learning_rate,
+                    "balanced_sampling": self.balanced_sampling,
+                    "sampling_ratio": self.sampling_ratio,
+                    "lr_features": self.lr_features,
+                    "lr_classifier": self.lr_classifier,
                     "optimizer": "AdamW",
                 },
                 transform_strategy=self.transform_strategy.value,

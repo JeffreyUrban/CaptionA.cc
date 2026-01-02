@@ -80,12 +80,6 @@ export function useTextAnnotationData({
     )
   }, [videoId, queue, queueIndex])
 
-  // Load per-frame OCR
-  useEffect(() => {
-    if (!videoId || !currentAnnotation) return
-    void loadFrameOCR(videoId, currentAnnotation.annotation.id, setPerFrameOCR, setLoadingFrames)
-  }, [videoId, currentAnnotation])
-
   const updateProgress = useCallback(async () => {
     await refreshProgress(videoId, setCompletedAnnotations, setWorkflowProgress)
   }, [videoId])
@@ -247,27 +241,6 @@ async function loadAnnotation(
     setError((err as Error).message)
     setLoading(false)
   }
-}
-
-async function loadFrameOCR(
-  videoId: string,
-  annotationId: number,
-  setPerFrameOCR: (frames: PerFrameOCRItem[]) => void,
-  setLoadingFrames: (b: boolean) => void
-) {
-  setLoadingFrames(true)
-  try {
-    const response = await fetch(
-      `/api/annotations/${encodeURIComponent(videoId)}/${annotationId}/frames`
-    )
-    if (!response.ok) throw new Error('Failed to load frame OCR')
-    const data = await response.json()
-    setPerFrameOCR(data.frames ?? [])
-  } catch (err) {
-    console.error('Failed to load frame OCR:', err)
-    setPerFrameOCR([])
-  }
-  setLoadingFrames(false)
 }
 
 async function refreshProgress(

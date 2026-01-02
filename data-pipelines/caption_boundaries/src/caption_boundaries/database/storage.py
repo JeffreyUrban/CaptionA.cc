@@ -1,8 +1,19 @@
-"""Database initialization and session management for training database.
+"""Database initialization and session management for training databases.
 
-The central training database is stored at: local/caption_boundaries_training.db
+Each training dataset is stored in its own database file:
+- local/models/caption_boundaries/datasets/{dataset_name}.db
+
+Each dataset database is fully self-contained with all necessary data:
+- TrainingDataset metadata
+- TrainingSample records
+- TrainingFrame BLOBs
+- TrainingOCRVisualization BLOBs
+- VideoRegistry (videos used in this dataset)
+- FontEmbedding (cached embeddings for this dataset)
+- Experiment records (training runs on this dataset)
 """
 
+import subprocess
 from collections.abc import Generator
 from pathlib import Path
 
@@ -11,89 +22,102 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from caption_boundaries.database.schema import Base
 
-# Default database location (can be overridden)
-DEFAULT_DB_PATH = Path("local/caption_boundaries_training.db")
+
+def get_git_root() -> Path:
+    """Get the git repository root directory."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return Path(result.stdout.strip())
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError("Not in a git repository") from e
 
 
-def get_db_url(db_path: Path | None = None) -> str:
+# Default database directory (relative to git root)
+DEFAULT_DATASET_DIR = get_git_root() / "local" / "models" / "caption_boundaries" / "datasets"
+
+
+def get_dataset_db_path(dataset_name: str) -> Path:
+    """Get path to dataset database file.
+
+    Args:
+        dataset_name: Name of the dataset
+
+    Returns:
+        Path to dataset database file
+
+    Example:
+        >>> get_dataset_db_path("production_v1")
+        Path("local/models/caption_boundaries/datasets/production_v1.db")
+    """
+    return DEFAULT_DATASET_DIR / f"{dataset_name}.db"
+
+
+def get_db_url(db_path: Path) -> str:
     """Get SQLAlchemy database URL.
 
     Args:
-        db_path: Path to database file (default: local/caption_boundaries_training.db)
+        db_path: Path to database file
 
     Returns:
         SQLAlchemy database URL
     """
-    if db_path is None:
-        db_path = DEFAULT_DB_PATH
-
     return f"sqlite:///{db_path.absolute()}"
 
 
-def init_training_db(db_path: Path | None = None, force: bool = False) -> None:
-    """Initialize the central training database.
+def init_dataset_db(db_path: Path, force: bool = False) -> None:
+    """Initialize a dataset database with all required tables.
 
-    Creates the database file and all tables. If the database already exists
-    and force=False, does nothing.
+    Creates a fully self-contained database for a training dataset.
 
     Args:
-        db_path: Path to database file (default: local/caption_boundaries_training.db)
+        db_path: Path to dataset database file
         force: If True, drop existing tables and recreate (WARNING: deletes data)
 
     Example:
-        >>> init_training_db()  # Create default database
-        >>> init_training_db(Path("custom/path.db"))  # Custom location
-        >>> init_training_db(force=True)  # Recreate tables (DANGER!)
+        >>> db_path = get_dataset_db_path("production_v1")
+        >>> init_dataset_db(db_path)
     """
-    if db_path is None:
-        db_path = DEFAULT_DB_PATH
-
     # Ensure parent directory exists
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Check if database exists
-    if db_path.exists() and not force:
-        # Database already initialized
-        return
-
-    # Create engine and tables
+    # Create engine
     engine = create_engine(get_db_url(db_path))
 
     if force:
-        # Drop all existing tables
+        # Drop all existing tables and recreate
         Base.metadata.drop_all(engine)
+        Base.metadata.create_all(engine)
+    else:
+        # Create missing tables only (safe for existing databases)
+        # This allows adding new tables without dropping existing data
+        Base.metadata.create_all(engine, checkfirst=True)
 
-    # Create all tables
-    Base.metadata.create_all(engine)
 
-
-def get_training_db(db_path: Path | None = None) -> Generator[Session]:
-    """Get database session for training database.
+def get_dataset_db(db_path: Path) -> Generator[Session]:
+    """Get database session for a dataset database.
 
     This is a generator function compatible with FastAPI's Depends() pattern
     and also usable in standalone scripts.
 
     Args:
-        db_path: Path to database file (default: local/caption_boundaries_training.db)
+        db_path: Path to dataset database file
 
     Yields:
         SQLAlchemy Session
 
     Example:
-        >>> # In scripts
-        >>> for db in get_training_db():
-        >>>     videos = db.query(VideoRegistry).all()
+        >>> # Get dataset database path
+        >>> db_path = get_dataset_db_path("production_v1")
         >>>
-        >>> # Or with context manager
-        >>> db = next(get_training_db())
-        >>> try:
-        >>>     videos = db.query(VideoRegistry).all()
-        >>> finally:
-        >>>     db.close()
+        >>> # Use in context
+        >>> with next(get_dataset_db(db_path)) as db:
+        >>>     dataset = db.query(TrainingDataset).first()
     """
-    if db_path is None:
-        db_path = DEFAULT_DB_PATH
-
     # Create engine (pool_size=5 is reasonable for training scripts)
     engine = create_engine(
         get_db_url(db_path),
@@ -113,28 +137,26 @@ def get_training_db(db_path: Path | None = None) -> Generator[Session]:
         db.close()
 
 
-def create_session(db_path: Path | None = None) -> Session:
+def create_dataset_session(db_path: Path) -> Session:
     """Create a new database session (non-generator version).
 
     Use this when you need a session outside of a generator context.
     Remember to close the session when done!
 
     Args:
-        db_path: Path to database file (default: local/caption_boundaries_training.db)
+        db_path: Path to dataset database file
 
     Returns:
         SQLAlchemy Session (remember to close it!)
 
     Example:
-        >>> db = create_session()
+        >>> db_path = get_dataset_db_path("production_v1")
+        >>> db = create_dataset_session(db_path)
         >>> try:
-        >>>     videos = db.query(VideoRegistry).all()
+        >>>     dataset = db.query(TrainingDataset).first()
         >>> finally:
         >>>     db.close()
     """
-    if db_path is None:
-        db_path = DEFAULT_DB_PATH
-
     engine = create_engine(
         get_db_url(db_path),
         pool_size=5,

@@ -11,12 +11,11 @@ from .database import (
     get_captions_needing_text,
     get_database_path,
     get_layout_config,
-    get_ocr_for_caption_range,
     save_vlm_inference_result,
 )
 from .ocr_comparison import compare_from_csv, compare_vlm_with_ocr
 from .text_vetting import extract_errors_from_vetting_results, vet_video_captions
-from .vlm_inference import convert_ocr_bbox_to_absolute, generate_caption, load_finetuned_model
+from .vlm_inference import generate_caption, load_finetuned_model
 
 app = typer.Typer(
     name="caption_text",
@@ -81,8 +80,8 @@ def infer(
 ) -> None:
     """Run VLM inference on captions needing text.
 
-    Generates caption text using fine-tuned Qwen2.5-VL model with OCR annotations
-    and layout priors. Saves results to database and optionally to CSV.
+    Generates caption text using fine-tuned Qwen2.5-VL model with layout priors
+    and font example. Saves results to database and optionally to CSV.
 
     Example:
         caption_text infer local/data/video_id \\
@@ -123,16 +122,6 @@ def infer(
             start_frame = caption["start_frame_index"]
             end_frame = caption["end_frame_index"]
 
-            # Get OCR annotations for this caption
-            ocr_data = get_ocr_for_caption_range(db_path, start_frame, end_frame)
-
-            if not ocr_data:
-                console.print(f"[yellow]Warning: No OCR data for frames {start_frame}-{end_frame}[/yellow]")
-                continue
-
-            # Use first frame's OCR (or aggregate if needed)
-            ocr_annotations = ocr_data[0].get("ocr_annotations", [])
-
             # Load main image from cropped_frames
             # Note: Need to read from database
             from frames_db import read_frame
@@ -152,7 +141,7 @@ def infer(
                     model_dict=model_dict,
                     main_image=main_image,
                     font_example_image=font_image,
-                    ocr_annotations=ocr_annotations,
+                    ocr_annotations=[],  # TODO: Use average cropped frame OCR when implemented
                     layout_config=layout_config,
                 )
 
@@ -206,13 +195,14 @@ def compare(
         help="Show version and exit",
     ),
 ) -> None:
-    """Compare VLM results with OCR and auto-validate matches.
+    """Compare VLM results (legacy command - OCR comparison no longer available).
 
-    Compares VLM-generated caption text with OCR text. When they match exactly,
-    marks the caption as validated. Mismatches are written to CSV for review.
+    Note: OCR data from cropped_frame_ocr is no longer available.
+    This command is kept for backward compatibility but will report all captions
+    as missing OCR data.
 
     Example:
-        caption_text compare local/data/video_id --auto-validate
+        caption_text compare local/data/video_id
     """
     if vlm_csv is None:
         vlm_csv = video_dir / "vlm_inference_results.csv"

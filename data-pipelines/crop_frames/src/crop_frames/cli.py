@@ -16,7 +16,6 @@ from . import __version__
 from .crop_frames import extract_frames as extract_frames_core
 from .crop_frames import resize_frames as resize_frames_core
 from .database import get_database_path, write_frames_to_database
-from .ocr import process_frames_to_database
 
 app = typer.Typer(
     name="crop_frames",
@@ -80,15 +79,10 @@ def extract_frames(
         "--write-to-db",
         help="Write frames to database and cleanup filesystem frames",
     ),
-    run_ocr: bool = typer.Option(
-        False,
-        "--run-ocr",
-        help="Run OCR on cropped frames and write to database",
-    ),
     crop_bounds_version: int = typer.Option(
         1,
         "--crop-bounds-version",
-        help="Crop bounds version from video_layout_config (required if --write-to-db or --run-ocr)",
+        help="Crop bounds version from video_layout_config (required if --write-to-db)",
     ),
     version: bool | None = typer.Option(
         None,
@@ -146,8 +140,6 @@ def extract_frames(
     if resize_params:
         console.print(f"Resize: {resize_width}×{resize_height}")
         console.print(f"Mode: {'preserve aspect' if preserve_aspect else 'stretch'}")
-    if run_ocr:
-        console.print(f"OCR: Enabled (crop_bounds_version: {crop_bounds_version})")
     if write_to_db:
         console.print(f"Database: Write to DB and cleanup (crop_bounds_version: {crop_bounds_version})")
     console.print()
@@ -187,32 +179,6 @@ def extract_frames(
             )
 
         console.print(f"[green]✓[/green] Extracted {num_frames} frames to {result_dir}")
-
-        # Run OCR on cropped frames if requested
-        if run_ocr:
-            console.print()
-            console.print("[bold]Running OCR on cropped frames...[/bold]")
-
-            db_path = get_database_path(result_dir)
-
-            with Progress(
-                SpinnerColumn(),
-                TextColumn("[progress.description]{task.description}"),
-                BarColumn(),
-                TaskProgressColumn(),
-                console=console,
-            ) as progress:
-                task = progress.add_task("Processing OCR...", total=num_frames)
-
-                total_boxes = process_frames_to_database(
-                    frames_dir=result_dir,
-                    db_path=db_path,
-                    crop_bounds_version=crop_bounds_version,
-                    language="zh-Hans",
-                    progress_callback=lambda current, total: progress.update(task, completed=current),
-                )
-
-            console.print(f"  [green]✓[/green] OCR complete: {total_boxes} text boxes detected")
 
         # Write frames to database and cleanup if requested
         if write_to_db:
