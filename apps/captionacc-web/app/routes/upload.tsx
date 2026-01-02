@@ -89,6 +89,13 @@ export default function UploadPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Helper to check if file is a supported video format
+  const isVideoFile = useCallback((file: File): boolean => {
+    const videoExtensions = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.m4v', '.flv', '.wmv']
+    const fileName = file.name.toLowerCase()
+    return videoExtensions.some(ext => fileName.endsWith(ext))
+  }, [])
+
   // Helper to recursively collect files from directory entries
   const collectFilesFromEntry = useCallback(
     async (entry: FileSystemEntry, path = ''): Promise<Array<{ file: File; path: string }>> => {
@@ -99,7 +106,13 @@ export default function UploadPage() {
         const file = await new Promise<File>((resolve, reject) => {
           fileEntry.file(resolve, reject)
         })
-        results.push({ file, path: path + file.name })
+
+        // Only include video files
+        if (isVideoFile(file)) {
+          results.push({ file, path: path + file.name })
+        } else {
+          console.log(`[UploadPage] Skipping non-video file: ${path + file.name}`)
+        }
       } else if (entry.isDirectory) {
         const dirEntry = entry as FileSystemDirectoryEntry
         const reader = dirEntry.createReader()
@@ -116,7 +129,7 @@ export default function UploadPage() {
 
       return results
     },
-    []
+    [isVideoFile]
   )
 
   // Process dropped or selected files
@@ -126,8 +139,18 @@ export default function UploadPage() {
 
       console.log(`[UploadPage] Processing ${fileList.length} files`)
 
+      // Filter to only video files
+      const files = Array.from(fileList).filter(file => {
+        const isVideo = isVideoFile(file)
+        if (!isVideo) {
+          console.log(`[UploadPage] Skipping non-video file: ${file.name}`)
+        }
+        return isVideo
+      })
+
+      console.log(`[UploadPage] Starting upload for ${files.length} video files`)
+
       // Start each file upload via upload manager
-      const files = Array.from(fileList)
       for (const file of files) {
         // Determine relative path from webkitRelativePath or just filename
         const webkitFile = file as File & { webkitRelativePath?: string }
@@ -145,7 +168,7 @@ export default function UploadPage() {
         }
       }
     },
-    [selectedFolder]
+    [selectedFolder, isVideoFile]
   )
 
   // Drag-and-drop handlers
