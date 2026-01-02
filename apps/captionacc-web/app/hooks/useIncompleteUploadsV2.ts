@@ -5,7 +5,8 @@
  * allowing uploads to be resumed after page refresh.
  */
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 
 import { useAppStore, selectIncompleteUploads } from '~/stores/app-store'
 import type { UploadMetadata } from '~/types/store'
@@ -43,15 +44,18 @@ function convertToIncompleteUpload(upload: UploadMetadata): IncompleteUpload {
  * @returns Incomplete upload state and control handlers
  */
 export function useIncompleteUploadsV2(): UseIncompleteUploadsV2Result {
-  const incompleteUploadsFromStore = useAppStore(selectIncompleteUploads)
+  const incompleteUploadsFromStore = useAppStore(useShallow(selectIncompleteUploads))
   const clearCompletedUploads = useAppStore(state => state.clearCompletedUploads)
   const removeUpload = useAppStore(state => state.removeUpload)
 
   const [showIncompletePrompt, setShowIncompletePrompt] = useState(false)
   const [hasChecked, setHasChecked] = useState(false)
 
-  // Convert to UI format
-  const incompleteUploads = incompleteUploadsFromStore.map(convertToIncompleteUpload)
+  // Convert to UI format (memoize to avoid creating new array on every render)
+  const incompleteUploads = useMemo(
+    () => incompleteUploadsFromStore.map(convertToIncompleteUpload),
+    [incompleteUploadsFromStore]
+  )
 
   // Check for incomplete uploads on mount (only once)
   useEffect(() => {

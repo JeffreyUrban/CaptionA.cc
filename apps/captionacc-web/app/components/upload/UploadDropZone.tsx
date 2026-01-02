@@ -53,7 +53,6 @@ export function UploadDropZone({
           <p className="text-sm font-semibold text-gray-900 dark:text-gray-200">
             Drag folder or videos here
           </p>
-          <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">or click to browse</p>
         </div>
         <div className="mt-4 text-xs text-gray-500 dark:text-gray-500">
           Supports: MP4, MKV, AVI, MOV, WebM

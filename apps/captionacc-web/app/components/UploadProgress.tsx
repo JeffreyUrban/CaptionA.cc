@@ -9,6 +9,7 @@ import { Transition } from '@headlessui/react'
 import { ArrowUpTrayIcon, CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/outline'
 import { Fragment } from 'react'
 import { Link } from 'react-router'
+import { useShallow } from 'zustand/react/shallow'
 
 import { useAppStore, selectActiveOperationCount } from '~/stores/app-store'
 import type { UploadMetadata } from '~/types/store'
@@ -209,9 +210,9 @@ function ExpandedPanel({ uploads }: { uploads: UploadMetadata[] }) {
 // ============================================================================
 
 export function UploadProgress({ expanded = false }: UploadProgressProps) {
-  // Subscribe to store
+  // Subscribe to store with shallow comparison
   const activeOperationCount = useAppStore(selectActiveOperationCount)
-  const uploads = useAppStore(selectUploads)
+  const uploads = useAppStore(useShallow(selectUploads))
   const allUploads = Object.values(uploads)
 
   // Render compact badge if not expanded

@@ -3,10 +3,9 @@
  *
  * This service:
  * - Manages TUS upload instances independent of React component lifecycle
- * - Integrates with Zustand store for state persistence
+ * - Integrates with upload-store for state persistence
  * - Supports concurrent uploads with queue management
- * - Handles resume from persisted metadata (survives page refreshes)
- * - Provides retry logic with exponential backoff
+ * - Handles retry logic with exponential backoff
  *
  * The service persists across navigation because it's a singleton,
  * allowing uploads to continue when user navigates between pages.
@@ -14,8 +13,7 @@
 
 import * as tus from 'tus-js-client'
 
-import { useAppStore } from '~/stores/app-store'
-import type { UploadMetadata } from '~/types/store'
+import { useUploadStore } from '~/stores/upload-store'
 import {
   CONCURRENT_UPLOADS,
   CHUNK_SIZE,
@@ -36,7 +34,7 @@ class UploadManager {
   // Files being uploaded (transient state, not in store)
   private uploadFiles = new Map<string, File>()
 
-  // Retry tracking
+  // Retry tracking (upload-manager responsibility, not store)
   private retryCount = new Map<string, number>()
 
   // Stall detection
@@ -55,29 +53,16 @@ class UploadManager {
       relativePath: string
     }
   ): Promise<string> {
-    // Generate unique ID for this upload
-    const uploadId = `upload-${Date.now()}-${Math.random().toString(36).substring(7)}`
+    const store = useUploadStore.getState()
 
-    // Create upload metadata in store
-    const uploadMetadata: UploadMetadata = {
-      id: uploadId,
+    // Add upload to store (returns generated ID)
+    const uploadId = store.addUpload({
       fileName: metadata.fileName,
       fileSize: file.size,
       fileType: metadata.fileType,
-      targetFolder: metadata.targetFolder,
       relativePath: metadata.relativePath,
-      uploadUrl: null,
-      bytesUploaded: 0,
-      progress: 0,
-      status: 'pending',
-      error: null,
-      createdAt: Date.now(),
-      startedAt: null,
-      completedAt: null,
-    }
-
-    // Add to store
-    useAppStore.getState().addUpload(uploadMetadata)
+      targetFolder: metadata.targetFolder,
+    })
 
     // Store file reference
     this.uploadFiles.set(uploadId, file)
@@ -92,8 +77,8 @@ class UploadManager {
    * Create and start a TUS upload instance
    */
   private createTusUpload(uploadId: string, retryCount: number = 0): void {
-    const store = useAppStore.getState()
-    const uploadMetadata = store.uploads[uploadId]
+    const store = useUploadStore.getState()
+    const uploadMetadata = store.activeUploads[uploadId]
     const file = this.uploadFiles.get(uploadId)
 
     if (!uploadMetadata || !file) {
@@ -145,11 +130,7 @@ class UploadManager {
           console.log(`[UploadManager] Will retry ${uploadMetadata.relativePath} in ${delay}ms`)
 
           // Update status to show retry
-          store.updateUploadStatus(
-            uploadId,
-            'pending',
-            `Retrying (attempt ${currentRetryCount + 1})`
-          )
+          store.updateStatus(uploadId, 'pending', `Retrying (attempt ${currentRetryCount + 1})`)
           this.retryCount.set(uploadId, currentRetryCount + 1)
 
           // Schedule retry
@@ -158,7 +139,7 @@ class UploadManager {
           }, delay)
         } else {
           // Max retries exceeded or non-retryable error
-          store.updateUploadStatus(uploadId, 'failed', error.message)
+          store.updateStatus(uploadId, 'error', error.message)
           this.activeUploads.delete(uploadId)
           this.uploadFiles.delete(uploadId)
           this.retryCount.delete(uploadId)
@@ -170,29 +151,23 @@ class UploadManager {
       },
 
       onProgress: (bytesUploaded, bytesTotal) => {
-        const progress = (bytesUploaded / bytesTotal) * 100
+        const progress = Math.round((bytesUploaded / bytesTotal) * 100)
 
         // Update store
-        store.updateUploadProgress(uploadId, bytesUploaded, progress)
+        store.updateProgress(uploadId, bytesUploaded, progress)
 
         // Track activity for stall detection
         this.lastProgressTime.set(uploadId, Date.now())
       },
 
       onSuccess: () => {
-        console.log(`[UploadManager] Complete ${uploadMetadata.relativePath}`)
+        console.log(`[UploadManager] Upload complete ${uploadMetadata.relativePath}`)
 
-        // Update store
-        store.updateUploadStatus(uploadId, 'completed')
+        // NOTE: Don't mark as completed here - wait for onAfterResponse to get videoId
+        // If no videoId is provided (shouldn't happen), we'll handle it there
 
-        // Cleanup
-        this.activeUploads.delete(uploadId)
-        this.uploadFiles.delete(uploadId)
-        this.retryCount.delete(uploadId)
-        this.lastProgressTime.delete(uploadId)
-
-        // Process next in queue
-        setTimeout(() => this.processUploadQueue(), 100)
+        // Track activity
+        this.lastProgressTime.set(uploadId, Date.now())
       },
 
       onAfterResponse: (_req, res) => {
@@ -200,6 +175,54 @@ class UploadManager {
         const uploadUrl = res.getHeader('Location')
         if (uploadUrl) {
           store.setUploadUrl(uploadId, uploadUrl)
+        }
+
+        // Get video ID and duplicate detection from headers
+        const videoId = res.getHeader('X-Video-Id')
+        const isDuplicateHeader = res.getHeader('X-Duplicate-Detected')
+
+        // Check if upload is complete (onSuccess was called)
+        const uploadComplete = res.getStatus() === 204 || res.getStatus() === 200
+
+        if (uploadComplete && videoId) {
+          // Check for duplicate detection
+          if (isDuplicateHeader === 'true') {
+            const duplicateOfVideoId = res.getHeader('X-Duplicate-Of-Video-Id')
+            const duplicateOfDisplayPath = res.getHeader('X-Duplicate-Of-Display-Path')
+
+            if (duplicateOfVideoId && duplicateOfDisplayPath) {
+              console.log(
+                `[UploadManager] Duplicate detected for ${uploadId}: ${duplicateOfDisplayPath}`
+              )
+
+              // Move to pending duplicates (removes from active uploads)
+              store.markAsDuplicate(uploadId, videoId, duplicateOfVideoId, duplicateOfDisplayPath)
+
+              // Cleanup
+              this.activeUploads.delete(uploadId)
+              this.uploadFiles.delete(uploadId)
+              this.retryCount.delete(uploadId)
+              this.lastProgressTime.delete(uploadId)
+
+              // Process next in queue
+              setTimeout(() => this.processUploadQueue(), 100)
+            }
+          } else {
+            // Normal completion - no duplicate
+            console.log(`[UploadManager] Video created with ID: ${videoId}`)
+
+            // Move to completed uploads
+            store.completeUpload(uploadId, videoId)
+
+            // Cleanup
+            this.activeUploads.delete(uploadId)
+            this.uploadFiles.delete(uploadId)
+            this.retryCount.delete(uploadId)
+            this.lastProgressTime.delete(uploadId)
+
+            // Process next in queue
+            setTimeout(() => this.processUploadQueue(), 100)
+          }
         }
       },
     })
@@ -209,7 +232,7 @@ class UploadManager {
     this.activeUploads.set(uploadId, upload)
 
     // Update status to uploading
-    store.updateUploadStatus(uploadId, 'uploading')
+    store.updateStatus(uploadId, 'uploading')
     this.lastProgressTime.set(uploadId, Date.now())
 
     // Start stall detection if not already running
@@ -220,7 +243,7 @@ class UploadManager {
    * Process the upload queue - start uploads for available slots
    */
   private processUploadQueue(): void {
-    const store = useAppStore.getState()
+    const store = useUploadStore.getState()
 
     // Count currently uploading
     const activeCount = this.activeUploads.size
@@ -230,7 +253,7 @@ class UploadManager {
     if (availableSlots <= 0) return
 
     // Find uploads ready to start (pending status)
-    const pendingUploads = Object.values(store.uploads)
+    const pendingUploads = Object.values(store.activeUploads)
       .filter(upload => upload.status === 'pending')
       .slice(0, availableSlots)
 
@@ -245,8 +268,8 @@ class UploadManager {
    * Resume an incomplete upload from persisted metadata
    */
   async resumeUpload(uploadId: string, file: File): Promise<void> {
-    const store = useAppStore.getState()
-    const uploadMetadata = store.uploads[uploadId]
+    const store = useUploadStore.getState()
+    const uploadMetadata = store.activeUploads[uploadId]
 
     if (!uploadMetadata) {
       console.error(`[UploadManager] No metadata found for ${uploadId}`)
@@ -264,7 +287,7 @@ class UploadManager {
     this.uploadFiles.set(uploadId, file)
 
     // Reset status to pending
-    store.updateUploadStatus(uploadId, 'pending')
+    store.updateStatus(uploadId, 'pending')
 
     // Process queue (will pick up this upload)
     this.processUploadQueue()
@@ -281,8 +304,10 @@ class UploadManager {
       this.activeUploads.delete(uploadId)
     }
 
-    const store = useAppStore.getState()
-    store.updateUploadStatus(uploadId, 'cancelled', 'Cancelled by user')
+    const store = useUploadStore.getState()
+
+    // Remove from store entirely (don't just mark as cancelled)
+    store.removeUpload(uploadId)
 
     // Cleanup
     this.uploadFiles.delete(uploadId)
@@ -311,10 +336,11 @@ class UploadManager {
       )
     )
 
-    // Update all statuses
-    const store = useAppStore.getState()
+    const store = useUploadStore.getState()
+
+    // Remove all from store
     uploadIds.forEach(id => {
-      store.updateUploadStatus(id, 'cancelled', 'Cancelled by user')
+      store.removeUpload(id)
     })
 
     // Cleanup
@@ -350,8 +376,8 @@ class UploadManager {
               this.activeUploads.delete(uploadId)
 
               // Mark as pending for retry
-              const store = useAppStore.getState()
-              store.updateUploadStatus(uploadId, 'pending', 'Upload stalled - retrying')
+              const store = useUploadStore.getState()
+              store.updateStatus(uploadId, 'pending', 'Upload stalled - retrying')
 
               // Retry
               const retryCount = this.retryCount.get(uploadId) ?? 0

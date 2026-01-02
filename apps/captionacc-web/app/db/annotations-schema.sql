@@ -299,19 +299,30 @@ CREATE TABLE IF NOT EXISTS video_metadata (
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Duplicate resolution tracking (one row per video if duplicate detected)
+CREATE TABLE IF NOT EXISTS duplicate_resolution (
+    id INTEGER PRIMARY KEY CHECK(id = 1),
+    duplicate_of_video_id TEXT NOT NULL,      -- UUID of the existing duplicate video
+    duplicate_of_display_path TEXT NOT NULL,  -- Display path of the existing video
+    detected_at TEXT NOT NULL,                -- When duplicate was detected
+    user_decision TEXT CHECK(user_decision IN ('keep_both', 'replace_existing', 'cancel_upload')),
+    resolved_at TEXT                          -- When user made their decision
+);
+
 -- Processing status tracking (one row per video)
 CREATE TABLE IF NOT EXISTS processing_status (
     id INTEGER PRIMARY KEY CHECK(id = 1),
 
     -- Overall status
     status TEXT NOT NULL DEFAULT 'uploading' CHECK(status IN (
-        'uploading',           -- File upload in progress
-        'upload_complete',     -- Upload done, queued for processing
-        'extracting_frames',   -- Running full_frames extraction
-        'running_ocr',         -- Running OCR on frames
-        'analyzing_layout',    -- Running layout analysis
-        'processing_complete', -- All processing complete
-        'error'                -- Processing failed
+        'uploading',                      -- File upload in progress
+        'upload_complete',                -- Upload done, queued for processing
+        'pending_duplicate_resolution',   -- Duplicate detected, awaiting user decision
+        'extracting_frames',              -- Running full_frames extraction
+        'running_ocr',                    -- Running OCR on frames
+        'analyzing_layout',               -- Running layout analysis
+        'processing_complete',            -- All processing complete
+        'error'                           -- Processing failed
     )),
 
     -- Processing progress (0.0 to 1.0)

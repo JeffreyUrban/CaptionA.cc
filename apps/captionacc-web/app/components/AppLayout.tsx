@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router'
 
+import { UploadBadge } from '~/components/UploadBadge'
 import { UploadProgress } from '~/components/UploadProgress'
 
 const navigation = [
@@ -210,6 +211,9 @@ export function AppLayout({ children, fullScreen = false }: AppLayoutProps) {
       <main className={fullScreen ? '' : 'py-8'}>
         <div className={fullScreen ? '' : 'mx-auto max-w-7xl px-4 sm:px-6 lg:px-8'}>{children}</div>
       </main>
+
+      {/* Upload Progress Badge */}
+      <UploadBadge />
     </div>
   )
 }

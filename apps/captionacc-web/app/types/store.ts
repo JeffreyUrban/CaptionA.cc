@@ -18,6 +18,7 @@ export interface UploadMetadata {
   fileType: string
   targetFolder: string | null
   relativePath: string // For folder uploads
+  videoId: string | null // UUID of created video (set when upload completes)
 
   // TUS resume data
   uploadUrl: string | null // TUS upload URL for resume
@@ -27,6 +28,11 @@ export interface UploadMetadata {
   // Status
   status: UploadStatus
   error: string | null
+
+  // Duplicate detection
+  isDuplicate: boolean
+  duplicateOfVideoId: string | null
+  duplicateOfDisplayPath: string | null
 
   // Timestamps
   createdAt: number
@@ -117,6 +123,12 @@ export interface AppState {
   updateUploadProgress: (id: string, bytesUploaded: number, progress: number) => void
   updateUploadStatus: (id: string, status: UploadStatus, error?: string) => void
   setUploadUrl: (id: string, uploadUrl: string) => void
+  setUploadVideoId: (id: string, videoId: string) => void
+  setUploadDuplicate: (
+    id: string,
+    duplicateOfVideoId: string,
+    duplicateOfDisplayPath: string
+  ) => void
   removeUpload: (id: string) => void
   clearCompletedUploads: () => void
 

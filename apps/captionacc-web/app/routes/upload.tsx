@@ -1,32 +1,31 @@
 /**
- * Upload Page - Video file upload workflow with drag-and-drop support.
+ * Upload Page - Video file upload workflow with drag-and-drop support (V2)
  *
  * This page allows users to:
  * - Drag and drop folders or individual video files
  * - Select a target folder for uploads
- * - Preview and confirm files before upload
  * - Monitor upload progress with TUS resumable uploads
- * - Handle retries and cancellation
+ * - Resolve duplicate videos
+ * - View upload history for current session
+ *
+ * Architecture:
+ * - Uses upload-store (sessionStorage persistence, survives navigation)
+ * - Three sections: Active Uploads, Pending Duplicates, Upload History
+ * - Zero polling - pure Zustand subscriptions
  */
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import { useLoaderData, type LoaderFunctionArgs } from 'react-router'
 
 import { AppLayout } from '~/components/AppLayout'
-import { StopQueuedModal, AbortAllModal } from '~/components/upload/UploadCancelModals'
-import { UploadConfirmationModal } from '~/components/upload/UploadConfirmationModal'
+import { UploadActiveSection } from '~/components/upload/UploadActiveSection'
 import { UploadDropZone } from '~/components/upload/UploadDropZone'
+import { UploadDuplicatesSection } from '~/components/upload/UploadDuplicatesSection'
 import { UploadFolderSelector } from '~/components/upload/UploadFolderSelector'
-import {
-  UploadProgressSection,
-  IncompleteUploadsNotification,
-} from '~/components/upload/UploadProgressSection'
-import { useIncompleteUploadsV2 } from '~/hooks/useIncompleteUploadsV2'
-import { useUploadDragDrop } from '~/hooks/useUploadDragDrop'
-import { useUploadFiles } from '~/hooks/useUploadFiles'
+import { UploadHistorySection } from '~/components/upload/UploadHistorySection'
 import { useUploadFolders } from '~/hooks/useUploadFolders'
-import { useUploadQueueV2 } from '~/hooks/useUploadQueueV2'
-import { calculateUploadStats } from '~/utils/upload-helpers'
+import { uploadManager } from '~/services/upload-manager'
+import { useUploadStore } from '~/stores/upload-store'
 
 // ============================================================================
 // Loader
@@ -47,64 +46,177 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 export default function UploadPage() {
   const loaderData = useLoaderData() as { preselectedFolder: string | null }
-  const [showConfirmation, setShowConfirmation] = useState(false)
-  const [showSkipped, setShowSkipped] = useState(false)
+  const [isDragActive, setIsDragActive] = useState(false)
 
-  // Hooks for upload workflow
+  // Folder selector
   const { selectedFolder, setSelectedFolder, availableFolders } = useUploadFolders(
     loaderData.preselectedFolder
   )
-  const { incompleteUploads, showIncompletePrompt, dismissIncompletePrompt } =
-    useIncompleteUploadsV2()
-  const fileState = useUploadFiles(false)
-  const uploadQueue = useUploadQueueV2(
-    fileState.videoFiles,
-    fileState.setVideoFiles,
-    selectedFolder
+
+  // Upload store state - subscribe to the objects, convert to arrays with useMemo
+  const activeUploadsObj = useUploadStore(state => state.activeUploads)
+  const pendingDuplicatesObj = useUploadStore(state => state.pendingDuplicates)
+  const completedUploads = useUploadStore(state => state.completedUploads)
+
+  // Convert objects to arrays with useMemo to prevent infinite loops
+  const activeUploads = useMemo(() => Object.values(activeUploadsObj), [activeUploadsObj])
+  const pendingDuplicates = useMemo(
+    () => Object.values(pendingDuplicatesObj),
+    [pendingDuplicatesObj]
   )
 
-  // Drag-and-drop with file processing callback
-  const handleFilesDropped = useCallback(
-    (files: FileList) => {
-      void fileState.processFiles(files)
-      setShowConfirmation(true)
+  // Store actions
+  const visitedUploadPage = useUploadStore(state => state.visitedUploadPage)
+  const abortAll = useUploadStore(state => state.abortAll)
+  const cancelQueued = useUploadStore(state => state.cancelQueued)
+  const clearHistory = useUploadStore(state => state.clearHistory)
+  const resolveDuplicate = useUploadStore(state => state.resolveDuplicate)
+
+  // On mount: mark that user visited upload page (hides notification badge)
+  useEffect(() => {
+    visitedUploadPage()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Process dropped or selected files
+  const processFiles = useCallback(
+    async (fileList: FileList | null) => {
+      if (!fileList || fileList.length === 0) return
+
+      console.log(`[UploadPage] Processing ${fileList.length} files`)
+
+      // Start each file upload via upload manager
+      const files = Array.from(fileList)
+      for (const file of files) {
+        // Determine relative path from webkitRelativePath or just filename
+        const webkitFile = file as File & { webkitRelativePath?: string }
+        const relativePath = webkitFile.webkitRelativePath || file.name
+
+        try {
+          await uploadManager.startUpload(file, {
+            fileName: file.name,
+            fileType: file.type,
+            targetFolder: selectedFolder,
+            relativePath,
+          })
+        } catch (error) {
+          console.error(`[UploadPage] Failed to start upload for ${relativePath}:`, error)
+        }
+      }
     },
-    [fileState]
+    [selectedFolder]
   )
-  const dragDrop = useUploadDragDrop(handleFilesDropped, uploadQueue.uploading)
 
-  // Event handlers
+  // Drag-and-drop handlers
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragActive(true)
+  }, [])
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+  }, [])
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    // Only deactivate if leaving the drop zone entirely
+    if (e.currentTarget === e.target) {
+      setIsDragActive(false)
+    }
+  }, [])
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault()
+      setIsDragActive(false)
+
+      const files = e.dataTransfer.files
+      void processFiles(files)
+    },
+    [processFiles]
+  )
+
+  // File input handler
   const handleFileSelect = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      void fileState.processFiles(e.target.files)
-      if (e.target.files?.length) setShowConfirmation(true)
+      void processFiles(e.target.files)
+      // Reset input so same file can be selected again
+      e.target.value = ''
     },
-    [fileState]
+    [processFiles]
   )
 
-  const handleStartUpload = useCallback(() => {
-    setShowConfirmation(false)
-    uploadQueue.startUpload()
-  }, [uploadQueue])
+  // Duplicate resolution handler
+  const handleResolveDuplicate = useCallback(
+    async (uploadId: string, decision: 'keep_both' | 'replace_existing' | 'cancel_upload') => {
+      const duplicate = pendingDuplicates.find(d => d.id === uploadId)
+      if (!duplicate) {
+        console.error('[UploadPage] Could not find duplicate for resolution:', uploadId)
+        return
+      }
 
-  const handleCancel = useCallback(() => {
-    setShowConfirmation(false)
-    fileState.resetFiles()
-  }, [fileState])
+      // For cancel_upload, always remove from UI even if backend call fails
+      if (decision === 'cancel_upload') {
+        console.log(`[UploadPage] Canceling upload for ${duplicate.relativePath}`)
 
-  const handleReset = useCallback(() => {
-    fileState.resetFiles()
-    setShowConfirmation(false)
-    setShowSkipped(false)
-  }, [fileState])
+        // Try to call backend (best effort)
+        try {
+          const response = await fetch(`/api/uploads/resolve-duplicate/${duplicate.videoId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ decision }),
+          })
+
+          if (!response.ok) {
+            console.warn('[UploadPage] Backend cancel failed, removing from UI anyway')
+          }
+        } catch (error) {
+          console.warn('[UploadPage] Backend cancel error, removing from UI anyway:', error)
+        }
+
+        // Always remove from UI
+        resolveDuplicate(uploadId)
+        return
+      }
+
+      // For keep_both and replace_existing, call backend
+      try {
+        console.log(`[UploadPage] Resolving duplicate ${duplicate.videoId}: ${decision}`)
+
+        const response = await fetch(`/api/uploads/resolve-duplicate/${duplicate.videoId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({ decision }),
+        })
+
+        if (!response.ok) {
+          const errorText = await response.text()
+          throw new Error(`Server returned ${response.status}: ${errorText}`)
+        }
+
+        console.log(`[UploadPage] Resolved duplicate ${duplicate.videoId}: ${decision}`)
+
+        // Remove from pending duplicates
+        resolveDuplicate(uploadId)
+      } catch (error) {
+        console.error('[UploadPage] Error resolving duplicate:', error)
+        const action = decision === 'keep_both' ? 'Keep Both' : 'Replace Existing'
+        const errorMsg = error instanceof Error ? error.message : String(error)
+        alert(
+          `Failed to ${action}:\n\n${errorMsg}\n\n` +
+            `You can:\n` +
+            `• Try again (the duplicate will remain in the list)\n` +
+            `• Click "Cancel Upload" to remove it without resolving`
+        )
+      }
+    },
+    [pendingDuplicates, resolveDuplicate]
+  )
 
   // Derived state
-  const stats = calculateUploadStats(fileState.videoFiles)
-  const showDropZone =
-    !showConfirmation && !uploadQueue.uploading && fileState.videoFiles.length === 0
-  const showConfirmationModal = showConfirmation && !uploadQueue.uploading
-  const showProgressSection =
-    (uploadQueue.uploading || fileState.videoFiles.length > 0) && !showConfirmation
+  const hasAnyUploads =
+    activeUploads.length > 0 || pendingDuplicates.length > 0 || completedUploads.length > 0
+  const showDropZone = !hasAnyUploads
 
   return (
     <AppLayout>
@@ -122,15 +234,7 @@ export default function UploadPage() {
           </div>
         </div>
 
-        {/* Interrupted uploads notification */}
-        {showIncompletePrompt && incompleteUploads.length > 0 && (
-          <IncompleteUploadsNotification
-            uploads={incompleteUploads}
-            onDismiss={dismissIncompletePrompt}
-          />
-        )}
-
-        {/* Drop Zone View */}
+        {/* Drop Zone (shown when no uploads) */}
         {showDropZone && (
           <div className="mt-8">
             <UploadFolderSelector
@@ -139,60 +243,62 @@ export default function UploadPage() {
               onSelect={setSelectedFolder}
             />
             <UploadDropZone
-              dragActive={dragDrop.dragActive}
-              onDragEnter={dragDrop.handleDragEnter}
-              onDragOver={dragDrop.handleDragOver}
-              onDragLeave={dragDrop.handleDragLeave}
-              onDrop={e => void dragDrop.handleDrop(e)}
+              dragActive={isDragActive}
+              onDragEnter={handleDragEnter}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
               onFileSelect={handleFileSelect}
             />
           </div>
         )}
 
-        {/* Confirmation Modal */}
-        {showConfirmationModal && (
-          <UploadConfirmationModal
-            videoFiles={fileState.videoFiles}
-            skippedFiles={fileState.skippedFiles}
-            showSkipped={showSkipped}
-            collapseEnabled={fileState.collapseEnabled}
-            collapsesAvailable={fileState.collapsesAvailable}
-            selectedFolder={selectedFolder}
-            onToggleFileSelection={fileState.toggleFileSelection}
-            onSelectAllFiles={fileState.selectAllFiles}
-            onDeselectDuplicates={fileState.deselectDuplicates}
-            onToggleShowSkipped={() => setShowSkipped(!showSkipped)}
-            onToggleCollapse={enabled => void fileState.handleCollapseToggle(enabled)}
-            onCancel={handleCancel}
-            onStartUpload={handleStartUpload}
-          />
-        )}
+        {/* Upload Sections */}
+        {hasAnyUploads && (
+          <>
+            {/* Folder Selector (compact version when uploads active) */}
+            <div className="mt-6">
+              <UploadFolderSelector
+                selectedFolder={selectedFolder}
+                availableFolders={availableFolders}
+                onSelect={setSelectedFolder}
+              />
+            </div>
 
-        {/* Upload Progress Section */}
-        {showProgressSection && (
-          <UploadProgressSection
-            videoFiles={fileState.videoFiles}
-            uploading={uploadQueue.uploading}
-            {...stats}
-            onStopQueued={() => uploadQueue.setShowStopQueuedModal(true)}
-            onAbortAll={() => uploadQueue.setShowAbortAllModal(true)}
-            onReset={handleReset}
-          />
-        )}
+            {/* Active Uploads */}
+            <UploadActiveSection
+              uploads={activeUploads}
+              onCancelQueued={cancelQueued}
+              onAbortAll={abortAll}
+            />
 
-        {/* Cancel Modals */}
-        <StopQueuedModal
-          open={uploadQueue.showStopQueuedModal}
-          videoFiles={fileState.videoFiles}
-          onClose={() => uploadQueue.setShowStopQueuedModal(false)}
-          onConfirm={uploadQueue.handleStopQueued}
-        />
-        <AbortAllModal
-          open={uploadQueue.showAbortAllModal}
-          videoFiles={fileState.videoFiles}
-          onClose={() => uploadQueue.setShowAbortAllModal(false)}
-          onConfirm={uploadQueue.handleAbortAll}
-        />
+            {/* Pending Duplicates */}
+            <UploadDuplicatesSection
+              duplicates={pendingDuplicates}
+              onResolveDuplicate={handleResolveDuplicate}
+            />
+
+            {/* Upload History */}
+            <UploadHistorySection uploads={completedUploads} onClearHistory={clearHistory} />
+
+            {/* Upload More Button */}
+            {activeUploads.length === 0 && pendingDuplicates.length === 0 && (
+              <div className="mt-6">
+                <label className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-teal-600 hover:bg-teal-700 cursor-pointer">
+                  <input
+                    type="file"
+                    multiple
+                    // @ts-expect-error - webkitdirectory is non-standard but widely supported
+                    webkitdirectory=""
+                    className="sr-only"
+                    onChange={handleFileSelect}
+                  />
+                  Upload More Videos
+                </label>
+              </div>
+            )}
+          </>
+        )}
       </div>
     </AppLayout>
   )
