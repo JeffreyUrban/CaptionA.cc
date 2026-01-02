@@ -123,6 +123,24 @@ class UploadManager {
       onError: error => {
         console.error(`[UploadManager] Failed ${uploadMetadata.relativePath}:`, error)
 
+        // Special handling for 404 errors (upload not found on server)
+        // This happens when metadata was cleaned up after completion
+        // Silently remove from store instead of showing an error
+        if (error.message.includes('404') || error.message.includes('not found')) {
+          console.log(
+            `[UploadManager] Upload ${uploadId} not found on server - cleaning up from store`
+          )
+          store.removeUpload(uploadId)
+          this.activeUploads.delete(uploadId)
+          this.uploadFiles.delete(uploadId)
+          this.retryCount.delete(uploadId)
+          this.lastProgressTime.delete(uploadId)
+
+          // Process next in queue
+          setTimeout(() => this.processUploadQueue(), 100)
+          return
+        }
+
         // Check if we should retry
         const currentRetryCount = retryCount
         if (currentRetryCount < MAX_RETRIES && isRetryableError(error)) {
