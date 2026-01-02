@@ -746,7 +746,7 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
     const boundaryPendingReview = queryBoundaryPending(db, videoId, stageErrors)
     const textPendingReview = queryTextPending(db, videoId, stageErrors)
     const coveredFrames = queryCoveredFrames(db)
-    const progress = totalFrames > 0 ? Math.round((coveredFrames / totalFrames) * 100) : 0
+    const progress = totalFrames > 0 ? (coveredFrames / totalFrames) * 100 : 0
     const hasOcrData = queryHasOcrData(db)
     const layoutApproved = queryLayoutApproved(db)
 

@@ -136,34 +136,102 @@ export function navigateAnnotation(
   const db = result.db
 
   try {
-    // Get current annotation's boundary_updated_at for comparison
-    const current = db
-      .prepare('SELECT boundary_updated_at FROM captions WHERE id = ?')
-      .get(currentId) as { boundary_updated_at: string } | undefined
+    // Get current annotation with full details (including gaps)
+    const current = db.prepare('SELECT * FROM captions WHERE id = ?').get(currentId) as
+      | AnnotationRow
+      | undefined
 
     if (!current) {
+      console.error(`[navigateAnnotation] Current annotation ${currentId} not found in database`)
       throw new Error('Current annotation not found')
     }
+
+    console.log(`[navigateAnnotation] Current annotation:`, {
+      id: current.id,
+      start_frame_index: current.start_frame_index,
+      end_frame_index: current.end_frame_index,
+      boundary_updated_at: current.boundary_updated_at,
+      boundary_state: current.boundary_state,
+    })
+
+    // Get nearby annotations for context (include all states for debugging)
+    const nearby = db
+      .prepare(
+        `
+        SELECT id, start_frame_index, end_frame_index, boundary_updated_at, boundary_state
+        FROM captions
+        ORDER BY boundary_updated_at DESC
+        LIMIT 15
+      `
+      )
+      .all() as Array<{
+      id: number
+      start_frame_index: number
+      end_frame_index: number
+      boundary_updated_at: string
+      boundary_state: string
+    }>
+
+    console.log(
+      `[navigateAnnotation] Recent annotations (ordered by boundary_updated_at DESC):`,
+      nearby
+    )
 
     let annotation: AnnotationRow | undefined
 
     if (direction === 'prev') {
-      // Get previous non-gap annotation (earlier boundary_updated_at, or same with lower id)
-      annotation = db
-        .prepare(
+      if (current.boundary_state === 'gap') {
+        // For gaps, use current time as reference to find most recently-completed annotation
+        // This supports the standard workflow: load gap → Prev → most recent completed work
+        const now = new Date().toISOString().replace('T', ' ').slice(0, 19)
+        annotation = db
+          .prepare(
+            `
+            SELECT * FROM captions
+            WHERE boundary_updated_at < ?
+            AND boundary_state IN ('predicted', 'confirmed')
+            ORDER BY boundary_updated_at DESC, id DESC
+            LIMIT 1
           `
-          SELECT * FROM captions
-          WHERE (boundary_updated_at < ? OR (boundary_updated_at = ? AND id < ?))
-          AND boundary_state IN ('predicted', 'confirmed')
-          ORDER BY boundary_updated_at DESC, id DESC
-          LIMIT 1
-        `
-        )
-        .get(current.boundary_updated_at, current.boundary_updated_at, currentId) as
-        | AnnotationRow
-        | undefined
+          )
+          .get(now) as AnnotationRow | undefined
+      } else {
+        // For confirmed/predicted annotations, navigate by timestamp (review order)
+        annotation = db
+          .prepare(
+            `
+            SELECT * FROM captions
+            WHERE (boundary_updated_at < ? OR (boundary_updated_at = ? AND id < ?))
+            AND boundary_state IN ('predicted', 'confirmed')
+            ORDER BY boundary_updated_at DESC, id DESC
+            LIMIT 1
+          `
+          )
+          .get(current.boundary_updated_at, current.boundary_updated_at, currentId) as
+          | AnnotationRow
+          | undefined
+      }
+
+      console.log(
+        `[navigateAnnotation] Prev query selected:`,
+        annotation
+          ? {
+              id: annotation.id,
+              start_frame_index: annotation.start_frame_index,
+              end_frame_index: annotation.end_frame_index,
+              boundary_updated_at: annotation.boundary_updated_at,
+            }
+          : null
+      )
     } else {
-      // Get next non-gap annotation (later boundary_updated_at, or same with higher id)
+      // Get next annotation (later boundary_updated_at, or same with higher id)
+      // For gaps, use current time; for confirmed, use actual timestamp
+      const referenceTimestamp =
+        current.boundary_state === 'gap'
+          ? new Date().toISOString().replace('T', ' ').slice(0, 19)
+          : current.boundary_updated_at
+
+      // First try confirmed/predicted annotations with later timestamps
       annotation = db
         .prepare(
           `
@@ -174,9 +242,36 @@ export function navigateAnnotation(
           LIMIT 1
         `
         )
-        .get(current.boundary_updated_at, current.boundary_updated_at, currentId) as
-        | AnnotationRow
-        | undefined
+        .get(referenceTimestamp, referenceTimestamp, currentId) as AnnotationRow | undefined
+
+      // If no confirmed/predicted annotation found, look for gaps with higher IDs
+      // This allows navigating back to gaps the user was working on
+      if (!annotation) {
+        annotation = db
+          .prepare(
+            `
+            SELECT * FROM captions
+            WHERE id > ?
+            AND boundary_state = 'gap'
+            ORDER BY id ASC
+            LIMIT 1
+          `
+          )
+          .get(currentId) as AnnotationRow | undefined
+      }
+
+      console.log(
+        `[navigateAnnotation] Next query selected:`,
+        annotation
+          ? {
+              id: annotation.id,
+              start_frame_index: annotation.start_frame_index,
+              end_frame_index: annotation.end_frame_index,
+              boundary_updated_at: annotation.boundary_updated_at,
+              boundary_state: annotation.boundary_state,
+            }
+          : null
+      )
     }
 
     return {

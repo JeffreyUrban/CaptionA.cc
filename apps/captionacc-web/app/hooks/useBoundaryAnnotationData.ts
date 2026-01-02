@@ -3,7 +3,7 @@
  * Handles CRUD operations, marking boundaries, and navigation between annotations.
  */
 
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useRef } from 'react'
 
 import type { Annotation } from '~/types/boundaries'
 
@@ -26,7 +26,7 @@ interface UseBoundaryAnnotationDataReturn {
   hasNextAnnotationRef: React.RefObject<boolean>
 
   // Actions
-  loadInitialAnnotation: () => Promise<void>
+  loadInitialAnnotation: () => Promise<number | null>
   loadAnnotationsForRange: (start: number, end: number) => Promise<void>
   saveAnnotation: (
     start: number,
@@ -69,65 +69,100 @@ export function useBoundaryAnnotationData({
   const hasPrevAnnotationRef = useRef(false)
   const hasNextAnnotationRef = useRef(false)
 
-  // Helper to check navigation availability
-  const checkNavigationAvailability = useCallback(
-    async (annotationId: number) => {
-      const encodedVideoId = encodeURIComponent(videoId)
+  // Navigation history stack (LIFO - current annotation is always at top)
+  const navigationStackRef = useRef<number[]>([]) // Stack of annotation IDs
 
-      try {
-        // Check for previous
-        const prevResponse = await fetch(
-          `/api/annotations/${encodedVideoId}/navigate?direction=prev&currentId=${annotationId}`
-        )
-        const prevData = await prevResponse.json()
-        hasPrevAnnotationRef.current = !!prevData.annotation
+  // Annotation cache for efficient batch loading
+  const annotationCacheRef = useRef<Annotation[]>([])
+  const highestQueriedFrameRef = useRef<number>(0) // Track where we've queried up to
 
-        // Check for next
-        const nextResponse = await fetch(
-          `/api/annotations/${encodedVideoId}/navigate?direction=next&currentId=${annotationId}`
+  // Refill annotation cache with next batch of workable annotations
+  const refillCache = useCallback(async () => {
+    const encodedVideoId = encodeURIComponent(videoId)
+    const startFrame = highestQueriedFrameRef.current + 1
+
+    try {
+      const response = await fetch(
+        `/api/annotations/${encodedVideoId}?start=${startFrame}&end=999999&workable=true&limit=20`
+      )
+      const data = await response.json()
+
+      if (data.annotations && data.annotations.length > 0) {
+        // Filter out any already in stack and add to cache
+        const newAnnotations = data.annotations.filter(
+          (a: Annotation) => !navigationStackRef.current.includes(a.id)
         )
-        const nextData = await nextResponse.json()
-        hasNextAnnotationRef.current = !!nextData.annotation
-      } catch (error) {
-        console.error('Failed to check navigation:', error)
+
+        annotationCacheRef.current.push(...newAnnotations)
+
+        // Update highest queried frame
+        const lastAnnotation = data.annotations[data.annotations.length - 1]
+        highestQueriedFrameRef.current = lastAnnotation.end_frame_index
+
+        console.log('[refillCache] Loaded batch:', {
+          startFrame,
+          count: data.annotations.length,
+          afterFilter: newAnnotations.length,
+          cacheSize: annotationCacheRef.current.length,
+          highestFrame: highestQueriedFrameRef.current,
+        })
       }
-    },
-    [videoId]
-  )
+    } catch (error) {
+      console.error('Failed to refill cache:', error)
+    }
+  }, [videoId])
+
+  // Helper to check navigation availability (cache-based)
+  const checkNavigationAvailability = useCallback(() => {
+    // Prev: only available if stack has more than current annotation
+    hasPrevAnnotationRef.current = navigationStackRef.current.length > 1
+
+    // Next: available if cache has annotations
+    hasNextAnnotationRef.current = annotationCacheRef.current.length > 0
+  }, [])
 
   // Load initial annotation on mount
   const loadInitialAnnotation = useCallback(async () => {
-    if (!videoId) return
+    if (!videoId) return null
 
     try {
-      const encodedVideoId = encodeURIComponent(videoId)
+      // Reset cache and load first batch
+      annotationCacheRef.current = []
+      highestQueriedFrameRef.current = 0
+      await refillCache()
 
-      // Load next annotation to work on
-      const nextResponse = await fetch(`/api/annotations/${encodedVideoId}/next`)
-      const nextData = await nextResponse.json()
+      // Take first annotation from cache
+      const firstAnnotation = annotationCacheRef.current.shift()
 
-      if (nextData.annotation) {
-        activeAnnotationRef.current = nextData.annotation
-        markedStartRef.current = nextData.annotation.start_frame_index
-        markedEndRef.current = nextData.annotation.end_frame_index
+      if (firstAnnotation) {
+        console.log('[loadInitialAnnotation] Loaded initial annotation:', {
+          id: firstAnnotation.id,
+          start_frame_index: firstAnnotation.start_frame_index,
+          end_frame_index: firstAnnotation.end_frame_index,
+          boundary_state:
+            (firstAnnotation as unknown as { boundary_state: string }).boundary_state ??
+            firstAnnotation.state,
+          cacheRemaining: annotationCacheRef.current.length,
+        })
 
-        // Initial load: check if there's any other annotation
-        const allAnnotationsResponse = await fetch(
-          `/api/annotations/${encodedVideoId}?start=0&end=999999`
-        )
-        const allAnnotationsData = await allAnnotationsResponse.json()
-        hasPrevAnnotationRef.current =
-          allAnnotationsData.annotations && allAnnotationsData.annotations.length > 1
-        hasNextAnnotationRef.current = false
+        activeAnnotationRef.current = firstAnnotation
+        markedStartRef.current = firstAnnotation.start_frame_index
+        markedEndRef.current = firstAnnotation.end_frame_index
+
+        // Initialize stack with first annotation
+        navigationStackRef.current = [firstAnnotation.id]
+
+        // Update button states
+        checkNavigationAvailability()
 
         // Return the start frame for navigation
-        return nextData.annotation.start_frame_index
+        return firstAnnotation.start_frame_index
       }
     } catch (error) {
       console.error('Failed to load initial annotation:', error)
     }
     return null
-  }, [videoId])
+  }, [videoId, refillCache, checkNavigationAvailability])
 
   // Load annotations for visible range
   const loadAnnotationsForRange = useCallback(
@@ -162,6 +197,14 @@ export function useBoundaryAnnotationData({
       try {
         const encodedVideoId = encodeURIComponent(videoId)
 
+        console.log('[saveAnnotation] Saving current annotation:', {
+          id: activeAnnotation.id,
+          old_start: activeAnnotation.start_frame_index,
+          old_end: activeAnnotation.end_frame_index,
+          new_start: start,
+          new_end: end,
+        })
+
         // Save the annotation with overlap resolution
         const saveResponse = await fetch(`/api/annotations/${encodedVideoId}`, {
           method: 'PUT',
@@ -170,8 +213,7 @@ export function useBoundaryAnnotationData({
             id: activeAnnotation.id,
             start_frame_index: start,
             end_frame_index: end,
-            state: activeAnnotation.state === 'gap' ? 'confirmed' : activeAnnotation.state,
-            pending: false,
+            boundary_state: activeAnnotation.state === 'gap' ? 'confirmed' : activeAnnotation.state,
           }),
         })
 
@@ -187,19 +229,34 @@ export function useBoundaryAnnotationData({
         const endFrame = Math.max(...visibleFramePositions)
         await loadAnnotationsForRange(startFrame, endFrame)
 
-        // Load next annotation
-        const nextResponse = await fetch(`/api/annotations/${encodedVideoId}/next`)
-        const nextData = await nextResponse.json()
+        // Get next annotation from cache (refill if empty)
+        if (annotationCacheRef.current.length === 0) {
+          await refillCache()
+        }
 
-        if (nextData.annotation) {
-          activeAnnotationRef.current = nextData.annotation
-          jumpTargetRef.current = nextData.annotation.start_frame_index // Set pending jump target
+        const selectedAnnotation = annotationCacheRef.current.shift() ?? null
+
+        if (selectedAnnotation) {
+          console.log('[saveAnnotation] Loaded next annotation:', {
+            id: selectedAnnotation.id,
+            start_frame_index: selectedAnnotation.start_frame_index,
+            end_frame_index: selectedAnnotation.end_frame_index,
+            boundary_state: selectedAnnotation.state,
+          })
+
+          activeAnnotationRef.current = selectedAnnotation
+          jumpTargetRef.current = selectedAnnotation.start_frame_index // Set pending jump target
           jumpRequestedRef.current = true // Signal frame loader: Save & Next is a jump
-          markedStartRef.current = nextData.annotation.start_frame_index
-          markedEndRef.current = nextData.annotation.end_frame_index
-          hasPrevAnnotationRef.current = true
-          hasNextAnnotationRef.current = false
+          markedStartRef.current = selectedAnnotation.start_frame_index
+          markedEndRef.current = selectedAnnotation.end_frame_index
+
+          // Push new annotation to stack
+          navigationStackRef.current.push(selectedAnnotation.id)
+
+          // Check navigation availability for the new annotation
+          checkNavigationAvailability()
         } else {
+          console.log('[saveAnnotation] No more annotations not in stack - workflow complete')
           // No more annotations - workflow complete
           activeAnnotationRef.current = null
           markedStartRef.current = null
@@ -211,12 +268,13 @@ export function useBoundaryAnnotationData({
         console.error('Failed to save annotation:', error)
       }
     },
-    [videoId, updateProgress, loadAnnotationsForRange]
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- jumpRequestedRef and jumpTargetRef are refs and don't need to be in dependencies
+    [videoId, updateProgress, loadAnnotationsForRange, refillCache, checkNavigationAvailability]
   )
 
   // Delete annotation
   const deleteAnnotation = useCallback(
-    async (currentFrameIndexRef: React.RefObject<number>) => {
+    async (_currentFrameIndexRef: React.RefObject<number>) => {
       const activeAnnotation = activeAnnotationRef.current
       if (!activeAnnotation) return
 
@@ -235,18 +293,25 @@ export function useBoundaryAnnotationData({
         // Update progress from database
         await updateProgress()
 
-        // Load next annotation
-        const nextResponse = await fetch(`/api/annotations/${encodedVideoId}/next`)
-        const nextData = await nextResponse.json()
+        // Get next annotation from cache (refill if empty)
+        if (annotationCacheRef.current.length === 0) {
+          await refillCache()
+        }
 
-        if (nextData.annotation) {
-          activeAnnotationRef.current = nextData.annotation
-          jumpTargetRef.current = nextData.annotation.start_frame_index // Set pending jump target
+        const selectedAnnotation = annotationCacheRef.current.shift() ?? null
+
+        if (selectedAnnotation) {
+          activeAnnotationRef.current = selectedAnnotation
+          jumpTargetRef.current = selectedAnnotation.start_frame_index // Set pending jump target
           jumpRequestedRef.current = true // Signal frame loader: Delete Caption is a jump
-          markedStartRef.current = nextData.annotation.start_frame_index
-          markedEndRef.current = nextData.annotation.end_frame_index
-          hasPrevAnnotationRef.current = true
-          hasNextAnnotationRef.current = false
+          markedStartRef.current = selectedAnnotation.start_frame_index
+          markedEndRef.current = selectedAnnotation.end_frame_index
+
+          // Push new annotation to stack
+          navigationStackRef.current.push(selectedAnnotation.id)
+
+          // Check navigation availability for the new annotation
+          checkNavigationAvailability()
         } else {
           // No more annotations - workflow complete
           activeAnnotationRef.current = null
@@ -259,36 +324,88 @@ export function useBoundaryAnnotationData({
         console.error('Failed to delete annotation:', error)
       }
     },
-    [videoId, updateProgress]
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- jumpRequestedRef and jumpTargetRef are refs and don't need to be in dependencies
+    [videoId, updateProgress, refillCache, checkNavigationAvailability]
   )
 
-  // Navigate to previous/next annotation by updated_at time
+  // Navigate to previous/next annotation with stack-based navigation
   const navigateToAnnotation = useCallback(
-    async (direction: 'prev' | 'next', currentFrameIndexRef: React.RefObject<number>) => {
+    async (direction: 'prev' | 'next', _currentFrameIndexRef: React.RefObject<number>) => {
       const activeAnnotation = activeAnnotationRef.current
+
+      console.log(
+        `[navigateToAnnotation] Called. direction=${direction}, stack=`,
+        navigationStackRef.current
+      )
+
       if (!activeAnnotation) return
 
-      try {
-        const encodedVideoId = encodeURIComponent(videoId)
-        const response = await fetch(
-          `/api/annotations/${encodedVideoId}/navigate?direction=${direction}&currentId=${activeAnnotation.id}`
-        )
-        const data = await response.json()
+      if (direction === 'prev') {
+        // Prev: pop from stack and go to new top (session-based only)
+        if (navigationStackRef.current.length > 1) {
+          // Pop current annotation from stack
+          navigationStackRef.current.pop()
+          const prevAnnotationId = navigationStackRef.current[navigationStackRef.current.length - 1]
 
-        if (data.annotation) {
-          activeAnnotationRef.current = data.annotation
-          jumpTargetRef.current = data.annotation.start_frame_index // Set pending jump target
-          markedStartRef.current = data.annotation.start_frame_index
-          markedEndRef.current = data.annotation.end_frame_index
+          console.log(
+            `[navigateToAnnotation] Popped from stack, going to ${prevAnnotationId}, new stack:`,
+            navigationStackRef.current
+          )
 
-          // After navigating, check both directions
-          void checkNavigationAvailability(data.annotation.id)
+          try {
+            const encodedVideoId = encodeURIComponent(videoId)
+            const response = await fetch(`/api/annotations/${encodedVideoId}?start=0&end=999999`)
+            const data = await response.json()
+            const annotation = data.annotations?.find((a: Annotation) => a.id === prevAnnotationId)
+
+            if (annotation) {
+              activeAnnotationRef.current = annotation
+              jumpTargetRef.current = annotation.start_frame_index
+              markedStartRef.current = annotation.start_frame_index
+              markedEndRef.current = annotation.end_frame_index
+
+              // Check navigation availability
+              checkNavigationAvailability()
+            }
+          } catch (error) {
+            console.error('Failed to load annotation from stack:', error)
+          }
+        } else {
+          // Stack only has one element - Prev should be disabled
+          console.log('[navigateToAnnotation] Prev called but stack only has one element')
         }
-      } catch (error) {
-        console.error(`Failed to navigate to ${direction} annotation:`, error)
+      } else {
+        // Next: get from cache (refill if empty)
+        if (annotationCacheRef.current.length === 0) {
+          await refillCache()
+        }
+
+        const nextAnnotation = annotationCacheRef.current.shift()
+
+        if (nextAnnotation) {
+          // Push to stack
+          navigationStackRef.current.push(nextAnnotation.id)
+
+          console.log('[navigateToAnnotation] Navigated to next:', {
+            stack: navigationStackRef.current,
+            annotation: nextAnnotation.id,
+            cacheRemaining: annotationCacheRef.current.length,
+          })
+
+          activeAnnotationRef.current = nextAnnotation
+          jumpTargetRef.current = nextAnnotation.start_frame_index
+          markedStartRef.current = nextAnnotation.start_frame_index
+          markedEndRef.current = nextAnnotation.end_frame_index
+
+          checkNavigationAvailability()
+        } else {
+          console.log('[navigateToAnnotation] No more annotations available')
+          hasNextAnnotationRef.current = false
+        }
       }
     },
-    [videoId, checkNavigationAvailability]
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- jumpTargetRef is a ref and doesn't need to be in dependencies
+    [videoId, refillCache, checkNavigationAvailability]
   )
 
   // Jump to frame and load annotation containing it
@@ -296,7 +413,7 @@ export function useBoundaryAnnotationData({
     async (
       frameNumber: number,
       totalFrames: number,
-      currentFrameIndexRef: React.RefObject<number>
+      _currentFrameIndexRef: React.RefObject<number>
     ): Promise<boolean> => {
       if (isNaN(frameNumber) || frameNumber < 0 || frameNumber >= totalFrames) {
         alert(`Invalid frame number. Must be between 0 and ${totalFrames - 1}`)
@@ -319,7 +436,7 @@ export function useBoundaryAnnotationData({
           markedEndRef.current = annotation.end_frame_index
 
           // After jumping, check navigation availability
-          void checkNavigationAvailability(annotation.id)
+          checkNavigationAvailability()
           return true
         } else {
           alert(`No annotation found containing frame ${frameNumber}`)
@@ -331,6 +448,7 @@ export function useBoundaryAnnotationData({
         return false
       }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- jumpTargetRef is a ref and doesn't need to be in dependencies
     [videoId, checkNavigationAvailability]
   )
 
@@ -349,7 +467,7 @@ export function useBoundaryAnnotationData({
           activeAnnotationRef.current = annotation
           markedStartRef.current = annotation.start_frame_index
           markedEndRef.current = annotation.end_frame_index
-          await checkNavigationAvailability(annotation.id)
+          checkNavigationAvailability()
         }
       } catch (error) {
         console.error('Failed to activate current frame annotation:', error)

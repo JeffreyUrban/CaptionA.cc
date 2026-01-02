@@ -239,7 +239,7 @@ export function useBoundaryFrameLoader({
 
       try {
         // If jumping, load exact frames around jump target FIRST, then navigate
-        if (isJump && jumpTarget !== null) {
+        if (isJump && jumpTarget !== null && !isNaN(jumpTarget) && jumpTarget >= 0) {
           jumpRequestedRef.current = false // Clear flag after reading
 
           let finestQueue = buildQueueForModulo(
@@ -276,6 +276,11 @@ export function useBoundaryFrameLoader({
           currentFrameIndexRef.current = jumpTarget
           jumpTargetRef.current = null // Clear pending jump
           lastLoadedFrame = jumpTarget // Update tracking
+        } else if (isJump) {
+          // Invalid jump target - clear flags and warn
+          console.warn('[useBoundaryFrameLoader] Invalid jump target:', jumpTarget)
+          jumpRequestedRef.current = false
+          jumpTargetRef.current = null
         }
 
         // Now do normal progressive loading (coarsest to finest)

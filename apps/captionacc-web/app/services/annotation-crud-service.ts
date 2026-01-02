@@ -467,7 +467,9 @@ function createOrMergeGap(
 export function listAnnotations(
   videoId: string,
   startFrame: number,
-  endFrame: number
+  endFrame: number,
+  workableOnly: boolean = false,
+  limit?: number
 ): Annotation[] {
   const result = getOrCreateAnnotationDatabase(videoId)
   if (!result.success) {
@@ -477,16 +479,23 @@ export function listAnnotations(
   const db = result.db
 
   try {
-    // Query annotations that overlap with the requested range
-    const annotations = db
-      .prepare(
-        `
+    // Build query based on workableOnly filter and limit
+    const baseQuery = workableOnly
+      ? `
+        SELECT * FROM captions
+        WHERE end_frame_index >= ? AND start_frame_index <= ?
+        AND (boundary_state = 'gap' OR boundary_pending = 1)
+        ORDER BY start_frame_index
+      `
+      : `
         SELECT * FROM captions
         WHERE end_frame_index >= ? AND start_frame_index <= ?
         ORDER BY start_frame_index
       `
-      )
-      .all(startFrame, endFrame) as AnnotationRow[]
+
+    const query = limit ? `${baseQuery} LIMIT ${limit}` : baseQuery
+
+    const annotations = db.prepare(query).all(startFrame, endFrame) as AnnotationRow[]
 
     return annotations.map(transformAnnotation)
   } finally {
@@ -647,7 +656,8 @@ export async function updateAnnotationWithOverlapResolution(
       SET start_frame_index = ?,
           end_frame_index = ?,
           boundary_state = ?,
-          boundary_pending = 0
+          boundary_pending = 0,
+          boundary_updated_at = datetime('now')
       WHERE id = ?
     `
     ).run(startFrameIndex, endFrameIndex, boundaryState ?? 'confirmed', id)
@@ -668,6 +678,14 @@ export async function updateAnnotationWithOverlapResolution(
     if (!updatedAnnotation) {
       throw new Error('Failed to retrieve updated annotation')
     }
+
+    console.log(`[updateAnnotationWithOverlapResolution] Updated annotation ${id}:`, {
+      id: updatedAnnotation.id,
+      boundary_state: updatedAnnotation.boundary_state,
+      boundary_updated_at: updatedAnnotation.boundary_updated_at,
+      original_state: original.boundary_state,
+      original_updated_at: original.boundary_updated_at,
+    })
 
     return {
       annotation: transformAnnotation(updatedAnnotation),

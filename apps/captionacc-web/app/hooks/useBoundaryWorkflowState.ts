@@ -29,6 +29,7 @@ interface UseBoundaryWorkflowStateReturn {
   // Loading state
   isLoadingMetadata: boolean
   isInitialized: boolean
+  isSaving: boolean
 
   // Display state (synced from refs at 60fps)
   displayState: BoundaryDisplayState
@@ -175,6 +176,7 @@ export function useBoundaryWorkflowState({
   )
   const [jumpToFrameInput, setJumpToFrameInput] = useState('')
   const [showHelpModal, setShowHelpModal] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
 
   // Track window height
   useEffect(() => {
@@ -258,12 +260,17 @@ export function useBoundaryWorkflowState({
   // Annotation actions
   const saveAnnotation = useCallback(async () => {
     if (!canSave || markedStart === null || markedEnd === null) return
-    await annotationData.saveAnnotation(
-      markedStart,
-      markedEnd,
-      currentFrameIndexRef,
-      visibleFramePositions
-    )
+    setIsSaving(true)
+    try {
+      await annotationData.saveAnnotation(
+        markedStart,
+        markedEnd,
+        currentFrameIndexRef,
+        visibleFramePositions
+      )
+    } finally {
+      setIsSaving(false)
+    }
   }, [canSave, markedStart, markedEnd, annotationData, visibleFramePositions])
 
   const deleteAnnotation = useCallback(
@@ -340,6 +347,7 @@ export function useBoundaryWorkflowState({
   return {
     isLoadingMetadata,
     isInitialized,
+    isSaving,
     displayState,
     visibleFramePositions,
     canSave,
