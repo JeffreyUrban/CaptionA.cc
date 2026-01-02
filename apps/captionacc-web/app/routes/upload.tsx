@@ -188,20 +188,26 @@ export default function UploadPage() {
     setPendingFiles([])
   }, [])
 
-  // Drag-and-drop handlers
+  // Drag-and-drop handlers with proper event handling
   const handleDragEnter = useCallback((e: React.DragEvent) => {
     e.preventDefault()
+    e.stopPropagation()
     setIsDragActive(true)
   }, [])
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
+    e.stopPropagation()
   }, [])
 
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault()
-    // Only deactivate if leaving the drop zone entirely
-    if (e.currentTarget === e.target) {
+    e.stopPropagation()
+
+    // Only deactivate if we're leaving the drop zone container itself
+    // Check if the relatedTarget (where we're going) is outside the currentTarget
+    const relatedTarget = e.relatedTarget as Node | null
+    if (!relatedTarget || !e.currentTarget.contains(relatedTarget)) {
       setIsDragActive(false)
     }
   }, [])
