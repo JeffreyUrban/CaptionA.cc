@@ -30,10 +30,9 @@ uv pip install -e data-pipelines/caption_text
 Before running the pipeline, ensure you have:
 
 1. **Cropped frames** in `annotations.db` (`cropped_frames` table)
-2. **OCR annotations** in `annotations.db` (`cropped_frame_ocr` table with `ocr_annotations` JSON)
-3. **Layout configuration** in `annotations.db` (`video_layout_config` table)
-4. **Caption boundaries** in `annotations.db` (`captions` table)
-5. **Font example image** (reference image showing caption font style)
+2. **Layout configuration** in `annotations.db` (`video_layout_config` table)
+3. **Caption boundaries** in `annotations.db` (`captions` table)
+4. **Font example image** (reference image showing caption font style)
 
 ### Model Checkpoint
 
@@ -219,19 +218,6 @@ text_status TEXT,          -- 'valid_caption', 'ocr_error', etc.
 text_notes TEXT,           -- Annotation notes
 text_ocr_combined TEXT,    -- Cached OCR result
 text_updated_at TEXT       -- Timestamp of last text update
-```
-
-### Cropped Frame OCR Table
-
-```sql
-CREATE TABLE cropped_frame_ocr (
-    frame_index INTEGER PRIMARY KEY,
-    ocr_text TEXT,
-    ocr_annotations TEXT,  -- JSON: [[char, conf, [x, y, w, h]], ...]
-    ocr_confidence REAL,
-    crop_bounds_version INTEGER,
-    created_at TEXT
-);
 ```
 
 ## Model Architecture

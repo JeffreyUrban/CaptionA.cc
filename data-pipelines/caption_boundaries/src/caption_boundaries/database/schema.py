@@ -122,14 +122,6 @@ class TrainingSample(Base):
     # Provenance
     source_caption_annotation_id: Mapped[int | None] = mapped_column(Integer)
     crop_bounds_version: Mapped[int] = mapped_column(Integer, nullable=False)
-    ocr_timestamp: Mapped[datetime | None] = mapped_column(DateTime)
-
-    # Quality metadata
-    ocr_confidence_frame1: Mapped[float | None] = mapped_column(Float)
-    ocr_confidence_frame2: Mapped[float | None] = mapped_column(Float)
-    ocr_text_frame1: Mapped[str | None] = mapped_column(Text)
-    ocr_text_frame2: Mapped[str | None] = mapped_column(Text)
-    levenshtein_distance: Mapped[int | None] = mapped_column(Integer)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=lambda: datetime.now(UTC))
 

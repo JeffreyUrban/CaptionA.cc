@@ -11,7 +11,6 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Literal
 
-import Levenshtein
 from rich.console import Console
 from rich.progress import track
 from sqlalchemy.orm import Session
@@ -237,88 +236,6 @@ def extract_frame_pairs_from_captions(db_path: Path) -> list[dict]:
         conn.close()
 
 
-def get_ocr_confidence_for_frame(db_path: Path, frame_index: int) -> float | None:
-    """Get OCR confidence for a specific frame.
-
-    TODO: Currently returns None for missing/incompatible OCR data to allow dataset
-    creation before backfill completes. Should enforce normalized schema once all
-    databases are migrated via backfill_ocr.py.
-
-    Args:
-        db_path: Path to video's annotations.db
-        frame_index: Frame index to query
-
-    Returns:
-        Average OCR confidence, or None if no OCR data or incompatible schema
-    """
-    try:
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-
-        try:
-            # Query normalized schema: one row per OCR box
-            cursor.execute(
-                """
-                SELECT AVG(confidence)
-                FROM cropped_frame_ocr
-                WHERE frame_index = ?
-            """,
-                (frame_index,),
-            )
-
-            row = cursor.fetchone()
-            return row[0] if row and row[0] is not None else None
-
-        finally:
-            conn.close()
-
-    except Exception:
-        # Gracefully handle missing table, wrong schema, or any DB errors
-        # TODO: Remove try/except once all DBs migrated to normalized schema
-        return None
-
-
-def get_ocr_text_for_frame(db_path: Path, frame_index: int) -> str:
-    """Get OCR text for a specific frame.
-
-    TODO: Currently returns empty string for missing/incompatible OCR data to allow
-    dataset creation before backfill completes. Should enforce normalized schema once
-    all databases are migrated via backfill_ocr.py.
-
-    Args:
-        db_path: Path to video's annotations.db
-        frame_index: Frame index to query
-
-    Returns:
-        Concatenated OCR text for the frame, or empty string if unavailable
-    """
-    try:
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-
-        try:
-            # Query normalized schema: concatenate all box text
-            cursor.execute(
-                """
-                SELECT GROUP_CONCAT(text, '')
-                FROM cropped_frame_ocr
-                WHERE frame_index = ?
-            """,
-                (frame_index,),
-            )
-
-            row = cursor.fetchone()
-            return row[0] if row and row[0] else ""
-
-        finally:
-            conn.close()
-
-    except Exception:
-        # Gracefully handle missing table, wrong schema, or any DB errors
-        # TODO: Remove try/except once all DBs migrated to normalized schema
-        return ""
-
-
 def _copy_frames_for_video(db, video_conn, video_hash: str, video_samples: list[dict]) -> None:
     """Copy frames needed by samples from video DB to training DB.
 
@@ -513,18 +430,6 @@ def create_training_dataset(
 
         # Add video hash to each pair
         for pair in pairs:
-            # Get OCR confidence and text for quality metadata
-            ocr_conf_1 = get_ocr_confidence_for_frame(video_db_path, pair["frame1_index"])
-            ocr_conf_2 = get_ocr_confidence_for_frame(video_db_path, pair["frame2_index"])
-
-            ocr_text_1 = get_ocr_text_for_frame(video_db_path, pair["frame1_index"])
-            ocr_text_2 = get_ocr_text_for_frame(video_db_path, pair["frame2_index"])
-
-            # Calculate Levenshtein distance for "same" labels (to catch OCR mismatches)
-            levenshtein_dist = None
-            if pair["label"] == "same" and ocr_text_1 and ocr_text_2:
-                levenshtein_dist = Levenshtein.distance(ocr_text_1, ocr_text_2)
-
             all_samples.append(
                 {
                     "video_hash": video_hash,
@@ -533,11 +438,6 @@ def create_training_dataset(
                     "label": pair["label"],
                     "crop_bounds_version": layout_meta["crop_bounds_version"],
                     "source_caption_annotation_id": pair["caption_id"],
-                    "ocr_confidence_frame1": ocr_conf_1,
-                    "ocr_confidence_frame2": ocr_conf_2,
-                    "ocr_text_frame1": ocr_text_1,
-                    "ocr_text_frame2": ocr_text_2,
-                    "levenshtein_distance": levenshtein_dist,
                 }
             )
 

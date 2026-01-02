@@ -10,7 +10,6 @@ from typing import Any
 from .database import (
     get_caption_by_frames,
     get_database_path,
-    get_ocr_for_caption_range,
     mark_text_as_validated,
 )
 
@@ -68,43 +67,9 @@ def compare_vlm_with_ocr(
             print(f"Warning: Caption not found for frames {start_frame}-{end_frame}")
             continue
 
-        # Get OCR data for this frame range
-        ocr_data = get_ocr_for_caption_range(db_path, start_frame, end_frame)
-
-        if not ocr_data:
-            stats["missing_ocr"] += 1
-            continue
-
-        # Extract OCR text from annotations
-        # Aggregate OCR text from all frames (typically just concatenate)
-        ocr_texts = []
-        for ocr_frame in ocr_data:
-            if ocr_frame.get("ocr_annotations"):
-                text = extract_ocr_text_from_annotations(ocr_frame["ocr_annotations"])
-                ocr_texts.append(text)
-
-        # Use the most common OCR text or first non-empty one
-        ocr_text = max(set(ocr_texts), key=ocr_texts.count) if ocr_texts else ""
-
-        # Compare
-        if vlm_text == ocr_text:
-            stats["matches"] += 1
-            if auto_validate:
-                mark_text_as_validated(
-                    db_path=db_path,
-                    caption_id=caption["id"],
-                    validation_source="vlm_ocr_exact_match",
-                )
-        else:
-            stats["mismatches"] += 1
-            mismatches.append(
-                {
-                    "start_frame": start_frame,
-                    "end_frame": end_frame,
-                    "ocr_text": ocr_text,
-                    "vlm_text": vlm_text,
-                }
-            )
+        # OCR data is no longer available (cropped_frame_ocr table removed)
+        stats["missing_ocr"] += 1
+        continue
 
     # Write mismatches to CSV
     if write_mismatches and mismatches:
