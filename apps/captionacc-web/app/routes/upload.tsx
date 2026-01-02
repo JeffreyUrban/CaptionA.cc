@@ -253,26 +253,39 @@ export default function UploadPage() {
 
   // File input handler
   const handleFileSelect = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
       const fileList = e.target.files
       if (!fileList || fileList.length === 0) return
 
-      // Convert FileList to UploadFile array
-      const files = Array.from(fileList)
-        .filter(file => isVideoFile(file))
-        .map(file => {
-          const webkitFile = file as File & { webkitRelativePath?: string }
-          return {
-            file,
-            relativePath: webkitFile.webkitRelativePath || file.name,
-          }
-        })
+      setIsProcessingDrop(true)
+      setProcessingStatus('Processing files...')
 
-      // Show preview modal
-      showUploadPreview(files)
+      try {
+        // Convert FileList to UploadFile array
+        const files = Array.from(fileList)
+          .filter(file => isVideoFile(file))
+          .map(file => {
+            const webkitFile = file as File & { webkitRelativePath?: string }
+            return {
+              file,
+              relativePath: webkitFile.webkitRelativePath || file.name,
+            }
+          })
 
-      // Reset input so same file can be selected again
-      e.target.value = ''
+        setProcessingStatus(`Found ${files.length} video files...`)
+
+        // Small delay to show status
+        await new Promise(resolve => setTimeout(resolve, 100))
+
+        // Show preview modal
+        showUploadPreview(files)
+      } finally {
+        setIsProcessingDrop(false)
+        setProcessingStatus('')
+
+        // Reset input so same file can be selected again
+        e.target.value = ''
+      }
     },
     [isVideoFile, showUploadPreview]
   )
