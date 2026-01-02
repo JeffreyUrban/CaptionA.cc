@@ -137,10 +137,49 @@ export function migrateDropCroppedFrameOCR(dbPath: string): boolean {
 }
 
 /**
+ * Apply migration 004: Add ocr_visualization_image to video_layout_config
+ */
+export function migrateOCRVisualizationImage(dbPath: string): boolean {
+  const db = new Database(dbPath)
+  try {
+    // Check if migration is needed
+    if (columnExists(db, 'video_layout_config', 'ocr_visualization_image')) {
+      // Already migrated
+      return false
+    }
+
+    console.log(`[Migration] Applying ocr_visualization_image migration to ${dbPath}`)
+
+    // Read migration SQL
+    const migrationPath = resolve(__dirname, 'migrations', '004_add_ocr_visualization_image.sql')
+    const migrationSQL = readFileSync(migrationPath, 'utf-8')
+
+    // Split by semicolon and execute each statement
+    const statements = migrationSQL
+      .split(';')
+      .map(s => s.trim())
+      .filter(s => s.length > 0 && !s.startsWith('--'))
+
+    for (const statement of statements) {
+      db.prepare(statement).run()
+    }
+
+    console.log(`[Migration] Successfully migrated ${dbPath}`)
+    return true
+  } catch (error) {
+    console.error(`[Migration] Failed to migrate ${dbPath}:`, error)
+    throw error
+  } finally {
+    db.close()
+  }
+}
+
+/**
  * Apply all pending migrations to a database
  */
 export function migrateDatabase(dbPath: string): void {
   migrateCropBounds(dbPath)
   migrateAnalysisModelVersion(dbPath)
   migrateDropCroppedFrameOCR(dbPath)
+  migrateOCRVisualizationImage(dbPath)
 }

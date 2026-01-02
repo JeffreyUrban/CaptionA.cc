@@ -46,7 +46,6 @@ export interface ProcessingStatus {
     | 'uploading'
     | 'upload_complete'
     | 'extracting_frames'
-    | 'running_ocr'
     | 'analyzing_layout'
     | 'processing_complete'
     | 'error'
@@ -470,7 +469,6 @@ function getLayoutProgressBadge(status: ProcessingStatus['status']): BadgeState 
     uploading: createLayoutStatusBadge('Uploading', 'blue'),
     upload_complete: createLayoutStatusBadge('Queued', 'blue'),
     extracting_frames: createLayoutStatusBadge('Layout: Framing', 'indigo'),
-    running_ocr: createLayoutStatusBadge('Layout: Running OCR', 'purple'),
     analyzing_layout: createLayoutStatusBadge('Layout: Analyzing', 'purple'),
   }
   return statusMap[status] ?? null

@@ -152,7 +152,6 @@ type ProcessingStatus =
   | 'uploading'
   | 'upload_complete'
   | 'extracting_frames'
-  | 'running_ocr'
   | 'analyzing_layout'
   | 'processing_complete'
   | 'error'
@@ -262,7 +261,6 @@ function checkProcessingStatus(db: Database.Database): ProcessingStatus {
     'uploading',
     'upload_complete',
     'extracting_frames',
-    'running_ocr',
     'analyzing_layout',
   ]
 

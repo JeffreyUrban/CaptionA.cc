@@ -308,7 +308,6 @@ CREATE TABLE IF NOT EXISTS processing_status (
         'uploading',           -- File upload in progress
         'upload_complete',     -- Upload done, queued for processing
         'extracting_frames',   -- Running full_frames extraction
-        'running_ocr',         -- Running OCR on frames
         'analyzing_layout',    -- Running layout analysis
         'processing_complete', -- All processing complete
         'error'                -- Processing failed

@@ -730,7 +730,7 @@ function checkAndRecoverVideo(dbPath: string, videoPath: string, videoId: string
     }
 
     // Check for stalled active processing
-    const activeStates = ['extracting_frames', 'running_ocr', 'analyzing_layout']
+    const activeStates = ['extracting_frames', 'analyzing_layout']
     if (activeStates.includes(status.status)) {
       recoverStalledJob(db, videoId, videoPath, status.current_job_id)
     }

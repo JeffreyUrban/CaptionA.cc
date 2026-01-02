@@ -703,10 +703,10 @@ function detectCropBoundsChanges(
  * @param cropBounds - New crop bounds to apply
  * @returns Number of frames invalidated
  */
-function invalidateFramesForCropChange(
+async function invalidateFramesForCropChange(
   db: import('better-sqlite3').Database,
   cropBounds: CropBounds
-): number {
+): Promise<number> {
   // Get layout config for frame dimensions
   const layoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as
     | VideoLayoutConfigRow
@@ -757,7 +757,7 @@ function invalidateFramesForCropChange(
         }
       : undefined
 
-  const ocrVisualizationImage = generateOCRVisualization(
+  const ocrVisualizationImage = await generateOCRVisualization(
     analysisBoxes,
     cropBounds,
     layoutConfig.frame_width,
@@ -1299,7 +1299,8 @@ function applyFillDarkening(
  * Apply normalized darkening to image data.
  */
 function applyNormalizedDarkening(
-  ctx: CanvasRenderingContext2D,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ctx: any, // Canvas context from node-canvas (different type than DOM CanvasRenderingContext2D)
   croppedWidth: number,
   croppedHeight: number,
   edgeCount: Uint16Array,
@@ -1325,7 +1326,8 @@ function applyNormalizedDarkening(
  * Draw colored layout annotations (anchor line, vertical position line).
  */
 function drawLayoutAnnotations(
-  ctx: CanvasRenderingContext2D,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ctx: any, // Canvas context from node-canvas (different type than DOM CanvasRenderingContext2D)
   layoutParams: {
     anchorType: 'left' | 'center' | 'right'
     anchorPosition: number
@@ -1363,7 +1365,7 @@ function drawLayoutAnnotations(
   }
 }
 
-function generateOCRVisualization(
+async function generateOCRVisualization(
   analysisBoxes: LayoutAnalysisBox[],
   cropBounds: CropBounds,
   frameWidth: number,
@@ -1373,10 +1375,11 @@ function generateOCRVisualization(
     anchorPosition: number
     verticalPosition: number
   }
-): Buffer {
-  // @ts-expect-error - canvas module is dynamically loaded
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { createCanvas } = require('canvas') as typeof import('canvas')
+): Promise<Buffer> {
+  // Server-side only - canvas module is dynamically loaded
+  // Use dynamic import which works in ES modules
+  const canvasModule = await import('canvas')
+  const { createCanvas } = canvasModule
 
   const croppedWidth = cropBounds.right - cropBounds.left
   const croppedHeight = cropBounds.bottom - cropBounds.top
@@ -1491,10 +1494,10 @@ export function getLayoutConfig(videoId: string): LayoutConfig | null {
  * @returns Result indicating what changed
  * @throws Error if database or config is not found
  */
-export function updateLayoutConfig(
+export async function updateLayoutConfig(
   videoId: string,
   input: UpdateLayoutConfigInput
-): UpdateLayoutConfigResult {
+): Promise<UpdateLayoutConfigResult> {
   const result = getWritableDatabase(videoId)
   if (!result.success) {
     throw new Error('Database not found')
@@ -1520,7 +1523,7 @@ export function updateLayoutConfig(
     try {
       // Handle crop bounds changes
       if (boundsChange.changed && cropBounds) {
-        framesInvalidated = invalidateFramesForCropChange(db, cropBounds)
+        framesInvalidated = await invalidateFramesForCropChange(db, cropBounds)
         console.log(`Crop bounds changed: invalidated ${framesInvalidated} frames`)
       } else if (cropBounds) {
         // Update crop bounds without invalidation (no actual change)
@@ -1570,7 +1573,7 @@ export function updateLayoutConfig(
  * @returns Reset result with new bounds and analysis data
  * @throws Error if database or required data is not found
  */
-export function resetCropBounds(videoId: string): ResetCropBoundsResult {
+export async function resetCropBounds(videoId: string): Promise<ResetCropBoundsResult> {
   const result = getWritableDatabase(videoId)
   if (!result.success) {
     throw new Error('Database not found')
@@ -1638,7 +1641,7 @@ export function resetCropBounds(videoId: string): ResetCropBoundsResult {
       verticalPosition: analysis.layoutParams.verticalPosition,
     }
 
-    const ocrVisualizationImage = generateOCRVisualization(
+    const ocrVisualizationImage = await generateOCRVisualization(
       analysisBoxes,
       analysis.cropBounds,
       layoutConfig.frame_width,
