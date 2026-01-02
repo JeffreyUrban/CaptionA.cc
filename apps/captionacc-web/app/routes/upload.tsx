@@ -72,6 +72,17 @@ export default function UploadPage() {
   const clearHistory = useUploadStore(state => state.clearHistory)
   const resolveDuplicate = useUploadStore(state => state.resolveDuplicate)
 
+  // Individual upload actions
+  const handleCancelUpload = useCallback(async (uploadId: string) => {
+    console.log(`[UploadPage] Canceling upload ${uploadId}`)
+    await uploadManager.cancelUpload(uploadId)
+  }, [])
+
+  const handleRetryUpload = useCallback(async (uploadId: string) => {
+    console.log(`[UploadPage] Retrying upload ${uploadId}`)
+    await uploadManager.retryUpload(uploadId)
+  }, [])
+
   // On mount: mark that user visited upload page (hides notification badge)
   useEffect(() => {
     visitedUploadPage()
@@ -270,6 +281,8 @@ export default function UploadPage() {
               uploads={activeUploads}
               onCancelQueued={cancelQueued}
               onAbortAll={abortAll}
+              onCancelUpload={handleCancelUpload}
+              onRetryUpload={handleRetryUpload}
             />
 
             {/* Pending Duplicates */}

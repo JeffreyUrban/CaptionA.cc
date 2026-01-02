@@ -319,6 +319,33 @@ class UploadManager {
   }
 
   /**
+   * Retry a failed upload
+   */
+  async retryUpload(uploadId: string): Promise<void> {
+    const store = useUploadStore.getState()
+    const upload = store.activeUploads[uploadId]
+    const file = this.uploadFiles.get(uploadId)
+
+    if (!upload || !file) {
+      console.error(`[UploadManager] Cannot retry ${uploadId}: missing upload or file`)
+      return
+    }
+
+    console.log(`[UploadManager] Retrying upload ${upload.fileName}`)
+
+    // Cancel the failed upload first
+    await this.cancelUpload(uploadId)
+
+    // Start a new upload with the same file
+    await this.startUpload(file, {
+      fileName: upload.fileName,
+      fileType: upload.fileType,
+      targetFolder: upload.targetFolder,
+      relativePath: upload.relativePath,
+    })
+  }
+
+  /**
    * Cancel all active uploads
    */
   async cancelAll(): Promise<void> {

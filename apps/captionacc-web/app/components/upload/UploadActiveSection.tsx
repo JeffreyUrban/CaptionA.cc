@@ -7,6 +7,8 @@
  * - Cancel/abort controls
  */
 
+import { XMarkIcon, ArrowPathIcon } from '@heroicons/react/20/solid'
+
 import type { ActiveUpload } from '~/stores/upload-store'
 import { formatBytes } from '~/utils/upload-helpers'
 
@@ -14,12 +16,16 @@ interface UploadActiveSectionProps {
   uploads: ActiveUpload[]
   onCancelQueued: () => void
   onAbortAll: () => void
+  onCancelUpload: (uploadId: string) => void
+  onRetryUpload: (uploadId: string) => void
 }
 
 export function UploadActiveSection({
   uploads,
   onCancelQueued,
   onAbortAll,
+  onCancelUpload,
+  onRetryUpload,
 }: UploadActiveSectionProps) {
   if (uploads.length === 0) return null
 
@@ -118,6 +124,31 @@ export function UploadActiveSection({
                 <span className="text-sm text-gray-500 dark:text-gray-400">
                   {formatBytes(upload.fileSize)}
                 </span>
+
+                {/* Action Buttons */}
+                <div className="flex items-center gap-1">
+                  {/* Retry button for failed uploads */}
+                  {upload.status === 'error' && (
+                    <button
+                      onClick={() => onRetryUpload(upload.id)}
+                      className="p-1.5 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                      title="Retry upload"
+                    >
+                      <ArrowPathIcon className="w-4 h-4" />
+                    </button>
+                  )}
+
+                  {/* Cancel button for pending/uploading */}
+                  {(upload.status === 'pending' || upload.status === 'uploading') && (
+                    <button
+                      onClick={() => onCancelUpload(upload.id)}
+                      className="p-1.5 text-gray-600 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400 rounded hover:bg-red-50 dark:hover:bg-red-900/20"
+                      title="Cancel upload"
+                    >
+                      <XMarkIcon className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
 
