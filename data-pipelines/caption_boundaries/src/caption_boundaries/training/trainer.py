@@ -700,7 +700,7 @@ class CaptionBoundaryTrainer:
         wandb.finish()
 
         console.print(f"\n[green]✓ Training complete![/green]")
-        console.print(f"Best Val F1: {best_val_f1:.4f}")
+        console.print(f"Best Val F1 (macro): {best_val_f1_macro:.4f}")
         console.print(f"Checkpoints saved to: {self.checkpoint_dir}")
 
     def _save_experiment_to_db(self, best_val_f1: float, best_val_accuracy: float):
