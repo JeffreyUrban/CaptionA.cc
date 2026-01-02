@@ -89,6 +89,36 @@ export default function UploadPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Helper to recursively collect files from directory entries
+  const collectFilesFromEntry = useCallback(
+    async (entry: FileSystemEntry, path = ''): Promise<Array<{ file: File; path: string }>> => {
+      const results: Array<{ file: File; path: string }> = []
+
+      if (entry.isFile) {
+        const fileEntry = entry as FileSystemFileEntry
+        const file = await new Promise<File>((resolve, reject) => {
+          fileEntry.file(resolve, reject)
+        })
+        results.push({ file, path: path + file.name })
+      } else if (entry.isDirectory) {
+        const dirEntry = entry as FileSystemDirectoryEntry
+        const reader = dirEntry.createReader()
+        const entries = await new Promise<FileSystemEntry[]>((resolve, reject) => {
+          reader.readEntries(resolve, reject)
+        })
+
+        for (const childEntry of entries) {
+          const childPath = path + entry.name + '/'
+          const childResults = await collectFilesFromEntry(childEntry, childPath)
+          results.push(...childResults)
+        }
+      }
+
+      return results
+    },
+    []
+  )
+
   // Process dropped or selected files
   const processFiles = useCallback(
     async (fileList: FileList | null) => {
@@ -137,14 +167,39 @@ export default function UploadPage() {
   }, [])
 
   const handleDrop = useCallback(
-    (e: React.DragEvent) => {
+    async (e: React.DragEvent) => {
       e.preventDefault()
       setIsDragActive(false)
 
-      const files = e.dataTransfer.files
-      void processFiles(files)
+      const items = Array.from(e.dataTransfer.items)
+      const allFiles: Array<{ file: File; path: string }> = []
+
+      // Process each dropped item (could be files or directories)
+      for (const item of items) {
+        const entry = item.webkitGetAsEntry()
+        if (entry) {
+          const files = await collectFilesFromEntry(entry)
+          allFiles.push(...files)
+        }
+      }
+
+      console.log(`[UploadPage] Collected ${allFiles.length} files from drop`)
+
+      // Upload each collected file
+      for (const { file, path } of allFiles) {
+        try {
+          await uploadManager.startUpload(file, {
+            fileName: file.name,
+            fileType: file.type,
+            targetFolder: selectedFolder,
+            relativePath: path,
+          })
+        } catch (error) {
+          console.error(`[UploadPage] Failed to start upload for ${path}:`, error)
+        }
+      }
     },
-    [processFiles]
+    [collectFilesFromEntry, selectedFolder]
   )
 
   // File input handler
