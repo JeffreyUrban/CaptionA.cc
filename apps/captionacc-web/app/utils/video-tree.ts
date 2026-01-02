@@ -36,7 +36,20 @@ export interface VideoNode {
 export function buildVideoTree(videos: VideoInfo[]): TreeNode[] {
   const root: Map<string, TreeNode> = new Map()
 
-  for (const video of videos) {
+  // Filter out malformed video paths (just folder names with no file)
+  // These are corrupted entries from old upload bugs
+  const validVideos = videos.filter(video => {
+    const segments = video.videoId.split('/')
+    if (segments.length < 2) {
+      console.warn(
+        `[buildVideoTree] Skipping malformed video path (no file name): ${video.videoId}`
+      )
+      return false
+    }
+    return true
+  })
+
+  for (const video of validVideos) {
     const segments = video.videoId.split('/')
     let currentLevel = root
     let parentFolder: FolderNode | null = null
@@ -73,7 +86,14 @@ export function buildVideoTree(videos: VideoInfo[]): TreeNode[] {
         currentLevel.set(segment, folderNode)
       }
 
-      const folderNode = currentLevel.get(segment) as FolderNode
+      const folderNode = currentLevel.get(segment)
+      if (!folderNode || folderNode.type !== 'folder') {
+        console.error(
+          `[buildVideoTree] Expected folder node for segment "${segment}", got:`,
+          folderNode
+        )
+        continue
+      }
 
       // Update parent's children array if needed
       if (parentFolder && !parentFolder.children.includes(folderNode)) {
