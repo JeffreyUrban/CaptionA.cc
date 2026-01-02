@@ -51,6 +51,9 @@ interface BoundaryControlsPanelProps {
   // Help
   onShowHelp: () => void
 
+  // Mode switching
+  onSwitchToText: () => void
+
   // Helper function
   getEffectiveState: (annotation: Annotation) => 'pending' | AnnotationState
 }
@@ -84,6 +87,7 @@ export function BoundaryControlsPanel({
   onNext,
   onDelete,
   onShowHelp,
+  onSwitchToText,
   getEffectiveState,
 }: BoundaryControlsPanelProps) {
   return (
@@ -93,7 +97,10 @@ export function BoundaryControlsPanel({
         <button className="flex-1 rounded py-2 text-sm font-semibold bg-teal-600 text-white">
           Boundaries
         </button>
-        <button className="flex-1 rounded py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800">
+        <button
+          onClick={onSwitchToText}
+          className="flex-1 rounded py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+        >
           Text Correction
         </button>
       </div>

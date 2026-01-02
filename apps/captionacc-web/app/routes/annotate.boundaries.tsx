@@ -1,4 +1,4 @@
-import { useSearchParams } from 'react-router'
+import { useSearchParams, useNavigate } from 'react-router'
 
 import { AppLayout } from '~/components/AppLayout'
 import { BoundaryControlsPanel } from '~/components/annotation/BoundaryControlsPanel'
@@ -17,9 +17,15 @@ export async function loader() {
 
 export default function BoundaryWorkflow() {
   const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
   const videoId = searchParams.get('videoId') ?? ''
 
   const workflow = useBoundaryWorkflowState({ videoId })
+
+  // Switch to text correction mode
+  const switchToText = () => {
+    void navigate(`/annotate/text?videoId=${encodeURIComponent(videoId)}`)
+  }
 
   // Loading state - wait for metadata AND initial position
   if (workflow.isLoadingMetadata || !workflow.isInitialized) {
@@ -94,6 +100,7 @@ export default function BoundaryWorkflow() {
             onNext={() => void workflow.navigateToAnnotation('next')}
             onDelete={() => void workflow.deleteAnnotation()}
             onShowHelp={() => workflow.setShowHelpModal(true)}
+            onSwitchToText={switchToText}
             getEffectiveState={getEffectiveState}
           />
         </div>
