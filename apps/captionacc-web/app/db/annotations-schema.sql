@@ -1,5 +1,6 @@
 -- Annotations database schema
 -- One database per video
+-- Schema version: 1
 
 CREATE TABLE IF NOT EXISTS captions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -40,6 +41,9 @@ CREATE TABLE IF NOT EXISTS full_frame_ocr (
     y REAL NOT NULL,
     width REAL NOT NULL,
     height REAL NOT NULL,
+
+    -- Temporal information
+    timestamp_seconds REAL,  -- Timestamp in video (frame_index / index_framerate_hz)
 
     -- Predictions (NULL = not yet calculated)
     predicted_label TEXT CHECK(predicted_label IN ('in', 'out')),
@@ -173,6 +177,7 @@ CREATE TABLE IF NOT EXISTS box_classification_model (
     prior_out REAL NOT NULL,
 
     -- Gaussian parameters for each feature (mean, std) per class
+    -- Base geometric features
     -- "in" class (caption boxes)
     in_vertical_alignment_mean REAL,
     in_vertical_alignment_std REAL,
@@ -204,6 +209,94 @@ CREATE TABLE IF NOT EXISTS box_classification_model (
     out_normalized_y_std REAL,
     out_normalized_area_mean REAL,
     out_normalized_area_std REAL,
+
+    -- Position features (normalized coordinates)
+    in_normalized_left_mean REAL,
+    in_normalized_left_std REAL,
+    in_normalized_top_mean REAL,
+    in_normalized_top_std REAL,
+    in_normalized_right_mean REAL,
+    in_normalized_right_std REAL,
+    in_normalized_bottom_mean REAL,
+    in_normalized_bottom_std REAL,
+
+    out_normalized_left_mean REAL,
+    out_normalized_left_std REAL,
+    out_normalized_top_mean REAL,
+    out_normalized_top_std REAL,
+    out_normalized_right_mean REAL,
+    out_normalized_right_std REAL,
+    out_normalized_bottom_mean REAL,
+    out_normalized_bottom_std REAL,
+
+    -- Temporal features
+    in_time_from_start_mean REAL,
+    in_time_from_start_std REAL,
+    in_time_from_end_mean REAL,
+    in_time_from_end_std REAL,
+
+    out_time_from_start_mean REAL,
+    out_time_from_start_std REAL,
+    out_time_from_end_mean REAL,
+    out_time_from_end_std REAL,
+
+    -- Character set features (language detection)
+    in_is_roman_mean REAL,
+    in_is_roman_std REAL,
+    in_is_hanzi_mean REAL,
+    in_is_hanzi_std REAL,
+    in_is_arabic_mean REAL,
+    in_is_arabic_std REAL,
+    in_is_korean_mean REAL,
+    in_is_korean_std REAL,
+    in_is_hiragana_mean REAL,
+    in_is_hiragana_std REAL,
+    in_is_katakana_mean REAL,
+    in_is_katakana_std REAL,
+    in_is_cyrillic_mean REAL,
+    in_is_cyrillic_std REAL,
+    in_is_devanagari_mean REAL,
+    in_is_devanagari_std REAL,
+    in_is_thai_mean REAL,
+    in_is_thai_std REAL,
+    in_is_digits_mean REAL,
+    in_is_digits_std REAL,
+    in_is_punctuation_mean REAL,
+    in_is_punctuation_std REAL,
+
+    out_is_roman_mean REAL,
+    out_is_roman_std REAL,
+    out_is_hanzi_mean REAL,
+    out_is_hanzi_std REAL,
+    out_is_arabic_mean REAL,
+    out_is_arabic_std REAL,
+    out_is_korean_mean REAL,
+    out_is_korean_std REAL,
+    out_is_hiragana_mean REAL,
+    out_is_hiragana_std REAL,
+    out_is_katakana_mean REAL,
+    out_is_katakana_std REAL,
+    out_is_cyrillic_mean REAL,
+    out_is_cyrillic_std REAL,
+    out_is_devanagari_mean REAL,
+    out_is_devanagari_std REAL,
+    out_is_thai_mean REAL,
+    out_is_thai_std REAL,
+    out_is_digits_mean REAL,
+    out_is_digits_std REAL,
+    out_is_punctuation_mean REAL,
+    out_is_punctuation_std REAL,
+
+    -- User annotation features
+    in_user_annotated_in_mean REAL,
+    in_user_annotated_in_std REAL,
+    in_user_annotated_out_mean REAL,
+    in_user_annotated_out_std REAL,
+
+    out_user_annotated_in_mean REAL,
+    out_user_annotated_in_std REAL,
+    out_user_annotated_out_mean REAL,
+    out_user_annotated_out_std REAL,
 
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -264,6 +357,7 @@ CREATE TABLE IF NOT EXISTS video_preferences (
     text_size REAL DEFAULT 3.0,  -- Text size as percentage of image width (1.0-10.0)
     padding_scale REAL DEFAULT 0.75,  -- Padding scale multiplier (0.0-2.0)
     text_anchor TEXT DEFAULT 'left' CHECK(text_anchor IN ('left', 'center', 'right')),  -- Text alignment
+    index_framerate_hz REAL DEFAULT 10.0,  -- Sampling rate for indexed frames (used for timestamp calculation)
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -374,3 +468,18 @@ BEGIN
     SET text_updated_at = datetime('now')
     WHERE id = NEW.id;
 END;
+
+-- Database metadata (schema versioning)
+-- Tracks schema version and verification state
+CREATE TABLE IF NOT EXISTS database_metadata (
+    id INTEGER PRIMARY KEY CHECK(id = 1),
+
+    -- Schema version tracking
+    schema_version INTEGER NOT NULL,
+    schema_checksum TEXT,              -- SHA256 of schema for verification
+
+    -- Lifecycle tracking
+    created_at TEXT NOT NULL,
+    migrated_at TEXT,                  -- When last migration applied
+    verified_at TEXT                   -- When schema last verified
+);

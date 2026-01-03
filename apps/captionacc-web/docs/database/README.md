@@ -46,7 +46,26 @@ local/data/
 - Missing `video_metadata` table = orphaned database
 - `SELECT COUNT(*) FROM video_metadata` should return 1
 
-**Migration Impact:** Migrations must check table existence before attempting modifications.
+**Strategy:** Repair incomplete databases rather than delete (partial recovery better than total loss). See [migrations.md](./migrations.md) for repair tool.
+
+## Database Administration
+
+**Tool:** Admin dashboard at `/admin/databases`
+
+**Features:**
+
+- View version distribution across all databases
+- Health summary (current, outdated, incomplete, unversioned)
+- Filter databases by version, status, or search
+- Inspect individual database schema
+
+**API endpoints:**
+
+- `GET /api/admin/databases/status` - Summary statistics
+- `GET /api/admin/databases/list` - Detailed list with filters
+- `GET /api/admin/databases/:videoId/schema` - Schema inspection
+
+**See:** [admin-roadmap.md](./admin-roadmap.md) for Phase 2+ features (background jobs, caching)
 
 ## File Locations
 
@@ -55,3 +74,4 @@ local/data/
 - Migration runner: `app/db/migrate.ts`
 - Database utilities: `app/utils/database.ts`
 - Video path resolution: `app/utils/video-paths.ts`
+- Admin service: `app/services/database-admin-service.ts`

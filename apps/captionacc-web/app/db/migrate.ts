@@ -7,6 +7,12 @@
 import Database from 'better-sqlite3'
 
 /**
+ * Current schema version
+ * Must match version in annotations-schema.sql
+ */
+export const CURRENT_SCHEMA_VERSION = 1
+
+/**
  * Check if a column exists in a table
  */
 export function columnExists(
@@ -34,6 +40,6 @@ export function tableExists(db: Database.Database, tableName: string): boolean {
  * Currently no migrations - all databases must match current schema.
  * Future migrations will be added here.
  */
-export function migrateDatabase(dbPath: string): void {
+export function migrateDatabase(_dbPath: string): void {
   // No migrations currently
 }

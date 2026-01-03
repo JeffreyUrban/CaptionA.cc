@@ -25,9 +25,9 @@ CREATE TABLE IF NOT EXISTS database_metadata (
 
 **Schema version semantics:**
 
-- Version 9 = migrations 001-009 applied
-- Version 0 = new/uninitialized database
-- Current version defined in code (e.g., `const CURRENT_SCHEMA_VERSION = 9`)
+- Version 1 = current standardized schema (all actively-used features)
+- Version 0 = uninitialized database
+- Current version defined in code: `const CURRENT_SCHEMA_VERSION = 1`
 
 ## Migration Pattern
 
@@ -101,10 +101,10 @@ async function migrateAllDatabases() {
 
 ```
 1. Restore backup from storage
-2. Check version: SELECT schema_version FROM database_metadata → 5
-3. Current version: 9
-4. Migration runner applies migrations 006-009
-5. Database updated to version 9
+2. Check version: SELECT schema_version FROM database_metadata → 0
+3. Current version: 1
+4. Migration runner applies migration to version 1
+5. Database updated to version 1
 ```
 
 ### Add New Video
@@ -115,7 +115,7 @@ INSERT INTO database_metadata (
     schema_version,
     created_at,
     verified_at
-) VALUES (9, datetime('now'), datetime('now'));
+) VALUES (1, datetime('now'), datetime('now'));
 ```
 
 ### Delete Video
@@ -185,7 +185,7 @@ npx tsx scripts/migrate-all-databases.ts
 
 # Output:
 # Scanning databases...
-# Current (v9): 350 databases ✓
+# Current (v1): 350 databases ✓
 # Needs migration: 24 databases
 # [1/24] Migrating {hash}/{uuid}... ✓
 # [2/24] Migrating {hash}/{uuid}... ✓
@@ -201,8 +201,8 @@ npx tsx scripts/check-database-health.ts
 
 # Output:
 # Database Version Report:
-#   Version 9: 374 databases ✓
-#   Version 8: 0 databases
+#   Version 1: 374 databases ✓
+#   Version 0: 0 databases
 #   Incomplete: 0 databases
 ```
 
