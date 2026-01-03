@@ -1,6 +1,6 @@
 -- Annotations database schema
 -- One database per video
--- Schema version: 1
+-- Schema version: 0 (legacy, for testing)
 
 CREATE TABLE IF NOT EXISTS captions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -482,4 +482,10 @@ CREATE TABLE IF NOT EXISTS database_metadata (
     created_at TEXT NOT NULL,
     migrated_at TEXT,                  -- When last migration applied
     verified_at TEXT                   -- When schema last verified
+);
+-- 
+-- Legacy table for v0 testing (removed in v1)
+CREATE TABLE IF NOT EXISTS schema_v0_legacy (
+    id INTEGER PRIMARY KEY,
+    note TEXT NOT NULL DEFAULT 'This table exists only in v0 for testing version migration'
 );
