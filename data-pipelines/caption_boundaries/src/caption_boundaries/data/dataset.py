@@ -5,18 +5,16 @@ Loads frame pairs, OCR visualizations, and metadata for training the boundary pr
 
 import sqlite3
 import subprocess
-from collections import OrderedDict
 from pathlib import Path
 from typing import Literal
 
 import numpy as np
 import torch
-from frames_db import get_frame_from_db
 from PIL import Image
 from torch.utils.data import Dataset
 
 from caption_boundaries.data.transforms import AnchorAwareResize, NormalizeImageNet, ResizeStrategy
-from caption_boundaries.database import FontEmbedding, TrainingDataset, TrainingSample, get_dataset_db
+from caption_boundaries.database import FontEmbedding, TrainingDataset, TrainingSample
 
 
 def get_git_root() -> Path:
@@ -96,6 +94,7 @@ class CaptionBoundaryDataset(Dataset):
         # Create persistent database session for data loading
         # This avoids opening a new connection for every sample
         from caption_boundaries.database import create_dataset_session
+
         self._db_session = create_dataset_session(dataset_db_path)
 
         # Load samples from database
@@ -115,7 +114,7 @@ class CaptionBoundaryDataset(Dataset):
 
     def __del__(self):
         """Clean up database session when dataset is destroyed."""
-        if hasattr(self, '_db_session'):
+        if hasattr(self, "_db_session"):
             self._db_session.close()
 
     def _load_samples(self) -> list[TrainingSample]:
@@ -133,16 +132,10 @@ class CaptionBoundaryDataset(Dataset):
             raise ValueError(f"No dataset found in {self.dataset_db_path}")
 
         # Load samples for this split
-        samples = (
-            self._db_session.query(TrainingSample)
-            .filter(TrainingSample.split == self.split)
-            .all()
-        )
+        samples = self._db_session.query(TrainingSample).filter(TrainingSample.split == self.split).all()
 
         if not samples:
-            raise ValueError(
-                f"No {self.split} samples found in dataset '{dataset.name}'"
-            )
+            raise ValueError(f"No {self.split} samples found in dataset '{dataset.name}'")
 
         # Detach from session (make transient)
         for sample in samples:
@@ -231,21 +224,17 @@ class CaptionBoundaryDataset(Dataset):
             ValueError: If frame not found in database
         """
         from io import BytesIO
+
         from caption_boundaries.database import TrainingFrame
 
         frame = (
             self._db_session.query(TrainingFrame)
-            .filter(
-                TrainingFrame.video_hash == video_hash,
-                TrainingFrame.frame_index == frame_index
-            )
+            .filter(TrainingFrame.video_hash == video_hash, TrainingFrame.frame_index == frame_index)
             .first()
         )
 
         if not frame:
-            raise ValueError(
-                f"Frame {frame_index} for video {video_hash[:8]}... not found in dataset"
-            )
+            raise ValueError(f"Frame {frame_index} for video {video_hash[:8]}... not found in dataset")
 
         return Image.open(BytesIO(frame.image_data))
 
@@ -262,6 +251,7 @@ class CaptionBoundaryDataset(Dataset):
             ValueError: If OCR visualization not found in database
         """
         from io import BytesIO
+
         from caption_boundaries.database import TrainingOCRVisualization
 
         ocr_viz = (
@@ -271,11 +261,10 @@ class CaptionBoundaryDataset(Dataset):
         )
 
         if not ocr_viz:
-            raise ValueError(
-                f"OCR visualization for video {video_hash[:8]}... not found in dataset"
-            )
+            raise ValueError(f"OCR visualization for video {video_hash[:8]}... not found in dataset")
 
-        return Image.open(BytesIO(ocr_viz.image_data))
+        img = Image.open(BytesIO(ocr_viz.image_data))
+        return img.convert("RGB")  # Ensure RGB, remove alpha channel if present
 
     def _get_font_embedding(self, video_hash: str) -> np.ndarray:
         """Get font embedding from dataset database.
@@ -292,16 +281,10 @@ class CaptionBoundaryDataset(Dataset):
         if video_hash in self._font_embedding_cache:
             return self._font_embedding_cache[video_hash]
 
-        embedding_record = (
-            self._db_session.query(FontEmbedding)
-            .filter(FontEmbedding.video_hash == video_hash)
-            .first()
-        )
+        embedding_record = self._db_session.query(FontEmbedding).filter(FontEmbedding.video_hash == video_hash).first()
 
         if not embedding_record:
-            raise ValueError(
-                f"Font embedding for video {video_hash[:8]}... not found in dataset"
-            )
+            raise ValueError(f"Font embedding for video {video_hash[:8]}... not found in dataset")
 
         # Convert bytes to numpy array
         embedding = np.frombuffer(embedding_record.embedding, dtype=np.float32)
@@ -380,6 +363,7 @@ class CaptionBoundaryDataset(Dataset):
 
 # Helper functions for inference
 
+
 def _get_video_metadata(video_db_path: Path) -> dict:
     """Get video metadata from annotations database.
 
@@ -389,7 +373,6 @@ def _get_video_metadata(video_db_path: Path) -> dict:
     Returns:
         Dict with video metadata
     """
-    import sqlite3
 
     conn = sqlite3.connect(video_db_path)
     cursor = conn.cursor()
@@ -416,7 +399,6 @@ def _get_spatial_features(video_db_path: Path, frame1_index: int, frame2_index: 
     Returns:
         List of spatial features (anchor type encoding, position, size)
     """
-    import sqlite3
 
     conn = sqlite3.connect(video_db_path)
     cursor = conn.cursor()
