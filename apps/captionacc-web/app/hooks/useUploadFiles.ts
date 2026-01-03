@@ -158,8 +158,10 @@ export function useUploadFiles(uploading: boolean): UseUploadFilesResult {
       if (enabled && collapsesAvailable) {
         // Re-apply collapse
         console.log('[handleCollapseToggle] Applying collapse...')
-        await collapseSingleVideoFolders(videoFiles, false)
-        setVideoFiles([...videoFiles]) // Trigger re-render
+        setVideoFiles(prev => {
+          void collapseSingleVideoFolders(prev, false)
+          return [...prev] // Return new array to trigger re-render
+        })
       } else {
         // Restore original paths
         console.log('[handleCollapseToggle] Restoring original paths...')
@@ -171,7 +173,7 @@ export function useUploadFiles(uploading: boolean): UseUploadFilesResult {
         )
       }
     },
-    [collapsesAvailable, videoFiles]
+    [collapsesAvailable]
   )
 
   /**

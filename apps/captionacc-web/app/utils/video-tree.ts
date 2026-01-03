@@ -36,7 +36,16 @@ export interface VideoNode {
 export function buildVideoTree(videos: VideoInfo[]): TreeNode[] {
   const root: Map<string, TreeNode> = new Map()
 
-  for (const video of videos) {
+  // Filter out empty video paths (shouldn't happen, but be defensive)
+  const validVideos = videos.filter(video => {
+    if (!video.videoId || video.videoId.trim() === '') {
+      console.warn(`[buildVideoTree] Skipping empty video path`)
+      return false
+    }
+    return true
+  })
+
+  for (const video of validVideos) {
     const segments = video.videoId.split('/')
     let currentLevel = root
     let parentFolder: FolderNode | null = null
@@ -73,7 +82,14 @@ export function buildVideoTree(videos: VideoInfo[]): TreeNode[] {
         currentLevel.set(segment, folderNode)
       }
 
-      const folderNode = currentLevel.get(segment) as FolderNode
+      const folderNode = currentLevel.get(segment)
+      if (!folderNode || folderNode.type !== 'folder') {
+        console.error(
+          `[buildVideoTree] Expected folder node for segment "${segment}", got:`,
+          folderNode
+        )
+        continue
+      }
 
       // Update parent's children array if needed
       if (parentFolder && !parentFolder.children.includes(folderNode)) {

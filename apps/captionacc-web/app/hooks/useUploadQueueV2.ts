@@ -23,6 +23,7 @@ interface UseUploadQueueV2Result {
   startUpload: () => void
   handleStopQueued: () => void
   handleAbortAll: () => void
+  resetUploadState: () => void
 }
 
 /**
@@ -45,43 +46,180 @@ export function useUploadQueueV2(
   // Track which videoFiles have been started in UploadManager
   const uploadIdMapRef = useRef<Map<string, string>>(new Map()) // relativePath -> uploadId
 
-  // Subscribe to upload progress from store
-  const uploads = useAppStore(state => state.uploads)
+  /**
+   * On mount, clean up stale/corrupted uploads and restore valid pending duplicates
+   */
+  useEffect(() => {
+    const store = useAppStore.getState()
+    const currentUploads = store.uploads
+    const now = Date.now()
+    const ONE_WEEK = 7 * 24 * 60 * 60 * 1000
+
+    // Clean up stale/corrupted uploads
+    const uploadsToRemove: string[] = []
+    Object.values(currentUploads).forEach(upload => {
+      // Remove uploads older than 1 week
+      if (now - upload.createdAt > ONE_WEEK) {
+        console.log(
+          `[useUploadQueueV2] Removing stale upload (>1 week old): ${upload.relativePath}`
+        )
+        uploadsToRemove.push(upload.id)
+        return
+      }
+
+      // Remove corrupted duplicates (missing required fields)
+      if (upload.isDuplicate && (!upload.videoId || !upload.duplicateOfVideoId)) {
+        console.log(
+          `[useUploadQueueV2] Removing corrupted duplicate (missing IDs): ${upload.relativePath}`
+        )
+        uploadsToRemove.push(upload.id)
+        return
+      }
+
+      // Remove failed/cancelled uploads (no need to keep them)
+      if (upload.status === 'failed' || upload.status === 'cancelled') {
+        console.log(`[useUploadQueueV2] Removing ${upload.status} upload: ${upload.relativePath}`)
+        uploadsToRemove.push(upload.id)
+        return
+      }
+    })
+
+    // Clean up the identified uploads
+    uploadsToRemove.forEach(id => store.removeUpload(id))
+
+    if (uploadsToRemove.length > 0) {
+      console.log(`[useUploadQueueV2] Cleaned up ${uploadsToRemove.length} stale/corrupted uploads`)
+    }
+
+    // Restore valid pending duplicates
+    const uploadsWithDuplicates = Object.values(store.uploads).filter(
+      upload => upload.status === 'completed' && upload.isDuplicate && upload.videoId
+    )
+
+    if (uploadsWithDuplicates.length > 0) {
+      console.log(
+        '[useUploadQueueV2] Restoring',
+        uploadsWithDuplicates.length,
+        'valid pending duplicates'
+      )
+
+      setVideoFiles(prev => {
+        // Create VideoFilePreview entries for uploads not already in the array
+        const existingPaths = new Set(prev.map(v => v.relativePath))
+        const newFiles: VideoFilePreview[] = uploadsWithDuplicates
+          .filter(upload => !existingPaths.has(upload.relativePath))
+          .map(upload => ({
+            file: new File([], upload.fileName, { type: upload.fileType }),
+            relativePath: upload.relativePath,
+            size: upload.fileSize,
+            type: upload.fileType,
+            selected: true,
+            uploadProgress: 100,
+            uploadStatus: 'complete',
+            uploadId: upload.id,
+            uploadUrl: upload.uploadUrl ?? undefined,
+            videoId: upload.videoId ?? undefined,
+            pendingDuplicateResolution: true,
+            duplicateOfVideoId: upload.duplicateOfVideoId ?? undefined,
+            duplicateOfDisplayPath: upload.duplicateOfDisplayPath ?? undefined,
+          }))
+
+        console.log(
+          '[useUploadQueueV2] Adding',
+          newFiles.length,
+          'valid duplicates (skipped',
+          uploadsWithDuplicates.length - newFiles.length,
+          'already present)'
+        )
+        return [...prev, ...newFiles]
+      })
+
+      // Map uploadIds
+      uploadsWithDuplicates.forEach(upload => {
+        uploadIdMapRef.current.set(upload.relativePath, upload.id)
+      })
+    }
+  }, []) // Run once on mount
 
   /**
    * Sync upload progress from store back to videoFiles array
+   * Uses polling instead of store subscription to avoid infinite loops
    */
   useEffect(() => {
-    if (uploadIdMapRef.current.size === 0) return
+    // Only poll when uploads are active
+    if (!uploading) return
 
-    setVideoFiles(prev =>
-      prev.map(videoFile => {
-        const uploadId = uploadIdMapRef.current.get(videoFile.relativePath)
-        if (!uploadId) return videoFile
+    const syncProgress = () => {
+      // Skip if no uploads tracked yet (async startUpload calls may not have completed)
+      if (uploadIdMapRef.current.size === 0) return
 
-        const uploadState = uploads[uploadId]
-        if (!uploadState) return videoFile
+      const currentUploads = useAppStore.getState().uploads
 
-        // Map store state to VideoFilePreview state
-        return {
-          ...videoFile,
-          uploadProgress: uploadState.progress,
-          uploadStatus:
-            uploadState.status === 'completed'
-              ? ('complete' as const)
-              : uploadState.status === 'failed'
-                ? ('error' as const)
-                : uploadState.status === 'cancelled'
+      setVideoFiles(prev =>
+        prev.map(videoFile => {
+          const uploadId = uploadIdMapRef.current.get(videoFile.relativePath)
+          if (!uploadId) return videoFile
+
+          const uploadState = currentUploads[uploadId]
+          if (!uploadState) return videoFile
+
+          // Map store state to VideoFilePreview state
+          return {
+            ...videoFile,
+            uploadProgress: uploadState.progress,
+            uploadStatus:
+              uploadState.status === 'completed'
+                ? ('complete' as const)
+                : uploadState.status === 'failed'
                   ? ('error' as const)
-                  : uploadState.status === 'uploading'
-                    ? ('uploading' as const)
-                    : ('pending' as const),
-          error: uploadState.error ?? undefined,
-          uploadUrl: uploadState.uploadUrl ?? undefined,
-        }
-      })
-    )
-  }, [uploads, setVideoFiles])
+                  : uploadState.status === 'cancelled'
+                    ? ('error' as const)
+                    : uploadState.status === 'uploading'
+                      ? ('uploading' as const)
+                      : ('pending' as const),
+            error: uploadState.error ?? undefined,
+            uploadUrl: uploadState.uploadUrl ?? undefined,
+            videoId: uploadState.videoId ?? undefined,
+            // Include duplicate info from upload manager
+            pendingDuplicateResolution: uploadState.isDuplicate,
+            duplicateOfVideoId: uploadState.duplicateOfVideoId ?? undefined,
+            duplicateOfDisplayPath: uploadState.duplicateOfDisplayPath ?? undefined,
+          }
+        })
+      )
+    }
+
+    // Poll every 100ms while uploads are active
+    const interval = setInterval(syncProgress, 100)
+    return () => clearInterval(interval)
+  }, [uploading])
+
+  /**
+   * Clean up uploadIdMapRef when uploads are removed from store
+   * This prevents stale references to deleted uploads
+   */
+  useEffect(() => {
+    const currentUploads = useAppStore.getState().uploads
+
+    // Remove mappings for uploads that no longer exist in store
+    const keysToDelete: string[] = []
+    uploadIdMapRef.current.forEach((uploadId, relativePath) => {
+      if (!currentUploads[uploadId]) {
+        keysToDelete.push(relativePath)
+      }
+    })
+
+    keysToDelete.forEach(key => {
+      console.log(`[useUploadQueueV2] Cleaning up stale mapping: ${key}`)
+      uploadIdMapRef.current.delete(key)
+    })
+
+    // If all uploads are removed and we're still in uploading state, stop uploading
+    if (uploading && uploadIdMapRef.current.size === 0) {
+      console.log('[useUploadQueueV2] All uploads removed, stopping upload state')
+      setUploading(false)
+    }
+  }, [videoFiles, uploading])
 
   /**
    * Start upload process for all selected files
@@ -130,27 +268,71 @@ export function useUploadQueueV2(
 
   /**
    * Monitor upload completion
+   * Uses polling to check completion status instead of store subscription
    */
   useEffect(() => {
-    if (!uploading) return
-    if (uploadIdMapRef.current.size === 0) return
+    if (!uploading || uploadIdMapRef.current.size === 0) return
 
-    // Check if all tracked uploads are complete
-    const allComplete = Array.from(uploadIdMapRef.current.values()).every(uploadId => {
-      const uploadState = uploads[uploadId]
-      return (
-        uploadState &&
-        (uploadState.status === 'completed' ||
+    const checkCompletion = () => {
+      const currentUploads = useAppStore.getState().uploads
+
+      // Check if all tracked uploads are complete
+      const allComplete = Array.from(uploadIdMapRef.current.values()).every(uploadId => {
+        const uploadState = currentUploads[uploadId]
+        // If upload was removed from store (e.g., duplicate resolution), consider it done
+        if (!uploadState) return true
+        return (
+          uploadState.status === 'completed' ||
           uploadState.status === 'failed' ||
-          uploadState.status === 'cancelled')
-      )
-    })
+          uploadState.status === 'cancelled'
+        )
+      })
 
-    if (allComplete) {
-      console.log('[useUploadQueueV2] All uploads complete')
-      setUploading(false)
+      if (allComplete) {
+        console.log('[useUploadQueueV2] All uploads complete')
+
+        // Do one final sync to ensure completion status reaches the UI
+        setVideoFiles(prev =>
+          prev.map(videoFile => {
+            const uploadId = uploadIdMapRef.current.get(videoFile.relativePath)
+            if (!uploadId) return videoFile
+
+            const uploadState = currentUploads[uploadId]
+            if (!uploadState) return videoFile
+
+            // Map store state to VideoFilePreview state
+            return {
+              ...videoFile,
+              uploadProgress: uploadState.progress,
+              uploadStatus:
+                uploadState.status === 'completed'
+                  ? ('complete' as const)
+                  : uploadState.status === 'failed'
+                    ? ('error' as const)
+                    : uploadState.status === 'cancelled'
+                      ? ('error' as const)
+                      : uploadState.status === 'uploading'
+                        ? ('uploading' as const)
+                        : ('pending' as const),
+              error: uploadState.error ?? undefined,
+              uploadUrl: uploadState.uploadUrl ?? undefined,
+              videoId: uploadState.videoId ?? undefined,
+              // Include duplicate info from upload manager
+              pendingDuplicateResolution: uploadState.isDuplicate,
+              duplicateOfVideoId: uploadState.duplicateOfVideoId ?? undefined,
+              duplicateOfDisplayPath: uploadState.duplicateOfDisplayPath ?? undefined,
+            }
+          })
+        )
+
+        setUploading(false)
+      }
     }
-  }, [uploads, uploading])
+
+    // Check every second
+    const interval = setInterval(checkCompletion, 1000)
+    return () => clearInterval(interval)
+  }, [uploading])
 
   /**
    * Stop queued uploads (keep active ones running)
@@ -158,16 +340,18 @@ export function useUploadQueueV2(
   const handleStopQueued = useCallback(() => {
     console.log('[useUploadQueueV2] Stopping queued uploads...')
 
+    const currentUploads = useAppStore.getState().uploads
+
     // Cancel uploads that are still pending
     uploadIdMapRef.current.forEach((uploadId, _relativePath) => {
-      const uploadState = uploads[uploadId]
+      const uploadState = currentUploads[uploadId]
       if (uploadState?.status === 'pending') {
         void uploadManager.cancelUpload(uploadId)
       }
     })
 
     setShowStopQueuedModal(false)
-  }, [uploads])
+  }, [])
 
   /**
    * Abort all uploads including active ones
@@ -203,6 +387,15 @@ export function useUploadQueueV2(
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
   }, [uploading])
 
+  /**
+   * Reset upload state (called when clicking "Upload More Videos")
+   */
+  const resetUploadState = useCallback(() => {
+    console.log('[useUploadQueueV2] Resetting upload state')
+    setUploading(false)
+    uploadIdMapRef.current.clear()
+  }, [])
+
   return {
     uploading,
     showStopQueuedModal,
@@ -212,5 +405,6 @@ export function useUploadQueueV2(
     startUpload,
     handleStopQueued,
     handleAbortAll,
+    resetUploadState,
   }
 }

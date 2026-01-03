@@ -23,6 +23,7 @@ import {
   DeleteVideoModal,
   ErrorDetailsModal,
   MoveItemModal,
+  ErrorAlertModal,
 } from '~/components/videos/VideoModals'
 import { TableHeader, TreeRow, EmptyState } from '~/components/videos/VideoTable'
 import { useFolderOperations } from '~/hooks/useFolderOperations'
@@ -276,6 +277,8 @@ export default function VideosPage() {
   const {
     draggedItem,
     dragOverFolder,
+    dragDropErrorModal,
+    closeDragDropErrorModal,
     handleDragStart,
     handleDragEnd,
     handleDragOver,
@@ -510,6 +513,13 @@ export default function VideosPage() {
           error={moveError}
           loading={moveLoading}
           onSubmit={() => void handleMove()}
+        />
+
+        <ErrorAlertModal
+          open={dragDropErrorModal.open}
+          title={dragDropErrorModal.title}
+          message={dragDropErrorModal.message}
+          onClose={closeDragDropErrorModal}
         />
       </div>
     </AppLayout>

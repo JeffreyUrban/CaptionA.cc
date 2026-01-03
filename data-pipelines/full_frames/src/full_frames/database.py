@@ -195,7 +195,7 @@ def process_frames_to_database(
     from ocr_utils import process_frame_ocr_with_retry
 
     # Ensure table exists using shared function
-    ensure_ocr_table(db_path, table_name="full_frame_ocr", include_crop_version=False)
+    ensure_ocr_table(db_path, table_name="full_frame_ocr")
 
     # Find all frame images
     frame_files = sorted(frames_dir.glob("frame_*.jpg"))
@@ -225,7 +225,6 @@ def process_frames_to_database(
                     ocr_result=ocr_result,
                     db_path=db_path,
                     table_name="full_frame_ocr",
-                    crop_bounds_version=None,  # full_frame_ocr doesn't use crop_bounds_version
                 )
                 total_boxes += boxes_inserted
 
