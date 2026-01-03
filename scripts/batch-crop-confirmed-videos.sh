@@ -24,8 +24,8 @@ echo ""
 videos_processed=0
 
 for db in $(find "$DATA_DIR" -name "annotations.db" | sort); do
-    # Check if video has enough confirmed boundaries
-    confirmed=$(sqlite3 "$db" "SELECT COUNT(*) FROM captions WHERE boundary_state = 'confirmed' AND boundary_pending = 0" 2>/dev/null || echo "0")
+    # Check if video has enough confirmed boundaries (exclude 'issue' state - not clean boundaries)
+    confirmed=$(sqlite3 "$db" "SELECT COUNT(*) FROM captions WHERE boundary_state = 'confirmed' AND boundary_state != 'issue' AND boundary_pending = 0" 2>/dev/null || echo "0")
 
     if [ "$confirmed" -lt "$MIN_CONFIRMED" ]; then
         continue

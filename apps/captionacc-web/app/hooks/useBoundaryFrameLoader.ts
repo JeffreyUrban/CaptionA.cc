@@ -240,7 +240,7 @@ export function useBoundaryFrameLoader({
       try {
         // If jumping, load exact frames around jump target FIRST, then navigate
         if (isJump && jumpTarget !== null && !isNaN(jumpTarget) && jumpTarget >= 0) {
-          jumpRequestedRef.current = false // Clear flag after reading
+          // Don't clear flag yet - wait until jump completes
 
           let finestQueue = buildQueueForModulo(
             jumpTarget, // Load around target, not current position
@@ -275,6 +275,7 @@ export function useBoundaryFrameLoader({
           // All exact frames loaded - NOW jump to target
           currentFrameIndexRef.current = jumpTarget
           jumpTargetRef.current = null // Clear pending jump
+          jumpRequestedRef.current = false // Clear jump flag
           lastLoadedFrame = jumpTarget // Update tracking
         } else if (isJump) {
           // Invalid jump target - clear flags and warn

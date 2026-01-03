@@ -1,8 +1,7 @@
 import { CaptionTextForm } from '~/components/annotation/CaptionTextForm'
 import { CombinedImageDisplay } from '~/components/annotation/CombinedImageDisplay'
 import { FrameViewer } from '~/components/annotation/FrameViewer'
-import { PerFrameOCRDisplay } from '~/components/annotation/PerFrameOCRDisplay'
-import type { AnnotationData, PerFrameOCRItem, TextStyle } from '~/types/text-annotation'
+import type { AnnotationData, TextStyle } from '~/types/text-annotation'
 
 interface TextAnnotationContentPanelProps {
   videoId: string
@@ -13,10 +12,6 @@ interface TextAnnotationContentPanelProps {
   currentFrameIndex: number
   onMouseDown: (e: React.MouseEvent) => void
   imageContainerRef: (node: HTMLDivElement | null) => (() => void) | undefined
-
-  // Per-frame OCR
-  perFrameOCR: PerFrameOCRItem[]
-  loadingFrames: boolean
 
   // Text state
   text: string
@@ -35,8 +30,6 @@ export function TextAnnotationContentPanel({
   currentFrameIndex,
   onMouseDown,
   imageContainerRef,
-  perFrameOCR,
-  loadingFrames,
   text,
   onTextChange,
   textStyle,
@@ -63,21 +56,12 @@ export function TextAnnotationContentPanel({
           imageContainerRef={imageContainerRef}
           onMouseDown={onMouseDown}
         />
-
-        {/* Per-frame OCR text */}
-        <PerFrameOCRDisplay
-          currentFrameIndex={currentFrameIndex}
-          perFrameOCR={perFrameOCR}
-          loadingFrames={loadingFrames}
-          textStyle={textStyle}
-          onTextSelect={onTextChange}
-        />
       </div>
 
       {/* Caption Text Editor */}
       <CaptionTextForm text={text} onChange={onTextChange} textStyle={textStyle} />
 
-      {/* Combined Frames: Image and OCR */}
+      {/* Combined Frames: Image */}
       <CombinedImageDisplay
         annotation={currentAnnotation.annotation}
         combinedImageUrl={currentAnnotation.combinedImageUrl}

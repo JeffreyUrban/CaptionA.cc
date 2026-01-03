@@ -30,7 +30,7 @@ export async function action({ params }: ActionFunctionArgs) {
   const videoId = videoIdResult.value
 
   try {
-    const result = resetCropBounds(videoId)
+    const result = await resetCropBounds(videoId)
 
     return jsonResponse({
       success: true,

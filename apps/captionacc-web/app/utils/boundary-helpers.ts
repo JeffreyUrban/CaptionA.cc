@@ -6,9 +6,10 @@
 import type { Annotation, AnnotationState } from '~/types/boundaries'
 
 // Opacity calculation constants
-// Uses exponential decay to smoothly fade frames as they get farther from current
+// Uses parabolic (quadratic) decay to keep frames bright in middle, fade only at ends
 const MIN_OPACITY = 0.1
-const OPACITY_DECAY_RATE = 0.12
+const FADE_THRESHOLD = 5 // frames stay at full opacity within this distance
+const QUADRATIC_FACTOR = 0.04 // controls steepness of parabolic fade
 
 /**
  * Get the effective state of an annotation, considering the pending flag.
@@ -32,22 +33,31 @@ export function getAnnotationBorderColor(annotation: Annotation): string {
       return 'border-teal-500'
     case 'gap':
       return ''
+    case 'issue':
+      return 'border-purple-700'
   }
 }
 
 /**
  * Calculate opacity for a frame based on distance from current frame.
- * Uses exponential decay: opacity = max(MIN_OPACITY, e^(-DECAY_RATE * distance))
+ * Uses parabolic decay: stays bright in the middle, fades quadratically at the ends.
+ * opacity = 1 / (1 + k * distance^2) for distance > threshold
  */
 export function calculateFrameOpacity(
   frameIndex: number,
   currentFrameIndex: number,
-  decayRate: number = OPACITY_DECAY_RATE,
+  fadeThreshold: number = FADE_THRESHOLD,
   minOpacity: number = MIN_OPACITY
 ): number {
   const distance = Math.abs(frameIndex - currentFrameIndex)
-  if (distance === 0) return 1.0
-  const opacity = Math.exp(-decayRate * distance)
+
+  // Keep frames at full opacity within threshold
+  if (distance <= fadeThreshold) return 1.0
+
+  // Apply parabolic (inverse quadratic) decay beyond threshold
+  const effectiveDistance = distance - fadeThreshold
+  const opacity = 1 / (1 + QUADRATIC_FACTOR * effectiveDistance * effectiveDistance)
+
   return Math.max(minOpacity, opacity)
 }
 

@@ -7,10 +7,9 @@ import { BoundaryActionButtons } from './BoundaryActionButtons'
 import { BoundaryAnnotationInfo } from './BoundaryAnnotationInfo'
 import { BoundaryMarkingControls } from './BoundaryMarkingControls'
 import { BoundaryShortcutsPanel } from './BoundaryShortcutsPanel'
-import { BoundarySpacingControl } from './BoundarySpacingControl'
 import { BoundaryVideoInfo } from './BoundaryVideoInfo'
 
-import type { Annotation, AnnotationState, FrameSpacing } from '~/types/boundaries'
+import type { Annotation, AnnotationState } from '~/types/boundaries'
 
 interface BoundaryControlsPanelProps {
   // Video info
@@ -23,10 +22,6 @@ interface BoundaryControlsPanelProps {
   onJumpInputChange: (value: string) => void
   onJump: () => void
   onActivateCurrentFrame: () => void
-
-  // Frame spacing
-  frameSpacing: FrameSpacing
-  onFrameSpacingChange: (spacing: FrameSpacing) => void
 
   // Marking controls
   markedStart: number | null
@@ -47,9 +42,13 @@ interface BoundaryControlsPanelProps {
   onPrevious: () => void
   onNext: () => void
   onDelete: () => void
+  onMarkAsIssue: () => void
 
   // Help
   onShowHelp: () => void
+
+  // Mode switching
+  onSwitchToText: () => void
 
   // Helper function
   getEffectiveState: (annotation: Annotation) => 'pending' | AnnotationState
@@ -65,8 +64,6 @@ export function BoundaryControlsPanel({
   onJumpInputChange,
   onJump,
   onActivateCurrentFrame,
-  frameSpacing,
-  onFrameSpacingChange,
   markedStart,
   markedEnd,
   onJumpToStart,
@@ -83,7 +80,9 @@ export function BoundaryControlsPanel({
   onPrevious,
   onNext,
   onDelete,
+  onMarkAsIssue,
   onShowHelp,
+  onSwitchToText,
   getEffectiveState,
 }: BoundaryControlsPanelProps) {
   return (
@@ -93,7 +92,10 @@ export function BoundaryControlsPanel({
         <button className="flex-1 rounded py-2 text-sm font-semibold bg-teal-600 text-white">
           Boundaries
         </button>
-        <button className="flex-1 rounded py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800">
+        <button
+          onClick={onSwitchToText}
+          className="flex-1 rounded py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+        >
           Text Correction
         </button>
       </div>
@@ -110,9 +112,6 @@ export function BoundaryControlsPanel({
         onJump={onJump}
         onActivateCurrentFrame={onActivateCurrentFrame}
       />
-
-      {/* Frame spacing */}
-      <BoundarySpacingControl frameSpacing={frameSpacing} onChange={onFrameSpacingChange} />
 
       {/* Boundaries */}
       <BoundaryMarkingControls
@@ -145,6 +144,7 @@ export function BoundaryControlsPanel({
             onPrevious={onPrevious}
             onNext={onNext}
             onDelete={onDelete}
+            onMarkAsIssue={onMarkAsIssue}
           />
         </div>
       )}

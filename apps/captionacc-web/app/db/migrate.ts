@@ -137,10 +137,130 @@ export function migrateDropCroppedFrameOCR(dbPath: string): boolean {
 }
 
 /**
+ * Apply migration 004: Add ocr_visualization_image to video_layout_config
+ */
+export function migrateOCRVisualizationImage(dbPath: string): boolean {
+  const db = new Database(dbPath)
+  try {
+    // Check if migration is needed
+    if (columnExists(db, 'video_layout_config', 'ocr_visualization_image')) {
+      // Already migrated
+      return false
+    }
+
+    console.log(`[Migration] Applying ocr_visualization_image migration to ${dbPath}`)
+
+    // Read migration SQL
+    const migrationPath = resolve(__dirname, 'migrations', '004_add_ocr_visualization_image.sql')
+    const migrationSQL = readFileSync(migrationPath, 'utf-8')
+
+    // Split by semicolon and execute each statement
+    const statements = migrationSQL
+      .split(';')
+      .map(s => s.trim())
+      .filter(s => s.length > 0 && !s.startsWith('--'))
+
+    for (const statement of statements) {
+      db.prepare(statement).run()
+    }
+
+    console.log(`[Migration] Successfully migrated ${dbPath}`)
+    return true
+  } catch (error) {
+    console.error(`[Migration] Failed to migrate ${dbPath}:`, error)
+    throw error
+  } finally {
+    db.close()
+  }
+}
+
+/**
+ * Apply migration 005: Add text preferences to video_preferences
+ */
+export function migrateTextPreferences(dbPath: string): boolean {
+  const db = new Database(dbPath)
+  try {
+    // Check if migration is needed
+    if (columnExists(db, 'video_preferences', 'text_size')) {
+      // Already migrated
+      return false
+    }
+
+    console.log(`[Migration] Applying text_preferences migration to ${dbPath}`)
+
+    // Read migration SQL
+    const migrationPath = resolve(__dirname, 'migrations', '005_add_text_preferences.sql')
+    const migrationSQL = readFileSync(migrationPath, 'utf-8')
+
+    // Split by semicolon and execute each statement
+    const statements = migrationSQL
+      .split(';')
+      .map(s => s.trim())
+      .filter(s => s.length > 0 && !s.startsWith('--'))
+
+    for (const statement of statements) {
+      db.prepare(statement).run()
+    }
+
+    console.log(`[Migration] Successfully migrated ${dbPath}`)
+    return true
+  } catch (error) {
+    console.error(`[Migration] Failed to migrate ${dbPath}:`, error)
+    throw error
+  } finally {
+    db.close()
+  }
+}
+
+/**
+ * Apply migration 006: Add 'issue' boundary state
+ */
+export function migrateIssueBoundaryState(dbPath: string): boolean {
+  const db = new Database(dbPath)
+  try {
+    // Check if migration is needed by checking the table schema
+    const schema = db
+      .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='captions'")
+      .get() as { sql: string } | undefined
+
+    if (!schema) {
+      console.log(`[Migration] No captions table found in ${dbPath}, skipping`)
+      return false
+    }
+
+    // Check if 'issue' is already in the CHECK constraint
+    if (schema.sql.includes("'issue'")) {
+      // Already migrated
+      return false
+    }
+
+    console.log(`[Migration] Applying issue_boundary_state migration to ${dbPath}`)
+
+    // Read migration SQL
+    const migrationPath = resolve(__dirname, 'migrations', '006_add_issue_boundary_state.sql')
+    const migrationSQL = readFileSync(migrationPath, 'utf-8')
+
+    // Execute migration SQL (exec handles PRAGMA and multi-statement transactions)
+    db.exec(migrationSQL)
+
+    console.log(`[Migration] Successfully migrated ${dbPath}`)
+    return true
+  } catch (error) {
+    console.error(`[Migration] Failed to migrate ${dbPath}:`, error)
+    throw error
+  } finally {
+    db.close()
+  }
+}
+
+/**
  * Apply all pending migrations to a database
  */
 export function migrateDatabase(dbPath: string): void {
   migrateCropBounds(dbPath)
   migrateAnalysisModelVersion(dbPath)
   migrateDropCroppedFrameOCR(dbPath)
+  migrateOCRVisualizationImage(dbPath)
+  migrateTextPreferences(dbPath)
+  migrateIssueBoundaryState(dbPath)
 }

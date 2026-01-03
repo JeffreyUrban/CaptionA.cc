@@ -59,7 +59,7 @@ export interface LayoutParamsEdit {
   verticalStd: number | null
   boxHeight: number | null
   boxHeightStd: number | null
-  anchorType: 'left' | 'center' | 'right' | null
+  anchorType: import('./review-labels').LayoutConfig['anchorType']
   anchorPosition: number | null
 }
 
@@ -93,7 +93,7 @@ export interface CanvasPoint {
 /**
  * Selection label type
  */
-export type SelectionLabel = 'in' | 'out' | 'clear'
+export type SelectionLabel = import('~/types/enums').BoxLabel | 'clear'
 
 /**
  * Parameters for rendering a box on canvas
@@ -129,7 +129,7 @@ export interface KeyboardShortcutContext {
   currentFrameBoxes: import('./review-labels').FrameBoxesData | null
   isSelecting: boolean
   handleThumbnailClick: (frameIndex: number | 'analysis') => void
-  handleBoxClick: (boxIndex: number, label: 'in' | 'out') => Promise<void>
+  handleBoxClick: (boxIndex: number, label: import('~/types/enums').BoxLabel) => Promise<void>
   cancelSelection: () => void
 }
 

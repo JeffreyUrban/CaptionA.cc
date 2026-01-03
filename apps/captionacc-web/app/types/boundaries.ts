@@ -3,13 +3,15 @@
  * These types are used across hooks and components for annotating caption boundaries.
  */
 
+import type { AnnotationState } from './enums'
+
+export type { AnnotationState } from './enums'
+
 export interface Frame {
   frame_index: number
   image_url: string
   ocr_text: string
 }
-
-export type AnnotationState = 'predicted' | 'confirmed' | 'gap'
 
 export interface Annotation {
   id: number
@@ -21,8 +23,6 @@ export interface Annotation {
   created_at?: string
   updated_at?: string
 }
-
-export type FrameSpacing = 'linear' | 'exponential' | 'hybrid'
 
 /**
  * Display state synchronized by RAF loop from internal refs.

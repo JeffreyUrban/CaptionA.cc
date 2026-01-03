@@ -2,6 +2,10 @@
  * Types for the Text Annotation workflow
  */
 
+import type { TextAnchor } from '~/types/enums'
+
+export type { TextAnchor } from '~/types/enums'
+
 export interface TextQueueAnnotation {
   id: number
   start_frame_index: number
@@ -38,8 +42,6 @@ export interface PerFrameOCRItem {
   frameIndex: number
   ocrText: string
 }
-
-export type TextAnchor = 'left' | 'center' | 'right'
 
 export interface TextDisplayPreferences {
   textSizePercent: number

@@ -1,21 +1,4 @@
-interface Frame {
-  frame_index: number
-  image_url: string
-  ocr_text: string
-}
-
-type AnnotationState = 'predicted' | 'confirmed' | 'gap'
-
-interface Annotation {
-  id: number
-  start_frame_index: number
-  end_frame_index: number
-  state: AnnotationState
-  pending: boolean
-  text: string | null
-  created_at?: string
-  updated_at?: string
-}
+import type { Frame, Annotation } from '~/types/boundaries'
 
 interface BoundaryFrameStackProps {
   visibleFramePositions: number[]
