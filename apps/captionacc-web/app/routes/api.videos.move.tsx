@@ -7,7 +7,7 @@ import { resolve } from 'path'
 import Database from 'better-sqlite3'
 import type { ActionFunctionArgs } from 'react-router'
 
-import { getVideoMetadata } from '~/utils/video-paths'
+import { getVideoMetadata, getAllVideos } from '~/utils/video-paths'
 
 export async function action({ request }: ActionFunctionArgs) {
   if (request.method !== 'PATCH') {
@@ -60,6 +60,21 @@ export async function action({ request }: ActionFunctionArgs) {
   // Prevent moving to current location
   if (metadata.displayPath === newPath) {
     return Response.json({ error: 'Video is already in this location' }, { status: 400 })
+  }
+
+  // Check for name conflict in target folder
+  const allVideos = getAllVideos()
+  const conflictingVideo = allVideos.find(
+    v => v.displayPath === newPath && v.storagePath !== metadata.storagePath
+  )
+
+  if (conflictingVideo) {
+    return Response.json(
+      {
+        error: `A video named "${videoName}" already exists in ${targetFolder ? `folder "${targetFolder}"` : 'the root folder'}`,
+      },
+      { status: 409 }
+    )
   }
 
   console.log(`[VideoMove] Moving "${metadata.displayPath}" to "${newPath}"`)
