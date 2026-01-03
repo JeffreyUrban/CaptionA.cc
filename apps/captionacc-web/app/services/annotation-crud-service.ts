@@ -13,7 +13,7 @@ import {
   getOrCreateAnnotationDatabase,
 } from '~/utils/database'
 import { deleteCombinedImage, getOrGenerateCombinedImage } from '~/utils/image-processing'
-import type { AnnotationState } from '~/types/boundaries'
+import type { AnnotationState, TextStatus } from '~/types/enums'
 
 // =============================================================================
 // Type Definitions

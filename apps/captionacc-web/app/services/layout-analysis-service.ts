@@ -5,6 +5,7 @@
  * layout parameters, and anchor types for caption detection.
  */
 
+import type { TextAnchor } from '~/types/enums'
 import { predictBoxLabel } from '~/utils/box-prediction'
 import { getAnnotationDatabase, getWritableDatabase } from '~/utils/database'
 
@@ -48,7 +49,7 @@ interface VideoLayoutConfigRow {
   vertical_std: number | null
   box_height: number | null
   box_height_std: number | null
-  anchor_type: 'left' | 'center' | 'right' | null
+  anchor_type: TextAnchor | null
   anchor_position: number | null
   top_edge_std: number | null
   bottom_edge_std: number | null
@@ -78,7 +79,7 @@ export interface LayoutConfig {
   verticalStd: number | null
   boxHeight: number | null
   boxHeightStd: number | null
-  anchorType: 'left' | 'center' | 'right' | null
+  anchorType: TextAnchor | null
   anchorPosition: number | null
   topEdgeStd: number | null
   bottomEdgeStd: number | null
@@ -96,7 +97,7 @@ export interface LayoutParams {
   verticalStd: number
   boxHeight: number
   boxHeightStd: number
-  anchorType: 'left' | 'center' | 'right'
+  anchorType: TextAnchor
   anchorPosition: number
   topEdgeStd: number
   bottomEdgeStd: number

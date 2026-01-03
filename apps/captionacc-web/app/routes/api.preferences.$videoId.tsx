@@ -3,12 +3,13 @@ import { existsSync } from 'fs'
 import Database from 'better-sqlite3'
 import { type LoaderFunctionArgs, type ActionFunctionArgs } from 'react-router'
 
+import type { TextAnchor } from '~/types/enums'
 import { getDbPath } from '~/utils/video-paths'
 
 interface VideoPreferences {
   text_size: number
   padding_scale: number
-  text_anchor: 'left' | 'center' | 'right'
+  text_anchor: TextAnchor
 }
 
 function getDatabase(videoId: string): { db: Database.Database; path: string } | Response {

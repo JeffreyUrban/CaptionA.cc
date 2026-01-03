@@ -1,11 +1,13 @@
+import type { TextAnchor } from '~/types/enums'
+
 interface TextDisplayControlsProps {
-  textAnchor: 'left' | 'center' | 'right'
+  textAnchor: TextAnchor
   textSizePercent: number
   paddingScale: number
   actualTextSize: number
   expanded: boolean
   onExpandedChange: (expanded: boolean) => void
-  onTextAnchorChange: (anchor: 'left' | 'center' | 'right') => void
+  onTextAnchorChange: (anchor: TextAnchor) => void
   onTextSizeChange: (size: number) => void
   onPaddingScaleChange: (padding: number) => void
 }

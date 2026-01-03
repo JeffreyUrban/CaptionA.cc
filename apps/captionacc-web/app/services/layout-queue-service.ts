@@ -7,6 +7,7 @@
 
 import type Database from 'better-sqlite3'
 
+import type { BoxLabel, TextAnchor } from '~/types/enums'
 import { getAnnotationDatabase } from '~/utils/database'
 
 // =============================================================================
@@ -39,7 +40,7 @@ interface VideoLayoutConfigRow {
   vertical_std: number | null
   box_height: number | null
   box_height_std: number | null
-  anchor_type: 'left' | 'center' | 'right' | null
+  anchor_type: TextAnchor | null
   anchor_position: number | null
   top_edge_std: number | null
   bottom_edge_std: number | null
@@ -85,7 +86,7 @@ export interface LayoutConfig {
   verticalStd: number | null
   boxHeight: number | null
   boxHeightStd: number | null
-  anchorType: 'left' | 'center' | 'right' | null
+  anchorType: TextAnchor | null
   anchorPosition: number | null
   topEdgeStd: number | null
   bottomEdgeStd: number | null
@@ -110,8 +111,8 @@ export interface PotentialMislabel {
   frameIndex: number
   boxIndex: number
   boxText: string
-  userLabel: 'in' | 'out'
-  predictedLabel: 'in' | 'out' | null
+  userLabel: BoxLabel
+  predictedLabel: BoxLabel | null
   predictedConfidence: number | null
   boxTop: number
   topDeviation: number

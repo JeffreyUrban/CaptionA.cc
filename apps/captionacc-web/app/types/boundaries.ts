@@ -3,27 +3,14 @@
  * These types are used across hooks and components for annotating caption boundaries.
  */
 
+import type { AnnotationState } from './enums'
+
+export type { AnnotationState } from './enums'
+
 export interface Frame {
   frame_index: number
   image_url: string
   ocr_text: string
-}
-
-/**
- * Allowed annotation states - single source of truth.
- * Used to generate TypeScript types, SQL CHECK constraints, and validation.
- */
-export const ANNOTATION_STATES = ['predicted', 'confirmed', 'gap', 'issue'] as const
-
-export type AnnotationState = (typeof ANNOTATION_STATES)[number]
-
-/**
- * Generate SQL CHECK constraint for annotation states.
- * Used in schema definitions and migrations.
- */
-export function getAnnotationStateCheckConstraint(): string {
-  const values = ANNOTATION_STATES.map(s => `'${s}'`).join(', ')
-  return `CHECK(boundary_state IN (${values}))`
 }
 
 export interface Annotation {

@@ -8,6 +8,8 @@
  * - horizontal_std_intercept: Linear model intercept
  */
 
+import type { TextAnchor } from '~/types/enums'
+
 export interface Box {
   left: number
   top: number
@@ -23,7 +25,7 @@ export interface DistributionParams {
 }
 
 export interface LayoutConfig {
-  anchor_type: 'left' | 'center' | 'right'
+  anchor_type: TextAnchor
   anchor_position: number
   vertical_position: number
   box_height: number
@@ -84,7 +86,7 @@ function linearRegression(x: number[], y: number[]): { slope: number; intercept:
  */
 function calculateHorizontalDeviation(
   box: Box,
-  anchorType: 'left' | 'center' | 'right',
+  anchorType: TextAnchor,
   anchorPosition: number
 ): number {
   const boxCenter = (box.left + box.right) / 2
@@ -182,7 +184,7 @@ export const CHAR_BUFFER_MULTIPLE = 2.5 // 2-3 extra characters
 export function calculateExpansion(
   edge: 'left' | 'right' | 'top' | 'bottom',
   distanceFromAnchor: number,
-  anchorType: 'left' | 'center' | 'right',
+  anchorType: TextAnchor,
   charWidth: number,
   horizontalStdSlope: number,
   horizontalStdIntercept: number,

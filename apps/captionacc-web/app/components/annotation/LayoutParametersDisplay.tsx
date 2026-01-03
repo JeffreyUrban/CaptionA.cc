@@ -1,9 +1,11 @@
+import type { TextAnchor } from '~/types/enums'
+
 interface LayoutConfig {
   verticalPosition: number | null
   verticalStd: number | null
   boxHeight: number | null
   boxHeightStd: number | null
-  anchorType: 'left' | 'center' | 'right' | null
+  anchorType: TextAnchor | null
   anchorPosition: number | null
   cropLeft: number
   cropTop: number
