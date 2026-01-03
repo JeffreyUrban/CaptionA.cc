@@ -281,7 +281,8 @@ class Experiment(Base):
     wandb_project: Mapped[str | None] = mapped_column(String(255))
 
     # Model configuration
-    model_architecture: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    architecture_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    model_config: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     hyperparameters: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
 
     # Transform strategy

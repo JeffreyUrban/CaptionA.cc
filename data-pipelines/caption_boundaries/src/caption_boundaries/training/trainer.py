@@ -22,7 +22,7 @@ from torch.utils.data import DataLoader, Sampler
 from caption_boundaries.data.dataset import CaptionBoundaryDataset
 from caption_boundaries.data.transforms import ResizeStrategy
 from caption_boundaries.database import Experiment, FontEmbedding, TrainingDataset, get_dataset_db
-from caption_boundaries.models.architecture import create_model
+from caption_boundaries.models.registry import create_model, get_model_info
 
 console = Console(stderr=True)
 
@@ -128,6 +128,8 @@ class CaptionBoundaryTrainer:
     Args:
         dataset_db_path: Path to dataset database file
         experiment_name: Name for this experiment (for W&B)
+        architecture_name: Model architecture from registry (e.g., "triple_backbone_resnet50")
+        model_config: Architecture-specific configuration (pretrained, dropout, etc.)
         transform_strategy: Transform strategy for variable-sized crops
         ocr_viz_variant: OCR visualization variant to use
         use_font_embedding: Whether to use font embeddings
@@ -148,6 +150,8 @@ class CaptionBoundaryTrainer:
         self,
         dataset_db_path: Path,
         experiment_name: str,
+        architecture_name: str = "triple_backbone_resnet50",
+        model_config: dict[str, Any] | None = None,
         transform_strategy: ResizeStrategy = ResizeStrategy.MIRROR_TILE,
         ocr_viz_variant: str = "boundaries",
         use_font_embedding: bool = True,
@@ -165,6 +169,8 @@ class CaptionBoundaryTrainer:
     ):
         self.dataset_db_path = dataset_db_path
         self.experiment_name = experiment_name
+        self.architecture_name = architecture_name
+        self.model_config = model_config or {"pretrained": True}
         self.transform_strategy = transform_strategy
         self.ocr_viz_variant = ocr_viz_variant
         self.use_font_embedding = use_font_embedding
@@ -330,8 +336,14 @@ class CaptionBoundaryTrainer:
     def _setup_model(self):
         """Initialize model, optimizer, and loss function."""
         console.print("[cyan]Initializing model...[/cyan]")
+        console.print(f"[cyan]Architecture:[/cyan] {self.architecture_name}")
 
-        self.model = create_model(device=self.device, pretrained=True)
+        # Create model from registry
+        self.model = create_model(
+            architecture=self.architecture_name,
+            device=self.device,
+            **self.model_config,
+        )
 
         console.print(f"[green]✓[/green] Total params: {self.model.get_num_total_params():,}")
         console.print(f"[green]✓[/green] Trainable params: {self.model.get_num_trainable_params():,}")
@@ -395,9 +407,9 @@ class CaptionBoundaryTrainer:
 
             config = {
                 # Model config
-                "model_architecture": "CaptionBoundaryPredictor",
+                "architecture_name": self.architecture_name,
+                "model_config": self.model_config,
                 "num_classes": 5,
-                "pretrained": True,
                 # Training config
                 "epochs": self.epochs,
                 "batch_size": self.batch_size,
@@ -590,6 +602,8 @@ class CaptionBoundaryTrainer:
             "optimizer_state_dict": self.optimizer.state_dict(),
             "metrics": metrics,
             "config": {
+                "architecture_name": self.architecture_name,
+                "model_config": self.model_config,
                 "dataset_db_path": str(self.dataset_db_path),
                 "transform_strategy": self.transform_strategy.value,
                 "ocr_viz_variant": self.ocr_viz_variant,
@@ -775,7 +789,8 @@ class CaptionBoundaryTrainer:
                 dataset_id=dataset.id,
                 wandb_run_id=self.wandb_run_id,
                 wandb_project=self.wandb_project,
-                model_architecture={"type": "CaptionBoundaryPredictor", "pretrained": True},
+                architecture_name=self.architecture_name,
+                model_config=self.model_config,
                 hyperparameters={
                     "epochs": self.epochs,
                     "batch_size": self.batch_size,

@@ -1,13 +1,19 @@
-"""Caption boundary detection model architecture.
+"""Caption boundary detection model architectures.
 
-Based on multi-frame ResNet architecture with metadata fusion.
-Predicts boundary transitions between consecutive caption frames.
+Provides different architecture variants for experimentation:
+- Triple backbone (separate ResNet50 for each input)
+- Shared backbone (single ResNet50 for all inputs)
+- Custom architectures (register your own!)
+
+All architectures registered in the model registry for reproducibility.
 """
 
 import torch
 import torch.nn as nn
 import torchvision.models as models
 from typing import Literal
+
+from caption_boundaries.models.registry import register_model
 
 
 class CaptionBoundaryPredictor(nn.Module):
@@ -201,13 +207,45 @@ class CaptionBoundaryPredictor(nn.Module):
         return sum(p.numel() for p in self.parameters())
 
 
+# Register the baseline triple-backbone architecture
+@register_model("triple_backbone_resnet50")
+def create_triple_backbone_resnet50(
+    num_classes: int = 5,
+    pretrained: bool = True,
+    **kwargs,
+) -> CaptionBoundaryPredictor:
+    """Create triple-backbone ResNet50 architecture (baseline).
+
+    Three separate ResNet50 backbones for OCR viz, frame1, and frame2,
+    with metadata fusion.
+
+    Args:
+        num_classes: Number of output classes (must be 5 for this task)
+        pretrained: Use ImageNet pretrained weights
+        **kwargs: Additional arguments for CaptionBoundaryPredictor
+
+    Returns:
+        Initialized model (not on device - registry handles that)
+    """
+    return CaptionBoundaryPredictor(
+        num_classes=num_classes,
+        pretrained=pretrained,
+        **kwargs,
+    )
+
+
+# Backwards compatibility - old create_model function
 def create_model(
     num_classes: int = 5,
     device: Literal["cuda", "mps", "cpu"] | None = None,
     pretrained: bool = True,
     **kwargs,
 ) -> CaptionBoundaryPredictor:
-    """Create caption boundary predictor model.
+    """Create caption boundary predictor model (backwards compatibility).
+
+    Note: Prefer using the registry directly:
+        from caption_boundaries.models.registry import create_model
+        model = create_model("triple_backbone_resnet50", device="cuda")
 
     Args:
         num_classes: Number of output classes
@@ -217,28 +255,13 @@ def create_model(
 
     Returns:
         CaptionBoundaryPredictor model on specified device
-
-    Example:
-        >>> model = create_model(device='cuda')
-        >>> print(f"Trainable params: {model.get_num_trainable_params():,}")
     """
-    # Auto-detect device if not specified
-    if device is None:
-        if torch.cuda.is_available():
-            device = "cuda"
-        elif torch.backends.mps.is_available():
-            device = "mps"
-        else:
-            device = "cpu"
+    from caption_boundaries.models.registry import create_model as registry_create_model
 
-    # Create model
-    model = CaptionBoundaryPredictor(
+    return registry_create_model(
+        architecture="triple_backbone_resnet50",
+        device=device,
         num_classes=num_classes,
         pretrained=pretrained,
         **kwargs,
     )
-
-    # Move to device
-    model = model.to(device)
-
-    return model
