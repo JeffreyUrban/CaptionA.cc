@@ -4,7 +4,6 @@ Implements training with W&B experiment tracking, validation metrics,
 and checkpoint management.
 """
 
-import json
 import random
 from collections import defaultdict
 from pathlib import Path
@@ -22,7 +21,7 @@ from torch.utils.data import DataLoader, Sampler
 
 from caption_boundaries.data.dataset import CaptionBoundaryDataset
 from caption_boundaries.data.transforms import ResizeStrategy
-from caption_boundaries.database import Experiment, TrainingDataset, get_dataset_db
+from caption_boundaries.database import Experiment, FontEmbedding, TrainingDataset, get_dataset_db
 from caption_boundaries.models.architecture import create_model
 
 console = Console(stderr=True)
@@ -354,7 +353,7 @@ class CaptionBoundaryTrainer:
 
         self.optimizer = optim.AdamW(param_groups)
 
-        console.print(f"[cyan]Learning rates:[/cyan]")
+        console.print("[cyan]Learning rates:[/cyan]")
         console.print(f"  Classifier: {self.lr_classifier:.2e}")
         console.print(f"  Features: {self.lr_features:.2e}")
 
@@ -381,6 +380,19 @@ class CaptionBoundaryTrainer:
             if not dataset:
                 raise ValueError(f"No dataset found in {self.dataset_db_path}")
 
+            # Get FontCLIP model version for W&B tracking
+            fontclip_model_version = None
+            if self.use_font_embedding:
+                fontclip_versions = (
+                    db.query(FontEmbedding.fontclip_model_version)
+                    .distinct()
+                    .all()
+                )
+                if fontclip_versions:
+                    versions = [v[0] for v in fontclip_versions if v[0]]
+                    if versions:
+                        fontclip_model_version = versions[0]
+
             config = {
                 # Model config
                 "model_architecture": "CaptionBoundaryPredictor",
@@ -402,6 +414,7 @@ class CaptionBoundaryTrainer:
                 "transform_strategy": self.transform_strategy.value,
                 "ocr_viz_variant": self.ocr_viz_variant,
                 "use_font_embedding": self.use_font_embedding,
+                "fontclip_model_version": fontclip_model_version,
                 "split_strategy": dataset.split_strategy,
                 "train_split_ratio": dataset.train_split_ratio,
                 "random_seed": dataset.random_seed,
@@ -699,7 +712,7 @@ class CaptionBoundaryTrainer:
         # Finish W&B
         wandb.finish()
 
-        console.print(f"\n[green]✓ Training complete![/green]")
+        console.print("\n[green]✓ Training complete![/green]")
         console.print(f"Best Val F1 (macro): {best_val_f1_macro:.4f}")
         console.print(f"Checkpoints saved to: {self.checkpoint_dir}")
 
@@ -710,6 +723,42 @@ class CaptionBoundaryTrainer:
             dataset = db.query(TrainingDataset).first()
             if not dataset:
                 raise ValueError(f"No dataset found in {self.dataset_db_path}")
+
+            # Get FontCLIP model version used in this dataset
+            # Query all unique fontclip_model_version values used
+            fontclip_versions = (
+                db.query(FontEmbedding.fontclip_model_version)
+                .distinct()
+                .all()
+            )
+
+            if fontclip_versions and self.use_font_embedding:
+                # Extract version strings
+                versions = [v[0] for v in fontclip_versions if v[0]]
+
+                if len(versions) == 1:
+                    # Single model version used (expected case)
+                    fontclip_model_version = versions[0]
+                elif len(versions) > 1:
+                    # Multiple versions (rare) - use most common one and log warning
+                    from collections import Counter
+                    version_counts = Counter(
+                        db.query(FontEmbedding.fontclip_model_version)
+                        .filter(FontEmbedding.fontclip_model_version.isnot(None))
+                        .all()
+                    )
+                    most_common = version_counts.most_common(1)[0][0][0]
+                    fontclip_model_version = most_common
+                    console.print(
+                        f"[yellow]⚠[/yellow] Multiple FontCLIP versions found in dataset, "
+                        f"using most common: {most_common}"
+                    )
+                else:
+                    # No versions found
+                    fontclip_model_version = None
+            else:
+                # Font embeddings not used or no embeddings found
+                fontclip_model_version = None
 
             # Get git info if available
             try:
@@ -739,6 +788,7 @@ class CaptionBoundaryTrainer:
                 transform_strategy=self.transform_strategy.value,
                 ocr_visualization_variant=self.ocr_viz_variant,
                 use_font_embedding=self.use_font_embedding,
+                fontclip_model_version=fontclip_model_version,
                 best_val_f1=best_val_f1,
                 best_val_accuracy=best_val_accuracy,
                 best_checkpoint_path=str(self.checkpoint_dir / "best.pt"),
@@ -757,3 +807,15 @@ class CaptionBoundaryTrainer:
 
             self.experiment_id = experiment.id
             console.print(f"[green]✓[/green] Experiment saved to database (ID: {experiment.id})")
+
+            # Log FontCLIP model version for transparency
+            if fontclip_model_version:
+                is_fallback = "-fallback" in fontclip_model_version
+                if is_fallback:
+                    console.print(
+                        f"[yellow]ℹ[/yellow] FontCLIP model: {fontclip_model_version} (using fallback CLIP model)"
+                    )
+                else:
+                    console.print(f"[green]ℹ[/green] FontCLIP model: {fontclip_model_version}")
+            elif self.use_font_embedding:
+                console.print("[yellow]⚠[/yellow] Font embeddings enabled but no FontCLIP version recorded")
