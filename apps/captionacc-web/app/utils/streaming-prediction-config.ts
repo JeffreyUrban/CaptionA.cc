@@ -104,6 +104,37 @@ export const PREDICTION_CHANGE_CONFIG = {
 } as const
 
 /**
+ * Configuration for annotation batch handling.
+ *
+ * Determines when to use streaming updates vs full retrain based on batch size.
+ */
+export const BATCH_HANDLING_CONFIG = {
+  /**
+   * Maximum batch size for streaming updates.
+   * Batches > this size skip streaming and wait for retrain triggers.
+   *
+   * Rationale: Streaming updates are designed for interactive single/small edits.
+   * For larger batches, better to wait for smart retrain triggers (20s minimum).
+   * - Single edit: 1 box → streaming update (~0.5s, immediate feedback)
+   * - Small batch: 2-10 boxes → streaming update (~1s, still feels responsive)
+   * - Medium batch: 10-100 boxes → skip streaming, wait for retrain
+   * - Large batch: 100+ boxes → force immediate retrain
+   */
+  MAX_STREAMING_UPDATE_BATCH_SIZE: 10,
+
+  /**
+   * Threshold for bulk operations that force immediate retrain.
+   * Batches >= this size trigger full retrain instead of waiting for triggers.
+   *
+   * Rationale: Large bulk operations (100+ boxes) indicate major changes.
+   * User expects some delay for these operations anyway.
+   * - Accept predictions: typically 1000s of boxes
+   * - Bulk rectangle annotation: can be 100s-1000s of boxes
+   */
+  BULK_ANNOTATION_THRESHOLD: 100,
+} as const
+
+/**
  * Configuration for model retraining triggers.
  *
  * Multiple trigger conditions to adapt to annotation patterns.

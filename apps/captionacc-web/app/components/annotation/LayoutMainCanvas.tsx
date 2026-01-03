@@ -28,23 +28,6 @@ interface LayoutMainCanvasProps {
 }
 
 /**
- * Overlay shown during crop bounds recalculation
- */
-function RecalculatingOverlay() {
-  return (
-    <div className="absolute inset-0 flex items-center justify-center bg-blue-900 bg-opacity-70 pointer-events-none">
-      <div className="bg-blue-800 px-6 py-4 rounded-lg shadow-lg">
-        <div className="text-white text-lg font-semibold mb-2">Recalculating Crop Bounds</div>
-        <div className="text-blue-200 text-sm">Annotations temporarily disabled...</div>
-        <div className="mt-3 h-1 w-64 rounded-full bg-blue-700">
-          <div className="h-1 rounded-full bg-blue-300 animate-pulse" style={{ width: '100%' }} />
-        </div>
-      </div>
-    </div>
-  )
-}
-
-/**
  * Analysis view canvas content
  */
 function AnalysisViewContent({
@@ -88,7 +71,7 @@ function AnalysisViewContent({
           <div className="text-white text-lg">Loading analysis boxes...</div>
         </div>
       )}
-      {annotationsSinceRecalc >= RECALC_THRESHOLD && <RecalculatingOverlay />}
+      {/* RecalculatingOverlay removed - processing now happens in background without blocking */}
     </div>
   )
 }
@@ -148,7 +131,7 @@ function FrameViewContent({
           style={{ touchAction: 'none', pointerEvents: 'none' }}
         />
       </div>
-      {annotationsSinceRecalc >= RECALC_THRESHOLD && <RecalculatingOverlay />}
+      {/* RecalculatingOverlay removed - processing now happens in background without blocking */}
     </div>
   )
 }

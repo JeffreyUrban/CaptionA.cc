@@ -80,6 +80,8 @@ export async function action({ params, request }: ActionFunctionArgs) {
     return jsonResponse({
       success: result.success,
       annotatedCount: result.annotatedCount,
+      retrainingTriggered: result.retrainingTriggered,
+      streamingUpdatesApplied: result.streamingUpdatesApplied,
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error'
