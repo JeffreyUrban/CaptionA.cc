@@ -40,6 +40,7 @@ interface UseLayoutCanvasParams {
   annotationsSinceRecalc: number
   pulseStartTime: number
   frameBoxesCache: React.RefObject<Map<number, FrameBoxesData>>
+  showCropBoundsInFrame: boolean
   setCurrentFrameBoxes: React.Dispatch<React.SetStateAction<FrameBoxesData | null>>
   setHasUnsyncedAnnotations: (value: boolean) => void
   setAnnotationsSinceRecalc: (count: number) => void
@@ -74,6 +75,7 @@ export function useLayoutCanvas(params: UseLayoutCanvasParams): UseLayoutCanvasR
     annotationsSinceRecalc,
     pulseStartTime,
     frameBoxesCache,
+    showCropBoundsInFrame,
     setCurrentFrameBoxes,
     setHasUnsyncedAnnotations,
     setAnnotationsSinceRecalc,
@@ -149,6 +151,19 @@ export function useLayoutCanvas(params: UseLayoutCanvasParams): UseLayoutCanvasR
           pulseIntensity,
         })
       })
+
+      // Draw crop bounds overlay if enabled
+      if (showCropBoundsInFrame && layoutConfig) {
+        ctx.strokeStyle = '#ef4444' // red-500
+        ctx.lineWidth = 2
+        ctx.setLineDash([15, 5])
+        const cropX = layoutConfig.cropLeft * scale
+        const cropY = layoutConfig.cropTop * scale
+        const cropW = (layoutConfig.cropRight - layoutConfig.cropLeft) * scale
+        const cropH = (layoutConfig.cropBottom - layoutConfig.cropTop) * scale
+        ctx.strokeRect(cropX, cropY, cropW, cropH)
+        ctx.setLineDash([])
+      }
     } else if (viewMode === 'analysis' && analysisBoxes && layoutConfig) {
       const scale = canvasSize.width / layoutConfig.frameWidth
       analysisBoxes.forEach(box => {
@@ -178,6 +193,7 @@ export function useLayoutCanvas(params: UseLayoutCanvasParams): UseLayoutCanvasR
     selectionLabel,
     boxHighlightMode,
     pulseStartTime,
+    showCropBoundsInFrame,
   ])
 
   useEffect(() => {
