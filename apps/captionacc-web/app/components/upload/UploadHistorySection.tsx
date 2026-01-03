@@ -4,10 +4,8 @@
  * Displays:
  * - List of successfully uploaded files
  * - Clear history button
- * - Links to video pages
+ * - Virtual paths without extensions
  */
-
-import { Link } from 'react-router'
 
 import type { CompletedUpload } from '~/stores/upload-store'
 
@@ -18,6 +16,17 @@ interface UploadHistorySectionProps {
 
 export function UploadHistorySection({ uploads, onClearHistory }: UploadHistorySectionProps) {
   if (uploads.length === 0) return null
+
+  // Helper to remove extension from path
+  const getPathWithoutExtension = (path: string): string => {
+    const lastDotIndex = path.lastIndexOf('.')
+    const lastSlashIndex = path.lastIndexOf('/')
+    // Only remove extension if dot comes after last slash (not a hidden folder)
+    if (lastDotIndex > lastSlashIndex && lastDotIndex > 0) {
+      return path.substring(0, lastDotIndex)
+    }
+    return path
+  }
 
   return (
     <div className="mt-8 bg-white dark:bg-gray-800 shadow rounded-lg">
@@ -47,10 +56,7 @@ export function UploadHistorySection({ uploads, onClearHistory }: UploadHistoryS
             <div className="flex items-center justify-between">
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
-                  {upload.fileName}
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                  {upload.relativePath}
+                  {getPathWithoutExtension(upload.relativePath)}
                 </p>
               </div>
 
@@ -66,14 +72,6 @@ export function UploadHistorySection({ uploads, onClearHistory }: UploadHistoryS
                   </svg>
                   Complete
                 </span>
-
-                {/* View Video Link */}
-                <Link
-                  to={`/videos/${upload.videoId}`}
-                  className="text-sm font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
-                >
-                  View Video →
-                </Link>
               </div>
             </div>
           </div>

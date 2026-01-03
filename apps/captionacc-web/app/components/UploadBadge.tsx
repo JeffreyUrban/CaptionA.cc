@@ -125,16 +125,6 @@ export function UploadBadge() {
             </span>
           </div>
         )}
-
-        {/* View Details Link */}
-        <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-          <Link
-            to="/upload"
-            className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium"
-          >
-            View details →
-          </Link>
-        </div>
       </div>
     </div>
   )

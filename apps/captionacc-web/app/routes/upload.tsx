@@ -373,9 +373,9 @@ export default function UploadPage() {
   )
 
   // Derived state
-  const hasAnyUploads =
-    activeUploads.length > 0 || pendingDuplicates.length > 0 || completedUploads.length > 0
-  const showDropZone = !hasAnyUploads
+  const hasActiveOperations = activeUploads.length > 0 || pendingDuplicates.length > 0
+  const hasHistory = completedUploads.length > 0
+  const showDropZone = !hasActiveOperations // Show drop zone when no active uploads/duplicates
 
   return (
     <AppLayout>
@@ -393,7 +393,7 @@ export default function UploadPage() {
           </div>
         </div>
 
-        {/* Drop Zone (shown when no uploads) */}
+        {/* Drop Zone (shown when no active operations) */}
         {showDropZone && (
           <div className="mt-8">
             <UploadDropZone
@@ -410,7 +410,7 @@ export default function UploadPage() {
         )}
 
         {/* Upload Sections */}
-        {hasAnyUploads && (
+        {(hasActiveOperations || hasHistory) && (
           <>
             {/* Active Uploads */}
             <UploadActiveSection
@@ -429,23 +429,6 @@ export default function UploadPage() {
 
             {/* Upload History */}
             <UploadHistorySection uploads={completedUploads} onClearHistory={clearHistory} />
-
-            {/* Upload More Button */}
-            {activeUploads.length === 0 && pendingDuplicates.length === 0 && (
-              <div className="mt-6">
-                <label className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-teal-600 hover:bg-teal-700 cursor-pointer">
-                  <input
-                    type="file"
-                    multiple
-                    // @ts-expect-error - webkitdirectory is non-standard but widely supported
-                    webkitdirectory=""
-                    className="sr-only"
-                    onChange={handleFileSelect}
-                  />
-                  Upload More Videos
-                </label>
-              </div>
-            )}
           </>
         )}
       </div>
