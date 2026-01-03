@@ -3,6 +3,8 @@
  * Displays upload progress, status breakdown, and file cards.
  */
 
+import { Link } from 'react-router'
+
 import type { VideoFilePreview, IncompleteUpload } from '~/types/upload'
 import { formatBytes, isVideoInProgress, isVideoFinished } from '~/utils/upload-helpers'
 
@@ -110,9 +112,14 @@ function VideoStatusBadge({ video }: { video: VideoFilePreview }) {
 function VideoProgressCard({
   video,
   showProgress,
+  onResolveDuplicate,
 }: {
   video: VideoFilePreview
   showProgress: boolean
+  onResolveDuplicate?: (
+    videoPath: string,
+    decision: 'keep_both' | 'replace_existing' | 'cancel_upload'
+  ) => void
 }) {
   return (
     <div className="border border-gray-200 dark:border-gray-700 rounded-md p-4">
@@ -142,6 +149,52 @@ function VideoProgressCard({
       {video.error && video.uploadStatus === 'error' && (
         <p className="mt-2 text-xs text-red-600 dark:text-red-400">{video.error}</p>
       )}
+
+      {/* Duplicate Resolution Warning */}
+      {video.pendingDuplicateResolution && video.duplicateOfDisplayPath && (
+        <div className="mt-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md p-3">
+          <div className="flex items-start">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                <path
+                  fillRule="evenodd"
+                  d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </div>
+            <div className="ml-3 flex-1">
+              <h4 className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                Duplicate Video Detected
+              </h4>
+              <p className="mt-1 text-xs text-yellow-700 dark:text-yellow-300">
+                This video is identical to{' '}
+                <span className="font-mono">{video.duplicateOfDisplayPath}</span>
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  onClick={() => onResolveDuplicate?.(video.relativePath, 'keep_both')}
+                  className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                >
+                  Keep Both
+                </button>
+                <button
+                  onClick={() => onResolveDuplicate?.(video.relativePath, 'replace_existing')}
+                  className="inline-flex items-center px-3 py-1.5 border border-yellow-300 dark:border-yellow-700 text-xs font-medium rounded text-yellow-700 dark:text-yellow-300 bg-white dark:bg-gray-800 hover:bg-yellow-100 hover:border-yellow-400 dark:hover:bg-yellow-900/50 dark:hover:border-yellow-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 transition-colors"
+                >
+                  Replace Existing
+                </button>
+                <button
+                  onClick={() => onResolveDuplicate?.(video.relativePath, 'cancel_upload')}
+                  className="inline-flex items-center px-3 py-1.5 border border-red-300 dark:border-red-700 text-xs font-medium rounded text-red-700 dark:text-red-300 bg-white dark:bg-gray-800 hover:bg-red-100 hover:border-red-400 dark:hover:bg-red-900/50 dark:hover:border-red-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
+                >
+                  Cancel Upload
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -170,13 +223,11 @@ export function IncompleteUploadsNotification({
         </div>
         <div className="ml-3 flex-1">
           <h3 className="text-sm font-medium text-blue-800 dark:text-blue-200">
-            Cleared {uploads.length} interrupted upload{uploads.length !== 1 ? 's' : ''}
+            Found {uploads.length} interrupted upload{uploads.length !== 1 ? 's' : ''} from previous
+            session
           </h3>
           <div className="mt-2 text-sm text-blue-700 dark:text-blue-300">
-            <p className="mb-2">
-              These uploads were interrupted when the page was closed and have been automatically
-              cleared:
-            </p>
+            <p className="mb-2">These uploads were interrupted when the page was closed:</p>
             <details className="mt-2">
               <summary className="cursor-pointer font-medium hover:text-blue-800 dark:hover:text-blue-200">
                 View list ({uploads.length} videos)
@@ -198,7 +249,7 @@ export function IncompleteUploadsNotification({
               onClick={onDismiss}
               className="text-sm font-semibold text-blue-800 dark:text-blue-200 hover:text-blue-900 dark:hover:text-blue-100"
             >
-              Dismiss
+              Acknowledge & Clear
             </button>
           </div>
         </div>
@@ -247,12 +298,12 @@ function UploadCompleteBanner({
             </p>
           </div>
           <div className="mt-4 flex gap-3">
-            <a
-              href="/videos"
+            <Link
+              to="/videos"
               className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
             >
               View Videos & Processing Status
-            </a>
+            </Link>
             <button
               onClick={onReset}
               className="inline-flex items-center px-4 py-2 border border-green-300 dark:border-green-700 text-sm font-medium rounded-md text-green-700 dark:text-green-300 bg-white dark:bg-gray-800 hover:bg-green-50 dark:hover:bg-green-900/30 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
@@ -284,6 +335,10 @@ interface UploadProgressSectionProps {
   onStopQueued: () => void
   onAbortAll: () => void
   onReset: () => void
+  onResolveDuplicate?: (
+    videoPath: string,
+    decision: 'keep_both' | 'replace_existing' | 'cancel_upload'
+  ) => void
 }
 
 /**
@@ -303,6 +358,7 @@ export function UploadProgressSection({
   onStopQueued,
   onAbortAll,
   onReset,
+  onResolveDuplicate,
 }: UploadProgressSectionProps) {
   const selectedVideos = videoFiles.filter(v => v.selected)
   const inProgressVideos = selectedVideos.filter(isVideoInProgress)
@@ -378,7 +434,12 @@ export function UploadProgressSection({
               </h4>
               <div className="space-y-4 max-h-96 overflow-y-auto">
                 {inProgressVideos.map((video, idx) => (
-                  <VideoProgressCard key={`progress-${idx}`} video={video} showProgress={true} />
+                  <VideoProgressCard
+                    key={`progress-${idx}`}
+                    video={video}
+                    showProgress={true}
+                    onResolveDuplicate={onResolveDuplicate}
+                  />
                 ))}
               </div>
             </div>
@@ -392,7 +453,12 @@ export function UploadProgressSection({
               </h4>
               <div className="space-y-4 max-h-96 overflow-y-auto">
                 {finishedVideos.map((video, idx) => (
-                  <VideoProgressCard key={`finished-${idx}`} video={video} showProgress={false} />
+                  <VideoProgressCard
+                    key={`finished-${idx}`}
+                    video={video}
+                    showProgress={false}
+                    onResolveDuplicate={onResolveDuplicate}
+                  />
                 ))}
               </div>
             </div>

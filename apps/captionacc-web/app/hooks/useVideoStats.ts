@@ -1,27 +1,13 @@
 /**
  * Hook for managing video statistics data.
- * Handles stats caching, polling for processing videos, localStorage persistence,
- * and validation of error badges on mount.
+ * Uses centralized video-stats-store for state management.
+ * Handles eager loading and error validation on mount.
  */
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 
+import { useVideoStatsStore } from '~/stores/video-stats-store'
 import type { VideoStats, TreeNode } from '~/utils/video-tree'
-
-// Cache version - increment to invalidate cache when VideoStats structure changes
-const CACHE_VERSION = 'v12'
-
-/** Validate video IDs (same logic as server-side validation) */
-function isValidVideoId(videoId: string): boolean {
-  if (!videoId || videoId.length === 0) return false
-  // Not a UUID bucket directory (2-char hex like "f0", "ff", "12")
-  if (videoId.length === 2 && /^[0-9a-f]{2}$/i.test(videoId)) return false
-  // Not a single number (like "1", "20")
-  if (/^\d+$/.test(videoId)) return false
-  // Not a hidden file/folder
-  if (videoId.startsWith('.')) return false
-  return true
-}
 
 /** Collect all video IDs from tree nodes */
 function collectAllVideoIds(nodes: TreeNode[]): string[] {
@@ -53,123 +39,61 @@ interface UseVideoStatsReturn {
 }
 
 /**
- * Hook for managing video statistics with caching and polling.
+ * Hook for managing video statistics using centralized store.
+ * Handles eager loading and error validation.
  */
 export function useVideoStats({ tree }: UseVideoStatsParams): UseVideoStatsReturn {
   // Client-side mount state
   const [isMounted, setIsMounted] = useState(false)
 
-  // Stats map with localStorage initialization
-  const [videoStatsMap, setVideoStatsMap] = useState<Map<string, VideoStats>>(() => {
-    // Load cached stats from localStorage
-    if (typeof window !== 'undefined') {
-      const cached = localStorage.getItem(`video-stats-cache-${CACHE_VERSION}`)
-      if (cached) {
-        try {
-          const parsed = JSON.parse(cached)
-          // Filter out invalid video IDs from cache
-          const validEntries = Object.entries(parsed).filter(([videoId]) => isValidVideoId(videoId))
-          if (validEntries.length < Object.entries(parsed).length) {
-            console.log(
-              `[useVideoStats] Filtered ${Object.entries(parsed).length - validEntries.length} invalid cached entries`
-            )
-          }
-          return new Map(validEntries)
-        } catch {
-          return new Map()
-        }
-      }
-    }
-    return new Map()
-  })
-
   // Track whether error badges have been validated
   const [errorBadgesValidated, setErrorBadgesValidated] = useState(false)
+
+  // Get store state and actions
+  const stats = useVideoStatsStore(state => state.stats)
+  const setStats = useVideoStatsStore(state => state.setStats)
+  const removeStats = useVideoStatsStore(state => state.removeStats)
+  const fetchStats = useVideoStatsStore(state => state.fetchStats)
+  const startPolling = useVideoStatsStore(state => state.startPolling)
+  const stopPolling = useVideoStatsStore(state => state.stopPolling)
+
+  // Convert stats object to Map for backward compatibility
+  const videoStatsMap = useMemo(() => {
+    return new Map(Object.entries(stats))
+  }, [stats])
 
   // Detect client-side mount
   useEffect(() => {
     setIsMounted(true)
   }, [])
 
-  // Save stats to localStorage whenever they update
-  useEffect(() => {
-    if (videoStatsMap.size > 0 && typeof window !== 'undefined') {
-      // Filter out any invalid stats objects (those with error property)
-      const validStats = Array.from(videoStatsMap.entries()).filter(
-        ([, stats]) => !('error' in stats)
-      )
-      if (validStats.length > 0) {
-        const cacheObj = Object.fromEntries(validStats)
-        localStorage.setItem(`video-stats-cache-${CACHE_VERSION}`, JSON.stringify(cacheObj))
-      }
-    }
-  }, [videoStatsMap])
+  // Callbacks for compatibility with existing code
+  const updateVideoStats = useCallback(
+    (videoId: string, videoStats: VideoStats) => {
+      setStats(videoId, videoStats)
+    },
+    [setStats]
+  )
 
-  // Callback for updating stats
-  const updateVideoStats = useCallback((videoId: string, stats: VideoStats) => {
-    setVideoStatsMap(prev => {
-      const next = new Map(prev)
-      next.set(videoId, stats)
-      return next
-    })
-  }, [])
+  const clearVideoStats = useCallback(
+    (videoId: string) => {
+      removeStats(videoId)
+    },
+    [removeStats]
+  )
 
-  // Callback for clearing stats
-  const clearVideoStats = useCallback((videoId: string) => {
-    setVideoStatsMap(prev => {
-      const next = new Map(prev)
-      next.delete(videoId)
-      return next
-    })
-  }, [])
-
-  // Poll for stats updates for videos that are processing
+  // Start/stop centralized polling based on mount state
   useEffect(() => {
     if (!isMounted) return
 
-    // Find videos that are currently processing (upload/processing OR crop_frames)
-    const processingVideos = Array.from(videoStatsMap.entries())
-      .filter(([, stats]) => {
-        // Poll if upload/processing is in progress
-        const hasProcessingStatus =
-          stats.processingStatus &&
-          stats.processingStatus.status !== 'processing_complete' &&
-          stats.processingStatus.status !== 'error'
+    // Start polling when component mounts
+    startPolling()
 
-        // Poll if crop_frames is queued or processing
-        const hasCropFramesProcessing =
-          stats.cropFramesStatus &&
-          (stats.cropFramesStatus.status === 'queued' ||
-            stats.cropFramesStatus.status === 'processing')
-
-        return Boolean(hasProcessingStatus) || Boolean(hasCropFramesProcessing)
-      })
-      .map(([videoId]) => videoId)
-
-    if (processingVideos.length === 0) return
-
-    console.log(`[useVideoStats] Polling ${processingVideos.length} processing videos...`)
-
-    // Poll every 5 seconds
-    const interval = setInterval(() => {
-      processingVideos.forEach(videoId => {
-        fetch(`/api/videos/${encodeURIComponent(videoId)}/stats`)
-          .then(res => (res.ok ? res.json() : null))
-          .then(data => {
-            if (data && !data.error) {
-              console.log(`[useVideoStats] Polling update for ${videoId}:`, {
-                processingStatus: data.processingStatus?.status,
-                cropFramesStatus: data.cropFramesStatus?.status,
-              })
-              updateVideoStats(videoId, data)
-            }
-          })
-          .catch(err => console.error(`Failed to poll stats for ${videoId}:`, err))
-      })
-    }, 5000)
-
-    return () => clearInterval(interval)
-  }, [isMounted, videoStatsMap, updateVideoStats])
+    // Stop polling when component unmounts
+    return () => {
+      stopPolling()
+    }
+  }, [isMounted, startPolling, stopPolling])
 
   // One-time validation of error badges on mount
   useEffect(() => {
@@ -177,7 +101,7 @@ export function useVideoStats({ tree }: UseVideoStatsParams): UseVideoStatsRetur
 
     // Find videos with error badges in cache and refetch them to validate
     const videosWithErrors = Array.from(videoStatsMap.entries())
-      .filter(([, stats]) => stats.badges?.some(badge => badge.type === 'error'))
+      .filter(([, videoStats]) => videoStats.badges?.some(badge => badge.type === 'error'))
       .map(([videoId]) => videoId)
 
     if (videosWithErrors.length > 0) {
@@ -185,23 +109,17 @@ export function useVideoStats({ tree }: UseVideoStatsParams): UseVideoStatsRetur
         `[useVideoStats] Validating ${videosWithErrors.length} videos with error badges...`
       )
       videosWithErrors.forEach(videoId => {
-        fetch(`/api/videos/${encodeURIComponent(videoId)}/stats`)
-          .then(res => (res.ok ? res.json() : null))
-          .then(data => {
-            if (data && !data.error) {
-              console.log(`[useVideoStats] Validated error badge for ${videoId}`)
-              updateVideoStats(videoId, data)
-            }
-          })
-          .catch(err => console.error(`Failed to validate error badge for ${videoId}:`, err))
+        void fetchStats(videoId, true) // Force refresh
       })
     }
 
     setErrorBadgesValidated(true)
-  }, [isMounted, errorBadgesValidated, videoStatsMap, updateVideoStats])
+  }, [isMounted, errorBadgesValidated, videoStatsMap, fetchStats])
 
   // Eagerly load stats for all videos in the tree
   useEffect(() => {
+    if (!isMounted) return
+
     const videoIds = collectAllVideoIds(tree)
 
     // Check for videos that were recently touched and need stats refresh
@@ -226,44 +144,18 @@ export function useVideoStats({ tree }: UseVideoStatsParams): UseVideoStatsRetur
 
       // Always fetch if no cache, or if touched
       if (needsRefresh || !cachedStats) {
-        console.log(`[useVideoStats] Loading stats for ${videoId}...`)
-        fetch(`/api/videos/${encodeURIComponent(videoId)}/stats`)
-          .then(res => {
-            if (!res.ok) {
-              console.error(`[useVideoStats] Stats request failed for ${videoId}: ${res.status}`)
-              return null
-            }
-            return res.json()
-          })
-          .then(data => {
-            if (data && !data.error) {
-              console.log(`[useVideoStats] Stats loaded for ${videoId}:`, data)
-              updateVideoStats(videoId, data)
-            } else {
-              console.error(
-                `[useVideoStats] Stats error for ${videoId}:`,
-                data?.error ?? 'Unknown error'
-              )
-            }
-          })
-          .catch(err => console.error(`Failed to load stats for ${videoId}:`, err))
+        void fetchStats(videoId, true) // Force refresh
       } else if (cachedStats.databaseId) {
         // We have cached stats with a database_id - verify it hasn't changed
-        fetch(`/api/videos/${encodeURIComponent(videoId)}/stats`)
-          .then(res => (res.ok ? res.json() : null))
-          .then(data => {
-            if (data?.databaseId && data.databaseId !== cachedStats.databaseId) {
-              // Database was recreated - invalidate cache and use fresh data
-              console.log(`[useVideoStats] Database recreated for ${videoId}, invalidating cache`)
-              updateVideoStats(videoId, data)
-            }
-          })
-          .catch(() => {
-            /* Ignore errors on background validation */
-          })
+        void fetchStats(videoId, false).then(data => {
+          if (data?.databaseId && data.databaseId !== cachedStats.databaseId) {
+            // Database was recreated - invalidate cache (fetchStats already updated)
+            console.log(`[useVideoStats] Database recreated for ${videoId}, cache updated`)
+          }
+        })
       }
     })
-  }, [tree, videoStatsMap, updateVideoStats])
+  }, [isMounted, tree, videoStatsMap, fetchStats])
 
   return {
     videoStatsMap,

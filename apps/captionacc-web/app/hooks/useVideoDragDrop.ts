@@ -19,6 +19,10 @@ interface UseVideoDragDropReturn {
   draggedItem: DraggedItemState | null
   /** Currently hovered folder path during drag */
   dragOverFolder: string | null
+  /** Drag-drop error modal state */
+  dragDropErrorModal: { open: boolean; title: string; message: string }
+  /** Close drag-drop error modal */
+  closeDragDropErrorModal: () => void
   /** Start dragging an item */
   handleDragStart: (path: string, name: string, type: 'video' | 'folder') => void
   /** End drag operation */
@@ -46,6 +50,15 @@ export function useVideoDragDrop({
 }: UseVideoDragDropParams): UseVideoDragDropReturn {
   const [draggedItem, setDraggedItem] = useState<DraggedItemState | null>(null)
   const [dragOverFolder, setDragOverFolder] = useState<string | null>(null)
+  const [dragDropErrorModal, setDragDropErrorModal] = useState({
+    open: false,
+    title: '',
+    message: '',
+  })
+
+  const closeDragDropErrorModal = useCallback(() => {
+    setDragDropErrorModal({ open: false, title: '', message: '' })
+  }, [])
 
   const handleDragStart = useCallback((path: string, name: string, type: 'video' | 'folder') => {
     console.log('[DnD] Drag start:', { path, name, type })
@@ -169,15 +182,29 @@ export function useVideoDragDrop({
         console.log('[DnD] API response:', { ok: response.ok, status: response.status, data })
 
         if (!response.ok) {
-          console.error(`[DnD] Failed to move ${draggedItem.type} to root:`, data.error)
+          const errorMessage = data.error ?? `Failed to move ${draggedItem.type}`
+          // Use warn for validation errors (4xx), error for server/network issues (5xx)
+          if (response.status >= 400 && response.status < 500) {
+            console.warn(`[DnD] Move blocked:`, errorMessage)
+          } else {
+            console.error(`[DnD] Failed to move ${draggedItem.type} to root:`, errorMessage)
+          }
+          setDragDropErrorModal({
+            open: true,
+            title: 'Move Failed',
+            message: errorMessage,
+          })
           return
         }
 
         console.log('[DnD] Move to root successful, reloading tree...')
 
-        // Clear cached stats for moved video
+        // Clear cached stats for moved video (old and new paths)
         if (draggedItem.type === 'video' && clearVideoStats) {
-          clearVideoStats(draggedItem.path)
+          clearVideoStats(draggedItem.path) // Clear old path
+          if (data.newPath) {
+            clearVideoStats(data.newPath) // Clear new path to force refresh
+          }
         }
 
         // Success - notify parent to reload
@@ -247,15 +274,29 @@ export function useVideoDragDrop({
         console.log('[DnD] API response:', { ok: response.ok, status: response.status, data })
 
         if (!response.ok) {
-          console.error(`[DnD] Failed to move ${draggedItem.type}:`, data.error)
+          const errorMessage = data.error ?? `Failed to move ${draggedItem.type}`
+          // Use warn for validation errors (4xx), error for server/network issues (5xx)
+          if (response.status >= 400 && response.status < 500) {
+            console.warn(`[DnD] Move blocked:`, errorMessage)
+          } else {
+            console.error(`[DnD] Failed to move ${draggedItem.type}:`, errorMessage)
+          }
+          setDragDropErrorModal({
+            open: true,
+            title: 'Move Failed',
+            message: errorMessage,
+          })
           return
         }
 
         console.log('[DnD] Move successful, reloading tree...')
 
-        // Clear cached stats for moved video
+        // Clear cached stats for moved video (old and new paths)
         if (draggedItem.type === 'video' && clearVideoStats) {
-          clearVideoStats(draggedItem.path)
+          clearVideoStats(draggedItem.path) // Clear old path
+          if (data.newPath) {
+            clearVideoStats(data.newPath) // Clear new path to force refresh
+          }
         }
 
         // Success - notify parent to reload
@@ -272,6 +313,8 @@ export function useVideoDragDrop({
   return {
     draggedItem,
     dragOverFolder,
+    dragDropErrorModal,
+    closeDragDropErrorModal,
     handleDragStart,
     handleDragEnd,
     handleDragOver,

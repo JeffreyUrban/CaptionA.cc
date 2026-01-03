@@ -99,11 +99,17 @@ export interface VideoFilePreview {
   uploadStatus: UploadStatus
   uploadId?: string
   uploadUrl?: string // TUS upload URL for resumability
+  videoId?: string // UUID of created video (set when upload completes)
   error?: string
-  isDuplicate?: boolean
+  isDuplicate?: boolean // Pre-upload duplicate check (by path)
   existingUploadedAt?: string
   retryCount?: number
   lastActivityAt?: number // Timestamp for stall detection
+
+  // Post-upload duplicate resolution (by hash)
+  pendingDuplicateResolution?: boolean
+  duplicateOfVideoId?: string
+  duplicateOfDisplayPath?: string
 }
 
 // ============================================================================

@@ -147,6 +147,52 @@ export const useAppStore = create<AppState>()(
             'setUploadUrl'
           ),
 
+        setUploadVideoId: (id: string, videoId: string) =>
+          set(
+            state => {
+              const upload = state.uploads[id]
+              if (!upload) return state
+
+              return {
+                uploads: {
+                  ...state.uploads,
+                  [id]: {
+                    ...upload,
+                    videoId,
+                  },
+                },
+              }
+            },
+            false,
+            'setUploadVideoId'
+          ),
+
+        setUploadDuplicate: (
+          id: string,
+          duplicateOfVideoId: string,
+          duplicateOfDisplayPath: string
+        ) =>
+          set(
+            state => {
+              const upload = state.uploads[id]
+              if (!upload) return state
+
+              return {
+                uploads: {
+                  ...state.uploads,
+                  [id]: {
+                    ...upload,
+                    isDuplicate: true,
+                    duplicateOfVideoId,
+                    duplicateOfDisplayPath,
+                  },
+                },
+              }
+            },
+            false,
+            'setUploadDuplicate'
+          ),
+
         removeUpload: (id: string) =>
           set(
             state => {

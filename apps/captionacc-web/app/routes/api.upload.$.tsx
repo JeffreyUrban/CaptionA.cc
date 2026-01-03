@@ -260,6 +260,11 @@ async function handlePatchRequest(request: Request, uploadId: string): Promise<R
     db.close()
   }
 
+  // Track duplicate info to return in response
+  let isDuplicate = false
+  let duplicateOfVideoId = ''
+  let duplicateOfDisplayPath = ''
+
   if (complete) {
     // Upload complete - move file to UUID-based storage and compute hash
     const completeStoragePath = metadata.metadata.storagePath
@@ -309,20 +314,17 @@ async function handlePatchRequest(request: Request, uploadId: string): Promise<R
 
     console.log(`[tus] Computed video hash: ${videoHash.slice(0, 16)}...`)
 
+    // Check for duplicate videos with same hash
+    const { getAllVideos } = await import('~/utils/video-paths')
+    const allVideos = getAllVideos()
+    const duplicateVideo = videoHash
+      ? allVideos.find(v => v.videoHash === videoHash && v.videoId !== metadata.metadata.videoId)
+      : null
+
     // Update status and video hash
     const db = new Database(dbPath)
     try {
-      db.prepare(
-        `
-        UPDATE processing_status
-        SET status = 'upload_complete',
-            upload_progress = 1.0,
-            upload_completed_at = datetime('now')
-        WHERE id = 1
-      `
-      ).run()
-
-      // Update video hash
+      // Update video hash first
       if (videoHash) {
         db.prepare(
           `
@@ -332,29 +334,91 @@ async function handlePatchRequest(request: Request, uploadId: string): Promise<R
         `
         ).run(videoHash)
       }
+
+      if (duplicateVideo) {
+        // Duplicate detected - set status to pending resolution
+        db.prepare(
+          `
+          UPDATE processing_status
+          SET status = 'pending_duplicate_resolution',
+              upload_progress = 1.0,
+              upload_completed_at = datetime('now')
+          WHERE id = 1
+        `
+        ).run()
+
+        // Store duplicate info for user to review
+        db.prepare(
+          `
+          INSERT OR REPLACE INTO duplicate_resolution (
+            id, duplicate_of_video_id, duplicate_of_display_path, detected_at
+          ) VALUES (1, ?, ?, datetime('now'))
+        `
+        ).run(duplicateVideo.videoId, duplicateVideo.displayPath)
+
+        console.log(
+          `[tus] Duplicate detected: ${displayPath} matches existing video ${duplicateVideo.displayPath}`
+        )
+
+        isDuplicate = true
+        duplicateOfVideoId = duplicateVideo.videoId
+        duplicateOfDisplayPath = duplicateVideo.displayPath
+      } else {
+        // No duplicate - proceed normally
+        db.prepare(
+          `
+          UPDATE processing_status
+          SET status = 'upload_complete',
+              upload_progress = 1.0,
+              upload_completed_at = datetime('now')
+          WHERE id = 1
+        `
+        ).run()
+
+        console.log(`[tus] Upload complete: ${displayPath} (storage: ${completeStoragePath})`)
+
+        // Queue video for background processing (respects concurrency limits)
+        const { queueVideoProcessing } = await import('~/services/video-processing')
+        queueVideoProcessing({
+          videoPath: displayPath, // Pass display path for logging
+          videoFile: finalVideoPath,
+          videoId: metadata.metadata.videoId, // Pass UUID for tracking
+        })
+      }
     } finally {
       db.close()
     }
+  }
 
-    console.log(`[tus] Upload complete: ${displayPath} (storage: ${completeStoragePath})`)
+  // Build response headers
+  const responseHeaders: Record<string, string> = {
+    'Tus-Resumable': '1.0.0',
+    'Upload-Offset': newSize.toString(),
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Expose-Headers': 'Upload-Offset,Tus-Resumable',
+  }
 
-    // Queue video for background processing (respects concurrency limits)
-    const { queueVideoProcessing } = await import('~/services/video-processing')
-    queueVideoProcessing({
-      videoPath: displayPath, // Pass display path for logging
-      videoFile: finalVideoPath,
-      videoId: metadata.metadata.videoId, // Pass UUID for tracking
-    })
+  // Add video ID for complete uploads so frontend can reference it
+  if (complete) {
+    const videoId = metadata.metadata.videoId
+    if (videoId) {
+      responseHeaders['X-Video-Id'] = videoId
+      responseHeaders['Access-Control-Expose-Headers'] += ',X-Video-Id'
+    }
+  }
+
+  // Add duplicate info if this was a complete upload with duplicate detected
+  if (complete && isDuplicate) {
+    responseHeaders['X-Duplicate-Detected'] = 'true'
+    responseHeaders['X-Duplicate-Of-Video-Id'] = duplicateOfVideoId
+    responseHeaders['X-Duplicate-Of-Display-Path'] = duplicateOfDisplayPath
+    responseHeaders['Access-Control-Expose-Headers'] +=
+      ',X-Duplicate-Detected,X-Duplicate-Of-Video-Id,X-Duplicate-Of-Display-Path'
   }
 
   return new Response(null, {
     status: 204,
-    headers: {
-      'Tus-Resumable': '1.0.0',
-      'Upload-Offset': newSize.toString(),
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Expose-Headers': 'Upload-Offset,Tus-Resumable',
-    },
+    headers: responseHeaders,
   })
 }
 
