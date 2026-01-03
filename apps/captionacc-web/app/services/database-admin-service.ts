@@ -3,34 +3,45 @@
  *
  * Provides observability and control over database versioning across all video databases.
  * Phase 1: Basic synchronous status queries
+ *
+ * Verification approach:
+ * - Parse canonical schema file to get expected structure
+ * - Query actual schema using PRAGMA table_info
+ * - Compare tables and columns to detect drift
  */
 
-import { readdirSync, statSync } from 'fs'
-import { join } from 'path'
+import { readFileSync, readdirSync, statSync } from 'fs'
+import { dirname, join } from 'path'
+import { fileURLToPath } from 'url'
 
 import Database from 'better-sqlite3'
 
-import { CURRENT_SCHEMA_VERSION } from '~/db/migrate'
+import { parseSchemaNames, type TableSchemaNames } from '~/utils/schema-parser'
 
 const LOCAL_DATA_DIR = process.env['LOCAL_DATA_DIR'] ?? '../../local/data'
+
+// Get schema path relative to this service file
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+const SCHEMA_PATH = join(__dirname, '../db/annotations-schema.sql')
 
 export interface DatabaseInfo {
   videoId: string
   displayPath: string | null
   version: number
-  status: 'current' | 'outdated' | 'incomplete' | 'unversioned'
+  versionLabel: string // Human-readable version (e.g., "v1", "latest (2026-01-03)")
+  status: 'valid' | 'incomplete' | 'drift' | 'unversioned'
   tableCount: number
   lastVerified: string | null
-  schemaChecksum: string | null
 }
 
 export interface StatusSummary {
   total: number
   byVersion: Record<number, number>
   health: {
-    current: number
-    outdated: number
+    valid: number
     incomplete: number
+    drift: number
     unversioned: number
     failed: number
   }
@@ -87,11 +98,48 @@ function extractVideoId(dbPath: string): string {
 }
 
 /**
- * Get expected tables from schema
+ * Get schema file path for specific version
  */
-function getExpectedTableCount(): number {
-  // Based on annotations-schema.sql version 1
-  return 12 // captions, full_frame_ocr, full_frame_box_labels, full_frames, cropped_frames, video_layout_config, box_classification_model, video_preferences, video_metadata, duplicate_resolution, processing_status, database_metadata
+function getSchemaPath(version: number): string {
+  if (version === -1) {
+    // Latest unreleased version uses working schema
+    return join(__dirname, '../db/annotations-schema.sql')
+  }
+  // Released versions use versioned schema files
+  return join(__dirname, `../db/annotations-schema-v${version}.sql`)
+}
+
+/**
+ * Get expected schema for specific version
+ */
+function getExpectedSchema(version: number): Map<string, TableSchemaNames> {
+  const schemaPath = getSchemaPath(version)
+  const schemaSQL = readFileSync(schemaPath, 'utf-8')
+  return parseSchemaNames(schemaSQL)
+}
+
+/**
+ * Get expected tables from schema for specific version
+ */
+function getExpectedTableCount(version: number): number {
+  return getExpectedSchema(version).size
+}
+
+/**
+ * Get actual columns for a table using PRAGMA
+ */
+function getActualColumns(db: Database.Database, tableName: string): Set<string> {
+  const columns = new Set<string>()
+
+  const columnInfo = db.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{
+    name: string
+  }>
+
+  for (const col of columnInfo) {
+    columns.add(col.name)
+  }
+
+  return columns
 }
 
 /**
@@ -107,22 +155,29 @@ function getDatabaseInfo(dbPath: string): DatabaseInfo {
     // Get version and metadata
     let version = 0
     let lastVerified: string | null = null
-    let schemaChecksum: string | null = null
 
     try {
       const metadata = db
-        .prepare('SELECT schema_version, verified_at, schema_checksum FROM database_metadata')
-        .get() as
-        | { schema_version: number; verified_at: string | null; schema_checksum: string | null }
-        | undefined
+        .prepare('SELECT schema_version, verified_at FROM database_metadata')
+        .get() as { schema_version: number; verified_at: string | null } | undefined
 
       if (metadata) {
         version = metadata.schema_version
         lastVerified = metadata.verified_at
-        schemaChecksum = metadata.schema_checksum
       }
     } catch {
       // database_metadata table doesn't exist or query failed
+    }
+
+    // Derive version label from version number and timestamp
+    const LATEST_VERSION = -1
+    let versionLabel: string
+    if (version === LATEST_VERSION) {
+      // Format: "latest (2026-01-03)"
+      const date = lastVerified ? new Date(lastVerified).toISOString().split('T')[0] : 'unknown'
+      versionLabel = `latest (${date})`
+    } else {
+      versionLabel = `v${version}`
     }
 
     // Get display path from video_metadata
@@ -150,28 +205,86 @@ function getDatabaseInfo(dbPath: string): DatabaseInfo {
       .get() as { count: number }
 
     const tableCount = tables.count
-    const expectedTableCount = getExpectedTableCount()
+    const expectedTableCount = getExpectedTableCount(version)
 
-    // Determine status
+    // Get actual table names
+    const actualTableNames = db
+      .prepare(
+        `
+      SELECT name FROM sqlite_master
+      WHERE type='table' AND name NOT LIKE 'sqlite_%'
+      ORDER BY name
+    `
+      )
+      .all() as Array<{ name: string }>
+
+    const actualTables = new Set(actualTableNames.map(t => t.name))
+
+    // Check for missing tables or columns
+    const expectedSchema = getExpectedSchema(version)
+    let hasMissingTables = false
+    let hasMissingColumns = false
+
+    // Check for missing tables
+    for (const expectedTableName of expectedSchema.keys()) {
+      if (!actualTables.has(expectedTableName)) {
+        hasMissingTables = true
+        break
+      }
+    }
+
+    // Check for extra tables (not in expected schema) - same as repair service
+    const extraTables = [...actualTables].filter(table => !expectedSchema.has(table))
+    const hasExtraTables = extraTables.length > 0
+
+    // Check for missing/extra columns in existing tables
+    let hasExtraColumns = false
+    if (!hasMissingTables) {
+      for (const [tableName, expectedTable] of expectedSchema) {
+        if (!actualTables.has(tableName)) continue
+
+        const actualColumns = getActualColumns(db, tableName)
+        const missingColumns = [...expectedTable.columns].filter(col => !actualColumns.has(col))
+        const extraColumns = [...actualColumns].filter(col => !expectedTable.columns.has(col))
+
+        if (missingColumns.length > 0) {
+          hasMissingColumns = true
+          break
+        }
+
+        if (extraColumns.length > 0) {
+          hasExtraColumns = true
+          break
+        }
+      }
+    }
+
+    // Determine status based on schema validity for this version
     let status: DatabaseInfo['status']
-    if (version === 0) {
+
+    // If no metadata was found (lastVerified is null), database is unversioned
+    // Note: v0 is a valid version, so we check lastVerified instead of version === 0
+    if (lastVerified === null) {
       status = 'unversioned'
-    } else if (tableCount < expectedTableCount) {
+    } else if (hasMissingTables || hasMissingColumns || tableCount < expectedTableCount) {
+      // Missing tables/columns = incomplete
       status = 'incomplete'
-    } else if (version < CURRENT_SCHEMA_VERSION) {
-      status = 'outdated'
+    } else if (hasExtraTables || hasExtraColumns) {
+      // Extra tables/columns = schema drift
+      status = 'drift'
     } else {
-      status = 'current'
+      // Matches declared version's schema perfectly = valid
+      status = 'valid'
     }
 
     return {
       videoId,
       displayPath,
       version,
+      versionLabel,
       status,
       tableCount,
       lastVerified,
-      schemaChecksum,
     }
   } catch (error) {
     // Database failed to open or query
@@ -179,10 +292,10 @@ function getDatabaseInfo(dbPath: string): DatabaseInfo {
       videoId,
       displayPath: null,
       version: 0,
+      versionLabel: 'v0',
       status: 'incomplete',
       tableCount: 0,
       lastVerified: null,
-      schemaChecksum: null,
     }
   } finally {
     if (db) {
@@ -201,8 +314,8 @@ export function getDatabaseStatusSummary(): StatusSummary {
     total: databases.length,
     byVersion: {},
     health: {
-      current: 0,
-      outdated: 0,
+      valid: 0,
+      drift: 0,
       incomplete: 0,
       unversioned: 0,
       failed: 0,
@@ -273,8 +386,8 @@ export function getDatabaseDetailedStatus(filters?: {
     total: databaseInfos.length,
     byVersion: {},
     health: {
-      current: 0,
-      outdated: 0,
+      valid: 0,
+      drift: 0,
       incomplete: 0,
       unversioned: 0,
       failed: 0,

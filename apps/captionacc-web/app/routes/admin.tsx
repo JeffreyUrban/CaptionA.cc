@@ -5,6 +5,7 @@
 import { useEffect, useState } from 'react'
 
 import { AppLayout } from '~/components/AppLayout'
+import { CURRENT_SCHEMA_VERSION, LATEST_SCHEMA_VERSION } from '~/db/migrate'
 import type { DatabaseInfo, StatusSummary } from '~/services/database-admin-service'
 
 interface FailedVideo {
@@ -24,11 +25,34 @@ interface ModelVersionStats {
   changedVideos: Array<{ displayPath: string; oldVersion: string | null; newVersion: string }>
 }
 
+interface RepairSummary {
+  total: number
+  current: number
+  repaired: number
+  failed: number
+  needsConfirmation: number
+  schemaVersion: number
+  hasDestructiveChanges: boolean
+  destructiveActionsSummary?: {
+    tablesToRemove: Record<string, { databases: number; totalRows: number }>
+    columnsToRemove: Record<string, { databases: number }>
+  }
+  results: Array<{
+    path: string
+    status: string
+    actions: string[]
+    destructiveActions: string[]
+    error?: string
+  }>
+}
+
 function DatabaseAdministration() {
   const [summary, setSummary] = useState<StatusSummary | null>(null)
   const [databases, setDatabases] = useState<DatabaseInfo[]>([])
   const [loading, setLoading] = useState(true)
   const [showDetails, setShowDetails] = useState(false)
+  const [repairing, setRepairing] = useState(false)
+  const [repairResult, setRepairResult] = useState<RepairSummary | null>(null)
 
   useEffect(() => {
     loadStatus()
@@ -58,6 +82,107 @@ function DatabaseAdministration() {
     }
   }
 
+  async function repairDatabases(targetVersion: number, force: boolean = false) {
+    // First pass: check for destructive changes
+    if (!force) {
+      setRepairing(true)
+      setRepairResult(null)
+
+      try {
+        const response = await fetch('/api/admin/databases/repair', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ targetVersion, force: false }),
+        })
+
+        const result = await response.json()
+
+        if (!response.ok) {
+          alert(`Repair failed: ${result.error || 'Unknown error'}`)
+          setRepairing(false)
+          return
+        }
+
+        // Check if there are destructive changes that need confirmation
+        if (result.hasDestructiveChanges) {
+          const summary = result.destructiveActionsSummary
+          let message = `⚠️ WARNING: This repair will delete data from ${result.needsConfirmation} databases!\n\n`
+
+          if (summary?.tablesToRemove && Object.keys(summary.tablesToRemove).length > 0) {
+            message += 'Tables to be removed:\n'
+            for (const [table, info] of Object.entries(summary.tablesToRemove)) {
+              const tableInfo = info as { databases: number; totalRows: number }
+              message += `  - ${table}: ${tableInfo.databases} databases (${tableInfo.totalRows} rows total)\n`
+            }
+          }
+
+          if (summary?.columnsToRemove && Object.keys(summary.columnsToRemove).length > 0) {
+            message += '\nColumns to be removed:\n'
+            for (const [column, info] of Object.entries(summary.columnsToRemove)) {
+              const columnInfo = info as { databases: number }
+              message += `  - ${column}: ${columnInfo.databases} databases\n`
+            }
+          }
+
+          message += '\nContinue?'
+
+          if (!confirm(message)) {
+            setRepairing(false)
+            return
+          }
+
+          // User confirmed, proceed with force
+          setRepairResult(null)
+          await repairDatabases(targetVersion, true)
+          return
+        }
+
+        // No destructive changes, show result
+        setRepairResult(result)
+        await loadStatus()
+        // Refresh video list if it's currently visible
+        if (showDetails) {
+          await loadDetails()
+        }
+      } catch (error) {
+        console.error('Failed to repair databases:', error)
+        alert('Failed to repair databases')
+      } finally {
+        setRepairing(false)
+      }
+      return
+    }
+
+    // Second pass: apply with force
+    setRepairing(true)
+
+    try {
+      const response = await fetch('/api/admin/databases/repair', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetVersion, force: true }),
+      })
+
+      const result = await response.json()
+
+      if (response.ok) {
+        setRepairResult(result)
+        await loadStatus()
+        // Refresh video list if it's currently visible
+        if (showDetails) {
+          await loadDetails()
+        }
+      } else {
+        alert(`Repair failed: ${result.error || 'Unknown error'}`)
+      }
+    } catch (error) {
+      console.error('Failed to repair databases:', error)
+      alert('Failed to repair databases')
+    } finally {
+      setRepairing(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
@@ -73,20 +198,84 @@ function DatabaseAdministration() {
     return null
   }
 
+  const hasProblems =
+    summary.health.incomplete > 0 || summary.health.drift > 0 || summary.health.unversioned > 0
+
+  // Calculate version range (support current and previous version)
+  const minSupportedVersion = Math.max(0, CURRENT_SCHEMA_VERSION - 1)
+  const maxSupportedVersion = CURRENT_SCHEMA_VERSION
+
+  // Find actual version distribution
+  const versionCounts = Object.entries(summary.byVersion)
+    .map(([version, count]) => ({ version: Number(version), count }))
+    .sort((a, b) => b.version - a.version)
+
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-          Database Administration
-        </h2>
-        <button
-          onClick={() => {
-            void loadStatus()
-          }}
-          className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
-        >
-          Refresh
-        </button>
+        <div>
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+            Database Administration
+          </h2>
+          <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 space-y-0.5">
+            <div>
+              Schema versions supported: v{minSupportedVersion}–v{maxSupportedVersion}
+            </div>
+            <div>
+              Current distribution:{' '}
+              {versionCounts
+                .map(({ version, count }) => {
+                  const versionLabel = version === LATEST_SCHEMA_VERSION ? 'latest' : `v${version}`
+                  return `${versionLabel} (${count})`
+                })
+                .join(', ')}
+            </div>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <div className="flex flex-col gap-1">
+            <div className="text-xs text-gray-600 dark:text-gray-400 font-medium">Repair to:</div>
+            <div className="flex">
+              <button
+                onClick={() => {
+                  void repairDatabases(LATEST_SCHEMA_VERSION)
+                }}
+                disabled={repairing}
+                className="px-3 py-1.5 bg-purple-600 text-white text-sm font-medium rounded-l-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Repair to latest unreleased schema (development)"
+              >
+                {repairing ? 'Repairing...' : 'Latest'}
+              </button>
+              <button
+                onClick={() => {
+                  void repairDatabases(CURRENT_SCHEMA_VERSION)
+                }}
+                disabled={repairing}
+                className="px-3 py-1.5 bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed border-l border-blue-500"
+              >
+                v{CURRENT_SCHEMA_VERSION}
+              </button>
+              <button
+                onClick={() => {
+                  void repairDatabases(minSupportedVersion)
+                }}
+                disabled={repairing || minSupportedVersion === CURRENT_SCHEMA_VERSION}
+                className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-r-md hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed border-l border-blue-400"
+                title={`Repair to v${minSupportedVersion} (for testing)`}
+              >
+                v{minSupportedVersion}
+              </button>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              void loadStatus()
+            }}
+            className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+          >
+            Refresh
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
@@ -95,15 +284,15 @@ function DatabaseAdministration() {
           <div className="text-2xl font-bold text-gray-900 dark:text-white">{summary.total}</div>
         </div>
         <div className="bg-green-50 dark:bg-green-900/20 rounded p-3">
-          <div className="text-xs text-green-600 dark:text-green-400">Current</div>
+          <div className="text-xs text-green-600 dark:text-green-400">Valid</div>
           <div className="text-2xl font-bold text-green-700 dark:text-green-300">
-            {summary.health.current}
+            {summary.health.valid}
           </div>
         </div>
         <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded p-3">
-          <div className="text-xs text-yellow-600 dark:text-yellow-400">Outdated</div>
+          <div className="text-xs text-yellow-600 dark:text-yellow-400">Schema Drift</div>
           <div className="text-2xl font-bold text-yellow-700 dark:text-yellow-300">
-            {summary.health.outdated}
+            {summary.health.drift}
           </div>
         </div>
         <div className="bg-red-50 dark:bg-red-900/20 rounded p-3">
@@ -118,17 +307,146 @@ function DatabaseAdministration() {
         Last scan: {new Date(summary.lastScan).toLocaleString()}
       </div>
 
-      {!showDetails ? (
-        <button
-          onClick={() => {
+      {repairResult && (
+        <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+          <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-300 mb-2">
+            Repair Complete
+          </h3>
+          <div className="text-xs text-blue-800 dark:text-blue-400 space-y-1">
+            <div>Total databases: {repairResult.total}</div>
+            <div>
+              No repair needed: {repairResult.current}{' '}
+              <span className="text-gray-600 dark:text-gray-500">
+                (already v{repairResult.schemaVersion})
+              </span>
+            </div>
+            <div>Successfully repaired: {repairResult.repaired}</div>
+            {repairResult.needsConfirmation > 0 && (
+              <div className="text-yellow-600 dark:text-yellow-400 font-medium">
+                Needs confirmation: {repairResult.needsConfirmation}
+              </div>
+            )}
+            {repairResult.failed > 0 && (
+              <div className="text-red-600 dark:text-red-400 font-medium">
+                Failed: {repairResult.failed}
+              </div>
+            )}
+            <div className="mt-2 pt-2 border-t border-blue-200 dark:border-blue-700 space-y-2">
+              {repairResult.repaired > 0 && (
+                <details className="cursor-pointer">
+                  <summary className="font-medium">View repaired databases</summary>
+                  <div className="mt-2 space-y-2 max-h-40 overflow-y-auto">
+                    {repairResult.results
+                      .filter(r => r.status === 'repaired')
+                      .map((r, i) => (
+                        <div key={i} className="text-xs bg-white dark:bg-gray-800 p-2 rounded">
+                          <div className="font-mono">{r.path}</div>
+                          <div className="text-gray-600 dark:text-gray-400 ml-2">
+                            {r.actions.map((action, j) => (
+                              <div key={j}>• {action}</div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                </details>
+              )}
+              {repairResult.needsConfirmation > 0 && (
+                <details className="cursor-pointer" open>
+                  <summary className="font-medium text-yellow-600 dark:text-yellow-400">
+                    View databases needing confirmation
+                  </summary>
+                  <div className="mt-2 space-y-2 max-h-40 overflow-y-auto">
+                    {repairResult.results
+                      .filter(r => r.status === 'needs_confirmation')
+                      .map((r, i) => (
+                        <div
+                          key={i}
+                          className="text-xs bg-yellow-50 dark:bg-yellow-900/20 p-2 rounded border border-yellow-200 dark:border-yellow-800"
+                        >
+                          <div className="font-mono font-medium text-yellow-900 dark:text-yellow-300">
+                            {r.path}
+                          </div>
+                          {r.destructiveActions.length > 0 && (
+                            <div className="text-yellow-700 dark:text-yellow-400 ml-2 mt-1">
+                              <div className="font-medium">Destructive changes required:</div>
+                              {r.destructiveActions.map((action, j) => (
+                                <div key={j} className="ml-2">
+                                  • {action}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {r.actions.length > 0 && (
+                            <div className="text-yellow-600 dark:text-yellow-500 ml-2 mt-1">
+                              <div className="font-medium">Actions attempted:</div>
+                              {r.actions.map((action, j) => (
+                                <div key={j} className="ml-2">
+                                  • {action}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                  </div>
+                </details>
+              )}
+              {repairResult.failed > 0 && (
+                <details className="cursor-pointer" open>
+                  <summary className="font-medium text-red-600 dark:text-red-400">
+                    View failed databases
+                  </summary>
+                  <div className="mt-2 space-y-2 max-h-40 overflow-y-auto">
+                    {repairResult.results
+                      .filter(r => r.status === 'failed')
+                      .map((r, i) => (
+                        <div
+                          key={i}
+                          className="text-xs bg-red-50 dark:bg-red-900/20 p-2 rounded border border-red-200 dark:border-red-800"
+                        >
+                          <div className="font-mono font-medium text-red-900 dark:text-red-300">
+                            {r.path}
+                          </div>
+                          <div className="text-red-700 dark:text-red-400 ml-2 mt-1">
+                            <div className="font-medium">Error:</div>
+                            <div className="ml-2">{r.error || 'Unknown error'}</div>
+                          </div>
+                          {r.actions.length > 0 && (
+                            <div className="text-red-600 dark:text-red-500 ml-2 mt-1">
+                              <div className="font-medium">Actions attempted:</div>
+                              {r.actions.map((action, j) => (
+                                <div key={j} className="ml-2">
+                                  • {action}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                  </div>
+                </details>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <button
+        onClick={() => {
+          if (showDetails) {
+            setShowDetails(false)
+          } else {
             void loadDetails()
-          }}
-          className="w-full px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700"
-        >
-          View All Databases →
-        </button>
-      ) : (
-        <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+          }
+        }}
+        className="w-full px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700"
+      >
+        {showDetails ? 'Hide Databases ↑' : 'View All Databases →'}
+      </button>
+
+      {showDetails && (
+        <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
           <div className="max-h-64 overflow-y-auto">
             <table className="w-full text-sm">
               <thead className="text-xs text-gray-600 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700">
@@ -149,14 +467,14 @@ function DatabaseAdministration() {
                       {db.displayPath || '—'}
                     </td>
                     <td className="py-2 text-center text-gray-900 dark:text-gray-300">
-                      v{db.version}
+                      {db.versionLabel}
                     </td>
                     <td className="py-2 text-center">
                       <span
                         className={`px-2 py-0.5 rounded text-xs ${
-                          db.status === 'current'
+                          db.status === 'valid'
                             ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                            : db.status === 'outdated'
+                            : db.status === 'drift'
                               ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
                               : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
                         }`}

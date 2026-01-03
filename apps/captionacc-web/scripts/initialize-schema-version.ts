@@ -3,6 +3,9 @@
  *
  * Adds database_metadata table and sets schema_version = 1 for all databases
  * that match the current standardized schema.
+ *
+ * Uses actual schema (PRAGMA table_info) for checksum verification,
+ * not historical CREATE statements from sqlite_master.
  */
 
 import { createHash } from 'crypto'
@@ -14,24 +17,96 @@ import Database from 'better-sqlite3'
 const SCHEMA_VERSION = 1
 const LOCAL_DATA_DIR = '../../local/data'
 
+interface ColumnInfo {
+  name: string
+  type: string
+  notnull: number
+  dflt_value: string | null
+  pk: number
+}
+
 /**
- * Compute schema checksum for verification
+ * Compute schema checksum from actual database structure using PRAGMA
+ *
+ * This provides accurate verification regardless of how tables/columns were created
+ * (CREATE TABLE vs ALTER TABLE).
  */
 function computeSchemaChecksum(db: Database.Database): string {
-  const schema = db
+  // Get all tables (excluding internal SQLite tables and database_metadata)
+  const tables = db
     .prepare(
       `
-    SELECT sql FROM sqlite_master
-    WHERE type IN ('table', 'index', 'trigger', 'view')
+    SELECT name FROM sqlite_master
+    WHERE type='table'
       AND name NOT LIKE 'sqlite_%'
       AND name != 'database_metadata'
-    ORDER BY type, name
+    ORDER BY name
   `
     )
-    .all() as Array<{ sql: string }>
+    .all() as Array<{ name: string }>
 
-  const schemaSQL = schema.map(s => s.sql).join('\n')
-  return createHash('sha256').update(schemaSQL).digest('hex')
+  // Build canonical schema representation
+  const schemaRepresentation: string[] = []
+
+  for (const table of tables) {
+    const tableName = table.name
+
+    // Get actual columns using PRAGMA
+    const columns = db.prepare(`PRAGMA table_info(${tableName})`).all() as ColumnInfo[]
+
+    // Sort columns by name for consistency
+    columns.sort((a, b) => a.name.localeCompare(b.name))
+
+    // Add table header
+    schemaRepresentation.push(`TABLE:${tableName}`)
+
+    // Add each column
+    for (const col of columns) {
+      const colStr = `${col.name}|${col.type}|${col.notnull}|${col.dflt_value ?? 'NULL'}|${col.pk}`
+      schemaRepresentation.push(colStr)
+    }
+
+    // Get indexes for this table
+    const indexes = db
+      .prepare(
+        `
+      SELECT name, sql FROM sqlite_master
+      WHERE type='index'
+        AND tbl_name = ?
+        AND name NOT LIKE 'sqlite_%'
+      ORDER BY name
+    `
+      )
+      .all(tableName) as Array<{ name: string; sql: string | null }>
+
+    for (const index of indexes) {
+      if (index.sql) {
+        schemaRepresentation.push(`INDEX:${index.name}:${index.sql}`)
+      }
+    }
+  }
+
+  // Get triggers (if any)
+  const triggers = db
+    .prepare(
+      `
+    SELECT name, sql FROM sqlite_master
+    WHERE type='trigger'
+      AND name NOT LIKE 'sqlite_%'
+    ORDER BY name
+  `
+    )
+    .all() as Array<{ name: string; sql: string | null }>
+
+  for (const trigger of triggers) {
+    if (trigger.sql) {
+      schemaRepresentation.push(`TRIGGER:${trigger.name}:${trigger.sql}`)
+    }
+  }
+
+  // Join and hash
+  const schemaString = schemaRepresentation.join('\n')
+  return createHash('sha256').update(schemaString).digest('hex')
 }
 
 /**
@@ -75,7 +150,7 @@ function initializeVersion(dbPath: string): { success: boolean; error?: string }
       )
     `)
 
-    // Compute checksum
+    // Compute checksum from actual schema
     const checksum = computeSchemaChecksum(db)
 
     // Insert version 1

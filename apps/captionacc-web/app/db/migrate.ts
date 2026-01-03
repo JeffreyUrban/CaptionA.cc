@@ -13,6 +13,12 @@ import Database from 'better-sqlite3'
 export const CURRENT_SCHEMA_VERSION = 1
 
 /**
+ * Special version number for latest unreleased schema
+ * Uses annotations-schema.sql (working schema, may have unreleased changes)
+ */
+export const LATEST_SCHEMA_VERSION = -1
+
+/**
  * Check if a column exists in a table
  */
 export function columnExists(
