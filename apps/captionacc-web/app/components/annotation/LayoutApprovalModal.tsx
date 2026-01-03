@@ -7,9 +7,15 @@ interface LayoutApprovalModalProps {
   videoId: string
   onClose: () => void
   onConfirm: () => void
+  showAlert?: (title: string, message: string, type: 'info' | 'error' | 'success') => void
 }
 
-export function LayoutApprovalModal({ videoId, onClose, onConfirm }: LayoutApprovalModalProps) {
+export function LayoutApprovalModal({
+  videoId,
+  onClose,
+  onConfirm,
+  showAlert,
+}: LayoutApprovalModalProps) {
   const handleConfirm = async () => {
     onClose()
 
@@ -32,7 +38,7 @@ export function LayoutApprovalModal({ videoId, onClose, onConfirm }: LayoutAppro
       }).catch(err => console.error('Frame re-cropping failed:', err))
     } catch (err) {
       console.error('Error marking layout complete:', err)
-      alert('Failed to mark layout complete')
+      showAlert?.('Approval Failed', 'Failed to mark layout complete', 'error')
     }
   }
 
