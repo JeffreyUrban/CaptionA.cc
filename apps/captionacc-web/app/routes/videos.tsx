@@ -183,6 +183,10 @@ function PageHeader({ onCreateFolder }: { onCreateFolder: () => void }) {
             <div className="w-3 h-3 rounded-sm bg-pink-500" />
             <span>Pending</span>
           </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-3 rounded-sm bg-purple-700" />
+            <span>Issue</span>
+          </div>
         </div>
         {/* Action Buttons */}
         <div className="flex items-center gap-3">
