@@ -145,9 +145,12 @@ export function useMoveOperation({
       setMoveModal({ open: false })
       setSelectedTargetFolder('')
 
-      // Clear cached stats for the moved video
+      // Clear cached stats for the moved video (old and new paths)
       if (itemType === 'video' && clearVideoStats) {
-        clearVideoStats(itemPath)
+        clearVideoStats(itemPath) // Clear old path
+        if (data.newPath) {
+          clearVideoStats(data.newPath) // Clear new path to force refresh
+        }
       }
 
       onMoveComplete()

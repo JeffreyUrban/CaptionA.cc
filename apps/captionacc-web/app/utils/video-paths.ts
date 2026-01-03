@@ -203,33 +203,36 @@ export function getAllVideos(): VideoMetadata[] {
                   }
                 | undefined
 
-              if (result) {
-                // Validate display_path to filter out corrupted/invalid entries
-                const isValidDisplayPath =
-                  result.display_path &&
-                  result.display_path.length > 0 &&
-                  // Not a UUID bucket directory (2-char hex like "f0", "ff", "12")
-                  !(
-                    result.display_path.length === 2 && /^[0-9a-f]{2}$/i.test(result.display_path)
-                  ) &&
-                  // Not a single number (like "1", "20")
-                  !/^\d+$/.test(result.display_path) &&
-                  // Not a hidden file/folder
-                  !result.display_path.startsWith('.')
+              // Check processing status to filter out pending duplicates and deleted videos
+              const status = db
+                .prepare(
+                  `
+                SELECT status, deleted
+                FROM processing_status
+                WHERE id = 1
+              `
+                )
+                .get() as { status: string; deleted: number } | undefined
 
-                if (isValidDisplayPath) {
-                  videos.push({
-                    videoId: result.video_id,
-                    videoHash: result.video_hash,
-                    storagePath: result.storage_path,
-                    displayPath: result.display_path,
-                    originalFilename: result.original_filename,
-                  })
-                } else {
-                  console.warn(
-                    `[VideoResolution] Skipping invalid display_path: "${result.display_path}" in ${dbPath}`
-                  )
+              if (result?.display_path) {
+                // Filter out pending duplicates and deleted videos
+                if (status?.status === 'pending_duplicate_resolution') {
+                  // Skip videos awaiting duplicate resolution
+                  return
                 }
+                if (status?.deleted === 1) {
+                  // Skip deleted videos
+                  return
+                }
+
+                // Valid video - add to list
+                videos.push({
+                  videoId: result.video_id,
+                  videoHash: result.video_hash,
+                  storagePath: result.storage_path,
+                  displayPath: result.display_path,
+                  originalFilename: result.original_filename,
+                })
               }
             } finally {
               db.close()
