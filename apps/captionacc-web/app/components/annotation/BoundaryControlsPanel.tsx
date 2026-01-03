@@ -7,10 +7,9 @@ import { BoundaryActionButtons } from './BoundaryActionButtons'
 import { BoundaryAnnotationInfo } from './BoundaryAnnotationInfo'
 import { BoundaryMarkingControls } from './BoundaryMarkingControls'
 import { BoundaryShortcutsPanel } from './BoundaryShortcutsPanel'
-import { BoundarySpacingControl } from './BoundarySpacingControl'
 import { BoundaryVideoInfo } from './BoundaryVideoInfo'
 
-import type { Annotation, AnnotationState, FrameSpacing } from '~/types/boundaries'
+import type { Annotation, AnnotationState } from '~/types/boundaries'
 
 interface BoundaryControlsPanelProps {
   // Video info
@@ -23,10 +22,6 @@ interface BoundaryControlsPanelProps {
   onJumpInputChange: (value: string) => void
   onJump: () => void
   onActivateCurrentFrame: () => void
-
-  // Frame spacing
-  frameSpacing: FrameSpacing
-  onFrameSpacingChange: (spacing: FrameSpacing) => void
 
   // Marking controls
   markedStart: number | null
@@ -69,8 +64,6 @@ export function BoundaryControlsPanel({
   onJumpInputChange,
   onJump,
   onActivateCurrentFrame,
-  frameSpacing,
-  onFrameSpacingChange,
   markedStart,
   markedEnd,
   onJumpToStart,
@@ -119,9 +112,6 @@ export function BoundaryControlsPanel({
         onJump={onJump}
         onActivateCurrentFrame={onActivateCurrentFrame}
       />
-
-      {/* Frame spacing */}
-      <BoundarySpacingControl frameSpacing={frameSpacing} onChange={onFrameSpacingChange} />
 
       {/* Boundaries */}
       <BoundaryMarkingControls

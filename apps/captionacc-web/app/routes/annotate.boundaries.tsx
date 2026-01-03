@@ -81,8 +81,6 @@ export default function BoundaryWorkflow() {
             onJumpInputChange={workflow.setJumpToFrameInput}
             onJump={() => void workflow.jumpToFrame()}
             onActivateCurrentFrame={() => void workflow.activateCurrentFrameAnnotation()}
-            frameSpacing={workflow.frameSpacing}
-            onFrameSpacingChange={workflow.setFrameSpacing}
             markedStart={displayState.markedStart}
             markedEnd={displayState.markedEnd}
             onJumpToStart={workflow.jumpToStart}

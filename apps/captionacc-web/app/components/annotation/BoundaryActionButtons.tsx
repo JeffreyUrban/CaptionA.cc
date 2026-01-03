@@ -119,7 +119,7 @@ export function BoundaryActionButtons({
         disabled={!canSave}
         className={`w-full rounded-md border-2 px-4 py-2 text-sm font-semibold ${
           canSave
-            ? 'border-orange-500 text-orange-600 hover:bg-orange-50 dark:border-orange-600 dark:text-orange-400 dark:hover:bg-orange-950'
+            ? 'border-purple-700 text-purple-600 hover:bg-purple-100 dark:border-purple-700 dark:text-purple-400 dark:hover:bg-purple-950'
             : 'cursor-not-allowed border-gray-300 text-gray-400 dark:border-gray-700 dark:text-gray-600'
         }`}
       >

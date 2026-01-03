@@ -14,7 +14,7 @@ import { useVideoMetadata } from './useVideoMetadata'
 import { useVideoTouched } from './useVideoTouched'
 import { useWorkflowProgress } from './useWorkflowProgress'
 
-import type { BoundaryDisplayState, FrameSpacing, Annotation } from '~/types/boundaries'
+import type { BoundaryDisplayState, Annotation } from '~/types/boundaries'
 import {
   calculateFrameOpacity,
   calculateVisibleFramePositions,
@@ -42,8 +42,6 @@ interface UseBoundaryWorkflowStateReturn {
   cropHeight: number
 
   // UI state
-  frameSpacing: FrameSpacing
-  setFrameSpacing: (spacing: FrameSpacing) => void
   jumpToFrameInput: string
   setJumpToFrameInput: (value: string) => void
   showHelpModal: boolean
@@ -171,7 +169,6 @@ export function useBoundaryWorkflowState({
   const { currentFrameIndex, annotations, markedStart, markedEnd } = displayState
 
   // UI state
-  const [frameSpacing, setFrameSpacing] = useState<FrameSpacing>('linear')
   const [windowHeight, setWindowHeight] = useState(
     typeof window !== 'undefined' ? window.innerHeight : 1000
   )
@@ -370,8 +367,6 @@ export function useBoundaryWorkflowState({
     totalFrames,
     cropWidth,
     cropHeight,
-    frameSpacing,
-    setFrameSpacing,
     jumpToFrameInput,
     setJumpToFrameInput,
     showHelpModal,

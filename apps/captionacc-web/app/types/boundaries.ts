@@ -24,8 +24,6 @@ export interface Annotation {
   updated_at?: string
 }
 
-export type FrameSpacing = 'linear' | 'exponential' | 'hybrid'
-
 /**
  * Display state synchronized by RAF loop from internal refs.
  * This is the single source of render state for the boundary workflow.
