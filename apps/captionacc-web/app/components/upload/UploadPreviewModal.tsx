@@ -93,12 +93,15 @@ export function UploadPreviewModal({
           {/* Content */}
           <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6">
             {/* File Count Summary */}
-            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg px-4 py-3">
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg px-4 py-3 space-y-2">
               <p className="text-sm text-blue-900 dark:text-blue-100">
                 Found <span className="font-semibold">{totalCount} video files</span>
                 {files[0] && files[0].relativePath.includes('/') && (
                   <span> in folder structure</span>
                 )}
+              </p>
+              <p className="text-xs text-blue-800 dark:text-blue-200">
+                Non-video files were automatically filtered out
               </p>
             </div>
 

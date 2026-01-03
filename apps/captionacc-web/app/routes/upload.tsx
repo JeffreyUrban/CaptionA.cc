@@ -23,7 +23,6 @@ import { AppLayout } from '~/components/AppLayout'
 import { UploadActiveSection } from '~/components/upload/UploadActiveSection'
 import { UploadDropZone } from '~/components/upload/UploadDropZone'
 import { UploadDuplicatesSection } from '~/components/upload/UploadDuplicatesSection'
-import { UploadFolderSelector } from '~/components/upload/UploadFolderSelector'
 import { UploadHistorySection } from '~/components/upload/UploadHistorySection'
 import { UploadPreviewModal } from '~/components/upload/UploadPreviewModal'
 import { useUploadFolders } from '~/hooks/useUploadFolders'
@@ -62,10 +61,8 @@ export default function UploadPage() {
   const [isProcessingDrop, setIsProcessingDrop] = useState(false)
   const [processingStatus, setProcessingStatus] = useState('')
 
-  // Folder selector
-  const { selectedFolder, setSelectedFolder, availableFolders } = useUploadFolders(
-    loaderData.preselectedFolder
-  )
+  // Load available folders for the modal
+  const { availableFolders } = useUploadFolders(loaderData.preselectedFolder)
 
   // Upload store state - subscribe to the objects, convert to arrays with useMemo
   const activeUploadsObj = useUploadStore(state => state.activeUploads)
@@ -251,14 +248,32 @@ export default function UploadPage() {
     [collectFilesFromEntry, showUploadPreview]
   )
 
+  // Show loading before file input opens
+  const handleFileInputClick = useCallback(() => {
+    setIsProcessingDrop(true)
+    setProcessingStatus('Opening file browser...')
+  }, [])
+
+  // Hide loading if user cancels (input loses focus without selecting files)
+  const handleFileInputCancel = useCallback(() => {
+    setIsProcessingDrop(false)
+    setProcessingStatus('')
+  }, [])
+
   // File input handler
   const handleFileSelect = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
       const fileList = e.target.files
-      if (!fileList || fileList.length === 0) return
 
-      setIsProcessingDrop(true)
-      setProcessingStatus('Processing files...')
+      // If no files selected (user canceled), hide loading
+      if (!fileList || fileList.length === 0) {
+        setIsProcessingDrop(false)
+        setProcessingStatus('')
+        return
+      }
+
+      // Update status - still showing loading from button click
+      setProcessingStatus('Loading file list...')
 
       try {
         // Convert FileList to UploadFile array
@@ -381,11 +396,6 @@ export default function UploadPage() {
         {/* Drop Zone (shown when no uploads) */}
         {showDropZone && (
           <div className="mt-8">
-            <UploadFolderSelector
-              selectedFolder={selectedFolder}
-              availableFolders={availableFolders}
-              onSelect={setSelectedFolder}
-            />
             <UploadDropZone
               dragActive={isDragActive}
               onDragEnter={handleDragEnter}
@@ -393,6 +403,8 @@ export default function UploadPage() {
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
               onFileSelect={handleFileSelect}
+              onFileInputClick={handleFileInputClick}
+              onFileInputCancel={handleFileInputCancel}
             />
           </div>
         )}
@@ -400,15 +412,6 @@ export default function UploadPage() {
         {/* Upload Sections */}
         {hasAnyUploads && (
           <>
-            {/* Folder Selector (compact version when uploads active) */}
-            <div className="mt-6">
-              <UploadFolderSelector
-                selectedFolder={selectedFolder}
-                availableFolders={availableFolders}
-                onSelect={setSelectedFolder}
-              />
-            </div>
-
             {/* Active Uploads */}
             <UploadActiveSection
               uploads={activeUploads}
@@ -469,7 +472,7 @@ export default function UploadPage() {
         <UploadPreviewModal
           files={pendingFiles}
           availableFolders={availableFolders}
-          defaultTargetFolder={selectedFolder}
+          defaultTargetFolder={loaderData.preselectedFolder}
           onConfirm={handleUploadConfirm}
           onCancel={handleUploadCancel}
         />

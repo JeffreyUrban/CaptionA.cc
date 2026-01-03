@@ -14,6 +14,8 @@ interface UploadDropZoneProps {
   onDragLeave: (e: React.DragEvent) => void
   onDrop: (e: React.DragEvent) => void
   onFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void
+  onFileInputClick?: () => void
+  onFileInputCancel?: () => void
 }
 
 /**
@@ -26,9 +28,45 @@ export function UploadDropZone({
   onDragLeave,
   onDrop,
   onFileSelect,
+  onFileInputClick,
+  onFileInputCancel,
 }: UploadDropZoneProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const folderInputRef = useRef<HTMLInputElement>(null)
+
+  const handleFolderButtonClick = () => {
+    onFileInputClick?.()
+
+    // Listen for window focus to detect when dialog closes
+    const handleWindowFocus = () => {
+      setTimeout(() => {
+        // Check if input has files after dialog closes
+        if (!folderInputRef.current?.files?.length) {
+          onFileInputCancel?.()
+        }
+      }, 100)
+    }
+
+    window.addEventListener('focus', handleWindowFocus, { once: true })
+    folderInputRef.current?.click()
+  }
+
+  const handleFileButtonClick = () => {
+    onFileInputClick?.()
+
+    // Listen for window focus to detect when dialog closes
+    const handleWindowFocus = () => {
+      setTimeout(() => {
+        // Check if input has files after dialog closes
+        if (!fileInputRef.current?.files?.length) {
+          onFileInputCancel?.()
+        }
+      }, 100)
+    }
+
+    window.addEventListener('focus', handleWindowFocus, { once: true })
+    fileInputRef.current?.click()
+  }
 
   return (
     <>
@@ -83,23 +121,28 @@ export function UploadDropZone({
       <div className="mt-6 space-y-3">
         <div className="flex gap-3 justify-center">
           <button
-            onClick={() => folderInputRef.current?.click()}
+            onClick={handleFolderButtonClick}
             className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
           >
             <FolderIcon className="h-5 w-5" />
             Upload Folder
           </button>
           <button
-            onClick={() => fileInputRef.current?.click()}
+            onClick={handleFileButtonClick}
             className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
           >
             <DocumentIcon className="h-5 w-5" />
             Upload Files
           </button>
         </div>
-        <p className="text-xs text-center text-gray-500 dark:text-gray-400">
-          Note: Your browser may ask for permission to access folders
-        </p>
+        <div className="text-xs text-center text-gray-500 dark:text-gray-400 space-y-1">
+          <p className="font-medium">Note: Your browser will ask permission to access the folder</p>
+          <p>
+            The browser counts <span className="font-semibold">all files</span> (including
+            non-videos), but only <span className="font-semibold">video files</span> will be
+            uploaded
+          </p>
+        </div>
       </div>
     </>
   )
