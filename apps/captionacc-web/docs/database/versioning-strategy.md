@@ -1,45 +1,245 @@
-# Schema Versioning Challenges
+# Schema Versioning Strategy
 
-## Per-Video Architecture Implications
+## Approach: Schema Version Number
 
-**Challenge:** Standard migration tracking patterns assume single database.
+**Decision:** Track schema version number in each database, not individual migration history.
 
-**Our Reality:** Many independent SQLite databases with no shared state.
+**Rationale:** Databases are independent, frequently added/deleted, and restored from backups at different schema versions. Version number provides exactly what's needed: "Is this database current?"
 
-### Problems
+## Database Metadata Table
 
-1. **No global schema version** - Each database tracks its own state (or doesn't)
-2. **Incomplete databases exist** - Some databases created but never fully initialized
-3. **Can't query "which databases need migration"** - Must scan filesystem and check each
-4. **Individual failures** - Migration may succeed on 90% of databases, fail on 10%
+```sql
+CREATE TABLE IF NOT EXISTS database_metadata (
+    id INTEGER PRIMARY KEY CHECK(id = 1),
 
-### Current Approach
+    -- Schema version tracking
+    schema_version INTEGER NOT NULL,
+    schema_checksum TEXT,              -- SHA256 of schema for verification
 
-**Detection:** Each migration checks if already applied by examining schema:
+    -- Lifecycle tracking
+    created_at TEXT NOT NULL,
+    migrated_at TEXT,                  -- When last migration applied
+    verified_at TEXT                   -- When schema last verified
+);
+```
 
-- `columnExists(db, 'table', 'column')` for column additions
-- `tableExists(db, 'table')` for table creations
-- `schema.sql.includes('value')` for CHECK constraint modifications
+**Schema version semantics:**
 
-**Consequences:**
+- Version 9 = migrations 001-009 applied
+- Version 0 = new/uninitialized database
+- Current version defined in code (e.g., `const CURRENT_SCHEMA_VERSION = 9`)
 
-- Idempotent by necessity (migrations run multiple times safely)
-- No migration history tracking
-- No way to know which specific migrations applied
-- Manual "already applied" check in every migration function
+## Migration Pattern
 
-### Standard Patterns That Don't Apply
+### Per-Database Migration
 
-**Schema migrations table:** Would need to be created/maintained in every database independently. No way to query "show me all databases at schema v7" without scanning all databases.
+```typescript
+export function migrateDatabase(dbPath: string): void {
+  const db = new Database(dbPath)
 
-**Centralized tracking:** Fundamentally incompatible with per-video isolation.
+  try {
+    // Get current database version
+    const result = db.prepare('SELECT schema_version FROM database_metadata').get() as
+      | { schema_version: number }
+      | undefined
 
-**Migration ordering guarantees:** Only enforced by order in `migrateDatabase()` function, not by database state.
+    const dbVersion = result?.schema_version ?? 0
 
-## Adapting to This Architecture
+    // Run pending migrations
+    for (let v = dbVersion + 1; v <= CURRENT_SCHEMA_VERSION; v++) {
+      applyMigration(db, v)
+    }
 
-**Accept:** Per-video isolation means per-video schema state. No global view.
+    // Update version and checksum
+    const schemaChecksum = computeSchemaChecksum(db)
+    db.prepare(
+      `
+      UPDATE database_metadata
+      SET schema_version = ?,
+          schema_checksum = ?,
+          migrated_at = datetime('now'),
+          verified_at = datetime('now')
+    `
+    ).run(CURRENT_SCHEMA_VERSION, schemaChecksum)
+  } finally {
+    db.close()
+  }
+}
+```
 
-**Embrace:** Idempotent migrations, table existence checks, graceful incomplete database handling.
+### Global Migration Orchestrator
 
-**Future consideration:** If migrating to centralized database, current per-video approach makes data migration straightforward (each database is independent unit).
+```typescript
+// Scan all databases and migrate
+async function migrateAllDatabases() {
+  const databases = findAllDatabases()
+  const results = { current: 0, migrated: 0, failed: 0 }
+
+  for (const dbPath of databases) {
+    const version = getDatabaseVersion(dbPath)
+
+    if (version === CURRENT_SCHEMA_VERSION) {
+      results.current++
+    } else {
+      try {
+        migrateDatabase(dbPath)
+        results.migrated++
+      } catch (error) {
+        results.failed++
+        console.error(`Failed to migrate ${dbPath}:`, error)
+      }
+    }
+  }
+
+  return results
+}
+```
+
+## Use Cases
+
+### Restore Old Backup
+
+```
+1. Restore backup from storage
+2. Check version: SELECT schema_version FROM database_metadata → 5
+3. Current version: 9
+4. Migration runner applies migrations 006-009
+5. Database updated to version 9
+```
+
+### Add New Video
+
+```sql
+-- Initialize new database at current version
+INSERT INTO database_metadata (
+    schema_version,
+    created_at,
+    verified_at
+) VALUES (9, datetime('now'), datetime('now'));
+```
+
+### Delete Video
+
+```
+rm -rf local/data/{hash}/{uuid}/
+```
+
+No migration history cleanup needed - entire database deleted.
+
+### Health Check
+
+```typescript
+// Aggregate versions across all databases
+function checkDatabaseHealth() {
+  const databases = findAllDatabases()
+  const versionCounts = new Map<number, number>()
+
+  for (const dbPath of databases) {
+    const version = getDatabaseVersion(dbPath)
+    versionCounts.set(version, (versionCounts.get(version) || 0) + 1)
+  }
+
+  console.log('Database Version Report:')
+  for (const [version, count] of versionCounts.entries()) {
+    const status = version === CURRENT_SCHEMA_VERSION ? '✓' : '⚠'
+    console.log(`  Version ${version}: ${count} databases ${status}`)
+  }
+}
+```
+
+## Schema Verification
+
+**Checksum approach:** Hash critical schema elements to detect drift/corruption.
+
+```typescript
+function computeSchemaChecksum(db: Database): string {
+  // Get table definitions in deterministic order
+  const schema = db
+    .prepare(
+      `
+    SELECT sql FROM sqlite_master
+    WHERE type IN ('table', 'index', 'view')
+    ORDER BY name
+  `
+    )
+    .all()
+
+  const schemaSQL = schema.map(s => s.sql).join('\n')
+  return sha256(schemaSQL)
+}
+```
+
+**Verification workflow:**
+
+1. After migration: compute and store checksum
+2. On database open: optionally verify checksum matches expected
+3. Health check: report databases with mismatched checksums
+
+## Operational Tools
+
+### Migration Runner
+
+```bash
+# Migrate all databases
+npx tsx scripts/migrate-all-databases.ts
+
+# Output:
+# Scanning databases...
+# Current (v9): 350 databases ✓
+# Needs migration: 24 databases
+# [1/24] Migrating {hash}/{uuid}... ✓
+# [2/24] Migrating {hash}/{uuid}... ✓
+# ...
+# Complete: 24 migrated, 0 failed
+```
+
+### Health Check
+
+```bash
+# Check schema versions
+npx tsx scripts/check-database-health.ts
+
+# Output:
+# Database Version Report:
+#   Version 9: 374 databases ✓
+#   Version 8: 0 databases
+#   Incomplete: 0 databases
+```
+
+## Architecture Benefits
+
+**Parallel execution:** Databases are independent, can migrate concurrently
+
+**Isolated failures:** One corrupt database doesn't block others
+
+**Incremental progress:** Can resume after partial failure
+
+**Simple cleanup:** Delete database = delete directory, no shared state to update
+
+## Creating New Database
+
+**Initialize at current version:**
+
+```typescript
+function createNewDatabase(dbPath: string): void {
+  const db = new Database(dbPath)
+
+  // Apply current schema
+  db.exec(readFileSync('app/db/annotations-schema.sql', 'utf-8'))
+
+  // Initialize metadata at current version
+  db.prepare(
+    `
+    INSERT INTO database_metadata (
+      schema_version,
+      created_at,
+      verified_at
+    ) VALUES (?, datetime('now'), datetime('now'))
+  `
+  ).run(CURRENT_SCHEMA_VERSION)
+
+  db.close()
+}
+```
+
+All databases have `database_metadata` table. New databases initialized at current version.
