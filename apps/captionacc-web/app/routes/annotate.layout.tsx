@@ -14,9 +14,11 @@ import { LayoutControlPanel } from '~/components/annotation/LayoutControlPanel'
 import { LayoutErrorScreen } from '~/components/annotation/LayoutErrorScreen'
 import { LayoutMainCanvas } from '~/components/annotation/LayoutMainCanvas'
 import { LayoutThumbnailGrid } from '~/components/annotation/LayoutThumbnailGrid'
+import { ProcessingIndicator } from '~/components/ProcessingIndicator'
 import { useKeyboardShortcuts } from '~/hooks/useKeyboardShortcuts'
 import { useLayoutCanvas, SELECTION_PADDING } from '~/hooks/useLayoutCanvas'
 import { useLayoutData } from '~/hooks/useLayoutData'
+import { useProcessingStatus } from '~/hooks/useProcessingStatus'
 import { useVideoTouched } from '~/hooks/useVideoTouched'
 import { RECALC_THRESHOLD, type KeyboardShortcutContext } from '~/types/layout'
 import { generateAnalysisThumbnail } from '~/utils/layout-canvas-helpers'
@@ -35,6 +37,9 @@ export default function AnnotateLayout() {
 
   // Mark video as being worked on
   useVideoTouched(videoId)
+
+  // Track background processing status
+  const processingStatus = useProcessingStatus(videoId)
 
   // Modal state
   const [showApproveModal, setShowApproveModal] = useState(false)
@@ -214,6 +219,9 @@ export default function AnnotateLayout() {
               onMouseMove={handleCanvasMouseMove}
               onContextMenu={handleCanvasContextMenu}
             />
+
+            {/* Processing status indicator */}
+            <ProcessingIndicator status={processingStatus} />
 
             {/* Thumbnail panel */}
             <LayoutThumbnailGrid

@@ -7,6 +7,8 @@
 import { exec } from 'child_process'
 import { resolve } from 'path'
 
+import { completeProcessing } from './processing-status-tracker'
+
 /**
  * Get path to annotations database for a video.
  */
@@ -43,6 +45,8 @@ export function triggerModelTraining(videoId: string): void {
       if (stderr) {
         console.error(`[Model Training] stderr:`, stderr)
       }
+      // Mark as complete even on error
+      completeProcessing(videoId)
     } else {
       console.log(`[Model Training] Success for ${videoId}`)
       console.log(stdout)
@@ -58,9 +62,13 @@ export function triggerModelTraining(videoId: string): void {
         .then(response => response.json())
         .then(result => {
           console.log(`[Model Training] Predictions recalculated:`, result)
+          // Mark as complete after predictions recalculated
+          completeProcessing(videoId)
         })
         .catch(err => {
           console.error(`[Model Training] Failed to recalculate predictions:`, err.message)
+          // Mark as complete even on error
+          completeProcessing(videoId)
         })
     }
   })
