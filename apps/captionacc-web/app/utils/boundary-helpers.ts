@@ -32,6 +32,8 @@ export function getAnnotationBorderColor(annotation: Annotation): string {
       return 'border-teal-500'
     case 'gap':
       return ''
+    case 'issue':
+      return 'border-orange-500'
   }
 }
 

@@ -47,6 +47,7 @@ interface BoundaryControlsPanelProps {
   onPrevious: () => void
   onNext: () => void
   onDelete: () => void
+  onMarkAsIssue: () => void
 
   // Help
   onShowHelp: () => void
@@ -86,6 +87,7 @@ export function BoundaryControlsPanel({
   onPrevious,
   onNext,
   onDelete,
+  onMarkAsIssue,
   onShowHelp,
   onSwitchToText,
   getEffectiveState,
@@ -152,6 +154,7 @@ export function BoundaryControlsPanel({
             onPrevious={onPrevious}
             onNext={onNext}
             onDelete={onDelete}
+            onMarkAsIssue={onMarkAsIssue}
           />
         </div>
       )}

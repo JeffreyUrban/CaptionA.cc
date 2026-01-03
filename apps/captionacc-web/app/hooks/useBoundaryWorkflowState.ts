@@ -63,6 +63,7 @@ interface UseBoundaryWorkflowStateReturn {
   jumpToEnd: () => void
   clearMarks: () => void
   saveAnnotation: () => Promise<void>
+  markAsIssue: () => Promise<void>
   deleteAnnotation: () => Promise<void>
   navigateToAnnotation: (direction: 'prev' | 'next') => Promise<void>
   jumpToFrame: () => Promise<void>
@@ -273,6 +274,21 @@ export function useBoundaryWorkflowState({
     }
   }, [canSave, markedStart, markedEnd, annotationData, visibleFramePositions])
 
+  const markAsIssue = useCallback(async () => {
+    if (!canSave || markedStart === null || markedEnd === null) return
+    setIsSaving(true)
+    try {
+      await annotationData.markAsIssue(
+        markedStart,
+        markedEnd,
+        currentFrameIndexRef,
+        visibleFramePositions
+      )
+    } finally {
+      setIsSaving(false)
+    }
+  }, [canSave, markedStart, markedEnd, annotationData, visibleFramePositions])
+
   const deleteAnnotation = useCallback(
     async () => annotationData.deleteAnnotation(currentFrameIndexRef),
     [annotationData]
@@ -371,6 +387,7 @@ export function useBoundaryWorkflowState({
     jumpToEnd,
     clearMarks: annotationData.clearMarks,
     saveAnnotation,
+    markAsIssue,
     deleteAnnotation,
     navigateToAnnotation,
     jumpToFrame,

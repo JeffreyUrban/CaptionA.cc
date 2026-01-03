@@ -134,7 +134,7 @@ function queryBasicStats(db: Database.Database): {
       `
       SELECT
         COUNT(*) as total,
-        SUM(CASE WHEN boundary_state = 'confirmed' THEN 1 ELSE 0 END) as confirmed,
+        SUM(CASE WHEN boundary_state = 'confirmed' OR boundary_state = 'issue' THEN 1 ELSE 0 END) as confirmed,
         SUM(CASE WHEN boundary_state = 'predicted' THEN 1 ELSE 0 END) as predicted,
         SUM(CASE WHEN boundary_state = 'gap' THEN 1 ELSE 0 END) as gaps
       FROM captions
@@ -198,7 +198,7 @@ function queryCoveredFrames(db: Database.Database): number {
   try {
     const result = db
       .prepare(
-        `SELECT SUM(end_frame_index - start_frame_index + 1) as covered_frames FROM captions WHERE boundary_state != 'gap' AND boundary_pending = 0`
+        `SELECT SUM(end_frame_index - start_frame_index + 1) as covered_frames FROM captions WHERE boundary_state != 'gap' AND boundary_state != 'issue' AND boundary_pending = 0`
       )
       .get() as { covered_frames: number | null }
     return result.covered_frames ?? 0

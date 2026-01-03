@@ -122,8 +122,8 @@ function toSnakeCase(annotation: Annotation) {
     id: annotation.id,
     start_frame_index: annotation.startFrameIndex,
     end_frame_index: annotation.endFrameIndex,
-    boundary_state: annotation.boundaryState,
-    boundary_pending: annotation.boundaryPending ? 1 : 0,
+    state: annotation.boundaryState, // Frontend expects 'state', not 'boundary_state'
+    pending: annotation.boundaryPending, // Frontend expects 'pending' as boolean
     boundary_updated_at: annotation.boundaryUpdatedAt,
     text: annotation.text,
     text_pending: annotation.textPending ? 1 : 0,

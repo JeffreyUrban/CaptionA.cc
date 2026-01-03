@@ -13,6 +13,7 @@ import {
   getOrCreateAnnotationDatabase,
 } from '~/utils/database'
 import { deleteCombinedImage, getOrGenerateCombinedImage } from '~/utils/image-processing'
+import type { AnnotationState } from '~/types/boundaries'
 
 // =============================================================================
 // Type Definitions
@@ -25,7 +26,7 @@ interface AnnotationRow {
   id: number
   start_frame_index: number
   end_frame_index: number
-  boundary_state: 'predicted' | 'confirmed' | 'gap'
+  boundary_state: AnnotationState
   boundary_pending: number
   boundary_updated_at: string
   text: string | null
@@ -44,7 +45,7 @@ export interface Annotation {
   id: number
   startFrameIndex: number
   endFrameIndex: number
-  boundaryState: 'predicted' | 'confirmed' | 'gap'
+  boundaryState: AnnotationState
   boundaryPending: boolean
   boundaryUpdatedAt: string
   text: string | null
@@ -62,7 +63,7 @@ export interface Annotation {
 export interface CreateAnnotationInput {
   startFrameIndex: number
   endFrameIndex: number
-  boundaryState?: 'predicted' | 'confirmed' | 'gap'
+  boundaryState?: AnnotationState
   boundaryPending?: boolean
   text?: string | null
 }
@@ -74,7 +75,7 @@ export interface UpdateAnnotationInput {
   id: number
   startFrameIndex: number
   endFrameIndex: number
-  boundaryState?: 'predicted' | 'confirmed' | 'gap'
+  boundaryState?: AnnotationState
 }
 
 /**

@@ -221,11 +221,11 @@ class BoundaryPredictor:
         from PIL import Image as PILImage
         self.ocr_viz_img = PILImage.open(io.BytesIO(ocr_viz_blob))
 
-        # Get confirmed caption segments
+        # Get confirmed caption segments (exclude 'issue' state - not clean boundaries)
         cursor.execute("""
             SELECT start_frame_index, end_frame_index
             FROM captions
-            WHERE boundary_state = 'confirmed'
+            WHERE boundary_state = 'confirmed' AND boundary_state != 'issue'
             ORDER BY start_frame_index
         """)
         confirmed_captions = cursor.fetchall()

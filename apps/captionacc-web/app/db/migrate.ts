@@ -213,6 +213,47 @@ export function migrateTextPreferences(dbPath: string): boolean {
 }
 
 /**
+ * Apply migration 006: Add 'issue' boundary state
+ */
+export function migrateIssueBoundaryState(dbPath: string): boolean {
+  const db = new Database(dbPath)
+  try {
+    // Check if migration is needed by checking the table schema
+    const schema = db
+      .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='captions'")
+      .get() as { sql: string } | undefined
+
+    if (!schema) {
+      console.log(`[Migration] No captions table found in ${dbPath}, skipping`)
+      return false
+    }
+
+    // Check if 'issue' is already in the CHECK constraint
+    if (schema.sql.includes("'issue'")) {
+      // Already migrated
+      return false
+    }
+
+    console.log(`[Migration] Applying issue_boundary_state migration to ${dbPath}`)
+
+    // Read migration SQL
+    const migrationPath = resolve(__dirname, 'migrations', '006_add_issue_boundary_state.sql')
+    const migrationSQL = readFileSync(migrationPath, 'utf-8')
+
+    // Execute migration SQL (exec handles PRAGMA and multi-statement transactions)
+    db.exec(migrationSQL)
+
+    console.log(`[Migration] Successfully migrated ${dbPath}`)
+    return true
+  } catch (error) {
+    console.error(`[Migration] Failed to migrate ${dbPath}:`, error)
+    throw error
+  } finally {
+    db.close()
+  }
+}
+
+/**
  * Apply all pending migrations to a database
  */
 export function migrateDatabase(dbPath: string): void {
@@ -221,4 +262,5 @@ export function migrateDatabase(dbPath: string): void {
   migrateDropCroppedFrameOCR(dbPath)
   migrateOCRVisualizationImage(dbPath)
   migrateTextPreferences(dbPath)
+  migrateIssueBoundaryState(dbPath)
 }

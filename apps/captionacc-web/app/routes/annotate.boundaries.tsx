@@ -99,6 +99,7 @@ export default function BoundaryWorkflow() {
             onPrevious={() => void workflow.navigateToAnnotation('prev')}
             onNext={() => void workflow.navigateToAnnotation('next')}
             onDelete={() => void workflow.deleteAnnotation()}
+            onMarkAsIssue={() => void workflow.markAsIssue()}
             onShowHelp={() => workflow.setShowHelpModal(true)}
             onSwitchToText={switchToText}
             getEffectiveState={getEffectiveState}

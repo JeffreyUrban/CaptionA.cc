@@ -1,15 +1,6 @@
-type AnnotationState = 'predicted' | 'confirmed' | 'gap'
+import { useState } from 'react'
 
-interface Annotation {
-  id: number
-  start_frame_index: number
-  end_frame_index: number
-  state: AnnotationState
-  pending: boolean
-  text: string | null
-  created_at?: string
-  updated_at?: string
-}
+import type { Annotation } from '~/types/boundaries'
 
 interface BoundaryActionButtonsProps {
   canSave: boolean
@@ -21,6 +12,7 @@ interface BoundaryActionButtonsProps {
   onPrevious: () => void
   onNext: () => void
   onDelete: () => void
+  onMarkAsIssue: () => void
 }
 
 export function BoundaryActionButtons({
@@ -33,7 +25,15 @@ export function BoundaryActionButtons({
   onPrevious,
   onNext,
   onDelete,
+  onMarkAsIssue,
 }: BoundaryActionButtonsProps) {
+  const [showIssueConfirm, setShowIssueConfirm] = useState(false)
+
+  const handleMarkAsIssue = () => {
+    setShowIssueConfirm(false)
+    onMarkAsIssue()
+  }
+
   return (
     <div className="space-y-3">
       <button
@@ -113,6 +113,46 @@ export function BoundaryActionButtons({
       >
         Delete Caption
       </button>
+
+      <button
+        onClick={() => setShowIssueConfirm(true)}
+        disabled={!canSave}
+        className={`w-full rounded-md border-2 px-4 py-2 text-sm font-semibold ${
+          canSave
+            ? 'border-orange-500 text-orange-600 hover:bg-orange-50 dark:border-orange-600 dark:text-orange-400 dark:hover:bg-orange-950'
+            : 'cursor-not-allowed border-gray-300 text-gray-400 dark:border-gray-700 dark:text-gray-600'
+        }`}
+      >
+        Mark as Issue
+      </button>
+
+      {/* Confirmation Dialog */}
+      {showIssueConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-gray-800">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+              Mark as Issue?
+            </h3>
+            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+              This will mark the caption boundaries as having an issue (e.g. not cleanly bounded).
+            </p>
+            <div className="mt-4 flex gap-3">
+              <button
+                onClick={() => setShowIssueConfirm(false)}
+                className="flex-1 rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleMarkAsIssue}
+                className="flex-1 rounded-md bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
