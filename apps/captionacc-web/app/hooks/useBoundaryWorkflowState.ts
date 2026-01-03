@@ -281,7 +281,7 @@ export function useBoundaryWorkflowState({
   const navigateToAnnotation = useCallback(
     async (direction: 'prev' | 'next') => {
       await annotationData.navigateToAnnotation(direction, currentFrameIndexRef)
-      jumpRequestedRef.current = true // Signal frame loader: this is a jump
+      // Frame index already updated by navigateToAnnotation, no jump signal needed
     },
     [annotationData]
   )
@@ -293,7 +293,7 @@ export function useBoundaryWorkflowState({
       currentFrameIndexRef
     )
     if (success) {
-      jumpRequestedRef.current = true // Signal frame loader: this is a jump
+      // Frame index already updated by jumpToFrameAnnotation, no jump signal needed
       setJumpToFrameInput('')
     }
   }, [jumpToFrameInput, totalFrames, annotationData])

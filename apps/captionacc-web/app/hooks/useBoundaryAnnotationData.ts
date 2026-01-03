@@ -75,6 +75,7 @@ export function useBoundaryAnnotationData({
   // Annotation cache for efficient batch loading
   const annotationCacheRef = useRef<Annotation[]>([])
   const highestQueriedFrameRef = useRef<number>(0) // Track where we've queried up to
+  const isLoadingInitialRef = useRef<boolean>(false) // Prevent concurrent initial loads
 
   // Refill annotation cache with next batch of workable annotations
   const refillCache = useCallback(async () => {
@@ -98,14 +99,6 @@ export function useBoundaryAnnotationData({
         // Update highest queried frame
         const lastAnnotation = data.annotations[data.annotations.length - 1]
         highestQueriedFrameRef.current = lastAnnotation.end_frame_index
-
-        console.log('[refillCache] Loaded batch:', {
-          startFrame,
-          count: data.annotations.length,
-          afterFilter: newAnnotations.length,
-          cacheSize: annotationCacheRef.current.length,
-          highestFrame: highestQueriedFrameRef.current,
-        })
       }
     } catch (error) {
       console.error('Failed to refill cache:', error)
@@ -125,6 +118,22 @@ export function useBoundaryAnnotationData({
   const loadInitialAnnotation = useCallback(async () => {
     if (!videoId) return null
 
+    // Skip if already loading or loaded (prevent React Strict Mode double-mount)
+    if (isLoadingInitialRef.current) {
+      // Wait for the other call to finish and return its result
+      while (isLoadingInitialRef.current) {
+        await new Promise(resolve => setTimeout(resolve, 10))
+      }
+      return activeAnnotationRef.current?.start_frame_index ?? null
+    }
+
+    if (activeAnnotationRef.current !== null && navigationStackRef.current.length > 0) {
+      return activeAnnotationRef.current.start_frame_index
+    }
+
+    // Set loading flag synchronously before async work
+    isLoadingInitialRef.current = true
+
     try {
       // Reset cache and load first batch
       annotationCacheRef.current = []
@@ -135,16 +144,6 @@ export function useBoundaryAnnotationData({
       const firstAnnotation = annotationCacheRef.current.shift()
 
       if (firstAnnotation) {
-        console.log('[loadInitialAnnotation] Loaded initial annotation:', {
-          id: firstAnnotation.id,
-          start_frame_index: firstAnnotation.start_frame_index,
-          end_frame_index: firstAnnotation.end_frame_index,
-          boundary_state:
-            (firstAnnotation as unknown as { boundary_state: string }).boundary_state ??
-            firstAnnotation.state,
-          cacheRemaining: annotationCacheRef.current.length,
-        })
-
         activeAnnotationRef.current = firstAnnotation
         markedStartRef.current = firstAnnotation.start_frame_index
         markedEndRef.current = firstAnnotation.end_frame_index
@@ -160,6 +159,8 @@ export function useBoundaryAnnotationData({
       }
     } catch (error) {
       console.error('Failed to load initial annotation:', error)
+    } finally {
+      isLoadingInitialRef.current = false
     }
     return null
   }, [videoId, refillCache, checkNavigationAvailability])
