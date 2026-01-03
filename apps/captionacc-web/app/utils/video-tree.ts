@@ -36,14 +36,10 @@ export interface VideoNode {
 export function buildVideoTree(videos: VideoInfo[]): TreeNode[] {
   const root: Map<string, TreeNode> = new Map()
 
-  // Filter out malformed video paths (just folder names with no file)
-  // These are corrupted entries from old upload bugs
+  // Filter out empty video paths (shouldn't happen, but be defensive)
   const validVideos = videos.filter(video => {
-    const segments = video.videoId.split('/')
-    if (segments.length < 2) {
-      console.warn(
-        `[buildVideoTree] Skipping malformed video path (no file name): ${video.videoId}`
-      )
+    if (!video.videoId || video.videoId.trim() === '') {
+      console.warn(`[buildVideoTree] Skipping empty video path`)
       return false
     }
     return true

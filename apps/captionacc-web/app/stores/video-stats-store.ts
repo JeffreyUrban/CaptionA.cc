@@ -78,17 +78,10 @@ function isProcessing(stats: VideoStats): boolean {
 }
 
 /**
- * Validate video ID (same logic as server-side)
+ * Validate video ID (only reject empty strings)
  */
 function isValidVideoId(videoId: string): boolean {
-  if (!videoId || videoId.length === 0) return false
-  // Not a UUID bucket directory (2-char hex like "f0", "ff", "12")
-  if (videoId.length === 2 && /^[0-9a-f]{2}$/i.test(videoId)) return false
-  // Not a single number (like "1", "20")
-  if (/^\d+$/.test(videoId)) return false
-  // Not a hidden file/folder
-  if (videoId.startsWith('.')) return false
-  return true
+  return Boolean(videoId && videoId.trim().length > 0)
 }
 
 // ============================================================================
