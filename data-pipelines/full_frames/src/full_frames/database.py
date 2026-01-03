@@ -225,7 +225,6 @@ def process_frames_to_database(
                     ocr_result=ocr_result,
                     db_path=db_path,
                     table_name="full_frame_ocr",
-                    crop_bounds_version=None,  # full_frame_ocr doesn't use crop_bounds_version
                 )
                 total_boxes += boxes_inserted
 
