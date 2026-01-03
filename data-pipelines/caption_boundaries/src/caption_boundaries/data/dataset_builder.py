@@ -142,12 +142,12 @@ def extract_frame_pairs_from_captions(db_path: Path) -> list[dict]:
     pairs = []
 
     try:
-        # Get all confirmed captions ordered by frame index
+        # Get all confirmed captions ordered by frame index (exclude 'issue' state - not clean boundaries)
         cursor.execute(
             """
             SELECT id, start_frame_index, end_frame_index, text
             FROM captions
-            WHERE boundary_state = 'confirmed'
+            WHERE boundary_state = 'confirmed' AND boundary_state != 'issue'
             ORDER BY start_frame_index
         """
         )

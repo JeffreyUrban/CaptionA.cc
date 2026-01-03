@@ -40,8 +40,8 @@ export default function AnnotateText() {
     queue,
     queueIndex,
     currentAnnotation,
-    perFrameOCR,
-    loadingFrames,
+    perFrameOCR: _perFrameOCR,
+    loadingFrames: _loadingFrames,
     text,
     setText,
     textStatus,
@@ -146,8 +146,6 @@ export default function AnnotateText() {
             currentFrameIndex={currentFrameIndex}
             onMouseDown={handleDragStart}
             imageContainerRef={combinedContainerRef}
-            perFrameOCR={perFrameOCR}
-            loadingFrames={loadingFrames}
             text={text}
             onTextChange={setText}
             textStyle={textStyle}

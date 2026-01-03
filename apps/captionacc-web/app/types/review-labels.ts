@@ -2,6 +2,8 @@
  * Types for the Review Labels annotation workflow
  */
 
+import type { BoxLabel, TextAnchor } from '~/types/enums'
+
 export interface FrameInfo {
   frameIndex: number
   totalBoxCount: number
@@ -15,8 +17,8 @@ export interface PotentialMislabel {
   frameIndex: number
   boxIndex: number
   boxText: string
-  userLabel: 'in' | 'out'
-  predictedLabel: 'in' | 'out' | null
+  userLabel: BoxLabel
+  predictedLabel: BoxLabel | null
   predictedConfidence: number | null
   boxTop: number
   topDeviation: number
@@ -38,7 +40,7 @@ export interface LayoutConfig {
   verticalStd: number | null
   boxHeight: number | null
   boxHeightStd: number | null
-  anchorType: 'left' | 'center' | 'right' | null
+  anchorType: TextAnchor | null
   anchorPosition: number | null
   topEdgeStd: number | null
   bottomEdgeStd: number | null
@@ -52,9 +54,9 @@ export interface BoxData {
   text: string
   originalBounds: { left: number; top: number; right: number; bottom: number }
   displayBounds: { left: number; top: number; right: number; bottom: number }
-  predictedLabel: 'in' | 'out'
+  predictedLabel: BoxLabel
   predictedConfidence: number
-  userLabel: 'in' | 'out' | null
+  userLabel: BoxLabel | null
   colorCode: string
 }
 

@@ -1,4 +1,4 @@
-type AnnotationState = 'predicted' | 'confirmed' | 'gap'
+type AnnotationState = 'predicted' | 'confirmed' | 'gap' | 'issue'
 
 interface Annotation {
   id: number

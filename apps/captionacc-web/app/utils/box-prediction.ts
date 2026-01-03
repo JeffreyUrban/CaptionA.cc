@@ -8,6 +8,8 @@
 
 import type Database from 'better-sqlite3'
 
+import type { BoxLabel, TextAnchor } from '~/types/enums'
+
 import {
   calculateFeatureImportance,
   computePooledCovariance,
@@ -39,7 +41,7 @@ interface VideoLayoutConfig {
   vertical_std: number | null
   box_height: number | null
   box_height_std: number | null
-  anchor_type: 'left' | 'center' | 'right' | null
+  anchor_type: TextAnchor | null
   anchor_position: number | null
 }
 
@@ -446,7 +448,7 @@ function queryUserAnnotation(
         AND label_source = 'user'
     `
       )
-      .get(frameIndex, boxIndex) as { label: 'in' | 'out' } | undefined
+      .get(frameIndex, boxIndex) as { label: BoxLabel } | undefined
 
     if (!annotation) return { isIn: 0.0, isOut: 0.0 }
     return annotation.label === 'in' ? { isIn: 1.0, isOut: 0.0 } : { isIn: 0.0, isOut: 1.0 }
@@ -1082,7 +1084,7 @@ function predictBayesian(
   timestampSeconds: number,
   durationSeconds: number,
   db: Database.Database
-): { label: 'in' | 'out'; confidence: number } {
+): { label: BoxLabel; confidence: number } {
   const features = extractFeatures(
     box,
     layout,
@@ -1184,7 +1186,7 @@ function predictBayesian(
 function predictWithHeuristics(
   boxBounds: BoxBounds,
   layoutConfig: VideoLayoutConfig
-): { label: 'in' | 'out'; confidence: number } {
+): { label: BoxLabel; confidence: number } {
   const frameHeight = layoutConfig.frame_height
   const boxCenterY = (boxBounds.top + boxBounds.bottom) / 2
   const boxHeight = boxBounds.bottom - boxBounds.top
@@ -1251,7 +1253,7 @@ export function predictBoxLabel(
   frameIndex: number,
   boxIndex: number,
   db?: Database.Database
-): { label: 'in' | 'out'; confidence: number } {
+): { label: BoxLabel; confidence: number } {
   // Try to use Bayesian model if database provided
   if (db) {
     try {

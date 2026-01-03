@@ -1,11 +1,13 @@
+import type { TextAnchor } from '~/types/enums'
+
 interface TextDisplayControlsProps {
-  textAnchor: 'left' | 'center' | 'right'
+  textAnchor: TextAnchor
   textSizePercent: number
   paddingScale: number
   actualTextSize: number
   expanded: boolean
   onExpandedChange: (expanded: boolean) => void
-  onTextAnchorChange: (anchor: 'left' | 'center' | 'right') => void
+  onTextAnchorChange: (anchor: TextAnchor) => void
   onTextSizeChange: (size: number) => void
   onPaddingScaleChange: (padding: number) => void
 }
@@ -48,11 +50,11 @@ export function TextDisplayControls({
             <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
               Text Anchor
             </label>
-            <div className="flex gap-2">
+            <div className="flex flex-col md:flex-row gap-2">
               <button
                 type="button"
                 onClick={() => onTextAnchorChange('left')}
-                className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
+                className={`flex-1 px-2 py-2 rounded-lg font-medium text-sm text-center transition-colors ${
                   textAnchor === 'left'
                     ? 'bg-blue-600 text-white'
                     : 'bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
@@ -63,7 +65,7 @@ export function TextDisplayControls({
               <button
                 type="button"
                 onClick={() => onTextAnchorChange('center')}
-                className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
+                className={`flex-1 px-2 py-2 rounded-lg font-medium text-sm text-center transition-colors ${
                   textAnchor === 'center'
                     ? 'bg-blue-600 text-white'
                     : 'bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
@@ -74,7 +76,7 @@ export function TextDisplayControls({
               <button
                 type="button"
                 onClick={() => onTextAnchorChange('right')}
-                className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
+                className={`flex-1 px-2 py-2 rounded-lg font-medium text-sm text-center transition-colors ${
                   textAnchor === 'right'
                     ? 'bg-blue-600 text-white'
                     : 'bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
@@ -87,11 +89,11 @@ export function TextDisplayControls({
 
           {/* Text Size */}
           <div>
-            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-              Text Size: {textSizePercent.toFixed(1)}% ({Math.round(actualTextSize)}px)
+            <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5 truncate">
+              Size: {textSizePercent.toFixed(1)}% ({Math.round(actualTextSize)}px)
             </label>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-500 dark:text-gray-400">1%</span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-gray-500 dark:text-gray-400 min-w-[2ch]">1</span>
               <input
                 type="range"
                 min="1.0"
@@ -99,22 +101,22 @@ export function TextDisplayControls({
                 step="0.1"
                 value={textSizePercent}
                 onChange={e => onTextSizeChange(parseFloat(e.target.value))}
-                className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
+                className="flex-1 min-w-0 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
               />
-              <span className="text-xs text-gray-500 dark:text-gray-400">10%</span>
+              <span className="text-xs text-gray-500 dark:text-gray-400 min-w-[3ch]">10</span>
             </div>
           </div>
 
           {/* Padding / Center Offset */}
           <div>
-            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+            <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5 truncate">
               {textAnchor === 'center'
-                ? `Center Offset: ${paddingScale >= 0 ? '+' : ''}${paddingScale.toFixed(2)}em`
-                : `${textAnchor === 'left' ? 'Left' : 'Right'} Padding: ${paddingScale.toFixed(2)}em`}
+                ? `Offset: ${paddingScale >= 0 ? '+' : ''}${paddingScale.toFixed(2)}em`
+                : `${textAnchor === 'left' ? 'L' : 'R'} Pad: ${paddingScale.toFixed(2)}em`}
             </label>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-500 dark:text-gray-400">
-                {textAnchor === 'center' ? '-2em' : textAnchor === 'right' ? '2em' : '0'}
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-gray-500 dark:text-gray-400 min-w-[3ch]">
+                {textAnchor === 'center' ? '-2' : textAnchor === 'right' ? '2' : '0'}
               </span>
               <input
                 type="range"
@@ -127,10 +129,10 @@ export function TextDisplayControls({
                   const actualValue = textAnchor === 'right' ? 2.0 - sliderValue : sliderValue
                   onPaddingScaleChange(actualValue)
                 }}
-                className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
+                className="flex-1 min-w-0 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
               />
-              <span className="text-xs text-gray-500 dark:text-gray-400">
-                {textAnchor === 'center' ? '+2em' : textAnchor === 'right' ? '0' : '2em'}
+              <span className="text-xs text-gray-500 dark:text-gray-400 min-w-[3ch]">
+                {textAnchor === 'center' ? '+2' : textAnchor === 'right' ? '0' : '2'}
               </span>
             </div>
           </div>

@@ -16,6 +16,21 @@ export default defineConfig(({ mode }) => ({
       '~': path.resolve(__dirname, './app'),
     },
   },
+  ssr: {
+    // Externalize canvas module for SSR - it's a native Node.js module
+    external: ['canvas'],
+  },
+  build: {
+    rollupOptions: {
+      // Only externalize canvas for SSR builds, not client builds
+      external: id => {
+        if (id === 'canvas') {
+          return true
+        }
+        return false
+      },
+    },
+  },
   plugins: [
     imagetools(), // Must come first to process image imports
     mdx({

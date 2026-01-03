@@ -13,6 +13,9 @@ const DEFAULT_LANGUAGE = 'zh-Hans' // Simplified Chinese
 const DEFAULT_TIMEOUT = 10000 // 10 seconds
 const MAX_RETRIES = 3
 
+// Python executable path - use venv Python if available, otherwise system python3
+const PYTHON_EXECUTABLE = path.resolve(process.cwd(), '../../.venv/bin/python3')
+
 /**
  * OCR result for a single image
  */
@@ -397,8 +400,8 @@ export async function runOCROnCombinedImage(
     const scriptPath = path.resolve(process.cwd(), 'scripts', 'run-frame-ocr.py')
     const args = ['--single', imagePath, language]
 
-    console.log(`[${reqId}] Spawning python3 ${scriptPath} ${args.join(' ')}`)
-    const python = spawn('python3', [scriptPath, ...args])
+    console.log(`[${reqId}] Spawning ${PYTHON_EXECUTABLE} ${scriptPath} ${args.join(' ')}`)
+    const python = spawn(PYTHON_EXECUTABLE, [scriptPath, ...args])
 
     let stdout = ''
     let stderr = ''

@@ -58,6 +58,7 @@ export function useBoundaryDisplaySync({
     let lastUpdateTime = 0
     let lastFrameIndex = 0
     let lastFrameCount = 0
+    let lastActiveAnnotationId: number | null = null
 
     const loop = (currentTime: number) => {
       const timeSinceUpdate = currentTime - lastUpdateTime
@@ -65,7 +66,11 @@ export function useBoundaryDisplaySync({
       // Check if data changed OR enough time passed for 60fps
       const frameIndex = refs.currentFrameIndexRef.current
       const frameCount = refs.framesRef.current.size
-      const dataChanged = frameIndex !== lastFrameIndex || frameCount !== lastFrameCount
+      const activeAnnotationId = refs.activeAnnotationRef.current?.id ?? null
+      const dataChanged =
+        frameIndex !== lastFrameIndex ||
+        frameCount !== lastFrameCount ||
+        activeAnnotationId !== lastActiveAnnotationId
 
       if (dataChanged && timeSinceUpdate >= FRAME_INTERVAL) {
         // Update display from ALL refs (non-urgent, batched by React 18)
@@ -88,6 +93,7 @@ export function useBoundaryDisplaySync({
         lastUpdateTime = currentTime
         lastFrameIndex = frameIndex
         lastFrameCount = frameCount
+        lastActiveAnnotationId = activeAnnotationId
       }
 
       // Continue loop

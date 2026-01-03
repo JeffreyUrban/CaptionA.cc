@@ -24,7 +24,7 @@ export function FrameViewer({
     <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
       {/* Frame info header */}
       <div className="mb-3 flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
-        <span className="font-medium">Frame {currentFrameIndex}: Image and OCR</span>
+        <span className="font-medium">Frame {currentFrameIndex}</span>
         <span className="text-xs">
           ({framePosition} of {totalFrames})
         </span>

@@ -14,7 +14,7 @@ import { useVideoMetadata } from './useVideoMetadata'
 import { useVideoTouched } from './useVideoTouched'
 import { useWorkflowProgress } from './useWorkflowProgress'
 
-import type { BoundaryDisplayState, FrameSpacing, Annotation } from '~/types/boundaries'
+import type { BoundaryDisplayState, Annotation } from '~/types/boundaries'
 import {
   calculateFrameOpacity,
   calculateVisibleFramePositions,
@@ -42,8 +42,6 @@ interface UseBoundaryWorkflowStateReturn {
   cropHeight: number
 
   // UI state
-  frameSpacing: FrameSpacing
-  setFrameSpacing: (spacing: FrameSpacing) => void
   jumpToFrameInput: string
   setJumpToFrameInput: (value: string) => void
   showHelpModal: boolean
@@ -63,6 +61,7 @@ interface UseBoundaryWorkflowStateReturn {
   jumpToEnd: () => void
   clearMarks: () => void
   saveAnnotation: () => Promise<void>
+  markAsIssue: () => Promise<void>
   deleteAnnotation: () => Promise<void>
   navigateToAnnotation: (direction: 'prev' | 'next') => Promise<void>
   jumpToFrame: () => Promise<void>
@@ -170,7 +169,6 @@ export function useBoundaryWorkflowState({
   const { currentFrameIndex, annotations, markedStart, markedEnd } = displayState
 
   // UI state
-  const [frameSpacing, setFrameSpacing] = useState<FrameSpacing>('linear')
   const [windowHeight, setWindowHeight] = useState(
     typeof window !== 'undefined' ? window.innerHeight : 1000
   )
@@ -273,6 +271,21 @@ export function useBoundaryWorkflowState({
     }
   }, [canSave, markedStart, markedEnd, annotationData, visibleFramePositions])
 
+  const markAsIssue = useCallback(async () => {
+    if (!canSave || markedStart === null || markedEnd === null) return
+    setIsSaving(true)
+    try {
+      await annotationData.markAsIssue(
+        markedStart,
+        markedEnd,
+        currentFrameIndexRef,
+        visibleFramePositions
+      )
+    } finally {
+      setIsSaving(false)
+    }
+  }, [canSave, markedStart, markedEnd, annotationData, visibleFramePositions])
+
   const deleteAnnotation = useCallback(
     async () => annotationData.deleteAnnotation(currentFrameIndexRef),
     [annotationData]
@@ -281,7 +294,7 @@ export function useBoundaryWorkflowState({
   const navigateToAnnotation = useCallback(
     async (direction: 'prev' | 'next') => {
       await annotationData.navigateToAnnotation(direction, currentFrameIndexRef)
-      jumpRequestedRef.current = true // Signal frame loader: this is a jump
+      // Frame index already updated by navigateToAnnotation, no jump signal needed
     },
     [annotationData]
   )
@@ -293,7 +306,7 @@ export function useBoundaryWorkflowState({
       currentFrameIndexRef
     )
     if (success) {
-      jumpRequestedRef.current = true // Signal frame loader: this is a jump
+      // Frame index already updated by jumpToFrameAnnotation, no jump signal needed
       setJumpToFrameInput('')
     }
   }, [jumpToFrameInput, totalFrames, annotationData])
@@ -354,8 +367,6 @@ export function useBoundaryWorkflowState({
     totalFrames,
     cropWidth,
     cropHeight,
-    frameSpacing,
-    setFrameSpacing,
     jumpToFrameInput,
     setJumpToFrameInput,
     showHelpModal,
@@ -371,6 +382,7 @@ export function useBoundaryWorkflowState({
     jumpToEnd,
     clearMarks: annotationData.clearMarks,
     saveAnnotation,
+    markAsIssue,
     deleteAnnotation,
     navigateToAnnotation,
     jumpToFrame,

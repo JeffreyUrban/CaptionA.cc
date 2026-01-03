@@ -46,7 +46,7 @@ def find_videos_with_confirmed_boundaries(data_dir: Path, min_confirmed: int = 5
             conn = sqlite3.connect(db_path)
             cursor = conn.cursor()
             cursor.execute(
-                "SELECT COUNT(*) FROM captions WHERE boundary_state = 'confirmed' AND boundary_pending = 0"
+                "SELECT COUNT(*) FROM captions WHERE boundary_state = 'confirmed' AND boundary_state != 'issue' AND boundary_pending = 0"
             )
             confirmed_count = cursor.fetchone()[0]
             conn.close()
@@ -87,7 +87,7 @@ def get_confirmed_captions(db_path: Path) -> list[tuple[int, int]]:
         """
         SELECT start_frame_index, end_frame_index
         FROM captions
-        WHERE boundary_state = 'confirmed' AND boundary_pending = 0
+        WHERE boundary_state = 'confirmed' AND boundary_state != 'issue' AND boundary_pending = 0
         ORDER BY start_frame_index
         """
     )

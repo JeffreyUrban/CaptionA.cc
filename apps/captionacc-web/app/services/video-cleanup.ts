@@ -25,7 +25,7 @@ import { getAllVideos, getDbPath, getVideoDir } from '~/utils/video-paths'
 
 const CLEANUP_INTERVAL_MS = 60 * 60 * 1000 // 1 hour
 const MAX_PROCESSING_ATTEMPTS = 3 // Max retries before marking as error
-const PROCESSING_STATES = ['extracting_frames', 'running_ocr', 'analyzing_layout'] as const
+const PROCESSING_STATES = ['extracting_frames', 'analyzing_layout'] as const
 
 let cleanupTimer: NodeJS.Timeout | null = null
 

@@ -5,6 +5,7 @@
  * multiple API route files, ensuring consistency and reducing maintenance burden.
  */
 
+import type { BoxLabel, LabelSource, AnnotationSource, TextAnchor } from '~/types/enums'
 import type { PixelBounds } from '~/utils/coordinate-utils'
 
 // =============================================================================
@@ -58,7 +59,7 @@ export interface VideoLayoutConfig {
   vertical_std: number | null
   box_height: number | null
   box_height_std: number | null
-  anchor_type: 'left' | 'center' | 'right' | null
+  anchor_type: TextAnchor | null
   anchor_position: number | null
   top_edge_std: number | null
   bottom_edge_std: number | null
@@ -122,7 +123,7 @@ export interface OcrBoxRecord {
   width: number
   /** Fractional height (0-1) */
   height: number
-  predicted_label: 'in' | 'out' | null
+  predicted_label: BoxLabel | null
   predicted_confidence: number | null
 }
 
@@ -130,7 +131,7 @@ export interface OcrBoxRecord {
  * Box label record from the full_frame_box_labels table.
  */
 export interface BoxLabelRecord {
-  annotation_source: string
+  annotation_source: AnnotationSource
   frame_index: number
   box_index: number
   box_text: string
@@ -138,9 +139,9 @@ export interface BoxLabelRecord {
   box_top: number
   box_right: number
   box_bottom: number
-  label: 'in' | 'out'
-  label_source: 'user' | 'model'
-  predicted_label: 'in' | 'out' | null
+  label: BoxLabel
+  label_source: LabelSource
+  predicted_label: BoxLabel | null
   predicted_confidence: number | null
   model_version: string | null
   labeled_at: string
@@ -169,9 +170,9 @@ export interface BoxData {
    * Used for frontend rendering where the displayed image is cropped.
    */
   displayBounds: { left: number; top: number; right: number; bottom: number }
-  predictedLabel: 'in' | 'out'
+  predictedLabel: BoxLabel
   predictedConfidence: number
-  userLabel: 'in' | 'out' | null
+  userLabel: BoxLabel | null
   /**
    * Color code for visual differentiation.
    * Combines prediction confidence and user annotation status.
@@ -226,7 +227,7 @@ export interface AnnotationStats {
  * Request body for saving box annotations.
  */
 export interface SaveBoxAnnotationsRequest {
-  annotations: Array<{ boxIndex: number; label: 'in' | 'out' }>
+  annotations: Array<{ boxIndex: number; label: BoxLabel }>
 }
 
 /**
@@ -241,7 +242,7 @@ export interface UpdateLayoutConfigRequest {
     verticalStd: number
     boxHeight: number
     boxHeightStd: number
-    anchorType: 'left' | 'center' | 'right'
+    anchorType: TextAnchor
     anchorPosition: number
   }
 }

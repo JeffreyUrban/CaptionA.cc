@@ -7,6 +7,7 @@
 
 import type Database from 'better-sqlite3'
 
+import type { BoxLabel, LabelSource, TextAnchor } from '~/types/enums'
 import { triggerModelTraining } from '~/services/model-training'
 import { predictBoxLabel, trainModel, initializeSeedModel } from '~/utils/box-prediction'
 import {
@@ -41,7 +42,7 @@ interface VideoLayoutConfigRow {
   vertical_std: number | null
   box_height: number | null
   box_height_std: number | null
-  anchor_type: 'left' | 'center' | 'right' | null
+  anchor_type: TextAnchor | null
   anchor_position: number | null
 }
 

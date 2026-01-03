@@ -77,7 +77,7 @@ function getBadgeColorClasses(color: string): string {
   const colorMap: Record<string, string> = {
     blue: defaultClasses,
     indigo: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400',
-    purple: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400',
+    purple: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
     yellow: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
     green: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
     teal: 'bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-400',

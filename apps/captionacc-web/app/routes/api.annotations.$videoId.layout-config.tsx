@@ -41,7 +41,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
   try {
     const body = (await request.json()) as UpdateLayoutConfigInput
 
-    const result = updateLayoutConfig(videoId, body)
+    const result = await updateLayoutConfig(videoId, body)
     return jsonResponse(result)
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error'

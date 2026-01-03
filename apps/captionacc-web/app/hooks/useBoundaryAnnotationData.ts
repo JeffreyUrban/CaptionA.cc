@@ -34,6 +34,12 @@ interface UseBoundaryAnnotationDataReturn {
     currentFrameIndexRef: React.RefObject<number>,
     visibleFramePositions: number[]
   ) => Promise<void>
+  markAsIssue: (
+    start: number,
+    end: number,
+    currentFrameIndexRef: React.RefObject<number>,
+    visibleFramePositions: number[]
+  ) => Promise<void>
   deleteAnnotation: (currentFrameIndexRef: React.RefObject<number>) => Promise<void>
   navigateToAnnotation: (
     direction: 'prev' | 'next',
@@ -75,6 +81,7 @@ export function useBoundaryAnnotationData({
   // Annotation cache for efficient batch loading
   const annotationCacheRef = useRef<Annotation[]>([])
   const highestQueriedFrameRef = useRef<number>(0) // Track where we've queried up to
+  const isLoadingInitialRef = useRef<boolean>(false) // Prevent concurrent initial loads
 
   // Refill annotation cache with next batch of workable annotations
   const refillCache = useCallback(async () => {
@@ -98,14 +105,6 @@ export function useBoundaryAnnotationData({
         // Update highest queried frame
         const lastAnnotation = data.annotations[data.annotations.length - 1]
         highestQueriedFrameRef.current = lastAnnotation.end_frame_index
-
-        console.log('[refillCache] Loaded batch:', {
-          startFrame,
-          count: data.annotations.length,
-          afterFilter: newAnnotations.length,
-          cacheSize: annotationCacheRef.current.length,
-          highestFrame: highestQueriedFrameRef.current,
-        })
       }
     } catch (error) {
       console.error('Failed to refill cache:', error)
@@ -125,6 +124,22 @@ export function useBoundaryAnnotationData({
   const loadInitialAnnotation = useCallback(async () => {
     if (!videoId) return null
 
+    // Skip if already loading or loaded (prevent React Strict Mode double-mount)
+    if (isLoadingInitialRef.current) {
+      // Wait for the other call to finish and return its result
+      while (isLoadingInitialRef.current) {
+        await new Promise(resolve => setTimeout(resolve, 10))
+      }
+      return activeAnnotationRef.current?.start_frame_index ?? null
+    }
+
+    if (activeAnnotationRef.current !== null && navigationStackRef.current.length > 0) {
+      return activeAnnotationRef.current.start_frame_index
+    }
+
+    // Set loading flag synchronously before async work
+    isLoadingInitialRef.current = true
+
     try {
       // Reset cache and load first batch
       annotationCacheRef.current = []
@@ -135,16 +150,6 @@ export function useBoundaryAnnotationData({
       const firstAnnotation = annotationCacheRef.current.shift()
 
       if (firstAnnotation) {
-        console.log('[loadInitialAnnotation] Loaded initial annotation:', {
-          id: firstAnnotation.id,
-          start_frame_index: firstAnnotation.start_frame_index,
-          end_frame_index: firstAnnotation.end_frame_index,
-          boundary_state:
-            (firstAnnotation as unknown as { boundary_state: string }).boundary_state ??
-            firstAnnotation.state,
-          cacheRemaining: annotationCacheRef.current.length,
-        })
-
         activeAnnotationRef.current = firstAnnotation
         markedStartRef.current = firstAnnotation.start_frame_index
         markedEndRef.current = firstAnnotation.end_frame_index
@@ -160,6 +165,8 @@ export function useBoundaryAnnotationData({
       }
     } catch (error) {
       console.error('Failed to load initial annotation:', error)
+    } finally {
+      isLoadingInitialRef.current = false
     }
     return null
   }, [videoId, refillCache, checkNavigationAvailability])
@@ -272,6 +279,95 @@ export function useBoundaryAnnotationData({
     [videoId, updateProgress, loadAnnotationsForRange, refillCache, checkNavigationAvailability]
   )
 
+  // Mark annotation as issue (unclean boundaries)
+  const markAsIssue = useCallback(
+    async (
+      start: number,
+      end: number,
+      currentFrameIndexRef: React.RefObject<number>,
+      visibleFramePositions: number[]
+    ) => {
+      const activeAnnotation = activeAnnotationRef.current
+      if (!activeAnnotation || start === null || end === null) return
+
+      try {
+        const encodedVideoId = encodeURIComponent(videoId)
+
+        console.log('[markAsIssue] Marking current annotation as issue:', {
+          id: activeAnnotation.id,
+          old_start: activeAnnotation.start_frame_index,
+          old_end: activeAnnotation.end_frame_index,
+          new_start: start,
+          new_end: end,
+        })
+
+        // Save the annotation with 'issue' state
+        const saveResponse = await fetch(`/api/annotations/${encodedVideoId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: activeAnnotation.id,
+            start_frame_index: start,
+            end_frame_index: end,
+            boundary_state: 'issue',
+          }),
+        })
+
+        if (!saveResponse.ok) {
+          throw new Error('Failed to mark annotation as issue')
+        }
+
+        // Update progress from database
+        await updateProgress()
+
+        // Reload annotations in current visible range
+        const startFrame = Math.min(...visibleFramePositions)
+        const endFrame = Math.max(...visibleFramePositions)
+        await loadAnnotationsForRange(startFrame, endFrame)
+
+        // Get next annotation from cache (refill if empty)
+        if (annotationCacheRef.current.length === 0) {
+          await refillCache()
+        }
+
+        const selectedAnnotation = annotationCacheRef.current.shift() ?? null
+
+        if (selectedAnnotation) {
+          console.log('[markAsIssue] Loaded next annotation:', {
+            id: selectedAnnotation.id,
+            start_frame_index: selectedAnnotation.start_frame_index,
+            end_frame_index: selectedAnnotation.end_frame_index,
+            boundary_state: selectedAnnotation.state,
+          })
+
+          activeAnnotationRef.current = selectedAnnotation
+          jumpTargetRef.current = selectedAnnotation.start_frame_index // Set pending jump target
+          jumpRequestedRef.current = true // Signal frame loader: Mark as Issue auto-advances
+          markedStartRef.current = selectedAnnotation.start_frame_index
+          markedEndRef.current = selectedAnnotation.end_frame_index
+
+          // Push new annotation to stack
+          navigationStackRef.current.push(selectedAnnotation.id)
+
+          // Check navigation availability for the new annotation
+          checkNavigationAvailability()
+        } else {
+          console.log('[markAsIssue] No more annotations not in stack - workflow complete')
+          // No more annotations - workflow complete
+          activeAnnotationRef.current = null
+          markedStartRef.current = null
+          markedEndRef.current = null
+          hasPrevAnnotationRef.current = false
+          hasNextAnnotationRef.current = false
+        }
+      } catch (error) {
+        console.error('Failed to mark annotation as issue:', error)
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- jumpRequestedRef and jumpTargetRef are refs and don't need to be in dependencies
+    [videoId, updateProgress, loadAnnotationsForRange, refillCache, checkNavigationAvailability]
+  )
+
   // Delete annotation
   const deleteAnnotation = useCallback(
     async (_currentFrameIndexRef: React.RefObject<number>) => {
@@ -361,6 +457,7 @@ export function useBoundaryAnnotationData({
             if (annotation) {
               activeAnnotationRef.current = annotation
               jumpTargetRef.current = annotation.start_frame_index
+              jumpRequestedRef.current = true // Signal frame loader to jump to new position
               markedStartRef.current = annotation.start_frame_index
               markedEndRef.current = annotation.end_frame_index
 
@@ -394,6 +491,7 @@ export function useBoundaryAnnotationData({
 
           activeAnnotationRef.current = nextAnnotation
           jumpTargetRef.current = nextAnnotation.start_frame_index
+          jumpRequestedRef.current = true // Signal frame loader to jump to new position
           markedStartRef.current = nextAnnotation.start_frame_index
           markedEndRef.current = nextAnnotation.end_frame_index
 
@@ -515,6 +613,7 @@ export function useBoundaryAnnotationData({
     loadInitialAnnotation,
     loadAnnotationsForRange,
     saveAnnotation,
+    markAsIssue,
     deleteAnnotation,
     navigateToAnnotation,
     jumpToFrameAnnotation,

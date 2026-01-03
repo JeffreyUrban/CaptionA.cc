@@ -7,7 +7,8 @@ CREATE TABLE IF NOT EXISTS captions (
     end_frame_index INTEGER NOT NULL,
 
     -- Boundary annotation fields
-    boundary_state TEXT NOT NULL DEFAULT 'predicted' CHECK(boundary_state IN ('predicted', 'confirmed', 'gap')),
+    -- CHECK constraint values defined in: app/types/boundaries.ts ANNOTATION_STATES
+    boundary_state TEXT NOT NULL DEFAULT 'predicted' CHECK(boundary_state IN ('predicted', 'confirmed', 'gap', 'issue')),
     boundary_pending INTEGER NOT NULL DEFAULT 0 CHECK(boundary_pending IN (0, 1)),
     boundary_updated_at TEXT NOT NULL DEFAULT (datetime('now')),
 
