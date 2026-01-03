@@ -6,10 +6,12 @@
  */
 
 import { useState, useEffect, useMemo } from 'react'
-import { useSearchParams } from 'react-router'
+import { useSearchParams, useNavigate } from 'react-router'
 
 import { AppLayout } from '~/components/AppLayout'
+import { LayoutAlertModal } from '~/components/annotation/LayoutAlertModal'
 import { LayoutApprovalModal } from '~/components/annotation/LayoutApprovalModal'
+import { LayoutConfirmModal } from '~/components/annotation/LayoutConfirmModal'
 import { LayoutControlPanel } from '~/components/annotation/LayoutControlPanel'
 import { LayoutErrorScreen } from '~/components/annotation/LayoutErrorScreen'
 import { LayoutMainCanvas } from '~/components/annotation/LayoutMainCanvas'
@@ -34,6 +36,7 @@ export async function loader() {
 export default function AnnotateLayout() {
   const [searchParams] = useSearchParams()
   const videoId = searchParams.get('videoId') ?? ''
+  const navigate = useNavigate()
 
   // Mark video as being worked on
   useVideoTouched(videoId)
@@ -43,6 +46,15 @@ export default function AnnotateLayout() {
 
   // Modal state
   const [showApproveModal, setShowApproveModal] = useState(false)
+  const [showClearConfirmModal, setShowClearConfirmModal] = useState(false)
+  const [alertModal, setAlertModal] = useState<{
+    title: string
+    message: string
+    type: 'info' | 'error' | 'success'
+  } | null>(null)
+
+  // Frame view toggle state
+  const [showCropBoundsInFrame, setShowCropBoundsInFrame] = useState(false)
 
   // Data management hook
   const {
@@ -59,6 +71,8 @@ export default function AnnotateLayout() {
     loadingFrame,
     analysisBoxes,
     annotationsSinceRecalc,
+    isRecalculating,
+    boundsMismatch,
     analysisThumbnailUrl,
     setAnalysisThumbnailUrl,
     cropBoundsEdit,
@@ -75,7 +89,10 @@ export default function AnnotateLayout() {
     setAnnotationsSinceRecalc,
     setLayoutApproved,
     handleClearAll,
-  } = useLayoutData({ videoId })
+  } = useLayoutData({
+    videoId,
+    showAlert: (title, message, type) => setAlertModal({ title, message, type }),
+  })
 
   // Canvas interaction hook
   const {
@@ -98,6 +115,7 @@ export default function AnnotateLayout() {
     annotationsSinceRecalc,
     pulseStartTime,
     frameBoxesCache,
+    showCropBoundsInFrame,
     setCurrentFrameBoxes,
     setHasUnsyncedAnnotations,
     setAnnotationsSinceRecalc,
@@ -162,16 +180,7 @@ export default function AnnotateLayout() {
 
   // Handle clear all with confirmation
   const handleClearAllWithConfirmation = () => {
-    const confirmMessage =
-      'Clear all layout annotations? This will:\n\n' +
-      '- Delete all user annotations\n' +
-      '- Reset predictions to seed model\n' +
-      '- Recalculate crop bounds\n\n' +
-      'This action cannot be undone.'
-
-    if (confirm(confirmMessage)) {
-      void handleClearAll()
-    }
+    setShowClearConfirmModal(true)
   }
 
   // Show error screen if there's an error
@@ -207,6 +216,8 @@ export default function AnnotateLayout() {
             <LayoutMainCanvas
               viewMode={viewMode}
               layoutConfig={layoutConfig}
+              layoutApproved={layoutApproved}
+              boundsMismatch={boundsMismatch}
               currentFrameBoxes={currentFrameBoxes}
               analysisBoxes={analysisBoxes}
               loadingFrame={loadingFrame}
@@ -244,7 +255,10 @@ export default function AnnotateLayout() {
             currentFrameBoxes={currentFrameBoxes}
             boxStats={boxStats}
             annotationsSinceRecalc={annotationsSinceRecalc}
+            isRecalculating={isRecalculating}
             recalcThreshold={RECALC_THRESHOLD}
+            showCropBoundsInFrame={showCropBoundsInFrame}
+            onToggleCropBounds={setShowCropBoundsInFrame}
             onApprove={() => setShowApproveModal(true)}
             onClearAll={handleClearAllWithConfirmation}
           />
@@ -256,7 +270,34 @@ export default function AnnotateLayout() {
         <LayoutApprovalModal
           videoId={videoId}
           onClose={() => setShowApproveModal(false)}
-          onConfirm={() => setLayoutApproved(true)}
+          onConfirm={() => {
+            setLayoutApproved(true)
+            navigate('/videos')
+          }}
+          showAlert={(title, message, type) => setAlertModal({ title, message, type })}
+        />
+      )}
+
+      {/* Clear All Confirmation Modal */}
+      {showClearConfirmModal && (
+        <LayoutConfirmModal
+          title="Clear All Annotations"
+          message={`Clear all layout annotations? This will:\n\n• Delete all user annotations\n• Reset predictions to seed model\n• Recalculate crop bounds\n\nThis action cannot be undone.`}
+          confirmLabel="Clear All"
+          cancelLabel="Cancel"
+          confirmType="danger"
+          onClose={() => setShowClearConfirmModal(false)}
+          onConfirm={() => void handleClearAll()}
+        />
+      )}
+
+      {/* Alert Modal */}
+      {alertModal && (
+        <LayoutAlertModal
+          title={alertModal.title}
+          message={alertModal.message}
+          type={alertModal.type}
+          onClose={() => setAlertModal(null)}
         />
       )}
     </AppLayout>

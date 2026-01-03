@@ -15,22 +15,21 @@ export function LayoutAnnotationProgress({
   recalcThreshold,
 }: LayoutAnnotationProgressProps) {
   if (boxStats?.captionBoxes === 0) {
-    // Alert when no caption boxes - using all boxes as fallback
+    // Alert when all boxes marked as noise
     return (
-      <div className="rounded-md border-2 border-blue-500 bg-blue-50 p-3 dark:border-blue-600 dark:bg-blue-900/20">
+      <div className="rounded-md border-2 border-amber-500 bg-amber-50 p-3 dark:border-amber-600 dark:bg-amber-900/20">
         <div className="flex items-center gap-2">
-          <span className="text-xl">ℹ️</span>
-          <div className="text-sm font-semibold text-blue-800 dark:text-blue-300">
-            No Caption Boxes Identified Yet
+          <span className="text-xl">⚠️</span>
+          <div className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+            All Boxes Marked as Noise
           </div>
         </div>
-        <div className="mt-2 text-xs text-blue-700 dark:text-blue-400">
-          Using all {boxStats.totalBoxes} boxes for initial layout analysis
+        <div className="mt-2 text-xs text-amber-700 dark:text-amber-400">
+          Currently {boxStats.totalBoxes} boxes are all marked as noise. The crop bounds calculation
+          needs at least some caption boxes to work effectively.
         </div>
-        <div className="mt-2 text-xs text-blue-800 dark:text-blue-300 font-medium">
-          Label caption boxes to improve accuracy.
-          <br />
-          Left-click boxes or press &apos;I&apos; while hovering to mark as captions.
+        <div className="mt-2 text-xs font-medium text-amber-800 dark:text-amber-300">
+          Action needed: Identify and mark caption boxes (left-click) to improve layout analysis.
         </div>
       </div>
     )
