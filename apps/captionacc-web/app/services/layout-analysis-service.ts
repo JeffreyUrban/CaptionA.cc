@@ -1193,7 +1193,7 @@ function countBoxEdges(
  * Count box overlaps at each pixel for normalized darkening.
  */
 function countBoxOverlaps(
-  analysisBoxes: LayoutAnalysisBox[],
+  analysisBoxes: Pick<LayoutAnalysisBox, 'predictedLabel' | 'originalBounds'>[],
   cropBounds: CropBounds,
   croppedWidth: number,
   croppedHeight: number
@@ -1366,8 +1366,8 @@ function drawLayoutAnnotations(
   }
 }
 
-async function generateOCRVisualization(
-  analysisBoxes: LayoutAnalysisBox[],
+export async function generateOCRVisualization(
+  analysisBoxes: Pick<LayoutAnalysisBox, 'predictedLabel' | 'originalBounds'>[],
   cropBounds: CropBounds,
   frameWidth: number,
   frameHeight: number,
