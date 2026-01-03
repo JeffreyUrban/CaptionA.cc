@@ -6,6 +6,7 @@ import { UploadProgress } from '~/components/UploadProgress'
 const navigation = [
   { name: 'Home', href: '/' },
   { name: 'Videos', href: '/videos' },
+  { name: 'Admin', href: '/admin' },
 ]
 
 function SunIcon(props: React.ComponentPropsWithoutRef<'svg'>) {
