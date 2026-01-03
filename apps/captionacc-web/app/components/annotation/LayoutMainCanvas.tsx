@@ -14,6 +14,8 @@ import {
 interface LayoutMainCanvasProps {
   viewMode: ViewMode
   layoutConfig: LayoutConfig | null
+  layoutApproved: boolean
+  boundsMismatch: boolean
   currentFrameBoxes: FrameBoxesData | null
   analysisBoxes: BoxData[] | null
   loadingFrame: boolean
@@ -49,6 +51,8 @@ function RecalculatingOverlay() {
  */
 function AnalysisViewContent({
   layoutConfig,
+  layoutApproved,
+  boundsMismatch,
   analysisBoxes,
   annotationsSinceRecalc,
   selectionPadding,
@@ -70,7 +74,16 @@ function AnalysisViewContent({
       onMouseMove={onMouseMove}
       onContextMenu={onContextMenu}
     >
-      <div className="relative">
+      <div
+        className="relative"
+        style={{
+          outline: boundsMismatch
+            ? '3px solid #ec4899' // pink-500
+            : layoutApproved
+              ? '3px solid #10b981' // green-500
+              : 'none',
+        }}
+      >
         <img
           ref={imageRef}
           src={`data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="${layoutConfig.frameWidth}" height="${layoutConfig.frameHeight}"><rect width="100%" height="100%" fill="black"/></svg>`}
@@ -167,6 +180,8 @@ function EmptyState({ loadingFrame }: { loadingFrame: boolean }) {
 export function LayoutMainCanvas({
   viewMode,
   layoutConfig,
+  layoutApproved,
+  boundsMismatch,
   currentFrameBoxes,
   analysisBoxes,
   loadingFrame,
@@ -184,6 +199,8 @@ export function LayoutMainCanvas({
       {viewMode === 'analysis' && layoutConfig ? (
         <AnalysisViewContent
           layoutConfig={layoutConfig}
+          layoutApproved={layoutApproved}
+          boundsMismatch={boundsMismatch}
           analysisBoxes={analysisBoxes}
           annotationsSinceRecalc={annotationsSinceRecalc}
           selectionPadding={selectionPadding}

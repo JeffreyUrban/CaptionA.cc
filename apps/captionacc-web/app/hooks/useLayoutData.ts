@@ -32,6 +32,7 @@ import {
 
 interface UseLayoutDataParams {
   videoId: string
+  showAlert?: (title: string, message: string, type: 'info' | 'error' | 'success') => void
 }
 
 interface UseLayoutDataReturn {
@@ -49,6 +50,8 @@ interface UseLayoutDataReturn {
   analysisBoxes: BoxData[] | null
   hasUnsyncedAnnotations: boolean
   annotationsSinceRecalc: number
+  isRecalculating: boolean
+  boundsMismatch: boolean
   analysisThumbnailUrl: string | null
   setAnalysisThumbnailUrl: (url: string | null) => void
   cropBoundsEdit: CropBoundsEdit | null
@@ -120,7 +123,7 @@ function processQueueResponse(
   }
 }
 
-export function useLayoutData({ videoId }: UseLayoutDataParams): UseLayoutDataReturn {
+export function useLayoutData({ videoId, showAlert }: UseLayoutDataParams): UseLayoutDataReturn {
   const [frames, setFrames] = useState<FrameInfo[]>([])
   const [layoutConfig, setLayoutConfig] = useState<LayoutConfig | null>(null)
   const [layoutApproved, setLayoutApproved] = useState(false)
@@ -133,9 +136,11 @@ export function useLayoutData({ videoId }: UseLayoutDataParams): UseLayoutDataRe
   const [analysisBoxes, setAnalysisBoxes] = useState<BoxData[] | null>(null)
   const [hasUnsyncedAnnotations, setHasUnsyncedAnnotations] = useState(false)
   const [annotationsSinceRecalc, setAnnotationsSinceRecalc] = useState(0)
+  const [isRecalculating, setIsRecalculating] = useState(false)
   const [analysisThumbnailUrl, setAnalysisThumbnailUrl] = useState<string | null>(null)
   const [pulseStartTime, setPulseStartTime] = useState(Date.now())
   const [cropBoundsEdit, setCropBoundsEdit] = useState<CropBoundsEdit | null>(null)
+  const [approvedCropBounds, setApprovedCropBounds] = useState<CropBoundsEdit | null>(null)
   const [, setSelectionRectEdit] = useState<SelectionRectEdit | null>(null)
   const [, setLayoutParamsEdit] = useState<LayoutParamsEdit | null>(null)
 
@@ -157,6 +162,29 @@ export function useLayoutData({ videoId }: UseLayoutDataParams): UseLayoutDataRe
     () => ({ setCropBoundsEdit, setSelectionRectEdit, setLayoutParamsEdit }),
     []
   )
+
+  // Save crop bounds when layout is approved
+  useEffect(() => {
+    if (layoutApproved && layoutConfig && !approvedCropBounds) {
+      setApprovedCropBounds({
+        left: layoutConfig.cropLeft,
+        top: layoutConfig.cropTop,
+        right: layoutConfig.cropRight,
+        bottom: layoutConfig.cropBottom,
+      })
+    }
+  }, [layoutApproved, layoutConfig, approvedCropBounds])
+
+  // Calculate if bounds have changed since approval
+  const boundsMismatch = useMemo(() => {
+    if (!layoutApproved || !approvedCropBounds || !layoutConfig) return false
+    return (
+      approvedCropBounds.left !== layoutConfig.cropLeft ||
+      approvedCropBounds.top !== layoutConfig.cropTop ||
+      approvedCropBounds.right !== layoutConfig.cropRight ||
+      approvedCropBounds.bottom !== layoutConfig.cropBottom
+    )
+  }, [layoutApproved, approvedCropBounds, layoutConfig])
 
   useEffect(() => {
     if (frames.length > 0 && selectedFrameIndex === null) {
@@ -208,11 +236,16 @@ export function useLayoutData({ videoId }: UseLayoutDataParams): UseLayoutDataRe
 
   const recalculateCropBounds = useCallback(async () => {
     if (!videoId) return
+    setIsRecalculating(true)
     try {
       await recalculatePredictions(videoId)
       const result = await resetCropBounds(videoId)
       if (!result.success) {
-        alert(result.message)
+        showAlert?.(
+          'Recalculation Failed',
+          result.message ?? 'Failed to recalculate crop bounds',
+          'error'
+        )
         setError(result.message ?? null)
         setAnnotationsSinceRecalc(0)
         return
@@ -222,8 +255,10 @@ export function useLayoutData({ videoId }: UseLayoutDataParams): UseLayoutDataRe
       setAnnotationsSinceRecalc(0)
     } catch (recalcError) {
       console.error('Error recalculating crop bounds:', recalcError)
+    } finally {
+      setIsRecalculating(false)
     }
-  }, [videoId, loadQueue, loadAnalysisBoxes])
+  }, [videoId, loadQueue, loadAnalysisBoxes, showAlert])
 
   useEffect(() => {
     if (!videoId || frames.length === 0) return
@@ -337,6 +372,7 @@ export function useLayoutData({ videoId }: UseLayoutDataParams): UseLayoutDataRe
 
   const handleClearAll = useCallback(async () => {
     if (!videoId) return
+    setIsRecalculating(true)
     try {
       const result = await clearAllAnnotations(videoId)
       console.log(`[Clear All] Deleted ${result.deletedCount} annotations`)
@@ -353,12 +389,18 @@ export function useLayoutData({ videoId }: UseLayoutDataParams): UseLayoutDataRe
       }
 
       setAnnotationsSinceRecalc(0)
-      alert(`Successfully cleared ${result.deletedCount} annotations and reset to seed model.`)
+      showAlert?.(
+        'Annotations Cleared',
+        `Successfully cleared ${result.deletedCount} annotations and reset to seed model.`,
+        'success'
+      )
     } catch (err) {
       console.error('Error clearing annotations:', err)
-      alert('Failed to clear annotations')
+      showAlert?.('Clear Failed', 'Failed to clear annotations', 'error')
+    } finally {
+      setIsRecalculating(false)
     }
-  }, [videoId, viewMode, selectedFrameIndex, loadQueue, loadAnalysisBoxes])
+  }, [videoId, viewMode, selectedFrameIndex, loadQueue, loadAnalysisBoxes, showAlert])
 
   return {
     frames,
@@ -375,6 +417,8 @@ export function useLayoutData({ videoId }: UseLayoutDataParams): UseLayoutDataRe
     analysisBoxes,
     hasUnsyncedAnnotations,
     annotationsSinceRecalc,
+    isRecalculating,
+    boundsMismatch,
     analysisThumbnailUrl,
     setAnalysisThumbnailUrl,
     cropBoundsEdit,
