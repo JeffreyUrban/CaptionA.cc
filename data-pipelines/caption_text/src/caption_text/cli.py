@@ -123,16 +123,14 @@ def infer(
 
             # Load main image from cropped_frames
             # Note: Need to read from database
-            from frames_db import read_frame
+            from frames_db import get_frame_from_db
 
-            main_image_data = read_frame(db_path, start_frame, table="cropped_frames")
-            if not main_image_data:
+            frame_data = get_frame_from_db(db_path, start_frame, table="cropped_frames")
+            if not frame_data:
                 console.print(f"[yellow]Warning: No frame image for frame {start_frame}[/yellow]")
                 continue
 
-            from io import BytesIO
-
-            main_image = Image.open(BytesIO(main_image_data))
+            main_image = frame_data.to_pil_image()
 
             # Generate caption
             try:

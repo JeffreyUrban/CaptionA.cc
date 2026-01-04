@@ -302,7 +302,7 @@ def train_model(
         log_every_n_steps=10,
         val_check_interval=0.5,  # Validate twice per epoch
         callbacks=[
-            L.pytorch.callbacks.ModelCheckpoint(
+            L.pytorch.callbacks.ModelCheckpoint(  # type: ignore[attr-defined]
                 dirpath=output_dir / "checkpoints",
                 filename="qwen-caption-{epoch:02d}-{val_loss:.4f}",
                 monitor="val_loss",
@@ -310,7 +310,7 @@ def train_model(
                 save_top_k=3,
                 save_last=True,
             ),
-            L.pytorch.callbacks.LearningRateMonitor(logging_interval="step"),
+            L.pytorch.callbacks.LearningRateMonitor(logging_interval="step"),  # type: ignore[attr-defined]
         ],
     )
 
@@ -318,7 +318,8 @@ def train_model(
     trainer.fit(model, train_loader, val_loader)
 
     # Get best checkpoint path
-    best_ckpt = trainer.checkpoint_callback.best_model_path
+    # Lightning type stubs don't properly expose checkpoint_callback.best_model_path
+    best_ckpt = trainer.checkpoint_callback.best_model_path  # type: ignore[union-attr]
     print(f"\nBest checkpoint: {best_ckpt}")
 
     return Path(best_ckpt)

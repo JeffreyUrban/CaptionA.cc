@@ -121,13 +121,13 @@ def load_frame_from_db(db_path: Path, frame_index: int) -> Image.Image | None:
     Returns:
         PIL Image or None if not found
     """
-    from frames_db import read_frame
+    from frames_db import get_frame_from_db
 
-    image_data = read_frame(db_path, frame_index, table="cropped_frames")
-    if not image_data:
+    frame_data = get_frame_from_db(db_path, frame_index, table="cropped_frames")
+    if not frame_data:
         return None
 
-    return Image.open(BytesIO(image_data))
+    return frame_data.to_pil_image()
 
 
 def collect_training_sample(
