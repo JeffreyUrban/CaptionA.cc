@@ -356,11 +356,21 @@ def list_models():
 
         # Create model to get parameter counts
         model = create_model_from_registry(arch_name, device="cpu", pretrained=False)
-        total_params = model.get_num_total_params()
-        trainable_params = model.get_num_trainable_params()
+        # Use getattr to access custom model methods (not on nn.Module base)
+        get_total = getattr(model, "get_num_total_params", None)
+        get_trainable = getattr(model, "get_num_trainable_params", None)
+        # Fallback to standard parameter counting if custom methods not available
+        if callable(get_total):
+            total_params: int = get_total()  # type: ignore[assignment]
+        else:
+            total_params = sum(p.numel() for p in model.parameters())
+        if callable(get_trainable):
+            trainable_params: int = get_trainable()  # type: ignore[assignment]
+        else:
+            trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
 
         console.print(f"[green]{arch_name}[/green]")
-        trainable_pct = trainable_params / total_params * 100
+        trainable_pct = trainable_params / total_params * 100 if total_params > 0 else 0
         console.print(f"  Parameters: {total_params:,} total, {trainable_params:,} trainable ({trainable_pct:.1f}%)")
         console.print(f"  Module: {info['module']}")
 
