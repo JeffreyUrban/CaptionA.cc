@@ -875,7 +875,7 @@ def cleanup_cli_template_for_monorepo(project_path: Path) -> None:
         print(f"    Removed monorepo-unnecessary: {', '.join(removed_items)}")
 
 
-def get_author_from_git_config() -> str:
+def get_author_from_git_config() -> str | None:
     """Get author name from git config, fallback to template default."""
     import subprocess
 
@@ -919,13 +919,13 @@ def validate_pyproject_toml(project_path: Path) -> bool:
     Returns True if valid, prints error and returns False if invalid.
     This prevents broken projects from entering the workspace.
     """
+    import tomllib
+
     pyproject_file = project_path / "pyproject.toml"
     if not pyproject_file.exists():
         return True  # No pyproject.toml, nothing to validate
 
     try:
-        import tomllib
-
         with open(pyproject_file, "rb") as f:
             tomllib.load(f)
         print("  ✓ pyproject.toml validation passed")
