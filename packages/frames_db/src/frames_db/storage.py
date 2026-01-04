@@ -64,6 +64,7 @@ def write_frame_to_db(
                 (frame_index, image_data, width, height, len(image_data)),
             )
         else:  # cropped_frames
+            assert crop_bounds is not None  # Validated above
             crop_left, crop_top, crop_right, crop_bottom = crop_bounds
             cursor.execute(
                 """
@@ -168,6 +169,7 @@ def write_frames_batch(
             # (frame_index is PRIMARY KEY, so only one set of cropped frames can exist)
             cursor.execute("DELETE FROM cropped_frames")
 
+            assert crop_bounds is not None  # Validated above
             crop_left, crop_top, crop_right, crop_bottom = crop_bounds
             for i, (frame_index, image_data, width, height) in enumerate(frames):
                 cursor.execute(
