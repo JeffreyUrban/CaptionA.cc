@@ -61,6 +61,7 @@ ignore = []
 
 [tool.ruff.format]
 quote-style = "double"
+exclude = ["**/_version.py"]  # Exclude auto-generated version files
 
 # Common pyright settings for all workspace members
 # Individual projects can override or extend these
