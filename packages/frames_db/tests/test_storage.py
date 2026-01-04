@@ -49,6 +49,10 @@ def temp_db(tmp_path: Path) -> Path:
                 width INTEGER NOT NULL,
                 height INTEGER NOT NULL,
                 file_size INTEGER NOT NULL,
+                crop_left INTEGER,
+                crop_top INTEGER,
+                crop_right INTEGER,
+                crop_bottom INTEGER,
                 crop_bounds_version INTEGER DEFAULT 1,
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
             )
@@ -132,6 +136,7 @@ class TestStorage:
             height=height,
             table="cropped_frames",
             crop_bounds_version=1,
+            crop_bounds=(0, 0, width, height),
         )
 
         # Verify frame was written
@@ -359,7 +364,9 @@ class TestPerformance:
         frames = [(i, jpeg_bytes, 100, 100) for i in range(1000)]
 
         start = time.time()
-        count = write_frames_batch(temp_db, frames, "cropped_frames", crop_bounds_version=1)
+        count = write_frames_batch(
+            temp_db, frames, "cropped_frames", crop_bounds_version=1, crop_bounds=(0, 0, 100, 100)
+        )
         elapsed = time.time() - start
 
         assert count == 1000

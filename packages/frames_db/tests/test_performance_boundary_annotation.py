@@ -44,6 +44,10 @@ def setup_test_data(tmp_path: Path):
                 width INTEGER NOT NULL,
                 height INTEGER NOT NULL,
                 file_size INTEGER NOT NULL,
+                crop_left INTEGER,
+                crop_top INTEGER,
+                crop_right INTEGER,
+                crop_bottom INTEGER,
                 crop_bounds_version INTEGER DEFAULT 1,
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
             )
@@ -64,6 +68,7 @@ def setup_test_data(tmp_path: Path):
         frames=frames,
         table="cropped_frames",
         crop_bounds_version=1,
+        crop_bounds=(0, 0, width, height),
     )
 
     # Create filesystem frames for comparison
