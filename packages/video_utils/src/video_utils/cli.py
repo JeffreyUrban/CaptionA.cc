@@ -6,7 +6,6 @@ from typing import Optional
 
 import typer
 from rich.console import Console
-from rich.live import Live
 from rich.progress import (
     BarColumn,
     Progress,
@@ -83,16 +82,16 @@ def extract_streaming(
     console.print("[bold cyan]Frame Extraction (Streaming)[/bold cyan]")
     console.print(f"Input: {video_path}")
     console.print(f"Output: {output_dir}")
-    console.print(f"Rate: {rate_hz} Hz ({1/rate_hz:.1f} seconds per frame)")
+    console.print(f"Rate: {rate_hz} Hz ({1 / rate_hz:.1f} seconds per frame)")
 
     # Parse crop box if provided
-    crop_box = None
+    crop_box: tuple[int, int, int, int] | None = None
     if crop:
         try:
             parts = [int(x.strip()) for x in crop.split(",")]
             if len(parts) != 4:
                 raise ValueError("Crop must have exactly 4 values")
-            crop_box = tuple(parts)
+            crop_box = (parts[0], parts[1], parts[2], parts[3])
             console.print(f"Crop: x={parts[0]}, y={parts[1]}, w={parts[2]}, h={parts[3]}")
         except ValueError as e:
             console.print(f"[red]Error:[/red] Invalid crop format: {e}")

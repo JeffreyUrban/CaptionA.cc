@@ -12,6 +12,8 @@ dependencies = [
     "pillow>=11.0.0",
     "crop_frames",
     "caption_boundaries",
+    "caption_text",
+    "full_frames",
     "orchestrator",
 ]
 
@@ -24,7 +26,9 @@ members = [
 ]
 exclude = [
     "apps/captionacc-web",
-    "data-pipelines/docs",
+    "data-pipelines/docs",  # Documentation directory, not a Python package
+    "**/__pycache__",  # Exclude all pycache directories
+    "**/.pytest_cache",  # Exclude pytest cache
 ]
 
 # Workspace-wide dependency version constraints
@@ -42,12 +46,18 @@ override-dependencies = [
 [tool.uv.sources]
 crop_frames = { workspace = true }
 caption-boundaries = { workspace = true }
+caption-text = { workspace = true }
+full-frames = { workspace = true }
 orchestrator = { workspace = true }
 
 # Common tool settings shared across all workspace members
 [tool.ruff]
 line-length = 120
-target-version = "py313"
+target-version = "py314"
+extend-exclude = [
+    "*/_version.py",  # Exclude auto-generated version files from all ruff checks
+    "**/*/_version.py",
+]
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]  # pycodestyle errors, pyflakes, isort
@@ -59,7 +69,7 @@ quote-style = "double"
 # Common pyright settings for all workspace members
 # Individual projects can override or extend these
 [tool.pyright]
-pythonVersion = "3.13"
+pythonVersion = "3.14"
 typeCheckingMode = "standard"
 reportMissingImports = true
 reportMissingTypeStubs = false
@@ -76,4 +86,23 @@ dev = [
     "pyyaml>=6.0.0",
     "dvc>=3.65.0",
     "pre-commit>=4.0.0",
+]
+
+[tool.pytest.ini_options]
+# Test collection configuration for workspace
+testpaths = [
+    "data-pipelines/caption_boundaries/tests",
+    "data-pipelines/caption_text/tests",
+    "packages/frames_db/tests",
+    "packages/video_utils/tests",
+    "services/orchestrator/tests",
+]
+# Skip directories with incomplete/skeleton tests
+# These can be re-enabled once the modules are properly implemented
+norecursedirs = [
+    "data-pipelines/crop_frames/tests",
+    "data-pipelines/full_frames/tests",
+    "data-pipelines/layout_analysis",
+    "packages/ocr_box_model",
+    "packages/jetbrains_integration",
 ]

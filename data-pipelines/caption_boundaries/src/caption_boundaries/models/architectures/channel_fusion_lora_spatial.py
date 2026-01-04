@@ -12,7 +12,6 @@ Design rationale:
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import torchvision.models as models
 
 from caption_boundaries.models.registry import register_model
@@ -65,12 +64,16 @@ class LoRALayer(nn.Module):
             self.lora_A = nn.Conv2d(in_channels, rank, kernel_size=1, bias=False)
 
             # B: 1x1 conv with same stride/padding as original to match spatial dims
+            # Cast stride to tuple[int, int] for type checker (Conv2d.stride is always 2-tuple)
+            stride_tuple = tuple(self.stride)  # Convert to regular tuple
+            stride_2d: tuple[int, int] = (stride_tuple[0], stride_tuple[1]) if len(stride_tuple) >= 2 else (1, 1)
             self.lora_B = nn.Conv2d(
-                rank, out_channels,
+                rank,
+                out_channels,
                 kernel_size=1,
-                stride=self.stride,
+                stride=stride_2d,
                 padding=0,  # 1x1 conv doesn't need padding
-                bias=False
+                bias=False,
             )
 
             # Initialize
@@ -89,12 +92,19 @@ class LoRALayer(nn.Module):
         # LoRA adaptation
         if isinstance(self.original_layer, nn.Linear):
             # x: (batch, in_features)
+            # lora_A and lora_B are Parameters (tensors) for Linear layers
+            assert isinstance(self.lora_A, nn.Parameter) and isinstance(self.lora_B, nn.Parameter)
             lora_output = (x @ self.lora_A.T) @ self.lora_B.T  # (batch, out_features)
             lora_output = lora_output * self.scaling
         elif isinstance(self.original_layer, nn.Conv2d):
             # x: (batch, in_channels, H, W)
+            # lora_A and lora_B are Conv2d modules for Conv layers
+            assert isinstance(self.lora_A, nn.Conv2d) and isinstance(self.lora_B, nn.Conv2d)
             lora_output = self.lora_B(self.lora_A(x))  # (batch, out_channels, H, W)
             lora_output = lora_output * self.scaling
+        else:
+            # This shouldn't happen if __init__ validated the layer type
+            raise RuntimeError(f"Unsupported layer type: {type(self.original_layer)}")
 
         return original_output + lora_output
 

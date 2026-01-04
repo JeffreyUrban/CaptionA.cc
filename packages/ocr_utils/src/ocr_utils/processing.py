@@ -3,11 +3,17 @@
 import json
 import signal
 import time
-from concurrent.futures import ProcessPoolExecutor, TimeoutError as FuturesTimeoutError, as_completed
+from collections.abc import Callable
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import TimeoutError as FuturesTimeoutError
 from pathlib import Path
-from typing import Optional
+from typing import Any
 
-from ocrmac import ocrmac
+# Import ocrmac only on macOS (graceful failure on other platforms)
+try:
+    from ocrmac import ocrmac  # type: ignore[reportMissingImports]
+except ImportError:
+    ocrmac = None  # type: ignore[assignment]
 
 
 class OCRTimeoutError(Exception):
@@ -27,7 +33,7 @@ def process_frame_ocr_with_retry(
     timeout: int = 10,
     max_retries: int = 3,
     base_backoff: float = 1.0,
-) -> dict[str, any]:
+) -> dict[str, Any]:
     """Run OCR on a single frame with timeout protection and retry logic.
 
     This function runs in a worker process and uses signal.alarm() for timeout.
@@ -42,7 +48,15 @@ def process_frame_ocr_with_retry(
 
     Returns:
         Dictionary with OCR results
+
+    Raises:
+        RuntimeError: If ocrmac is not available (non-macOS platform)
     """
+    if ocrmac is None:
+        raise RuntimeError(
+            "ocrmac is not available on this platform. This function requires macOS with the ocrmac package installed."
+        )
+
     last_error = None
 
     for attempt in range(max_retries):
@@ -51,9 +65,7 @@ def process_frame_ocr_with_retry(
         signal.alarm(timeout)
 
         try:
-            annotations = ocrmac.OCR(
-                str(image_path), framework="livetext", language_preference=[language]
-            ).recognize()
+            annotations = ocrmac.OCR(str(image_path), framework="livetext", language_preference=[language]).recognize()
 
             # Cancel the alarm
             signal.alarm(0)
@@ -105,7 +117,7 @@ def process_frames_directory(
     frames_dir: Path,
     output_file: Path,
     language: str = "zh-Hans",
-    progress_callback: Optional[callable] = None,
+    progress_callback: Callable[[int, int], None] | None = None,
     keep_frames: bool = False,
     max_workers: int = 1,
 ) -> Path:
@@ -124,7 +136,15 @@ def process_frames_directory(
 
     Returns:
         Path to the first frame (kept for visualization)
+
+    Raises:
+        RuntimeError: If ocrmac is not available (non-macOS platform)
     """
+    if ocrmac is None:
+        raise RuntimeError(
+            "ocrmac is not available on this platform. This function requires macOS with the ocrmac package installed."
+        )
+
     # Find all frame images
     frame_files = sorted(frames_dir.glob("frame_*.jpg"))
     if not frame_files:
@@ -175,9 +195,9 @@ def process_frames_streaming(
     output_file: Path,
     language: str = "zh-Hans",
     max_workers: int = 1,
-    progress_callback: Optional[callable] = None,
+    progress_callback: Callable[[int, int | None], None] | None = None,
     check_interval: float = 0.1,
-    ffmpeg_running_check: Optional[callable] = None,
+    ffmpeg_running_check: Callable[[], bool] | None = None,
 ) -> None:
     """Process frames as they appear in directory with OCR using worker pool.
 
@@ -194,6 +214,9 @@ def process_frames_streaming(
         check_interval: How often to check for new frames (seconds)
         ffmpeg_running_check: Optional callable that returns True if extraction still running
 
+    Raises:
+        RuntimeError: If ocrmac is not available (non-macOS platform)
+
     Example:
         >>> process_frames_streaming(
         ...     frames_dir=Path("frames/"),
@@ -203,6 +226,11 @@ def process_frames_streaming(
         ...     ffmpeg_running_check=lambda: ffmpeg_proc.poll() is None
         ... )
     """
+    if ocrmac is None:
+        raise RuntimeError(
+            "ocrmac is not available on this platform. This function requires macOS with the ocrmac package installed."
+        )
+
     submitted_frames = set()  # Frames submitted to workers
     pending_retries = {}  # frame_path -> (retry_time, retry_count)
     current_count = 0
@@ -232,9 +260,7 @@ def process_frames_streaming(
 
                 for frame_path in new_frames[:available_slots]:
                     # Submit to worker pool
-                    future = executor.submit(
-                        process_frame_ocr_with_retry, frame_path, language
-                    )
+                    future = executor.submit(process_frame_ocr_with_retry, frame_path, language)
                     futures[future] = (frame_path, time.time(), 0)
                     submitted_frames.add(frame_path)
 
@@ -245,9 +271,7 @@ def process_frames_streaming(
                     if current_time >= retry_time:
                         # Resubmit frame
                         print(f"  Retrying {frame_path.name} (attempt {retry_count + 1}/{max_retries})...")
-                        future = executor.submit(
-                            process_frame_ocr_with_retry, frame_path, language
-                        )
+                        future = executor.submit(process_frame_ocr_with_retry, frame_path, language)
                         futures[future] = (frame_path, time.time(), retry_count)
                         del pending_retries[frame_path]
 
@@ -257,11 +281,11 @@ def process_frames_streaming(
 
                     # Check if future has been pending too long
                     if time.time() - submit_time > worker_timeout:
-                        print(f"\n{'='*80}")
+                        print(f"\n{'=' * 80}")
                         print(f"TIMEOUT DETECTED: {frame_path.name} (attempt {retry_count + 1}/{max_retries})")
                         print(f"Elapsed: {time.time() - submit_time:.1f}s")
-                        print(f"Worker hung - cancelling")
-                        print(f"{'='*80}\n")
+                        print("Worker hung - cancelling")
+                        print(f"{'=' * 80}\n")
 
                         futures.pop(future)
                         try:
@@ -272,7 +296,7 @@ def process_frames_streaming(
                         # Check if we should retry
                         if retry_count < max_retries - 1:
                             # Schedule retry with exponential backoff
-                            backoff_delay = 1.0 * (2 ** retry_count)
+                            backoff_delay = 1.0 * (2**retry_count)
                             retry_time = time.time() + backoff_delay
                             pending_retries[frame_path] = (retry_time, retry_count + 1)
                             print(f"  Will retry after {backoff_delay}s backoff...")

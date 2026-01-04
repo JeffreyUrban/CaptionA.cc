@@ -13,7 +13,7 @@ from typing import Literal
 
 from rich.console import Console
 from rich.progress import track
-from sqlalchemy.orm import Session
+from video_utils import get_video_metadata
 
 from caption_boundaries.database import (
     TrainingDataset,
@@ -23,7 +23,6 @@ from caption_boundaries.database import (
     get_dataset_db_path,
     init_dataset_db,
 )
-from video_utils import get_video_metadata
 
 console = Console(stderr=True)
 
@@ -114,10 +113,7 @@ def get_video_layout_metadata(db_path: Path) -> dict:
         conn.close()
 
 
-def extract_frame_pairs_from_captions(
-    db_path: Path,
-    boundary_states: list[str] | None = None
-) -> list[dict]:
+def extract_frame_pairs_from_captions(db_path: Path, boundary_states: list[str] | None = None) -> list[dict]:
     """Extract frame pairs from caption boundaries.
 
     Creates training samples by comparing consecutive frames within and across
@@ -142,7 +138,7 @@ def extract_frame_pairs_from_captions(
             - boundary_state: State of the source caption
     """
     if boundary_states is None:
-        boundary_states = ['confirmed']
+        boundary_states = ["confirmed"]
 
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
@@ -153,7 +149,7 @@ def extract_frame_pairs_from_captions(
     try:
         # Get captions with specified boundary states, ordered by frame index
         # Exclude 'issue' state by default unless explicitly requested
-        placeholders = ','.join('?' * len(boundary_states))
+        placeholders = ",".join("?" * len(boundary_states))
         cursor.execute(
             f"""
             SELECT id, start_frame_index, end_frame_index, text, boundary_state
@@ -161,7 +157,7 @@ def extract_frame_pairs_from_captions(
             WHERE boundary_state IN ({placeholders})
             ORDER BY start_frame_index
         """,
-            boundary_states
+            boundary_states,
         )
 
         captions = cursor.fetchall()
@@ -211,7 +207,7 @@ def extract_frame_pairs_from_captions(
             # Sample across boundaries (different label)
             if i < len(captions) - 1:
                 next_caption = captions[i + 1]
-                next_caption_id = next_caption["id"]
+                next_caption["id"]
                 next_start_idx = next_caption["start_frame_index"]
                 next_text = next_caption["text"] or ""
 
@@ -299,9 +295,7 @@ def _copy_frames_for_video(db, video_conn, video_hash: str, video_samples: list[
 
         row = cursor.fetchone()
         if not row:
-            console.print(
-                f"[yellow]⚠ Frame {frame_index} not found, skipping[/yellow]"
-            )
+            console.print(f"[yellow]⚠ Frame {frame_index} not found, skipping[/yellow]")
             continue
 
         # Create training frame record
@@ -316,9 +310,7 @@ def _copy_frames_for_video(db, video_conn, video_hash: str, video_samples: list[
         db.add(training_frame)
 
 
-def _copy_ocr_viz_for_video(
-    db, video_conn, video_hash: str, has_samples: bool, variant: str = "boundaries"
-) -> bool:
+def _copy_ocr_viz_for_video(db, video_conn, video_hash: str, has_samples: bool, variant: str = "boundaries") -> bool:
     """Copy OCR visualization from video DB to training DB.
 
     Only processes videos that have training samples.
@@ -360,9 +352,7 @@ def _copy_ocr_viz_for_video(
         return False
 
     # Create training OCR visualization record
-    training_ocr_viz = TrainingOCRVisualization(
-        video_hash=video_hash, variant=variant, image_data=row[0]
-    )
+    training_ocr_viz = TrainingOCRVisualization(video_hash=video_hash, variant=variant, image_data=row[0])
     db.add(training_ocr_viz)
     return True
 
@@ -398,7 +388,6 @@ def create_training_dataset(
     Raises:
         ValueError: If dataset already exists or no valid samples found
     """
-    from collections import defaultdict
 
     # Get dataset database path from name
     dataset_db_path = get_dataset_db_path(name)
@@ -450,10 +439,7 @@ def create_training_dataset(
         # Extract frame pairs based on split strategy
         try:
             # Extract only confirmed annotations (default)
-            pairs = extract_frame_pairs_from_captions(
-                video_db_path,
-                boundary_states=['confirmed']
-            )
+            pairs = extract_frame_pairs_from_captions(video_db_path, boundary_states=["confirmed"])
         except Exception as e:
             skipped_videos.append((video_db_path, f"Failed to extract pairs: {e}"))
             continue
@@ -490,20 +476,22 @@ def create_training_dataset(
         crop_bounds_versions[video_hash] = layout_meta["crop_bounds_version"]
 
         # Store video registry data (will create objects in database session)
-        video_registry_records.append({
-            "video_hash": video_hash,
-            "video_path": str(video_file),
-            "file_size_bytes": metadata["file_size_bytes"],
-            "duration_seconds": metadata.get("duration_seconds"),
-            "width": metadata.get("width"),
-            "height": metadata.get("height"),
-        })
+        video_registry_records.append(
+            {
+                "video_hash": video_hash,
+                "video_path": str(video_file),
+                "file_size_bytes": metadata["file_size_bytes"],
+                "duration_seconds": metadata.get("duration_seconds"),
+                "width": metadata.get("width"),
+                "height": metadata.get("height"),
+            }
+        )
 
     if not all_samples:
         raise ValueError("No valid samples found in any video")
 
     console.print(f"\n[green]✓[/green] Extracted {len(all_samples)} frame pairs from {len(video_hashes)} videos")
-    console.print(f"[cyan]Label distribution:[/cyan]")
+    console.print("[cyan]Label distribution:[/cyan]")
     for label, count in sorted(label_counts.items()):
         console.print(f"  {label}: {count}")
 
@@ -631,7 +619,9 @@ def create_training_dataset(
             batch_end = min(batch_start + BATCH_SIZE, len(video_hashes))
             batch_hashes = video_hashes[batch_start:batch_end]
 
-            for video_hash in track(batch_hashes, description=f"Copying batch {batch_start//BATCH_SIZE + 1}/{(len(video_hashes) + BATCH_SIZE - 1)//BATCH_SIZE}"):
+            batch_num = batch_start // BATCH_SIZE + 1
+            total_batches = (len(video_hashes) + BATCH_SIZE - 1) // BATCH_SIZE
+            for video_hash in track(batch_hashes, description=f"Copying batch {batch_num}/{total_batches}"):
                 video_samples = samples_by_video[video_hash]
                 video_db_path = video_db_map.get(video_hash)
 
@@ -675,10 +665,15 @@ def create_training_dataset(
                     if video_record_data["video_hash"] != video_hash:
                         continue
 
-                    existing = db.query(VideoRegistry).filter(VideoRegistry.video_hash == video_record_data["video_hash"]).first()
+                    existing = (
+                        db.query(VideoRegistry)
+                        .filter(VideoRegistry.video_hash == video_record_data["video_hash"])
+                        .first()
+                    )
 
                     if existing:
                         from datetime import UTC, datetime
+
                         existing.last_seen_at = datetime.now(UTC)
                         existing.video_path = video_record_data["video_path"]
                     else:
@@ -690,27 +685,24 @@ def create_training_dataset(
             db.commit()
             gc.collect()
 
-    console.print(f"\n[green]✓[/green] Dataset created successfully!")
+    console.print("\n[green]✓[/green] Dataset created successfully!")
     console.print(f"  Name: {name}")
     console.print(f"  Database: {dataset_db_path}")
 
     # Calculate actual inserted counts (only videos with OCR viz)
     with next(get_dataset_db(dataset_db_path)) as db:
-        actual_train_count = db.query(TrainingSample).filter(TrainingSample.split == 'train').count()
-        actual_val_count = db.query(TrainingSample).filter(TrainingSample.split == 'val').count()
+        actual_train_count = db.query(TrainingSample).filter(TrainingSample.split == "train").count()
+        actual_val_count = db.query(TrainingSample).filter(TrainingSample.split == "val").count()
 
     console.print(f"  Train samples: {actual_train_count}")
     console.print(f"  Val samples: {actual_val_count}")
 
     # Report excluded samples due to missing OCR visualization
     if videos_without_ocr_viz:
-        excluded_sample_count = sum(
-            len(samples_by_video[vh]) for vh in videos_without_ocr_viz
-        )
-        console.print(f"\n[yellow]⚠ Excluded samples (missing OCR visualization):[/yellow]")
+        excluded_sample_count = sum(len(samples_by_video[vh]) for vh in videos_without_ocr_viz)
+        console.print("\n[yellow]⚠ Excluded samples (missing OCR visualization):[/yellow]")
         console.print(f"  Videos excluded: {len(videos_without_ocr_viz)} / {len(samples_by_video)}")
         console.print(f"  Samples excluded: {excluded_sample_count}")
         console.print(f"  Videos with complete data: {len(videos_with_ocr_viz)}")
-
 
     return dataset_db_path

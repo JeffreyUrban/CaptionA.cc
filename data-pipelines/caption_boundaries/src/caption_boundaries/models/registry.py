@@ -7,7 +7,8 @@ Architecture definitions live in Python code, not config files. The registry
 tracks what was used for each experiment.
 """
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import torch
 import torch.nn as nn
@@ -68,8 +69,7 @@ def create_model(
     if architecture not in _MODEL_REGISTRY:
         available = ", ".join(_MODEL_REGISTRY.keys())
         raise ValueError(
-            f"Unknown architecture: '{architecture}'. "
-            f"Available: {available if available else 'none registered'}"
+            f"Unknown architecture: '{architecture}'. Available: {available if available else 'none registered'}"
         )
 
     # Auto-detect device if not specified
@@ -110,9 +110,7 @@ def validate_model(model: nn.Module) -> None:
     # Check num_classes (if model exposes it)
     if hasattr(model, "num_classes"):
         if model.num_classes != 5:
-            raise ValueError(
-                f"Model must output 5 classes for boundary detection, got {model.num_classes}"
-            )
+            raise ValueError(f"Model must output 5 classes for boundary detection, got {model.num_classes}")
 
 
 def list_architectures() -> list[str]:

@@ -9,10 +9,10 @@ Handles frame cropping after layout annotation:
 This replaces apps/captionacc-web/app/services/crop-frames-processing.ts
 """
 
-from pathlib import Path
 import os
 import sqlite3
 import subprocess
+from pathlib import Path
 from typing import Any
 
 import requests
@@ -60,7 +60,9 @@ def extract_cropped_frames(
     Path(output_dir).mkdir(parents=True, exist_ok=True)
 
     # Format crop bounds as string
-    crop_str = f"{crop_bounds['left']},{crop_bounds['top']},{crop_bounds['right']},{crop_bounds['bottom']}"
+    crop_str = (
+        f"{crop_bounds['left']},{crop_bounds['top']},{crop_bounds['right']},{crop_bounds['bottom']}"
+    )
 
     # Get absolute path to crop_frames pipeline
     pipeline_dir = Path(__file__).parent.parent.parent.parent / "data-pipelines" / "crop_frames"
@@ -91,7 +93,9 @@ def extract_cropped_frames(
     if result.returncode != 0:
         print(f"STDOUT: {result.stdout}")
         print(f"STDERR: {result.stderr}")
-        raise RuntimeError(f"crop_frames pipeline failed with code {result.returncode}: {result.stderr}")
+        raise RuntimeError(
+            f"crop_frames pipeline failed with code {result.returncode}: {result.stderr}"
+        )
 
     print("Crop frames extraction completed successfully")
     print(f"Output: {result.stdout}")
@@ -286,7 +290,9 @@ def crop_frames_flow(
         table={
             "Video ID": [video_id],
             "Cropped Frames": [result["frame_count"]],
-            "Crop Bounds": [f"({crop_bounds['left']}, {crop_bounds['top']}, {crop_bounds['right']}, {crop_bounds['bottom']})"],
+            "Crop Bounds": [
+                f"({crop_bounds['left']}, {crop_bounds['top']}, {crop_bounds['right']}, {crop_bounds['bottom']})"
+            ],
             "Status": ["Ready for Boundary Annotation"],
         },
         description=f"Crop frames processing complete for {video_id}",

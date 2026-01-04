@@ -1,7 +1,8 @@
 """Image processing utilities using Pillow."""
 
+from collections.abc import Callable
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Literal
 
 from PIL import Image
 
@@ -82,7 +83,7 @@ def resize_directory(
     target_size: tuple[int, int],
     pattern: str = "*.jpg",
     preserve_aspect: bool = False,
-    progress_callback: Optional[callable] = None,
+    progress_callback: Callable[[int, int], None] | None = None,
 ) -> list[Path]:
     """Resize all images in a directory.
 

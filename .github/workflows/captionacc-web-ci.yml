@@ -36,8 +36,31 @@ jobs:
       - name: Type check
         run: npm run typecheck
 
+      - name: Start dev server
+        run: |
+          npm run dev &
+          DEV_SERVER_PID=$!
+          echo "DEV_SERVER_PID=$DEV_SERVER_PID" >> $GITHUB_ENV
+          # Wait for server to be ready
+          echo "Waiting for dev server to start..."
+          for i in {1..30}; do
+            if curl -s http://localhost:5173 > /dev/null; then
+              echo "Dev server is ready!"
+              break
+            fi
+            if [ $i -eq 30 ]; then
+              echo "Dev server failed to start"
+              exit 1
+            fi
+            sleep 1
+          done
+
       - name: Run tests
         run: npm test
+
+      - name: Stop dev server
+        if: always()
+        run: kill $DEV_SERVER_PID || true
 
       - name: Build project
         run: npm run build

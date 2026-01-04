@@ -1,6 +1,5 @@
 """Command-line interface for ocr_utils."""
 
-import sys
 from pathlib import Path
 from typing import Optional
 
@@ -105,7 +104,7 @@ def run(
         ocr_utils run frames/ output.jsonl --language zh-Hans
         ocr_utils run cropped_frames/ ocr_cropped.jsonl --visualize --width 1920 --height 1080
     """
-    console.print(f"[bold cyan]OCR Processing[/bold cyan]")
+    console.print("[bold cyan]OCR Processing[/bold cyan]")
     console.print(f"Input: {frames_dir}")
     console.print(f"Output: {output_file}")
     console.print(f"Language: {language}")
@@ -137,16 +136,13 @@ def run(
         ) as progress:
             task = progress.add_task("Processing OCR...", total=total_frames)
 
-            first_frame = process_frames_directory(
+            process_frames_directory(
                 frames_dir,
                 output_file,
                 language,
-                pattern=pattern,
                 max_workers=max_workers,
                 keep_frames=keep_frames,
-                progress_callback=lambda current, total: progress.update(
-                    task, completed=current
-                ),
+                progress_callback=lambda current, total: progress.update(task, completed=current),
             )
 
         console.print(f"[green]✓[/green] Processed {total_frames} frames")
@@ -155,9 +151,7 @@ def run(
         # Create visualization if requested
         if visualize:
             if width is None or height is None:
-                console.print(
-                    "[yellow]Warning:[/yellow] --width and --height required for visualization, skipping"
-                )
+                console.print("[yellow]Warning:[/yellow] --width and --height required for visualization, skipping")
             else:
                 console.print()
                 console.print("Creating OCR visualization...")

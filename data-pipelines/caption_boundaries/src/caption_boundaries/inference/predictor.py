@@ -4,15 +4,13 @@ Loads trained models and predicts boundaries on new videos.
 """
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 import torch
-from PIL import Image
 from rich.console import Console
 
 from caption_boundaries.data.dataset import CaptionBoundaryDataset
-from caption_boundaries.data.ocr_visualization import create_ocr_visualization
 from caption_boundaries.data.transforms import AnchorAwareResize, NormalizeImageNet, ResizeStrategy
 from caption_boundaries.models.registry import create_model
 
@@ -93,7 +91,7 @@ class BoundaryPredictor:
         video_db_path: Path,
         frame1_index: int,
         frame2_index: int,
-        anchor_type: str = "center",
+        anchor_type: Literal["left", "center", "right"] = "center",
     ) -> dict[str, Any]:
         """Predict boundary classification for a single frame pair.
 
@@ -115,12 +113,19 @@ class BoundaryPredictor:
         frame1_data = get_frame_from_db(video_db_path, frame1_index, table="cropped_frames")
         frame2_data = get_frame_from_db(video_db_path, frame2_index, table="cropped_frames")
 
+        if frame1_data is None:
+            raise ValueError(f"Frame {frame1_index} not found in {video_db_path}")
+        if frame2_data is None:
+            raise ValueError(f"Frame {frame2_index} not found in {video_db_path}")
+
         # Convert FrameData to PIL Images
         frame1_img = frame1_data.to_pil_image()
         frame2_img = frame2_data.to_pil_image()
 
         # OCR visualization is loaded once per video in __init__, use the cached version
         ocr_viz_img = self.ocr_viz_img
+        if ocr_viz_img is None:
+            raise ValueError("OCR visualization not loaded. Call load_ocr_visualization() first.")
 
         # Get spatial metadata
         from caption_boundaries.data.dataset import _get_spatial_features
@@ -179,17 +184,19 @@ class BoundaryPredictor:
         Returns:
             List of predicted boundaries with metadata
         """
-        from caption_boundaries.data.dataset import _get_video_metadata
-
         # Convert to absolute path to avoid issues with relative paths
         from pathlib import Path
+
+        from caption_boundaries.data.dataset import _get_video_metadata
+
         video_db_path = Path(video_db_path).resolve()
 
         # Get video metadata and confirmed captions
-        metadata = _get_video_metadata(video_db_path)
+        _get_video_metadata(video_db_path)
 
         # Get all confirmed captions sorted by time
         import sqlite3
+
         conn = sqlite3.connect(video_db_path)
         cursor = conn.cursor()
 
@@ -206,7 +213,9 @@ class BoundaryPredictor:
 
         # Load OCR visualization image from blob
         import io
+
         from PIL import Image as PILImage
+
         self.ocr_viz_img = PILImage.open(io.BytesIO(ocr_viz_blob))
 
         # Get confirmed caption segments (exclude 'issue' state - not clean boundaries)
@@ -222,7 +231,7 @@ class BoundaryPredictor:
         # Convert caption segments to frame pairs for boundary detection
         # We check the boundary between end of one caption and start of next
         confirmed_frames = []
-        for i, (start_idx, end_idx) in enumerate(confirmed_captions):
+        for _start_idx, end_idx in confirmed_captions:
             # Add end frame as a transition point
             confirmed_frames.append((end_idx, anchor_type))
 
@@ -244,15 +253,15 @@ class BoundaryPredictor:
             anchor_type = anchor1 or "center"
 
             # Predict
-            result = self.predict_frame_pair(
-                video_db_path, frame1_index, frame2_index, anchor_type=anchor_type
-            )
+            result = self.predict_frame_pair(video_db_path, frame1_index, frame2_index, anchor_type=anchor_type)
 
-            result.update({
-                "frame1_index": frame1_index,
-                "frame2_index": frame2_index,
-                "anchor_type": anchor_type,
-            })
+            result.update(
+                {
+                    "frame1_index": frame1_index,
+                    "frame2_index": frame2_index,
+                    "anchor_type": anchor_type,
+                }
+            )
 
             predictions.append(result)
 

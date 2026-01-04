@@ -3,6 +3,7 @@
 Writes cropped frame images to the cropped_frames table in annotations.db.
 """
 
+from collections.abc import Callable
 from pathlib import Path
 
 from PIL import Image
@@ -32,7 +33,7 @@ def write_frames_to_database(
     db_path: Path,
     crop_bounds: tuple[int, int, int, int],
     crop_bounds_version: int = 1,
-    progress_callback: callable | None = None,
+    progress_callback: Callable[[int, int], None] | None = None,
     delete_after_write: bool = True,
 ) -> int:
     """Write all cropped frame images from directory to database.

@@ -1,13 +1,10 @@
 """Unit tests for frames_db storage and retrieval operations."""
 
 import sqlite3
-import tempfile
 from pathlib import Path
 
 import numpy as np
 import pytest
-from PIL import Image
-
 from frames_db import (
     FrameData,
     get_all_frame_indices,
@@ -16,6 +13,7 @@ from frames_db import (
     write_frame_to_db,
     write_frames_batch,
 )
+from PIL import Image
 
 
 @pytest.fixture
@@ -51,6 +49,10 @@ def temp_db(tmp_path: Path) -> Path:
                 width INTEGER NOT NULL,
                 height INTEGER NOT NULL,
                 file_size INTEGER NOT NULL,
+                crop_left INTEGER,
+                crop_top INTEGER,
+                crop_right INTEGER,
+                crop_bottom INTEGER,
                 crop_bounds_version INTEGER DEFAULT 1,
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
             )
@@ -134,6 +136,7 @@ class TestStorage:
             height=height,
             table="cropped_frames",
             crop_bounds_version=1,
+            crop_bounds=(0, 0, width, height),
         )
 
         # Verify frame was written
@@ -151,9 +154,7 @@ class TestStorage:
             (200, jpeg_bytes, width, height),
         ]
 
-        count = write_frames_batch(
-            db_path=temp_db, frames=frames, table="full_frames"
-        )
+        count = write_frames_batch(db_path=temp_db, frames=frames, table="full_frames")
 
         assert count == 3
 
@@ -363,7 +364,9 @@ class TestPerformance:
         frames = [(i, jpeg_bytes, 100, 100) for i in range(1000)]
 
         start = time.time()
-        count = write_frames_batch(temp_db, frames, "cropped_frames", crop_bounds_version=1)
+        count = write_frames_batch(
+            temp_db, frames, "cropped_frames", crop_bounds_version=1, crop_bounds=(0, 0, 100, 100)
+        )
         elapsed = time.time() - start
 
         assert count == 1000

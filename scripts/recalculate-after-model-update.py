@@ -104,9 +104,7 @@ def calculate_crop_bounds_from_predictions(conn: sqlite3.Connection) -> dict | N
     }
 
 
-def recalculate_video(
-    db_path: Path, dry_run: bool = False
-) -> tuple[bool, str, dict | None]:
+def recalculate_video(db_path: Path, dry_run: bool = False) -> tuple[bool, str, dict | None]:
     """Recalculate crop bounds for a video if model version changed.
 
     Returns (success, message, stats_dict)
@@ -136,9 +134,7 @@ def recalculate_video(
             )
 
         # Get old bounds
-        cursor.execute(
-            "SELECT crop_left, crop_top, crop_right, crop_bottom FROM video_layout_config WHERE id = 1"
-        )
+        cursor.execute("SELECT crop_left, crop_top, crop_right, crop_bottom FROM video_layout_config WHERE id = 1")
         result = cursor.fetchone()
         if not result:
             conn.close()
@@ -164,7 +160,7 @@ def recalculate_video(
             conn.close()
             return (
                 True,
-                f"Updated version (no predictions)",
+                "Updated version (no predictions)",
                 {
                     "action": "version_updated",
                     "display_path": display_path,
@@ -191,7 +187,7 @@ def recalculate_video(
             conn.close()
             return (
                 True,
-                f"Recalculated, bounds unchanged",
+                "Recalculated, bounds unchanged",
                 {
                     "action": "recalculated_unchanged",
                     "display_path": display_path,
@@ -237,9 +233,17 @@ def recalculate_video(
         conn.commit()
         conn.close()
 
+        old_bounds_str = (
+            f"[{old_bounds['crop_left']},{old_bounds['crop_top']},"
+            f"{old_bounds['crop_right']},{old_bounds['crop_bottom']}]"
+        )
+        new_bounds_str = (
+            f"[{new_bounds['crop_left']},{new_bounds['crop_top']},"
+            f"{new_bounds['crop_right']},{new_bounds['crop_bottom']}]"
+        )
         return (
             True,
-            f"Bounds changed: [{old_bounds['crop_left']},{old_bounds['crop_top']},{old_bounds['crop_right']},{old_bounds['crop_bottom']}] → [{new_bounds['crop_left']},{new_bounds['crop_top']},{new_bounds['crop_right']},{new_bounds['crop_bottom']}], marked {captions_marked} captions pending",
+            f"Bounds changed: {old_bounds_str} → {new_bounds_str}, marked {captions_marked} captions pending",
             {
                 "action": "recalculated_changed",
                 "display_path": display_path,
@@ -256,15 +260,9 @@ def recalculate_video(
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Recalculate crop bounds after model updates (background job)"
-    )
-    parser.add_argument(
-        "--dry-run", action="store_true", help="Show what would be done without making changes"
-    )
-    parser.add_argument(
-        "--limit", type=int, help="Limit number of videos to process (for testing)"
-    )
+    parser = argparse.ArgumentParser(description="Recalculate crop bounds after model updates (background job)")
+    parser.add_argument("--dry-run", action="store_true", help="Show what would be done without making changes")
+    parser.add_argument("--limit", type=int, help="Limit number of videos to process (for testing)")
     args = parser.parse_args()
 
     # Find all databases
@@ -298,6 +296,11 @@ def main():
     for i, db_path in enumerate(databases, 1):
         success, message, result = recalculate_video(db_path, args.dry_run)
 
+        if result is None:
+            stats["errors"] += 1
+            print(f"[{i}/{len(databases)}] ✗ {db_path}: {message}")
+            continue
+
         action = result.get("action", "unknown")
 
         if action == "skipped":
@@ -324,7 +327,7 @@ def main():
 
     # Summary
     print("\n" + "=" * 70)
-    print(f"Recalculation complete:")
+    print("Recalculation complete:")
     print(f"  ⏭️  Already up to date: {stats['skipped']}")
     print(f"  🔄 Version updated (no predictions): {stats['version_updated']}")
     print(f"  ✅ Recalculated (bounds unchanged): {stats['recalculated_unchanged']}")

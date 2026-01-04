@@ -60,17 +60,16 @@ TODO: Implementation Requirements
 """
 
 import sqlite3
-from pathlib import Path
 from typing import Any
 
 from prefect import flow, task
 
 from .base_model_update import load_base_model
 
-
 # =============================================================================
 # TODO: Feature Extraction
 # =============================================================================
+
 
 @task(
     name="extract-box-features",
@@ -113,6 +112,7 @@ def extract_box_features(
 # =============================================================================
 # TODO: Model Training
 # =============================================================================
+
 
 @task(
     name="train-video-model",
@@ -227,7 +227,7 @@ def save_video_model(
         )
 
         conn.commit()
-        print(f"[SaveVideoModel] Model saved successfully")
+        print("[SaveVideoModel] Model saved successfully")
 
     finally:
         conn.close()
@@ -236,6 +236,7 @@ def save_video_model(
 # =============================================================================
 # TODO: Prediction Updates
 # =============================================================================
+
 
 @task(
     name="update-box-predictions",
@@ -296,6 +297,7 @@ def update_box_predictions(
 # =============================================================================
 # Main Flow
 # =============================================================================
+
 
 @flow(
     name="retrain-video-model",

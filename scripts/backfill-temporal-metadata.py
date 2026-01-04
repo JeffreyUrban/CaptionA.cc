@@ -56,9 +56,7 @@ def get_database_paths(data_dir: Path) -> list[tuple[Path, Path]]:
 
 def table_exists(cursor: sqlite3.Cursor, table_name: str) -> bool:
     """Check if a table exists in the database."""
-    cursor.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_name,)
-    )
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_name,))
     return cursor.fetchone() is not None
 
 
@@ -69,9 +67,7 @@ def column_exists(cursor: sqlite3.Cursor, table_name: str, column_name: str) -> 
     return column_name in columns
 
 
-def backfill_video_metadata(
-    db_path: Path, video_path: Path, dry_run: bool = False
-) -> tuple[bool, str]:
+def backfill_video_metadata(db_path: Path, video_path: Path, dry_run: bool = False) -> tuple[bool, str]:
     """Backfill video_metadata.duration_seconds.
 
     Returns:
@@ -92,9 +88,7 @@ def backfill_video_metadata(
             cursor.execute("ALTER TABLE video_metadata ADD COLUMN duration_seconds REAL")
 
         # Update duration
-        cursor.execute(
-            "UPDATE video_metadata SET duration_seconds = ? WHERE id = 1", (duration,)
-        )
+        cursor.execute("UPDATE video_metadata SET duration_seconds = ? WHERE id = 1", (duration,))
 
         conn.commit()
         conn.close()
@@ -120,9 +114,7 @@ def backfill_video_preferences(db_path: Path, dry_run: bool = False) -> tuple[bo
 
         # Check if index_framerate_hz column exists
         if not column_exists(cursor, "video_preferences", "index_framerate_hz"):
-            cursor.execute(
-                "ALTER TABLE video_preferences ADD COLUMN index_framerate_hz REAL DEFAULT 10.0"
-            )
+            cursor.execute("ALTER TABLE video_preferences ADD COLUMN index_framerate_hz REAL DEFAULT 10.0")
 
         # Update to 10.0 if NULL
         cursor.execute(
@@ -142,9 +134,7 @@ def backfill_video_preferences(db_path: Path, dry_run: bool = False) -> tuple[bo
         return False, f"Error: {str(e)[:100]}"
 
 
-def backfill_frame_timestamps(
-    db_path: Path, table_name: str, dry_run: bool = False
-) -> tuple[bool, str]:
+def backfill_frame_timestamps(db_path: Path, table_name: str, dry_run: bool = False) -> tuple[bool, str]:
     """Backfill timestamp_seconds for a frame table.
 
     Args:
@@ -212,9 +202,7 @@ def backfill_frame_timestamps(
         return False, f"Error: {str(e)[:100]}"
 
 
-def backfill_database(
-    db_path: Path, video_path: Path, dry_run: bool = False
-) -> dict[str, tuple[bool, str]]:
+def backfill_database(db_path: Path, video_path: Path, dry_run: bool = False) -> dict[str, tuple[bool, str]]:
     """Backfill all temporal metadata for a database.
 
     Returns:
@@ -242,12 +230,8 @@ def backfill_database(
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Backfill temporal metadata for existing videos"
-    )
-    parser.add_argument(
-        "--dry-run", action="store_true", help="Show what would be done without making changes"
-    )
+    parser = argparse.ArgumentParser(description="Backfill temporal metadata for existing videos")
+    parser.add_argument("--dry-run", action="store_true", help="Show what would be done without making changes")
     args = parser.parse_args()
 
     # Find all databases
