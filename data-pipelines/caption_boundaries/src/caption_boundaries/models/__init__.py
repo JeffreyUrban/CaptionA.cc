@@ -5,13 +5,14 @@ from pathlib import Path
 
 # Note: CaptionBoundaryPredictor and create_model are available through the registry
 # after automatic architecture module imports below
-
 from caption_boundaries.models.registry import (
     create_model,
-    create_model as create_model_from_registry,
     get_model_info,
     list_architectures,
     register_model,
+)
+from caption_boundaries.models.registry import (
+    create_model as create_model_from_registry,
 )
 
 # Automatically import all architecture modules to register them

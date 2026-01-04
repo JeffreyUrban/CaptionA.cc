@@ -7,7 +7,7 @@ from collections.abc import Callable
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from concurrent.futures import TimeoutError as FuturesTimeoutError
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 # Import ocrmac only on macOS (graceful failure on other platforms)
 try:

@@ -1,4 +1,5 @@
 """Unit tests for feature extraction."""
+# ruff: noqa
 # pyright: reportUndefinedVariable=false, reportGeneralTypeIssues=false
 # NOTE: This entire test file is skipped - ocr_box_model.features module has been removed
 
