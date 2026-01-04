@@ -9,7 +9,11 @@ from concurrent.futures import TimeoutError as FuturesTimeoutError
 from pathlib import Path
 from typing import Any, Optional
 
-from ocrmac import ocrmac
+# Import ocrmac only on macOS (graceful failure on other platforms)
+try:
+    from ocrmac import ocrmac
+except ImportError:
+    ocrmac = None  # type: ignore[assignment]
 
 
 class OCRTimeoutError(Exception):
@@ -44,7 +48,16 @@ def process_frame_ocr_with_retry(
 
     Returns:
         Dictionary with OCR results
+
+    Raises:
+        RuntimeError: If ocrmac is not available (non-macOS platform)
     """
+    if ocrmac is None:
+        raise RuntimeError(
+            "ocrmac is not available on this platform. "
+            "This function requires macOS with the ocrmac package installed."
+        )
+
     last_error = None
 
     for attempt in range(max_retries):
@@ -124,7 +137,16 @@ def process_frames_directory(
 
     Returns:
         Path to the first frame (kept for visualization)
+
+    Raises:
+        RuntimeError: If ocrmac is not available (non-macOS platform)
     """
+    if ocrmac is None:
+        raise RuntimeError(
+            "ocrmac is not available on this platform. "
+            "This function requires macOS with the ocrmac package installed."
+        )
+
     # Find all frame images
     frame_files = sorted(frames_dir.glob("frame_*.jpg"))
     if not frame_files:
@@ -194,6 +216,9 @@ def process_frames_streaming(
         check_interval: How often to check for new frames (seconds)
         ffmpeg_running_check: Optional callable that returns True if extraction still running
 
+    Raises:
+        RuntimeError: If ocrmac is not available (non-macOS platform)
+
     Example:
         >>> process_frames_streaming(
         ...     frames_dir=Path("frames/"),
@@ -203,6 +228,12 @@ def process_frames_streaming(
         ...     ffmpeg_running_check=lambda: ffmpeg_proc.poll() is None
         ... )
     """
+    if ocrmac is None:
+        raise RuntimeError(
+            "ocrmac is not available on this platform. "
+            "This function requires macOS with the ocrmac package installed."
+        )
+
     submitted_frames = set()  # Frames submitted to workers
     pending_retries = {}  # frame_path -> (retry_time, retry_count)
     current_count = 0
