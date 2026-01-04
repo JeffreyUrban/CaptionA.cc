@@ -1,0 +1,237 @@
+#!/usr/bin/env python3
+"""
+CLI tool to queue Prefect flows.
+
+This is called by TypeScript app via spawn() instead of running a separate API server.
+
+Usage:
+    python queue_flow.py full-frames --video-id UUID --video-path /path --db-path /path --output-dir /path
+    python queue_flow.py crop-frames --video-id UUID --video-path /path --db-path /path --output-dir /path --crop-bounds '{"left":0,"top":0,"right":100,"bottom":100}'
+"""
+
+import asyncio
+import json
+import sys
+from pathlib import Path
+
+import typer
+from prefect.deployments import run_deployment
+
+app = typer.Typer()
+
+
+@app.command("full-frames")
+def queue_full_frames(
+    video_id: str,
+    video_path: str,
+    db_path: str,
+    output_dir: str,
+    frame_rate: float = 0.1,
+):
+    """Queue full frames processing (background job)."""
+
+    async def _queue():
+        try:
+            flow_run = await run_deployment(
+                name="process-video-initial/production",
+                parameters={
+                    "video_id": video_id,
+                    "video_path": video_path,
+                    "db_path": db_path,
+                    "output_dir": output_dir,
+                    "frame_rate": frame_rate,
+                },
+                timeout=0,
+                tags=["background", "low-priority"],
+            )
+
+            # Output JSON for TypeScript to parse (camelCase for API consistency)
+            result = {
+                "flowRunId": str(flow_run.id),
+                "status": "queued",
+                "priority": "background",
+            }
+            print(json.dumps(result))
+            return 0
+
+        except Exception as e:
+            error = {"error": str(e), "status": "failed"}
+            print(json.dumps(error), file=sys.stderr)
+            return 1
+
+    exit_code = asyncio.run(_queue())
+    sys.exit(exit_code)
+
+
+@app.command("crop-frames")
+def queue_crop_frames(
+    video_id: str,
+    video_path: str,
+    db_path: str,
+    output_dir: str,
+    crop_bounds: str,  # JSON string: '{"left":0,"top":0,"right":100,"bottom":100}'
+    crop_bounds_version: int = 1,
+    frame_rate: float = 10.0,
+):
+    """Queue crop frames processing (user-initiated job)."""
+
+    async def _queue():
+        try:
+            # Parse crop bounds JSON
+            bounds = json.loads(crop_bounds)
+
+            flow_run = await run_deployment(
+                name="crop-video-frames/production",
+                parameters={
+                    "video_id": video_id,
+                    "video_path": video_path,
+                    "db_path": db_path,
+                    "output_dir": output_dir,
+                    "crop_bounds": bounds,
+                    "crop_bounds_version": crop_bounds_version,
+                    "frame_rate": frame_rate,
+                },
+                timeout=0,
+                tags=["user-initiated", "high-priority"],
+            )
+
+            result = {
+                "flowRunId": str(flow_run.id),
+                "status": "queued",
+                "priority": "user-initiated",
+            }
+            print(json.dumps(result))
+            return 0
+
+        except Exception as e:
+            error = {"error": str(e), "status": "failed"}
+            print(json.dumps(error), file=sys.stderr)
+            return 1
+
+    exit_code = asyncio.run(_queue())
+    sys.exit(exit_code)
+
+
+@app.command("caption-median-ocr")
+def queue_caption_median_ocr(
+    video_id: str,
+    db_path: str,
+    video_dir: str,
+    caption_ids: str,  # JSON array string: '[1, 2, 3]'
+    language: str = "zh-Hans",
+):
+    """Queue caption median OCR processing (user-initiated job)."""
+
+    async def _queue():
+        try:
+            # Parse caption IDs JSON array
+            ids = json.loads(caption_ids)
+
+            flow_run = await run_deployment(
+                name="process-caption-median-ocr/production",
+                parameters={
+                    "video_id": video_id,
+                    "db_path": db_path,
+                    "video_dir": video_dir,
+                    "caption_ids": ids,
+                    "language": language,
+                },
+                timeout=0,
+                tags=["user-initiated", "high-priority"],
+            )
+
+            result = {
+                "flowRunId": str(flow_run.id),
+                "status": "queued",
+                "priority": "user-initiated",
+            }
+            print(json.dumps(result))
+            return 0
+
+        except Exception as e:
+            error = {"error": str(e), "status": "failed"}
+            print(json.dumps(error), file=sys.stderr)
+            return 1
+
+    exit_code = asyncio.run(_queue())
+    sys.exit(exit_code)
+
+
+@app.command("update-base-model")
+def queue_update_base_model(
+    data_dir: str,
+    training_source: str = "all_videos",
+    retrain_videos: bool = True,
+):
+    """Queue base model update (admin/maintenance job)."""
+
+    async def _queue():
+        try:
+            flow_run = await run_deployment(
+                name="update-base-model-globally/production",
+                parameters={
+                    "data_dir": data_dir,
+                    "training_source": training_source,
+                    "retrain_videos": retrain_videos,
+                },
+                timeout=0,
+                tags=["admin", "base-model", "low-priority"],
+            )
+
+            result = {
+                "flowRunId": str(flow_run.id),
+                "status": "queued",
+                "priority": "admin",
+            }
+            print(json.dumps(result))
+            return 0
+
+        except Exception as e:
+            error = {"error": str(e), "status": "failed"}
+            print(json.dumps(error), file=sys.stderr)
+            return 1
+
+    exit_code = asyncio.run(_queue())
+    sys.exit(exit_code)
+
+
+@app.command("retrain-video-model")
+def queue_retrain_video_model(
+    video_id: str,
+    db_path: str,
+    update_predictions: bool = True,
+):
+    """Queue video model retrain (user-initiated or batch job)."""
+
+    async def _queue():
+        try:
+            flow_run = await run_deployment(
+                name="retrain-video-model/production",
+                parameters={
+                    "video_id": video_id,
+                    "db_path": db_path,
+                    "update_predictions": update_predictions,
+                },
+                timeout=0,
+                tags=["model-retrain", "medium-priority"],
+            )
+
+            result = {
+                "flowRunId": str(flow_run.id),
+                "status": "queued",
+                "priority": "medium",
+            }
+            print(json.dumps(result))
+            return 0
+
+        except Exception as e:
+            error = {"error": str(e), "status": "failed"}
+            print(json.dumps(error), file=sys.stderr)
+            return 1
+
+    exit_code = asyncio.run(_queue())
+    sys.exit(exit_code)
+
+
+if __name__ == "__main__":
+    app()

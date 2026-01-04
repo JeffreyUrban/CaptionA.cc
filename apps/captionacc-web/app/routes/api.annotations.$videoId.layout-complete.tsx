@@ -58,15 +58,22 @@ export async function action({ params, request }: ActionFunctionArgs) {
 
     db.close()
 
-    return new Response(
+    // Mark video as touched for UI refresh
+    // Layout approval is a significant state change that should update the video list
+    const response = new Response(
       JSON.stringify({
         success: true,
         layoutApproved: complete,
       }),
       {
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Video-Touched': videoId, // Signal client to mark as touched
+        },
       }
     )
+
+    return response
   } catch (error) {
     console.error('Error updating layout approved status:', error)
     return new Response(

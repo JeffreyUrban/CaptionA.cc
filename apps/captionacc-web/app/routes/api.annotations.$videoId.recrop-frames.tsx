@@ -3,8 +3,8 @@ import { existsSync } from 'fs'
 import Database from 'better-sqlite3'
 import { type ActionFunctionArgs } from 'react-router'
 
-import { queueCropFramesProcessing } from '~/services/crop-frames-processing'
-import { getDbPath } from '~/utils/video-paths'
+import { queueCropFramesProcessing } from '~/services/prefect'
+import { getDbPath, getVideoDir } from '~/utils/video-paths'
 
 function getDatabase(videoId: string): Database.Database | Response {
   const dbPath = getDbPath(videoId)
@@ -68,10 +68,47 @@ export async function action({ params }: ActionFunctionArgs) {
       )
     }
 
-    // Queue the crop_frames job (managed by processing coordinator)
-    queueCropFramesProcessing({
+    // Queue the crop_frames job via Prefect
+    const dbPath = getDbPath(videoId)
+    const videoDir = getVideoDir(videoId)
+    if (!dbPath || !videoDir) {
+      return new Response(
+        JSON.stringify({
+          error: 'Failed to resolve video paths',
+        }),
+        {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
+    }
+
+    // Get video file from metadata
+    const { readdirSync } = await import('fs')
+    const { resolve } = await import('path')
+    const videoFiles = readdirSync(videoDir).filter(
+      f => f.endsWith('.mp4') || f.endsWith('.mkv') || f.endsWith('.avi') || f.endsWith('.mov')
+    )
+    const videoFile = videoFiles[0]
+    if (!videoFile) {
+      return new Response(
+        JSON.stringify({
+          error: 'Video file not found',
+        }),
+        {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
+    }
+
+    const videoPath = resolve(videoDir, videoFile)
+
+    await queueCropFramesProcessing({
       videoId,
-      videoPath: videoId, // Use videoId as display path
+      videoPath,
+      dbPath,
+      outputDir: resolve(videoDir, 'crop_frames'),
       cropBounds: {
         left: layoutConfig.crop_left,
         top: layoutConfig.crop_top,
@@ -79,6 +116,8 @@ export async function action({ params }: ActionFunctionArgs) {
         bottom: layoutConfig.crop_bottom,
       },
     })
+
+    console.log(`[Prefect] Queued crop frames for ${videoId}`)
 
     return new Response(
       JSON.stringify({
@@ -92,7 +131,10 @@ export async function action({ params }: ActionFunctionArgs) {
         },
       }),
       {
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Video-Touched': videoId,
+        },
       }
     )
   } catch (error) {
