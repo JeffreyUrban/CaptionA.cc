@@ -392,7 +392,9 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "caption-boundaries" },
+    { name = "caption-text" },
     { name = "crop-frames" },
+    { name = "full-frames" },
     { name = "orchestrator" },
     { name = "pillow" },
     { name = "tqdm" },
@@ -410,7 +412,9 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "caption-boundaries", editable = "data-pipelines/caption_boundaries" },
+    { name = "caption-text", editable = "data-pipelines/caption_text" },
     { name = "crop-frames", editable = "data-pipelines/crop_frames" },
+    { name = "full-frames", editable = "data-pipelines/full_frames" },
     { name = "orchestrator", editable = "services/orchestrator" },
     { name = "pillow", specifier = ">=11.0.0" },
     { name = "tqdm", specifier = ">=4.67.1" },

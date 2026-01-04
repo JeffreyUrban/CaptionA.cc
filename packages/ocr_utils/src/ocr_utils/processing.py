@@ -54,8 +54,7 @@ def process_frame_ocr_with_retry(
     """
     if ocrmac is None:
         raise RuntimeError(
-            "ocrmac is not available on this platform. "
-            "This function requires macOS with the ocrmac package installed."
+            "ocrmac is not available on this platform. This function requires macOS with the ocrmac package installed."
         )
 
     last_error = None
@@ -143,8 +142,7 @@ def process_frames_directory(
     """
     if ocrmac is None:
         raise RuntimeError(
-            "ocrmac is not available on this platform. "
-            "This function requires macOS with the ocrmac package installed."
+            "ocrmac is not available on this platform. This function requires macOS with the ocrmac package installed."
         )
 
     # Find all frame images
@@ -230,8 +228,7 @@ def process_frames_streaming(
     """
     if ocrmac is None:
         raise RuntimeError(
-            "ocrmac is not available on this platform. "
-            "This function requires macOS with the ocrmac package installed."
+            "ocrmac is not available on this platform. This function requires macOS with the ocrmac package installed."
         )
 
     submitted_frames = set()  # Frames submitted to workers
