@@ -73,7 +73,6 @@ def stream_video_with_ocr(
         max_workers=max_workers,
         progress_callback=progress_callback,
         ffmpeg_running_check=lambda: ffmpeg_process.poll() is None,
-        keep_frames=keep_frames,
     )
 
     # Check for FFmpeg errors
