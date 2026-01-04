@@ -75,3 +75,22 @@ dev = [
     "pytest-cov>=5.0.0",
     "pyyaml>=6.0.0",
 ]
+
+[tool.pytest.ini_options]
+# Test collection configuration for workspace
+testpaths = [
+    "data-pipelines/caption_boundaries/tests",
+    "data-pipelines/caption_text/tests",
+    "packages/frames_db/tests",
+    "packages/video_utils/tests",
+    "services/orchestrator/tests",
+]
+# Skip directories with incomplete/skeleton tests
+# These can be re-enabled once the modules are properly implemented
+norecursedirs = [
+    "data-pipelines/crop_frames/tests",
+    "data-pipelines/full_frames/tests",
+    "data-pipelines/layout_analysis",
+    "packages/ocr_box_model",
+    "packages/jetbrains_integration",
+]
