@@ -15,7 +15,7 @@ from caption_boundaries.data.dataset import CaptionBoundaryDataset
 from caption_boundaries.data.font_embeddings import get_font_embedding
 from caption_boundaries.data.ocr_visualization import create_ocr_visualization
 from caption_boundaries.data.transforms import AnchorAwareResize, NormalizeImageNet, ResizeStrategy
-from caption_boundaries.models.architecture import create_model
+from caption_boundaries.models.registry import create_model
 
 console = Console(stderr=True)
 
@@ -55,6 +55,8 @@ class BoundaryPredictor:
 
         # Extract config from checkpoint
         config = checkpoint.get("config", {})
+        self.architecture_name = config.get("architecture_name", "triple_backbone_resnet50")
+        self.model_config = config.get("model_config", {"pretrained": False})
         self.transform_strategy = transform_strategy or ResizeStrategy(config.get("transform_strategy", "mirror_tile"))
         self.ocr_viz_variant = ocr_viz_variant or config.get("ocr_visualization_variant", "boundaries")
         self.use_font_embedding = config.get("use_font_embedding", True)
@@ -62,8 +64,12 @@ class BoundaryPredictor:
         # OCR visualization will be loaded per-video (not at init time)
         self.ocr_viz_img = None
 
-        # Load model
-        self.model = create_model(device=device, pretrained=False)
+        # Load model from registry
+        self.model = create_model(
+            architecture=self.architecture_name,
+            device=device,
+            **self.model_config,
+        )
         self.model.load_state_dict(checkpoint["model_state_dict"])
         self.model.eval()
 

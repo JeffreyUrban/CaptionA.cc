@@ -301,16 +301,29 @@ def _copy_frames_for_video(db, video_conn, video_hash: str, video_samples: list[
         db.add(training_frame)
 
 
-def _copy_ocr_viz_for_video(db, video_conn, video_hash: str, variant: str = "boundaries") -> None:
+def _copy_ocr_viz_for_video(
+    db, video_conn, video_hash: str, has_samples: bool, variant: str = "boundaries"
+) -> bool:
     """Copy OCR visualization from video DB to training DB.
+
+    Only processes videos that have training samples.
+    Returns whether OCR visualization exists for this video.
 
     Args:
         db: Training database session
         video_conn: Open SQLite connection to video's annotations.db
         video_hash: Video hash
+        has_samples: Whether this video has training samples in the dataset
         variant: OCR visualization variant (default: 'boundaries')
+
+    Returns:
+        True if OCR visualization exists (or was copied), False otherwise
     """
     from caption_boundaries.database import TrainingOCRVisualization
+
+    # Skip if no training samples for this video
+    if not has_samples:
+        return False
 
     # Check if visualization already exists
     existing = (
@@ -320,22 +333,23 @@ def _copy_ocr_viz_for_video(db, video_conn, video_hash: str, variant: str = "bou
     )
 
     if existing:
-        return  # Already exists
+        return True  # Already exists
 
-    # Copy from video DB using provided connection
+    # Try to copy from video DB
     cursor = video_conn.cursor()
     cursor.execute("SELECT ocr_visualization_image FROM video_layout_config WHERE id = 1")
 
     row = cursor.fetchone()
     if not row or not row[0]:
-        console.print(f"[yellow]⚠ OCR visualization not found, skipping[/yellow]")
-        return
+        # OCR visualization not found
+        return False
 
     # Create training OCR visualization record
     training_ocr_viz = TrainingOCRVisualization(
         video_hash=video_hash, variant=variant, image_data=row[0]
     )
     db.add(training_ocr_viz)
+    return True
 
 
 def create_training_dataset(
@@ -522,11 +536,8 @@ def create_training_dataset(
         raise NotImplementedError("Show-based split not yet implemented")
 
     # Calculate quality metadata
-    all_confidences = [
-        s["ocr_confidence_frame1"] for s in all_samples if s["ocr_confidence_frame1"] is not None
-    ] + [s["ocr_confidence_frame2"] for s in all_samples if s["ocr_confidence_frame2"] is not None]
-
-    avg_ocr_confidence = sum(all_confidences) / len(all_confidences) if all_confidences else None
+    # Note: OCR confidence tracking removed - samples have no OCR metadata
+    avg_ocr_confidence = None
     min_samples_per_class = min(label_counts.values()) if label_counts else 0
 
     # Create dataset record and get ID
@@ -597,12 +608,17 @@ def create_training_dataset(
         console.print("  Dataset will be created without font embeddings")
 
     # Process each video: copy frames, copy OCR viz, insert samples
+    # IMPORTANT: Only include samples from videos with OCR visualizations
     # Use a single database session for all videos to avoid creating too many engines
     # Process in batches to limit simultaneous open connections
     console.print(f"\n[cyan]Consolidating {len(samples_by_video)} videos to training database...[/cyan]")
 
     BATCH_SIZE = 50  # Maximum simultaneous connections to video databases
     video_hashes = list(samples_by_video.keys())
+
+    # Track which videos have OCR visualizations
+    videos_with_ocr_viz = set()
+    videos_without_ocr_viz = set()
 
     with next(get_dataset_db(dataset_db_path)) as db:
         # Process videos in batches to limit open file descriptors
@@ -615,7 +631,7 @@ def create_training_dataset(
                 video_db_path = video_db_map.get(video_hash)
 
                 if not video_db_path:
-                    console.print(f"[yellow]⚠ Could not find video DB for {video_hash}, skipping frame copy[/yellow]")
+                    console.print(f"[yellow]⚠ Could not find video DB for {video_hash}, skipping[/yellow]")
                     continue
 
                 # Open video database once for both operations
@@ -624,29 +640,30 @@ def create_training_dataset(
                     # Copy frames for this video
                     _copy_frames_for_video(db, video_conn, video_hash, video_samples)
 
-                    # Copy OCR visualization for this video
-                    _copy_ocr_viz_for_video(db, video_conn, video_hash)
+                    # Copy OCR visualization for this video (only if has samples)
+                    has_ocr_viz = _copy_ocr_viz_for_video(db, video_conn, video_hash, has_samples=True)
+
+                    if has_ocr_viz:
+                        videos_with_ocr_viz.add(video_hash)
+                    else:
+                        videos_without_ocr_viz.add(video_hash)
                 finally:
                     video_conn.close()
 
-                # Insert samples for this video
-                for sample_data in video_samples:
-                    sample = TrainingSample(
-                        dataset_id=dataset_id,
-                        video_hash=sample_data["video_hash"],
-                        frame1_index=sample_data["frame1_index"],
-                        frame2_index=sample_data["frame2_index"],
-                        label=sample_data["label"],
-                        split=sample_data["split"],
-                        crop_bounds_version=sample_data["crop_bounds_version"],
-                        source_caption_annotation_id=sample_data["source_caption_annotation_id"],
-                        ocr_confidence_frame1=sample_data["ocr_confidence_frame1"],
-                        ocr_confidence_frame2=sample_data["ocr_confidence_frame2"],
-                        ocr_text_frame1=sample_data["ocr_text_frame1"],
-                        ocr_text_frame2=sample_data["ocr_text_frame2"],
-                        levenshtein_distance=sample_data["levenshtein_distance"],
-                    )
-                    db.add(sample)
+                # Only insert samples for videos WITH OCR visualization
+                if video_hash in videos_with_ocr_viz:
+                    for sample_data in video_samples:
+                        sample = TrainingSample(
+                            dataset_id=dataset_id,
+                            video_hash=sample_data["video_hash"],
+                            frame1_index=sample_data["frame1_index"],
+                            frame2_index=sample_data["frame2_index"],
+                            label=sample_data["label"],
+                            split=sample_data["split"],
+                            crop_bounds_version=sample_data["crop_bounds_version"],
+                            source_caption_annotation_id=sample_data["source_caption_annotation_id"],
+                        )
+                        db.add(sample)
 
                 # Add/update video registry
                 for video_record_data in video_registry_records:
@@ -671,8 +688,24 @@ def create_training_dataset(
     console.print(f"\n[green]✓[/green] Dataset created successfully!")
     console.print(f"  Name: {name}")
     console.print(f"  Database: {dataset_db_path}")
-    console.print(f"  Train samples: {sum(1 for s in all_samples if s['split'] == 'train')}")
-    console.print(f"  Val samples: {sum(1 for s in all_samples if s['split'] == 'val')}")
+
+    # Calculate actual inserted counts (only videos with OCR viz)
+    with next(get_dataset_db(dataset_db_path)) as db:
+        actual_train_count = db.query(TrainingSample).filter(TrainingSample.split == 'train').count()
+        actual_val_count = db.query(TrainingSample).filter(TrainingSample.split == 'val').count()
+
+    console.print(f"  Train samples: {actual_train_count}")
+    console.print(f"  Val samples: {actual_val_count}")
+
+    # Report excluded samples due to missing OCR visualization
+    if videos_without_ocr_viz:
+        excluded_sample_count = sum(
+            len(samples_by_video[vh]) for vh in videos_without_ocr_viz
+        )
+        console.print(f"\n[yellow]⚠ Excluded samples (missing OCR visualization):[/yellow]")
+        console.print(f"  Videos excluded: {len(videos_without_ocr_viz)} / {len(samples_by_video)}")
+        console.print(f"  Samples excluded: {excluded_sample_count}")
+        console.print(f"  Videos with complete data: {len(videos_with_ocr_viz)}")
 
     # Show font embedding model info
     from caption_boundaries.data.font_embeddings import get_dataset_model_info

@@ -9,7 +9,7 @@ Database location: local/caption_boundaries_training.db
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import JSON, LargeBinary, CheckConstraint, DateTime, Float, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import JSON, CheckConstraint, DateTime, Float, ForeignKey, Index, Integer, LargeBinary, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -267,6 +267,7 @@ class Experiment(Base):
     """W&B experiment tracking with model checkpoints.
 
     Links to W&B runs and stores checkpoint locations for reproducibility.
+    Tracks FontCLIP model version to distinguish real FontCLIP vs. fallback CLIP.
     """
 
     __tablename__ = "experiments"
@@ -280,13 +281,15 @@ class Experiment(Base):
     wandb_project: Mapped[str | None] = mapped_column(String(255))
 
     # Model configuration
-    model_architecture: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    architecture_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    model_config: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     hyperparameters: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
 
     # Transform strategy
     transform_strategy: Mapped[str] = mapped_column(String(50), nullable=False)
     ocr_visualization_variant: Mapped[str] = mapped_column(String(50), nullable=False)
     use_font_embedding: Mapped[bool] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+    fontclip_model_version: Mapped[str | None] = mapped_column(String(100))
 
     # Training results
     best_val_f1: Mapped[float | None] = mapped_column(Float)
