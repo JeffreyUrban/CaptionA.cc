@@ -4,7 +4,7 @@ Loads trained models and predicts boundaries on new videos.
 """
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 import torch
@@ -91,7 +91,7 @@ class BoundaryPredictor:
         video_db_path: Path,
         frame1_index: int,
         frame2_index: int,
-        anchor_type: str = "center",
+        anchor_type: Literal["left", "center", "right"] = "center",
     ) -> dict[str, Any]:
         """Predict boundary classification for a single frame pair.
 
@@ -112,6 +112,11 @@ class BoundaryPredictor:
 
         frame1_data = get_frame_from_db(video_db_path, frame1_index, table="cropped_frames")
         frame2_data = get_frame_from_db(video_db_path, frame2_index, table="cropped_frames")
+
+        if frame1_data is None:
+            raise ValueError(f"Frame {frame1_index} not found in {video_db_path}")
+        if frame2_data is None:
+            raise ValueError(f"Frame {frame2_index} not found in {video_db_path}")
 
         # Convert FrameData to PIL Images
         frame1_img = frame1_data.to_pil_image()
