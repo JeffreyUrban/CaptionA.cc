@@ -70,7 +70,7 @@ def check_file(filepath: str) -> bool:
     if path.exists() and path.stat().st_size > 1_000_000:  # 1MB
         print(f"❌ BLOCKED: {filepath}")
         print(f"   Reason: File is {path.stat().st_size / 1_000_000:.1f}MB (limit: 1MB)")
-        print(f"   Large files should be tracked with DVC")
+        print("   Large files should be tracked with DVC")
         return False
 
     return True

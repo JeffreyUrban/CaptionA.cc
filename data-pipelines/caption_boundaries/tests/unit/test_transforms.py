@@ -136,9 +136,7 @@ def test_crop_oversized_center_anchor():
 @pytest.mark.unit
 def test_mirror_tile_undersized_left_anchor():
     """Test mirror-tiling undersized image with left anchor fills right."""
-    transform = AnchorAwareResize(
-        target_width=480, target_height=48, strategy=ResizeStrategy.MIRROR_TILE
-    )
+    transform = AnchorAwareResize(target_width=480, target_height=48, strategy=ResizeStrategy.MIRROR_TILE)
 
     # Create narrow image
     img = create_test_image(240, 48, pattern="gradient")
@@ -165,9 +163,7 @@ def test_mirror_tile_undersized_left_anchor():
 @pytest.mark.unit
 def test_mirror_tile_undersized_right_anchor():
     """Test mirror-tiling undersized image with right anchor fills left."""
-    transform = AnchorAwareResize(
-        target_width=480, target_height=48, strategy=ResizeStrategy.MIRROR_TILE
-    )
+    transform = AnchorAwareResize(target_width=480, target_height=48, strategy=ResizeStrategy.MIRROR_TILE)
 
     # Create narrow image
     img = create_test_image(240, 48, pattern="gradient")
@@ -190,9 +186,7 @@ def test_mirror_tile_undersized_right_anchor():
 @pytest.mark.unit
 def test_mirror_tile_undersized_center_anchor():
     """Test mirror-tiling undersized image with center anchor fills both sides."""
-    transform = AnchorAwareResize(
-        target_width=480, target_height=48, strategy=ResizeStrategy.MIRROR_TILE
-    )
+    transform = AnchorAwareResize(target_width=480, target_height=48, strategy=ResizeStrategy.MIRROR_TILE)
 
     # Create narrow image
     img = create_test_image(240, 48, pattern="gradient")
@@ -335,9 +329,7 @@ def test_all_strategies_produce_correct_size():
 @pytest.mark.unit
 def test_mirror_tile_creates_smooth_transition():
     """Test that mirror tiling creates smooth visual transition."""
-    transform = AnchorAwareResize(
-        target_width=480, target_height=48, strategy=ResizeStrategy.MIRROR_TILE
-    )
+    transform = AnchorAwareResize(target_width=480, target_height=48, strategy=ResizeStrategy.MIRROR_TILE)
 
     # Create narrow image with distinct left/right colors
     img = Image.new("RGB", (100, 48))

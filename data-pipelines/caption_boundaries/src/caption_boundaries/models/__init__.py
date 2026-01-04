@@ -4,8 +4,11 @@ from importlib import import_module
 from pathlib import Path
 
 from caption_boundaries.models.architectures.poor.triple_backbone_resnet50 import CaptionBoundaryPredictor, create_model
+
 from caption_boundaries.models.registry import (
     create_model as create_model_from_registry,
+)
+from caption_boundaries.models.registry import (
     get_model_info,
     list_architectures,
     register_model,

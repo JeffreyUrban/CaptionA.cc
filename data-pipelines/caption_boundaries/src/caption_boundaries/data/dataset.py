@@ -125,7 +125,6 @@ class CaptionBoundaryDataset(Dataset):
         Raises:
             ValueError: If no samples found for split
         """
-        from caption_boundaries.database import TrainingFrame, TrainingOCRVisualization
 
         # Get dataset to verify it exists
         dataset = self._db_session.query(TrainingDataset).first()
@@ -157,8 +156,12 @@ class CaptionBoundaryDataset(Dataset):
 
         incomplete_count = len(all_samples) - len(valid_samples)
         if incomplete_count > 0:
-            print(f"⚠️  Excluded {incomplete_count}/{len(all_samples)} incomplete samples from {self.split} split ({incomplete_count/len(all_samples)*100:.1f}%)")
-            print(f"   Missing data breakdown:")
+            incomplete_pct = incomplete_count / len(all_samples) * 100
+            print(
+                f"⚠️  Excluded {incomplete_count}/{len(all_samples)} incomplete samples "
+                f"from {self.split} split ({incomplete_pct:.1f}%)"
+            )
+            print("   Missing data breakdown:")
             for key, count in missing_stats.items():
                 if count > 0:
                     print(f"   - {key}: {count} samples")

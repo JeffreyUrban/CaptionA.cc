@@ -24,9 +24,10 @@ from pathlib import Path
 # Add src to path for direct execution
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
+from video_utils import get_video_metadata
+
 from caption_boundaries.database import TrainingDataset, TrainingSample, VideoRegistry, init_training_db
 from caption_boundaries.database.storage import create_session
-from video_utils import get_video_metadata
 
 
 def find_videos_with_confirmed_boundaries(data_dir: Path, min_confirmed: int = 5) -> list[Path]:
@@ -46,7 +47,8 @@ def find_videos_with_confirmed_boundaries(data_dir: Path, min_confirmed: int = 5
             conn = sqlite3.connect(db_path)
             cursor = conn.cursor()
             cursor.execute(
-                "SELECT COUNT(*) FROM captions WHERE boundary_state = 'confirmed' AND boundary_state != 'issue' AND boundary_pending = 0"
+                "SELECT COUNT(*) FROM captions "
+                "WHERE boundary_state = 'confirmed' AND boundary_state != 'issue' AND boundary_pending = 0"
             )
             confirmed_count = cursor.fetchone()[0]
             conn.close()
@@ -121,9 +123,7 @@ def get_cropped_frame_indices(db_path: Path) -> list[int]:
     return frames
 
 
-def label_frame_pair(
-    frame1: int, frame2: int, captions: list[tuple[int, int]]
-) -> str | None:
+def label_frame_pair(frame1: int, frame2: int, captions: list[tuple[int, int]]) -> str | None:
     """Determine label for a frame pair based on caption boundaries.
 
     Args:
@@ -194,11 +194,13 @@ def extract_samples_from_video(
         if label is None:
             continue
 
-        samples.append({
-            "frame1_index": frame1,
-            "frame2_index": frame2,
-            "label": label,
-        })
+        samples.append(
+            {
+                "frame1_index": frame1,
+                "frame2_index": frame2,
+                "label": label,
+            }
+        )
 
         # Limit samples per video
         if len(samples) >= max_samples_per_video:
@@ -255,7 +257,7 @@ def create_training_dataset(
                     break
 
             if not video_path:
-                print(f"  ⚠️  No video file found, skipping")
+                print("  ⚠️  No video file found, skipping")
                 continue
 
             try:
@@ -268,7 +270,7 @@ def create_training_dataset(
             # Extract samples
             samples = extract_samples_from_video(db_path)
             if not samples:
-                print(f"  ⚠️  No samples extracted")
+                print("  ⚠️  No samples extracted")
                 continue
 
             # Store samples with video hash
@@ -298,7 +300,7 @@ def create_training_dataset(
 
         print("\nLabel distribution:")
         for label, count in sorted(label_counts.items()):
-            print(f"  {label}: {count} ({count/len(all_samples)*100:.1f}%)")
+            print(f"  {label}: {count} ({count / len(all_samples) * 100:.1f}%)")
 
         # Create dataset record
         dataset = TrainingDataset(
@@ -367,10 +369,10 @@ def create_training_dataset(
         train_count = sum(1 for s in all_samples[:train_size])
         val_count = len(all_samples) - train_count
 
-        print(f"  ✓ Train: {train_count} samples ({train_count/len(all_samples)*100:.1f}%)")
-        print(f"  ✓ Val: {val_count} samples ({val_count/len(all_samples)*100:.1f}%)")
+        print(f"  ✓ Train: {train_count} samples ({train_count / len(all_samples) * 100:.1f}%)")
+        print(f"  ✓ Val: {val_count} samples ({val_count / len(all_samples) * 100:.1f}%)")
 
-        print(f"\n✅ Dataset created successfully!")
+        print("\n✅ Dataset created successfully!")
         print(f"   Dataset ID: {dataset.id}")
         print(f"   Total samples: {len(all_samples)}")
         print(f"   Videos: {len(video_hashes)}")
@@ -382,9 +384,7 @@ def create_training_dataset(
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Create training dataset from confirmed caption boundaries"
-    )
+    parser = argparse.ArgumentParser(description="Create training dataset from confirmed caption boundaries")
 
     # Default paths
     script_dir = Path(__file__).parent.parent
@@ -469,14 +469,14 @@ def main():
     if dataset_id is None:
         return 1
 
-    print(f"\n{'='*60}")
-    print(f"Dataset created successfully!")
+    print(f"\n{'=' * 60}")
+    print("Dataset created successfully!")
     print(f"  Dataset ID: {dataset_id}")
     print(f"  Database: {args.training_db}")
-    print(f"\nNext steps:")
-    print(f"  1. Extract font embeddings for all videos")
-    print(f"  2. Train model on this dataset")
-    print(f"{'='*60}")
+    print("\nNext steps:")
+    print("  1. Extract font embeddings for all videos")
+    print("  2. Train model on this dataset")
+    print(f"{'=' * 60}")
 
     return 0
 

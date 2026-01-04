@@ -1,8 +1,8 @@
 """Tests for CLI statistics printing."""
 
 import pytest
-
 from full_frames.full_frames import CaptionLayout
+
 from full_frames.cli import print_stats
 
 

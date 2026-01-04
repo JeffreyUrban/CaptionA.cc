@@ -12,8 +12,8 @@ import argparse
 import sqlite3
 import subprocess
 import sys
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 
 
 def get_database_path(video_path: Path) -> Path:
@@ -59,11 +59,7 @@ def run_full_frames_pipeline(video_path: Path, dry_run: bool = False) -> bool:
         return True
 
     # Run full_frames pipeline
-    cmd = [
-        "uv", "run", "full_frames", "analyze",
-        str(video_path),
-        "--output-dir", str(output_dir)
-    ]
+    cmd = ["uv", "run", "full_frames", "analyze", str(video_path), "--output-dir", str(output_dir)]
 
     try:
         result = subprocess.run(
@@ -71,18 +67,18 @@ def run_full_frames_pipeline(video_path: Path, dry_run: bool = False) -> bool:
             cwd="/Users/jurban/PycharmProjects/CaptionA.cc/data-pipelines/full_frames",
             capture_output=True,
             text=True,
-            timeout=3600  # 1 hour timeout per video
+            timeout=3600,  # 1 hour timeout per video
         )
 
         if result.returncode != 0:
-            print(f"  ✗ Pipeline failed:")
+            print("  ✗ Pipeline failed:")
             print(f"    {result.stderr[:200]}")
             return False
 
         return True
 
     except subprocess.TimeoutExpired:
-        print(f"  ✗ Pipeline timeout (>1 hour)")
+        print("  ✗ Pipeline timeout (>1 hour)")
         return False
     except Exception as e:
         print(f"  ✗ Error running pipeline: {e}")
@@ -106,16 +102,14 @@ def find_all_videos(data_dir: Path) -> list[Path]:
                 continue
 
             # Look for video files (mp4, mkv, avi, mov)
-            for ext in ['*.mp4', '*.mkv', '*.avi', '*.mov']:
+            for ext in ["*.mp4", "*.mkv", "*.avi", "*.mov"]:
                 videos.extend(video_dir.glob(ext))
 
     return sorted(videos)
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Batch process all videos with full_frames pipeline"
-    )
+    parser = argparse.ArgumentParser(description="Batch process all videos with full_frames pipeline")
 
     # Default to local/data relative to script location
     script_dir = Path(__file__).parent.parent  # scripts/ -> project root
@@ -125,23 +119,11 @@ def main():
         "--data-dir",
         type=Path,
         default=default_data_dir,
-        help=f"Data directory containing videos (default: {default_data_dir})"
+        help=f"Data directory containing videos (default: {default_data_dir})",
     )
-    parser.add_argument(
-        "--force",
-        action="store_true",
-        help="Re-process videos even if full_frames already populated"
-    )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Show what would be done without processing"
-    )
-    parser.add_argument(
-        "--limit",
-        type=int,
-        help="Limit number of videos to process (for testing)"
-    )
+    parser.add_argument("--force", action="store_true", help="Re-process videos even if full_frames already populated")
+    parser.add_argument("--dry-run", action="store_true", help="Show what would be done without processing")
+    parser.add_argument("--limit", type=int, help="Limit number of videos to process (for testing)")
 
     args = parser.parse_args()
 
@@ -184,13 +166,12 @@ def main():
 
     # Apply limit if specified
     if args.limit:
-        videos_to_process = videos_to_process[:args.limit]
+        videos_to_process = videos_to_process[: args.limit]
         print(f"Limiting to first {args.limit} videos\n")
 
     # Process each video
     success_count = 0
     fail_count = 0
-    skip_count = 0
 
     start_time = datetime.now()
 
@@ -202,7 +183,7 @@ def main():
 
         if run_full_frames_pipeline(video_path, dry_run=args.dry_run):
             success_count += 1
-            print(f"  ✓ Success")
+            print("  ✓ Success")
         else:
             fail_count += 1
             # Continue processing other videos

@@ -14,7 +14,6 @@ Usage:
 import asyncio
 import subprocess
 import sys
-from pathlib import Path
 
 from prefect.client.orchestration import get_client
 

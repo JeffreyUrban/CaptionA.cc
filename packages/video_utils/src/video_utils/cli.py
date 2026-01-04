@@ -6,7 +6,6 @@ from typing import Optional
 
 import typer
 from rich.console import Console
-from rich.live import Live
 from rich.progress import (
     BarColumn,
     Progress,
@@ -83,7 +82,7 @@ def extract_streaming(
     console.print("[bold cyan]Frame Extraction (Streaming)[/bold cyan]")
     console.print(f"Input: {video_path}")
     console.print(f"Output: {output_dir}")
-    console.print(f"Rate: {rate_hz} Hz ({1/rate_hz:.1f} seconds per frame)")
+    console.print(f"Rate: {rate_hz} Hz ({1 / rate_hz:.1f} seconds per frame)")
 
     # Parse crop box if provided
     crop_box = None

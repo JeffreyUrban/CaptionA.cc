@@ -11,12 +11,11 @@ Usage:
 
 from prefect import serve
 
-from flows.video_processing import process_video_initial_flow
-from flows.crop_frames import crop_frames_flow
-from flows.caption_median_ocr import caption_median_ocr_flow
 from flows.base_model_update import base_model_update_flow
+from flows.caption_median_ocr import caption_median_ocr_flow
+from flows.crop_frames import crop_frames_flow
 from flows.video_model_retrain import retrain_video_model_flow
-
+from flows.video_processing import process_video_initial_flow
 
 if __name__ == "__main__":
     print("=" * 80)

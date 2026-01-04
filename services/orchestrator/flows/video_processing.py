@@ -9,15 +9,15 @@ Handles initial video processing after upload:
 This replaces apps/captionacc-web/app/services/video-processing.ts
 """
 
-from pathlib import Path
 import os
 import sqlite3
 import subprocess
+from pathlib import Path
 from typing import Any
 
 import requests
 from prefect import flow, task
-from prefect.artifacts import create_table_artifact, create_link_artifact
+from prefect.artifacts import create_link_artifact, create_table_artifact
 
 
 @task(
@@ -84,7 +84,9 @@ def extract_full_frames(
     if result.returncode != 0:
         print(f"STDOUT: {result.stdout}")
         print(f"STDERR: {result.stderr}")
-        raise RuntimeError(f"full_frames pipeline failed with code {result.returncode}: {result.stderr}")
+        raise RuntimeError(
+            f"full_frames pipeline failed with code {result.returncode}: {result.stderr}"
+        )
 
     print("Frame extraction completed successfully")
     print(f"Output: {result.stdout}")

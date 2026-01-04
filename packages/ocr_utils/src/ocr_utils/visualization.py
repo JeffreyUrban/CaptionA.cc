@@ -7,9 +7,7 @@ from pathlib import Path
 from PIL import Image
 
 
-def create_ocr_visualization(
-    ocr_file: Path, output_image: Path, width: int, height: int
-) -> None:
+def create_ocr_visualization(ocr_file: Path, output_image: Path, width: int, height: int) -> None:
     """Create visualization of OCR bounding boxes.
 
     Creates a white canvas showing all detected text boxes from all frames.

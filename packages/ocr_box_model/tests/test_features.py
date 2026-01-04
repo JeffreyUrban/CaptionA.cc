@@ -1,7 +1,6 @@
 """Unit tests for feature extraction."""
 
 import pytest
-
 from caption_models import BoundingBox, CropBounds
 from ocr_box_model.features import (
     LayoutParams,

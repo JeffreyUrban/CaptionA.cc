@@ -52,9 +52,7 @@ def check_model_version(db_path: Path) -> dict:
         current_model_version = result[0] if result else None
 
         # Get analysis model version
-        cursor.execute(
-            "SELECT analysis_model_version FROM video_layout_config WHERE id = 1"
-        )
+        cursor.execute("SELECT analysis_model_version FROM video_layout_config WHERE id = 1")
         result = cursor.fetchone()
         analysis_model_version = result[0] if result else None
 
@@ -66,9 +64,7 @@ def check_model_version(db_path: Path) -> dict:
         conn.close()
 
         needs_recalc = (
-            not has_column
-            or analysis_model_version is None
-            or analysis_model_version != current_model_version
+            not has_column or analysis_model_version is None or analysis_model_version != current_model_version
         )
 
         return {
@@ -88,12 +84,8 @@ def check_model_version(db_path: Path) -> dict:
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Check all videos for model version mismatches"
-    )
-    parser.add_argument(
-        "--details", action="store_true", help="Show details for all videos"
-    )
+    parser = argparse.ArgumentParser(description="Check all videos for model version mismatches")
+    parser.add_argument("--details", action="store_true", help="Show details for all videos")
     args = parser.parse_args()
 
     # Find all databases
@@ -123,7 +115,7 @@ def main():
 
     # Print summary
     print("=" * 70)
-    print(f"Summary:")
+    print("Summary:")
     print(f"  ✅ Up to date: {len(up_to_date)}")
     print(f"  ⚠️  Needs recalculation: {len(needs_recalc)}")
     print(f"  ❌ Errors: {len(errors)}")
@@ -139,10 +131,7 @@ def main():
             elif result["analysis_model_version"] is None:
                 reason = "(never analyzed)"
             else:
-                reason = (
-                    f"({result['analysis_model_version']} → "
-                    f"{result['current_model_version']})"
-                )
+                reason = f"({result['analysis_model_version']} → {result['current_model_version']})"
 
             print(f"  • {result['display_path']:<50} {reason}")
 
@@ -153,9 +142,7 @@ def main():
     if args.details and up_to_date:
         print(f"\n✅ Up-to-date videos ({len(up_to_date)}):\n")
         for result in up_to_date[:20]:
-            print(
-                f"  • {result['display_path']:<50} (model: {result['current_model_version']})"
-            )
+            print(f"  • {result['display_path']:<50} (model: {result['current_model_version']})")
 
         if len(up_to_date) > 20:
             print(f"\n  ... and {len(up_to_date) - 20} more")
@@ -166,12 +153,8 @@ def main():
         for result in errors:
             print(f"  • {result['display_path']}: {result['error']}")
 
-    print(
-        f"\n💡 To trigger recalculation, access each video's layout analysis page in the web UI."
-    )
-    print(
-        "   The model version check will run automatically and recalculate if needed."
-    )
+    print("\n💡 To trigger recalculation, access each video's layout analysis page in the web UI.")
+    print("   The model version check will run automatically and recalculate if needed.")
 
 
 if __name__ == "__main__":

@@ -7,19 +7,17 @@ Simulates the actual access pattern:
 """
 
 import sqlite3
-import tempfile
 import time
 from io import BytesIO
 from pathlib import Path
 
 import pytest
-from PIL import Image
-
 from frames_db import (
     get_frame_from_db,
     get_frames_range,
     write_frames_batch,
 )
+from PIL import Image
 
 
 def create_test_frame(width: int = 480, height: int = 48) -> bytes:
@@ -106,7 +104,7 @@ class TestBoundariesAnnotationPerformance:
         elapsed = time.time() - start
 
         assert len(frames_loaded) == 11
-        print(f"\n[Filesystem] Loaded 11 frames in {elapsed*1000:.2f}ms")
+        print(f"\n[Filesystem] Loaded 11 frames in {elapsed * 1000:.2f}ms")
         assert elapsed < 0.1  # Should be <100ms
 
     @pytest.mark.unit
@@ -128,7 +126,7 @@ class TestBoundariesAnnotationPerformance:
         elapsed = time.time() - start
 
         assert len(frames_loaded) == 11
-        print(f"\n[Database Individual] Loaded 11 frames in {elapsed*1000:.2f}ms")
+        print(f"\n[Database Individual] Loaded 11 frames in {elapsed * 1000:.2f}ms")
         assert elapsed < 0.2  # Should be <200ms
 
     @pytest.mark.unit
@@ -146,7 +144,7 @@ class TestBoundariesAnnotationPerformance:
         elapsed = time.time() - start
 
         assert len(frames) == 11
-        print(f"\n[Database Range] Loaded 11 frames in {elapsed*1000:.2f}ms")
+        print(f"\n[Database Range] Loaded 11 frames in {elapsed * 1000:.2f}ms")
         assert elapsed < 0.15  # Should be faster than individual queries
 
     @pytest.mark.unit
@@ -160,18 +158,13 @@ class TestBoundariesAnnotationPerformance:
         start = time.time()
         for current_frame in positions:
             # Load 11 visible frames
-            frames = get_frames_range(
-                db_path,
-                current_frame - 5,
-                current_frame + 5,
-                "cropped_frames"
-            )
+            frames = get_frames_range(db_path, current_frame - 5, current_frame + 5, "cropped_frames")
             assert len(frames) == 11
         elapsed = time.time() - start
 
         avg_per_load = elapsed / len(positions) * 1000
         print(f"\n[Navigation] 10 loads, avg {avg_per_load:.2f}ms per load")
-        print(f"[Navigation] Total: {elapsed*1000:.2f}ms for 10 navigation steps")
+        print(f"[Navigation] Total: {elapsed * 1000:.2f}ms for 10 navigation steps")
         assert avg_per_load < 50  # Each load should be <50ms for smooth navigation
 
     @pytest.mark.unit
@@ -182,16 +175,11 @@ class TestBoundariesAnnotationPerformance:
         # Large window: -15 to +15 (30 frames total)
         current_frame = 500
         start = time.time()
-        frames = get_frames_range(
-            db_path,
-            current_frame - 15,
-            current_frame + 15,
-            "cropped_frames"
-        )
+        frames = get_frames_range(db_path, current_frame - 15, current_frame + 15, "cropped_frames")
         elapsed = time.time() - start
 
         assert len(frames) == 31  # Inclusive range
-        print(f"\n[Large Window] Loaded 31 frames in {elapsed*1000:.2f}ms")
+        print(f"\n[Large Window] Loaded 31 frames in {elapsed * 1000:.2f}ms")
         assert elapsed < 0.3  # Should be <300ms even for large window
 
     @pytest.mark.unit
@@ -213,7 +201,6 @@ class TestBoundariesAnnotationPerformance:
     @pytest.mark.unit
     def test_memory_efficiency(self, setup_test_data):
         """Test that frames can be garbage collected (not held in memory)."""
-        import sys
         db_path = setup_test_data["db_path"]
 
         # Load frames and measure memory
@@ -248,18 +235,15 @@ class TestOptimizationStrategies:
             start = time.time()
             cursor = conn.cursor()
             for i in range(50):
-                cursor.execute(
-                    "SELECT image_data FROM cropped_frames WHERE frame_index = ?",
-                    (i,)
-                )
+                cursor.execute("SELECT image_data FROM cropped_frames WHERE frame_index = ?", (i,))
                 cursor.fetchone()
             elapsed_with_pool = time.time() - start
         finally:
             conn.close()
 
-        print(f"\n[Pooling] Without: {elapsed_no_pool*1000:.2f}ms")
-        print(f"[Pooling] With reuse: {elapsed_with_pool*1000:.2f}ms")
-        print(f"[Pooling] Improvement: {(1 - elapsed_with_pool/elapsed_no_pool)*100:.1f}%")
+        print(f"\n[Pooling] Without: {elapsed_no_pool * 1000:.2f}ms")
+        print(f"[Pooling] With reuse: {elapsed_with_pool * 1000:.2f}ms")
+        print(f"[Pooling] Improvement: {(1 - elapsed_with_pool / elapsed_no_pool) * 100:.1f}%")
 
         # Connection reuse should be faster
         assert elapsed_with_pool < elapsed_no_pool

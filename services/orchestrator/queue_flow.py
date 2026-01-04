@@ -12,7 +12,6 @@ Usage:
 import asyncio
 import json
 import sys
-from pathlib import Path
 
 import typer
 from prefect.deployments import run_deployment

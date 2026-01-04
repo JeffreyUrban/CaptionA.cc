@@ -49,14 +49,14 @@ def save_analysis_text(region: SubtitleRegion, output_file: Path) -> None:
     }
 
     human_readable_stats = f"""Subtitle Box Analysis
-Number of valid boxes: {stats_dict['num_valid_boxes']}
-Height mode: {stats_dict['height_mode']} pixels
-Height standard deviation: {stats_dict['height_std']} pixels
-Vertical position mode: {stats_dict['vertical_position_mode']} pixels
-Vertical position standard deviation: {stats_dict['vertical_position_std']} pixels
-Anchor type: {stats_dict['anchor_type']}
-Anchor position: {stats_dict['anchor_position']} pixels
-Crop bounds: {stats_dict['crop_bounds']}
+Number of valid boxes: {stats_dict["num_valid_boxes"]}
+Height mode: {stats_dict["height_mode"]} pixels
+Height standard deviation: {stats_dict["height_std"]} pixels
+Vertical position mode: {stats_dict["vertical_position_mode"]} pixels
+Vertical position standard deviation: {stats_dict["vertical_position_std"]} pixels
+Anchor type: {stats_dict["anchor_type"]}
+Anchor position: {stats_dict["anchor_position"]} pixels
+Crop bounds: {stats_dict["crop_bounds"]}
 """
 
     with output_file.open("w") as f:

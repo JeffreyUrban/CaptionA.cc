@@ -91,7 +91,7 @@ def get_confirmed_text_annotations(db_path: Path) -> list[dict[str, Any]]:
 
         return [dict(row) for row in rows]
 
-    except sqlite3.OperationalError as e:
+    except sqlite3.OperationalError:
         # Table doesn't exist or other DB error - skip this video
         return []
 
@@ -215,7 +215,7 @@ def collect_all_training_data(
                 if result:
                     _, metadata = result
                     # Optionally log successful generation
-            except Exception as e:
+            except Exception:
                 # Silently skip videos that fail
                 pass
 
@@ -293,7 +293,7 @@ def get_training_data_stats(samples: list[TrainingSample]) -> dict[str, Any]:
         Dictionary with statistics
     """
     # Count unique videos
-    unique_videos = set(s.video_id for s in samples)
+    unique_videos = {s.video_id for s in samples}
 
     # Count text lengths
     text_lengths = [len(s.ground_truth_text) for s in samples]

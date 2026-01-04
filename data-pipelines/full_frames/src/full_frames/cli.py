@@ -1,8 +1,6 @@
 """Command-line interface for full_frames."""
 
-import sys
 from pathlib import Path
-from typing import Optional
 
 import typer
 from rich.console import Console
@@ -15,14 +13,8 @@ from rich.progress import (
 )
 
 from . import __version__
-from .analysis import (
-    create_analysis_visualization,
-    load_ocr_annotations,
-    save_analysis_text,
-)
 from .database import (
     get_database_path,
-    load_ocr_annotations_from_database,
     process_frames_to_database,
     write_frames_to_database,
 )
@@ -67,7 +59,7 @@ def analyze(
         "-r",
         help="Frame sampling rate in Hz (0.1 = one frame every 10 seconds)",
     ),
-    version: Optional[bool] = typer.Option(
+    version: bool | None = typer.Option(
         None,
         "--version",
         "-v",
@@ -96,7 +88,7 @@ def analyze(
     - Frame filename index = time_in_seconds * 10
     - This allows 1:1 mapping with database frame_index values
     """
-    console.print(f"[bold cyan]Caption Layout Analysis Pipeline[/bold cyan]")
+    console.print("[bold cyan]Caption Layout Analysis Pipeline[/bold cyan]")
     console.print(f"Video: {video}")
     console.print(f"Output: {output_dir}")
     console.print(f"Frame rate: {frame_rate} Hz")
@@ -137,9 +129,7 @@ def analyze(
                 video,
                 output_dir,
                 frame_rate,
-                progress_callback=lambda current, total: progress.update(
-                    task, completed=current
-                ),
+                progress_callback=lambda current, total: progress.update(task, completed=current),
             )
 
         console.print(f"  [green]✓[/green] Extracted {len(frames)} frames")
@@ -154,7 +144,7 @@ def analyze(
         frame_files = sorted(output_dir.glob("frame_*.jpg"), reverse=True)
         for frame_file in frame_files:
             # Extract frame number from filename (e.g., "frame_0000000001.jpg" → 1)
-            frame_num = int(frame_file.stem.split('_')[1])
+            frame_num = int(frame_file.stem.split("_")[1])
             # Multiply by 100 to match database indexing (e.g., 1 → 100)
             new_index = frame_num * 100
             new_name = f"frame_{new_index:010d}.jpg"
@@ -180,9 +170,7 @@ def analyze(
                 output_dir,
                 db_path,
                 "zh-Hans",
-                progress_callback=lambda current, total: progress.update(
-                    task, completed=current
-                ),
+                progress_callback=lambda current, total: progress.update(task, completed=current),
             )
 
         console.print(f"  [green]✓[/green] OCR results: {db_path} ({total_boxes} boxes)")
@@ -202,19 +190,17 @@ def analyze(
             frames_written = write_frames_to_database(
                 output_dir,
                 db_path,
-                progress_callback=lambda current, total: progress.update(
-                    task, completed=current
-                ),
+                progress_callback=lambda current, total: progress.update(task, completed=current),
                 delete_after_write=True,
             )
 
         console.print(f"  [green]✓[/green] Stored {frames_written} frames in database")
-        console.print(f"  [green]✓[/green] Deleted filesystem frames")
+        console.print("  [green]✓[/green] Deleted filesystem frames")
 
         # Remove empty output directory
         if output_dir.exists() and not any(output_dir.iterdir()):
             output_dir.rmdir()
-            console.print(f"  [green]✓[/green] Removed empty directory")
+            console.print("  [green]✓[/green] Removed empty directory")
         console.print()
 
         # Step 3/3: Create minimal layout config
@@ -224,20 +210,24 @@ def analyze(
         # Write minimal layout config with just frame dimensions
         # Full layout (crop bounds, anchor, etc.) calculated by web app using ML model
         import sqlite3
+
         conn = sqlite3.connect(db_path)
         try:
-            conn.execute("""
+            conn.execute(
+                """
                 INSERT OR REPLACE INTO video_layout_config (
                     id, frame_width, frame_height,
                     crop_left, crop_top, crop_right, crop_bottom,
                     crop_bounds_version
                 ) VALUES (1, ?, ?, 0, 0, ?, ?, 1)
-            """, (width, height, width, height))
+            """,
+                (width, height, width, height),
+            )
             conn.commit()
         finally:
             conn.close()
 
-        console.print(f"  [green]✓[/green] Initial config created")
+        console.print("  [green]✓[/green] Initial config created")
         console.print()
 
         # Print final summary
@@ -246,14 +236,14 @@ def analyze(
         console.print("[bold cyan]Summary:[/bold cyan]")
         console.print(f"  Extracted and analyzed {frames_written} frames")
         console.print(f"  Frame dimensions: {width}×{height}")
-        console.print(f"  Layout analysis: Will be performed by ML model in web app")
+        console.print("  Layout analysis: Will be performed by ML model in web app")
 
     except (RuntimeError, FileNotFoundError, ValueError) as e:
         console.print(f"[red]Error:[/red] {e}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
     except Exception as e:
         console.print(f"[red]Error:[/red] Unexpected error: {e}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
 
 @app.command()
@@ -309,16 +299,14 @@ def sample_frames(
                 video,
                 output_dir,
                 frame_rate,
-                progress_callback=lambda current, total: progress.update(
-                    task, completed=current
-                ),
+                progress_callback=lambda current, total: progress.update(task, completed=current),
             )
 
         console.print(f"[green]✓[/green] Extracted {len(frames)} frames to {output_dir}")
 
     except (RuntimeError, FileNotFoundError) as e:
         console.print(f"[red]Error:[/red] {e}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
 
 @app.command()
@@ -371,6 +359,7 @@ def run_ocr(
 
         # Get dimensions from first frame
         import cv2
+
         first_frame_img = cv2.imread(str(frame_files[0]))
         if first_frame_img is None:
             console.print(f"[red]Error:[/red] Failed to read {frame_files[0]}")
@@ -391,13 +380,11 @@ def run_ocr(
         ) as progress:
             task = progress.add_task("Processing OCR...", total=total_frames)
 
-            first_frame = process_frames_directory(
+            process_frames_directory(
                 frames_dir,
                 ocr_output,
                 language,
-                progress_callback=lambda current, total: progress.update(
-                    task, completed=current
-                ),
+                progress_callback=lambda current, total: progress.update(task, completed=current),
                 keep_frames=True,  # Keep frames for standalone OCR command
             )
 
@@ -411,10 +398,10 @@ def run_ocr(
 
     except FileNotFoundError as e:
         console.print(f"[red]Error:[/red] {e}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
     except Exception as e:
         console.print(f"[red]Error:[/red] {e}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
 
 @app.command()

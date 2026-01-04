@@ -133,7 +133,13 @@ def run_ocr_on_median_frame(
     print(f"Language: {language}")
 
     # Get path to OCR script
-    script_path = Path(__file__).parent.parent.parent / "apps" / "captionacc-web" / "scripts" / "run-frame-ocr.py"
+    script_path = (
+        Path(__file__).parent.parent.parent
+        / "apps"
+        / "captionacc-web"
+        / "scripts"
+        / "run-frame-ocr.py"
+    )
 
     if not script_path.exists():
         raise FileNotFoundError(f"OCR script not found at {script_path}")
@@ -343,7 +349,7 @@ def caption_median_ocr_flow(
                 error_message=str(e),
             )
 
-    print(f"\n=== Processing Complete ===")
+    print("\n=== Processing Complete ===")
     print(f"Processed: {processed_count}/{len(caption_ids)}")
     print(f"Failed: {failed_count}/{len(caption_ids)}")
 

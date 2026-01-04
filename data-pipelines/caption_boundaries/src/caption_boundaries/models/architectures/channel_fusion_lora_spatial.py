@@ -12,7 +12,6 @@ Design rationale:
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import torchvision.models as models
 
 from caption_boundaries.models.registry import register_model
@@ -66,11 +65,12 @@ class LoRALayer(nn.Module):
 
             # B: 1x1 conv with same stride/padding as original to match spatial dims
             self.lora_B = nn.Conv2d(
-                rank, out_channels,
+                rank,
+                out_channels,
                 kernel_size=1,
                 stride=self.stride,
                 padding=0,  # 1x1 conv doesn't need padding
-                bias=False
+                bias=False,
             )
 
             # Initialize

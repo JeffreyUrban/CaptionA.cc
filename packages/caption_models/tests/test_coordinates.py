@@ -1,7 +1,6 @@
 """Unit tests for coordinate conversion functions (pixel-based)."""
 
 import pytest
-
 from caption_models.coordinates import (
     BoundingBox,
     CropBounds,
@@ -157,9 +156,7 @@ class TestCropBounds:
 
     def test_from_fractional(self):
         """Test creation from fractional coordinates."""
-        crop = CropBounds.from_fractional(
-            left=0.0, top=0.5, right=1.0, bottom=1.0, frame_width=1920, frame_height=1080
-        )
+        crop = CropBounds.from_fractional(left=0.0, top=0.5, right=1.0, bottom=1.0, frame_width=1920, frame_height=1080)
 
         assert crop.left == 0
         assert crop.top == 540

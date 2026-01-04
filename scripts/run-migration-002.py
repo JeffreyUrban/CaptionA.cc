@@ -47,9 +47,7 @@ def run_migration(db_path: Path, dry_run: bool = False) -> tuple[bool, str]:
             return True, "Would add column"
 
         # Add column
-        cursor.execute(
-            "ALTER TABLE video_layout_config ADD COLUMN analysis_model_version TEXT"
-        )
+        cursor.execute("ALTER TABLE video_layout_config ADD COLUMN analysis_model_version TEXT")
 
         # Populate with current model version (if model exists)
         cursor.execute("SELECT model_version FROM box_classification_model WHERE id = 1")
@@ -63,7 +61,7 @@ def run_migration(db_path: Path, dry_run: bool = False) -> tuple[bool, str]:
                 SET analysis_model_version = ?
                 WHERE id = 1 AND analysis_model_version IS NULL
                 """,
-                (current_model_version,)
+                (current_model_version,),
             )
 
         conn.commit()
@@ -77,9 +75,7 @@ def run_migration(db_path: Path, dry_run: bool = False) -> tuple[bool, str]:
 
 def main():
     parser = argparse.ArgumentParser(description="Run migration 002 on all databases")
-    parser.add_argument(
-        "--dry-run", action="store_true", help="Show what would be done without making changes"
-    )
+    parser.add_argument("--dry-run", action="store_true", help="Show what would be done without making changes")
     args = parser.parse_args()
 
     # Find all databases
@@ -109,7 +105,7 @@ def main():
             result = cursor.fetchone()
             display_path = result[0] if result else str(db_path.parent.name)
             conn.close()
-        except:
+        except Exception:
             display_path = str(db_path.parent.name)
 
         success, message = run_migration(db_path, args.dry_run)
@@ -126,7 +122,7 @@ def main():
 
     # Summary
     print("\n" + "=" * 70)
-    print(f"Migration complete:")
+    print("Migration complete:")
     print(f"  ✅ Migrated: {success_count}")
     print(f"  ⏭️  Already migrated: {already_exists_count}")
     print(f"  ❌ Errors: {error_count}")

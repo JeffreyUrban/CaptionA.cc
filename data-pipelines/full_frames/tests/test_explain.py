@@ -7,7 +7,6 @@ explaining why TEMPLATE_PLACEHOLDER.
 from io import StringIO
 
 import pytest
-
 from full_frames.full_frames import CaptionLayout
 
 

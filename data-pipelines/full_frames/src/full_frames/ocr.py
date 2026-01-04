@@ -5,7 +5,6 @@ a specialized streaming OCR function for the full_frames pipeline.
 """
 
 from pathlib import Path
-from typing import Optional
 
 from ocr_utils import (
     OCRTimeoutError,
@@ -14,7 +13,7 @@ from ocr_utils import (
     process_frames_directory,
     process_frames_streaming,
 )
-from video_utils import extract_frames_streaming, get_video_duration
+from video_utils import extract_frames_streaming
 
 __all__ = [
     "OCRTimeoutError",
@@ -32,7 +31,7 @@ def stream_video_with_ocr(
     frames_dir: Path,
     rate_hz: float = 0.1,
     language: str = "zh-Hans",
-    progress_callback: Optional[callable] = None,
+    progress_callback: callable | None = None,
     max_workers: int = 2,
     keep_frames: bool = False,
 ) -> None:

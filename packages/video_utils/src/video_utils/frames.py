@@ -100,9 +100,7 @@ def extract_frames(
         stderr = e.stderr.decode() if e.stderr else ""
         raise RuntimeError(f"FFmpeg failed: {stderr}") from e
     except FileNotFoundError as e:
-        raise FileNotFoundError(
-            "FFmpeg not found. Please install FFmpeg: https://ffmpeg.org/download.html"
-        ) from e
+        raise FileNotFoundError("FFmpeg not found. Please install FFmpeg: https://ffmpeg.org/download.html") from e
 
     # Collect extracted frame paths
     frame_files = sorted(output_dir.glob("frame_*.jpg"))

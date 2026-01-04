@@ -28,7 +28,7 @@ from torch.utils.data import DataLoader, Sampler
 from caption_boundaries.data.dataset import CaptionBoundaryDataset
 from caption_boundaries.data.transforms import ResizeStrategy
 from caption_boundaries.database import Experiment, TrainingDataset, get_dataset_db
-from caption_boundaries.models.registry import create_model, get_model_info
+from caption_boundaries.models.registry import create_model
 
 console = Console(stderr=True)
 
@@ -133,7 +133,7 @@ class BalancedBatchSampler(Sampler):
         """Sample indices for this epoch."""
         epoch_indices = []
 
-        for label, indices in self.label_to_indices.items():
+        for _label, indices in self.label_to_indices.items():
             if len(indices) <= self.max_samples_per_class:
                 # Use all samples for minority/medium classes
                 epoch_indices.extend(indices)
@@ -282,7 +282,9 @@ class CaptionBoundaryTrainer:
 
             # Log sampling statistics
             if self.max_samples_per_class is not None:
-                console.print(f"[cyan]Balanced sampling enabled (cap={self.max_samples_per_class:,} samples/class):[/cyan]")
+                console.print(
+                    f"[cyan]Balanced sampling enabled (cap={self.max_samples_per_class:,} samples/class):[/cyan]"
+                )
             else:
                 console.print(f"[cyan]Balanced sampling enabled (ratio={self.sampling_ratio}):[/cyan]")
             console.print(f"  Total train samples: {len(self.train_dataset)}")
@@ -510,9 +512,7 @@ class CaptionBoundaryTrainer:
         f1_macro = f1_score(all_labels_np, all_preds_np, average="macro", zero_division=0)
 
         # Per-class accuracy
-        per_class_acc = compute_per_class_accuracy(
-            all_labels_np, all_preds_np, len(CaptionBoundaryDataset.LABELS)
-        )
+        per_class_acc = compute_per_class_accuracy(all_labels_np, all_preds_np, len(CaptionBoundaryDataset.LABELS))
 
         metrics = {
             "train/loss": avg_loss,
@@ -575,9 +575,7 @@ class CaptionBoundaryTrainer:
         f1_macro = f1_score(all_labels_np, all_preds_np, average="macro", zero_division=0)
 
         # Per-class accuracy
-        per_class_acc = compute_per_class_accuracy(
-            all_labels_np, all_preds_np, len(CaptionBoundaryDataset.LABELS)
-        )
+        per_class_acc = compute_per_class_accuracy(all_labels_np, all_preds_np, len(CaptionBoundaryDataset.LABELS))
 
         # Confusion matrix
         cm = confusion_matrix(all_labels_np, all_preds_np)
@@ -683,10 +681,7 @@ class CaptionBoundaryTrainer:
         epoch_0_metrics = self.validate(epoch=0)
 
         # Log epoch 0 to W&B
-        wandb_metrics = {
-            k: v for k, v in epoch_0_metrics.items()
-            if not isinstance(v, (np.ndarray, dict))
-        }
+        wandb_metrics = {k: v for k, v in epoch_0_metrics.items() if not isinstance(v, (np.ndarray, dict))}
         wandb_metrics["epoch"] = 0
         wandb.log(wandb_metrics, step=0)
 
@@ -714,9 +709,7 @@ class CaptionBoundaryTrainer:
             all_metrics = {**train_metrics, **val_metrics, "epoch": epoch}
 
             # Remove non-scalar metrics for W&B logging
-            wandb_metrics = {
-                k: v for k, v in all_metrics.items() if not isinstance(v, (np.ndarray, dict))
-            }
+            wandb_metrics = {k: v for k, v in all_metrics.items() if not isinstance(v, (np.ndarray, dict))}
             wandb.log(wandb_metrics, step=epoch)
 
             # Print progress with key metrics
@@ -786,7 +779,9 @@ class CaptionBoundaryTrainer:
                 import subprocess
 
                 git_commit = subprocess.check_output(["git", "rev-parse", "HEAD"]).decode("ascii").strip()
-                git_branch = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"]).decode("ascii").strip()
+                git_branch = (
+                    subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"]).decode("ascii").strip()
+                )
             except Exception:
                 git_commit = None
                 git_branch = None

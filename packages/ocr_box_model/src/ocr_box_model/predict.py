@@ -121,9 +121,7 @@ def predict_box_with_heuristics(
 
     # Combine likelihoods (weighted geometric mean)
     # Vertical position is most important, then height, then anchor
-    combined_likelihood = (
-        vertical_prob**0.5 * height_prob**0.3 * anchor_prob**0.2
-    )
+    combined_likelihood = vertical_prob**0.5 * height_prob**0.3 * anchor_prob**0.2
 
     # Normalize to [0-1] confidence range
     # High likelihood → high confidence "in"

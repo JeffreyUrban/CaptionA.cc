@@ -10,7 +10,6 @@ from typing import Any
 from .database import (
     get_caption_by_frames,
     get_database_path,
-    mark_text_as_validated,
 )
 
 
@@ -58,7 +57,7 @@ def compare_vlm_with_ocr(
 
     mismatches = []
 
-    for (start_frame, end_frame), vlm_text in vlm_results.items():
+    for (start_frame, end_frame), _vlm_text in vlm_results.items():
         stats["total"] += 1
 
         # Get caption from database
@@ -80,7 +79,7 @@ def compare_vlm_with_ocr(
                 # Escape commas in text
                 ocr_escaped = m["ocr_text"].replace(",", "，")
                 vlm_escaped = m["vlm_text"].replace(",", "，")
-                f.write(f'{m["start_frame"]},{m["end_frame"]},{ocr_escaped},{vlm_escaped}\n')
+                f.write(f"{m['start_frame']},{m['end_frame']},{ocr_escaped},{vlm_escaped}\n")
         print(f"Wrote {len(mismatches)} mismatches to {mismatch_path}")
 
     return stats
@@ -99,7 +98,7 @@ def load_vlm_results_from_csv(csv_path: Path) -> dict[tuple[int, int], str]:
     """
     results = {}
 
-    with open(csv_path, "r") as f:
+    with open(csv_path) as f:
         for line in f:
             line = line.strip()
             if not line:

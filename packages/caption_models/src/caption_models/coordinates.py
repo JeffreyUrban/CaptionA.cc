@@ -128,10 +128,7 @@ class BoundingBox:
             True if boxes overlap
         """
         return not (
-            self.right <= other.left
-            or self.left >= other.right
-            or self.bottom <= other.top
-            or self.top >= other.bottom
+            self.right <= other.left or self.left >= other.right or self.bottom <= other.top or self.top >= other.bottom
         )
 
     def intersection(self, other: "BoundingBox") -> Optional["BoundingBox"]:

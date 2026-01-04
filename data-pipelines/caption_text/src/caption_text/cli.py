@@ -4,7 +4,6 @@ from pathlib import Path
 
 import typer
 from rich.console import Console
-from rich.progress import Progress, SpinnerColumn, TextColumn
 
 from . import __version__
 from .database import (
@@ -13,7 +12,7 @@ from .database import (
     get_layout_config,
     save_vlm_inference_result,
 )
-from .ocr_comparison import compare_from_csv, compare_vlm_with_ocr
+from .ocr_comparison import compare_from_csv
 from .text_vetting import extract_errors_from_vetting_results, vet_video_captions
 from .vlm_inference import generate_caption, load_finetuned_model
 
@@ -495,7 +494,7 @@ def train(
     console.print(f"  Unique videos: {stats['unique_videos']}")
     console.print(f"  Avg text length: {stats['avg_text_length']:.1f} chars")
 
-    console.print(f"\n[bold]Step 2: Training model[/bold]")
+    console.print("\n[bold]Step 2: Training model[/bold]")
     console.print(f"  Epochs: {epochs}")
     console.print(f"  Batch size: {batch_size}")
     console.print(f"  Learning rate: {learning_rate}")
@@ -512,5 +511,5 @@ def train(
         accumulate_grad_batches=accumulate_grad_batches,
     )
 
-    console.print(f"\n[green]✓ Training complete![/green]")
+    console.print("\n[green]✓ Training complete![/green]")
     console.print(f"Best checkpoint: {best_checkpoint}")

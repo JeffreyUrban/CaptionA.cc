@@ -3,7 +3,8 @@
 import json
 import signal
 import time
-from concurrent.futures import ProcessPoolExecutor, TimeoutError as FuturesTimeoutError, as_completed
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import TimeoutError as FuturesTimeoutError
 from pathlib import Path
 from typing import Optional
 
@@ -51,9 +52,7 @@ def process_frame_ocr_with_retry(
         signal.alarm(timeout)
 
         try:
-            annotations = ocrmac.OCR(
-                str(image_path), framework="livetext", language_preference=[language]
-            ).recognize()
+            annotations = ocrmac.OCR(str(image_path), framework="livetext", language_preference=[language]).recognize()
 
             # Cancel the alarm
             signal.alarm(0)
@@ -232,9 +231,7 @@ def process_frames_streaming(
 
                 for frame_path in new_frames[:available_slots]:
                     # Submit to worker pool
-                    future = executor.submit(
-                        process_frame_ocr_with_retry, frame_path, language
-                    )
+                    future = executor.submit(process_frame_ocr_with_retry, frame_path, language)
                     futures[future] = (frame_path, time.time(), 0)
                     submitted_frames.add(frame_path)
 
@@ -245,9 +242,7 @@ def process_frames_streaming(
                     if current_time >= retry_time:
                         # Resubmit frame
                         print(f"  Retrying {frame_path.name} (attempt {retry_count + 1}/{max_retries})...")
-                        future = executor.submit(
-                            process_frame_ocr_with_retry, frame_path, language
-                        )
+                        future = executor.submit(process_frame_ocr_with_retry, frame_path, language)
                         futures[future] = (frame_path, time.time(), retry_count)
                         del pending_retries[frame_path]
 
@@ -257,11 +252,11 @@ def process_frames_streaming(
 
                     # Check if future has been pending too long
                     if time.time() - submit_time > worker_timeout:
-                        print(f"\n{'='*80}")
+                        print(f"\n{'=' * 80}")
                         print(f"TIMEOUT DETECTED: {frame_path.name} (attempt {retry_count + 1}/{max_retries})")
                         print(f"Elapsed: {time.time() - submit_time:.1f}s")
-                        print(f"Worker hung - cancelling")
-                        print(f"{'='*80}\n")
+                        print("Worker hung - cancelling")
+                        print(f"{'=' * 80}\n")
 
                         futures.pop(future)
                         try:
@@ -272,7 +267,7 @@ def process_frames_streaming(
                         # Check if we should retry
                         if retry_count < max_retries - 1:
                             # Schedule retry with exponential backoff
-                            backoff_delay = 1.0 * (2 ** retry_count)
+                            backoff_delay = 1.0 * (2**retry_count)
                             retry_time = time.time() + backoff_delay
                             pending_retries[frame_path] = (retry_time, retry_count + 1)
                             print(f"  Will retry after {backoff_delay}s backoff...")

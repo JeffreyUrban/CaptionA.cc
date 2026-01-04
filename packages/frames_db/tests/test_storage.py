@@ -1,13 +1,10 @@
 """Unit tests for frames_db storage and retrieval operations."""
 
 import sqlite3
-import tempfile
 from pathlib import Path
 
 import numpy as np
 import pytest
-from PIL import Image
-
 from frames_db import (
     FrameData,
     get_all_frame_indices,
@@ -16,6 +13,7 @@ from frames_db import (
     write_frame_to_db,
     write_frames_batch,
 )
+from PIL import Image
 
 
 @pytest.fixture
@@ -151,9 +149,7 @@ class TestStorage:
             (200, jpeg_bytes, width, height),
         ]
 
-        count = write_frames_batch(
-            db_path=temp_db, frames=frames, table="full_frames"
-        )
+        count = write_frames_batch(db_path=temp_db, frames=frames, table="full_frames")
 
         assert count == 3
 

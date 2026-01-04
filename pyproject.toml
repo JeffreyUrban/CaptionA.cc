@@ -24,6 +24,7 @@ members = [
 ]
 exclude = [
     "apps/captionacc-web",
+    "data-pipelines/docs",  # Documentation directory, not a Python package
 ]
 
 # Workspace-wide dependency version constraints
