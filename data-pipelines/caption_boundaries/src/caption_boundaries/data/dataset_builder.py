@@ -301,6 +301,89 @@ def _copy_frames_for_video(db, video_conn, video_hash: str, video_samples: list[
         db.add(training_frame)
 
 
+def _copy_reference_frame_for_video(db, video_conn, video_hash: str) -> None:
+    """Copy reference frame from video DB to training DB.
+
+    Loads the reference frame from full_frames table and crops it to the caption
+    region before storing in TrainingFrame table. This allows models to run CLIP
+    on the reference image themselves.
+
+    Args:
+        db: Training database session
+        video_conn: Open SQLite connection to video's annotations.db
+        video_hash: Video hash
+    """
+    from io import BytesIO
+
+    from frames_db import crop_to_caption_region
+    from PIL import Image
+
+    from caption_boundaries.database import FontEmbedding, TrainingFrame
+
+    # Get reference frame index from FontEmbedding
+    font_embedding = db.query(FontEmbedding).filter(FontEmbedding.video_hash == video_hash).first()
+
+    if not font_embedding:
+        # No font embedding for this video, skip
+        return
+
+    reference_frame_index = font_embedding.reference_frame_index
+
+    # Check if reference frame already exists in training DB
+    existing = (
+        db.query(TrainingFrame)
+        .filter(TrainingFrame.video_hash == video_hash, TrainingFrame.frame_index == reference_frame_index)
+        .first()
+    )
+
+    if existing:
+        return  # Already copied
+
+    # Load reference frame from full_frames table
+    cursor = video_conn.cursor()
+    cursor.execute(
+        """
+        SELECT image_data
+        FROM full_frames
+        WHERE frame_index = ?
+        """,
+        (reference_frame_index,),
+    )
+
+    row = cursor.fetchone()
+    if not row:
+        console.print(
+            f"[yellow]⚠ Reference frame {reference_frame_index} not found in full_frames, skipping[/yellow]"
+        )
+        return
+
+    # Load image and crop to caption region
+    full_frame_image = Image.open(BytesIO(row[0]))
+
+    # Crop to caption region using the same method as training frames
+    cropped_image = crop_to_caption_region(full_frame_image, video_conn)
+
+    # Convert back to bytes
+    output = BytesIO()
+    cropped_image.save(output, format="PNG")
+    image_bytes = output.getvalue()
+
+    # Create training frame record for reference frame
+    training_frame = TrainingFrame(
+        video_hash=video_hash,
+        frame_index=reference_frame_index,
+        image_data=image_bytes,
+        width=cropped_image.width,
+        height=cropped_image.height,
+        file_size=len(image_bytes),
+    )
+    db.add(training_frame)
+
+    # Clean up
+    cropped_image.close()
+    full_frame_image.close()
+
+
 def _copy_ocr_viz_for_video(
     db, video_conn, video_hash: str, has_samples: bool, variant: str = "boundaries"
 ) -> bool:
@@ -634,11 +717,14 @@ def create_training_dataset(
                     console.print(f"[yellow]⚠ Could not find video DB for {video_hash}, skipping[/yellow]")
                     continue
 
-                # Open video database once for both operations
+                # Open video database once for all operations
                 video_conn = sqlite3.connect(video_db_path)
                 try:
                     # Copy frames for this video
                     _copy_frames_for_video(db, video_conn, video_hash, video_samples)
+
+                    # Copy reference frame for this video (for CLIP encoding)
+                    _copy_reference_frame_for_video(db, video_conn, video_hash)
 
                     # Copy OCR visualization for this video (only if has samples)
                     has_ocr_viz = _copy_ocr_viz_for_video(db, video_conn, video_hash, has_samples=True)

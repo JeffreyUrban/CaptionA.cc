@@ -1,6 +1,9 @@
 """Model architectures and registry for caption boundary detection."""
 
-from caption_boundaries.models.architecture import CaptionBoundaryPredictor, create_model
+from importlib import import_module
+from pathlib import Path
+
+from caption_boundaries.models.architectures.poor.triple_backbone_resnet50 import CaptionBoundaryPredictor, create_model
 from caption_boundaries.models.registry import (
     create_model as create_model_from_registry,
     get_model_info,
@@ -8,10 +11,13 @@ from caption_boundaries.models.registry import (
     register_model,
 )
 
-# Import architecture modules to register them
-# Add your custom architectures here
-from caption_boundaries.models import example_architecture  # noqa: F401
-from caption_boundaries.models import lora_architecture  # noqa: F401
+# Automatically import all architecture modules to register them
+_architectures_dir = Path(__file__).parent / "architectures"
+for _model_file in _architectures_dir.glob("*.py"):
+    _module_name = _model_file.stem
+    # Skip __init__ and any private modules
+    if _module_name != "__init__" and not _module_name.startswith("_"):
+        import_module(f"caption_boundaries.models.architectures.{_module_name}")
 
 __all__ = [
     "CaptionBoundaryPredictor",
