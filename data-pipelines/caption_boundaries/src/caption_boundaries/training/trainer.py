@@ -10,25 +10,6 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any, cast
 
-
-def get_project_root() -> Path:
-    """Get the git repository root directory.
-
-    Returns:
-        Absolute path to the git root directory
-    """
-    try:
-        result = subprocess.run(
-            ["git", "rev-parse", "--show-toplevel"],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        return Path(result.stdout.strip())
-    except Exception:
-        # Fallback: use current working directory
-        return Path.cwd()
-
 import numpy as np
 import torch
 import torch.nn as nn
@@ -52,6 +33,25 @@ from caption_boundaries.database import Experiment, TrainingDataset, get_dataset
 from caption_boundaries.models.registry import create_model
 
 console = Console(stderr=True)
+
+
+def get_project_root() -> Path:
+    """Get the git repository root directory.
+
+    Returns:
+        Absolute path to the git root directory
+    """
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return Path(result.stdout.strip())
+    except Exception:
+        # Fallback: use current working directory
+        return Path.cwd()
 
 
 def get_dataset_dvc_hash(dataset_path: Path) -> str:
@@ -735,7 +735,9 @@ class CaptionBoundaryTrainer:
             "optimizer_state_dict": self.optimizer.state_dict(),
             "scheduler_state_dict": self.scheduler.state_dict() if self.scheduler else None,
             "metrics": metrics,
-            "config": wandb.config.as_dict() if wandb.run else {
+            "config": wandb.config.as_dict()
+            if wandb.run
+            else {
                 "architecture_name": self.architecture_name,
                 "model_config": self.model_config,
                 "dataset_db_path": str(self.dataset_db_path),
@@ -867,18 +869,21 @@ class CaptionBoundaryTrainer:
         self._save_experiment_to_db(best_val_balanced_acc, val_metrics["val/accuracy"])
 
         # Print DVC tracking instructions
-        console.print("\n" + "="*70)
+        console.print("\n" + "=" * 70)
         console.print("[green]✓ Training complete![/green]")
-        console.print("="*70)
+        console.print("=" * 70)
         console.print(f"Best Val Balanced Accuracy: {best_val_balanced_acc:.4f}")
         console.print(f"Final Val Accuracy: {val_metrics['val/accuracy']:.4f}")
         console.print(f"Checkpoints saved to: {self.checkpoint_dir}")
-        console.print(f"\n[cyan]W&B Run:[/cyan]")
+        console.print("\n[cyan]W&B Run:[/cyan]")
         console.print(f"  ID:  {self.wandb_run_id}")
         console.print(f"  URL: {wandb.run.url if wandb.run else 'N/A'}")
-        console.print(f"\n[yellow]To track with DVC:[/yellow]")
-        console.print(f"  [blue]./scripts/track-experiment.sh {self.checkpoint_dir.parent} {self.wandb_run_id} <model_name>[/blue]")
-        console.print("="*70 + "\n")
+        console.print("\n[yellow]To track with DVC:[/yellow]")
+        console.print(
+            f"  [blue]./scripts/track-experiment.sh {self.checkpoint_dir.parent} "
+            f"{self.wandb_run_id} <model_name>[/blue]"
+        )
+        console.print("=" * 70 + "\n")
 
         # Finish W&B
         wandb.finish()

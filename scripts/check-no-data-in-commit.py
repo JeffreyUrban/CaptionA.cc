@@ -29,6 +29,7 @@ FORBIDDEN_DIRS = [
     "wandb/local-runs/",  # Local W&B files
 ]
 
+
 def get_staged_files():
     """Get list of files staged for commit."""
     result = subprocess.run(
@@ -38,6 +39,7 @@ def get_staged_files():
         check=True,
     )
     return result.stdout.strip().split("\n") if result.stdout else []
+
 
 def check_file(filepath: str) -> bool:
     """Check if file should be blocked.
@@ -76,6 +78,7 @@ def check_file(filepath: str) -> bool:
 
     return True
 
+
 def main():
     """Main pre-commit hook logic."""
     staged_files = get_staged_files()
@@ -110,6 +113,7 @@ def main():
 
     print("✓ No data/model files in commit")
     return 0
+
 
 if __name__ == "__main__":
     sys.exit(main())

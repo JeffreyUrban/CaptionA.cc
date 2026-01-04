@@ -9,9 +9,6 @@ from caption_boundaries.models.registry import (
     list_architectures,
     register_model,
 )
-from caption_boundaries.models.registry import (
-    create_model as create_model_from_registry,
-)
 
 # Automatically import all architecture modules to register them
 _architectures_dir = Path(__file__).parent / "architectures"
