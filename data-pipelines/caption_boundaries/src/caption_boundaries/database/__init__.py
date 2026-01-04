@@ -3,7 +3,6 @@
 from caption_boundaries.database.schema import (
     Base,
     Experiment,
-    FontEmbedding,
     OCRVisualization,
     TrainingDataset,
     TrainingFrame,
@@ -25,7 +24,6 @@ __all__ = [
     "TrainingSample",
     "TrainingFrame",
     "TrainingOCRVisualization",
-    "FontEmbedding",
     "OCRVisualization",
     "Experiment",
     "init_dataset_db",

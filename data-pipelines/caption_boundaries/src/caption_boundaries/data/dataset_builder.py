@@ -114,8 +114,11 @@ def get_video_layout_metadata(db_path: Path) -> dict:
         conn.close()
 
 
-def extract_frame_pairs_from_captions(db_path: Path) -> list[dict]:
-    """Extract frame pairs from confirmed caption boundaries.
+def extract_frame_pairs_from_captions(
+    db_path: Path,
+    boundary_states: list[str] | None = None
+) -> list[dict]:
+    """Extract frame pairs from caption boundaries.
 
     Creates training samples by comparing consecutive frames within and across
     caption boundaries:
@@ -125,6 +128,8 @@ def extract_frame_pairs_from_captions(db_path: Path) -> list[dict]:
 
     Args:
         db_path: Path to video's annotations.db
+        boundary_states: List of boundary states to include (default: ['confirmed'])
+                        Options: 'confirmed', 'predicted', 'issue'
 
     Returns:
         List of frame pair dicts with keys:
@@ -134,7 +139,11 @@ def extract_frame_pairs_from_captions(db_path: Path) -> list[dict]:
             - text1: Text from frame 1 (for validation)
             - text2: Text from frame 2 (for validation)
             - caption_id: Source caption ID
+            - boundary_state: State of the source caption
     """
+    if boundary_states is None:
+        boundary_states = ['confirmed']
+
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
@@ -142,14 +151,17 @@ def extract_frame_pairs_from_captions(db_path: Path) -> list[dict]:
     pairs = []
 
     try:
-        # Get all confirmed captions ordered by frame index (exclude 'issue' state - not clean boundaries)
+        # Get captions with specified boundary states, ordered by frame index
+        # Exclude 'issue' state by default unless explicitly requested
+        placeholders = ','.join('?' * len(boundary_states))
         cursor.execute(
-            """
-            SELECT id, start_frame_index, end_frame_index, text
+            f"""
+            SELECT id, start_frame_index, end_frame_index, text, boundary_state
             FROM captions
-            WHERE boundary_state = 'confirmed' AND boundary_state != 'issue'
+            WHERE boundary_state IN ({placeholders})
             ORDER BY start_frame_index
-        """
+        """,
+            boundary_states
         )
 
         captions = cursor.fetchall()
@@ -162,6 +174,7 @@ def extract_frame_pairs_from_captions(db_path: Path) -> list[dict]:
             start_idx = caption["start_frame_index"]
             end_idx = caption["end_frame_index"]
             text = caption["text"] or ""
+            boundary_state = caption["boundary_state"]
 
             # Sample within caption (same label)
             # Take pairs at different intervals to get variety
@@ -191,6 +204,7 @@ def extract_frame_pairs_from_captions(db_path: Path) -> list[dict]:
                                 "text1": text,
                                 "text2": text,
                                 "caption_id": caption_id,
+                                "boundary_state": boundary_state,
                             }
                         )
 
@@ -227,6 +241,7 @@ def extract_frame_pairs_from_captions(db_path: Path) -> list[dict]:
                         "text1": text,
                         "text2": next_text,
                         "caption_id": caption_id,  # Use first caption's ID
+                        "boundary_state": boundary_state,  # Use first caption's state
                     }
                 )
 
@@ -301,89 +316,6 @@ def _copy_frames_for_video(db, video_conn, video_hash: str, video_samples: list[
         db.add(training_frame)
 
 
-def _copy_reference_frame_for_video(db, video_conn, video_hash: str) -> None:
-    """Copy reference frame from video DB to training DB.
-
-    Loads the reference frame from full_frames table and crops it to the caption
-    region before storing in TrainingFrame table. This allows models to run CLIP
-    on the reference image themselves.
-
-    Args:
-        db: Training database session
-        video_conn: Open SQLite connection to video's annotations.db
-        video_hash: Video hash
-    """
-    from io import BytesIO
-
-    from frames_db import crop_to_caption_region
-    from PIL import Image
-
-    from caption_boundaries.database import FontEmbedding, TrainingFrame
-
-    # Get reference frame index from FontEmbedding
-    font_embedding = db.query(FontEmbedding).filter(FontEmbedding.video_hash == video_hash).first()
-
-    if not font_embedding:
-        # No font embedding for this video, skip
-        return
-
-    reference_frame_index = font_embedding.reference_frame_index
-
-    # Check if reference frame already exists in training DB
-    existing = (
-        db.query(TrainingFrame)
-        .filter(TrainingFrame.video_hash == video_hash, TrainingFrame.frame_index == reference_frame_index)
-        .first()
-    )
-
-    if existing:
-        return  # Already copied
-
-    # Load reference frame from full_frames table
-    cursor = video_conn.cursor()
-    cursor.execute(
-        """
-        SELECT image_data
-        FROM full_frames
-        WHERE frame_index = ?
-        """,
-        (reference_frame_index,),
-    )
-
-    row = cursor.fetchone()
-    if not row:
-        console.print(
-            f"[yellow]⚠ Reference frame {reference_frame_index} not found in full_frames, skipping[/yellow]"
-        )
-        return
-
-    # Load image and crop to caption region
-    full_frame_image = Image.open(BytesIO(row[0]))
-
-    # Crop to caption region using the same method as training frames
-    cropped_image = crop_to_caption_region(full_frame_image, video_conn)
-
-    # Convert back to bytes
-    output = BytesIO()
-    cropped_image.save(output, format="PNG")
-    image_bytes = output.getvalue()
-
-    # Create training frame record for reference frame
-    training_frame = TrainingFrame(
-        video_hash=video_hash,
-        frame_index=reference_frame_index,
-        image_data=image_bytes,
-        width=cropped_image.width,
-        height=cropped_image.height,
-        file_size=len(image_bytes),
-    )
-    db.add(training_frame)
-
-    # Clean up
-    cropped_image.close()
-    full_frame_image.close()
-
-
 def _copy_ocr_viz_for_video(
     db, video_conn, video_hash: str, has_samples: bool, variant: str = "boundaries"
 ) -> bool:
@@ -454,7 +386,8 @@ def create_training_dataset(
     Args:
         name: Dataset name (will be used as database filename)
         video_db_paths: List of paths to video annotations.db files
-        split_strategy: 'random' or 'show_based' splitting
+        split_strategy: How to split data:
+            - 'random': Stratified random split
         train_split_ratio: Fraction of data for training (default: 0.8)
         random_seed: Random seed for reproducibility
         description: Optional dataset description
@@ -514,9 +447,13 @@ def create_training_dataset(
             skipped_videos.append((video_db_path, f"Failed to get layout metadata: {e}"))
             continue
 
-        # Extract frame pairs
+        # Extract frame pairs based on split strategy
         try:
-            pairs = extract_frame_pairs_from_captions(video_db_path)
+            # Extract only confirmed annotations (default)
+            pairs = extract_frame_pairs_from_captions(
+                video_db_path,
+                boundary_states=['confirmed']
+            )
         except Exception as e:
             skipped_videos.append((video_db_path, f"Failed to extract pairs: {e}"))
             continue
@@ -535,6 +472,7 @@ def create_training_dataset(
                     "label": pair["label"],
                     "crop_bounds_version": layout_meta["crop_bounds_version"],
                     "source_caption_annotation_id": pair["caption_id"],
+                    "boundary_state": pair["boundary_state"],  # Include boundary state for split logic
                 }
             )
 
@@ -616,7 +554,7 @@ def create_training_dataset(
 
     else:
         # Show-based split not implemented yet
-        raise NotImplementedError("Show-based split not yet implemented")
+        raise NotImplementedError(f"Split strategy '{split_strategy}' not yet implemented")
 
     # Calculate quality metadata
     # Note: OCR confidence tracking removed - samples have no OCR metadata
@@ -674,22 +612,6 @@ def create_training_dataset(
         except Exception:
             continue
 
-    # Extract font embeddings only for videos with samples
-    videos_with_samples = list(video_db_map.values())
-    console.print(f"\n[cyan]Extracting font embeddings for {len(videos_with_samples)} videos with samples...[/cyan]")
-    from caption_boundaries.data.font_embeddings import batch_extract_embeddings
-
-    try:
-        embeddings = batch_extract_embeddings(
-            video_db_paths=videos_with_samples,
-            training_db_path=dataset_db_path,
-            force_recompute=False,
-        )
-        console.print(f"[green]✓[/green] Extracted {len(embeddings)} font embeddings")
-    except Exception as e:
-        console.print(f"[yellow]⚠ Font embedding extraction failed: {e}[/yellow]")
-        console.print("  Dataset will be created without font embeddings")
-
     # Process each video: copy frames, copy OCR viz, insert samples
     # IMPORTANT: Only include samples from videos with OCR visualizations
     # Use a single database session for all videos to avoid creating too many engines
@@ -722,9 +644,6 @@ def create_training_dataset(
                 try:
                     # Copy frames for this video
                     _copy_frames_for_video(db, video_conn, video_hash, video_samples)
-
-                    # Copy reference frame for this video (for CLIP encoding)
-                    _copy_reference_frame_for_video(db, video_conn, video_hash)
 
                     # Copy OCR visualization for this video (only if has samples)
                     has_ocr_viz = _copy_ocr_viz_for_video(db, video_conn, video_hash, has_samples=True)
@@ -793,16 +712,5 @@ def create_training_dataset(
         console.print(f"  Samples excluded: {excluded_sample_count}")
         console.print(f"  Videos with complete data: {len(videos_with_ocr_viz)}")
 
-    # Show font embedding model info
-    from caption_boundaries.data.font_embeddings import get_dataset_model_info
-
-    try:
-        model_info = get_dataset_model_info(dataset_db_path)
-        if model_info:
-            console.print(f"\n[cyan]Font embedding models:[/cyan]")
-            for model_version, count in model_info.items():
-                console.print(f"  {model_version}: {count} videos")
-    except Exception:
-        pass  # Don't fail if model info query fails
 
     return dataset_db_path

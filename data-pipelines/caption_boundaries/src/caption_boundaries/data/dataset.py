@@ -14,7 +14,7 @@ from PIL import Image
 from torch.utils.data import Dataset
 
 from caption_boundaries.data.transforms import AnchorAwareResize, NormalizeImageNet, ResizeStrategy
-from caption_boundaries.database import FontEmbedding, TrainingDataset, TrainingSample
+from caption_boundaries.database import TrainingDataset, TrainingSample
 
 
 def get_git_root() -> Path:
@@ -233,7 +233,6 @@ class CaptionBoundaryDataset(Dataset):
             - frame1: Tensor of shape (C, H, W) - First frame
             - frame2: Tensor of shape (C, H, W) - Second frame
             - spatial_features: Tensor of shape (6,) - Spatial metadata
-            - reference_image: Tensor of shape (C, H, W) - Reference frame for CLIP encoding
             - label: Integer label (0-4)
             - sample_id: Database ID of sample (for debugging)
         """
@@ -249,9 +248,6 @@ class CaptionBoundaryDataset(Dataset):
         # Get spatial metadata
         spatial_features = self._get_spatial_metadata(sample.video_hash)
 
-        # Get reference frame image from dataset database (use frame1 as fallback)
-        reference_image = self._get_reference_frame(sample.video_hash, fallback_frame_index=sample.frame1_index)
-
         # Apply transforms
         # Get anchor type from spatial metadata
         anchor_type = self._get_anchor_type(spatial_features)
@@ -259,13 +255,11 @@ class CaptionBoundaryDataset(Dataset):
         frame1 = self.resize_transform(frame1_image, anchor_type)
         frame2 = self.resize_transform(frame2_image, anchor_type)
         ocr_viz = self.resize_transform(ocr_viz_image, anchor_type)
-        reference_frame = self.resize_transform(reference_image, anchor_type)
 
         # Normalize to tensors
         frame1_tensor = torch.from_numpy(self.normalize(frame1))
         frame2_tensor = torch.from_numpy(self.normalize(frame2))
         ocr_viz_tensor = torch.from_numpy(self.normalize(ocr_viz))
-        reference_tensor = torch.from_numpy(self.normalize(reference_frame))
 
         # Convert spatial features to tensor
         spatial_tensor = torch.tensor(spatial_features, dtype=torch.float32)
@@ -278,7 +272,6 @@ class CaptionBoundaryDataset(Dataset):
             "frame1": frame1_tensor,
             "frame2": frame2_tensor,
             "spatial_features": spatial_tensor,
-            "reference_image": reference_tensor,
             "label": label_idx,
             "sample_id": sample.id,
         }
@@ -338,63 +331,6 @@ class CaptionBoundaryDataset(Dataset):
 
         img = Image.open(BytesIO(ocr_viz.image_data))
         return img.convert("RGB")  # Ensure RGB, remove alpha channel if present
-
-    def _get_reference_frame(self, video_hash: str, fallback_frame_index: int | None = None) -> Image.Image:
-        """Get reference frame image from dataset database.
-
-        The reference frame is the frame selected for CLIP encoding. Models will
-        run CLIP on this image themselves during forward pass.
-
-        Falls back to using any available frame if the reference frame is missing.
-
-        Args:
-            video_hash: Video hash
-            fallback_frame_index: Frame index to use if reference frame is missing
-
-        Returns:
-            PIL Image of reference frame
-
-        Raises:
-            ValueError: If no frames found for video
-        """
-        from io import BytesIO
-
-        from caption_boundaries.database import FontEmbedding, TrainingFrame
-
-        # Try to get reference frame index from FontEmbedding table
-        embedding_record = self._db_session.query(FontEmbedding).filter(FontEmbedding.video_hash == video_hash).first()
-
-        if embedding_record:
-            reference_frame_index = embedding_record.reference_frame_index
-
-            # Try to load the reference frame from TrainingFrame table
-            frame = (
-                self._db_session.query(TrainingFrame)
-                .filter(TrainingFrame.video_hash == video_hash, TrainingFrame.frame_index == reference_frame_index)
-                .first()
-            )
-
-            if frame:
-                return Image.open(BytesIO(frame.image_data))
-
-        # Fallback: use the provided fallback frame index (usually frame1)
-        if fallback_frame_index is not None:
-            frame = (
-                self._db_session.query(TrainingFrame)
-                .filter(TrainingFrame.video_hash == video_hash, TrainingFrame.frame_index == fallback_frame_index)
-                .first()
-            )
-
-            if frame:
-                return Image.open(BytesIO(frame.image_data))
-
-        # Last resort: use any available frame for this video
-        frame = self._db_session.query(TrainingFrame).filter(TrainingFrame.video_hash == video_hash).first()
-
-        if not frame:
-            raise ValueError(f"No frames found for video {video_hash[:8]}... in dataset")
-
-        return Image.open(BytesIO(frame.image_data))
 
     def _get_spatial_metadata(self, video_hash: str) -> np.ndarray:
         """Get spatial metadata for video.
@@ -459,7 +395,6 @@ class CaptionBoundaryDataset(Dataset):
             "frame1": torch.stack([s["frame1"] for s in batch]),
             "frame2": torch.stack([s["frame2"] for s in batch]),
             "spatial_features": torch.stack([s["spatial_features"] for s in batch]),
-            "reference_image": torch.stack([s["reference_image"] for s in batch]),
             "label": torch.tensor([s["label"] for s in batch], dtype=torch.long),
             "sample_id": [s["sample_id"] for s in batch],  # Keep as list for debugging
         }

@@ -9,7 +9,6 @@ Each dataset database is fully self-contained with all necessary data:
 - TrainingFrame BLOBs
 - TrainingOCRVisualization BLOBs
 - VideoRegistry (videos used in this dataset)
-- FontEmbedding (cached embeddings for this dataset)
 - Experiment records (training runs on this dataset)
 """
 
