@@ -508,8 +508,8 @@ class CaptionBoundaryTrainer:
         # Overall metrics
         accuracy = accuracy_score(all_labels_np, all_preds_np)
         balanced_acc = balanced_accuracy_score(all_labels_np, all_preds_np)
-        f1_weighted = f1_score(all_labels_np, all_preds_np, average="weighted", zero_division=0)
-        f1_macro = f1_score(all_labels_np, all_preds_np, average="macro", zero_division=0)
+        f1_weighted = f1_score(all_labels_np, all_preds_np, average="weighted", zero_division="0")
+        f1_macro = f1_score(all_labels_np, all_preds_np, average="macro", zero_division="0")
 
         # Per-class accuracy
         per_class_acc = compute_per_class_accuracy(all_labels_np, all_preds_np, len(CaptionBoundaryDataset.LABELS))
@@ -571,8 +571,8 @@ class CaptionBoundaryTrainer:
         # Overall metrics
         accuracy = accuracy_score(all_labels_np, all_preds_np)
         balanced_acc = balanced_accuracy_score(all_labels_np, all_preds_np)
-        f1_weighted = f1_score(all_labels_np, all_preds_np, average="weighted", zero_division=0)
-        f1_macro = f1_score(all_labels_np, all_preds_np, average="macro", zero_division=0)
+        f1_weighted = f1_score(all_labels_np, all_preds_np, average="weighted", zero_division="0")
+        f1_macro = f1_score(all_labels_np, all_preds_np, average="macro", zero_division="0")
 
         # Per-class accuracy
         per_class_acc = compute_per_class_accuracy(all_labels_np, all_preds_np, len(CaptionBoundaryDataset.LABELS))
@@ -587,7 +587,7 @@ class CaptionBoundaryTrainer:
             labels=list(range(len(CaptionBoundaryDataset.LABELS))),
             target_names=CaptionBoundaryDataset.LABELS,
             output_dict=True,
-            zero_division=0,
+            zero_division="0",
         )
 
         metrics = {

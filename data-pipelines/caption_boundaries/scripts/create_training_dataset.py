@@ -26,8 +26,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from video_utils import get_video_metadata
 
-from caption_boundaries.database import TrainingDataset, TrainingSample, VideoRegistry, init_training_db
-from caption_boundaries.database.storage import create_session
+from caption_boundaries.database import TrainingDataset, TrainingSample, VideoRegistry, init_dataset_db
+from caption_boundaries.database.storage import create_dataset_session
 
 
 def find_videos_with_confirmed_boundaries(data_dir: Path, min_confirmed: int = 5) -> list[Path]:
@@ -216,7 +216,7 @@ def create_training_dataset(
     description: str,
     train_split_ratio: float = 0.8,
     random_seed: int = 42,
-) -> int:
+) -> int | None:
     """Create training dataset from video databases.
 
     Args:
@@ -235,8 +235,8 @@ def create_training_dataset(
     random.seed(random_seed)
 
     # Initialize training database
-    init_training_db(training_db_path)
-    db = create_session(training_db_path)
+    init_dataset_db(training_db_path)
+    db = create_dataset_session(training_db_path)
 
     try:
         # Extract samples from all videos

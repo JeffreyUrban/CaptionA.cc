@@ -1,6 +1,7 @@
 """Command-line interface for caption boundaries detection pipeline."""
 
 from pathlib import Path
+from typing import Literal, cast
 
 import typer
 from rich.console import Console
@@ -107,7 +108,6 @@ def train(
             model_config={"pretrained": pretrained},
             transform_strategy=strategy,
             ocr_viz_variant=ocr_viz_variant,
-            use_font_embedding=True,
             epochs=epochs,
             batch_size=batch_size,
             lr_features=lr_features,
@@ -321,11 +321,17 @@ def create_dataset(
 
     console.print(f"Found {len(video_db_paths)} video databases")
 
+    # Validate split strategy
+    if split_strategy not in ("random", "show_based"):
+        console.print(f"[red]✗[/red] Invalid split strategy: {split_strategy}")
+        console.print("Valid options: random, show_based")
+        raise typer.Exit(code=1)
+
     try:
         create_training_dataset(
             name=name,
             video_db_paths=video_db_paths,
-            split_strategy=split_strategy,
+            split_strategy=cast(Literal["random", "show_based"], split_strategy),
             train_split_ratio=train_ratio,
             random_seed=random_seed,
             description=description,
