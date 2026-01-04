@@ -29,16 +29,25 @@ def caption_vetting_prompt(caption_text: str, prev_context: list[str], next_cont
     prev_context_str = "\n".join(prev_context) if prev_context else " "
     next_context_str = "\n".join(next_context) if next_context else " "
 
-    return f"""You are given three text snippets: "previous context," "caption" (current segment), and "next context" for captions from a video. Analyze the "caption" segment using the surrounding context, focusing on whether its Chinese characters contain a likely transcription error (i.e., miswritten or incorrect character) based on meaning and context.
+    return f"""You are given three text snippets: "previous context," "caption" (current segment), and "next context" \
+for captions from a video. Analyze the "caption" segment using the surrounding context, focusing on whether its \
+Chinese characters contain a likely transcription error (i.e., miswritten or incorrect character) based on meaning \
+and context.
 
 **Instructions:**
 
-- has_error: Determine if the caption contains a *character transcription error* (ignore punctuation and whitespace issues).
-- corrected: If a character transcription error exists, provide a corrected version, only fixing character mistakes.
-- word_segmentation: Segment the caption into meaningful words/phrases according to standard usage in this context.
+- has_error: Determine if the caption contains a *character transcription error* (ignore punctuation and \
+whitespace issues).
+- corrected: If a character transcription error exists, provide a corrected version, only fixing character \
+mistakes.
+- word_segmentation: Segment the caption into meaningful words/phrases according to standard usage in this \
+context.
 - translation: Translate the caption precisely into English.
-- explanation: Summarize the meaning of the segment in English, given the surrounding context; Provide only that meaning, without reference to this prompt, or the example or that it is a summary, or that it is about a text (i.e. DO NOT mention "caption", "context", "the text").
-- Output all findings in a JSON object with the keys: `has_error`, `corrected`, `word_segmentation`, `translation`, and `explanation`.
+- explanation: Summarize the meaning of the segment in English, given the surrounding context; Provide only \
+that meaning, without reference to this prompt, or the example or that it is a summary, or that it is about a \
+text (i.e. DO NOT mention "caption", "context", "the text").
+- Output all findings in a JSON object with the keys: `has_error`, `corrected`, `word_segmentation`, \
+`translation`, and `explanation`.
 
 **Do not process any text below "EXAMPLE INPUT/OUTPUT"—it is only to illustrate the required behavior.**
 
@@ -81,7 +90,9 @@ Expected JSON output:
   "corrected": null,
   "word_segmentation": ["中国", "多样的", "地理环境", "和", "气候"],
   "translation": "China's diverse geographical environment and climate",
-  "explanation": "China has a varied geography and climate, and seasonal agricultural practices (spring sowing, summer weeding, autumn harvest, winter storage). Environmental diversity shapes traditional farming cycles across different regions of China."
+  "explanation": "China has a varied geography and climate, and seasonal agricultural practices (spring \
+sowing, summer weeding, autumn harvest, winter storage). Environmental diversity shapes traditional farming cycles \
+across different regions of China."
 }}
 
 ---
@@ -254,7 +265,7 @@ def extract_errors_from_vetting_results(
     """
     errors = []
 
-    with open(vetting_results_path, "r") as f:
+    with open(vetting_results_path) as f:
         for line in f:
             if not line.strip():
                 continue
@@ -280,6 +291,6 @@ def extract_errors_from_vetting_results(
                 # Escape commas
                 original = error["original_text"].replace(",", "，")
                 corrected = error["corrected_text"].replace(",", "，")
-                f.write(f'{error["caption_id"]},{error["start_frame"]},{error["end_frame"]},{original},{corrected}\n')
+                f.write(f"{error['caption_id']},{error['start_frame']},{error['end_frame']},{original},{corrected}\n")
 
     return errors

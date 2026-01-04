@@ -123,6 +123,7 @@ def test_update_caption_text(mock_db):
     """Test updating caption text."""
     # Get first caption
     caption = get_caption_by_frames(mock_db, 100, 150)
+    assert caption is not None, "Caption should exist"
     caption_id = caption["id"]
 
     # Update text
@@ -137,6 +138,7 @@ def test_update_caption_text(mock_db):
 
     # Verify update
     updated = get_caption_by_frames(mock_db, 100, 150)
+    assert updated is not None, "Updated caption should exist"
     assert updated["text"] == "new caption text"
     assert updated["text_status"] == "valid_caption"
     assert updated["text_notes"] == "test update"

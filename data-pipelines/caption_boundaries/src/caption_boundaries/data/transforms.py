@@ -86,9 +86,17 @@ class AnchorAwareResize:
 
         # Determine strategy for this image
         if self.strategy == ResizeStrategy.CROP:
-            return self._crop(resized, anchor_type) if new_width > self.target_width else self._mirror_tile(resized, anchor_type)
+            return (
+                self._crop(resized, anchor_type)
+                if new_width > self.target_width
+                else self._mirror_tile(resized, anchor_type)
+            )
         elif self.strategy == ResizeStrategy.MIRROR_TILE:
-            return self._mirror_tile(resized, anchor_type) if new_width < self.target_width else self._crop(resized, anchor_type)
+            return (
+                self._mirror_tile(resized, anchor_type)
+                if new_width < self.target_width
+                else self._crop(resized, anchor_type)
+            )
         else:  # ADAPTIVE
             # Crop if oversized (any amount), mirror-tile if undersized
             # Threshold determines the boundary for "significantly oversized"

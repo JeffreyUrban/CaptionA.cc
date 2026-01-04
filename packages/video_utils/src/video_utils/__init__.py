@@ -7,9 +7,9 @@ from video_utils.frames import (
     get_video_duration,
 )
 from video_utils.video_hash import (
+    VideoMetadata,
     compute_video_hash,
     get_video_metadata,
-    VideoMetadata,
 )
 
 try:

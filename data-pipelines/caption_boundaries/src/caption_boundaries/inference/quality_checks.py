@@ -41,11 +41,13 @@ def check_boundary_coherence(
         if curr["predicted_label"] == "different" and next_bound["predicted_label"] == "different":
             gap = next_bound["frame1_index"] - curr["frame2_index"]
             if gap < 2:
-                issues.append({
-                    "type": "consecutive_boundaries",
-                    "frames": (curr["frame1_index"], curr["frame2_index"], next_bound["frame1_index"]),
-                    "message": "Two boundaries with no gap between them",
-                })
+                issues.append(
+                    {
+                        "type": "consecutive_boundaries",
+                        "frames": (curr["frame1_index"], curr["frame2_index"], next_bound["frame1_index"]),
+                        "message": "Two boundaries with no gap between them",
+                    }
+                )
 
     return {
         "coherent": len(issues) == 0,
@@ -87,21 +89,26 @@ def run_quality_checks(
             # Check if this boundary is part of any issue
             for frames in issue_frames:
                 if boundary["frame1_index"] in frames or boundary["frame2_index"] in frames:
-                    flagged_boundaries.append({
-                        **boundary,
-                        "flags": [issue["message"] for issue in coherence_check["issues"]
+                    flagged_boundaries.append(
+                        {
+                            **boundary,
+                            "flags": [
+                                issue["message"]
+                                for issue in coherence_check["issues"]
                                 if boundary["frame1_index"] in issue["frames"]
-                                or boundary["frame2_index"] in issue["frames"]],
-                    })
+                                or boundary["frame2_index"] in issue["frames"]
+                            ],
+                        }
+                    )
                     break
 
     # Summary
     pass_rate = (len(boundaries) - len(flagged_boundaries)) / len(boundaries) if boundaries else 1.0
 
-    console.print(f"\n[cyan]Quality Check Summary:[/cyan]")
+    console.print("\n[cyan]Quality Check Summary:[/cyan]")
     console.print(f"  Total boundaries: {quality_stats['total_boundaries']}")
     console.print(f"  Flagged: {len(flagged_boundaries)}")
-    console.print(f"  Pass rate: {pass_rate*100:.1f}%")
+    console.print(f"  Pass rate: {pass_rate * 100:.1f}%")
     console.print(f"  Sequence issues: {quality_stats['sequence_issues']}")
 
     return {

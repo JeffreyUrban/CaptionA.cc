@@ -20,7 +20,7 @@ def get_video_directories(data_dir: Path) -> list[Path]:
     """Find all video directories with split databases."""
     video_dirs = []
     for hash_dir in data_dir.iterdir():
-        if not hash_dir.is_dir() or hash_dir.name.startswith('.'):
+        if not hash_dir.is_dir() or hash_dir.name.startswith("."):
             continue
         for video_dir in hash_dir.iterdir():
             if not video_dir.is_dir():
@@ -39,7 +39,7 @@ def run_command(cmd: list[str], dry_run: bool = False) -> bool:
         return True
 
     try:
-        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+        subprocess.run(cmd, check=True, capture_output=True, text=True)
         return True
     except subprocess.CalledProcessError as e:
         print(f"  ✗ Error: {e.stderr}")
@@ -57,11 +57,11 @@ def setup_dvc_for_video(video_dir: Path, dry_run: bool = False) -> dict:
     """
     # Databases to track with DVC
     databases_to_track = [
-        "video.db",      # Immutable frames and metadata
-        "fullOCR.db",    # OCR detection results
-        "cropping.db",   # Cropped frames and layout config
-        "layout.db",     # Box annotations and classification model
-        "captions.db",   # Caption boundaries and text
+        "video.db",  # Immutable frames and metadata
+        "fullOCR.db",  # OCR detection results
+        "cropping.db",  # Cropped frames and layout config
+        "layout.db",  # Box annotations and classification model
+        "captions.db",  # Caption boundaries and text
         # state.db is NOT tracked (ephemeral workspace state)
     ]
 
@@ -91,21 +91,10 @@ def setup_dvc_for_video(video_dir: Path, dry_run: bool = False) -> dict:
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--data-dir",
-        type=Path,
-        default=Path("local/data"),
-        help="Path to data directory (default: local/data)"
+        "--data-dir", type=Path, default=Path("local/data"), help="Path to data directory (default: local/data)"
     )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Show what would be tracked without making changes"
-    )
-    parser.add_argument(
-        "--limit",
-        type=int,
-        help="Only process first N videos (for testing)"
-    )
+    parser.add_argument("--dry-run", action="store_true", help="Show what would be tracked without making changes")
+    parser.add_argument("--limit", type=int, help="Only process first N videos (for testing)")
 
     args = parser.parse_args()
 
@@ -113,7 +102,7 @@ def main():
     video_dirs = get_video_directories(args.data_dir)
 
     if args.limit:
-        video_dirs = video_dirs[:args.limit]
+        video_dirs = video_dirs[: args.limit]
 
     print(f"Found {len(video_dirs)} videos with split databases")
 
@@ -147,21 +136,21 @@ def main():
     print("DVC TRACKING SUMMARY")
     print("=" * 70)
     print(f"Videos tracked: {tracked_count}/{len(video_dirs)}")
-    print(f"\nSize breakdown:")
+    print("\nSize breakdown:")
     for db_name, size_mb in total_size_by_db.items():
         if size_mb > 0:
-            print(f"  {db_name}: {size_mb:.1f} MB ({size_mb/1024:.2f} GB)")
-    print(f"\nTotal tracked: {total_size_mb:.1f} MB ({total_size_mb/1024:.2f} GB)")
-    print(f"NOT tracked: state.db (ephemeral workspace state)")
+            print(f"  {db_name}: {size_mb:.1f} MB ({size_mb / 1024:.2f} GB)")
+    print(f"\nTotal tracked: {total_size_mb:.1f} MB ({total_size_mb / 1024:.2f} GB)")
+    print("NOT tracked: state.db (ephemeral workspace state)")
 
     if not args.dry_run:
-        print(f"\nNext steps:")
-        print(f"  1. Review .gitignore files (state.db should be excluded)")
-        print(f"  2. Stage .dvc files: git add 'local/data/**/*.dvc'")
-        print(f"  3. Stage .gitignore: git add 'local/data/**/.gitignore'")
-        print(f"  4. Commit: git commit -m 'Set up DVC tracking for split databases'")
-        print(f"  5. Push to DVC: dvc push")
-        print(f"  6. Push to git: git push")
+        print("\nNext steps:")
+        print("  1. Review .gitignore files (state.db should be excluded)")
+        print("  2. Stage .dvc files: git add 'local/data/**/*.dvc'")
+        print("  3. Stage .gitignore: git add 'local/data/**/.gitignore'")
+        print("  4. Commit: git commit -m 'Set up DVC tracking for split databases'")
+        print("  5. Push to DVC: dvc push")
+        print("  6. Push to git: git push")
 
     print("=" * 70)
 

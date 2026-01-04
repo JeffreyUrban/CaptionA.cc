@@ -4,7 +4,7 @@ from ocr_box_model.features import extract_box_features, extract_features_batch
 from ocr_box_model.predict import predict_with_heuristics
 
 try:
-    from ocr_box_model._version import __version__, __version_tuple__
+    from ocr_box_model._version import __version__, __version_tuple__  # type: ignore[import-not-found]
 except ImportError:
     __version__ = "0.0.0+unknown"
     __version_tuple__ = (0, 0, 0, "unknown", "unknown")

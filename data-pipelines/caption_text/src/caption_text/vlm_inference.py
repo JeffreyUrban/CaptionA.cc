@@ -5,7 +5,6 @@ from cropped frames with OCR annotations and layout priors.
 """
 
 import json
-from io import BytesIO
 from pathlib import Path
 from typing import Any
 
@@ -13,7 +12,6 @@ import torch
 from PIL import Image
 from transformers import AutoProcessor, AutoTokenizer
 from transformers.models.qwen2_5_vl import Qwen2_5_VLForConditionalGeneration
-
 
 # Global model instance to avoid reloading
 _model_instance: dict[str, Any] | None = None
@@ -221,10 +219,12 @@ def generate_caption(
         )
 
     # Decode response
-    generated_ids_trimmed = [out_ids[len(in_ids) :] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)]
-    response = processor.batch_decode(generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False)[
-        0
+    generated_ids_trimmed = [
+        out_ids[len(in_ids) :] for in_ids, out_ids in zip(inputs.input_ids, generated_ids, strict=False)
     ]
+    response = processor.batch_decode(
+        generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
+    )[0]
 
     return response.strip()
 

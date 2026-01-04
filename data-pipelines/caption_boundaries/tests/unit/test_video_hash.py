@@ -4,7 +4,6 @@ import tempfile
 from pathlib import Path
 
 import pytest
-
 from video_utils import compute_video_hash, get_video_metadata
 
 

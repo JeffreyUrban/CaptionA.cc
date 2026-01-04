@@ -1,5 +1,7 @@
 """Unit tests for anchor-aware transforms."""
 
+from typing import Literal, cast
+
 import numpy as np
 import pytest
 from PIL import Image, ImageDraw
@@ -31,6 +33,7 @@ def create_test_image(width: int, height: int, pattern: str = "solid") -> Image.
     elif pattern == "gradient":
         # Horizontal gradient (useful for verifying crop/tile positions)
         pixels = img.load()
+        assert pixels is not None, "Failed to load image pixels"
         for x in range(width):
             color_value = int((x / width) * 255)
             for y in range(height):
@@ -59,7 +62,7 @@ def test_exact_size_no_transform():
 
     # Should pass through unchanged for any anchor type
     for anchor in ["left", "center", "right"]:
-        result = transform(img, anchor_type=anchor)
+        result = transform(img, anchor_type=cast(Literal["left", "center", "right"], anchor))
         assert result.size == (480, 48)
         assert np.array_equal(np.array(result), np.array(img))
 
@@ -136,9 +139,7 @@ def test_crop_oversized_center_anchor():
 @pytest.mark.unit
 def test_mirror_tile_undersized_left_anchor():
     """Test mirror-tiling undersized image with left anchor fills right."""
-    transform = AnchorAwareResize(
-        target_width=480, target_height=48, strategy=ResizeStrategy.MIRROR_TILE
-    )
+    transform = AnchorAwareResize(target_width=480, target_height=48, strategy=ResizeStrategy.MIRROR_TILE)
 
     # Create narrow image
     img = create_test_image(240, 48, pattern="gradient")
@@ -165,9 +166,7 @@ def test_mirror_tile_undersized_left_anchor():
 @pytest.mark.unit
 def test_mirror_tile_undersized_right_anchor():
     """Test mirror-tiling undersized image with right anchor fills left."""
-    transform = AnchorAwareResize(
-        target_width=480, target_height=48, strategy=ResizeStrategy.MIRROR_TILE
-    )
+    transform = AnchorAwareResize(target_width=480, target_height=48, strategy=ResizeStrategy.MIRROR_TILE)
 
     # Create narrow image
     img = create_test_image(240, 48, pattern="gradient")
@@ -190,9 +189,7 @@ def test_mirror_tile_undersized_right_anchor():
 @pytest.mark.unit
 def test_mirror_tile_undersized_center_anchor():
     """Test mirror-tiling undersized image with center anchor fills both sides."""
-    transform = AnchorAwareResize(
-        target_width=480, target_height=48, strategy=ResizeStrategy.MIRROR_TILE
-    )
+    transform = AnchorAwareResize(target_width=480, target_height=48, strategy=ResizeStrategy.MIRROR_TILE)
 
     # Create narrow image
     img = create_test_image(240, 48, pattern="gradient")
@@ -324,20 +321,18 @@ def test_all_strategies_produce_correct_size():
 
         for anchor in ["left", "center", "right"]:
             # Test oversized
-            result_over = transform(img_oversized, anchor_type=anchor)
+            result_over = transform(img_oversized, anchor_type=cast(Literal["left", "center", "right"], anchor))
             assert result_over.size == (480, 48), f"Failed for {strategy} + {anchor} (oversized)"
 
             # Test undersized
-            result_under = transform(img_undersized, anchor_type=anchor)
+            result_under = transform(img_undersized, anchor_type=cast(Literal["left", "center", "right"], anchor))
             assert result_under.size == (480, 48), f"Failed for {strategy} + {anchor} (undersized)"
 
 
 @pytest.mark.unit
 def test_mirror_tile_creates_smooth_transition():
     """Test that mirror tiling creates smooth visual transition."""
-    transform = AnchorAwareResize(
-        target_width=480, target_height=48, strategy=ResizeStrategy.MIRROR_TILE
-    )
+    transform = AnchorAwareResize(target_width=480, target_height=48, strategy=ResizeStrategy.MIRROR_TILE)
 
     # Create narrow image with distinct left/right colors
     img = Image.new("RGB", (100, 48))

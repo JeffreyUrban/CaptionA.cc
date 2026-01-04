@@ -90,8 +90,6 @@ def get_captions_needing_text(db_path: Path, limit: int | None = None) -> list[d
     return [dict(row) for row in rows]
 
 
-
-
 def update_caption_text(
     db_path: Path,
     caption_id: int,

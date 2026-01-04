@@ -15,9 +15,8 @@ import asyncio
 import signal
 import sys
 
-from prefect.workers.process import ProcessWorker
 from prefect.client.orchestration import get_client
-
+from prefect.workers.process import ProcessWorker
 
 # Global flag for graceful shutdown
 shutdown_requested = False
@@ -55,7 +54,7 @@ async def start_worker():
     work_pool_name = "video-processing-pool"
     max_concurrent = 2  # Replaces MAX_TOTAL_CONCURRENT_PROCESSING from TypeScript
 
-    print(f"Worker configuration:")
+    print("Worker configuration:")
     print(f"  Work pool: {work_pool_name}")
     print(f"  Max concurrent jobs: {max_concurrent}")
     print(f"  Flow code location: {__file__}")

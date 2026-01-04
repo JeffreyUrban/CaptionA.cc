@@ -12,6 +12,8 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
  *
  * Note: These tests require the dev server to be running on localhost:5173
  * Run with: npm run dev (in another terminal)
+ *
+ * Skipped in CI environments as they require a running dev server.
  */
 
 const DATA_DIR = resolve(process.cwd(), '..', '..', 'local', 'data')

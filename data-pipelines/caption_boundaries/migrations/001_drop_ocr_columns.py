@@ -31,12 +31,12 @@ def migrate_dataset_db(db_path: Path) -> None:
         columns = {row[1] for row in cursor.fetchall()}
 
         ocr_columns = {
-            'ocr_confidence_frame1',
-            'ocr_confidence_frame2',
-            'ocr_text_frame1',
-            'ocr_text_frame2',
-            'levenshtein_distance',
-            'ocr_timestamp'
+            "ocr_confidence_frame1",
+            "ocr_confidence_frame2",
+            "ocr_text_frame1",
+            "ocr_text_frame2",
+            "levenshtein_distance",
+            "ocr_timestamp",
         }
 
         columns_to_drop = ocr_columns & columns
@@ -51,7 +51,7 @@ def migrate_dataset_db(db_path: Path) -> None:
             SELECT sql FROM sqlite_master
             WHERE type='table' AND name='training_samples'
         """)
-        create_sql = cursor.fetchone()[0]
+        cursor.fetchone()[0]
 
         # Create new table without OCR columns
         cursor.execute("BEGIN TRANSACTION")
@@ -117,7 +117,6 @@ def migrate_dataset_db(db_path: Path) -> None:
 
 def main():
     """Run migration on all dataset databases."""
-    from caption_boundaries.database import get_dataset_db_path
 
     # Find all dataset databases
     datasets_dir = Path(__file__).parent.parent / "../../local/models/caption_boundaries/datasets"

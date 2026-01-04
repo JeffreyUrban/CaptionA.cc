@@ -9,7 +9,6 @@ Usage:
 """
 
 from flows.video_processing import process_video_initial_flow
-from flows.crop_frames import crop_frames_flow
 
 
 def deploy_flows():

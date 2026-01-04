@@ -8,26 +8,7 @@ import random
 import subprocess
 from collections import defaultdict
 from pathlib import Path
-from typing import Any
-
-
-def get_project_root() -> Path:
-    """Get the git repository root directory.
-
-    Returns:
-        Absolute path to the git root directory
-    """
-    try:
-        result = subprocess.run(
-            ["git", "rev-parse", "--show-toplevel"],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        return Path(result.stdout.strip())
-    except Exception:
-        # Fallback: use current working directory
-        return Path.cwd()
+from typing import Any, cast
 
 import numpy as np
 import torch
@@ -49,9 +30,28 @@ from torch.utils.data import DataLoader, Sampler
 from caption_boundaries.data.dataset import CaptionBoundaryDataset
 from caption_boundaries.data.transforms import ResizeStrategy
 from caption_boundaries.database import Experiment, TrainingDataset, get_dataset_db
-from caption_boundaries.models.registry import create_model, get_model_info
+from caption_boundaries.models.registry import create_model
 
 console = Console(stderr=True)
+
+
+def get_project_root() -> Path:
+    """Get the git repository root directory.
+
+    Returns:
+        Absolute path to the git root directory
+    """
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return Path(result.stdout.strip())
+    except Exception:
+        # Fallback: use current working directory
+        return Path.cwd()
 
 
 def get_dataset_dvc_hash(dataset_path: Path) -> str:
@@ -192,7 +192,7 @@ class BalancedBatchSampler(Sampler):
         """Sample indices for this epoch."""
         epoch_indices = []
 
-        for label, indices in self.label_to_indices.items():
+        for _label, indices in self.label_to_indices.items():
             if len(indices) <= self.max_samples_per_class:
                 # Use all samples for minority/medium classes
                 epoch_indices.extend(indices)
@@ -341,7 +341,9 @@ class CaptionBoundaryTrainer:
 
             # Log sampling statistics
             if self.max_samples_per_class is not None:
-                console.print(f"[cyan]Balanced sampling enabled (cap={self.max_samples_per_class:,} samples/class):[/cyan]")
+                console.print(
+                    f"[cyan]Balanced sampling enabled (cap={self.max_samples_per_class:,} samples/class):[/cyan]"
+                )
             else:
                 console.print(f"[cyan]Balanced sampling enabled (ratio={self.sampling_ratio}):[/cyan]")
             console.print(f"  Total train samples: {len(self.train_dataset)}")
@@ -430,8 +432,14 @@ class CaptionBoundaryTrainer:
             **self.model_config,
         )
 
-        console.print(f"[green]✓[/green] Total params: {self.model.get_num_total_params():,}")
-        console.print(f"[green]✓[/green] Trainable params: {self.model.get_num_trainable_params():,}")
+        # Log parameter counts (custom methods on our model architectures)
+        # Use getattr to access custom methods that pyright doesn't know about
+        get_total = getattr(self.model, "get_num_total_params", None)
+        get_trainable = getattr(self.model, "get_num_trainable_params", None)
+        if callable(get_total):
+            console.print(f"[green]✓[/green] Total params: {get_total():,}")
+        if callable(get_trainable):
+            console.print(f"[green]✓[/green] Trainable params: {get_trainable():,}")
 
         # Optimizer with different learning rates for different components
         # Higher LR for newly added classifier, lower LR for pretrained feature extractor
@@ -521,6 +529,9 @@ class CaptionBoundaryTrainer:
                 mode="online",  # Default to online reporting to wandb.ai
             )
 
+            # wandb.run is set after init()
+            assert wandb.run is not None, "W&B run not initialized"
+
             # Save W&B run ID for experiment tracking
             self.wandb_run_id = wandb.run.id
 
@@ -535,6 +546,12 @@ class CaptionBoundaryTrainer:
         Returns:
             Dict with training metrics
         """
+        # Assert training components are initialized (set by train() before calling this)
+        assert self.model is not None, "Model not initialized. Call train() first."
+        assert self.train_loader is not None, "Train loader not initialized. Call train() first."
+        assert self.optimizer is not None, "Optimizer not initialized. Call train() first."
+        assert self.criterion is not None, "Criterion not initialized. Call train() first."
+
         self.model.train()
         total_loss = 0.0
         all_preds = []
@@ -573,13 +590,11 @@ class CaptionBoundaryTrainer:
         # Overall metrics
         accuracy = accuracy_score(all_labels_np, all_preds_np)
         balanced_acc = balanced_accuracy_score(all_labels_np, all_preds_np)
-        f1_weighted = f1_score(all_labels_np, all_preds_np, average="weighted", zero_division=0)
-        f1_macro = f1_score(all_labels_np, all_preds_np, average="macro", zero_division=0)
+        f1_weighted = f1_score(all_labels_np, all_preds_np, average="weighted", zero_division="0")
+        f1_macro = f1_score(all_labels_np, all_preds_np, average="macro", zero_division="0")
 
         # Per-class accuracy
-        per_class_acc = compute_per_class_accuracy(
-            all_labels_np, all_preds_np, len(CaptionBoundaryDataset.LABELS)
-        )
+        per_class_acc = compute_per_class_accuracy(all_labels_np, all_preds_np, len(CaptionBoundaryDataset.LABELS))
 
         metrics = {
             "train/loss": avg_loss,
@@ -604,6 +619,11 @@ class CaptionBoundaryTrainer:
         Returns:
             Dict with validation metrics
         """
+        # Assert validation components are initialized (set by train() before calling this)
+        assert self.model is not None, "Model not initialized. Call train() first."
+        assert self.val_loader is not None, "Validation loader not initialized. Call train() first."
+        assert self.criterion is not None, "Criterion not initialized. Call train() first."
+
         self.model.eval()
         total_loss = 0.0
         all_preds = []
@@ -638,25 +658,27 @@ class CaptionBoundaryTrainer:
         # Overall metrics
         accuracy = accuracy_score(all_labels_np, all_preds_np)
         balanced_acc = balanced_accuracy_score(all_labels_np, all_preds_np)
-        f1_weighted = f1_score(all_labels_np, all_preds_np, average="weighted", zero_division=0)
-        f1_macro = f1_score(all_labels_np, all_preds_np, average="macro", zero_division=0)
+        f1_weighted = f1_score(all_labels_np, all_preds_np, average="weighted", zero_division="0")
+        f1_macro = f1_score(all_labels_np, all_preds_np, average="macro", zero_division="0")
 
         # Per-class accuracy
-        per_class_acc = compute_per_class_accuracy(
-            all_labels_np, all_preds_np, len(CaptionBoundaryDataset.LABELS)
-        )
+        per_class_acc = compute_per_class_accuracy(all_labels_np, all_preds_np, len(CaptionBoundaryDataset.LABELS))
 
         # Confusion matrix
         cm = confusion_matrix(all_labels_np, all_preds_np)
 
         # Classification report (specify labels to handle missing classes in small datasets)
-        class_report = classification_report(
-            all_labels_np,
-            all_preds_np,
-            labels=list(range(len(CaptionBoundaryDataset.LABELS))),
-            target_names=CaptionBoundaryDataset.LABELS,
-            output_dict=True,
-            zero_division=0,
+        # Cast needed because sklearn stubs don't properly type output_dict=True
+        class_report = cast(
+            dict[str, Any],
+            classification_report(
+                all_labels_np,
+                all_preds_np,
+                labels=list(range(len(CaptionBoundaryDataset.LABELS))),
+                target_names=CaptionBoundaryDataset.LABELS,
+                output_dict=True,
+                zero_division="0",
+            ),
         )
 
         metrics = {
@@ -704,13 +726,18 @@ class CaptionBoundaryTrainer:
             metrics: Validation metrics
             is_best: Whether this is the best model so far
         """
+        assert self.model is not None, "Model not initialized"
+        assert self.optimizer is not None, "Optimizer not initialized"
+
         checkpoint = {
             "epoch": epoch,
             "model_state_dict": self.model.state_dict(),
             "optimizer_state_dict": self.optimizer.state_dict(),
             "scheduler_state_dict": self.scheduler.state_dict() if self.scheduler else None,
             "metrics": metrics,
-            "config": wandb.config.as_dict() if wandb.run else {
+            "config": wandb.config.as_dict()
+            if wandb.run
+            else {
                 "architecture_name": self.architecture_name,
                 "model_config": self.model_config,
                 "dataset_db_path": str(self.dataset_db_path),
@@ -734,11 +761,12 @@ class CaptionBoundaryTrainer:
             torch.save(checkpoint, best_path)
             console.print(f"[green]✓[/green] Saved best checkpoint: {best_path}")
 
-            # Log to W&B
-            wandb.run.summary["best_epoch"] = epoch
-            wandb.run.summary["best_val_f1_macro"] = metrics["val/f1_macro"]
-            wandb.run.summary["best_val_f1_weighted"] = metrics["val/f1_weighted"]
-            wandb.run.summary["best_val_accuracy"] = metrics["val/accuracy"]
+            # Log to W&B (if run is initialized)
+            if wandb.run is not None:
+                wandb.run.summary["best_epoch"] = epoch
+                wandb.run.summary["best_val_f1_macro"] = metrics["val/f1_macro"]
+                wandb.run.summary["best_val_f1_weighted"] = metrics["val/f1_weighted"]
+                wandb.run.summary["best_val_accuracy"] = metrics["val/accuracy"]
 
     def train(self):
         """Run full training loop."""
@@ -749,15 +777,18 @@ class CaptionBoundaryTrainer:
         self._setup_model()
         self._setup_wandb()
 
+        # Assert components are initialized after setup
+        assert self.model is not None
+        assert self.optimizer is not None
+        assert self.train_loader is not None
+        assert self.val_loader is not None
+
         # Evaluate untrained model (epoch 0 baseline)
         console.print("[cyan]Evaluating untrained model (epoch 0)...[/cyan]")
         epoch_0_metrics = self.validate(epoch=0)
 
         # Log epoch 0 to W&B
-        wandb_metrics = {
-            k: v for k, v in epoch_0_metrics.items()
-            if not isinstance(v, (np.ndarray, dict))
-        }
+        wandb_metrics = {k: v for k, v in epoch_0_metrics.items() if not isinstance(v, (np.ndarray, dict))}
         wandb_metrics["epoch"] = 0
         wandb.log(wandb_metrics, step=0)
 
@@ -773,6 +804,9 @@ class CaptionBoundaryTrainer:
         # Track best model (use balanced accuracy for imbalanced datasets)
         best_val_balanced_acc = 0.0
 
+        # Initialize val_metrics with epoch 0 metrics (in case training loop doesn't run)
+        val_metrics = epoch_0_metrics
+
         # Training loop
         for epoch in range(1, self.epochs + 1):
             # Train
@@ -785,9 +819,7 @@ class CaptionBoundaryTrainer:
             all_metrics = {**train_metrics, **val_metrics, "epoch": epoch}
 
             # Remove non-scalar metrics for W&B logging
-            wandb_metrics = {
-                k: v for k, v in all_metrics.items() if not isinstance(v, (np.ndarray, dict))
-            }
+            wandb_metrics = {k: v for k, v in all_metrics.items() if not isinstance(v, (np.ndarray, dict))}
             wandb.log(wandb_metrics, step=epoch)
 
             # Print progress with key metrics
@@ -837,18 +869,21 @@ class CaptionBoundaryTrainer:
         self._save_experiment_to_db(best_val_balanced_acc, val_metrics["val/accuracy"])
 
         # Print DVC tracking instructions
-        console.print("\n" + "="*70)
+        console.print("\n" + "=" * 70)
         console.print("[green]✓ Training complete![/green]")
-        console.print("="*70)
+        console.print("=" * 70)
         console.print(f"Best Val Balanced Accuracy: {best_val_balanced_acc:.4f}")
         console.print(f"Final Val Accuracy: {val_metrics['val/accuracy']:.4f}")
         console.print(f"Checkpoints saved to: {self.checkpoint_dir}")
-        console.print(f"\n[cyan]W&B Run:[/cyan]")
+        console.print("\n[cyan]W&B Run:[/cyan]")
         console.print(f"  ID:  {self.wandb_run_id}")
         console.print(f"  URL: {wandb.run.url if wandb.run else 'N/A'}")
-        console.print(f"\n[yellow]To track with DVC:[/yellow]")
-        console.print(f"  [blue]./scripts/track-experiment.sh {self.checkpoint_dir.parent} {self.wandb_run_id} <model_name>[/blue]")
-        console.print("="*70 + "\n")
+        console.print("\n[yellow]To track with DVC:[/yellow]")
+        console.print(
+            f"  [blue]./scripts/track-experiment.sh {self.checkpoint_dir.parent} "
+            f"{self.wandb_run_id} <model_name>[/blue]"
+        )
+        console.print("=" * 70 + "\n")
 
         # Finish W&B
         wandb.finish()
@@ -866,7 +901,9 @@ class CaptionBoundaryTrainer:
                 import subprocess
 
                 git_commit = subprocess.check_output(["git", "rev-parse", "HEAD"]).decode("ascii").strip()
-                git_branch = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"]).decode("ascii").strip()
+                git_branch = (
+                    subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"]).decode("ascii").strip()
+                )
             except Exception:
                 git_commit = None
                 git_branch = None

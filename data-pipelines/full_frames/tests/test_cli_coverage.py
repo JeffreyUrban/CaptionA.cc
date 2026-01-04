@@ -7,10 +7,10 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Optional
 
 import pytest
-from typer.testing import CliRunner, Result
+from click.testing import Result
+from typer.testing import CliRunner
 
 # Ensure consistent terminal width
 os.environ.setdefault("COLUMNS", "120")
@@ -46,7 +46,7 @@ def get_stderr(result: Result) -> str:
         return result.output
 
 
-def run_command(args: list[str], input_data: Optional[str] = None) -> tuple[int, str, str]:
+def run_command(args: list[str], input_data: str | None = None) -> tuple[int, str, str]:
     """Run full_frames CLI and return (exit_code, stdout, stderr)."""
     result = subprocess.run(
         [sys.executable, "-m", "full_frames"] + args,

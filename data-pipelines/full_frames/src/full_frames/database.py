@@ -5,6 +5,7 @@ Writes frame images to full_frames table for blob storage.
 """
 
 import sqlite3
+from collections.abc import Callable
 from pathlib import Path
 
 from ocr_utils import ensure_ocr_table, write_ocr_result_to_database
@@ -97,7 +98,7 @@ def load_ocr_annotations_from_database(db_path: Path) -> list[dict]:
 def write_frames_to_database(
     frames_dir: Path,
     db_path: Path,
-    progress_callback: callable | None = None,
+    progress_callback: Callable[[int, int], None] | None = None,
     delete_after_write: bool = True,
 ) -> int:
     """Write all frame images from directory to database.
@@ -170,7 +171,7 @@ def process_frames_to_database(
     frames_dir: Path,
     db_path: Path,
     language: str = "zh-Hans",
-    progress_callback: callable | None = None,
+    progress_callback: Callable[[int, int], None] | None = None,
     max_workers: int = 1,
 ) -> int:
     """Process all frames in a directory with OCR and write to database.

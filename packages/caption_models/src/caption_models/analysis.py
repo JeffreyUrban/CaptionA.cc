@@ -67,15 +67,11 @@ def determine_anchor_type(boxes, region_bounds):
     right_threshold = max_right - region_width * 0.2  # Right 20% of region
     right_side_boxes = [box for box in boxes if box[2] >= right_threshold]
     right_side_edges = [box[2] for box in right_side_boxes]
-    right_consistency = (
-        stdev(right_side_edges) if len(right_side_edges) > 1 else float("inf")
-    )
+    right_consistency = stdev(right_side_edges) if len(right_side_edges) > 1 else float("inf")
 
     # For center-aligned: check consistency of ALL box centers
     center_positions = [(box[0] + box[2]) / 2 for box in boxes]
-    center_consistency = (
-        stdev(center_positions) if len(center_positions) > 1 else float("inf")
-    )
+    center_consistency = stdev(center_positions) if len(center_positions) > 1 else float("inf")
 
     # Penalize left/right with too few boxes (likely just noise, not actual anchor)
     min_boxes = len(boxes) * 0.1  # At least 10% of boxes on anchor side
@@ -188,7 +184,7 @@ def analyze_subtitle_region(
             all_boxes.append(box)
 
     if not all_boxes:
-        raise ValueError(f"No OCR boxes found (expected at least some text detection)")
+        raise ValueError("No OCR boxes found (expected at least some text detection)")
 
     # Calculate bounding box of ALL detected text (no position assumptions)
     margin = 10  # pixels
@@ -209,9 +205,7 @@ def analyze_subtitle_region(
     # Filter boxes with top/bottom approximately equal to modes to find "typical" caption boxes
     tolerance = 5  # pixels
     typical_boxes = [
-        box
-        for box in all_boxes
-        if abs(box[1] - top_mode) <= tolerance and abs(box[3] - bottom_mode) <= tolerance
+        box for box in all_boxes if abs(box[1] - top_mode) <= tolerance and abs(box[3] - bottom_mode) <= tolerance
     ]
 
     # Fallback: if no typical boxes found, use all boxes
@@ -223,6 +217,9 @@ def analyze_subtitle_region(
     region_bounds = [crop_left, crop_top, crop_right, crop_bottom]
     anchor_type = determine_anchor_type(typical_boxes, region_bounds)
     anchor_position = get_anchor_position(typical_boxes, anchor_type, crop_left, crop_right)
+
+    # anchor_position should not be None since typical_boxes is guaranteed non-empty
+    assert anchor_position is not None, "anchor_position should not be None with non-empty typical_boxes"
 
     # Calculate statistics from typical boxes
     heights = [box[3] - box[1] for box in typical_boxes]

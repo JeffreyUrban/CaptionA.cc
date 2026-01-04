@@ -2,6 +2,7 @@
 
 import subprocess
 from pathlib import Path
+from typing import Literal, cast
 
 import typer
 from rich.console import Console
@@ -40,58 +41,38 @@ def train(
     dataset_name: str = typer.Argument(..., help="Dataset name (e.g., 'my_dataset')"),
     experiment_name: str = typer.Option(..., "--name", "-n", help="Experiment name for W&B"),
     architecture: str = typer.Option(
-        "triple_backbone_resnet50",
-        "--architecture", "-a",
-        help="Model architecture from registry"
+        "triple_backbone_resnet50", "--architecture", "-a", help="Model architecture from registry"
     ),
-    pretrained: bool = typer.Option(
-        True,
-        "--pretrained/--no-pretrained",
-        help="Use ImageNet pretrained weights"
-    ),
+    pretrained: bool = typer.Option(True, "--pretrained/--no-pretrained", help="Use ImageNet pretrained weights"),
     epochs: int = typer.Option(50, "--epochs", "-e", help="Number of training epochs"),
     batch_size: int = typer.Option(32, "--batch-size", "-b", help="Training batch size"),
     lr_features: float = typer.Option(1e-3, "--lr-features", help="Learning rate for feature extractor"),
     lr_classifier: float = typer.Option(1e-2, "--lr-classifier", help="Learning rate for classifier head"),
     transform_strategy: str = typer.Option(
-        "mirror_tile",
-        "--transform",
-        help="Transform strategy: 'crop', 'mirror_tile', or 'adaptive'"
+        "mirror_tile", "--transform", help="Transform strategy: 'crop', 'mirror_tile', or 'adaptive'"
     ),
     ocr_viz_variant: str = typer.Option(
-        "boundaries",
-        "--ocr-viz",
-        help="OCR visualization variant: 'boundaries', 'centers', 'both', or '3d_channels'"
+        "boundaries", "--ocr-viz", help="OCR visualization variant: 'boundaries', 'centers', 'both', or '3d_channels'"
     ),
-    device: str = typer.Option(
-        None,
-        "--device",
-        help="Device: 'cuda', 'mps', 'cpu', or None for auto-detect"
-    ),
-    wandb_project: str = typer.Option(
-        "caption-boundary-detection",
-        "--wandb-project",
-        help="W&B project name"
-    ),
+    device: str = typer.Option(None, "--device", help="Device: 'cuda', 'mps', 'cpu', or None for auto-detect"),
+    wandb_project: str = typer.Option("caption-boundary-detection", "--wandb-project", help="W&B project name"),
     checkpoint_dir: Path = typer.Option(
         None,
         "--checkpoint-dir",
-        help="Directory to save checkpoints (default: {project_root}/local/models/caption_boundaries/experiments)"
+        help="Directory to save checkpoints (default: {project_root}/local/models/caption_boundaries/experiments)",
     ),
     balanced_sampling: bool = typer.Option(
         True,
         "--balanced-sampling/--no-balanced-sampling",
-        help="Use balanced sampling to undersample majority classes per epoch"
+        help="Use balanced sampling to undersample majority classes per epoch",
     ),
     max_samples_per_class: int = typer.Option(
         None,
         "--max-samples",
-        help="Max samples per class per epoch (recommended for scaling). Overrides --sampling-ratio."
+        help="Max samples per class per epoch (recommended for scaling). Overrides --sampling-ratio.",
     ),
     sampling_ratio: float = typer.Option(
-        3.0,
-        "--sampling-ratio",
-        help="Max ratio of majority to minority class (legacy, for backward compat)"
+        3.0, "--sampling-ratio", help="Max ratio of majority to minority class (legacy, for backward compat)"
     ),
 ):
     """Train caption boundary detection model with W&B tracking.
@@ -135,7 +116,7 @@ def train(
     except ValueError:
         console.print(f"[red]✗[/red] Invalid transform strategy: {transform_strategy}")
         console.print("Valid options: crop, mirror_tile, adaptive")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from None
 
     # Validate OCR viz variant
     valid_viz = ["boundaries", "centers", "both", "3d_channels"]
@@ -171,8 +152,9 @@ def train(
     except Exception as e:
         console.print(f"[red]✗ Training failed:[/red] {e}")
         import traceback
+
         traceback.print_exc()
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from e
 
 
 @app.command()
@@ -188,10 +170,12 @@ def infer(
 
     Examples:
         # Basic inference
-        caption_boundaries infer local/data/61/61c3*/annotations.db --checkpoint local/models/caption_boundaries/experiments/production_baseline/checkpoints/best.pt
+        caption_boundaries infer local/data/61/61c3*/annotations.db \\
+            --checkpoint local/models/caption_boundaries/experiments/production_baseline/checkpoints/best.pt
 
         # With quality checks
-        caption_boundaries infer local/data/61/61c3*/annotations.db --checkpoint best.pt --confidence 0.9 --ocr-min 0.8
+        caption_boundaries infer local/data/61/61c3*/annotations.db \\
+            --checkpoint best.pt --confidence 0.9 --ocr-min 0.8
 
         # Save results to file
         caption_boundaries infer video.db --checkpoint best.pt --output results.json
@@ -218,33 +202,33 @@ def infer(
         console.print(f"[yellow]⚠[/yellow] Flagged {results['num_flagged']} for quality issues")
 
         # Show boundaries
-        if results['boundaries']:
+        if results["boundaries"]:
             console.print("\n[cyan]Predicted Boundaries:[/cyan]")
-            for i, boundary in enumerate(results['boundaries'], 1):
+            for i, boundary in enumerate(results["boundaries"], 1):
                 console.print(
                     f"  {i}. Frames {boundary['frame1_index']} → {boundary['frame2_index']}: "
                     f"{boundary['predicted_label']} (conf={boundary['confidence']:.3f})"
                 )
 
         # Show flagged boundaries
-        if results['quality']['flagged_boundaries']:
+        if results["quality"]["flagged_boundaries"]:
             console.print("\n[yellow]Flagged Boundaries:[/yellow]")
-            for boundary in results['quality']['flagged_boundaries']:
+            for boundary in results["quality"]["flagged_boundaries"]:
                 console.print(
-                    f"  Frames {boundary['frame1_index']} → {boundary['frame2_index']}: "
-                    f"{', '.join(boundary['flags'])}"
+                    f"  Frames {boundary['frame1_index']} → {boundary['frame2_index']}: {', '.join(boundary['flags'])}"
                 )
 
         # Save to file if requested
         if output_json:
             import json
-            with open(output_json, 'w') as f:
+
+            with open(output_json, "w") as f:
                 # Convert to JSON-serializable format
                 json_results = {
-                    'boundaries': results['boundaries'],
-                    'quality_stats': results['quality']['quality_stats'],
-                    'num_boundaries': results['num_boundaries'],
-                    'num_flagged': results['num_flagged'],
+                    "boundaries": results["boundaries"],
+                    "quality_stats": results["quality"]["quality_stats"],
+                    "num_boundaries": results["num_boundaries"],
+                    "num_flagged": results["num_flagged"],
                 }
                 json.dump(json_results, f, indent=2)
             console.print(f"\n[green]✓[/green] Results saved to {output_json}")
@@ -252,8 +236,9 @@ def infer(
     except Exception as e:
         console.print(f"[red]✗ Inference failed:[/red] {e}")
         import traceback
+
         traceback.print_exc()
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from e
 
 
 @app.command()
@@ -268,16 +253,17 @@ def analyze(
         # Analyze predictions from file
         caption_boundaries analyze predictions.json --video-db local/data/61/61c3*/annotations.db
     """
-    from caption_boundaries.inference.quality_checks import run_quality_checks
     import json
+
+    from caption_boundaries.inference.quality_checks import run_quality_checks
 
     try:
         console.print(f"\n[cyan]Analyzing predictions from:[/cyan] {predictions_json}")
 
         # Load predictions
-        with open(predictions_json, 'r') as f:
+        with open(predictions_json) as f:
             data = json.load(f)
-            boundaries = data.get('boundaries', [])
+            boundaries = data.get("boundaries", [])
 
         if not boundaries:
             console.print("[yellow]⚠[/yellow] No boundaries found in file")
@@ -291,48 +277,32 @@ def analyze(
         )
 
         # Display detailed results
-        console.print(f"\n[cyan]Quality Analysis Results:[/cyan]")
-        console.print(f"  Pass rate: {quality_results['pass_rate']*100:.1f}%")
+        console.print("\n[cyan]Quality Analysis Results:[/cyan]")
+        console.print(f"  Pass rate: {quality_results['pass_rate'] * 100:.1f}%")
 
-        if quality_results['flagged_boundaries']:
-            console.print(f"\n[yellow]Detailed Flags:[/yellow]")
-            for boundary in quality_results['flagged_boundaries']:
+        if quality_results["flagged_boundaries"]:
+            console.print("\n[yellow]Detailed Flags:[/yellow]")
+            for boundary in quality_results["flagged_boundaries"]:
                 console.print(f"\n  Frames {boundary['frame1_index']} → {boundary['frame2_index']}:")
-                for flag in boundary['flags']:
+                for flag in boundary["flags"]:
                     console.print(f"    • {flag}")
 
     except Exception as e:
         console.print(f"[red]✗ Analysis failed:[/red] {e}")
         import traceback
+
         traceback.print_exc()
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from e
 
 
 @app.command()
 def create_dataset(
     name: str = typer.Argument(..., help="Dataset name (will be used as database filename)"),
     video_dirs: list[Path] = typer.Argument(..., help="Paths to video directories (glob patterns supported)"),
-    split_strategy: str = typer.Option(
-        "random",
-        "--split",
-        help="Split strategy: 'random' or 'show_based'"
-    ),
-    train_ratio: float = typer.Option(
-        0.8,
-        "--train-ratio",
-        help="Fraction of data for training (default: 0.8)"
-    ),
-    random_seed: int = typer.Option(
-        42,
-        "--seed",
-        help="Random seed for reproducibility"
-    ),
-    description: str = typer.Option(
-        None,
-        "--description",
-        "-d",
-        help="Dataset description"
-    ),
+    split_strategy: str = typer.Option("random", "--split", help="Split strategy: 'random' or 'show_based'"),
+    train_ratio: float = typer.Option(0.8, "--train-ratio", help="Fraction of data for training (default: 0.8)"),
+    random_seed: int = typer.Option(42, "--seed", help="Random seed for reproducibility"),
+    description: str = typer.Option(None, "--description", "-d", help="Dataset description"),
 ):
     """Create training dataset from annotated videos.
 
@@ -354,9 +324,10 @@ def create_dataset(
     # Expand glob patterns and find annotations.db files
     video_db_paths = []
     for pattern in video_dirs:
-        if '*' in str(pattern):
+        if "*" in str(pattern):
             # Glob pattern
             import glob
+
             matches = glob.glob(str(pattern))
             for match in matches:
                 db_path = Path(match) / "annotations.db"
@@ -376,11 +347,17 @@ def create_dataset(
 
     console.print(f"Found {len(video_db_paths)} video databases")
 
+    # Validate split strategy
+    if split_strategy not in ("random", "show_based"):
+        console.print(f"[red]✗[/red] Invalid split strategy: {split_strategy}")
+        console.print("Valid options: random, show_based")
+        raise typer.Exit(code=1)
+
     try:
-        dataset_db_path = create_training_dataset(
+        create_training_dataset(
             name=name,
             video_db_paths=video_db_paths,
-            split_strategy=split_strategy,
+            split_strategy=cast(Literal["random", "show_based"], split_strategy),
             train_split_ratio=train_ratio,
             random_seed=random_seed,
             description=description,
@@ -390,13 +367,13 @@ def create_dataset(
 
     except Exception as e:
         console.print(f"[red]✗ Failed to create dataset:[/red] {e}")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from e
 
 
 @app.command()
 def list_models():
     """List available model architectures."""
-    from caption_boundaries.models import get_model_info, list_architectures, create_model_from_registry
+    from caption_boundaries.models import create_model, get_model_info, list_architectures
 
     console.print("[cyan]Available Model Architectures:[/cyan]\n")
 
@@ -404,12 +381,23 @@ def list_models():
         info = get_model_info(arch_name)
 
         # Create model to get parameter counts
-        model = create_model_from_registry(arch_name, device="cpu", pretrained=False)
-        total_params = model.get_num_total_params()
-        trainable_params = model.get_num_trainable_params()
+        model = create_model(arch_name, device="cpu", pretrained=False)
+        # Use getattr to access custom model methods (not on nn.Module base)
+        get_total = getattr(model, "get_num_total_params", None)
+        get_trainable = getattr(model, "get_num_trainable_params", None)
+        # Fallback to standard parameter counting if custom methods not available
+        if callable(get_total):
+            total_params: int = get_total()  # type: ignore[assignment]
+        else:
+            total_params = sum(p.numel() for p in model.parameters())
+        if callable(get_trainable):
+            trainable_params: int = get_trainable()  # type: ignore[assignment]
+        else:
+            trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
 
         console.print(f"[green]{arch_name}[/green]")
-        console.print(f"  Parameters: {total_params:,} total, {trainable_params:,} trainable ({trainable_params/total_params*100:.1f}%)")
+        trainable_pct = trainable_params / total_params * 100 if total_params > 0 else 0
+        console.print(f"  Parameters: {total_params:,} total, {trainable_params:,} trainable ({trainable_pct:.1f}%)")
         console.print(f"  Module: {info['module']}")
 
         if info["docstring"]:
@@ -424,6 +412,7 @@ def list_models():
 def version():
     """Show version information."""
     from caption_boundaries import __version__
+
     console.print(f"caption_boundaries version: {__version__}")
 
 

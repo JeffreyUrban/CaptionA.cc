@@ -5,12 +5,12 @@ Run OCR on frames and return simple results
 Takes frame indices as input, runs OCR, returns JSON with text extracted.
 """
 
-import sys
 import json
+import sys
 from pathlib import Path
 
 # Add ocr_utils to path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / 'packages' / 'ocr_utils' / 'src'))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "packages" / "ocr_utils" / "src"))
 
 from ocr_utils.processing import process_frame_ocr_with_retry
 
@@ -18,17 +18,17 @@ from ocr_utils.processing import process_frame_ocr_with_retry
 def extract_text_from_annotations(annotations):
     """Extract text from OCR annotations array."""
     if not annotations:
-        return ''
+        return ""
 
     texts = []
     for ann in annotations:
         if isinstance(ann, (list, tuple)) and len(ann) > 0:
             texts.append(ann[0])  # First element is text
-        elif isinstance(ann, dict) and 'text' in ann:
-            texts.append(ann['text'])
+        elif isinstance(ann, dict) and "text" in ann:
+            texts.append(ann["text"])
 
     # Join without separator for continuous text (e.g., Chinese characters)
-    return ''.join(texts)
+    return "".join(texts)
 
 
 def calculate_average_confidence(annotations):
@@ -40,8 +40,8 @@ def calculate_average_confidence(annotations):
     for ann in annotations:
         if isinstance(ann, (list, tuple)) and len(ann) > 1:
             confidences.append(ann[1])  # Second element is confidence
-        elif isinstance(ann, dict) and 'confidence' in ann:
-            confidences.append(ann['confidence'])
+        elif isinstance(ann, dict) and "confidence" in ann:
+            confidences.append(ann["confidence"])
 
     if not confidences:
         return 1.0
@@ -51,30 +51,26 @@ def calculate_average_confidence(annotations):
 
 def main():
     # Check for single image mode
-    if len(sys.argv) >= 3 and sys.argv[1] == '--single':
+    if len(sys.argv) >= 3 and sys.argv[1] == "--single":
         image_path = Path(sys.argv[2])
-        language = sys.argv[3] if len(sys.argv) > 3 else 'zh-Hans'
+        language = sys.argv[3] if len(sys.argv) > 3 else "zh-Hans"
 
         try:
-            ocr_result = process_frame_ocr_with_retry(
-                image_path,
-                language=language,
-                timeout=10,
-                max_retries=3
-            )
+            ocr_result = process_frame_ocr_with_retry(image_path, language=language, timeout=10, max_retries=3)
 
-            annotations = ocr_result.get('annotations', [])
+            annotations = ocr_result.get("annotations", [])
             text = extract_text_from_annotations(annotations)
 
             # Output simple result for single image
-            print(json.dumps({
-                'text': text,
-                'framework': ocr_result.get('framework', 'unknown'),
-                'language': language
-            }, ensure_ascii=False))
+            print(
+                json.dumps(
+                    {"text": text, "framework": ocr_result.get("framework", "unknown"), "language": language},
+                    ensure_ascii=False,
+                )
+            )
 
         except Exception as e:
-            print(json.dumps({'error': str(e)}), file=sys.stderr)
+            print(json.dumps({"error": str(e)}), file=sys.stderr)
             sys.exit(1)
         return
 
@@ -94,36 +90,35 @@ def main():
         frame_path = frames_dir / f"frame_{str(frame_index).zfill(10)}.jpg"
 
         try:
-            ocr_result = process_frame_ocr_with_retry(
-                frame_path,
-                language=language,
-                timeout=10,
-                max_retries=3
-            )
+            ocr_result = process_frame_ocr_with_retry(frame_path, language=language, timeout=10, max_retries=3)
 
-            annotations = ocr_result.get('annotations', [])
+            annotations = ocr_result.get("annotations", [])
             text = extract_text_from_annotations(annotations)
             confidence = calculate_average_confidence(annotations)
 
-            results.append({
-                'frame_index': frame_index,
-                'ocr_text': text,
-                'ocr_annotations': annotations,
-                'ocr_confidence': confidence
-            })
+            results.append(
+                {
+                    "frame_index": frame_index,
+                    "ocr_text": text,
+                    "ocr_annotations": annotations,
+                    "ocr_confidence": confidence,
+                }
+            )
         except Exception as e:
             # Return empty result on error
-            results.append({
-                'frame_index': frame_index,
-                'ocr_text': '',
-                'ocr_annotations': [],
-                'ocr_confidence': 0.0,
-                'error': str(e)
-            })
+            results.append(
+                {
+                    "frame_index": frame_index,
+                    "ocr_text": "",
+                    "ocr_annotations": [],
+                    "ocr_confidence": 0.0,
+                    "error": str(e),
+                }
+            )
 
     # Output JSON
     print(json.dumps(results, ensure_ascii=False))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

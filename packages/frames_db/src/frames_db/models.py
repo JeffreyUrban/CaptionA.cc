@@ -50,13 +50,19 @@ class FrameData:
         Returns:
             NumPy array in BGR format (OpenCV's default)
 
+        Raises:
+            ValueError: If image data cannot be decoded
+
         Example:
             >>> frame = get_frame_from_db(db_path, 100)
             >>> img = frame.to_cv2_image()
             >>> cv2.imshow('Frame', img)
         """
         nparr = np.frombuffer(self.image_data, np.uint8)
-        return cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        if img is None:
+            raise ValueError(f"Failed to decode image data for frame {self.frame_index}")
+        return img
 
     def to_temp_file(self, suffix: str = ".jpg") -> Path:
         """Save frame to temporary file.

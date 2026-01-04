@@ -125,7 +125,7 @@ def run_cookiecutter(template_config: dict[str, Any], project_name: str, target_
     # If not found by project_name, look for any new directory (most recently created)
     if not generated_dirs:
         # Find most recently created directory
-        all_dirs = [d for d in target_dir.iterdir() if d.is_dir() and not d.name.startswith('.')]
+        all_dirs = [d for d in target_dir.iterdir() if d.is_dir() and not d.name.startswith(".")]
         if all_dirs:
             # Sort by modification time, get most recent
             generated_dirs = sorted(all_dirs, key=lambda x: x.stat().st_mtime, reverse=True)[:1]
@@ -150,9 +150,9 @@ def run_cookiecutter(template_config: dict[str, Any], project_name: str, target_
 
 def clone_github_template(template_config: dict[str, Any], project_name: str, target_dir: Path) -> Path:
     """Clone a GitHub template repository directly (non-cookiecutter)"""
+    import re
     import shutil
     import tempfile
-    import re
 
     repo = template_config["repo"]
     version = template_config.get("version", "main")
@@ -160,7 +160,7 @@ def clone_github_template(template_config: dict[str, Any], project_name: str, ta
     # Extract template repo name from URL for fallback replacement
     # e.g., "https://github.com/user/web-react-router-template" -> "web-react-router-template"
     template_repo_name = None
-    repo_match = re.search(r'/([^/]+?)(?:\.git)?$', repo)
+    repo_match = re.search(r"/([^/]+?)(?:\.git)?$", repo)
     if repo_match:
         template_repo_name = repo_match.group(1)
 
@@ -183,7 +183,7 @@ def clone_github_template(template_config: dict[str, Any], project_name: str, ta
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp_path = Path(tmpdir) / "template"
 
-        print(f"  Cloning repository...")
+        print("  Cloning repository...")
         try:
             # Clone the specific branch
             subprocess.run(
@@ -207,7 +207,7 @@ def clone_github_template(template_config: dict[str, Any], project_name: str, ta
         customizations["project_name"] = project_name
         customizations["project_slug"] = project_slug
 
-        print(f"  Applying customizations...")
+        print("  Applying customizations...")
         apply_customizations(tmp_path, customizations, template_repo_name=template_repo_name)
 
         # Copy to final location
@@ -221,7 +221,9 @@ def clone_github_template(template_config: dict[str, Any], project_name: str, ta
     return final_path
 
 
-def apply_customizations(project_path: Path, customizations: dict[str, str], template_repo_name: str | None = None) -> None:
+def apply_customizations(
+    project_path: Path, customizations: dict[str, str], template_repo_name: str | None = None
+) -> None:
     """
     Apply text replacements to customize a GitHub template.
 
@@ -232,6 +234,7 @@ def apply_customizations(project_path: Path, customizations: dict[str, str], tem
     This allows templates to remain deployable while still being customizable.
     """
     import json
+
     import yaml
 
     # Check for .template-config.yml (our convention for controlled templates)
@@ -274,9 +277,13 @@ def apply_customizations(project_path: Path, customizations: dict[str, str], tem
 
                         # Replace placeholder with actual value
                         if "{project_slug}" in replace_with:
-                            replace_value = replace_with.replace("{project_slug}", customizations.get("project_slug", ""))
+                            replace_value = replace_with.replace(
+                                "{project_slug}", customizations.get("project_slug", "")
+                            )
                         elif "{project_name}" in replace_with:
-                            replace_value = replace_with.replace("{project_name}", customizations.get("project_name", ""))
+                            replace_value = replace_with.replace(
+                                "{project_name}", customizations.get("project_name", "")
+                            )
                         else:
                             replace_value = customizations.get(replace_with, replace_with)
 
@@ -435,12 +442,12 @@ def update_template_run_configs(project_path: Path, monorepo_root: Path) -> None
             # Update configuration name to use project name
             old_name = config.get("name", "")
             # Replace template placeholders with actual project name
-            new_name = re.sub(r'\bcli_template\b', project_name, old_name, flags=re.IGNORECASE)
+            new_name = re.sub(r"\bcli_template\b", project_name, old_name, flags=re.IGNORECASE)
             config.set("name", new_name)
 
             # Update working directory if present
             for option in config.findall(".//option[@name='WORKING_DIRECTORY']"):
-                old_value = option.get("value", "")
+                option.get("value", "")
                 # Update to use monorepo project path
                 new_value = f"$PROJECT_DIR$/{project_rel_path}"
                 option.set("value", new_value)
@@ -570,7 +577,6 @@ def transform_cookiecutter_pyproject(project_path: Path, monorepo_root: Path, pr
         monorepo_root: Path to the monorepo root
         project_name: The desired project name (from command line)
     """
-    import tomllib
     import os
     import re
 
@@ -602,11 +608,7 @@ def transform_cookiecutter_pyproject(project_path: Path, monorepo_root: Path, pr
 
     # 0. Replace project name if it's still the template default
     if re.search(r'name\s*=\s*["\']python-boilerplate["\']', content):
-        content = re.sub(
-            r'(name\s*=\s*["\'])python-boilerplate(["\'])',
-            rf'\1{project_name}\2',
-            content
-        )
+        content = re.sub(r'(name\s*=\s*["\'])python-boilerplate(["\'])', rf"\1{project_name}\2", content)
         print(f"    Updated project name to '{project_name}'")
 
     # 1. Add build-system if not present or if it doesn't have hatch-vcs
@@ -623,12 +625,8 @@ build-backend = "hatchling.build"
     elif "hatch-vcs" not in content:
         # Replace existing build-system
         import re
-        content = re.sub(
-            r'\[build-system\][^\[]*',
-            build_system,
-            content,
-            count=1
-        )
+
+        content = re.sub(r"\[build-system\][^\[]*", build_system, content, count=1)
         print("    Updated build system to use hatch-vcs")
 
     # 2. Make version dynamic and remove license
@@ -636,7 +634,7 @@ build-backend = "hatchling.build"
 
     # Remove explicit version line
     if re.search(r'^version\s*=\s*["\']', content, re.MULTILINE):
-        content = re.sub(r'^version\s*=\s*["\'][^"\']*["\']\s*\n', '', content, flags=re.MULTILINE)
+        content = re.sub(r'^version\s*=\s*["\'][^"\']*["\']\s*\n', "", content, flags=re.MULTILINE)
         print("    Removed explicit version (using dynamic versioning)")
 
     # Add dynamic = ["version"] after name if not present
@@ -644,31 +642,23 @@ build-backend = "hatchling.build"
         content = re.sub(
             r'(name\s*=\s*["\'][^"\']*["\'])\s*\n',
             r'\1\n# Version is automatically determined from git tags via hatch-vcs\ndynamic = ["version"]\n',
-            content
+            content,
         )
         print("    Added dynamic version configuration")
 
     # Remove license field
-    if re.search(r'^license\s*=', content, re.MULTILINE):
-        content = re.sub(r'^license\s*=\s*\{[^}]*\}\s*\n', '', content, flags=re.MULTILINE)
-        content = re.sub(r'^license\s*=\s*["\'][^"\']*["\']\s*\n', '', content, flags=re.MULTILINE)
+    if re.search(r"^license\s*=", content, re.MULTILINE):
+        content = re.sub(r"^license\s*=\s*\{[^}]*\}\s*\n", "", content, flags=re.MULTILINE)
+        content = re.sub(r'^license\s*=\s*["\'][^"\']*["\']\s*\n', "", content, flags=re.MULTILINE)
         print("    Removed license field (using root LICENSE.md)")
 
     # 3. Update requires-python to 3.14+
-    content = re.sub(
-        r'requires-python\s*=\s*["\'][^"\']*["\']',
-        'requires-python = ">=3.14"',
-        content
-    )
+    content = re.sub(r'requires-python\s*=\s*["\'][^"\']*["\']', 'requires-python = ">=3.14"', content)
 
     # 4. Update dependencies to include rich
     if "dependencies" in content and '"rich' not in content and "'rich" not in content:
         # Add rich to dependencies array
-        content = re.sub(
-            r'(dependencies\s*=\s*\[\s*\n\s*["\']typer[^"\']*["\'])',
-            r'\1,\n    "rich>=13.0.0"',
-            content
-        )
+        content = re.sub(r'(dependencies\s*=\s*\[\s*\n\s*["\']typer[^"\']*["\'])', r'\1,\n    "rich>=13.0.0"', content)
         print("    Added rich to dependencies")
 
     # 5. Replace [project.optional-dependencies] test group with dev and docs groups
@@ -693,22 +683,13 @@ docs = [
         # Match the section header and everything until the next section (starting with [)
         # This matches the entire [project.optional-dependencies] section including all subsections
         content = re.sub(
-            r'\[project\.optional-dependencies\].*?(?=\n\[|\Z)',
-            opt_deps_replacement,
-            content,
-            flags=re.DOTALL,
-            count=1
+            r"\[project\.optional-dependencies\].*?(?=\n\[|\Z)", opt_deps_replacement, content, flags=re.DOTALL, count=1
         )
         print("    Updated optional-dependencies (dev, docs groups)")
 
     # 6. Remove [tool.ty] section if present (not used in our monorepo)
     if "[tool.ty]" in content:
-        content = re.sub(
-            r'\[tool\.ty\][^\[]*',
-            '',
-            content,
-            count=1
-        )
+        content = re.sub(r"\[tool\.ty\][^\[]*", "", content, count=1)
         print("    Removed [tool.ty] section")
 
     # 7. Add/update tool configurations before [tool.uv] if present
@@ -799,7 +780,7 @@ version-file = "{source_path}/_version.py"
             # Remove all [tool.*] sections except [tool.uv]
             before_tools = content.split("[tool.")[0]
             # Extract [tool.uv] section and everything after
-            tool_uv_match = re.search(r'(\[tool\.uv\].*)', content, re.DOTALL)
+            tool_uv_match = re.search(r"(\[tool\.uv\].*)", content, re.DOTALL)
             if tool_uv_match:
                 tool_uv_section = tool_uv_match.group(1)
                 content = before_tools + tool_configs + "\n" + tool_uv_section
@@ -847,8 +828,8 @@ def cleanup_cli_template_for_monorepo(project_path: Path) -> None:
     # Files that don't apply to monorepo data pipelines
     standalone_files = [
         "HOMEBREW_AUTOMATION_SETUP.md",  # Homebrew tap setup
-        ".readthedocs.yaml",              # ReadTheDocs config
-        "scripts/configure-github.sh",    # Standalone GitHub setup
+        ".readthedocs.yaml",  # ReadTheDocs config
+        "scripts/configure-github.sh",  # Standalone GitHub setup
     ]
 
     removed = []
@@ -894,16 +875,12 @@ def cleanup_cli_template_for_monorepo(project_path: Path) -> None:
         print(f"    Removed monorepo-unnecessary: {', '.join(removed_items)}")
 
 
-def get_author_from_git_config() -> str:
+def get_author_from_git_config() -> str | None:
     """Get author name from git config, fallback to template default."""
     import subprocess
+
     try:
-        result = subprocess.run(
-            ["git", "config", "user.name"],
-            capture_output=True,
-            text=True,
-            check=True
-        )
+        result = subprocess.run(["git", "config", "user.name"], capture_output=True, text=True, check=True)
         author = result.stdout.strip()
         if author:
             return author
@@ -942,12 +919,13 @@ def validate_pyproject_toml(project_path: Path) -> bool:
     Returns True if valid, prints error and returns False if invalid.
     This prevents broken projects from entering the workspace.
     """
+    import tomllib
+
     pyproject_file = project_path / "pyproject.toml"
     if not pyproject_file.exists():
         return True  # No pyproject.toml, nothing to validate
 
     try:
-        import tomllib
         with open(pyproject_file, "rb") as f:
             tomllib.load(f)
         print("  ✓ pyproject.toml validation passed")
@@ -987,43 +965,33 @@ def strip_monorepo_irrelevant_fields(project_path: Path, monorepo_root: Path) ->
     fields_stripped = []
 
     # 1. Remove requires-python (inherited from workspace)
-    if re.search(r'requires-python\s*=', content):
-        content = re.sub(r'requires-python\s*=\s*["\'][^"\']*["\']\s*\n', '', content)
+    if re.search(r"requires-python\s*=", content):
+        content = re.sub(r'requires-python\s*=\s*["\'][^"\']*["\']\s*\n', "", content)
         fields_stripped.append("requires-python")
 
     # 2. Remove keywords array
-    if re.search(r'keywords\s*=\s*\[', content):
-        content = re.sub(r'keywords\s*=\s*\[.*?\]\s*\n', '', content, flags=re.DOTALL)
+    if re.search(r"keywords\s*=\s*\[", content):
+        content = re.sub(r"keywords\s*=\s*\[.*?\]\s*\n", "", content, flags=re.DOTALL)
         fields_stripped.append("keywords")
 
     # 3. Remove classifiers array
-    if re.search(r'classifiers\s*=\s*\[', content):
-        content = re.sub(r'classifiers\s*=\s*\[.*?\]\s*\n', '', content, flags=re.DOTALL)
+    if re.search(r"classifiers\s*=\s*\[", content):
+        content = re.sub(r"classifiers\s*=\s*\[.*?\]\s*\n", "", content, flags=re.DOTALL)
         fields_stripped.append("classifiers")
 
     # 4. Remove authors array
-    if re.search(r'authors\s*=\s*\[', content):
-        content = re.sub(r'authors\s*=\s*\[.*?\]\s*\n', '', content, flags=re.DOTALL)
+    if re.search(r"authors\s*=\s*\[", content):
+        content = re.sub(r"authors\s*=\s*\[.*?\]\s*\n", "", content, flags=re.DOTALL)
         fields_stripped.append("authors")
 
     # 5. Remove [project.urls] section
-    if '[project.urls]' in content:
-        content = re.sub(
-            r'\[project\.urls\].*?(?=\n\[|\Z)',
-            '',
-            content,
-            flags=re.DOTALL
-        )
+    if "[project.urls]" in content:
+        content = re.sub(r"\[project\.urls\].*?(?=\n\[|\Z)", "", content, flags=re.DOTALL)
         fields_stripped.append("[project.urls]")
 
     # 6. Remove [project.optional-dependencies] section (workspace provides dev/docs)
-    if '[project.optional-dependencies]' in content:
-        content = re.sub(
-            r'\[project\.optional-dependencies\].*?(?=\n\[|\Z)',
-            '',
-            content,
-            flags=re.DOTALL
-        )
+    if "[project.optional-dependencies]" in content:
+        content = re.sub(r"\[project\.optional-dependencies\].*?(?=\n\[|\Z)", "", content, flags=re.DOTALL)
         fields_stripped.append("[project.optional-dependencies]")
 
     if fields_stripped:
@@ -1059,13 +1027,13 @@ def apply_cli_template_transformations(project_path: Path, monorepo_root: Path) 
     # 1. Remove duplicate keys within [project.optional-dependencies]
     # Our cli-template sometimes generates duplicate docs/dev groups
     def remove_duplicate_keys_in_section(text):
-        section_match = re.search(r'\[project\.optional-dependencies\](.*?)(?=\n\[|\Z)', text, re.DOTALL)
+        section_match = re.search(r"\[project\.optional-dependencies\](.*?)(?=\n\[|\Z)", text, re.DOTALL)
         if not section_match:
             return text, False
 
         section_content = section_match.group(1)
         section_start = section_match.start(1)
-        key_pattern = r'^(\w+)\s*=\s*\[(.*?)\]'
+        key_pattern = r"^(\w+)\s*=\s*\[(.*?)\]"
         keys_found = {}
         keys_to_remove = []
 
@@ -1082,7 +1050,7 @@ def apply_cli_template_transformations(project_path: Path, monorepo_root: Path) 
         for match in reversed(keys_to_remove):
             start = section_start + match.start()
             end = section_start + match.end()
-            text = text[:start] + text[end + 1 if end < len(text) and text[end] == '\n' else end:]
+            text = text[:start] + text[end + 1 if end < len(text) and text[end] == "\n" else end :]
 
         return text, True
 
@@ -1093,6 +1061,7 @@ def apply_cli_template_transformations(project_path: Path, monorepo_root: Path) 
     # 2. Replace Python version placeholders (cli-template specific)
     if "PYTHON_VERSION_MIN_KICKOFF" in content or "PYTHON_VERSION_MAX_KICKOFF" in content:
         import datetime
+
         current_year = datetime.datetime.now().year
 
         if current_year >= 2025:
@@ -1104,14 +1073,16 @@ def apply_cli_template_transformations(project_path: Path, monorepo_root: Path) 
             intermediate_versions = ["3.9", "3.10", "3.11", "3.12"]
             max_version = "3.13"
 
-        content = content.replace('PYTHON_VERSION_MIN_KICKOFF', min_version)
-        content = content.replace('PYTHON_VERSION_MAX_KICKOFF', max_version)
+        content = content.replace("PYTHON_VERSION_MIN_KICKOFF", min_version)
+        content = content.replace("PYTHON_VERSION_MAX_KICKOFF", max_version)
 
         for i, version in enumerate(intermediate_versions, start=1):
-            placeholder = f'PYTHON_VERSION_INTERMEDIATE_{i}_KICKOFF'
+            placeholder = f"PYTHON_VERSION_INTERMEDIATE_{i}_KICKOFF"
             content = content.replace(placeholder, version)
 
-        content = re.sub(r'    "Programming Language :: Python :: PYTHON_VERSION_INTERMEDIATE_\d+_KICKOFF",\n', '', content)
+        content = re.sub(
+            r'    "Programming Language :: Python :: PYTHON_VERSION_INTERMEDIATE_\d+_KICKOFF",\n', "", content
+        )
         transformations_applied.append(f"Python versions ({min_version}-{max_version})")
 
     # 3. Replace author placeholder with git config (cli-template specific)
@@ -1382,7 +1353,10 @@ def integrate_project(project_path: Path, monorepo_root: Path, project_name: str
                                     f"\\1 --config {project_rel_path}/fly.toml\\2",
                                     content,
                                 )
-                                print(f"    Added '--config {project_rel_path}/fly.toml' to flyctl deploy in {workflow_file.name}")
+                                print(
+                                    f"    Added '--config {project_rel_path}/fly.toml' "
+                                    f"to flyctl deploy in {workflow_file.name}"
+                                )
 
                 # Write to monorepo workflows with project prefix
                 new_name = f"{project_path.name}-{workflow_file.name}"

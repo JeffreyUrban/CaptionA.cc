@@ -57,16 +57,15 @@ TODO: Implementation Requirements
 """
 
 import json
-import sqlite3
 from pathlib import Path
 from typing import Any
 
 from prefect import flow, task
 
-
 # =============================================================================
 # TODO: Base Model Storage
 # =============================================================================
+
 
 def get_base_model_path() -> Path:
     """
@@ -126,6 +125,7 @@ def save_base_model(model: dict[str, Any]) -> None:
 # =============================================================================
 # TODO: Base Model Training
 # =============================================================================
+
 
 @task(
     name="train-base-model",
@@ -199,12 +199,13 @@ def update_base_model_storage(base_model: dict[str, Any]) -> None:
     """
     print(f"[UpdateBaseModel] Saving base model: {base_model['model_version']}")
     save_base_model(base_model)
-    print(f"[UpdateBaseModel] Base model saved successfully")
+    print("[UpdateBaseModel] Base model saved successfully")
 
 
 # =============================================================================
 # TODO: Video Discovery
 # =============================================================================
+
 
 @task(
     name="find-videos-with-models",
@@ -239,6 +240,7 @@ def find_videos_with_models(data_dir: str) -> list[dict[str, str]]:
 # =============================================================================
 # Main Flow
 # =============================================================================
+
 
 @flow(
     name="update-base-model-globally",

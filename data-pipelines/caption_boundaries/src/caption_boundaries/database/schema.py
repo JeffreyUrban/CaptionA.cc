@@ -6,6 +6,8 @@ that tracks datasets, training samples, cached embeddings, and experiment proven
 Database location: local/caption_boundaries_training.db
 """
 
+from __future__ import annotations
+
 from datetime import UTC, datetime
 from typing import Any
 
@@ -38,7 +40,7 @@ class VideoRegistry(Base):
     last_seen_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=lambda: datetime.now(UTC))
 
     # Relationships
-    ocr_visualizations: Mapped[list["OCRVisualization"]] = relationship(
+    ocr_visualizations: Mapped[list[OCRVisualization]] = relationship(
         back_populates="video", cascade="all, delete-orphan"
     )
 
@@ -63,9 +65,7 @@ class TrainingDataset(Base):
     label_distribution: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
 
     # Splitting strategy
-    split_strategy: Mapped[str] = mapped_column(
-        String(50), nullable=False, default="random", server_default="random"
-    )
+    split_strategy: Mapped[str] = mapped_column(String(50), nullable=False, default="random", server_default="random")
     train_split_ratio: Mapped[float] = mapped_column(Float, nullable=False, default=0.8, server_default="0.8")
     random_seed: Mapped[int | None] = mapped_column(Integer)
 
@@ -87,7 +87,7 @@ class TrainingDataset(Base):
     min_samples_per_class: Mapped[int | None] = mapped_column(Integer)
 
     # Relationships
-    samples: Mapped[list["TrainingSample"]] = relationship(back_populates="dataset", cascade="all, delete-orphan")
+    samples: Mapped[list[TrainingSample]] = relationship(back_populates="dataset", cascade="all, delete-orphan")
 
     __table_args__ = (
         CheckConstraint("split_strategy IN ('random', 'show_based')", name="check_split_strategy"),
@@ -222,7 +222,9 @@ class TrainingOCRVisualization(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=lambda: datetime.now(UTC))
 
     __table_args__ = (
-        CheckConstraint("variant IN ('boundaries', 'centers', 'both', '3d_channels')", name="check_training_ocr_variant"),
+        CheckConstraint(
+            "variant IN ('boundaries', 'centers', 'both', '3d_channels')", name="check_training_ocr_variant"
+        ),
         # One visualization per (video_hash, variant) combination
         Index("idx_unique_training_ocr_viz", "video_hash", "variant", unique=True),
     )
@@ -271,9 +273,7 @@ class Experiment(Base):
     git_branch: Mapped[str | None] = mapped_column(String(255))
 
     __table_args__ = (
-        CheckConstraint(
-            "transform_strategy IN ('crop', 'mirror_tile', 'adaptive')", name="check_transform_strategy"
-        ),
+        CheckConstraint("transform_strategy IN ('crop', 'mirror_tile', 'adaptive')", name="check_transform_strategy"),
         CheckConstraint(
             "ocr_visualization_variant IN ('boundaries', 'centers', 'both', '3d_channels')",
             name="check_ocr_variant",

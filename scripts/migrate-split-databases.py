@@ -17,8 +17,8 @@ Usage:
 import argparse
 import shutil
 import sqlite3
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 
 # Database split configuration based on update patterns
 DATABASE_TABLES = {
@@ -53,7 +53,7 @@ def get_video_directories(data_dir: Path) -> list[Path]:
     """Find all video directories containing annotations.db."""
     video_dirs = []
     for hash_dir in data_dir.iterdir():
-        if not hash_dir.is_dir() or hash_dir.name.startswith('.'):
+        if not hash_dir.is_dir() or hash_dir.name.startswith("."):
             continue
         for video_dir in hash_dir.iterdir():
             if not video_dir.is_dir():
@@ -148,11 +148,8 @@ def split_database(video_dir: Path, dry_run: bool = False) -> dict:
                         rows = cursor.fetchall()
 
                         if rows:
-                            placeholders = ','.join(['?'] * len(rows[0]))
-                            conn.executemany(
-                                f"INSERT INTO {table} VALUES ({placeholders})",
-                                rows
-                            )
+                            placeholders = ",".join(["?"] * len(rows[0]))
+                            conn.executemany(f"INSERT INTO {table} VALUES ({placeholders})", rows)
 
                         print(f"    ✓ {table}: {len(rows):,} rows")
                 except sqlite3.OperationalError as e:
@@ -161,8 +158,8 @@ def split_database(video_dir: Path, dry_run: bool = False) -> dict:
             # Copy indices for this database's tables
             cursor = original_conn.cursor()
             cursor.execute(
-                f"SELECT sql FROM sqlite_master WHERE type='index' AND tbl_name IN ({','.join(['?']*len(tables))})",
-                tables
+                f"SELECT sql FROM sqlite_master WHERE type='index' AND tbl_name IN ({','.join(['?'] * len(tables))})",
+                tables,
             )
             for (index_sql,) in cursor.fetchall():
                 if index_sql:  # Skip auto-generated indices
@@ -184,10 +181,10 @@ def split_database(video_dir: Path, dry_run: bool = False) -> dict:
     # Rename original annotations.db to .old (keep as backup)
     old_db = video_dir / "annotations.db.old"
     if not old_db.exists():  # Don't overwrite existing .old file
-        print(f"  Renaming annotations.db → annotations.db.old...")
+        print("  Renaming annotations.db → annotations.db.old...")
         original_db.rename(old_db)
     else:
-        print(f"  Removing original annotations.db (backup already exists)...")
+        print("  Removing original annotations.db (backup already exists)...")
         original_db.unlink()
 
     return stats
@@ -196,21 +193,10 @@ def split_database(video_dir: Path, dry_run: bool = False) -> dict:
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--data-dir",
-        type=Path,
-        default=Path("local/data"),
-        help="Path to data directory (default: local/data)"
+        "--data-dir", type=Path, default=Path("local/data"), help="Path to data directory (default: local/data)"
     )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Analyze databases without making changes"
-    )
-    parser.add_argument(
-        "--limit",
-        type=int,
-        help="Only process first N videos (for testing)"
-    )
+    parser.add_argument("--dry-run", action="store_true", help="Analyze databases without making changes")
+    parser.add_argument("--limit", type=int, help="Only process first N videos (for testing)")
 
     args = parser.parse_args()
 
@@ -218,7 +204,7 @@ def main():
     video_dirs = get_video_directories(args.data_dir)
 
     if args.limit:
-        video_dirs = video_dirs[:args.limit]
+        video_dirs = video_dirs[: args.limit]
 
     print(f"Found {len(video_dirs)} video databases")
 
@@ -249,20 +235,20 @@ def main():
     print("MIGRATION SUMMARY")
     print("=" * 70)
     print(f"Videos processed: {len(video_dirs)}")
-    print(f"Total original size: {total_original_mb:.1f} MB ({total_original_mb/1024:.1f} GB)")
+    print(f"Total original size: {total_original_mb:.1f} MB ({total_original_mb / 1024:.1f} GB)")
 
     if not args.dry_run:
-        print(f"\nSize breakdown after split:")
+        print("\nSize breakdown after split:")
         for db_name in DATABASE_TABLES.keys():
             total = totals_by_db[db_name]
             pct = (total / total_original_mb * 100) if total_original_mb > 0 else 0
-            print(f"  {db_name}: {total:.1f} MB ({total/1024:.1f} GB, {pct:.1f}%)")
+            print(f"  {db_name}: {total:.1f} MB ({total / 1024:.1f} GB, {pct:.1f}%)")
 
-        print(f"\nBackups saved as: annotations_backup_*.db")
-        print(f"\nNext steps:")
-        print(f"  1. Verify migration: spot-check a few videos")
-        print(f"  2. Set up DVC tracking: python scripts/setup-dvc-tracking.py")
-        print(f"  3. Delete backups once verified: find local/data -name 'annotations_backup_*.db' -delete")
+        print("\nBackups saved as: annotations_backup_*.db")
+        print("\nNext steps:")
+        print("  1. Verify migration: spot-check a few videos")
+        print("  2. Set up DVC tracking: python scripts/setup-dvc-tracking.py")
+        print("  3. Delete backups once verified: find local/data -name 'annotations_backup_*.db' -delete")
 
     print("=" * 70)
 
