@@ -6,6 +6,7 @@ import { BoundaryFrameStack } from '~/components/annotation/BoundaryFrameStack'
 import { BoundaryHelpModal } from '~/components/annotation/BoundaryHelpModal'
 import { CompletionBanner } from '~/components/annotation/CompletionBanner'
 import { useBoundaryWorkflowState } from '~/hooks/useBoundaryWorkflowState'
+import { useImageRegeneration } from '~/hooks/useImageRegeneration'
 import { getAnnotationBorderColor, getEffectiveState } from '~/utils/boundary-helpers'
 
 // Loader function to expose environment variables
@@ -21,6 +22,9 @@ export default function BoundaryWorkflow() {
   const videoId = searchParams.get('videoId') ?? ''
 
   const workflow = useBoundaryWorkflowState({ videoId })
+
+  // Opportunistically process pending image regenerations during idle time
+  useImageRegeneration({ videoId, enabled: true, idleDelay: 3000, maxBatch: 3 })
 
   // Switch to text correction mode
   const switchToText = () => {

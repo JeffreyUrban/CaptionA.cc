@@ -3,9 +3,9 @@
  */
 
 import { useEffect, useState } from 'react'
+import { useLoaderData } from 'react-router'
 
 import { AppLayout } from '~/components/AppLayout'
-import { CURRENT_SCHEMA_VERSION, LATEST_SCHEMA_VERSION } from '~/db/migrate'
 import type { DatabaseInfo, StatusSummary } from '~/services/database-admin-service'
 
 interface FailedVideo {
@@ -46,7 +46,17 @@ interface RepairSummary {
   }>
 }
 
-function DatabaseAdministration() {
+interface DatabaseAdministrationProps {
+  CURRENT_SCHEMA_VERSION: number
+  LATEST_SCHEMA_VERSION: number
+  hasLatestSchema: boolean
+}
+
+function DatabaseAdministration({
+  CURRENT_SCHEMA_VERSION,
+  LATEST_SCHEMA_VERSION,
+  hasLatestSchema,
+}: DatabaseAdministrationProps) {
   const [summary, setSummary] = useState<StatusSummary | null>(null)
   const [databases, setDatabases] = useState<DatabaseInfo[]>([])
   const [loading, setLoading] = useState(true)
@@ -236,22 +246,24 @@ function DatabaseAdministration() {
           <div className="flex flex-col gap-1">
             <div className="text-xs text-gray-600 dark:text-gray-400 font-medium">Repair to:</div>
             <div className="flex">
-              <button
-                onClick={() => {
-                  void repairDatabases(LATEST_SCHEMA_VERSION)
-                }}
-                disabled={repairing}
-                className="px-3 py-1.5 bg-purple-600 text-white text-sm font-medium rounded-l-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Repair to latest unreleased schema (development)"
-              >
-                {repairing ? 'Repairing...' : 'Latest'}
-              </button>
+              {hasLatestSchema && (
+                <button
+                  onClick={() => {
+                    void repairDatabases(LATEST_SCHEMA_VERSION)
+                  }}
+                  disabled={repairing}
+                  className="px-3 py-1.5 bg-purple-600 text-white text-sm font-medium rounded-l-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Repair to latest unreleased schema (development)"
+                >
+                  {repairing ? 'Repairing...' : 'Latest'}
+                </button>
+              )}
               <button
                 onClick={() => {
                   void repairDatabases(CURRENT_SCHEMA_VERSION)
                 }}
                 disabled={repairing}
-                className="px-3 py-1.5 bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed border-l border-blue-500"
+                className={`px-3 py-1.5 bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed ${hasLatestSchema ? 'border-l border-blue-500' : 'rounded-l-md'}`}
               >
                 v{CURRENT_SCHEMA_VERSION}
               </button>
@@ -498,7 +510,27 @@ function DatabaseAdministration() {
   )
 }
 
+// Loader to get schema versions (server-side only)
+export async function loader() {
+  // Import on server side only
+  const { CURRENT_SCHEMA_VERSION, LATEST_SCHEMA_VERSION } = await import('~/db/migrate')
+  const { hasLatestSchema } = await import('~/db/schema-loader')
+  const { resolve } = await import('path')
+
+  // Check if latest unreleased schema file exists
+  const schemaDir = resolve(process.cwd(), 'app', 'db')
+  const hasLatest = hasLatestSchema(schemaDir)
+
+  return {
+    CURRENT_SCHEMA_VERSION,
+    LATEST_SCHEMA_VERSION,
+    hasLatestSchema: hasLatest,
+  }
+}
+
 export default function AdminPage() {
+  const { CURRENT_SCHEMA_VERSION, LATEST_SCHEMA_VERSION, hasLatestSchema } =
+    useLoaderData<typeof loader>()
   const [failedVideos, setFailedVideos] = useState<FailedVideo[]>([])
   const [loadingFailed, setLoadingFailed] = useState(true)
   const [retryingVideos, setRetryingVideos] = useState<Set<string>>(new Set())
@@ -741,7 +773,11 @@ export default function AdminPage() {
         </div>
 
         {/* Database Administration */}
-        <DatabaseAdministration />
+        <DatabaseAdministration
+          CURRENT_SCHEMA_VERSION={CURRENT_SCHEMA_VERSION}
+          LATEST_SCHEMA_VERSION={LATEST_SCHEMA_VERSION}
+          hasLatestSchema={hasLatestSchema}
+        />
 
         {/* Background Jobs Section (placeholder for future) */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">

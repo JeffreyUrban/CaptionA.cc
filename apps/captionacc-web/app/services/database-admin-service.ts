@@ -16,14 +16,14 @@ import { fileURLToPath } from 'url'
 
 import Database from 'better-sqlite3'
 
+import { getSchemaPath } from '~/db/schema-loader'
 import { parseSchemaNames, type TableSchemaNames } from '~/utils/schema-parser'
 
 const LOCAL_DATA_DIR = process.env['LOCAL_DATA_DIR'] ?? '../../local/data'
 
-// Get schema path relative to this service file
+// Get __dirname for path resolution
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
-const SCHEMA_PATH = join(__dirname, '../db/annotations-schema.sql')
 
 export interface DatabaseInfo {
   videoId: string
@@ -99,21 +99,18 @@ function extractVideoId(dbPath: string): string {
 
 /**
  * Get schema file path for specific version
+ * Uses centralized schema-loader for consistent path resolution
  */
-function getSchemaPath(version: number): string {
-  if (version === -1) {
-    // Latest unreleased version uses working schema
-    return join(__dirname, '../db/annotations-schema.sql')
-  }
-  // Released versions use versioned schema files
-  return join(__dirname, `../db/annotations-schema-v${version}.sql`)
+function getSchemaPathForVersion(version: number): string {
+  const schemaDir = join(__dirname, '../db')
+  return getSchemaPath(version, schemaDir)
 }
 
 /**
  * Get expected schema for specific version
  */
 function getExpectedSchema(version: number): Map<string, TableSchemaNames> {
-  const schemaPath = getSchemaPath(version)
+  const schemaPath = getSchemaPathForVersion(version)
   const schemaSQL = readFileSync(schemaPath, 'utf-8')
   return parseSchemaNames(schemaSQL)
 }

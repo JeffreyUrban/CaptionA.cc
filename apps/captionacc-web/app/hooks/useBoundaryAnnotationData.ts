@@ -228,20 +228,49 @@ export function useBoundaryAnnotationData({
           throw new Error('Failed to save annotation')
         }
 
+        const saveData = await saveResponse.json()
+        const createdGaps = saveData.createdGaps ?? []
+
         // Update progress from database
         await updateProgress()
 
-        // Reload annotations in current visible range
-        const startFrame = Math.min(...visibleFramePositions)
-        const endFrame = Math.max(...visibleFramePositions)
-        await loadAnnotationsForRange(startFrame, endFrame)
+        // Signal workflow activity for opportunistic image regeneration
+        window.dispatchEvent(new CustomEvent('annotation-saved'))
 
-        // Get next annotation from cache (refill if empty)
-        if (annotationCacheRef.current.length === 0) {
-          await refillCache()
+        // Select next annotation: prioritize newly created gaps over cache
+        let selectedAnnotation: Annotation | null = null
+
+        // Check if any created gaps are not in the navigation stack (unvisited)
+        if (createdGaps.length > 0) {
+          const unvisitedGaps = createdGaps.filter(
+            (gap: Annotation) => !navigationStackRef.current.includes(gap.id)
+          )
+
+          if (unvisitedGaps.length > 0) {
+            // Sort by start_frame_index and select the first one
+            unvisitedGaps.sort(
+              (a: Annotation, b: Annotation) => a.start_frame_index - b.start_frame_index
+            )
+            const firstGap = unvisitedGaps[0]
+            if (firstGap) {
+              selectedAnnotation = firstGap
+              console.log('[saveAnnotation] Prioritizing newly created gap:', {
+                id: firstGap.id,
+                start_frame_index: firstGap.start_frame_index,
+                end_frame_index: firstGap.end_frame_index,
+              })
+            }
+          }
         }
 
-        const selectedAnnotation = annotationCacheRef.current.shift() ?? null
+        // Fall back to cache if no created gaps
+        if (!selectedAnnotation) {
+          // Get next annotation from cache (refill if empty)
+          if (annotationCacheRef.current.length === 0) {
+            await refillCache()
+          }
+          selectedAnnotation = annotationCacheRef.current.shift() ?? null
+        }
 
         if (selectedAnnotation) {
           console.log('[saveAnnotation] Loaded next annotation:', {
@@ -276,7 +305,7 @@ export function useBoundaryAnnotationData({
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- jumpRequestedRef and jumpTargetRef are refs and don't need to be in dependencies
-    [videoId, updateProgress, loadAnnotationsForRange, refillCache, checkNavigationAvailability]
+    [videoId, updateProgress, refillCache, checkNavigationAvailability]
   )
 
   // Mark annotation as issue (unclean boundaries)
@@ -317,20 +346,49 @@ export function useBoundaryAnnotationData({
           throw new Error('Failed to mark annotation as issue')
         }
 
+        const saveData = await saveResponse.json()
+        const createdGaps = saveData.createdGaps ?? []
+
         // Update progress from database
         await updateProgress()
 
-        // Reload annotations in current visible range
-        const startFrame = Math.min(...visibleFramePositions)
-        const endFrame = Math.max(...visibleFramePositions)
-        await loadAnnotationsForRange(startFrame, endFrame)
+        // Signal workflow activity for opportunistic image regeneration
+        window.dispatchEvent(new CustomEvent('annotation-saved'))
 
-        // Get next annotation from cache (refill if empty)
-        if (annotationCacheRef.current.length === 0) {
-          await refillCache()
+        // Select next annotation: prioritize newly created gaps over cache
+        let selectedAnnotation: Annotation | null = null
+
+        // Check if any created gaps are not in the navigation stack (unvisited)
+        if (createdGaps.length > 0) {
+          const unvisitedGaps = createdGaps.filter(
+            (gap: Annotation) => !navigationStackRef.current.includes(gap.id)
+          )
+
+          if (unvisitedGaps.length > 0) {
+            // Sort by start_frame_index and select the first one
+            unvisitedGaps.sort(
+              (a: Annotation, b: Annotation) => a.start_frame_index - b.start_frame_index
+            )
+            const firstGap = unvisitedGaps[0]
+            if (firstGap) {
+              selectedAnnotation = firstGap
+              console.log('[markAsIssue] Prioritizing newly created gap:', {
+                id: firstGap.id,
+                start_frame_index: firstGap.start_frame_index,
+                end_frame_index: firstGap.end_frame_index,
+              })
+            }
+          }
         }
 
-        const selectedAnnotation = annotationCacheRef.current.shift() ?? null
+        // Fall back to cache if no created gaps
+        if (!selectedAnnotation) {
+          // Get next annotation from cache (refill if empty)
+          if (annotationCacheRef.current.length === 0) {
+            await refillCache()
+          }
+          selectedAnnotation = annotationCacheRef.current.shift() ?? null
+        }
 
         if (selectedAnnotation) {
           console.log('[markAsIssue] Loaded next annotation:', {
@@ -365,7 +423,7 @@ export function useBoundaryAnnotationData({
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- jumpRequestedRef and jumpTargetRef are refs and don't need to be in dependencies
-    [videoId, updateProgress, loadAnnotationsForRange, refillCache, checkNavigationAvailability]
+    [videoId, updateProgress, refillCache, checkNavigationAvailability]
   )
 
   // Delete annotation
@@ -433,6 +491,9 @@ export function useBoundaryAnnotationData({
         `[navigateToAnnotation] Called. direction=${direction}, stack=`,
         navigationStackRef.current
       )
+
+      // Signal workflow activity for opportunistic image regeneration
+      window.dispatchEvent(new CustomEvent('annotation-navigated'))
 
       if (!activeAnnotation) return
 
