@@ -37,9 +37,13 @@ export interface VideoStatsStore {
   // Fetch from API
   fetchStats: (videoId: string, force?: boolean) => Promise<VideoStats | null>
 
-  // Background polling for processing videos
-  startPolling: () => void
-  stopPolling: () => void
+  // SSE connection management
+  connectSSE: () => void
+  disconnectSSE: () => void
+
+  // Callback for when new videos are detected
+  onNewVideo: ((videoId: string) => void) | null
+  setOnNewVideo: (callback: ((videoId: string) => void) | null) => void
 }
 
 // ============================================================================
@@ -52,30 +56,9 @@ const STORAGE_KEY = `video-stats-${CACHE_VERSION}`
 // Cache duration: 5 minutes (don't refetch if recently fetched)
 const CACHE_DURATION_MS = 5 * 60 * 1000
 
-// Poll interval for processing videos: 5 seconds
-const POLL_INTERVAL_MS = 5000
-
 // ============================================================================
 // Helper Functions
 // ============================================================================
-
-/**
- * Check if video is currently processing and needs polling
- */
-function isProcessing(stats: VideoStats): boolean {
-  // Poll if upload/processing is in progress
-  const hasProcessingStatus =
-    stats.processingStatus &&
-    stats.processingStatus.status !== 'processing_complete' &&
-    stats.processingStatus.status !== 'error'
-
-  // Poll if crop_frames is queued or processing
-  const hasCropFramesProcessing =
-    stats.cropFramesStatus &&
-    (stats.cropFramesStatus.status === 'queued' || stats.cropFramesStatus.status === 'processing')
-
-  return Boolean(hasProcessingStatus) || Boolean(hasCropFramesProcessing)
-}
 
 /**
  * Validate video ID (only reject empty strings)
@@ -88,7 +71,10 @@ function isValidVideoId(videoId: string): boolean {
 // Store Implementation
 // ============================================================================
 
-let pollingInterval: ReturnType<typeof setInterval> | null = null
+// Global SSE connection (singleton, persists across component unmounts)
+let sseConnection: EventSource | null = null
+let reconnectTimeout: NodeJS.Timeout | null = null
+let reconnectAttempts = 0
 
 export const useVideoStatsStore = create<VideoStatsStore>()(
   persist(
@@ -96,6 +82,7 @@ export const useVideoStatsStore = create<VideoStatsStore>()(
       // Initial state
       stats: {},
       lastFetch: {},
+      onNewVideo: null,
 
       // Set stats for a video
       setStats: (videoId, stats) => {
@@ -165,38 +152,111 @@ export const useVideoStatsStore = create<VideoStatsStore>()(
         }
       },
 
-      // Start background polling for processing videos
-      startPolling: () => {
-        // Stop existing polling if any
-        if (pollingInterval) {
-          clearInterval(pollingInterval)
+      // Connect to SSE (singleton, only one connection ever)
+      connectSSE: () => {
+        // Already connected or connecting
+        if (sseConnection) {
+          console.log('[VideoStatsStore] SSE already connected')
+          return
         }
 
-        pollingInterval = setInterval(() => {
-          const state = get()
+        console.log('[VideoStatsStore] Connecting to SSE...')
 
-          // Find videos that are processing
-          const processingVideos = Object.entries(state.stats)
-            .filter(([, stats]) => isProcessing(stats))
-            .map(([videoId]) => videoId)
+        let eventSource: EventSource
+        try {
+          eventSource = new EventSource('/api/events/video-stats')
+          sseConnection = eventSource
+        } catch (error) {
+          console.error('[VideoStatsStore] Failed to create SSE connection:', error)
+          return
+        }
 
-          if (processingVideos.length === 0) return
+        eventSource.addEventListener('video-stats-updated', event => {
+          try {
+            const data = JSON.parse(event.data) as {
+              videoId: string
+              flowName: string
+              status: string
+            }
+            console.log('[VideoStatsStore] SSE update received:', data)
 
-          console.log(`[VideoStatsStore] Polling ${processingVideos.length} processing videos...`)
+            const currentStats = get().stats
+            const isNewVideo = !currentStats[data.videoId]
 
-          // Fetch stats for all processing videos
-          processingVideos.forEach(videoId => {
-            void get().fetchStats(videoId, true) // Force refresh
-          })
-        }, POLL_INTERVAL_MS)
+            // videoId is now the UUID (stable identifier)
+            // Force refetch stats for this video
+            void get().fetchStats(data.videoId, true)
+
+            // If this is a new video (not in our stats cache), notify callback
+            // This allows the Videos page to revalidate and fetch the new video list
+            if (isNewVideo && get().onNewVideo) {
+              console.log(
+                '[VideoStatsStore] New video detected, triggering callback:',
+                data.videoId
+              )
+              get().onNewVideo?.(data.videoId)
+            }
+
+            // Reset reconnect attempts on successful message
+            reconnectAttempts = 0
+          } catch (error) {
+            console.error('[VideoStatsStore] Failed to parse SSE event:', error)
+          }
+        })
+
+        eventSource.onopen = () => {
+          console.log('[VideoStatsStore] SSE connected')
+          reconnectAttempts = 0
+        }
+
+        eventSource.onerror = error => {
+          console.error('[VideoStatsStore] SSE connection error:', error)
+
+          // Check if it's just a normal close (readyState = 2)
+          if (eventSource.readyState === EventSource.CLOSED) {
+            console.log('[VideoStatsStore] SSE connection closed cleanly')
+            eventSource.close()
+            sseConnection = null
+
+            // Only reconnect if we had a successful connection before
+            if (reconnectAttempts === 0) {
+              console.log('[VideoStatsStore] Not reconnecting - connection never succeeded')
+              return
+            }
+          }
+
+          eventSource.close()
+          sseConnection = null
+
+          // Exponential backoff reconnect
+          const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000)
+          console.log(
+            `[VideoStatsStore] Reconnecting in ${delay}ms (attempt ${reconnectAttempts + 1})...`
+          )
+
+          reconnectTimeout = setTimeout(() => {
+            reconnectAttempts++
+            get().connectSSE()
+          }, delay)
+        }
       },
 
-      // Stop background polling
-      stopPolling: () => {
-        if (pollingInterval) {
-          clearInterval(pollingInterval)
-          pollingInterval = null
+      // Disconnect from SSE
+      disconnectSSE: () => {
+        if (sseConnection) {
+          console.log('[VideoStatsStore] Disconnecting SSE')
+          sseConnection.close()
+          sseConnection = null
         }
+        if (reconnectTimeout) {
+          clearTimeout(reconnectTimeout)
+          reconnectTimeout = null
+        }
+      },
+
+      // Set callback for new video detection
+      setOnNewVideo: callback => {
+        set({ onNewVideo: callback })
       },
     }),
     {

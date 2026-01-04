@@ -38,14 +38,22 @@ mkdirSync(dirname(dbPath), { recursive: true })
 // Create/open database
 const db = new Database(dbPath)
 
-// Read schema
-const schemaPath = resolve(process.cwd(), 'app', 'db', 'annotations-schema.sql')
-const schema = readFileSync(schemaPath, 'utf-8')
+// Load schema using centralized schema selection logic
+const { getSchemaForNewDatabase } = await import('../app/db/schema-loader.js')
+const schemaDir = resolve(process.cwd(), 'app', 'db')
+const schema = getSchemaForNewDatabase(schemaDir)
 
 // Execute schema
-db.exec(schema)
+db.exec(schema.content)
 
 console.log('Database schema created successfully')
+
+// Insert schema version metadata
+db.prepare(
+  `INSERT OR REPLACE INTO database_metadata (id, schema_version, created_at) VALUES (1, ?, datetime('now'))`
+).run(schema.version)
+
+console.log(`Schema version ${schema.version} initialized`)
 
 // Get total frames for this video (count frame files)
 const { readdirSync } = await import('fs')

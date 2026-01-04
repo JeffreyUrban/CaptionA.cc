@@ -10,10 +10,12 @@ This replaces apps/captionacc-web/app/services/video-processing.ts
 """
 
 from pathlib import Path
+import os
 import sqlite3
 import subprocess
 from typing import Any
 
+import requests
 from prefect import flow, task
 from prefect.artifacts import create_table_artifact, create_link_artifact
 
@@ -180,6 +182,60 @@ def process_video_initial_flow(
     print(f"Video path: {video_path}")
     print(f"Database: {db_path}")
 
+    # Check if video/database still exists (may have been deleted)
+    if not Path(video_path).exists() or not Path(db_path).exists():
+        print(f"Video or database not found (may have been deleted): {video_id}")
+        print("Exiting without retry")
+        return {
+            "video_id": video_id,
+            "status": "cancelled",
+            "message": "Video was deleted",
+        }
+
+    # Check if video is marked as deleted in database
+    conn = sqlite3.connect(db_path)
+    try:
+        result = conn.execute("SELECT deleted FROM processing_status WHERE id = 1").fetchone()
+        if result and result[0] == 1:
+            print(f"Video marked as deleted in database: {video_id}")
+            print("Exiting without retry")
+            return {
+                "video_id": video_id,
+                "status": "cancelled",
+                "message": "Video was deleted",
+            }
+    finally:
+        conn.close()
+
+    # Update database status to "extracting_frames" at START
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute(
+            """
+            UPDATE processing_status
+            SET status = 'extracting_frames',
+                processing_started_at = datetime('now')
+            WHERE id = 1
+            """
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    # Send webhook notification at START of processing
+    try:
+        webhook_url = os.getenv("WEB_APP_URL", "http://localhost:5173")
+        webhook_endpoint = f"{webhook_url}/api/webhooks/prefect"
+        webhook_payload = {
+            "videoId": video_id,
+            "flowName": "process-video-initial",
+            "status": "started",
+        }
+        print(f"Sending start webhook to {webhook_endpoint}")
+        requests.post(webhook_endpoint, json=webhook_payload, timeout=5)
+    except Exception as e:
+        print(f"Warning: Failed to send start webhook: {e}")
+
     # Extract frames and run OCR
     frames_result = extract_full_frames(
         video_path=video_path, db_path=db_path, output_dir=output_dir, frame_rate=frame_rate
@@ -209,6 +265,33 @@ def process_video_initial_flow(
 
     print(f"Initial processing complete for {video_id}")
     print(f"Frames: {frames_result['frame_count']}, OCR boxes: {frames_result['ocr_count']}")
+
+    # Send webhook notification to web app
+    try:
+        webhook_url = os.getenv("WEB_APP_URL", "http://localhost:5173")
+        webhook_endpoint = f"{webhook_url}/api/webhooks/prefect"
+
+        webhook_payload = {
+            "videoId": video_id,  # UUID (stable identifier)
+            "flowName": "process-video-initial",
+            "status": "complete",
+        }
+
+        print(f"Sending webhook to {webhook_endpoint}")
+        response = requests.post(
+            webhook_endpoint,
+            json=webhook_payload,
+            timeout=5,
+        )
+
+        if response.ok:
+            print(f"Webhook sent successfully: {response.status_code}")
+        else:
+            print(f"Webhook failed: {response.status_code} - {response.text}")
+
+    except Exception as webhook_error:
+        # Don't fail the flow if webhook fails
+        print(f"Warning: Failed to send webhook notification: {webhook_error}")
 
     return {
         "video_id": video_id,

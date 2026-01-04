@@ -10,10 +10,12 @@ This replaces apps/captionacc-web/app/services/crop-frames-processing.ts
 """
 
 from pathlib import Path
+import os
 import sqlite3
 import subprocess
 from typing import Any
 
+import requests
 from prefect import flow, task
 from prefect.artifacts import create_table_artifact
 
@@ -197,6 +199,74 @@ def crop_frames_flow(
     print(f"Starting crop frames processing for video: {video_id}")
     print(f"Crop bounds: {crop_bounds}")
 
+    # Check if video/database still exists (may have been deleted)
+    if not Path(video_path).exists() or not Path(db_path).exists():
+        print(f"Video or database not found (may have been deleted): {video_id}")
+        print("Exiting without retry")
+        return {
+            "video_id": video_id,
+            "status": "cancelled",
+            "message": "Video was deleted",
+        }
+
+    # Check if video is marked as deleted in database
+    conn = sqlite3.connect(db_path)
+    try:
+        result = conn.execute("SELECT deleted FROM processing_status WHERE id = 1").fetchone()
+        if result and result[0] == 1:
+            print(f"Video marked as deleted in database: {video_id}")
+            print("Exiting without retry")
+            return {
+                "video_id": video_id,
+                "status": "cancelled",
+                "message": "Video was deleted",
+            }
+    finally:
+        conn.close()
+
+    # Update database status to "processing" at START
+    conn = sqlite3.connect(db_path)
+    try:
+        # Ensure table exists and update status
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS crop_frames_status (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                status TEXT NOT NULL DEFAULT 'queued',
+                processing_started_at TEXT,
+                processing_completed_at TEXT,
+                current_job_id TEXT,
+                error_message TEXT,
+                error_details TEXT,
+                error_occurred_at TEXT,
+                retry_count INTEGER NOT NULL DEFAULT 0
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO crop_frames_status (id, status, processing_started_at, retry_count)
+            VALUES (1, 'processing', datetime('now'), 0)
+            """
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    # Send webhook notification at START of processing
+    try:
+        webhook_url = os.getenv("WEB_APP_URL", "http://localhost:5173")
+        webhook_endpoint = f"{webhook_url}/api/webhooks/prefect"
+        webhook_payload = {
+            "videoId": video_id,
+            "flowName": "crop-video-frames",
+            "status": "started",
+        }
+        print(f"Sending start webhook to {webhook_endpoint}")
+        requests.post(webhook_endpoint, json=webhook_payload, timeout=5)
+    except Exception as e:
+        print(f"Warning: Failed to send start webhook: {e}")
+
     # Extract cropped frames
     result = extract_cropped_frames(
         video_path=video_path,
@@ -223,6 +293,33 @@ def crop_frames_flow(
     )
 
     print(f"Crop frames complete for {video_id}: {result['frame_count']} frames")
+
+    # Send webhook notification to web app
+    try:
+        webhook_url = os.getenv("WEB_APP_URL", "http://localhost:5173")
+        webhook_endpoint = f"{webhook_url}/api/webhooks/prefect"
+
+        webhook_payload = {
+            "videoId": video_id,  # UUID (stable identifier)
+            "flowName": "crop-video-frames",
+            "status": "complete",
+        }
+
+        print(f"Sending webhook to {webhook_endpoint}")
+        response = requests.post(
+            webhook_endpoint,
+            json=webhook_payload,
+            timeout=5,
+        )
+
+        if response.ok:
+            print(f"Webhook sent successfully: {response.status_code}")
+        else:
+            print(f"Webhook failed: {response.status_code} - {response.text}")
+
+    except Exception as webhook_error:
+        # Don't fail the flow if webhook fails
+        print(f"Warning: Failed to send webhook notification: {webhook_error}")
 
     return {
         "video_id": video_id,

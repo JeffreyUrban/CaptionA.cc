@@ -125,10 +125,22 @@ async function handleCreateUpload(request: Request): Promise<Response> {
   const db = new Database(dbPath)
 
   try {
-    // Load schema
-    const schemaPath = resolve(process.cwd(), 'app', 'db', 'annotations-schema.sql')
-    const schema = await readFile(schemaPath, 'utf-8')
-    db.exec(schema)
+    // Load schema using centralized schema selection logic
+    const { getSchemaForNewDatabase } = await import('~/db/schema-loader')
+    const schemaDir = resolve(process.cwd(), 'app', 'db')
+    const schema = getSchemaForNewDatabase(schemaDir)
+
+    // Execute schema
+    db.exec(schema.content)
+
+    // Insert schema version metadata
+    db.prepare(
+      `
+      INSERT OR REPLACE INTO database_metadata (
+        id, schema_version, created_at
+      ) VALUES (1, ?, datetime('now'))
+    `
+    ).run(schema.version)
 
     // Insert video metadata with UUID-based storage
     db.prepare(

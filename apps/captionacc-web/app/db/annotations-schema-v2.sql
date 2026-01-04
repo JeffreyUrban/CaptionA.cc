@@ -458,8 +458,6 @@ CREATE TABLE IF NOT EXISTS processing_status (
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
-<<<<<<< HEAD
-=======
 -- Text review status tracking (one row per video)
 -- Tracks whether text annotations are ready for review
 -- Follows the same pattern as crop_frames_status for consistency
@@ -474,7 +472,6 @@ CREATE TABLE IF NOT EXISTS text_review_status (
     review_completed_at TEXT  -- When all text review was completed
 );
 
->>>>>>> origin/main
 -- Triggers
 
 -- Triggers to update timestamp fields on captions
@@ -494,8 +491,6 @@ BEGIN
     WHERE id = NEW.id;
 END;
 
-<<<<<<< HEAD
-=======
 -- Triggers to maintain text_review_status based on caption text_pending state
 CREATE TRIGGER IF NOT EXISTS update_text_review_status_insert
 AFTER INSERT ON captions
@@ -550,8 +545,6 @@ BEGIN
         END
     WHERE id = 1;
 END;
-
->>>>>>> origin/main
 -- Database metadata (schema versioning)
 -- Tracks schema version and verification state
 CREATE TABLE IF NOT EXISTS database_metadata (

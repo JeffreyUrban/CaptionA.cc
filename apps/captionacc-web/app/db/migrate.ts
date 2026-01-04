@@ -8,13 +8,13 @@ import Database from 'better-sqlite3'
 
 /**
  * Current schema version
- * Must match version in annotations-schema.sql
+ * Must match version in annotations-schema-v{N}.sql
  */
 export const CURRENT_SCHEMA_VERSION = 2
 
 /**
  * Special version number for latest unreleased schema
- * Uses annotations-schema.sql (working schema, may have unreleased changes)
+ * Uses annotations-schema-latest.sql (working schema, may have unreleased changes)
  */
 export const LATEST_SCHEMA_VERSION = -1
 

@@ -12,6 +12,7 @@ import { fileURLToPath } from 'url'
 import Database from 'better-sqlite3'
 
 import { CURRENT_SCHEMA_VERSION, LATEST_SCHEMA_VERSION } from '~/db/migrate'
+import { getSchemaPath as getSchemaPathFromLoader } from '~/db/schema-loader'
 import { parseSchemaFull, type ColumnDefinition } from '~/utils/schema-parser'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -22,19 +23,10 @@ const SCHEMA_DIR = join(__dirname, '../db')
 
 /**
  * Get schema file path for target version
- *
- * Naming convention:
- * - annotations-schema.sql = Working schema (may have unreleased changes)
- * - annotations-schema-v{N}.sql = Released/frozen schemas for specific versions
+ * Uses centralized schema-loader for consistent path resolution
  */
 function getSchemaPath(version: number): string {
-  if (version === LATEST_SCHEMA_VERSION) {
-    // Use working schema for latest unreleased version
-    return join(SCHEMA_DIR, 'annotations-schema.sql')
-  }
-
-  // Use versioned schema files for released versions
-  return join(SCHEMA_DIR, `annotations-schema-v${version}.sql`)
+  return getSchemaPathFromLoader(version, SCHEMA_DIR)
 }
 
 interface RepairResult {
@@ -444,7 +436,7 @@ export async function repairAllDatabases(
       for (const action of result.destructiveActions) {
         // Parse "Remove table: X (contains N rows)"
         const tableMatch = action.match(/Remove table: (\w+) \(contains (\d+) rows?\)/)
-        if (tableMatch && tableMatch[1] && tableMatch[2]) {
+        if (tableMatch?.[1] && tableMatch[2]) {
           const tableName = tableMatch[1]
           const rowCount = parseInt(tableMatch[2], 10)
 
@@ -457,7 +449,7 @@ export async function repairAllDatabases(
 
         // Parse "Remove column: X.Y (contains data)"
         const columnMatch = action.match(/Remove column: (\w+)\.(\w+)/)
-        if (columnMatch && columnMatch[1] && columnMatch[2]) {
+        if (columnMatch?.[1] && columnMatch[2]) {
           const fullColumn = `${columnMatch[1]}.${columnMatch[2]}`
           if (!columnsToRemove[fullColumn]) {
             columnsToRemove[fullColumn] = { databases: 0 }

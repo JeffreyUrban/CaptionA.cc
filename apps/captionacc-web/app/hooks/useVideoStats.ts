@@ -5,6 +5,7 @@
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useRevalidator } from 'react-router'
 
 import { useVideoStatsStore } from '~/stores/video-stats-store'
 import type { VideoStats, TreeNode } from '~/utils/video-tree'
@@ -49,13 +50,15 @@ export function useVideoStats({ tree }: UseVideoStatsParams): UseVideoStatsRetur
   // Track whether error badges have been validated
   const [errorBadgesValidated, setErrorBadgesValidated] = useState(false)
 
+  // Revalidator for refreshing the video tree when new videos appear
+  const revalidator = useRevalidator()
+
   // Get store state and actions
   const stats = useVideoStatsStore(state => state.stats)
   const setStats = useVideoStatsStore(state => state.setStats)
   const removeStats = useVideoStatsStore(state => state.removeStats)
   const fetchStats = useVideoStatsStore(state => state.fetchStats)
-  const startPolling = useVideoStatsStore(state => state.startPolling)
-  const stopPolling = useVideoStatsStore(state => state.stopPolling)
+  const setOnNewVideo = useVideoStatsStore(state => state.setOnNewVideo)
 
   // Convert stats object to Map for backward compatibility
   const videoStatsMap = useMemo(() => {
@@ -82,18 +85,24 @@ export function useVideoStats({ tree }: UseVideoStatsParams): UseVideoStatsRetur
     [removeStats]
   )
 
-  // Start/stop centralized polling based on mount state
+  // Connect to SSE on mount (singleton connection in store)
   useEffect(() => {
     if (!isMounted) return
 
-    // Start polling when component mounts
-    startPolling()
+    // Set up callback to revalidate when new videos are detected
+    setOnNewVideo(videoId => {
+      console.log(`[useVideoStats] New video detected: ${videoId}, revalidating...`)
+      void revalidator.revalidate()
+    })
 
-    // Stop polling when component unmounts
+    // Call connectSSE directly from store to avoid dependency issues
+    useVideoStatsStore.getState().connectSSE()
+
+    // Cleanup callback on unmount
     return () => {
-      stopPolling()
+      setOnNewVideo(null)
     }
-  }, [isMounted, startPolling, stopPolling])
+  }, [isMounted, revalidator, setOnNewVideo])
 
   // One-time validation of error badges on mount
   useEffect(() => {
@@ -121,6 +130,21 @@ export function useVideoStats({ tree }: UseVideoStatsParams): UseVideoStatsRetur
     if (!isMounted) return
 
     const videoIds = collectAllVideoIds(tree)
+    const videoIdSet = new Set(videoIds)
+
+    // Clean up stale entries (videos that are no longer in the tree)
+    const cachedVideoIds = Object.keys(stats)
+    const staleVideoIds = cachedVideoIds.filter(id => !videoIdSet.has(id))
+
+    if (staleVideoIds.length > 0) {
+      console.log(
+        `[useVideoStats] Removing ${staleVideoIds.length} stale cache entries:`,
+        staleVideoIds
+      )
+      staleVideoIds.forEach(videoId => {
+        removeStats(videoId)
+      })
+    }
 
     // Check for videos that were recently touched and need stats refresh
     let touchedVideos: Set<string> = new Set()
@@ -155,7 +179,7 @@ export function useVideoStats({ tree }: UseVideoStatsParams): UseVideoStatsRetur
         })
       }
     })
-  }, [isMounted, tree, videoStatsMap, fetchStats])
+  }, [isMounted, tree, videoStatsMap, fetchStats, stats, removeStats])
 
   return {
     videoStatsMap,
