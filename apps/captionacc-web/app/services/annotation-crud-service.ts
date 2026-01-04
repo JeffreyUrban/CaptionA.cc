@@ -35,6 +35,7 @@ interface AnnotationRow {
   text_notes: string | null
   text_ocr_combined: string | null
   text_updated_at: string
+  image_needs_regen: number
   created_at: string
 }
 
@@ -54,6 +55,7 @@ export interface Annotation {
   textNotes: string | null
   textOcrCombined: string | null
   textUpdatedAt: string
+  imageNeedsRegen: boolean
   createdAt: string
 }
 
@@ -135,32 +137,29 @@ function transformAnnotation(row: AnnotationRow): Annotation {
     textNotes: row.text_notes,
     textOcrCombined: row.text_ocr_combined,
     textUpdatedAt: row.text_updated_at,
+    imageNeedsRegen: row.image_needs_regen === 1,
     createdAt: row.created_at,
   }
 }
 
 /**
- * Regenerate combined image when annotation boundaries change.
- * Deletes old image, generates new one, and clears OCR cache.
+ * Mark annotation's combined image as needing regeneration.
+ * Deletes old image immediately and marks for async regeneration.
  */
-async function regenerateCombinedImageForAnnotation(
+function markImageForRegeneration(
   videoId: string,
   annotationId: number,
-  startFrame: number,
-  endFrame: number,
   db: Database.Database
-): Promise<void> {
-  // Delete old combined image
+): void {
+  // Delete old combined image immediately
   deleteCombinedImage(videoId, annotationId)
 
-  // Generate new combined image immediately (for ML training)
-  await getOrGenerateCombinedImage(videoId, annotationId, startFrame, endFrame)
-
-  // Clear OCR cache and mark text as pending
+  // Mark for async regeneration and clear OCR cache
   db.prepare(
     `
     UPDATE captions
-    SET text_ocr_combined = NULL,
+    SET image_needs_regen = 1,
+        text_ocr_combined = NULL,
         text_pending = 1
     WHERE id = ?
   `
@@ -350,19 +349,19 @@ function createGapAnnotations(
 }
 
 /**
- * Regenerate combined images for a list of annotations.
+ * Mark combined images for async regeneration for a list of annotations.
  *
  * @param videoId - Video identifier
  * @param annotations - Array of annotation info with frame ranges
  * @param db - Database connection
  */
-async function regenerateAnnotationImages(
+function markAnnotationImagesForRegeneration(
   videoId: string,
   annotations: ModifiedAnnotationInfo[],
   db: Database.Database
-): Promise<void> {
+): void {
   for (const ann of annotations) {
-    await regenerateCombinedImageForAnnotation(videoId, ann.id, ann.startFrame, ann.endFrame, db)
+    markImageForRegeneration(videoId, ann.id, db)
   }
 }
 
@@ -542,10 +541,7 @@ export function getAnnotation(videoId: string, annotationId: number): Annotation
  * @returns The created annotation
  * @throws Error if database is not found
  */
-export async function createAnnotation(
-  videoId: string,
-  input: CreateAnnotationInput
-): Promise<Annotation> {
+export function createAnnotation(videoId: string, input: CreateAnnotationInput): Annotation {
   const result = getOrCreateAnnotationDatabase(videoId)
   if (!result.success) {
     throw new Error('Database not found')
@@ -554,11 +550,16 @@ export async function createAnnotation(
   const db = result.db
 
   try {
+    // For non-gap, non-pending annotations, mark for image generation
+    const isPending = input.boundaryPending ?? false
+    const isGap = input.boundaryState === 'gap'
+    const needsImageRegen = !isGap && !isPending ? 1 : 0
+
     const insertResult = db
       .prepare(
         `
-        INSERT INTO captions (start_frame_index, end_frame_index, boundary_state, boundary_pending, text)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO captions (start_frame_index, end_frame_index, boundary_state, boundary_pending, text, image_needs_regen)
+        VALUES (?, ?, ?, ?, ?, ?)
       `
       )
       .run(
@@ -566,22 +567,11 @@ export async function createAnnotation(
         input.endFrameIndex,
         input.boundaryState ?? 'predicted',
         input.boundaryPending ? 1 : 0,
-        input.text ?? null
+        input.text ?? null,
+        needsImageRegen
       )
 
     const annotationId = insertResult.lastInsertRowid as number
-
-    // Generate combined image for non-gap, non-pending annotations
-    const isPending = input.boundaryPending ?? false
-    const isGap = input.boundaryState === 'gap'
-    if (!isGap && !isPending) {
-      await getOrGenerateCombinedImage(
-        videoId,
-        annotationId,
-        input.startFrameIndex,
-        input.endFrameIndex
-      )
-    }
 
     const annotation = db.prepare('SELECT * FROM captions WHERE id = ?').get(annotationId) as
       | AnnotationRow
@@ -604,17 +594,17 @@ export async function createAnnotation(
  * 1. Deletes annotations completely contained within the new range
  * 2. Trims or splits overlapping annotations
  * 3. Creates gap annotations for uncovered ranges when shrinking
- * 4. Regenerates combined images as needed
+ * 4. Marks images for async regeneration as needed
  *
  * @param videoId - Video identifier
  * @param input - Update input with new boundaries
  * @returns Overlap resolution result with all affected annotations
  * @throws Error if database or annotation is not found
  */
-export async function updateAnnotationWithOverlapResolution(
+export function updateAnnotationWithOverlapResolution(
   videoId: string,
   input: UpdateAnnotationInput
-): Promise<OverlapResolutionResult> {
+): OverlapResolutionResult {
   const result = getWritableDatabase(videoId)
   if (!result.success) {
     throw new Error('Database not found')
@@ -644,11 +634,15 @@ export async function updateAnnotationWithOverlapResolution(
       endFrameIndex
     )
 
-    // Regenerate combined images for all modified overlapping annotations
-    await regenerateAnnotationImages(videoId, modifiedAnnotations, db)
+    // Mark combined images for async regeneration (all modified overlapping annotations)
+    markAnnotationImagesForRegeneration(videoId, modifiedAnnotations, db)
 
     // Create gap annotations for uncovered ranges when annotation shrinks
     const createdGaps = createGapAnnotations(db, original, startFrameIndex, endFrameIndex)
+
+    // Check if boundaries changed
+    const boundariesChanged =
+      startFrameIndex !== original.start_frame_index || endFrameIndex !== original.end_frame_index
 
     // Update the annotation and mark as confirmed
     db.prepare(
@@ -658,17 +652,21 @@ export async function updateAnnotationWithOverlapResolution(
           end_frame_index = ?,
           boundary_state = ?,
           boundary_pending = 0,
+          image_needs_regen = ?,
           boundary_updated_at = datetime('now')
       WHERE id = ?
     `
-    ).run(startFrameIndex, endFrameIndex, boundaryState ?? 'confirmed', id)
+    ).run(
+      startFrameIndex,
+      endFrameIndex,
+      boundaryState ?? 'confirmed',
+      boundariesChanged ? 1 : 0,
+      id
+    )
 
-    // Regenerate combined image if boundaries changed
-    const boundariesChanged =
-      startFrameIndex !== original.start_frame_index || endFrameIndex !== original.end_frame_index
-
+    // Delete old combined image if boundaries changed
     if (boundariesChanged) {
-      await regenerateCombinedImageForAnnotation(videoId, id, startFrameIndex, endFrameIndex, db)
+      deleteCombinedImage(videoId, id)
     }
 
     // Get updated annotation
