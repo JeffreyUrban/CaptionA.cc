@@ -373,6 +373,22 @@ function queryDatabaseId(db: Database.Database): string | undefined {
 }
 
 /**
+ * Query if any captions have median OCR processing in progress
+ */
+function queryMedianOcrProcessing(db: Database.Database): boolean {
+  try {
+    const result = db
+      .prepare(
+        `SELECT COUNT(*) as count FROM captions WHERE median_ocr_status IN ('queued', 'processing')`
+      )
+      .get() as { count: number } | undefined
+    return (result?.count ?? 0) > 0
+  } catch {
+    return false
+  }
+}
+
+/**
  * Calculate badge states based on video stats
  * Returns array of badges to display
  */
@@ -393,7 +409,7 @@ function calculateBadges(
   if (boundariesBadge) badges.push(boundariesBadge)
 
   // Text Track
-  const textBadge = calculateTextBadge(stats, videoId, stageErrors.text)
+  const textBadge = calculateTextBadge(stats, videoId, db, stageErrors.text)
   if (textBadge) badges.push(textBadge)
 
   // If all tracks complete (and video is actually ready for annotation), show Fully Annotated
@@ -717,6 +733,7 @@ function calculateBoundariesBadge(
 function calculateTextBadge(
   stats: Omit<VideoStats, 'badges'>,
   videoId: string,
+  db: Database.Database,
   error?: { message: string; stack?: string }
 ): BadgeState | null {
   // Priority 0: Error (show if this stage has a data error)
@@ -744,7 +761,18 @@ function calculateTextBadge(
     return null
   }
 
-  // Priority 1: Review (has text pending review)
+  // Priority 1: Processing OCR (median frame OCR in progress)
+  const hasProcessingOcr = queryMedianOcrProcessing(db)
+  if (hasProcessingOcr) {
+    return {
+      type: 'text',
+      label: 'Text: Processing OCR',
+      color: 'purple',
+      clickable: false,
+    }
+  }
+
+  // Priority 2: Review (has text pending review)
   if (stats.textPendingReview > 0) {
     return {
       type: 'text',

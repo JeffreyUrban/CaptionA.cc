@@ -23,10 +23,12 @@ function log(message: string) {
 }
 
 interface QueueFlowOptions {
-  videoId: string
-  videoPath: string
-  dbPath: string
-  outputDir: string
+  videoId?: string
+  videoPath?: string
+  dbPath?: string
+  outputDir?: string
+  videoDir?: string
+  dataDir?: string
   frameRate?: number
   cropBounds?: {
     left: number
@@ -35,6 +37,11 @@ interface QueueFlowOptions {
     bottom: number
   }
   cropBoundsVersion?: number
+  captionIds?: number[]
+  language?: string
+  trainingSource?: string
+  retrainVideos?: boolean
+  updatePredictions?: boolean
 }
 
 interface QueueFlowResult {
@@ -50,30 +57,87 @@ interface QueueFlowResult {
  * but queues to Prefect instead of running directly.
  */
 function queueFlow(
-  flowType: 'full-frames' | 'crop-frames',
+  flowType:
+    | 'full-frames'
+    | 'crop-frames'
+    | 'caption-median-ocr'
+    | 'update-base-model'
+    | 'retrain-video-model',
   options: QueueFlowOptions
 ): Promise<QueueFlowResult> {
   return new Promise((resolve, reject) => {
-    const args = [flowType, options.videoId, options.videoPath, options.dbPath, options.outputDir]
+    let args: string[] = []
 
-    // Add optional frame rate for full-frames as named option
-    if (
-      flowType === 'full-frames' &&
-      options.frameRate !== undefined &&
-      options.frameRate !== 0.1
-    ) {
-      args.push('--frame-rate', options.frameRate.toString())
-    }
-
-    // Add crop bounds for crop-frames
-    if (flowType === 'crop-frames') {
-      if (!options.cropBounds) {
-        reject(new Error('cropBounds required for crop-frames flow'))
+    if (flowType === 'caption-median-ocr') {
+      // caption-median-ocr has different argument structure
+      if (!options.videoDir) {
+        reject(new Error('videoDir required for caption-median-ocr flow'))
         return
       }
-      args.push(JSON.stringify(options.cropBounds))
-      if (options.cropBoundsVersion !== undefined) {
-        args.push(options.cropBoundsVersion.toString())
+      if (!options.captionIds || options.captionIds.length === 0) {
+        reject(new Error('captionIds required for caption-median-ocr flow'))
+        return
+      }
+      args = [
+        flowType,
+        options.videoId!,
+        options.dbPath!,
+        options.videoDir!,
+        JSON.stringify(options.captionIds!),
+      ]
+      if (options.language) {
+        args.push(options.language)
+      }
+    } else if (flowType === 'update-base-model') {
+      // update-base-model has different argument structure
+      if (!options.dataDir) {
+        reject(new Error('dataDir required for update-base-model flow'))
+        return
+      }
+      args = [flowType, options.dataDir]
+      if (options.trainingSource) {
+        args.push(options.trainingSource)
+      }
+      if (options.retrainVideos !== undefined) {
+        args.push(options.retrainVideos.toString())
+      }
+    } else if (flowType === 'retrain-video-model') {
+      // retrain-video-model has different argument structure
+      if (!options.videoId || !options.dbPath) {
+        reject(new Error('videoId and dbPath required for retrain-video-model flow'))
+        return
+      }
+      args = [flowType, options.videoId, options.dbPath]
+      if (options.updatePredictions !== undefined) {
+        args.push(options.updatePredictions.toString())
+      }
+    } else {
+      // full-frames and crop-frames have the original structure
+      if (!options.videoPath || !options.outputDir || !options.videoId || !options.dbPath) {
+        reject(new Error('videoId, videoPath, dbPath, and outputDir required for this flow type'))
+        return
+      }
+      args = [flowType, options.videoId, options.videoPath, options.dbPath, options.outputDir]
+
+      // Add optional frame rate for full-frames as named option
+      if (
+        flowType === 'full-frames' &&
+        options.frameRate !== undefined &&
+        options.frameRate !== 0.1
+      ) {
+        args.push('--frame-rate', options.frameRate.toString())
+      }
+
+      // Add crop bounds for crop-frames
+      if (flowType === 'crop-frames') {
+        if (!options.cropBounds) {
+          reject(new Error('cropBounds required for crop-frames flow'))
+          return
+        }
+        args.push(JSON.stringify(options.cropBounds))
+        if (options.cropBoundsVersion !== undefined) {
+          args.push(options.cropBoundsVersion.toString())
+        }
       }
     }
 
@@ -173,5 +237,75 @@ export async function queueCropFramesProcessing(options: {
   })
 
   log(`[Prefect] Crop frames flow queued: ${result.flowRunId} (status: ${result.status})`)
+  return result
+}
+
+/**
+ * Queue caption median OCR processing (user-initiated after boundary changes)
+ *
+ * Replaces: synchronous OCR in api.annotations.$videoId.$id.text.tsx
+ */
+export async function queueCaptionMedianOcrProcessing(options: {
+  videoId: string
+  dbPath: string
+  videoDir: string
+  captionIds: number[]
+  language?: string
+}): Promise<QueueFlowResult> {
+  log(
+    `[Prefect] Queuing caption median OCR for ${options.videoId}, captions: ${options.captionIds.join(', ')}`
+  )
+
+  const result = await queueFlow('caption-median-ocr', {
+    ...options,
+    language: options.language ?? 'zh-Hans',
+  })
+
+  log(`[Prefect] Caption median OCR flow queued: ${result.flowRunId} (status: ${result.status})`)
+  return result
+}
+
+/**
+ * Queue base model update (admin/maintenance task)
+ *
+ * Updates global base model and optionally retrains all video models.
+ * This is a manual or scheduled task for model maintenance.
+ */
+export async function queueBaseModelUpdate(options: {
+  dataDir: string
+  trainingSource?: string
+  retrainVideos?: boolean
+}): Promise<QueueFlowResult> {
+  log(`[Prefect] Queuing base model update from: ${options.dataDir}`)
+
+  const result = await queueFlow('update-base-model', {
+    ...options,
+    trainingSource: options.trainingSource ?? 'all_videos',
+    retrainVideos: options.retrainVideos ?? true,
+  })
+
+  log(`[Prefect] Base model update flow queued: ${result.flowRunId} (status: ${result.status})`)
+  return result
+}
+
+/**
+ * Queue video model retrain (user-initiated or batch)
+ *
+ * Retrains a single video's model with current base model + video's labels.
+ * Can be triggered manually from UI or as part of base model update batch.
+ */
+export async function queueVideoModelRetrain(options: {
+  videoId: string
+  dbPath: string
+  updatePredictions?: boolean
+}): Promise<QueueFlowResult> {
+  log(`[Prefect] Queuing video model retrain for: ${options.videoId}`)
+
+  const result = await queueFlow('retrain-video-model', {
+    ...options,
+    updatePredictions: options.updatePredictions ?? true,
+  })
+
+  log(`[Prefect] Video model retrain flow queued: ${result.flowRunId} (status: ${result.status})`)
   return result
 }
