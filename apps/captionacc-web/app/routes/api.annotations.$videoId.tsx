@@ -78,7 +78,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
         boundaryState: body.boundary_state,
       }
 
-      const result = updateAnnotationWithOverlapResolution(videoId, input)
+      const result = await updateAnnotationWithOverlapResolution(videoId, input)
 
       // Return in snake_case format for API compatibility
       return jsonResponse({
@@ -97,7 +97,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
         text: body.text,
       }
 
-      const annotation = createAnnotation(videoId, input)
+      const annotation = await createAnnotation(videoId, input)
 
       // Return in snake_case format for API compatibility
       return jsonResponse({ annotation: toSnakeCase(annotation) })
@@ -132,6 +132,9 @@ function toSnakeCase(annotation: Annotation) {
     text_ocr_combined: annotation.textOcrCombined,
     text_updated_at: annotation.textUpdatedAt,
     image_needs_regen: annotation.imageNeedsRegen ? 1 : 0,
+    median_ocr_status: annotation.medianOcrStatus,
+    median_ocr_error: annotation.medianOcrError,
+    median_ocr_processed_at: annotation.medianOcrProcessedAt,
     created_at: annotation.createdAt,
   }
 }

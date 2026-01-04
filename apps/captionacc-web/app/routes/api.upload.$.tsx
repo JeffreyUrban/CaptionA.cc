@@ -377,13 +377,51 @@ async function handlePatchRequest(request: Request, uploadId: string): Promise<R
 
         console.log(`[tus] Upload complete: ${displayPath} (storage: ${completeStoragePath})`)
 
-        // Queue video for background processing (respects concurrency limits)
-        const { queueVideoProcessing } = await import('~/services/video-processing')
-        queueVideoProcessing({
-          videoPath: displayPath, // Pass display path for logging
-          videoFile: finalVideoPath,
-          videoId: metadata.metadata.videoId, // Pass UUID for tracking
-        })
+        // Queue video for background processing via Prefect
+        console.log('[Prefect] Starting to queue full frames processing...')
+        const { queueFullFramesProcessing } = await import('~/services/prefect')
+        const { resolve } = await import('path')
+
+        try {
+          const videoDir = resolve(
+            process.cwd(),
+            '..',
+            '..',
+            'local',
+            'data',
+            ...completeStoragePath.split('/')
+          )
+
+          console.log(`[Prefect] Video ID: ${metadata.metadata.videoId}`)
+          console.log(`[Prefect] Video path: ${finalVideoPath}`)
+          console.log(`[Prefect] DB path: ${dbPath}`)
+          console.log(`[Prefect] Output dir: ${resolve(videoDir, 'full_frames')}`)
+
+          const result = await queueFullFramesProcessing({
+            videoId: metadata.metadata.videoId!,
+            videoPath: finalVideoPath,
+            dbPath,
+            outputDir: resolve(videoDir, 'full_frames'),
+            frameRate: 0.1,
+          })
+          console.log(`[Prefect] ✅ Successfully queued full frames: ${result.flowRunId}`)
+        } catch (error) {
+          console.error('[Prefect] ❌ Failed to queue processing:', error)
+          console.error(
+            '[Prefect] Error stack:',
+            error instanceof Error ? error.stack : 'No stack trace'
+          )
+          // Mark as error in database
+          db.prepare(
+            `
+            UPDATE processing_status
+            SET status = 'error',
+                error_message = 'Failed to queue processing',
+                error_details = ?
+            WHERE id = 1
+          `
+          ).run(error instanceof Error ? error.message : String(error))
+        }
       }
     } finally {
       db.close()

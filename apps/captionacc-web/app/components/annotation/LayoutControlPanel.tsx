@@ -28,7 +28,10 @@ interface LayoutControlPanelProps {
   currentFrameBoxes: FrameBoxesData | null
   boxStats: BoxStats | null
   annotationsSinceRecalc: number
+  isRecalculating: boolean
   recalcThreshold: number
+  showCropBoundsInFrame: boolean
+  onToggleCropBounds: (show: boolean) => void
   onApprove: () => void
   onClearAll: () => void
 }
@@ -42,7 +45,10 @@ export function LayoutControlPanel({
   currentFrameBoxes,
   boxStats,
   annotationsSinceRecalc,
+  isRecalculating,
   recalcThreshold,
+  showCropBoundsInFrame,
+  onToggleCropBounds,
   onApprove,
   onClearAll,
 }: LayoutControlPanelProps) {
@@ -68,7 +74,7 @@ export function LayoutControlPanel({
       <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Layout Controls</h2>
 
       {/* Instructions */}
-      <LayoutInstructionsPanel />
+      <LayoutInstructionsPanel viewMode={viewMode} />
 
       {/* Annotation Progress Indicator */}
       <LayoutAnnotationProgress
@@ -82,9 +88,27 @@ export function LayoutControlPanel({
         layoutApproved={layoutApproved}
         layoutConfig={layoutConfig}
         cropBoundsEdit={cropBoundsEdit}
+        isRecalculating={isRecalculating}
         onApprove={onApprove}
         onClearAll={onClearAll}
       />
+
+      {/* Crop Boundary Toggle (Frame view only) */}
+      {viewMode === 'frame' && (
+        <div className="rounded-md bg-gray-50 p-3 dark:bg-gray-900">
+          <label className="flex cursor-pointer items-center gap-2">
+            <input
+              type="checkbox"
+              checked={showCropBoundsInFrame}
+              onChange={e => onToggleCropBounds(e.target.checked)}
+              className="h-4 w-4"
+            />
+            <span className="text-sm text-gray-700 dark:text-gray-300">
+              Show crop boundary overlay
+            </span>
+          </label>
+        </div>
+      )}
 
       {/* Current view info */}
       {viewMode === 'frame' && <LayoutCurrentFrameInfo currentFrameBoxes={currentFrameBoxes} />}

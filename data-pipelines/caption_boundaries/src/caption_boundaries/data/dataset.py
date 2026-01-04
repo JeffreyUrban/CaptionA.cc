@@ -5,18 +5,16 @@ Loads frame pairs, OCR visualizations, and metadata for training the boundary pr
 
 import sqlite3
 import subprocess
-from collections import OrderedDict
 from pathlib import Path
 from typing import Literal
 
 import numpy as np
 import torch
-from frames_db import get_frame_from_db
 from PIL import Image
 from torch.utils.data import Dataset
 
 from caption_boundaries.data.transforms import AnchorAwareResize, NormalizeImageNet, ResizeStrategy
-from caption_boundaries.database import FontEmbedding, TrainingDataset, TrainingSample, get_dataset_db
+from caption_boundaries.database import FontEmbedding, TrainingDataset, TrainingSample
 
 
 def get_git_root() -> Path:
@@ -51,7 +49,7 @@ class CaptionBoundaryDataset(Dataset):
     - Frame 1 (cropped caption at time t, from training_frames table)
     - Frame 2 (cropped caption at time t+1, from training_frames table)
     - Spatial metadata (anchor_type, position, size)
-    - Font embedding (512-dim from FontCLIP, from font_embeddings table)
+    - Reference frame image (for CLIP encoding, from training_frames table)
     - Label (5-way classification)
 
     Args:
@@ -72,7 +70,7 @@ class CaptionBoundaryDataset(Dataset):
         >>> sample = dataset[0]
         >>> print(sample.keys())
         dict_keys(['ocr_viz', 'frame1', 'frame2', 'spatial_features',
-                   'font_embedding', 'label'])
+                   'reference_image', 'label'])
     """
 
     # Label encoding
@@ -96,6 +94,7 @@ class CaptionBoundaryDataset(Dataset):
         # Create persistent database session for data loading
         # This avoids opening a new connection for every sample
         from caption_boundaries.database import create_dataset_session
+
         self._db_session = create_dataset_session(dataset_db_path)
 
         # Load samples from database
@@ -109,46 +108,114 @@ class CaptionBoundaryDataset(Dataset):
         )
         self.normalize = NormalizeImageNet()
 
-        # Cache for metadata (font embeddings and spatial features)
+        # Cache for spatial metadata
         self._spatial_metadata_cache = {}
-        self._font_embedding_cache = {}
 
     def __del__(self):
         """Clean up database session when dataset is destroyed."""
-        if hasattr(self, '_db_session'):
+        if hasattr(self, "_db_session"):
             self._db_session.close()
 
     def _load_samples(self) -> list[TrainingSample]:
         """Load training samples from database for this split.
 
         Returns:
-            List of TrainingSample objects
+            List of TrainingSample objects (only complete samples with all required data)
 
         Raises:
             ValueError: If no samples found for split
         """
+        from caption_boundaries.database import TrainingFrame, TrainingOCRVisualization
+
         # Get dataset to verify it exists
         dataset = self._db_session.query(TrainingDataset).first()
         if not dataset:
             raise ValueError(f"No dataset found in {self.dataset_db_path}")
 
         # Load samples for this split
-        samples = (
-            self._db_session.query(TrainingSample)
-            .filter(TrainingSample.split == self.split)
-            .all()
-        )
+        all_samples = self._db_session.query(TrainingSample).filter(TrainingSample.split == self.split).all()
 
-        if not samples:
-            raise ValueError(
-                f"No {self.split} samples found in dataset '{dataset.name}'"
-            )
+        if not all_samples:
+            raise ValueError(f"No {self.split} samples found in dataset '{dataset.name}'")
+
+        # Filter to only complete samples (all required data exists)
+        valid_samples = []
+        missing_stats = {
+            "frame1": 0,
+            "frame2": 0,
+            "ocr_viz": 0,
+        }
+
+        for sample in all_samples:
+            # Check if all required data exists
+            if self._is_complete_sample(sample, missing_stats):
+                valid_samples.append(sample)
 
         # Detach from session (make transient)
-        for sample in samples:
+        for sample in valid_samples:
             self._db_session.expunge(sample)
 
-        return samples
+        incomplete_count = len(all_samples) - len(valid_samples)
+        if incomplete_count > 0:
+            print(f"⚠️  Excluded {incomplete_count}/{len(all_samples)} incomplete samples from {self.split} split ({incomplete_count/len(all_samples)*100:.1f}%)")
+            print(f"   Missing data breakdown:")
+            for key, count in missing_stats.items():
+                if count > 0:
+                    print(f"   - {key}: {count} samples")
+
+        if not valid_samples:
+            raise ValueError(f"No complete {self.split} samples found in dataset '{dataset.name}'")
+
+        return valid_samples
+
+    def _is_complete_sample(self, sample: TrainingSample, missing_stats: dict = None) -> bool:
+        """Check if a sample has all required data.
+
+        Note: Reference frame check removed since we now fallback to frame1 if missing.
+
+        Args:
+            sample: Training sample to validate
+            missing_stats: Optional dict to track what's missing (for diagnostics)
+
+        Returns:
+            True if all required data exists, False otherwise
+        """
+        from caption_boundaries.database import TrainingFrame, TrainingOCRVisualization
+
+        # Check frame1 exists (also serves as fallback reference frame)
+        frame1 = (
+            self._db_session.query(TrainingFrame)
+            .filter(TrainingFrame.video_hash == sample.video_hash, TrainingFrame.frame_index == sample.frame1_index)
+            .first()
+        )
+        if not frame1:
+            if missing_stats is not None:
+                missing_stats["frame1"] += 1
+            return False
+
+        # Check frame2 exists
+        frame2 = (
+            self._db_session.query(TrainingFrame)
+            .filter(TrainingFrame.video_hash == sample.video_hash, TrainingFrame.frame_index == sample.frame2_index)
+            .first()
+        )
+        if not frame2:
+            if missing_stats is not None:
+                missing_stats["frame2"] += 1
+            return False
+
+        # Check OCR visualization exists
+        ocr_viz = (
+            self._db_session.query(TrainingOCRVisualization)
+            .filter(TrainingOCRVisualization.video_hash == sample.video_hash)
+            .first()
+        )
+        if not ocr_viz:
+            if missing_stats is not None:
+                missing_stats["ocr_viz"] += 1
+            return False
+
+        return True
 
     def __len__(self) -> int:
         """Return number of samples in dataset."""
@@ -166,7 +233,7 @@ class CaptionBoundaryDataset(Dataset):
             - frame1: Tensor of shape (C, H, W) - First frame
             - frame2: Tensor of shape (C, H, W) - Second frame
             - spatial_features: Tensor of shape (6,) - Spatial metadata
-            - font_embedding: Tensor of shape (512,) - Font embedding
+            - reference_image: Tensor of shape (C, H, W) - Reference frame for CLIP encoding
             - label: Integer label (0-4)
             - sample_id: Database ID of sample (for debugging)
         """
@@ -182,8 +249,8 @@ class CaptionBoundaryDataset(Dataset):
         # Get spatial metadata
         spatial_features = self._get_spatial_metadata(sample.video_hash)
 
-        # Get font embedding from dataset database
-        font_embedding = self._get_font_embedding(sample.video_hash)
+        # Get reference frame image from dataset database (use frame1 as fallback)
+        reference_image = self._get_reference_frame(sample.video_hash, fallback_frame_index=sample.frame1_index)
 
         # Apply transforms
         # Get anchor type from spatial metadata
@@ -192,17 +259,16 @@ class CaptionBoundaryDataset(Dataset):
         frame1 = self.resize_transform(frame1_image, anchor_type)
         frame2 = self.resize_transform(frame2_image, anchor_type)
         ocr_viz = self.resize_transform(ocr_viz_image, anchor_type)
+        reference_frame = self.resize_transform(reference_image, anchor_type)
 
         # Normalize to tensors
         frame1_tensor = torch.from_numpy(self.normalize(frame1))
         frame2_tensor = torch.from_numpy(self.normalize(frame2))
         ocr_viz_tensor = torch.from_numpy(self.normalize(ocr_viz))
+        reference_tensor = torch.from_numpy(self.normalize(reference_frame))
 
         # Convert spatial features to tensor
         spatial_tensor = torch.tensor(spatial_features, dtype=torch.float32)
-
-        # Convert font embedding to tensor
-        font_tensor = torch.tensor(font_embedding, dtype=torch.float32)
 
         # Encode label
         label_idx = self.LABEL_TO_IDX[sample.label]
@@ -212,7 +278,7 @@ class CaptionBoundaryDataset(Dataset):
             "frame1": frame1_tensor,
             "frame2": frame2_tensor,
             "spatial_features": spatial_tensor,
-            "font_embedding": font_tensor,
+            "reference_image": reference_tensor,
             "label": label_idx,
             "sample_id": sample.id,
         }
@@ -231,21 +297,17 @@ class CaptionBoundaryDataset(Dataset):
             ValueError: If frame not found in database
         """
         from io import BytesIO
+
         from caption_boundaries.database import TrainingFrame
 
         frame = (
             self._db_session.query(TrainingFrame)
-            .filter(
-                TrainingFrame.video_hash == video_hash,
-                TrainingFrame.frame_index == frame_index
-            )
+            .filter(TrainingFrame.video_hash == video_hash, TrainingFrame.frame_index == frame_index)
             .first()
         )
 
         if not frame:
-            raise ValueError(
-                f"Frame {frame_index} for video {video_hash[:8]}... not found in dataset"
-            )
+            raise ValueError(f"Frame {frame_index} for video {video_hash[:8]}... not found in dataset")
 
         return Image.open(BytesIO(frame.image_data))
 
@@ -262,6 +324,7 @@ class CaptionBoundaryDataset(Dataset):
             ValueError: If OCR visualization not found in database
         """
         from io import BytesIO
+
         from caption_boundaries.database import TrainingOCRVisualization
 
         ocr_viz = (
@@ -271,43 +334,67 @@ class CaptionBoundaryDataset(Dataset):
         )
 
         if not ocr_viz:
-            raise ValueError(
-                f"OCR visualization for video {video_hash[:8]}... not found in dataset"
-            )
+            raise ValueError(f"OCR visualization for video {video_hash[:8]}... not found in dataset")
 
-        return Image.open(BytesIO(ocr_viz.image_data))
+        img = Image.open(BytesIO(ocr_viz.image_data))
+        return img.convert("RGB")  # Ensure RGB, remove alpha channel if present
 
-    def _get_font_embedding(self, video_hash: str) -> np.ndarray:
-        """Get font embedding from dataset database.
+    def _get_reference_frame(self, video_hash: str, fallback_frame_index: int | None = None) -> Image.Image:
+        """Get reference frame image from dataset database.
+
+        The reference frame is the frame selected for CLIP encoding. Models will
+        run CLIP on this image themselves during forward pass.
+
+        Falls back to using any available frame if the reference frame is missing.
 
         Args:
             video_hash: Video hash
+            fallback_frame_index: Frame index to use if reference frame is missing
 
         Returns:
-            512-dimensional font embedding
+            PIL Image of reference frame
 
         Raises:
-            ValueError: If font embedding not found
+            ValueError: If no frames found for video
         """
-        if video_hash in self._font_embedding_cache:
-            return self._font_embedding_cache[video_hash]
+        from io import BytesIO
 
-        embedding_record = (
-            self._db_session.query(FontEmbedding)
-            .filter(FontEmbedding.video_hash == video_hash)
-            .first()
-        )
+        from caption_boundaries.database import FontEmbedding, TrainingFrame
 
-        if not embedding_record:
-            raise ValueError(
-                f"Font embedding for video {video_hash[:8]}... not found in dataset"
+        # Try to get reference frame index from FontEmbedding table
+        embedding_record = self._db_session.query(FontEmbedding).filter(FontEmbedding.video_hash == video_hash).first()
+
+        if embedding_record:
+            reference_frame_index = embedding_record.reference_frame_index
+
+            # Try to load the reference frame from TrainingFrame table
+            frame = (
+                self._db_session.query(TrainingFrame)
+                .filter(TrainingFrame.video_hash == video_hash, TrainingFrame.frame_index == reference_frame_index)
+                .first()
             )
 
-        # Convert bytes to numpy array
-        embedding = np.frombuffer(embedding_record.embedding, dtype=np.float32)
+            if frame:
+                return Image.open(BytesIO(frame.image_data))
 
-        self._font_embedding_cache[video_hash] = embedding
-        return embedding
+        # Fallback: use the provided fallback frame index (usually frame1)
+        if fallback_frame_index is not None:
+            frame = (
+                self._db_session.query(TrainingFrame)
+                .filter(TrainingFrame.video_hash == video_hash, TrainingFrame.frame_index == fallback_frame_index)
+                .first()
+            )
+
+            if frame:
+                return Image.open(BytesIO(frame.image_data))
+
+        # Last resort: use any available frame for this video
+        frame = self._db_session.query(TrainingFrame).filter(TrainingFrame.video_hash == video_hash).first()
+
+        if not frame:
+            raise ValueError(f"No frames found for video {video_hash[:8]}... in dataset")
+
+        return Image.open(BytesIO(frame.image_data))
 
     def _get_spatial_metadata(self, video_hash: str) -> np.ndarray:
         """Get spatial metadata for video.
@@ -372,13 +459,14 @@ class CaptionBoundaryDataset(Dataset):
             "frame1": torch.stack([s["frame1"] for s in batch]),
             "frame2": torch.stack([s["frame2"] for s in batch]),
             "spatial_features": torch.stack([s["spatial_features"] for s in batch]),
-            "font_embedding": torch.stack([s["font_embedding"] for s in batch]),
+            "reference_image": torch.stack([s["reference_image"] for s in batch]),
             "label": torch.tensor([s["label"] for s in batch], dtype=torch.long),
             "sample_id": [s["sample_id"] for s in batch],  # Keep as list for debugging
         }
 
 
 # Helper functions for inference
+
 
 def _get_video_metadata(video_db_path: Path) -> dict:
     """Get video metadata from annotations database.
@@ -389,7 +477,6 @@ def _get_video_metadata(video_db_path: Path) -> dict:
     Returns:
         Dict with video metadata
     """
-    import sqlite3
 
     conn = sqlite3.connect(video_db_path)
     cursor = conn.cursor()
@@ -416,7 +503,6 @@ def _get_spatial_features(video_db_path: Path, frame1_index: int, frame2_index: 
     Returns:
         List of spatial features (anchor type encoding, position, size)
     """
-    import sqlite3
 
     conn = sqlite3.connect(video_db_path)
     cursor = conn.cursor()

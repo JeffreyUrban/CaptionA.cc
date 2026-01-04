@@ -5,8 +5,8 @@
 import Database from 'better-sqlite3'
 import { type ActionFunctionArgs } from 'react-router'
 
-import { queueCropFramesProcessing } from '~/services/crop-frames-processing'
-import { getDbPath } from '~/utils/video-paths'
+import { queueCropFramesProcessing } from '~/services/prefect'
+import { getDbPath, getVideoDir } from '~/utils/video-paths'
 
 export async function action({ params }: ActionFunctionArgs) {
   const { videoId: encodedVideoId } = params
@@ -128,10 +128,30 @@ export async function action({ params }: ActionFunctionArgs) {
       db.close()
     }
 
-    // Queue the crop_frames job immediately
-    queueCropFramesProcessing({
+    // Queue the crop_frames job immediately via Prefect
+    const videoDir = getVideoDir(videoId)
+    if (!videoDir) {
+      throw new Error('Failed to resolve video directory')
+    }
+
+    // Get video file
+    const { readdirSync } = await import('fs')
+    const { resolve } = await import('path')
+    const videoFiles = readdirSync(videoDir).filter(
+      f => f.endsWith('.mp4') || f.endsWith('.mkv') || f.endsWith('.avi') || f.endsWith('.mov')
+    )
+    const videoFile = videoFiles[0]
+    if (!videoFile) {
+      throw new Error('Video file not found')
+    }
+
+    const videoFilePath = resolve(videoDir, videoFile)
+
+    await queueCropFramesProcessing({
       videoId,
-      videoPath,
+      videoPath: videoFilePath,
+      dbPath,
+      outputDir: resolve(videoDir, 'crop_frames'),
       cropBounds: {
         left: layoutConfig.crop_left,
         top: layoutConfig.crop_top,
@@ -140,13 +160,18 @@ export async function action({ params }: ActionFunctionArgs) {
       },
     })
 
+    console.log(`[Prefect] Queued crop frames retry for ${videoId}`)
+
     return new Response(
       JSON.stringify({
         success: true,
         message: 'Crop frames queued for reprocessing',
       }),
       {
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Video-Touched': videoId,
+        },
       }
     )
   } catch (error) {

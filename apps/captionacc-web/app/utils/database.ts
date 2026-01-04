@@ -89,6 +89,9 @@ export function getAnnotationDatabase(videoId: string): DatabaseResult {
 
   try {
     const db = new Database(dbPath, { readonly: true })
+    // Enable WAL mode for better concurrent access
+    // WAL allows reads to proceed while writes are happening
+    db.pragma('journal_mode = WAL')
     return { success: true, db }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to open database'
@@ -129,6 +132,9 @@ export function getWritableDatabase(videoId: string): DatabaseResult {
     migrateDatabase(dbPath)
 
     const db = new Database(dbPath)
+    // Enable WAL mode for better concurrent access
+    // WAL allows reads to proceed while writes are happening
+    db.pragma('journal_mode = WAL')
     return { success: true, db }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to open database'
@@ -181,6 +187,9 @@ export function getOrCreateAnnotationDatabase(
     }
 
     const db = new Database(actualDbPath)
+    // Enable WAL mode for better concurrent access
+    // WAL allows reads to proceed while writes are happening
+    db.pragma('journal_mode = WAL')
 
     // Return whether database was created (for callers that need to initialize schema)
     return {

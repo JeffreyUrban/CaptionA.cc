@@ -22,6 +22,12 @@ export interface CropFramesStatus {
   errorMessage?: string
 }
 
+export interface TextReviewStatus {
+  status: 'pending' | 'complete'
+  lastUpdatedAt?: string
+  reviewCompletedAt?: string
+}
+
 export interface VideoStats {
   totalAnnotations: number
   pendingReview: number
@@ -35,8 +41,9 @@ export interface VideoStats {
   layoutApproved: boolean // Whether layout annotation has been approved (gate for boundary annotation)
   processingStatus?: ProcessingStatus // Upload/processing status (null if not uploaded via web)
   cropFramesStatus?: CropFramesStatus // Crop frames processing status
+  textReviewStatus?: TextReviewStatus // Text review status
   boundaryPendingReview: number // Boundaries pending review
-  textPendingReview: number // Text annotations pending review
+  textPendingReview: number // Text annotations pending review (deprecated, use textReviewStatus)
   databaseId?: string // Unique ID that changes when database is recreated (for cache invalidation)
   badges: BadgeState[] // Calculated badge states for display
 }
@@ -45,7 +52,9 @@ export interface ProcessingStatus {
   status:
     | 'uploading'
     | 'upload_complete'
+    | 'pending_duplicate_resolution'
     | 'extracting_frames'
+    | 'running_ocr'
     | 'analyzing_layout'
     | 'processing_complete'
     | 'error'
@@ -169,6 +178,7 @@ function queryBoundaryPending(
 
 /**
  * Query text pending count, recording errors to stageErrors
+ * Note: This is deprecated in favor of queryTextReviewStatus, but kept for backward compatibility
  */
 function queryTextPending(
   db: Database.Database,
@@ -176,16 +186,18 @@ function queryTextPending(
   stageErrors: StageErrors
 ): number {
   try {
-    const result = db
-      .prepare(
-        `SELECT SUM(CASE WHEN text_pending = 1 THEN 1 ELSE 0 END) as text_pending FROM captions`
-      )
-      .get() as { text_pending: number }
-    return result.text_pending || 0
+    // Query the text_review_status table instead of counting individual flags
+    const statusRow = db.prepare(`SELECT status FROM text_review_status WHERE id = 1`).get() as
+      | { status: string }
+      | undefined
+
+    // If status is 'pending', return 1 to indicate there's text to review
+    // If 'complete' or no row, return 0
+    return statusRow?.status === 'pending' ? 1 : 0
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error)
     const errorStack = error instanceof Error ? error.stack : undefined
-    console.error(`[getVideoStats] Error querying text_pending for ${videoId}:`, error)
+    console.error(`[getVideoStats] Error querying text_review_status for ${videoId}:`, error)
     stageErrors.text = { message: errorMessage, stack: errorStack }
     return 0
   }
@@ -324,6 +336,29 @@ function queryCropFramesStatus(db: Database.Database): CropFramesStatus | undefi
 }
 
 /**
+ * Query text review status from database
+ */
+function queryTextReviewStatus(db: Database.Database): TextReviewStatus | undefined {
+  try {
+    const row = db.prepare(`SELECT * FROM text_review_status WHERE id = 1`).get() as
+      | {
+          status: string
+          last_updated_at?: string
+          review_completed_at?: string
+        }
+      | undefined
+    if (!row) return undefined
+    return {
+      status: row.status as TextReviewStatus['status'],
+      lastUpdatedAt: row.last_updated_at,
+      reviewCompletedAt: row.review_completed_at,
+    }
+  } catch {
+    return undefined
+  }
+}
+
+/**
  * Query database ID for cache invalidation
  */
 function queryDatabaseId(db: Database.Database): string | undefined {
@@ -334,6 +369,22 @@ function queryDatabaseId(db: Database.Database): string | undefined {
     return result?.database_id
   } catch {
     return undefined
+  }
+}
+
+/**
+ * Query if any captions have median OCR processing in progress
+ */
+function queryMedianOcrProcessing(db: Database.Database): boolean {
+  try {
+    const result = db
+      .prepare(
+        `SELECT COUNT(*) as count FROM captions WHERE median_ocr_status IN ('queued', 'processing')`
+      )
+      .get() as { count: number } | undefined
+    return (result?.count ?? 0) > 0
+  } catch {
+    return false
   }
 }
 
@@ -358,7 +409,7 @@ function calculateBadges(
   if (boundariesBadge) badges.push(boundariesBadge)
 
   // Text Track
-  const textBadge = calculateTextBadge(stats, videoId, stageErrors.text)
+  const textBadge = calculateTextBadge(stats, videoId, db, stageErrors.text)
   if (textBadge) badges.push(textBadge)
 
   // If all tracks complete (and video is actually ready for annotation), show Fully Annotated
@@ -468,7 +519,9 @@ function getLayoutProgressBadge(status: ProcessingStatus['status']): BadgeState 
   const statusMap: Partial<Record<ProcessingStatus['status'], BadgeState>> = {
     uploading: createLayoutStatusBadge('Uploading', 'blue'),
     upload_complete: createLayoutStatusBadge('Queued', 'blue'),
+    pending_duplicate_resolution: createLayoutStatusBadge('Duplicate Pending', 'yellow'),
     extracting_frames: createLayoutStatusBadge('Layout: Framing', 'indigo'),
+    running_ocr: createLayoutStatusBadge('Layout: Running OCR', 'purple'),
     analyzing_layout: createLayoutStatusBadge('Layout: Analyzing', 'purple'),
   }
   return statusMap[status] ?? null
@@ -663,6 +716,17 @@ function calculateBoundariesBadge(
   const processingBadge = handleCropFramesProcessingState(stats.cropFramesStatus, stats, videoId)
   if (processingBadge) return processingBadge
 
+  // Priority 5: Intermediate state - layout approved but crop frames not initialized yet
+  // This happens briefly after layout approval before recrop-frames API is called
+  if (!stats.cropFramesStatus) {
+    return {
+      type: 'boundaries',
+      label: 'Boundaries: Initializing',
+      color: 'blue',
+      clickable: false,
+    }
+  }
+
   // Priority 6: Incomplete (progress < 100% means there are unannotated frames)
   if (stats.progress < 100) {
     return createBoundariesActionBadge(videoId, 'annotate')
@@ -680,6 +744,7 @@ function calculateBoundariesBadge(
 function calculateTextBadge(
   stats: Omit<VideoStats, 'badges'>,
   videoId: string,
+  db: Database.Database,
   error?: { message: string; stack?: string }
 ): BadgeState | null {
   // Priority 0: Error (show if this stage has a data error)
@@ -707,7 +772,18 @@ function calculateTextBadge(
     return null
   }
 
-  // Priority 1: Review (has text pending review)
+  // Priority 1: Processing OCR (median frame OCR in progress)
+  const hasProcessingOcr = queryMedianOcrProcessing(db)
+  if (hasProcessingOcr) {
+    return {
+      type: 'text',
+      label: 'Text: Processing OCR',
+      color: 'purple',
+      clickable: false,
+    }
+  }
+
+  // Priority 2: Review (has text pending review)
   if (stats.textPendingReview > 0) {
     return {
       type: 'text',
@@ -737,6 +813,13 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
   const db = new Database(dbPath, { readonly: true })
 
   try {
+    // Check if video is deleted FIRST, before any other queries
+    // This prevents showing "Layout: Error" during deletion race conditions
+    const { status: processingStatus, isDeleted } = queryProcessingStatus(db, videoId)
+    if (isDeleted) {
+      return createEmptyStats([])
+    }
+
     // Query all the data using helper functions
     const totalFrames = queryTotalFrames(db)
     const stageErrors: StageErrors = {}
@@ -748,13 +831,8 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
     const hasOcrData = queryHasOcrData(db)
     const layoutApproved = queryLayoutApproved(db)
 
-    // Handle deleted videos early
-    const { status: processingStatus, isDeleted } = queryProcessingStatus(db, videoId)
-    if (isDeleted) {
-      return createEmptyStats([])
-    }
-
     const cropFramesStatus = queryCropFramesStatus(db)
+    const textReviewStatus = queryTextReviewStatus(db)
     const databaseId = queryDatabaseId(db)
 
     // Build stats object (used twice: once for return, once for badge calculation)
@@ -771,6 +849,7 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
       layoutApproved,
       processingStatus,
       cropFramesStatus,
+      textReviewStatus,
       boundaryPendingReview,
       textPendingReview,
       databaseId,

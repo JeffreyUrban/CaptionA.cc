@@ -12,17 +12,14 @@ import { renderToPipeableStream } from 'react-dom/server'
 import { ServerRouter, type AppLoadContext, type EntryContext } from 'react-router'
 
 import { startPeriodicCleanup } from '~/services/video-cleanup'
-import { recoverStalledProcessing } from '~/services/video-processing'
-// Import to register queue processors with coordinator
-import '~/services/crop-frames-processing'
 
 const ABORT_DELAY = 5_000
 
 // Start periodic cleanup on server startup
 startPeriodicCleanup()
 
-// Recover any stalled processing jobs from server restart
-recoverStalledProcessing()
+// Note: Video processing is now handled by Prefect orchestrator
+// Prefect server manages job recovery and retries independently
 
 export default function handleRequest(
   request: Request,

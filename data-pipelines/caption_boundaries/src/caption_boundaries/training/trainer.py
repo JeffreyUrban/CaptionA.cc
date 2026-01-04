@@ -4,7 +4,6 @@ Implements training with W&B experiment tracking, validation metrics,
 and checkpoint management.
 """
 
-import json
 import random
 from collections import defaultdict
 from pathlib import Path
@@ -17,15 +16,44 @@ import torch.optim as optim
 import wandb
 from rich.console import Console
 from rich.progress import track
-from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, f1_score
+from sklearn.metrics import (
+    accuracy_score,
+    balanced_accuracy_score,
+    classification_report,
+    confusion_matrix,
+    f1_score,
+)
 from torch.utils.data import DataLoader, Sampler
 
 from caption_boundaries.data.dataset import CaptionBoundaryDataset
 from caption_boundaries.data.transforms import ResizeStrategy
-from caption_boundaries.database import Experiment, TrainingDataset, get_dataset_db
-from caption_boundaries.models.architecture import create_model
+from caption_boundaries.database import Experiment, FontEmbedding, TrainingDataset, get_dataset_db
+from caption_boundaries.models.registry import create_model, get_model_info
 
 console = Console(stderr=True)
+
+
+def compute_per_class_accuracy(y_true: np.ndarray, y_pred: np.ndarray, num_classes: int) -> dict[int, float]:
+    """Compute accuracy for each class separately.
+
+    Args:
+        y_true: True labels
+        y_pred: Predicted labels
+        num_classes: Total number of classes
+
+    Returns:
+        Dict mapping class index to accuracy (0.0 if no samples)
+    """
+    per_class_acc = {}
+    for class_idx in range(num_classes):
+        # Get indices where true label is this class
+        mask = y_true == class_idx
+        if mask.sum() == 0:
+            per_class_acc[class_idx] = 0.0
+        else:
+            # Accuracy for this class = correct predictions / total samples
+            per_class_acc[class_idx] = (y_pred[mask] == class_idx).mean()
+    return per_class_acc
 
 
 class BalancedBatchSampler(Sampler):
@@ -129,6 +157,8 @@ class CaptionBoundaryTrainer:
     Args:
         dataset_db_path: Path to dataset database file
         experiment_name: Name for this experiment (for W&B)
+        architecture_name: Model architecture from registry (e.g., "triple_backbone_resnet50")
+        model_config: Architecture-specific configuration (pretrained, dropout, etc.)
         transform_strategy: Transform strategy for variable-sized crops
         ocr_viz_variant: OCR visualization variant to use
         use_font_embedding: Whether to use font embeddings
@@ -149,6 +179,8 @@ class CaptionBoundaryTrainer:
         self,
         dataset_db_path: Path,
         experiment_name: str,
+        architecture_name: str = "triple_backbone_resnet50",
+        model_config: dict[str, Any] | None = None,
         transform_strategy: ResizeStrategy = ResizeStrategy.MIRROR_TILE,
         ocr_viz_variant: str = "boundaries",
         use_font_embedding: bool = True,
@@ -166,6 +198,8 @@ class CaptionBoundaryTrainer:
     ):
         self.dataset_db_path = dataset_db_path
         self.experiment_name = experiment_name
+        self.architecture_name = architecture_name
+        self.model_config = model_config or {"pretrained": True}
         self.transform_strategy = transform_strategy
         self.ocr_viz_variant = ocr_viz_variant
         self.use_font_embedding = use_font_embedding
@@ -331,8 +365,14 @@ class CaptionBoundaryTrainer:
     def _setup_model(self):
         """Initialize model, optimizer, and loss function."""
         console.print("[cyan]Initializing model...[/cyan]")
+        console.print(f"[cyan]Architecture:[/cyan] {self.architecture_name}")
 
-        self.model = create_model(device=self.device, pretrained=True)
+        # Create model from registry
+        self.model = create_model(
+            architecture=self.architecture_name,
+            device=self.device,
+            **self.model_config,
+        )
 
         console.print(f"[green]✓[/green] Total params: {self.model.get_num_total_params():,}")
         console.print(f"[green]✓[/green] Trainable params: {self.model.get_num_trainable_params():,}")
@@ -354,7 +394,7 @@ class CaptionBoundaryTrainer:
 
         self.optimizer = optim.AdamW(param_groups)
 
-        console.print(f"[cyan]Learning rates:[/cyan]")
+        console.print("[cyan]Learning rates:[/cyan]")
         console.print(f"  Classifier: {self.lr_classifier:.2e}")
         console.print(f"  Features: {self.lr_features:.2e}")
 
@@ -381,11 +421,24 @@ class CaptionBoundaryTrainer:
             if not dataset:
                 raise ValueError(f"No dataset found in {self.dataset_db_path}")
 
+            # Get FontCLIP model version for W&B tracking
+            fontclip_model_version = None
+            if self.use_font_embedding:
+                fontclip_versions = (
+                    db.query(FontEmbedding.fontclip_model_version)
+                    .distinct()
+                    .all()
+                )
+                if fontclip_versions:
+                    versions = [v[0] for v in fontclip_versions if v[0]]
+                    if versions:
+                        fontclip_model_version = versions[0]
+
             config = {
                 # Model config
-                "model_architecture": "CaptionBoundaryPredictor",
+                "architecture_name": self.architecture_name,
+                "model_config": self.model_config,
                 "num_classes": 5,
-                "pretrained": True,
                 # Training config
                 "epochs": self.epochs,
                 "batch_size": self.batch_size,
@@ -402,6 +455,7 @@ class CaptionBoundaryTrainer:
                 "transform_strategy": self.transform_strategy.value,
                 "ocr_viz_variant": self.ocr_viz_variant,
                 "use_font_embedding": self.use_font_embedding,
+                "fontclip_model_version": fontclip_model_version,
                 "split_strategy": dataset.split_strategy,
                 "train_split_ratio": dataset.train_split_ratio,
                 "random_seed": dataset.random_seed,
@@ -443,12 +497,12 @@ class CaptionBoundaryTrainer:
             frame1 = batch["frame1"].to(self.device)
             frame2 = batch["frame2"].to(self.device)
             spatial_features = batch["spatial_features"].to(self.device)
-            font_embedding = batch["font_embedding"].to(self.device)
+            reference_image = batch["reference_image"].to(self.device)
             labels = batch["label"].to(self.device)
 
             # Forward pass
             self.optimizer.zero_grad()
-            logits = self.model(ocr_viz, frame1, frame2, spatial_features, font_embedding)
+            logits = self.model(ocr_viz, frame1, frame2, spatial_features, reference_image)
 
             # Compute loss
             loss = self.criterion(logits, labels)
@@ -465,16 +519,33 @@ class CaptionBoundaryTrainer:
 
         # Compute epoch metrics
         avg_loss = total_loss / len(self.train_loader)
-        accuracy = accuracy_score(all_labels, all_preds)
-        f1_weighted = f1_score(all_labels, all_preds, average="weighted", zero_division=0)
-        f1_macro = f1_score(all_labels, all_preds, average="macro", zero_division=0)
+        all_labels_np = np.array(all_labels)
+        all_preds_np = np.array(all_preds)
 
-        return {
+        # Overall metrics
+        accuracy = accuracy_score(all_labels_np, all_preds_np)
+        balanced_acc = balanced_accuracy_score(all_labels_np, all_preds_np)
+        f1_weighted = f1_score(all_labels_np, all_preds_np, average="weighted", zero_division=0)
+        f1_macro = f1_score(all_labels_np, all_preds_np, average="macro", zero_division=0)
+
+        # Per-class accuracy
+        per_class_acc = compute_per_class_accuracy(
+            all_labels_np, all_preds_np, len(CaptionBoundaryDataset.LABELS)
+        )
+
+        metrics = {
             "train/loss": avg_loss,
             "train/accuracy": accuracy,
+            "train/balanced_accuracy": balanced_acc,
             "train/f1_weighted": f1_weighted,
             "train/f1_macro": f1_macro,
         }
+
+        # Add per-class accuracies
+        for idx, label_name in enumerate(CaptionBoundaryDataset.LABELS):
+            metrics[f"train/accuracy_{label_name}"] = per_class_acc[idx]
+
+        return metrics
 
     def validate(self, epoch: int) -> dict[str, Any]:
         """Run validation.
@@ -497,11 +568,11 @@ class CaptionBoundaryTrainer:
                 frame1 = batch["frame1"].to(self.device)
                 frame2 = batch["frame2"].to(self.device)
                 spatial_features = batch["spatial_features"].to(self.device)
-                font_embedding = batch["font_embedding"].to(self.device)
+                reference_image = batch["reference_image"].to(self.device)
                 labels = batch["label"].to(self.device)
 
                 # Forward pass
-                logits = self.model(ocr_viz, frame1, frame2, spatial_features, font_embedding)
+                logits = self.model(ocr_viz, frame1, frame2, spatial_features, reference_image)
 
                 # Compute loss
                 loss = self.criterion(logits, labels)
@@ -514,17 +585,27 @@ class CaptionBoundaryTrainer:
 
         # Compute validation metrics
         avg_loss = total_loss / len(self.val_loader)
-        accuracy = accuracy_score(all_labels, all_preds)
-        f1_weighted = f1_score(all_labels, all_preds, average="weighted", zero_division=0)
-        f1_macro = f1_score(all_labels, all_preds, average="macro", zero_division=0)
+        all_labels_np = np.array(all_labels)
+        all_preds_np = np.array(all_preds)
+
+        # Overall metrics
+        accuracy = accuracy_score(all_labels_np, all_preds_np)
+        balanced_acc = balanced_accuracy_score(all_labels_np, all_preds_np)
+        f1_weighted = f1_score(all_labels_np, all_preds_np, average="weighted", zero_division=0)
+        f1_macro = f1_score(all_labels_np, all_preds_np, average="macro", zero_division=0)
+
+        # Per-class accuracy
+        per_class_acc = compute_per_class_accuracy(
+            all_labels_np, all_preds_np, len(CaptionBoundaryDataset.LABELS)
+        )
 
         # Confusion matrix
-        cm = confusion_matrix(all_labels, all_preds)
+        cm = confusion_matrix(all_labels_np, all_preds_np)
 
         # Classification report (specify labels to handle missing classes in small datasets)
         class_report = classification_report(
-            all_labels,
-            all_preds,
+            all_labels_np,
+            all_preds_np,
             labels=list(range(len(CaptionBoundaryDataset.LABELS))),
             target_names=CaptionBoundaryDataset.LABELS,
             output_dict=True,
@@ -534,6 +615,7 @@ class CaptionBoundaryTrainer:
         metrics = {
             "val/loss": avg_loss,
             "val/accuracy": accuracy,
+            "val/balanced_accuracy": balanced_acc,
             "val/f1_weighted": f1_weighted,
             "val/f1_macro": f1_macro,
             "val/confusion_matrix": cm,
@@ -541,7 +623,11 @@ class CaptionBoundaryTrainer:
         }
 
         # Add per-class metrics for W&B logging
-        for label_name in CaptionBoundaryDataset.LABELS:
+        for idx, label_name in enumerate(CaptionBoundaryDataset.LABELS):
+            # Per-class accuracy
+            metrics[f"val/accuracy_{label_name}"] = per_class_acc[idx]
+
+            # Per-class precision, recall, f1 from classification report
             if label_name in class_report:
                 metrics[f"val/precision_{label_name}"] = class_report[label_name]["precision"]
                 metrics[f"val/recall_{label_name}"] = class_report[label_name]["recall"]
@@ -577,6 +663,8 @@ class CaptionBoundaryTrainer:
             "optimizer_state_dict": self.optimizer.state_dict(),
             "metrics": metrics,
             "config": {
+                "architecture_name": self.architecture_name,
+                "model_config": self.model_config,
                 "dataset_db_path": str(self.dataset_db_path),
                 "transform_strategy": self.transform_strategy.value,
                 "ocr_viz_variant": self.ocr_viz_variant,
@@ -627,12 +715,13 @@ class CaptionBoundaryTrainer:
         console.print(
             f"\n[yellow]Epoch 0/{self.epochs} (untrained)[/yellow] - "
             f"Val Loss: {epoch_0_metrics['val/loss']:.4f}, "
-            f"Val F1 (macro): {epoch_0_metrics['val/f1_macro']:.4f}, "
-            f"Val Accuracy: {epoch_0_metrics['val/accuracy']:.4f}\n"
+            f"Val Balanced Acc: {epoch_0_metrics['val/balanced_accuracy']:.4f}, "
+            f"Val Accuracy: {epoch_0_metrics['val/accuracy']:.4f}, "
+            f"Val F1 (macro): {epoch_0_metrics['val/f1_macro']:.4f}\n"
         )
 
-        # Track best model (use macro F1 for imbalanced datasets)
-        best_val_f1_macro = 0.0
+        # Track best model (use balanced accuracy for imbalanced datasets)
+        best_val_balanced_acc = 0.0
 
         # Training loop
         for epoch in range(1, self.epochs + 1):
@@ -651,22 +740,23 @@ class CaptionBoundaryTrainer:
             }
             wandb.log(wandb_metrics, step=epoch)
 
-            # Print progress
+            # Print progress with key metrics
             console.print(
                 f"\nEpoch {epoch}/{self.epochs} - "
                 f"Train Loss: {train_metrics['train/loss']:.4f}, "
-                f"Train F1 (macro): {train_metrics['train/f1_macro']:.4f} | "
+                f"Train Bal Acc: {train_metrics['train/balanced_accuracy']:.4f} | "
                 f"Val Loss: {val_metrics['val/loss']:.4f}, "
-                f"Val F1 (macro): {val_metrics['val/f1_macro']:.4f}"
+                f"Val Bal Acc: {val_metrics['val/balanced_accuracy']:.4f}, "
+                f"Val Acc: {val_metrics['val/accuracy']:.4f}"
             )
 
             # Step learning rate scheduler based on validation loss
             self.scheduler.step(val_metrics["val/loss"])
 
-            # Save checkpoint (use macro F1 for best model selection)
-            is_best = val_metrics["val/f1_macro"] > best_val_f1_macro
+            # Save checkpoint (use balanced accuracy for best model selection)
+            is_best = val_metrics["val/balanced_accuracy"] > best_val_balanced_acc
             if is_best:
-                best_val_f1_macro = val_metrics["val/f1_macro"]
+                best_val_balanced_acc = val_metrics["val/balanced_accuracy"]
                 self.early_stopping_counter = 0  # Reset early stopping
             else:
                 self.early_stopping_counter += 1
@@ -694,13 +784,14 @@ class CaptionBoundaryTrainer:
         )
 
         # Save experiment to database
-        self._save_experiment_to_db(best_val_f1_macro, val_metrics["val/accuracy"])
+        self._save_experiment_to_db(best_val_balanced_acc, val_metrics["val/accuracy"])
 
         # Finish W&B
         wandb.finish()
 
-        console.print(f"\n[green]✓ Training complete![/green]")
-        console.print(f"Best Val F1 (macro): {best_val_f1_macro:.4f}")
+        console.print("\n[green]✓ Training complete![/green]")
+        console.print(f"Best Val Balanced Accuracy: {best_val_balanced_acc:.4f}")
+        console.print(f"Final Val Accuracy: {val_metrics['val/accuracy']:.4f}")
         console.print(f"Checkpoints saved to: {self.checkpoint_dir}")
 
     def _save_experiment_to_db(self, best_val_f1: float, best_val_accuracy: float):
@@ -710,6 +801,42 @@ class CaptionBoundaryTrainer:
             dataset = db.query(TrainingDataset).first()
             if not dataset:
                 raise ValueError(f"No dataset found in {self.dataset_db_path}")
+
+            # Get FontCLIP model version used in this dataset
+            # Query all unique fontclip_model_version values used
+            fontclip_versions = (
+                db.query(FontEmbedding.fontclip_model_version)
+                .distinct()
+                .all()
+            )
+
+            if fontclip_versions and self.use_font_embedding:
+                # Extract version strings
+                versions = [v[0] for v in fontclip_versions if v[0]]
+
+                if len(versions) == 1:
+                    # Single model version used (expected case)
+                    fontclip_model_version = versions[0]
+                elif len(versions) > 1:
+                    # Multiple versions (rare) - use most common one and log warning
+                    from collections import Counter
+                    version_counts = Counter(
+                        db.query(FontEmbedding.fontclip_model_version)
+                        .filter(FontEmbedding.fontclip_model_version.isnot(None))
+                        .all()
+                    )
+                    most_common = version_counts.most_common(1)[0][0][0]
+                    fontclip_model_version = most_common
+                    console.print(
+                        f"[yellow]⚠[/yellow] Multiple FontCLIP versions found in dataset, "
+                        f"using most common: {most_common}"
+                    )
+                else:
+                    # No versions found
+                    fontclip_model_version = None
+            else:
+                # Font embeddings not used or no embeddings found
+                fontclip_model_version = None
 
             # Get git info if available
             try:
@@ -726,7 +853,8 @@ class CaptionBoundaryTrainer:
                 dataset_id=dataset.id,
                 wandb_run_id=self.wandb_run_id,
                 wandb_project=self.wandb_project,
-                model_architecture={"type": "CaptionBoundaryPredictor", "pretrained": True},
+                architecture_name=self.architecture_name,
+                model_config=self.model_config,
                 hyperparameters={
                     "epochs": self.epochs,
                     "batch_size": self.batch_size,
@@ -739,6 +867,7 @@ class CaptionBoundaryTrainer:
                 transform_strategy=self.transform_strategy.value,
                 ocr_visualization_variant=self.ocr_viz_variant,
                 use_font_embedding=self.use_font_embedding,
+                fontclip_model_version=fontclip_model_version,
                 best_val_f1=best_val_f1,
                 best_val_accuracy=best_val_accuracy,
                 best_checkpoint_path=str(self.checkpoint_dir / "best.pt"),
@@ -757,3 +886,15 @@ class CaptionBoundaryTrainer:
 
             self.experiment_id = experiment.id
             console.print(f"[green]✓[/green] Experiment saved to database (ID: {experiment.id})")
+
+            # Log FontCLIP model version for transparency
+            if fontclip_model_version:
+                is_fallback = "-fallback" in fontclip_model_version
+                if is_fallback:
+                    console.print(
+                        f"[yellow]ℹ[/yellow] FontCLIP model: {fontclip_model_version} (using fallback CLIP model)"
+                    )
+                else:
+                    console.print(f"[green]ℹ[/green] FontCLIP model: {fontclip_model_version}")
+            elif self.use_font_embedding:
+                console.print("[yellow]⚠[/yellow] Font embeddings enabled but no FontCLIP version recorded")

@@ -84,11 +84,13 @@ export async function action({ request, params }: ActionFunctionArgs) {
       const videoDir = resolve(dataDir, ...videoMetadata.storage_path.split('/'))
       const videoFile = resolve(videoDir, videoMetadata.original_filename)
 
-      const { queueVideoProcessing } = await import('~/services/video-processing')
-      queueVideoProcessing({
-        videoPath: videoMetadata.display_path,
-        videoFile,
+      const { queueFullFramesProcessing } = await import('~/services/prefect')
+      await queueFullFramesProcessing({
         videoId: videoMetadata.video_id,
+        videoPath: videoFile,
+        dbPath,
+        outputDir: resolve(videoDir, 'full_frames'),
+        frameRate: 0.1,
       })
 
       console.log(`[DuplicateResolution] Keeping both: ${videoMetadata.display_path}`)
@@ -154,11 +156,13 @@ export async function action({ request, params }: ActionFunctionArgs) {
       const videoDir = resolve(dataDir, ...videoMetadata.storage_path.split('/'))
       const videoFile = resolve(videoDir, videoMetadata.original_filename)
 
-      const { queueVideoProcessing } = await import('~/services/video-processing')
-      queueVideoProcessing({
-        videoPath: videoMetadata.display_path,
-        videoFile,
+      const { queueFullFramesProcessing } = await import('~/services/prefect')
+      await queueFullFramesProcessing({
         videoId: videoMetadata.video_id,
+        videoPath: videoFile,
+        dbPath,
+        outputDir: resolve(videoDir, 'full_frames'),
+        frameRate: 0.1,
       })
 
       console.log(`[DuplicateResolution] Replacing existing with: ${videoMetadata.display_path}`)

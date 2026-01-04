@@ -12,8 +12,10 @@ import {
   getWritableDatabase,
   getOrCreateAnnotationDatabase,
 } from '~/utils/database'
-import { deleteCombinedImage, getOrGenerateCombinedImage } from '~/utils/image-processing'
+import { deleteCombinedImage } from '~/utils/image-processing'
 import type { AnnotationState, TextStatus } from '~/types/enums'
+import { queueCaptionMedianOcrProcessing } from './prefect'
+import { getDbPath, getVideoDir } from '~/utils/video-paths'
 
 // =============================================================================
 // Type Definitions
@@ -36,6 +38,9 @@ interface AnnotationRow {
   text_ocr_combined: string | null
   text_updated_at: string
   image_needs_regen: number
+  median_ocr_status: string
+  median_ocr_error: string | null
+  median_ocr_processed_at: string | null
   created_at: string
 }
 
@@ -56,6 +61,9 @@ export interface Annotation {
   textOcrCombined: string | null
   textUpdatedAt: string
   imageNeedsRegen: boolean
+  medianOcrStatus: string
+  medianOcrError: string | null
+  medianOcrProcessedAt: string | null
   createdAt: string
 }
 
@@ -138,32 +146,66 @@ function transformAnnotation(row: AnnotationRow): Annotation {
     textOcrCombined: row.text_ocr_combined,
     textUpdatedAt: row.text_updated_at,
     imageNeedsRegen: row.image_needs_regen === 1,
+    medianOcrStatus: row.median_ocr_status,
+    medianOcrError: row.median_ocr_error,
+    medianOcrProcessedAt: row.median_ocr_processed_at,
     createdAt: row.created_at,
   }
 }
 
 /**
  * Mark annotation's combined image as needing regeneration.
- * Deletes old image immediately and marks for async regeneration.
+ * Deletes old image immediately, marks for async regeneration, and queues Prefect flow.
  */
-function markImageForRegeneration(
+async function markImageForRegeneration(
   videoId: string,
   annotationId: number,
   db: Database.Database
-): void {
+): Promise<void> {
   // Delete old combined image immediately
   deleteCombinedImage(videoId, annotationId)
 
-  // Mark for async regeneration and clear OCR cache
+  // Mark for async regeneration, clear OCR cache, and queue via Prefect
   db.prepare(
     `
     UPDATE captions
     SET image_needs_regen = 1,
         text_ocr_combined = NULL,
-        text_pending = 1
+        text_pending = 1,
+        median_ocr_status = 'queued'
     WHERE id = ?
   `
   ).run(annotationId)
+
+  // Queue median frame OCR processing via Prefect (async)
+  const dbPath = getDbPath(videoId)
+  const videoDir = getVideoDir(videoId)
+
+  if (dbPath && videoDir) {
+    try {
+      await queueCaptionMedianOcrProcessing({
+        videoId,
+        dbPath,
+        videoDir,
+        captionIds: [annotationId],
+      })
+      console.log(`[markImageForRegeneration] Queued median OCR for annotation ${annotationId}`)
+    } catch (error) {
+      console.error(
+        `[markImageForRegeneration] Failed to queue median OCR for annotation ${annotationId}:`,
+        error
+      )
+      // Update status to error
+      db.prepare(
+        `
+        UPDATE captions
+        SET median_ocr_status = 'error',
+            median_ocr_error = ?
+        WHERE id = ?
+      `
+      ).run(error instanceof Error ? error.message : String(error), annotationId)
+    }
+  }
 }
 
 /**
@@ -350,18 +392,19 @@ function createGapAnnotations(
 
 /**
  * Mark combined images for async regeneration for a list of annotations.
+ * Queues Prefect flows for each annotation.
  *
  * @param videoId - Video identifier
  * @param annotations - Array of annotation info with frame ranges
  * @param db - Database connection
  */
-function markAnnotationImagesForRegeneration(
+async function markAnnotationImagesForRegeneration(
   videoId: string,
   annotations: ModifiedAnnotationInfo[],
   db: Database.Database
-): void {
+): Promise<void> {
   for (const ann of annotations) {
-    markImageForRegeneration(videoId, ann.id, db)
+    await markImageForRegeneration(videoId, ann.id, db)
   }
 }
 
@@ -536,12 +579,17 @@ export function getAnnotation(videoId: string, annotationId: number): Annotation
  * Use this when you're certain there are no overlapping annotations,
  * or for creating gap annotations that don't need overlap handling.
  *
+ * Queues median OCR processing via Prefect for non-gap, non-pending annotations.
+ *
  * @param videoId - Video identifier
  * @param input - Annotation creation input
  * @returns The created annotation
  * @throws Error if database is not found
  */
-export function createAnnotation(videoId: string, input: CreateAnnotationInput): Annotation {
+export async function createAnnotation(
+  videoId: string,
+  input: CreateAnnotationInput
+): Promise<Annotation> {
   const result = getOrCreateAnnotationDatabase(videoId)
   if (!result.success) {
     throw new Error('Database not found')
@@ -573,6 +621,49 @@ export function createAnnotation(videoId: string, input: CreateAnnotationInput):
 
     const annotationId = insertResult.lastInsertRowid as number
 
+    // Queue median OCR processing for non-gap, non-pending annotations via Prefect
+    // image_needs_regen flag is already set in INSERT above
+    if (!isGap && !isPending) {
+      // Update median_ocr_status to queued
+      db.prepare(
+        `
+        UPDATE captions
+        SET median_ocr_status = 'queued'
+        WHERE id = ?
+      `
+      ).run(annotationId)
+
+      // Queue median frame OCR processing via Prefect (async)
+      const dbPath = getDbPath(videoId)
+      const videoDir = getVideoDir(videoId)
+
+      if (dbPath && videoDir) {
+        try {
+          await queueCaptionMedianOcrProcessing({
+            videoId,
+            dbPath,
+            videoDir,
+            captionIds: [annotationId],
+          })
+          console.log(`[createAnnotation] Queued median OCR for annotation ${annotationId}`)
+        } catch (error) {
+          console.error(
+            `[createAnnotation] Failed to queue median OCR for annotation ${annotationId}:`,
+            error
+          )
+          // Update status to error
+          db.prepare(
+            `
+            UPDATE captions
+            SET median_ocr_status = 'error',
+                median_ocr_error = ?
+            WHERE id = ?
+          `
+          ).run(error instanceof Error ? error.message : String(error), annotationId)
+        }
+      }
+    }
+
     const annotation = db.prepare('SELECT * FROM captions WHERE id = ?').get(annotationId) as
       | AnnotationRow
       | undefined
@@ -594,17 +685,17 @@ export function createAnnotation(videoId: string, input: CreateAnnotationInput):
  * 1. Deletes annotations completely contained within the new range
  * 2. Trims or splits overlapping annotations
  * 3. Creates gap annotations for uncovered ranges when shrinking
- * 4. Marks images for async regeneration as needed
+ * 4. Marks images for async regeneration and queues Prefect flows
  *
  * @param videoId - Video identifier
  * @param input - Update input with new boundaries
  * @returns Overlap resolution result with all affected annotations
  * @throws Error if database or annotation is not found
  */
-export function updateAnnotationWithOverlapResolution(
+export async function updateAnnotationWithOverlapResolution(
   videoId: string,
   input: UpdateAnnotationInput
-): OverlapResolutionResult {
+): Promise<OverlapResolutionResult> {
   const result = getWritableDatabase(videoId)
   if (!result.success) {
     throw new Error('Database not found')
@@ -635,7 +726,7 @@ export function updateAnnotationWithOverlapResolution(
     )
 
     // Mark combined images for async regeneration (all modified overlapping annotations)
-    markAnnotationImagesForRegeneration(videoId, modifiedAnnotations, db)
+    await markAnnotationImagesForRegeneration(videoId, modifiedAnnotations, db)
 
     // Create gap annotations for uncovered ranges when annotation shrinks
     const createdGaps = createGapAnnotations(db, original, startFrameIndex, endFrameIndex)

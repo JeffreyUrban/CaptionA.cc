@@ -18,6 +18,16 @@ console = Console(stderr=True)
 def train(
     dataset_name: str = typer.Argument(..., help="Dataset name (e.g., 'my_dataset')"),
     experiment_name: str = typer.Option(..., "--name", "-n", help="Experiment name for W&B"),
+    architecture: str = typer.Option(
+        "triple_backbone_resnet50",
+        "--architecture", "-a",
+        help="Model architecture from registry"
+    ),
+    pretrained: bool = typer.Option(
+        True,
+        "--pretrained/--no-pretrained",
+        help="Use ImageNet pretrained weights"
+    ),
     epochs: int = typer.Option(50, "--epochs", "-e", help="Number of training epochs"),
     batch_size: int = typer.Option(32, "--batch-size", "-b", help="Training batch size"),
     lr_features: float = typer.Option(1e-3, "--lr-features", help="Learning rate for feature extractor"),
@@ -113,6 +123,8 @@ def train(
         trainer = CaptionBoundaryTrainer(
             dataset_db_path=dataset_db_path,
             experiment_name=experiment_name,
+            architecture_name=architecture,
+            model_config={"pretrained": pretrained},
             transform_strategy=strategy,
             ocr_viz_variant=ocr_viz_variant,
             use_font_embedding=True,
@@ -354,6 +366,33 @@ def create_dataset(
     except Exception as e:
         console.print(f"[red]✗ Failed to create dataset:[/red] {e}")
         raise typer.Exit(code=1)
+
+
+@app.command()
+def list_models():
+    """List available model architectures."""
+    from caption_boundaries.models import get_model_info, list_architectures, create_model_from_registry
+
+    console.print("[cyan]Available Model Architectures:[/cyan]\n")
+
+    for arch_name in sorted(list_architectures()):
+        info = get_model_info(arch_name)
+
+        # Create model to get parameter counts
+        model = create_model_from_registry(arch_name, device="cpu", pretrained=False)
+        total_params = model.get_num_total_params()
+        trainable_params = model.get_num_trainable_params()
+
+        console.print(f"[green]{arch_name}[/green]")
+        console.print(f"  Parameters: {total_params:,} total, {trainable_params:,} trainable ({trainable_params/total_params*100:.1f}%)")
+        console.print(f"  Module: {info['module']}")
+
+        if info["docstring"]:
+            # Extract first line of docstring
+            first_line = info["docstring"].split("\n")[0].strip()
+            console.print(f"  Description: {first_line}")
+
+        console.print()
 
 
 @app.command()

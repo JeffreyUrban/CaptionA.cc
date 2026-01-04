@@ -30,7 +30,7 @@ function isSqliteError(error: unknown): error is SqliteError {
   return error instanceof Error && 'code' in error
 }
 
-interface VideoLayoutConfig {
+export interface VideoLayoutConfig {
   frame_width: number
   frame_height: number
   crop_left: number
@@ -45,7 +45,7 @@ interface VideoLayoutConfig {
   anchor_position: number | null
 }
 
-interface BoxBounds {
+export interface BoxBounds {
   left: number
   top: number
   right: number
@@ -471,7 +471,7 @@ function queryUserAnnotation(
  * All spatial features use k-nearest neighbors approach, independent of pre-computed
  * cluster parameters to avoid circular dependencies.
  */
-function extractFeatures(
+export function extractFeatures(
   box: BoxBounds,
   layout: VideoLayoutConfig,
   allBoxes: BoxBounds[],
