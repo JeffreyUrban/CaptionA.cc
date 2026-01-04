@@ -10,8 +10,6 @@ from caption_boundaries.database import (
     Experiment,
     OCRVisualization,
     TrainingDataset,
-    TrainingFrame,
-    TrainingOCRVisualization,
     TrainingSample,
     VideoRegistry,
     create_dataset_session,
