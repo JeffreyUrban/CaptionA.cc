@@ -373,7 +373,7 @@ def create_dataset(
 @app.command()
 def list_models():
     """List available model architectures."""
-    from caption_boundaries.models import create_model_from_registry, get_model_info, list_architectures
+    from caption_boundaries.models import create_model, get_model_info, list_architectures
 
     console.print("[cyan]Available Model Architectures:[/cyan]\n")
 
@@ -381,7 +381,7 @@ def list_models():
         info = get_model_info(arch_name)
 
         # Create model to get parameter counts
-        model = create_model_from_registry(arch_name, device="cpu", pretrained=False)
+        model = create_model(arch_name, device="cpu", pretrained=False)
         # Use getattr to access custom model methods (not on nn.Module base)
         get_total = getattr(model, "get_num_total_params", None)
         get_trainable = getattr(model, "get_num_trainable_params", None)

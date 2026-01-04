@@ -6,6 +6,8 @@ that tracks datasets, training samples, cached embeddings, and experiment proven
 Database location: local/caption_boundaries_training.db
 """
 
+from __future__ import annotations
+
 from datetime import UTC, datetime
 from typing import Any
 
