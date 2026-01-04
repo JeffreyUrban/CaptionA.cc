@@ -1,0 +1,2 @@
+# DVC-tracked model checkpoints (ignore all .pt files, track via .dvc)
+*.pt

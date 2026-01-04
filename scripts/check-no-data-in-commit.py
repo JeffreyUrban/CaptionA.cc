@@ -24,10 +24,10 @@ FORBIDDEN_PATTERNS = [
 # Directories that should be DVC-tracked only
 FORBIDDEN_DIRS = [
     "local/data/",
+    "local/models/",
     "checkpoints/",
     "wandb/local-runs/",  # Local W&B files
 ]
-
 
 def get_staged_files():
     """Get list of files staged for commit."""
@@ -39,7 +39,6 @@ def get_staged_files():
     )
     return result.stdout.strip().split("\n") if result.stdout else []
 
-
 def check_file(filepath: str) -> bool:
     """Check if file should be blocked.
 
@@ -47,6 +46,10 @@ def check_file(filepath: str) -> bool:
         True if file is OK to commit, False if blocked
     """
     path = Path(filepath)
+
+    # Allow .dvc files and .gitignore files (metadata)
+    if filepath.endswith(".dvc") or filepath.endswith(".gitignore"):
+        return True
 
     # Check forbidden directories
     for forbidden_dir in FORBIDDEN_DIRS:
@@ -59,12 +62,10 @@ def check_file(filepath: str) -> bool:
     # Check forbidden patterns
     for pattern in FORBIDDEN_PATTERNS:
         if path.match(pattern):
-            # Allow .dvc files (metadata)
-            if not filepath.endswith(".dvc"):
-                print(f"❌ BLOCKED: {filepath}")
-                print(f"   Reason: {pattern} files must be tracked with DVC")
-                print(f"   Use: dvc add {filepath}")
-                return False
+            print(f"❌ BLOCKED: {filepath}")
+            print(f"   Reason: {pattern} files must be tracked with DVC")
+            print(f"   Use: dvc add {filepath}")
+            return False
 
     # Check file size (belt and suspenders with pre-commit's check-added-large-files)
     if path.exists() and path.stat().st_size > 1_000_000:  # 1MB
@@ -74,7 +75,6 @@ def check_file(filepath: str) -> bool:
         return False
 
     return True
-
 
 def main():
     """Main pre-commit hook logic."""
@@ -110,7 +110,6 @@ def main():
 
     print("✓ No data/model files in commit")
     return 0
-
 
 if __name__ == "__main__":
     sys.exit(main())
