@@ -140,7 +140,6 @@ def run(
                 frames_dir,
                 output_file,
                 language,
-                pattern=pattern,
                 max_workers=max_workers,
                 keep_frames=keep_frames,
                 progress_callback=lambda current, total: progress.update(task, completed=current),

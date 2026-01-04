@@ -9,7 +9,8 @@ import tempfile
 from pathlib import Path
 
 import pytest
-from typer.testing import CliRunner, Result
+from click.testing import Result
+from typer.testing import CliRunner
 
 # Ensure consistent terminal width
 os.environ.setdefault("COLUMNS", "120")

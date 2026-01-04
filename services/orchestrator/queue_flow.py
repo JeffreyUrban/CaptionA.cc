@@ -31,7 +31,9 @@ def queue_full_frames(
 
     async def _queue():
         try:
-            flow_run = await run_deployment(
+            # Prefect type stubs incorrectly type run_deployment as returning FlowRun directly
+            # In reality it's async and returns Awaitable[FlowRun]
+            flow_run = await run_deployment(  # type: ignore[misc]
                 name="process-video-initial/production",
                 parameters={
                     "video_id": video_id,
@@ -79,7 +81,8 @@ def queue_crop_frames(
             # Parse crop bounds JSON
             bounds = json.loads(crop_bounds)
 
-            flow_run = await run_deployment(
+            # Prefect type stubs incorrectly type run_deployment as returning FlowRun directly
+            flow_run = await run_deployment(  # type: ignore[misc]
                 name="crop-video-frames/production",
                 parameters={
                     "video_id": video_id,
@@ -126,7 +129,8 @@ def queue_caption_median_ocr(
             # Parse caption IDs JSON array
             ids = json.loads(caption_ids)
 
-            flow_run = await run_deployment(
+            # Prefect type stubs incorrectly type run_deployment as returning FlowRun directly
+            flow_run = await run_deployment(  # type: ignore[misc]
                 name="process-caption-median-ocr/production",
                 parameters={
                     "video_id": video_id,
@@ -166,7 +170,8 @@ def queue_update_base_model(
 
     async def _queue():
         try:
-            flow_run = await run_deployment(
+            # Prefect type stubs incorrectly type run_deployment as returning FlowRun directly
+            flow_run = await run_deployment(  # type: ignore[misc]
                 name="update-base-model-globally/production",
                 parameters={
                     "data_dir": data_dir,
@@ -204,7 +209,8 @@ def queue_retrain_video_model(
 
     async def _queue():
         try:
-            flow_run = await run_deployment(
+            # Prefect type stubs incorrectly type run_deployment as returning FlowRun directly
+            flow_run = await run_deployment(  # type: ignore[misc]
                 name="retrain-video-model/production",
                 parameters={
                     "video_id": video_id,

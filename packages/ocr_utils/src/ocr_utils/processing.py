@@ -3,10 +3,11 @@
 import json
 import signal
 import time
+from collections.abc import Callable
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from concurrent.futures import TimeoutError as FuturesTimeoutError
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from ocrmac import ocrmac
 
@@ -28,7 +29,7 @@ def process_frame_ocr_with_retry(
     timeout: int = 10,
     max_retries: int = 3,
     base_backoff: float = 1.0,
-) -> dict[str, any]:
+) -> dict[str, Any]:
     """Run OCR on a single frame with timeout protection and retry logic.
 
     This function runs in a worker process and uses signal.alarm() for timeout.
@@ -104,7 +105,7 @@ def process_frames_directory(
     frames_dir: Path,
     output_file: Path,
     language: str = "zh-Hans",
-    progress_callback: Optional[callable] = None,
+    progress_callback: Callable[[int, int], None] | None = None,
     keep_frames: bool = False,
     max_workers: int = 1,
 ) -> Path:
@@ -174,9 +175,9 @@ def process_frames_streaming(
     output_file: Path,
     language: str = "zh-Hans",
     max_workers: int = 1,
-    progress_callback: Optional[callable] = None,
+    progress_callback: Callable[[int, int | None], None] | None = None,
     check_interval: float = 0.1,
-    ffmpeg_running_check: Optional[callable] = None,
+    ffmpeg_running_check: Callable[[], bool] | None = None,
 ) -> None:
     """Process frames as they appear in directory with OCR using worker pool.
 

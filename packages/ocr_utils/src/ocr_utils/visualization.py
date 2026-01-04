@@ -3,6 +3,7 @@
 import json
 from collections import defaultdict
 from pathlib import Path
+from typing import cast
 
 from PIL import Image
 
@@ -77,7 +78,7 @@ def create_ocr_visualization(ocr_file: Path, output_image: Path, width: int, hei
                 # Draw each edge of the rectangle separately with a dark color
                 # Top edge
                 for i in range(x1, x2 + 1):
-                    r, g, b = blank_image.getpixel((i, y1))
+                    r, g, b = cast(tuple[int, int, int], blank_image.getpixel((i, y1)))
                     blank_image.putpixel(
                         (i, y1),
                         (max(0, r - darkness), max(0, g - darkness), max(0, b - darkness)),
@@ -85,7 +86,7 @@ def create_ocr_visualization(ocr_file: Path, output_image: Path, width: int, hei
 
                 # Bottom edge
                 for i in range(x1, x2 + 1):
-                    r, g, b = blank_image.getpixel((i, y2))
+                    r, g, b = cast(tuple[int, int, int], blank_image.getpixel((i, y2)))
                     blank_image.putpixel(
                         (i, y2),
                         (max(0, r - darkness), max(0, g - darkness), max(0, b - darkness)),
@@ -93,7 +94,7 @@ def create_ocr_visualization(ocr_file: Path, output_image: Path, width: int, hei
 
                 # Left edge
                 for i in range(y1, y2 + 1):
-                    r, g, b = blank_image.getpixel((x1, i))
+                    r, g, b = cast(tuple[int, int, int], blank_image.getpixel((x1, i)))
                     blank_image.putpixel(
                         (x1, i),
                         (max(0, r - darkness), max(0, g - darkness), max(0, b - darkness)),
@@ -101,7 +102,7 @@ def create_ocr_visualization(ocr_file: Path, output_image: Path, width: int, hei
 
                 # Right edge
                 for i in range(y1, y2 + 1):
-                    r, g, b = blank_image.getpixel((x2, i))
+                    r, g, b = cast(tuple[int, int, int], blank_image.getpixel((x2, i)))
                     blank_image.putpixel(
                         (x2, i),
                         (max(0, r - darkness), max(0, g - darkness), max(0, b - darkness)),

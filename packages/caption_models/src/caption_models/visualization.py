@@ -50,8 +50,8 @@ def create_analysis_visualization(
 
         cv2.line(
             img,
-            (region.anchor_position, region.crop_top),
-            (region.anchor_position, region.crop_bottom),
+            (int(region.anchor_position), int(region.crop_top)),
+            (int(region.anchor_position), int(region.crop_bottom)),
             color,
             2,
         )
@@ -59,8 +59,8 @@ def create_analysis_visualization(
     # Draw vertical position mode line (cyan)
     cv2.line(
         img,
-        (region.crop_left, region.vertical_position),
-        (region.crop_right, region.vertical_position),
+        (int(region.crop_left), int(region.vertical_position)),
+        (int(region.crop_right), int(region.vertical_position)),
         (0, 255, 255),
         2,
     )

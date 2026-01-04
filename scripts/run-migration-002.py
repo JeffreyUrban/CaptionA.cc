@@ -53,6 +53,7 @@ def run_migration(db_path: Path, dry_run: bool = False) -> tuple[bool, str]:
         cursor.execute("SELECT model_version FROM box_classification_model WHERE id = 1")
         result = cursor.fetchone()
 
+        current_model_version = None
         if result:
             current_model_version = result[0]
             cursor.execute(
@@ -67,7 +68,7 @@ def run_migration(db_path: Path, dry_run: bool = False) -> tuple[bool, str]:
         conn.commit()
         conn.close()
 
-        return True, f"Added column, set to {current_model_version if result else 'NULL'}"
+        return True, f"Added column, set to {current_model_version if current_model_version else 'NULL'}"
 
     except Exception as e:
         return False, f"Error: {str(e)[:100]}"

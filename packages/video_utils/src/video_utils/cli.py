@@ -85,13 +85,13 @@ def extract_streaming(
     console.print(f"Rate: {rate_hz} Hz ({1 / rate_hz:.1f} seconds per frame)")
 
     # Parse crop box if provided
-    crop_box = None
+    crop_box: tuple[int, int, int, int] | None = None
     if crop:
         try:
             parts = [int(x.strip()) for x in crop.split(",")]
             if len(parts) != 4:
                 raise ValueError("Crop must have exactly 4 values")
-            crop_box = tuple(parts)
+            crop_box = (parts[0], parts[1], parts[2], parts[3])
             console.print(f"Crop: x={parts[0]}, y={parts[1]}, w={parts[2]}, h={parts[3]}")
         except ValueError as e:
             console.print(f"[red]Error:[/red] Invalid crop format: {e}")

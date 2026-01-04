@@ -37,24 +37,26 @@ if __name__ == "__main__":
     print()
 
     # Serve all flows
+    # Prefect type stubs incorrectly type to_deployment() as returning RunnerDeployment | Coroutine
+    # In reality, it returns RunnerDeployment directly (not async)
     serve(
-        process_video_initial_flow.to_deployment(
+        process_video_initial_flow.to_deployment(  # type: ignore[arg-type]
             name="production",
             tags=["background", "full-frames"],
         ),
-        crop_frames_flow.to_deployment(
+        crop_frames_flow.to_deployment(  # type: ignore[arg-type]
             name="production",
             tags=["user-initiated", "crop-frames"],
         ),
-        caption_median_ocr_flow.to_deployment(
+        caption_median_ocr_flow.to_deployment(  # type: ignore[arg-type]
             name="production",
             tags=["user-initiated", "median-ocr"],
         ),
-        base_model_update_flow.to_deployment(
+        base_model_update_flow.to_deployment(  # type: ignore[arg-type]
             name="production",
             tags=["admin", "base-model"],
         ),
-        retrain_video_model_flow.to_deployment(
+        retrain_video_model_flow.to_deployment(  # type: ignore[arg-type]
             name="production",
             tags=["model-retrain", "medium-priority"],
         ),

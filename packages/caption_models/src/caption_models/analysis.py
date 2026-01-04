@@ -218,6 +218,9 @@ def analyze_subtitle_region(
     anchor_type = determine_anchor_type(typical_boxes, region_bounds)
     anchor_position = get_anchor_position(typical_boxes, anchor_type, crop_left, crop_right)
 
+    # anchor_position should not be None since typical_boxes is guaranteed non-empty
+    assert anchor_position is not None, "anchor_position should not be None with non-empty typical_boxes"
+
     # Calculate statistics from typical boxes
     heights = [box[3] - box[1] for box in typical_boxes]
     vertical_positions = [(box[1] + box[3]) // 2 for box in typical_boxes]

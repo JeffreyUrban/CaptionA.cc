@@ -4,6 +4,7 @@ This module re-exports OCR utilities from the shared ocr_utils package and provi
 a specialized streaming OCR function for the full_frames pipeline.
 """
 
+from collections.abc import Callable
 from pathlib import Path
 
 from ocr_utils import (
@@ -31,7 +32,7 @@ def stream_video_with_ocr(
     frames_dir: Path,
     rate_hz: float = 0.1,
     language: str = "zh-Hans",
-    progress_callback: callable | None = None,
+    progress_callback: Callable[[int, int | None], None] | None = None,
     max_workers: int = 2,
     keep_frames: bool = False,
 ) -> None:
