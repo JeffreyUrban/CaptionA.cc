@@ -50,7 +50,7 @@ jobs:
       - name: Format check with ruff
         if: steps.check-python.outputs.has_python == 'true'
 
-        run: uv run ruff format --check .
+        run: uv run ruff format --check --exclude '**/_version.py' .
 
       - name: Type check with pyright
         if: steps.check-python.outputs.has_python == 'true'
