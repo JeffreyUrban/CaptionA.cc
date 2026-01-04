@@ -716,6 +716,17 @@ function calculateBoundariesBadge(
   const processingBadge = handleCropFramesProcessingState(stats.cropFramesStatus, stats, videoId)
   if (processingBadge) return processingBadge
 
+  // Priority 5: Intermediate state - layout approved but crop frames not initialized yet
+  // This happens briefly after layout approval before recrop-frames API is called
+  if (!stats.cropFramesStatus) {
+    return {
+      type: 'boundaries',
+      label: 'Boundaries: Initializing',
+      color: 'blue',
+      clickable: false,
+    }
+  }
+
   // Priority 6: Incomplete (progress < 100% means there are unannotated frames)
   if (stats.progress < 100) {
     return createBoundariesActionBadge(videoId, 'annotate')
