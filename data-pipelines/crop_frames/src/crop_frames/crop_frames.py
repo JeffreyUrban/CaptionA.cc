@@ -6,6 +6,7 @@ All functions work with generic video paths and crop coordinates.
 
 import os
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -21,7 +22,7 @@ def extract_frames(
     rate_hz: float = 10.0,
     resize_to: tuple[int, int] | None = None,
     preserve_aspect: bool = False,
-    progress_callback: callable | None = None,
+    progress_callback: Callable[[int, int], None] | None = None,
 ) -> tuple[Path, int]:
     """Extract frames from video with cropping and optional resizing.
 
@@ -183,7 +184,7 @@ def resize_frames(
     target_width: int,
     target_height: int,
     preserve_aspect: bool = False,
-    progress_callback: callable | None = None,
+    progress_callback: Callable[[int, int], None] | None = None,
 ) -> tuple[Path, int]:
     """Resize all frames in a directory to fixed dimensions.
 
