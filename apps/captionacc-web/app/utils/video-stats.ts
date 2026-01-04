@@ -22,6 +22,12 @@ export interface CropFramesStatus {
   errorMessage?: string
 }
 
+export interface TextReviewStatus {
+  status: 'pending' | 'complete'
+  lastUpdatedAt?: string
+  reviewCompletedAt?: string
+}
+
 export interface VideoStats {
   totalAnnotations: number
   pendingReview: number
@@ -35,8 +41,9 @@ export interface VideoStats {
   layoutApproved: boolean // Whether layout annotation has been approved (gate for boundary annotation)
   processingStatus?: ProcessingStatus // Upload/processing status (null if not uploaded via web)
   cropFramesStatus?: CropFramesStatus // Crop frames processing status
+  textReviewStatus?: TextReviewStatus // Text review status
   boundaryPendingReview: number // Boundaries pending review
-  textPendingReview: number // Text annotations pending review
+  textPendingReview: number // Text annotations pending review (deprecated, use textReviewStatus)
   databaseId?: string // Unique ID that changes when database is recreated (for cache invalidation)
   badges: BadgeState[] // Calculated badge states for display
 }
@@ -45,7 +52,9 @@ export interface ProcessingStatus {
   status:
     | 'uploading'
     | 'upload_complete'
+    | 'pending_duplicate_resolution'
     | 'extracting_frames'
+    | 'running_ocr'
     | 'analyzing_layout'
     | 'processing_complete'
     | 'error'
@@ -169,6 +178,7 @@ function queryBoundaryPending(
 
 /**
  * Query text pending count, recording errors to stageErrors
+ * Note: This is deprecated in favor of queryTextReviewStatus, but kept for backward compatibility
  */
 function queryTextPending(
   db: Database.Database,
@@ -176,16 +186,18 @@ function queryTextPending(
   stageErrors: StageErrors
 ): number {
   try {
-    const result = db
-      .prepare(
-        `SELECT SUM(CASE WHEN text_pending = 1 THEN 1 ELSE 0 END) as text_pending FROM captions`
-      )
-      .get() as { text_pending: number }
-    return result.text_pending || 0
+    // Query the text_review_status table instead of counting individual flags
+    const statusRow = db.prepare(`SELECT status FROM text_review_status WHERE id = 1`).get() as
+      | { status: string }
+      | undefined
+
+    // If status is 'pending', return 1 to indicate there's text to review
+    // If 'complete' or no row, return 0
+    return statusRow?.status === 'pending' ? 1 : 0
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error)
     const errorStack = error instanceof Error ? error.stack : undefined
-    console.error(`[getVideoStats] Error querying text_pending for ${videoId}:`, error)
+    console.error(`[getVideoStats] Error querying text_review_status for ${videoId}:`, error)
     stageErrors.text = { message: errorMessage, stack: errorStack }
     return 0
   }
@@ -317,6 +329,29 @@ function queryCropFramesStatus(db: Database.Database): CropFramesStatus | undefi
       processingStartedAt: row.processing_started_at,
       processingCompletedAt: row.processing_completed_at,
       errorMessage: row.error_message,
+    }
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * Query text review status from database
+ */
+function queryTextReviewStatus(db: Database.Database): TextReviewStatus | undefined {
+  try {
+    const row = db.prepare(`SELECT * FROM text_review_status WHERE id = 1`).get() as
+      | {
+          status: string
+          last_updated_at?: string
+          review_completed_at?: string
+        }
+      | undefined
+    if (!row) return undefined
+    return {
+      status: row.status as TextReviewStatus['status'],
+      lastUpdatedAt: row.last_updated_at,
+      reviewCompletedAt: row.review_completed_at,
     }
   } catch {
     return undefined
@@ -468,7 +503,9 @@ function getLayoutProgressBadge(status: ProcessingStatus['status']): BadgeState 
   const statusMap: Partial<Record<ProcessingStatus['status'], BadgeState>> = {
     uploading: createLayoutStatusBadge('Uploading', 'blue'),
     upload_complete: createLayoutStatusBadge('Queued', 'blue'),
+    pending_duplicate_resolution: createLayoutStatusBadge('Duplicate Pending', 'yellow'),
     extracting_frames: createLayoutStatusBadge('Layout: Framing', 'indigo'),
+    running_ocr: createLayoutStatusBadge('Layout: Running OCR', 'purple'),
     analyzing_layout: createLayoutStatusBadge('Layout: Analyzing', 'purple'),
   }
   return statusMap[status] ?? null
@@ -737,6 +774,13 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
   const db = new Database(dbPath, { readonly: true })
 
   try {
+    // Check if video is deleted FIRST, before any other queries
+    // This prevents showing "Layout: Error" during deletion race conditions
+    const { status: processingStatus, isDeleted } = queryProcessingStatus(db, videoId)
+    if (isDeleted) {
+      return createEmptyStats([])
+    }
+
     // Query all the data using helper functions
     const totalFrames = queryTotalFrames(db)
     const stageErrors: StageErrors = {}
@@ -748,13 +792,8 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
     const hasOcrData = queryHasOcrData(db)
     const layoutApproved = queryLayoutApproved(db)
 
-    // Handle deleted videos early
-    const { status: processingStatus, isDeleted } = queryProcessingStatus(db, videoId)
-    if (isDeleted) {
-      return createEmptyStats([])
-    }
-
     const cropFramesStatus = queryCropFramesStatus(db)
+    const textReviewStatus = queryTextReviewStatus(db)
     const databaseId = queryDatabaseId(db)
 
     // Build stats object (used twice: once for return, once for badge calculation)
@@ -771,6 +810,7 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
       layoutApproved,
       processingStatus,
       cropFramesStatus,
+      textReviewStatus,
       boundaryPendingReview,
       textPendingReview,
       databaseId,

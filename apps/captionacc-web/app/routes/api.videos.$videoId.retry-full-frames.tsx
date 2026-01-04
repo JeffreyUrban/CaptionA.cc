@@ -8,7 +8,7 @@ import { resolve } from 'path'
 import Database from 'better-sqlite3'
 import { type ActionFunctionArgs } from 'react-router'
 
-import { queueVideoProcessing } from '~/services/video-processing'
+import { queueFullFramesProcessing } from '~/services/prefect'
 import { getDbPath, getVideoDir } from '~/utils/video-paths'
 
 export async function action({ params }: ActionFunctionArgs) {
@@ -160,12 +160,21 @@ export async function action({ params }: ActionFunctionArgs) {
       db.close()
     }
 
-    // Queue the full_frames job immediately
-    queueVideoProcessing({
+    // Queue the full_frames job immediately via Prefect
+    const videoDir = getVideoDir(videoId)
+    if (!videoDir) {
+      throw new Error('Failed to resolve video directory')
+    }
+
+    await queueFullFramesProcessing({
       videoId,
-      videoPath,
-      videoFile,
+      videoPath: videoFile,
+      dbPath,
+      outputDir: resolve(videoDir, 'full_frames'),
+      frameRate: 0.1,
     })
+
+    console.log(`[Prefect] Queued retry for ${videoId}`)
 
     return new Response(
       JSON.stringify({
@@ -173,7 +182,10 @@ export async function action({ params }: ActionFunctionArgs) {
         message: 'Full frames queued for reprocessing',
       }),
       {
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Video-Touched': videoId,
+        },
       }
     )
   } catch (error) {

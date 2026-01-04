@@ -282,6 +282,20 @@ class UploadManager {
             // Move to completed uploads
             store.completeUpload(uploadId, videoId)
 
+            // Mark video as touched for video list refresh
+            // The video list uses display_path (videoPath) as the identifier
+            if (typeof window !== 'undefined') {
+              try {
+                const touchedList = localStorage.getItem('touched-videos')
+                const touched = touchedList ? new Set(JSON.parse(touchedList)) : new Set()
+                touched.add(videoPath) // videoPath is the display_path
+                localStorage.setItem('touched-videos', JSON.stringify(Array.from(touched)))
+                console.log(`[UploadManager] Marked ${videoPath} as touched for refresh`)
+              } catch (e) {
+                console.error('[UploadManager] Failed to mark video as touched:', e)
+              }
+            }
+
             // Cleanup
             this.activeUploads.delete(uploadId)
             this.uploadFiles.delete(uploadId)

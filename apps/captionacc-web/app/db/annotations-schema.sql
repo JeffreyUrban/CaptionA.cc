@@ -450,6 +450,20 @@ CREATE TABLE IF NOT EXISTS processing_status (
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Text review status tracking (one row per video)
+-- Tracks whether text annotations are ready for review
+-- Follows the same pattern as crop_frames_status for consistency
+CREATE TABLE IF NOT EXISTS text_review_status (
+    id INTEGER PRIMARY KEY CHECK(id = 1),
+
+    -- Status: pending (has text needing review) or complete (all done)
+    status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'complete')),
+
+    -- Timestamps
+    last_updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    review_completed_at TEXT  -- When all text review was completed
+);
+
 -- Triggers
 
 -- Triggers to update timestamp fields on captions
@@ -467,6 +481,61 @@ BEGIN
     UPDATE captions
     SET text_updated_at = datetime('now')
     WHERE id = NEW.id;
+END;
+
+-- Triggers to maintain text_review_status based on caption text_pending state
+CREATE TRIGGER IF NOT EXISTS update_text_review_status_insert
+AFTER INSERT ON captions
+BEGIN
+    -- Check if any captions have text_pending = 1
+    UPDATE text_review_status
+    SET
+        status = CASE
+            WHEN EXISTS (SELECT 1 FROM captions WHERE text_pending = 1) THEN 'pending'
+            ELSE 'complete'
+        END,
+        last_updated_at = datetime('now'),
+        review_completed_at = CASE
+            WHEN NOT EXISTS (SELECT 1 FROM captions WHERE text_pending = 1) THEN datetime('now')
+            ELSE review_completed_at
+        END
+    WHERE id = 1;
+END;
+
+CREATE TRIGGER IF NOT EXISTS update_text_review_status_update
+AFTER UPDATE OF text, text_pending, text_status ON captions
+BEGIN
+    -- Check if any captions have text_pending = 1
+    UPDATE text_review_status
+    SET
+        status = CASE
+            WHEN EXISTS (SELECT 1 FROM captions WHERE text_pending = 1) THEN 'pending'
+            ELSE 'complete'
+        END,
+        last_updated_at = datetime('now'),
+        review_completed_at = CASE
+            WHEN NOT EXISTS (SELECT 1 FROM captions WHERE text_pending = 1) THEN datetime('now')
+            ELSE review_completed_at
+        END
+    WHERE id = 1;
+END;
+
+CREATE TRIGGER IF NOT EXISTS update_text_review_status_delete
+AFTER DELETE ON captions
+BEGIN
+    -- Check if any captions have text_pending = 1
+    UPDATE text_review_status
+    SET
+        status = CASE
+            WHEN EXISTS (SELECT 1 FROM captions WHERE text_pending = 1) THEN 'pending'
+            ELSE 'complete'
+        END,
+        last_updated_at = datetime('now'),
+        review_completed_at = CASE
+            WHEN NOT EXISTS (SELECT 1 FROM captions WHERE text_pending = 1) THEN datetime('now')
+            ELSE review_completed_at
+        END
+    WHERE id = 1;
 END;
 
 -- Database metadata (schema versioning)
