@@ -1,5 +1,6 @@
 """Command-line interface for caption boundaries detection pipeline."""
 
+import subprocess
 from pathlib import Path
 
 import typer
@@ -12,6 +13,26 @@ app = typer.Typer(
 )
 
 console = Console(stderr=True)
+
+
+def get_project_root() -> Path:
+    """Get the git repository root directory.
+
+    Returns:
+        Absolute path to the git root directory
+    """
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return Path(result.stdout.strip())
+    except Exception:
+        # Fallback: assume we're in data-pipelines/caption_boundaries/src/caption_boundaries
+        # and go up to project root
+        return Path(__file__).parent.parent.parent.parent.parent
 
 
 @app.command()
@@ -53,9 +74,9 @@ def train(
         help="W&B project name"
     ),
     checkpoint_dir: Path = typer.Option(
-        Path("../../local/models/caption_boundaries/experiments"),
+        None,
         "--checkpoint-dir",
-        help="Directory to save checkpoints"
+        help="Directory to save checkpoints (default: {project_root}/local/models/caption_boundaries/experiments)"
     ),
     balanced_sampling: bool = typer.Option(
         True,
@@ -91,6 +112,11 @@ def train(
     from caption_boundaries.data.transforms import ResizeStrategy
     from caption_boundaries.database import get_dataset_db_path
     from caption_boundaries.training import CaptionBoundaryTrainer
+
+    # Set default checkpoint_dir if not provided
+    if checkpoint_dir is None:
+        project_root = get_project_root()
+        checkpoint_dir = project_root / "local" / "models" / "caption_boundaries" / "experiments"
 
     # Get dataset database path
     dataset_db_path = get_dataset_db_path(dataset_name)

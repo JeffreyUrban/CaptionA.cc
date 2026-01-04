@@ -10,6 +10,25 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
+
+def get_project_root() -> Path:
+    """Get the git repository root directory.
+
+    Returns:
+        Absolute path to the git root directory
+    """
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return Path(result.stdout.strip())
+    except Exception:
+        # Fallback: use current working directory
+        return Path.cwd()
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -490,11 +509,15 @@ class CaptionBoundaryTrainer:
             }
 
             # Initialize W&B (store runs in local/models/caption_boundaries/wandb)
+            project_root = get_project_root()
+            wandb_dir = project_root / "local" / "models" / "caption_boundaries" / "wandb"
+            wandb_dir.mkdir(parents=True, exist_ok=True)
+
             wandb.init(
                 project=self.wandb_project,
                 name=self.experiment_name,
                 config=config,
-                dir="../../local/models/caption_boundaries/wandb",
+                dir=str(wandb_dir),
                 mode="online",  # Default to online reporting to wandb.ai
             )
 
