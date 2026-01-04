@@ -11,7 +11,6 @@ members = [
     "caption-boundaries",
     "caption-models",
     "caption-text",
-    "captionacc-orchestrator",
     "captionacc-workspace",
     "crop-frames",
     "frames-db",
@@ -19,6 +18,7 @@ members = [
     "image-utils",
     "ocr-box-model",
     "ocr-utils",
+    "orchestrator",
     "video-utils",
 ]
 
@@ -387,34 +387,13 @@ requires-dist = [
 provides-extras = ["vetting"]
 
 [[package]]
-name = "captionacc-orchestrator"
-version = "1.0.0"
-source = { editable = "services/orchestrator" }
-dependencies = [
-    { name = "prefect" },
-]
-
-[package.optional-dependencies]
-dev = [
-    { name = "pytest" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "prefect", specifier = ">=3.0.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8.0" },
-]
-provides-extras = ["dev"]
-
-[[package]]
 name = "captionacc-workspace"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "caption-boundaries" },
     { name = "crop-frames" },
+    { name = "orchestrator" },
     { name = "pillow" },
     { name = "tqdm" },
 ]
@@ -432,6 +411,7 @@ dev = [
 requires-dist = [
     { name = "caption-boundaries", editable = "data-pipelines/caption_boundaries" },
     { name = "crop-frames", editable = "data-pipelines/crop_frames" },
+    { name = "orchestrator", editable = "services/orchestrator" },
     { name = "pillow", specifier = ">=11.0.0" },
     { name = "tqdm", specifier = ">=4.67.1" },
 ]
@@ -1822,6 +1802,30 @@ sdist = { url = "https://files.pythonhosted.org/packages/91/df/553f93ed38bf22f4b
 wheels = [
     { url = "https://files.pythonhosted.org/packages/7a/5e/5958555e09635d09b75de3c4f8b9cae7335ca545d77392ffe7331534c402/opentelemetry_semantic_conventions-0.60b1-py3-none-any.whl", hash = "sha256:9fa8c8b0c110da289809292b0591220d3a7b53c1526a23021e977d68597893fb", size = 219982, upload-time = "2025-12-11T13:32:36.955Z" },
 ]
+
+[[package]]
+name = "orchestrator"
+version = "1.0.0"
+source = { editable = "services/orchestrator" }
+dependencies = [
+    { name = "prefect" },
+    { name = "requests" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "prefect", specifier = ">=3.0.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
+    { name = "requests", specifier = ">=2.31.0" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8.0" },
+]
+provides-extras = ["dev"]
 
 [[package]]
 name = "orjson"

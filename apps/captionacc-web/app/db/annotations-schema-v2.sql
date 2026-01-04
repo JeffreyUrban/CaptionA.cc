@@ -21,7 +21,10 @@ CREATE TABLE IF NOT EXISTS captions (
     text_ocr_combined TEXT,  -- Cached OCR result from combined image
     text_updated_at TEXT,  -- NULL until first text annotation save
 
-    -- Median frame OCR processing status
+    -- Combined image regeneration tracking
+    image_needs_regen INTEGER NOT NULL DEFAULT 0 CHECK(image_needs_regen IN (0, 1)),  -- 1 = image out of sync with boundaries
+
+    -- Median frame OCR processing status (Prefect workflow)
     median_ocr_status TEXT NOT NULL DEFAULT 'pending' CHECK(median_ocr_status IN ('pending', 'queued', 'processing', 'complete', 'error')),
     median_ocr_error TEXT,
     median_ocr_processed_at TEXT,
@@ -542,7 +545,6 @@ BEGIN
         END
     WHERE id = 1;
 END;
-
 -- Database metadata (schema versioning)
 -- Tracks schema version and verification state
 CREATE TABLE IF NOT EXISTS database_metadata (

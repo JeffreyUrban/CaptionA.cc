@@ -29,7 +29,7 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
 const LOCAL_DATA_DIR = join(__dirname, '../../../local/data')
-const SCHEMA_PATH = join(__dirname, '../app/db/annotations-schema.sql')
+const SCHEMA_PATH = join(__dirname, '../app/db/annotations-schema-latest.sql')
 
 interface RepairResult {
   path: string

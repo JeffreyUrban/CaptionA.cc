@@ -14,6 +14,7 @@ import { existsSync } from 'fs'
 
 import Database from 'better-sqlite3'
 
+import { migrateDatabase } from '~/db/migrate'
 import { notFoundResponse, errorResponse } from '~/utils/api-responses'
 import { getDbPath, getVideoDir } from '~/utils/video-paths'
 
@@ -127,6 +128,9 @@ export function getWritableDatabase(videoId: string): DatabaseResult {
   }
 
   try {
+    // Run migrations before opening for writing
+    migrateDatabase(dbPath)
+
     const db = new Database(dbPath)
     // Enable WAL mode for better concurrent access
     // WAL allows reads to proceed while writes are happening
@@ -177,6 +181,11 @@ export function getOrCreateAnnotationDatabase(
   const actualDbPath = dbPath ?? `${videoDir}/annotations.db`
 
   try {
+    // Run migrations if database already exists
+    if (dbExists) {
+      migrateDatabase(actualDbPath)
+    }
+
     const db = new Database(actualDbPath)
     // Enable WAL mode for better concurrent access
     // WAL allows reads to proceed while writes are happening

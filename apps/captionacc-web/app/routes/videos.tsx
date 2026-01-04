@@ -127,12 +127,13 @@ export async function loader() {
     return { tree: [] }
   }
 
-  // Get all videos with their metadata (uses display_path)
+  // Get all videos with their metadata
   const allVideos = getAllVideos()
 
-  // Convert to VideoInfo objects using display_path
+  // Convert to VideoInfo objects using UUID as primary key
   const videos: VideoInfo[] = allVideos.map(video => ({
-    videoId: video.displayPath,
+    videoId: video.videoId, // UUID (stable identifier)
+    displayPath: video.displayPath, // For tree structure and display
   }))
 
   // Build tree structure from videos only (without stats - will be loaded client-side)

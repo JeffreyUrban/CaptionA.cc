@@ -6,7 +6,8 @@ import Database from 'better-sqlite3'
 import { type VideoStats } from './video-stats'
 
 export interface VideoInfo {
-  videoId: string
+  videoId: string // UUID (stable identifier)
+  displayPath: string // Display path for tree structure and UI
 }
 
 export type { VideoStats }
@@ -25,8 +26,9 @@ export interface FolderNode {
 export interface VideoNode {
   type: 'video'
   name: string
-  path: string
-  videoId: string
+  path: string // displayPath (for tree structure)
+  videoId: string // UUID (stable identifier - primary key)
+  displayPath: string // User-facing path (can change)
   stats: VideoStats | null // Individual video stats (loaded async)
 }
 
@@ -46,7 +48,7 @@ export function buildVideoTree(videos: VideoInfo[]): TreeNode[] {
   })
 
   for (const video of validVideos) {
-    const segments = video.videoId.split('/')
+    const segments = video.displayPath.split('/')
     let currentLevel = root
     let parentFolder: FolderNode | null = null
 
@@ -83,7 +85,7 @@ export function buildVideoTree(videos: VideoInfo[]): TreeNode[] {
       }
 
       const folderNode = currentLevel.get(segment)
-      if (!folderNode || folderNode.type !== 'folder') {
+      if (folderNode?.type !== 'folder') {
         console.error(
           `[buildVideoTree] Expected folder node for segment "${segment}", got:`,
           folderNode
@@ -106,8 +108,9 @@ export function buildVideoTree(videos: VideoInfo[]): TreeNode[] {
     const videoNode: VideoNode = {
       type: 'video',
       name: videoName,
-      path: video.videoId,
-      videoId: video.videoId,
+      path: video.displayPath, // For tree structure
+      videoId: video.videoId, // UUID (stable identifier - primary key)
+      displayPath: video.displayPath, // User-facing path
       stats: null, // Will be loaded async
     }
 

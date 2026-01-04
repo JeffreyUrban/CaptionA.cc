@@ -12,6 +12,7 @@ dependencies = [
     "pillow>=11.0.0",
     "crop_frames",
     "caption_boundaries",
+    "orchestrator",
 ]
 
 [tool.uv.workspace]
@@ -40,6 +41,7 @@ override-dependencies = [
 [tool.uv.sources]
 crop_frames = { workspace = true }
 caption-boundaries = { workspace = true }
+orchestrator = { workspace = true }
 
 # Common tool settings shared across all workspace members
 [tool.ruff]
