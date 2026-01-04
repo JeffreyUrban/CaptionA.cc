@@ -16,7 +16,13 @@ import torch.optim as optim
 import wandb
 from rich.console import Console
 from rich.progress import track
-from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, f1_score
+from sklearn.metrics import (
+    accuracy_score,
+    balanced_accuracy_score,
+    classification_report,
+    confusion_matrix,
+    f1_score,
+)
 from torch.utils.data import DataLoader, Sampler
 
 from caption_boundaries.data.dataset import CaptionBoundaryDataset
@@ -25,6 +31,29 @@ from caption_boundaries.database import Experiment, FontEmbedding, TrainingDatas
 from caption_boundaries.models.registry import create_model, get_model_info
 
 console = Console(stderr=True)
+
+
+def compute_per_class_accuracy(y_true: np.ndarray, y_pred: np.ndarray, num_classes: int) -> dict[int, float]:
+    """Compute accuracy for each class separately.
+
+    Args:
+        y_true: True labels
+        y_pred: Predicted labels
+        num_classes: Total number of classes
+
+    Returns:
+        Dict mapping class index to accuracy (0.0 if no samples)
+    """
+    per_class_acc = {}
+    for class_idx in range(num_classes):
+        # Get indices where true label is this class
+        mask = y_true == class_idx
+        if mask.sum() == 0:
+            per_class_acc[class_idx] = 0.0
+        else:
+            # Accuracy for this class = correct predictions / total samples
+            per_class_acc[class_idx] = (y_pred[mask] == class_idx).mean()
+    return per_class_acc
 
 
 class BalancedBatchSampler(Sampler):
@@ -468,12 +497,12 @@ class CaptionBoundaryTrainer:
             frame1 = batch["frame1"].to(self.device)
             frame2 = batch["frame2"].to(self.device)
             spatial_features = batch["spatial_features"].to(self.device)
-            font_embedding = batch["font_embedding"].to(self.device)
+            reference_image = batch["reference_image"].to(self.device)
             labels = batch["label"].to(self.device)
 
             # Forward pass
             self.optimizer.zero_grad()
-            logits = self.model(ocr_viz, frame1, frame2, spatial_features, font_embedding)
+            logits = self.model(ocr_viz, frame1, frame2, spatial_features, reference_image)
 
             # Compute loss
             loss = self.criterion(logits, labels)
@@ -490,16 +519,33 @@ class CaptionBoundaryTrainer:
 
         # Compute epoch metrics
         avg_loss = total_loss / len(self.train_loader)
-        accuracy = accuracy_score(all_labels, all_preds)
-        f1_weighted = f1_score(all_labels, all_preds, average="weighted", zero_division=0)
-        f1_macro = f1_score(all_labels, all_preds, average="macro", zero_division=0)
+        all_labels_np = np.array(all_labels)
+        all_preds_np = np.array(all_preds)
 
-        return {
+        # Overall metrics
+        accuracy = accuracy_score(all_labels_np, all_preds_np)
+        balanced_acc = balanced_accuracy_score(all_labels_np, all_preds_np)
+        f1_weighted = f1_score(all_labels_np, all_preds_np, average="weighted", zero_division=0)
+        f1_macro = f1_score(all_labels_np, all_preds_np, average="macro", zero_division=0)
+
+        # Per-class accuracy
+        per_class_acc = compute_per_class_accuracy(
+            all_labels_np, all_preds_np, len(CaptionBoundaryDataset.LABELS)
+        )
+
+        metrics = {
             "train/loss": avg_loss,
             "train/accuracy": accuracy,
+            "train/balanced_accuracy": balanced_acc,
             "train/f1_weighted": f1_weighted,
             "train/f1_macro": f1_macro,
         }
+
+        # Add per-class accuracies
+        for idx, label_name in enumerate(CaptionBoundaryDataset.LABELS):
+            metrics[f"train/accuracy_{label_name}"] = per_class_acc[idx]
+
+        return metrics
 
     def validate(self, epoch: int) -> dict[str, Any]:
         """Run validation.
@@ -522,11 +568,11 @@ class CaptionBoundaryTrainer:
                 frame1 = batch["frame1"].to(self.device)
                 frame2 = batch["frame2"].to(self.device)
                 spatial_features = batch["spatial_features"].to(self.device)
-                font_embedding = batch["font_embedding"].to(self.device)
+                reference_image = batch["reference_image"].to(self.device)
                 labels = batch["label"].to(self.device)
 
                 # Forward pass
-                logits = self.model(ocr_viz, frame1, frame2, spatial_features, font_embedding)
+                logits = self.model(ocr_viz, frame1, frame2, spatial_features, reference_image)
 
                 # Compute loss
                 loss = self.criterion(logits, labels)
@@ -539,17 +585,27 @@ class CaptionBoundaryTrainer:
 
         # Compute validation metrics
         avg_loss = total_loss / len(self.val_loader)
-        accuracy = accuracy_score(all_labels, all_preds)
-        f1_weighted = f1_score(all_labels, all_preds, average="weighted", zero_division=0)
-        f1_macro = f1_score(all_labels, all_preds, average="macro", zero_division=0)
+        all_labels_np = np.array(all_labels)
+        all_preds_np = np.array(all_preds)
+
+        # Overall metrics
+        accuracy = accuracy_score(all_labels_np, all_preds_np)
+        balanced_acc = balanced_accuracy_score(all_labels_np, all_preds_np)
+        f1_weighted = f1_score(all_labels_np, all_preds_np, average="weighted", zero_division=0)
+        f1_macro = f1_score(all_labels_np, all_preds_np, average="macro", zero_division=0)
+
+        # Per-class accuracy
+        per_class_acc = compute_per_class_accuracy(
+            all_labels_np, all_preds_np, len(CaptionBoundaryDataset.LABELS)
+        )
 
         # Confusion matrix
-        cm = confusion_matrix(all_labels, all_preds)
+        cm = confusion_matrix(all_labels_np, all_preds_np)
 
         # Classification report (specify labels to handle missing classes in small datasets)
         class_report = classification_report(
-            all_labels,
-            all_preds,
+            all_labels_np,
+            all_preds_np,
             labels=list(range(len(CaptionBoundaryDataset.LABELS))),
             target_names=CaptionBoundaryDataset.LABELS,
             output_dict=True,
@@ -559,6 +615,7 @@ class CaptionBoundaryTrainer:
         metrics = {
             "val/loss": avg_loss,
             "val/accuracy": accuracy,
+            "val/balanced_accuracy": balanced_acc,
             "val/f1_weighted": f1_weighted,
             "val/f1_macro": f1_macro,
             "val/confusion_matrix": cm,
@@ -566,7 +623,11 @@ class CaptionBoundaryTrainer:
         }
 
         # Add per-class metrics for W&B logging
-        for label_name in CaptionBoundaryDataset.LABELS:
+        for idx, label_name in enumerate(CaptionBoundaryDataset.LABELS):
+            # Per-class accuracy
+            metrics[f"val/accuracy_{label_name}"] = per_class_acc[idx]
+
+            # Per-class precision, recall, f1 from classification report
             if label_name in class_report:
                 metrics[f"val/precision_{label_name}"] = class_report[label_name]["precision"]
                 metrics[f"val/recall_{label_name}"] = class_report[label_name]["recall"]
@@ -654,12 +715,13 @@ class CaptionBoundaryTrainer:
         console.print(
             f"\n[yellow]Epoch 0/{self.epochs} (untrained)[/yellow] - "
             f"Val Loss: {epoch_0_metrics['val/loss']:.4f}, "
-            f"Val F1 (macro): {epoch_0_metrics['val/f1_macro']:.4f}, "
-            f"Val Accuracy: {epoch_0_metrics['val/accuracy']:.4f}\n"
+            f"Val Balanced Acc: {epoch_0_metrics['val/balanced_accuracy']:.4f}, "
+            f"Val Accuracy: {epoch_0_metrics['val/accuracy']:.4f}, "
+            f"Val F1 (macro): {epoch_0_metrics['val/f1_macro']:.4f}\n"
         )
 
-        # Track best model (use macro F1 for imbalanced datasets)
-        best_val_f1_macro = 0.0
+        # Track best model (use balanced accuracy for imbalanced datasets)
+        best_val_balanced_acc = 0.0
 
         # Training loop
         for epoch in range(1, self.epochs + 1):
@@ -678,22 +740,23 @@ class CaptionBoundaryTrainer:
             }
             wandb.log(wandb_metrics, step=epoch)
 
-            # Print progress
+            # Print progress with key metrics
             console.print(
                 f"\nEpoch {epoch}/{self.epochs} - "
                 f"Train Loss: {train_metrics['train/loss']:.4f}, "
-                f"Train F1 (macro): {train_metrics['train/f1_macro']:.4f} | "
+                f"Train Bal Acc: {train_metrics['train/balanced_accuracy']:.4f} | "
                 f"Val Loss: {val_metrics['val/loss']:.4f}, "
-                f"Val F1 (macro): {val_metrics['val/f1_macro']:.4f}"
+                f"Val Bal Acc: {val_metrics['val/balanced_accuracy']:.4f}, "
+                f"Val Acc: {val_metrics['val/accuracy']:.4f}"
             )
 
             # Step learning rate scheduler based on validation loss
             self.scheduler.step(val_metrics["val/loss"])
 
-            # Save checkpoint (use macro F1 for best model selection)
-            is_best = val_metrics["val/f1_macro"] > best_val_f1_macro
+            # Save checkpoint (use balanced accuracy for best model selection)
+            is_best = val_metrics["val/balanced_accuracy"] > best_val_balanced_acc
             if is_best:
-                best_val_f1_macro = val_metrics["val/f1_macro"]
+                best_val_balanced_acc = val_metrics["val/balanced_accuracy"]
                 self.early_stopping_counter = 0  # Reset early stopping
             else:
                 self.early_stopping_counter += 1
@@ -721,13 +784,14 @@ class CaptionBoundaryTrainer:
         )
 
         # Save experiment to database
-        self._save_experiment_to_db(best_val_f1_macro, val_metrics["val/accuracy"])
+        self._save_experiment_to_db(best_val_balanced_acc, val_metrics["val/accuracy"])
 
         # Finish W&B
         wandb.finish()
 
         console.print("\n[green]✓ Training complete![/green]")
-        console.print(f"Best Val F1 (macro): {best_val_f1_macro:.4f}")
+        console.print(f"Best Val Balanced Accuracy: {best_val_balanced_acc:.4f}")
+        console.print(f"Final Val Accuracy: {val_metrics['val/accuracy']:.4f}")
         console.print(f"Checkpoints saved to: {self.checkpoint_dir}")
 
     def _save_experiment_to_db(self, best_val_f1: float, best_val_accuracy: float):

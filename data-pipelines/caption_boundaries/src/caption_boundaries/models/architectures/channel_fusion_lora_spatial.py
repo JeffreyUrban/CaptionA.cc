@@ -12,6 +12,7 @@ Design rationale:
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torchvision.models as models
 
 from caption_boundaries.models.registry import register_model
@@ -133,7 +134,7 @@ class ChannelFusionLoRAPredictor(nn.Module):
     1. Stack 3 RGB images → 9 channels
     2. 1x1 conv (learnable) → 3 channels
     3. ResNet50 backbone (pretrained + LoRA adapters)
-    4. Metadata fusion (spatial + font)
+    4. Metadata fusion (spatial)
     5. Classifier MLP
 
     Trainable parameters:
@@ -148,7 +149,6 @@ class ChannelFusionLoRAPredictor(nn.Module):
         self,
         num_classes: int = 5,
         spatial_dim: int = 6,
-        font_dim: int = 512,
         fusion_hidden_dim: int = 1024,
         dropout: float = 0.3,
         pretrained: bool = True,
@@ -159,7 +159,6 @@ class ChannelFusionLoRAPredictor(nn.Module):
 
         self.num_classes = num_classes
         self.spatial_dim = spatial_dim
-        self.font_dim = font_dim
         self.lora_rank = lora_rank
         self.lora_alpha = lora_alpha
 
@@ -200,16 +199,9 @@ class ChannelFusionLoRAPredictor(nn.Module):
             nn.Linear(128, 128),
         )
 
-        self.font_proj = nn.Sequential(
-            nn.Linear(font_dim, 256),
-            nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.Linear(256, 128),
-        )
-
         # Fusion MLP
-        # Input: 2048 (ResNet features) + 128 (spatial) + 128 (font) = 2304
-        fusion_input_dim = self.resnet_feat_dim + 128 + 128
+        # Input: 2048 (ResNet features) + 128 (spatial)
+        fusion_input_dim = self.resnet_feat_dim + 128
 
         self.fusion_mlp = nn.Sequential(
             nn.Linear(fusion_input_dim, fusion_hidden_dim),
@@ -227,7 +219,7 @@ class ChannelFusionLoRAPredictor(nn.Module):
         frame1: torch.Tensor,
         frame2: torch.Tensor,
         spatial_features: torch.Tensor,
-        font_embedding: torch.Tensor,
+        reference_image: torch.Tensor,
     ) -> torch.Tensor:
         """Forward pass.
 
@@ -236,7 +228,6 @@ class ChannelFusionLoRAPredictor(nn.Module):
             frame1: (batch, 3, H, W)
             frame2: (batch, 3, H, W)
             spatial_features: (batch, 6)
-            font_embedding: (batch, 512)
 
         Returns:
             logits: (batch, 5)
@@ -255,10 +246,9 @@ class ChannelFusionLoRAPredictor(nn.Module):
 
         # Project metadata
         spatial_proj = self.spatial_proj(spatial_features)  # (batch, 128)
-        font_proj = self.font_proj(font_embedding)  # (batch, 128)
 
         # Concatenate and classify
-        combined = torch.cat([features, spatial_proj, font_proj], dim=1)  # (batch, 2304)
+        combined = torch.cat([features, spatial_proj], dim=1)  # (batch, 2176)
         logits = self.fusion_mlp(combined)  # (batch, 5)
 
         return logits
@@ -285,8 +275,8 @@ class ChannelFusionLoRAPredictor(nn.Module):
 
 
 # Register the architecture
-@register_model("channel_fusion_lora_resnet50")
-def create_channel_fusion_lora_resnet50(
+@register_model("channel_fusion_lora_spatial")
+def create_channel_fusion_lora_spatial(
     num_classes: int = 5,
     pretrained: bool = True,
     lora_rank: int = 16,
