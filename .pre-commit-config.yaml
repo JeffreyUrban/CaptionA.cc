@@ -39,6 +39,27 @@ repos:
     language: system
     files: ^apps/captionacc-web/.*\.(ts|tsx)$
     pass_filenames: true
+  - id: block-database-files
+    name: Block database files
+    entry: Database files must be tracked with DVC, not Git
+    language: fail
+    files: '\.(db|db-shm|db-wal|sqlite|sqlite3)$'
+  - id: block-model-files
+    name: Block model checkpoint files
+    entry: Model files must be tracked with DVC, not Git
+    language: fail
+    files: '\.(pt|pth|ckpt|safetensors|bin|h5|pkl|pickle)$'
+  - id: block-video-files
+    name: Block video files
+    entry: Video files must not be committed to Git
+    language: fail
+    files: '\.(mp4|avi|mov|mkv|wmv|flv|webm)$'
+  - id: prevent-data-commits
+    name: Prevent data/model commits (comprehensive)
+    entry: scripts/check-no-data-in-commit.py
+    language: system
+    pass_filenames: false
+    always_run: true
 
 # General checks
 - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -51,7 +72,8 @@ repos:
   - id: check-yaml
     files: ^data-pipelines/crop_frames/
   - id: check-added-large-files
-    files: ^data-pipelines/crop_frames/
+    args: ['--maxkb=1000']  # 1MB limit for data protection
+    exclude: '^(\.dvc/|.*\.dvc)$'  # Allow .dvc metadata files
   - id: check-merge-conflict
     files: ^data-pipelines/crop_frames/
   - id: mixed-line-ending

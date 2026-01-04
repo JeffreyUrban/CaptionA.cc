@@ -38,7 +38,6 @@ class VideoRegistry(Base):
     last_seen_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=lambda: datetime.now(UTC))
 
     # Relationships
-    font_embeddings: Mapped[list[FontEmbedding]] = relationship(back_populates="video", cascade="all, delete-orphan")
     ocr_visualizations: Mapped[list[OCRVisualization]] = relationship(
         back_populates="video", cascade="all, delete-orphan"
     )
@@ -138,40 +137,6 @@ class TrainingSample(Base):
         Index("idx_training_samples_label", "label"),
         # Unique constraint on frame pair within dataset
         Index("idx_unique_frame_pair", "dataset_id", "video_hash", "frame1_index", "frame2_index", unique=True),
-    )
-
-
-class FontEmbedding(Base):
-    """Cached FontCLIP embeddings for videos.
-
-    Pre-trained FontCLIP model extracts 512-dim embeddings from auto-selected
-    reference frames. Cache these to avoid recomputation.
-    """
-
-    __tablename__ = "font_embeddings"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    video_hash: Mapped[str] = mapped_column(String(64), ForeignKey("video_registry.video_hash"), nullable=False)
-
-    # Embedding data
-    embedding: Mapped[bytes] = mapped_column(Text, nullable=False)  # Serialized numpy array
-    embedding_dim: Mapped[int] = mapped_column(Integer, nullable=False, default=512, server_default="512")
-
-    # Selection metadata
-    reference_frame_index: Mapped[int] = mapped_column(Integer, nullable=False)
-    num_ocr_boxes: Mapped[int] = mapped_column(Integer, nullable=False)
-    mean_ocr_confidence: Mapped[float] = mapped_column(Float, nullable=False)
-
-    # Provenance
-    fontclip_model_version: Mapped[str] = mapped_column(String(100), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=lambda: datetime.now(UTC))
-
-    # Relationships
-    video: Mapped[VideoRegistry] = relationship(back_populates="font_embeddings")
-
-    __table_args__ = (
-        # One embedding per video per model version
-        Index("idx_unique_font_embedding", "video_hash", "fontclip_model_version", unique=True),
     )
 
 

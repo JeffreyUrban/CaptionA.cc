@@ -27,7 +27,7 @@ from torch.utils.data import DataLoader, Sampler
 
 from caption_boundaries.data.dataset import CaptionBoundaryDataset
 from caption_boundaries.data.transforms import ResizeStrategy
-from caption_boundaries.database import Experiment, FontEmbedding, TrainingDataset, get_dataset_db
+from caption_boundaries.database import Experiment, TrainingDataset, get_dataset_db
 from caption_boundaries.models.registry import create_model, get_model_info
 
 console = Console(stderr=True)
@@ -161,7 +161,6 @@ class CaptionBoundaryTrainer:
         model_config: Architecture-specific configuration (pretrained, dropout, etc.)
         transform_strategy: Transform strategy for variable-sized crops
         ocr_viz_variant: OCR visualization variant to use
-        use_font_embedding: Whether to use font embeddings
         epochs: Number of training epochs
         batch_size: Training batch size
         lr_features: Learning rate for feature extractor
@@ -183,7 +182,6 @@ class CaptionBoundaryTrainer:
         model_config: dict[str, Any] | None = None,
         transform_strategy: ResizeStrategy = ResizeStrategy.MIRROR_TILE,
         ocr_viz_variant: str = "boundaries",
-        use_font_embedding: bool = True,
         epochs: int = 50,
         batch_size: int = 32,
         lr_features: float = 1e-3,
@@ -202,7 +200,6 @@ class CaptionBoundaryTrainer:
         self.model_config = model_config or {"pretrained": True}
         self.transform_strategy = transform_strategy
         self.ocr_viz_variant = ocr_viz_variant
-        self.use_font_embedding = use_font_embedding
         self.epochs = epochs
         self.batch_size = batch_size
         self.lr_features = lr_features
@@ -421,19 +418,6 @@ class CaptionBoundaryTrainer:
             if not dataset:
                 raise ValueError(f"No dataset found in {self.dataset_db_path}")
 
-            # Get FontCLIP model version for W&B tracking
-            fontclip_model_version = None
-            if self.use_font_embedding:
-                fontclip_versions = (
-                    db.query(FontEmbedding.fontclip_model_version)
-                    .distinct()
-                    .all()
-                )
-                if fontclip_versions:
-                    versions = [v[0] for v in fontclip_versions if v[0]]
-                    if versions:
-                        fontclip_model_version = versions[0]
-
             config = {
                 # Model config
                 "architecture_name": self.architecture_name,
@@ -454,8 +438,6 @@ class CaptionBoundaryTrainer:
                 "num_val_samples": len(self.val_dataset),
                 "transform_strategy": self.transform_strategy.value,
                 "ocr_viz_variant": self.ocr_viz_variant,
-                "use_font_embedding": self.use_font_embedding,
-                "fontclip_model_version": fontclip_model_version,
                 "split_strategy": dataset.split_strategy,
                 "train_split_ratio": dataset.train_split_ratio,
                 "random_seed": dataset.random_seed,
@@ -497,12 +479,11 @@ class CaptionBoundaryTrainer:
             frame1 = batch["frame1"].to(self.device)
             frame2 = batch["frame2"].to(self.device)
             spatial_features = batch["spatial_features"].to(self.device)
-            reference_image = batch["reference_image"].to(self.device)
             labels = batch["label"].to(self.device)
 
             # Forward pass
             self.optimizer.zero_grad()
-            logits = self.model(ocr_viz, frame1, frame2, spatial_features, reference_image)
+            logits = self.model(ocr_viz, frame1, frame2, spatial_features)
 
             # Compute loss
             loss = self.criterion(logits, labels)
@@ -568,11 +549,10 @@ class CaptionBoundaryTrainer:
                 frame1 = batch["frame1"].to(self.device)
                 frame2 = batch["frame2"].to(self.device)
                 spatial_features = batch["spatial_features"].to(self.device)
-                reference_image = batch["reference_image"].to(self.device)
                 labels = batch["label"].to(self.device)
 
                 # Forward pass
-                logits = self.model(ocr_viz, frame1, frame2, spatial_features, reference_image)
+                logits = self.model(ocr_viz, frame1, frame2, spatial_features)
 
                 # Compute loss
                 loss = self.criterion(logits, labels)
@@ -668,7 +648,6 @@ class CaptionBoundaryTrainer:
                 "dataset_db_path": str(self.dataset_db_path),
                 "transform_strategy": self.transform_strategy.value,
                 "ocr_viz_variant": self.ocr_viz_variant,
-                "use_font_embedding": self.use_font_embedding,
             },
         }
 
@@ -802,42 +781,6 @@ class CaptionBoundaryTrainer:
             if not dataset:
                 raise ValueError(f"No dataset found in {self.dataset_db_path}")
 
-            # Get FontCLIP model version used in this dataset
-            # Query all unique fontclip_model_version values used
-            fontclip_versions = (
-                db.query(FontEmbedding.fontclip_model_version)
-                .distinct()
-                .all()
-            )
-
-            if fontclip_versions and self.use_font_embedding:
-                # Extract version strings
-                versions = [v[0] for v in fontclip_versions if v[0]]
-
-                if len(versions) == 1:
-                    # Single model version used (expected case)
-                    fontclip_model_version = versions[0]
-                elif len(versions) > 1:
-                    # Multiple versions (rare) - use most common one and log warning
-                    from collections import Counter
-                    version_counts = Counter(
-                        db.query(FontEmbedding.fontclip_model_version)
-                        .filter(FontEmbedding.fontclip_model_version.isnot(None))
-                        .all()
-                    )
-                    most_common = version_counts.most_common(1)[0][0][0]
-                    fontclip_model_version = most_common
-                    console.print(
-                        f"[yellow]⚠[/yellow] Multiple FontCLIP versions found in dataset, "
-                        f"using most common: {most_common}"
-                    )
-                else:
-                    # No versions found
-                    fontclip_model_version = None
-            else:
-                # Font embeddings not used or no embeddings found
-                fontclip_model_version = None
-
             # Get git info if available
             try:
                 import subprocess
@@ -866,8 +809,6 @@ class CaptionBoundaryTrainer:
                 },
                 transform_strategy=self.transform_strategy.value,
                 ocr_visualization_variant=self.ocr_viz_variant,
-                use_font_embedding=self.use_font_embedding,
-                fontclip_model_version=fontclip_model_version,
                 best_val_f1=best_val_f1,
                 best_val_accuracy=best_val_accuracy,
                 best_checkpoint_path=str(self.checkpoint_dir / "best.pt"),
@@ -886,15 +827,3 @@ class CaptionBoundaryTrainer:
 
             self.experiment_id = experiment.id
             console.print(f"[green]✓[/green] Experiment saved to database (ID: {experiment.id})")
-
-            # Log FontCLIP model version for transparency
-            if fontclip_model_version:
-                is_fallback = "-fallback" in fontclip_model_version
-                if is_fallback:
-                    console.print(
-                        f"[yellow]ℹ[/yellow] FontCLIP model: {fontclip_model_version} (using fallback CLIP model)"
-                    )
-                else:
-                    console.print(f"[green]ℹ[/green] FontCLIP model: {fontclip_model_version}")
-            elif self.use_font_embedding:
-                console.print("[yellow]⚠[/yellow] Font embeddings enabled but no FontCLIP version recorded")

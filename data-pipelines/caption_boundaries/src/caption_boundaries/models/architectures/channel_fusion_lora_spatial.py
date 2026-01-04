@@ -219,7 +219,6 @@ class ChannelFusionLoRAPredictor(nn.Module):
         frame1: torch.Tensor,
         frame2: torch.Tensor,
         spatial_features: torch.Tensor,
-        reference_image: torch.Tensor,
     ) -> torch.Tensor:
         """Forward pass.
 
