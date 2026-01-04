@@ -54,7 +54,10 @@ orchestrator = { workspace = true }
 [tool.ruff]
 line-length = 120
 target-version = "py314"
-extend-exclude = ["**/_version.py"]  # Exclude auto-generated version files from all ruff checks
+extend-exclude = [
+    "*/_version.py",  # Exclude auto-generated version files from all ruff checks
+    "**/*/_version.py",
+]
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]  # pycodestyle errors, pyflakes, isort
