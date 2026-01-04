@@ -11,7 +11,7 @@ from typing import Any
 
 # Import ocrmac only on macOS (graceful failure on other platforms)
 try:
-    from ocrmac import ocrmac
+    from ocrmac import ocrmac  # type: ignore[reportMissingImports]
 except ImportError:
     ocrmac = None  # type: ignore[assignment]
 
