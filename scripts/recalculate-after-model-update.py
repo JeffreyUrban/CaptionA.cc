@@ -296,6 +296,11 @@ def main():
     for i, db_path in enumerate(databases, 1):
         success, message, result = recalculate_video(db_path, args.dry_run)
 
+        if result is None:
+            stats["errors"] += 1
+            print(f"[{i}/{len(databases)}] ✗ {db_path}: {message}")
+            continue
+
         action = result.get("action", "unknown")
 
         if action == "skipped":
