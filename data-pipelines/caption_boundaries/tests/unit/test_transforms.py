@@ -1,5 +1,7 @@
 """Unit tests for anchor-aware transforms."""
 
+from typing import Literal, cast
+
 import numpy as np
 import pytest
 from PIL import Image, ImageDraw
@@ -31,6 +33,7 @@ def create_test_image(width: int, height: int, pattern: str = "solid") -> Image.
     elif pattern == "gradient":
         # Horizontal gradient (useful for verifying crop/tile positions)
         pixels = img.load()
+        assert pixels is not None, "Failed to load image pixels"
         for x in range(width):
             color_value = int((x / width) * 255)
             for y in range(height):
@@ -59,7 +62,7 @@ def test_exact_size_no_transform():
 
     # Should pass through unchanged for any anchor type
     for anchor in ["left", "center", "right"]:
-        result = transform(img, anchor_type=anchor)
+        result = transform(img, anchor_type=cast(Literal["left", "center", "right"], anchor))
         assert result.size == (480, 48)
         assert np.array_equal(np.array(result), np.array(img))
 
@@ -318,11 +321,11 @@ def test_all_strategies_produce_correct_size():
 
         for anchor in ["left", "center", "right"]:
             # Test oversized
-            result_over = transform(img_oversized, anchor_type=anchor)
+            result_over = transform(img_oversized, anchor_type=cast(Literal["left", "center", "right"], anchor))
             assert result_over.size == (480, 48), f"Failed for {strategy} + {anchor} (oversized)"
 
             # Test undersized
-            result_under = transform(img_undersized, anchor_type=anchor)
+            result_under = transform(img_undersized, anchor_type=cast(Literal["left", "center", "right"], anchor))
             assert result_under.size == (480, 48), f"Failed for {strategy} + {anchor} (undersized)"
 
 
