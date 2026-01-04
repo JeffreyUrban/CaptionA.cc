@@ -46,8 +46,7 @@ function createTestFolder(name: string): string {
   return folderName
 }
 
-// Skip these integration tests in CI - they require a running dev server
-describe.skipIf(process.env['CI'])('Folder API', () => {
+describe('Folder API', () => {
   beforeAll(async () => {
     // Clean up any leftover test folders from previous runs
     const metadata = readFoldersMetadata()
