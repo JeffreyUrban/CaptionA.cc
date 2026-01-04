@@ -1,0 +1,2 @@
+# DVC-tracked datasets (ignore all .db files, track via .dvc)
+*.db
