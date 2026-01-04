@@ -12,7 +12,6 @@ from PIL import Image
 from rich.console import Console
 
 from caption_boundaries.data.dataset import CaptionBoundaryDataset
-from caption_boundaries.data.font_embeddings import get_font_embedding
 from caption_boundaries.data.ocr_visualization import create_ocr_visualization
 from caption_boundaries.data.transforms import AnchorAwareResize, NormalizeImageNet, ResizeStrategy
 from caption_boundaries.models.registry import create_model
@@ -59,7 +58,6 @@ class BoundaryPredictor:
         self.model_config = config.get("model_config", {"pretrained": False})
         self.transform_strategy = transform_strategy or ResizeStrategy(config.get("transform_strategy", "mirror_tile"))
         self.ocr_viz_variant = ocr_viz_variant or config.get("ocr_visualization_variant", "boundaries")
-        self.use_font_embedding = config.get("use_font_embedding", True)
 
         # OCR visualization will be loaded per-video (not at init time)
         self.ocr_viz_img = None
@@ -124,21 +122,6 @@ class BoundaryPredictor:
         # OCR visualization is loaded once per video in __init__, use the cached version
         ocr_viz_img = self.ocr_viz_img
 
-        # Get font embedding
-        if self.use_font_embedding:
-            try:
-                font_embedding = get_font_embedding(video_db_path)
-                if font_embedding is None:
-                    # Use zero vector as fallback
-                    font_embedding = torch.zeros(512)
-                else:
-                    font_embedding = torch.tensor(font_embedding.embedding_vector)
-            except Exception:
-                # If font embedding fails (e.g., training db doesn't exist), use zeros
-                font_embedding = torch.zeros(512)
-        else:
-            font_embedding = torch.zeros(512)
-
         # Get spatial metadata
         from caption_boundaries.data.dataset import _get_spatial_features
 
@@ -163,10 +146,9 @@ class BoundaryPredictor:
         frame1 = frame1.unsqueeze(0).to(self.device)
         frame2 = frame2.unsqueeze(0).to(self.device)
         spatial_features = spatial_features.unsqueeze(0).to(self.device)
-        font_embedding = font_embedding.unsqueeze(0).to(self.device)
 
         # Forward pass
-        logits = self.model(ocr_viz, frame1, frame2, spatial_features, font_embedding)
+        logits = self.model(ocr_viz, frame1, frame2, spatial_features)
         probs = torch.softmax(logits, dim=1).cpu().numpy()[0]
 
         # Get prediction
