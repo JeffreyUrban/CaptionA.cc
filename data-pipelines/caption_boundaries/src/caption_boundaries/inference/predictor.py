@@ -124,6 +124,8 @@ class BoundaryPredictor:
 
         # OCR visualization is loaded once per video in __init__, use the cached version
         ocr_viz_img = self.ocr_viz_img
+        if ocr_viz_img is None:
+            raise ValueError("OCR visualization not loaded. Call load_ocr_visualization() first.")
 
         # Get spatial metadata
         from caption_boundaries.data.dataset import _get_spatial_features
