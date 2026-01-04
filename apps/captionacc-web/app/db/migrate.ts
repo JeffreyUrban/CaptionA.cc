@@ -10,7 +10,7 @@ import Database from 'better-sqlite3'
  * Current schema version
  * Must match version in annotations-schema.sql
  */
-export const CURRENT_SCHEMA_VERSION = 1
+export const CURRENT_SCHEMA_VERSION = 2
 
 /**
  * Special version number for latest unreleased schema

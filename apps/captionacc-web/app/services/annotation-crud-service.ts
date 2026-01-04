@@ -12,8 +12,10 @@ import {
   getWritableDatabase,
   getOrCreateAnnotationDatabase,
 } from '~/utils/database'
-import { deleteCombinedImage, getOrGenerateCombinedImage } from '~/utils/image-processing'
+import { deleteCombinedImage } from '~/utils/image-processing'
 import type { AnnotationState, TextStatus } from '~/types/enums'
+import { queueCaptionMedianOcrProcessing } from './prefect'
+import { getDbPath, getVideoDir } from '~/utils/video-paths'
 
 // =============================================================================
 // Type Definitions
@@ -153,18 +155,46 @@ async function regenerateCombinedImageForAnnotation(
   // Delete old combined image
   deleteCombinedImage(videoId, annotationId)
 
-  // Generate new combined image immediately (for ML training)
-  await getOrGenerateCombinedImage(videoId, annotationId, startFrame, endFrame)
-
-  // Clear OCR cache and mark text as pending
+  // Clear OCR cache and set median_ocr_status to queued
   db.prepare(
     `
     UPDATE captions
     SET text_ocr_combined = NULL,
-        text_pending = 1
+        text_pending = 0,
+        median_ocr_status = 'queued'
     WHERE id = ?
   `
   ).run(annotationId)
+
+  // Queue median frame OCR processing via Prefect (async)
+  const dbPath = getDbPath(videoId)
+  const videoDir = getVideoDir(videoId)
+
+  if (dbPath && videoDir) {
+    try {
+      await queueCaptionMedianOcrProcessing({
+        videoId,
+        dbPath,
+        videoDir,
+        captionIds: [annotationId],
+      })
+      console.log(`[regenerateCombinedImage] Queued median OCR for annotation ${annotationId}`)
+    } catch (error) {
+      console.error(
+        `[regenerateCombinedImage] Failed to queue median OCR for annotation ${annotationId}:`,
+        error
+      )
+      // Update status to error
+      db.prepare(
+        `
+        UPDATE captions
+        SET median_ocr_status = 'error',
+            median_ocr_error = ?
+        WHERE id = ?
+      `
+      ).run(error instanceof Error ? error.message : String(error), annotationId)
+    }
+  }
 }
 
 /**
@@ -571,16 +601,48 @@ export async function createAnnotation(
 
     const annotationId = insertResult.lastInsertRowid as number
 
-    // Generate combined image for non-gap, non-pending annotations
+    // Queue median OCR processing for non-gap, non-pending annotations
     const isPending = input.boundaryPending ?? false
     const isGap = input.boundaryState === 'gap'
     if (!isGap && !isPending) {
-      await getOrGenerateCombinedImage(
-        videoId,
-        annotationId,
-        input.startFrameIndex,
-        input.endFrameIndex
-      )
+      // Set median_ocr_status to queued
+      db.prepare(
+        `
+        UPDATE captions
+        SET median_ocr_status = 'queued'
+        WHERE id = ?
+      `
+      ).run(annotationId)
+
+      // Queue median frame OCR processing via Prefect (async)
+      const dbPath = getDbPath(videoId)
+      const videoDir = getVideoDir(videoId)
+
+      if (dbPath && videoDir) {
+        try {
+          await queueCaptionMedianOcrProcessing({
+            videoId,
+            dbPath,
+            videoDir,
+            captionIds: [annotationId],
+          })
+          console.log(`[createAnnotation] Queued median OCR for annotation ${annotationId}`)
+        } catch (error) {
+          console.error(
+            `[createAnnotation] Failed to queue median OCR for annotation ${annotationId}:`,
+            error
+          )
+          // Update status to error
+          db.prepare(
+            `
+            UPDATE captions
+            SET median_ocr_status = 'error',
+                median_ocr_error = ?
+            WHERE id = ?
+          `
+          ).run(error instanceof Error ? error.message : String(error), annotationId)
+        }
+      }
     }
 
     const annotation = db.prepare('SELECT * FROM captions WHERE id = ?').get(annotationId) as
