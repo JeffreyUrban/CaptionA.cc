@@ -48,26 +48,27 @@ SNAPSHOT_LOG="local/dvc-snapshots.log"
 # Create log directory if needed
 mkdir -p "$(dirname "$SNAPSHOT_LOG")"
 
-# Track last snapshot time (use git commit time of .dvc files)
-LAST_SNAPSHOT_TIME=$(git log -1 --format="%ct" --all -- 'local/data/**/*.dvc' 2>/dev/null || echo "0")
-
-echo "Checking for modified databases since last snapshot..."
-echo "Last snapshot: $(date -r "$LAST_SNAPSHOT_TIME" 2>/dev/null || echo 'never')"
-
 # Find all split databases (exclude state.db)
 DB_TYPES=("video.db" "fullOCR.db" "cropping.db" "layout.db" "captions.db")
 MODIFIED_DBS=()
 
+echo "Collecting all split databases..."
+
+# For first run, just track all databases
+# Later runs will check .dvc file timestamps vs database timestamps
 for db_type in "${DB_TYPES[@]}"; do
-    # Find all databases of this type modified since last snapshot
     while IFS= read -r db_file; do
-        if [ -f "$db_file" ]; then
-            DB_MTIME=$(stat -f "%m" "$db_file" 2>/dev/null || stat -c "%Y" "$db_file" 2>/dev/null)
-            if [ "$DB_MTIME" -gt "$LAST_SNAPSHOT_TIME" ]; then
-                MODIFIED_DBS+=("$db_file")
-            fi
+        # Check if .dvc file exists and is newer than database
+        dvc_file="${db_file}.dvc"
+
+        if [ ! -f "$dvc_file" ]; then
+            # No .dvc file exists - needs tracking
+            MODIFIED_DBS+=("$db_file")
+        elif [ "$db_file" -nt "$dvc_file" ]; then
+            # Database is newer than .dvc file - needs re-tracking
+            MODIFIED_DBS+=("$db_file")
         fi
-    done < <(find local/data -name "$db_type" -type f 2>/dev/null)
+    done < <(find -L local/data -name "$db_type" -type f 2>/dev/null)
 done
 
 # Count modified databases
