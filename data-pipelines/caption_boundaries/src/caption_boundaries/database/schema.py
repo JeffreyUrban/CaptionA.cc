@@ -38,7 +38,7 @@ class VideoRegistry(Base):
     last_seen_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=lambda: datetime.now(UTC))
 
     # Relationships
-    ocr_visualizations: Mapped[list[OCRVisualization]] = relationship(
+    ocr_visualizations: Mapped[list["OCRVisualization"]] = relationship(
         back_populates="video", cascade="all, delete-orphan"
     )
 
@@ -85,7 +85,7 @@ class TrainingDataset(Base):
     min_samples_per_class: Mapped[int | None] = mapped_column(Integer)
 
     # Relationships
-    samples: Mapped[list[TrainingSample]] = relationship(back_populates="dataset", cascade="all, delete-orphan")
+    samples: Mapped[list["TrainingSample"]] = relationship(back_populates="dataset", cascade="all, delete-orphan")
 
     __table_args__ = (
         CheckConstraint("split_strategy IN ('random', 'show_based')", name="check_split_strategy"),

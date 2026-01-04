@@ -1,0 +1,5 @@
+outs:
+- md5: 35e1536744dc1d33d7526a033633df8e
+  size: 137664517
+  hash: md5
+  path: fusion_lora_spatial_mrn0fkfd.pt

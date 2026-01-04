@@ -1,0 +1,8 @@
+{
+  "name": "confirmed_dataset",
+  "version": "v1.0",
+  "created_at": "2026-01-04T13:37:00-05:00",
+  "description": "Training dataset with confirmed caption boundaries",
+  "size_bytes": 1181116416,
+  "git_commit": "$(git rev-parse HEAD)"
+}

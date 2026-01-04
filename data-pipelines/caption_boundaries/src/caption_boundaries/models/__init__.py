@@ -3,8 +3,6 @@
 from importlib import import_module
 from pathlib import Path
 
-# Note: CaptionBoundaryPredictor and create_model are available through the registry
-# after automatic architecture module imports below
 from caption_boundaries.models.registry import (
     create_model,
     get_model_info,
@@ -25,7 +23,6 @@ for _model_file in _architectures_dir.glob("*.py"):
 
 __all__ = [
     "create_model",
-    "create_model_from_registry",
     "register_model",
     "list_architectures",
     "get_model_info",

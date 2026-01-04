@@ -1,0 +1,4 @@
+[core]
+    remote = storage
+['remote "storage"']
+    # URL configured in .dvc/config.local (not committed to Git)
