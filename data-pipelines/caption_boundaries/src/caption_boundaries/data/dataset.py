@@ -171,7 +171,7 @@ class CaptionBoundaryDataset(Dataset):
 
         return valid_samples
 
-    def _is_complete_sample(self, sample: TrainingSample, missing_stats: dict = None) -> bool:
+    def _is_complete_sample(self, sample: TrainingSample, missing_stats: dict | None = None) -> bool:
         """Check if a sample has all required data.
 
         Note: Reference frame check removed since we now fallback to frame1 if missing.
@@ -384,14 +384,14 @@ class CaptionBoundaryDataset(Dataset):
             return "right"
 
     @staticmethod
-    def collate_fn(batch: list[dict]) -> dict[str, torch.Tensor]:
+    def collate_fn(batch: list[dict]) -> dict[str, torch.Tensor | list]:
         """Collate function for DataLoader.
 
         Args:
             batch: List of sample dictionaries from __getitem__
 
         Returns:
-            Batched dictionary with stacked tensors
+            Batched dictionary with stacked tensors (sample_id is kept as list for debugging)
         """
         return {
             "ocr_viz": torch.stack([s["ocr_viz"] for s in batch]),
