@@ -7,7 +7,7 @@ and checkpoint management.
 import random
 from collections import defaultdict
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import torch
@@ -373,8 +373,14 @@ class CaptionBoundaryTrainer:
             **self.model_config,
         )
 
-        console.print(f"[green]✓[/green] Total params: {self.model.get_num_total_params():,}")
-        console.print(f"[green]✓[/green] Trainable params: {self.model.get_num_trainable_params():,}")
+        # Log parameter counts (custom methods on our model architectures)
+        # Use getattr to access custom methods that pyright doesn't know about
+        get_total = getattr(self.model, "get_num_total_params", None)
+        get_trainable = getattr(self.model, "get_num_trainable_params", None)
+        if callable(get_total):
+            console.print(f"[green]✓[/green] Total params: {get_total():,}")
+        if callable(get_trainable):
+            console.print(f"[green]✓[/green] Trainable params: {get_trainable():,}")
 
         # Optimizer with different learning rates for different components
         # Higher LR for newly added classifier, lower LR for pretrained feature extractor
@@ -456,6 +462,9 @@ class CaptionBoundaryTrainer:
                 mode="online",  # Default to online reporting to wandb.ai
             )
 
+            # wandb.run is set after init()
+            assert wandb.run is not None, "W&B run not initialized"
+
             # Save W&B run ID for experiment tracking
             self.wandb_run_id = wandb.run.id
 
@@ -470,6 +479,12 @@ class CaptionBoundaryTrainer:
         Returns:
             Dict with training metrics
         """
+        # Assert training components are initialized (set by train() before calling this)
+        assert self.model is not None, "Model not initialized. Call train() first."
+        assert self.train_loader is not None, "Train loader not initialized. Call train() first."
+        assert self.optimizer is not None, "Optimizer not initialized. Call train() first."
+        assert self.criterion is not None, "Criterion not initialized. Call train() first."
+
         self.model.train()
         total_loss = 0.0
         all_preds = []
@@ -537,6 +552,11 @@ class CaptionBoundaryTrainer:
         Returns:
             Dict with validation metrics
         """
+        # Assert validation components are initialized (set by train() before calling this)
+        assert self.model is not None, "Model not initialized. Call train() first."
+        assert self.val_loader is not None, "Validation loader not initialized. Call train() first."
+        assert self.criterion is not None, "Criterion not initialized. Call train() first."
+
         self.model.eval()
         total_loss = 0.0
         all_preds = []
@@ -581,13 +601,17 @@ class CaptionBoundaryTrainer:
         cm = confusion_matrix(all_labels_np, all_preds_np)
 
         # Classification report (specify labels to handle missing classes in small datasets)
-        class_report = classification_report(
-            all_labels_np,
-            all_preds_np,
-            labels=list(range(len(CaptionBoundaryDataset.LABELS))),
-            target_names=CaptionBoundaryDataset.LABELS,
-            output_dict=True,
-            zero_division="0",
+        # Cast needed because sklearn stubs don't properly type output_dict=True
+        class_report = cast(
+            dict[str, Any],
+            classification_report(
+                all_labels_np,
+                all_preds_np,
+                labels=list(range(len(CaptionBoundaryDataset.LABELS))),
+                target_names=CaptionBoundaryDataset.LABELS,
+                output_dict=True,
+                zero_division="0",
+            ),
         )
 
         metrics = {
@@ -635,6 +659,9 @@ class CaptionBoundaryTrainer:
             metrics: Validation metrics
             is_best: Whether this is the best model so far
         """
+        assert self.model is not None, "Model not initialized"
+        assert self.optimizer is not None, "Optimizer not initialized"
+
         checkpoint = {
             "epoch": epoch,
             "model_state_dict": self.model.state_dict(),
@@ -661,11 +688,12 @@ class CaptionBoundaryTrainer:
             torch.save(checkpoint, best_path)
             console.print(f"[green]✓[/green] Saved best checkpoint: {best_path}")
 
-            # Log to W&B
-            wandb.run.summary["best_epoch"] = epoch
-            wandb.run.summary["best_val_f1_macro"] = metrics["val/f1_macro"]
-            wandb.run.summary["best_val_f1_weighted"] = metrics["val/f1_weighted"]
-            wandb.run.summary["best_val_accuracy"] = metrics["val/accuracy"]
+            # Log to W&B (if run is initialized)
+            if wandb.run is not None:
+                wandb.run.summary["best_epoch"] = epoch
+                wandb.run.summary["best_val_f1_macro"] = metrics["val/f1_macro"]
+                wandb.run.summary["best_val_f1_weighted"] = metrics["val/f1_weighted"]
+                wandb.run.summary["best_val_accuracy"] = metrics["val/accuracy"]
 
     def train(self):
         """Run full training loop."""
@@ -675,6 +703,12 @@ class CaptionBoundaryTrainer:
         self._setup_datasets()
         self._setup_model()
         self._setup_wandb()
+
+        # Assert components are initialized after setup
+        assert self.model is not None
+        assert self.optimizer is not None
+        assert self.train_loader is not None
+        assert self.val_loader is not None
 
         # Evaluate untrained model (epoch 0 baseline)
         console.print("[cyan]Evaluating untrained model (epoch 0)...[/cyan]")
@@ -696,6 +730,9 @@ class CaptionBoundaryTrainer:
 
         # Track best model (use balanced accuracy for imbalanced datasets)
         best_val_balanced_acc = 0.0
+
+        # Initialize val_metrics with epoch 0 metrics (in case training loop doesn't run)
+        val_metrics = epoch_0_metrics
 
         # Training loop
         for epoch in range(1, self.epochs + 1):
