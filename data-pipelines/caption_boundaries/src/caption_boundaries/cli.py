@@ -127,7 +127,6 @@ def train(
             model_config={"pretrained": pretrained},
             transform_strategy=strategy,
             ocr_viz_variant=ocr_viz_variant,
-            use_font_embedding=True,
             epochs=epochs,
             batch_size=batch_size,
             lr_features=lr_features,

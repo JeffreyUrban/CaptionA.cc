@@ -1,10 +1,11 @@
 """Training loop for caption boundary detection model.
 
 Implements training with W&B experiment tracking, validation metrics,
-and checkpoint management.
+and checkpoint management with DVC traceability.
 """
 
 import random
+import subprocess
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
@@ -14,6 +15,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import wandb
+import yaml
 from rich.console import Console
 from rich.progress import track
 from sklearn.metrics import (
@@ -31,6 +33,44 @@ from caption_boundaries.database import Experiment, TrainingDataset, get_dataset
 from caption_boundaries.models.registry import create_model, get_model_info
 
 console = Console(stderr=True)
+
+
+def get_dataset_dvc_hash(dataset_path: Path) -> str:
+    """Get DVC hash of dataset for traceability.
+
+    Args:
+        dataset_path: Path to the dataset file (without .dvc extension)
+
+    Returns:
+        MD5 hash from DVC metadata, or "unknown" if not tracked
+    """
+    dvc_file = Path(f"{dataset_path}.dvc")
+    if dvc_file.exists():
+        try:
+            with open(dvc_file) as f:
+                dvc_data = yaml.safe_load(f)
+            return dvc_data["outs"][0]["md5"]
+        except Exception:
+            return "unknown"
+    return "unknown"
+
+
+def get_git_commit() -> str:
+    """Get current git commit hash.
+
+    Returns:
+        Full git commit hash, or "unknown" if not in a git repo
+    """
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return result.stdout.strip()
+    except Exception:
+        return "unknown"
 
 
 def compute_per_class_accuracy(y_true: np.ndarray, y_pred: np.ndarray, num_classes: int) -> dict[int, float]:
@@ -434,6 +474,7 @@ class CaptionBoundaryTrainer:
                 # Data config
                 "dataset_name": dataset.name,
                 "dataset_db_path": str(self.dataset_db_path),
+                "dataset_dvc_hash": get_dataset_dvc_hash(self.dataset_db_path),  # DVC traceability
                 "num_train_samples": len(self.train_dataset),
                 "num_val_samples": len(self.val_dataset),
                 "transform_strategy": self.transform_strategy.value,
@@ -443,6 +484,9 @@ class CaptionBoundaryTrainer:
                 "random_seed": dataset.random_seed,
                 # Hardware
                 "device": self.device,
+                # Version control
+                "git_commit": get_git_commit(),  # Code version traceability
+                "experiment_dir": str(self.checkpoint_dir.parent),
             }
 
             # Initialize W&B (store runs in local/models/caption_boundaries/wandb)
@@ -630,7 +674,7 @@ class CaptionBoundaryTrainer:
         return metrics
 
     def save_checkpoint(self, epoch: int, metrics: dict, is_best: bool = False):
-        """Save model checkpoint.
+        """Save model checkpoint with full metadata for DVC/W&B traceability.
 
         Args:
             epoch: Current epoch
@@ -641,14 +685,18 @@ class CaptionBoundaryTrainer:
             "epoch": epoch,
             "model_state_dict": self.model.state_dict(),
             "optimizer_state_dict": self.optimizer.state_dict(),
+            "scheduler_state_dict": self.scheduler.state_dict() if self.scheduler else None,
             "metrics": metrics,
-            "config": {
+            "config": wandb.config.as_dict() if wandb.run else {
                 "architecture_name": self.architecture_name,
                 "model_config": self.model_config,
                 "dataset_db_path": str(self.dataset_db_path),
                 "transform_strategy": self.transform_strategy.value,
                 "ocr_viz_variant": self.ocr_viz_variant,
             },
+            # W&B traceability - critical for linking checkpoint to run
+            "wandb_run_id": wandb.run.id if wandb.run else None,
+            "wandb_run_name": wandb.run.name if wandb.run else None,
         }
 
         # Save periodic checkpoint
@@ -765,13 +813,22 @@ class CaptionBoundaryTrainer:
         # Save experiment to database
         self._save_experiment_to_db(best_val_balanced_acc, val_metrics["val/accuracy"])
 
-        # Finish W&B
-        wandb.finish()
-
-        console.print("\n[green]✓ Training complete![/green]")
+        # Print DVC tracking instructions
+        console.print("\n" + "="*70)
+        console.print("[green]✓ Training complete![/green]")
+        console.print("="*70)
         console.print(f"Best Val Balanced Accuracy: {best_val_balanced_acc:.4f}")
         console.print(f"Final Val Accuracy: {val_metrics['val/accuracy']:.4f}")
         console.print(f"Checkpoints saved to: {self.checkpoint_dir}")
+        console.print(f"\n[cyan]W&B Run:[/cyan]")
+        console.print(f"  ID:  {self.wandb_run_id}")
+        console.print(f"  URL: {wandb.run.url if wandb.run else 'N/A'}")
+        console.print(f"\n[yellow]To track with DVC:[/yellow]")
+        console.print(f"  [blue]./scripts/track-experiment.sh {self.checkpoint_dir.parent} {self.wandb_run_id} <model_name>[/blue]")
+        console.print("="*70 + "\n")
+
+        # Finish W&B
+        wandb.finish()
 
     def _save_experiment_to_db(self, best_val_f1: float, best_val_accuracy: float):
         """Save experiment metadata to database."""

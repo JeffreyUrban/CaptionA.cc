@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 env:
-  PYTHON_VERSION: 3.14
+  PYTHON_VERSION: 3.13
 
 jobs:
   # Python linting and type checking
@@ -113,7 +113,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.14"]
+        python-version: ["3.13"]
     steps:
       - uses: actions/checkout@v4
 
@@ -156,6 +156,39 @@ jobs:
         with:
           file: ./coverage.xml
           fail_ci_if_error: false
+
+  # Python 3.14 experimental - tests readiness for future upgrade
+  python-test-experimental:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for Python projects
+        id: check-python
+        run: |
+          if find apps services packages data-pipelines -name "pyproject.toml" 2>/dev/null | grep -q .; then
+            echo "has_python=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_python=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Set up Python 3.14
+        if: steps.check-python.outputs.has_python == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install uv
+        if: steps.check-python.outputs.has_python == 'true'
+        uses: astral-sh/setup-uv@v3
+
+      - name: Install dependencies
+        if: steps.check-python.outputs.has_python == 'true'
+        run: uv sync --all-extras
+
+      - name: Run tests
+        if: steps.check-python.outputs.has_python == 'true'
+        run: uv run pytest --cov --cov-report=xml --cov-report=term
 
   # TypeScript tests
   typescript-test:
