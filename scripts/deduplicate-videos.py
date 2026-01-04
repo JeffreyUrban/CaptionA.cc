@@ -21,8 +21,9 @@ LOG_FILE = Path("scripts/deduplicate-videos.log")
 DECISIONS_FILE = Path("scripts/deduplication-decisions.json")
 
 
-def get_video_info(db_path: Path) -> dict:
+def get_video_info(db_path: Path) -> dict | None:
     """Extract video information and work progress from database."""
+    conn = None
     try:
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
@@ -50,10 +51,11 @@ def get_video_info(db_path: Path) -> dict:
         display_path, video_id, storage_path = result
     except Exception:
         # Skip databases that can't be read or don't have expected schema
-        try:
-            conn.close()
-        except Exception:
-            pass
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
         return None
 
     try:
