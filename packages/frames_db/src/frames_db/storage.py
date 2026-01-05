@@ -307,9 +307,6 @@ def update_vp9_encoding_status(
             updates.append("error_message = ?")
             params.append(error_message)
 
-        # Always update updated_at
-        updates.append("updated_at = datetime('now')")
-
         # Add WHERE clause params
         params.extend([video_id, frame_type])
 

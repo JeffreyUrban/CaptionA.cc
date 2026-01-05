@@ -13,6 +13,11 @@ from frames_db import (
     write_frame_to_db,
     write_frames_batch,
 )
+from frames_db.storage import (
+    get_vp9_encoding_status,
+    init_vp9_encoding_status,
+    update_vp9_encoding_status,
+)
 from PIL import Image
 
 
@@ -55,6 +60,29 @@ def temp_db(tmp_path: Path) -> Path:
                 crop_bottom INTEGER,
                 crop_bounds_version INTEGER DEFAULT 1,
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+            """
+        )
+
+        # Create vp9_encoding_status table
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS vp9_encoding_status (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                video_id TEXT NOT NULL,
+                frame_type TEXT NOT NULL CHECK(frame_type IN ('cropped', 'full')),
+                status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN (
+                    'pending', 'encoding', 'uploading', 'completed', 'failed'
+                )),
+                chunks_encoded INTEGER DEFAULT 0,
+                chunks_uploaded INTEGER DEFAULT 0,
+                total_frames INTEGER DEFAULT 0,
+                wasabi_available INTEGER NOT NULL DEFAULT 0,
+                modulo_levels TEXT,
+                error_message TEXT,
+                encoding_started_at TEXT,
+                encoding_completed_at TEXT,
+                UNIQUE(video_id, frame_type)
             )
             """
         )
@@ -390,3 +418,116 @@ class TestPerformance:
 
         assert len(result) == 100
         assert elapsed < 5.0  # Should complete in <5 seconds
+
+
+class TestVP9EncodingStatus:
+    """Tests for VP9 encoding status tracking."""
+
+    @pytest.mark.unit
+    def test_init_vp9_encoding_status(self, temp_db: Path):
+        """Test initializing VP9 encoding status."""
+        init_vp9_encoding_status(
+            db_path=temp_db,
+            video_id="test-video-123",
+            frame_type="cropped",
+            modulo_levels=[16, 4, 1],
+            total_frames=1000,
+        )
+
+        status = get_vp9_encoding_status(temp_db, "test-video-123", "cropped")
+        assert status is not None
+        assert status["status"] == "pending"
+        assert status["total_frames"] == 1000
+        assert status["modulo_levels"] == [16, 4, 1]
+        assert status["wasabi_available"] is False
+
+    @pytest.mark.unit
+    def test_update_vp9_encoding_status(self, temp_db: Path):
+        """Test updating VP9 encoding status."""
+        # Initialize
+        init_vp9_encoding_status(
+            db_path=temp_db,
+            video_id="test-video-123",
+            frame_type="cropped",
+            modulo_levels=[16, 4, 1],
+        )
+
+        # Update to encoding
+        update_vp9_encoding_status(
+            db_path=temp_db,
+            video_id="test-video-123",
+            frame_type="cropped",
+            status="encoding",
+            chunks_encoded=10,
+        )
+
+        status = get_vp9_encoding_status(temp_db, "test-video-123", "cropped")
+        assert status is not None
+        assert status["status"] == "encoding"
+        assert status["chunks_encoded"] == 10
+
+        # Update to completed
+        update_vp9_encoding_status(
+            db_path=temp_db,
+            video_id="test-video-123",
+            frame_type="cropped",
+            status="completed",
+            chunks_uploaded=10,
+            wasabi_available=True,
+        )
+
+        status = get_vp9_encoding_status(temp_db, "test-video-123", "cropped")
+        assert status is not None
+        assert status["status"] == "completed"
+        assert status["chunks_uploaded"] == 10
+        assert status["wasabi_available"] is True
+
+    @pytest.mark.unit
+    def test_update_vp9_encoding_status_with_error(self, temp_db: Path):
+        """Test updating VP9 encoding status with error."""
+        init_vp9_encoding_status(
+            db_path=temp_db, video_id="test-video-123", frame_type="cropped", modulo_levels=[16, 4, 1]
+        )
+
+        update_vp9_encoding_status(
+            db_path=temp_db,
+            video_id="test-video-123",
+            frame_type="cropped",
+            status="failed",
+            error_message="FFmpeg encoding failed",
+        )
+
+        status = get_vp9_encoding_status(temp_db, "test-video-123", "cropped")
+        assert status is not None
+        assert status["status"] == "failed"
+        assert status["error_message"] == "FFmpeg encoding failed"
+        assert status["wasabi_available"] is False
+
+    @pytest.mark.unit
+    def test_get_vp9_encoding_status_not_found(self, temp_db: Path):
+        """Test getting non-existent VP9 encoding status."""
+        status = get_vp9_encoding_status(temp_db, "nonexistent-video", "cropped")
+        assert status is None
+
+    @pytest.mark.unit
+    def test_multiple_frame_types(self, temp_db: Path):
+        """Test tracking status for multiple frame types."""
+        # Initialize cropped
+        init_vp9_encoding_status(
+            db_path=temp_db, video_id="test-video-123", frame_type="cropped", modulo_levels=[16, 4, 1]
+        )
+
+        # Initialize full
+        init_vp9_encoding_status(
+            db_path=temp_db, video_id="test-video-123", frame_type="full", modulo_levels=[1]
+        )
+
+        # Get both statuses
+        cropped_status = get_vp9_encoding_status(temp_db, "test-video-123", "cropped")
+        full_status = get_vp9_encoding_status(temp_db, "test-video-123", "full")
+
+        assert cropped_status is not None
+        assert full_status is not None
+        # Verify they have different modulo levels
+        assert cropped_status["modulo_levels"] == [16, 4, 1]
+        assert full_status["modulo_levels"] == [1]
