@@ -545,6 +545,53 @@ BEGIN
         END
     WHERE id = 1;
 END;
+-- VP9 encoding status tracking (per frame type)
+-- Tracks VP9 encoding and Wasabi upload progress
+CREATE TABLE IF NOT EXISTS vp9_encoding_status (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    video_id TEXT NOT NULL,
+    frame_type TEXT NOT NULL CHECK(frame_type IN ('cropped', 'full')),
+
+    -- Encoding progress
+    status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN (
+        'pending',      -- Queued for encoding
+        'encoding',     -- Currently encoding
+        'uploading',    -- Encoding complete, uploading to Wasabi
+        'completed',    -- All chunks uploaded successfully
+        'failed'        -- Encoding or upload failed
+    )),
+
+    encoding_started_at TEXT,
+    encoding_completed_at TEXT,
+
+    -- Progress tracking
+    chunks_encoded INTEGER DEFAULT 0,
+    chunks_uploaded INTEGER DEFAULT 0,
+    total_frames INTEGER DEFAULT 0,
+
+    -- Wasabi availability
+    wasabi_available INTEGER NOT NULL DEFAULT 0 CHECK(wasabi_available IN (0, 1)),
+
+    -- Configuration
+    modulo_levels TEXT,  -- JSON array: ["16", "4", "1"] for cropped, ["1"] for full
+
+    -- Error tracking
+    error_message TEXT,
+
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+
+    UNIQUE(video_id, frame_type)
+);
+
+-- Index for checking Wasabi availability
+CREATE INDEX IF NOT EXISTS idx_vp9_encoding_status_wasabi_available
+ON vp9_encoding_status(video_id, frame_type, wasabi_available);
+
+-- Index for finding pending/failed jobs
+CREATE INDEX IF NOT EXISTS idx_vp9_encoding_status_status
+ON vp9_encoding_status(status, created_at);
+
 -- Database metadata (schema versioning)
 -- Tracks schema version and verification state
 CREATE TABLE IF NOT EXISTS database_metadata (

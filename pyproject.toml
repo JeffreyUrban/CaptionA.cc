@@ -50,6 +50,8 @@ caption-boundaries = { workspace = true }
 caption-text = { workspace = true }
 full-frames = { workspace = true }
 orchestrator = { workspace = true }
+vp9-utils = { workspace = true }
+frames-db = { workspace = true }
 
 # Common tool settings shared across all workspace members
 [tool.ruff]

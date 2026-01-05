@@ -16,5 +16,9 @@
   },
   "engines": {
     "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.962.0",
+    "dotenv": "^17.2.3"
   }
 }
