@@ -5,6 +5,7 @@
  */
 
 import { useState } from 'react'
+
 import { signIn } from '../../services/supabase-client'
 import { Button } from '../Button'
 
@@ -92,7 +93,7 @@ export function LoginForm({ onSuccess, onSwitchToSignUp }: LoginFormProps) {
               className="text-blue-500 hover:text-blue-700 text-sm"
               type="button"
             >
-              Don't have an account? Sign up
+              Don&apos;t have an account? Sign up
             </button>
           </div>
         )}

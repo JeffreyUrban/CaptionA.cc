@@ -10,6 +10,7 @@ import React, {
   useState,
 } from 'react'
 import { useLocation } from 'react-router'
+
 import { AuthProvider } from '~/components/auth/AuthProvider'
 
 // Custom hook to track the previous value

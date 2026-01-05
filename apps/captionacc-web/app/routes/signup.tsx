@@ -1,7 +1,8 @@
-import { useNavigate } from 'react-router'
-import { SignUpForm } from '~/components/auth/SignUpForm'
-import { useAuth } from '~/components/auth/AuthProvider'
 import { useEffect } from 'react'
+import { useNavigate } from 'react-router'
+
+import { useAuth } from '~/components/auth/AuthProvider'
+import { SignUpForm } from '~/components/auth/SignUpForm'
 
 export default function SignUpPage() {
   const navigate = useNavigate()
@@ -10,7 +11,7 @@ export default function SignUpPage() {
   // Redirect to home if already logged in
   useEffect(() => {
     if (!loading && user) {
-      navigate('/')
+      void navigate('/')
     }
   }, [user, loading, navigate])
 
@@ -30,8 +31,8 @@ export default function SignUpPage() {
           <p className="text-gray-600 dark:text-gray-400">Caption Annotation Platform</p>
         </div>
         <SignUpForm
-          onSuccess={() => navigate('/login')}
-          onSwitchToLogin={() => navigate('/login')}
+          onSuccess={() => void navigate('/login')}
+          onSwitchToLogin={() => void navigate('/login')}
         />
       </div>
     </div>

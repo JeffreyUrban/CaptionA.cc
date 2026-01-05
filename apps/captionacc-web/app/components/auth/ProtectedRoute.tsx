@@ -6,6 +6,7 @@
  */
 
 import { Navigate } from 'react-router'
+
 import { useAuth } from './AuthProvider'
 
 interface ProtectedRouteProps {

@@ -5,6 +5,7 @@
  */
 
 import { useState } from 'react'
+
 import { signUp } from '../../services/supabase-client'
 import { Button } from '../Button'
 

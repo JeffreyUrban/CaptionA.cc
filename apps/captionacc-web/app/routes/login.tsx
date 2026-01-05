@@ -1,7 +1,8 @@
-import { useNavigate } from 'react-router'
-import { LoginForm } from '~/components/auth/LoginForm'
-import { useAuth } from '~/components/auth/AuthProvider'
 import { useEffect } from 'react'
+import { useNavigate } from 'react-router'
+
+import { useAuth } from '~/components/auth/AuthProvider'
+import { LoginForm } from '~/components/auth/LoginForm'
 
 export default function LoginPage() {
   const navigate = useNavigate()
@@ -10,7 +11,7 @@ export default function LoginPage() {
   // Redirect to home if already logged in
   useEffect(() => {
     if (!loading && user) {
-      navigate('/')
+      void navigate('/')
     }
   }, [user, loading, navigate])
 
@@ -29,7 +30,10 @@ export default function LoginPage() {
           <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-2">CaptionA.cc</h1>
           <p className="text-gray-600 dark:text-gray-400">Caption Annotation Platform</p>
         </div>
-        <LoginForm onSuccess={() => navigate('/')} onSwitchToSignUp={() => navigate('/signup')} />
+        <LoginForm
+          onSuccess={() => void navigate('/')}
+          onSwitchToSignUp={() => void navigate('/signup')}
+        />
       </div>
     </div>
   )
