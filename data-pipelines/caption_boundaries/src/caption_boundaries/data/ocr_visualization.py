@@ -152,7 +152,7 @@ def visualize_boxes_centers(
             intensity = int(confidence * 255)
 
         # Draw circle at center
-        cv2.circle(image, (center_x, center_y), radius, intensity, -1)
+        cv2.circle(image, (center_x, center_y), radius, (intensity, intensity, intensity), -1)
 
     return image
 
