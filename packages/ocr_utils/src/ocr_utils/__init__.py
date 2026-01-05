@@ -1,4 +1,4 @@
-"""Shared OCR processing utilities using macOS LiveText."""
+"""Shared OCR processing utilities using OCR service or macOS LiveText fallback."""
 
 from ocr_utils.database import (
     ensure_ocr_table,
@@ -6,6 +6,7 @@ from ocr_utils.database import (
     load_ocr_for_frame_range,
     write_ocr_result_to_database,
 )
+from ocr_utils.ocr_service_client import OCRServiceAdapter, OCRServiceError
 from ocr_utils.processing import (
     OCRTimeoutError,
     process_frame_ocr_with_retry,
@@ -24,6 +25,8 @@ __all__ = [
     "__version__",
     "__version_tuple__",
     "OCRTimeoutError",
+    "OCRServiceAdapter",
+    "OCRServiceError",
     "process_frame_ocr_with_retry",
     "process_frames_directory",
     "process_frames_streaming",

@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "ocr_utils"
 dynamic = ["version"]
-description = "Shared OCR processing utilities using macOS LiveText"
+description = "Shared OCR processing utilities using OCR service or macOS LiveText fallback"
 readme = "README.md"
 authors = [
     {name = "Jeffrey Urban"}
@@ -13,9 +13,8 @@ authors = [
 requires-python = ">=3.13,<3.14"
 keywords = [
     "ocr",
-    "livetext",
-    "macos",
-    "text-recognition"
+    "text-recognition",
+    "google-cloud-vision"
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -23,22 +22,24 @@ classifiers = [
     "Topic :: Multimedia :: Graphics :: Capture",
     "Topic :: Text Processing",
     "Topic :: Utilities",
-    "Operating System :: MacOS",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.14"
 ]
 dependencies = [
-    "ocrmac>=0.1.0; sys_platform == 'darwin'",
     "pillow>=10.0.0",
     "opencv-python>=4.8.0",
     "typer>=0.9.0",
-    "rich>=13.0.0"
+    "rich>=13.0.0",
+    "httpx>=0.27.0"
 ]
 
 [project.scripts]
 ocr_utils = "ocr_utils.cli:app"
 
 [project.optional-dependencies]
+ocrmac = [
+    "ocrmac>=0.1.0"
+]
 dev = [
     "pytest>=7.4.0",
     "pytest-cov>=4.1.0",
