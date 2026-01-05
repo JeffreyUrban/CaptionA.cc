@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  ocr-service:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount your Google Cloud credentials
+      - ${GOOGLE_APPLICATION_CREDENTIALS}:/credentials/google-cloud-credentials.json:ro
+    environment:
+      - GOOGLE_APPLICATION_CREDENTIALS=/credentials/google-cloud-credentials.json
+    restart: unless-stopped
