@@ -5,9 +5,8 @@
  * Provides current user and session information to all components.
  */
 
-import { createContext, useContext, useEffect, useState } from 'react'
-
 import type { Session, User } from '@supabase/supabase-js'
+import { createContext, useContext, useEffect, useState } from 'react'
 
 import { onAuthStateChange, supabase } from '../../services/supabase-client'
 

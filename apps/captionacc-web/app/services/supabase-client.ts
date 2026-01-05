@@ -9,6 +9,8 @@
  */
 
 import { createClient } from '@supabase/supabase-js'
+
+import type { Session } from '@supabase/supabase-js'
 import type { Database } from '../types/supabase'
 
 // Environment variables - use import.meta.env for Vite
@@ -136,6 +138,6 @@ export async function signOut() {
 /**
  * Subscribe to authentication state changes
  */
-export function onAuthStateChange(callback: (event: string, session: any) => void) {
+export function onAuthStateChange(callback: (event: string, session: Session | null) => void) {
   return supabase.auth.onAuthStateChange(callback)
 }
