@@ -10,7 +10,7 @@ Provides access to Supabase for:
 
 import os
 from datetime import datetime
-from typing import Any, cast
+from typing import Any
 
 from supabase import Client, create_client
 
