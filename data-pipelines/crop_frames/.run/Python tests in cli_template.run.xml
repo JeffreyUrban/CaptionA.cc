@@ -1,5 +1,5 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="pytest in CaptionA.cc-claude1" type="tests" factoryName="py.test" nameIsGenerated="true">
+  <configuration default="false" name="pytest in CaptionA.cc-claude3" type="tests" factoryName="py.test" nameIsGenerated="true">
     <module name="crop_frames" />
     <option name="ENV_FILES" value="" />
     <option name="INTERPRETER_OPTIONS" value="" />
