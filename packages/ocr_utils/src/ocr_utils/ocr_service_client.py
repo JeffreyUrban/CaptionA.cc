@@ -32,9 +32,7 @@ class OCRServiceAdapter:
         self.poll_interval = poll_interval
         self.timeout = timeout
 
-    def process_frames_batch(
-        self, frame_paths: List[Path], language: str = "zh-Hans"
-    ) -> List[Dict[str, Any]]:
+    def process_frames_batch(self, frame_paths: List[Path], language: str = "zh-Hans") -> List[Dict[str, Any]]:
         """Process batch of frames and return ocrmac-compatible format.
 
         Args:
@@ -72,9 +70,7 @@ class OCRServiceAdapter:
 
         # Submit job to OCR service
         try:
-            response = httpx.post(
-                f"{self.service_url}/ocr/jobs", json={"images": images}, timeout=30
-            )
+            response = httpx.post(f"{self.service_url}/ocr/jobs", json={"images": images}, timeout=30)
             response.raise_for_status()
             job_data = response.json()
             job_id = job_data["job_id"]
@@ -86,18 +82,14 @@ class OCRServiceAdapter:
         start_time = time.time()
         while time.time() - start_time < self.timeout:
             try:
-                response = httpx.get(
-                    f"{self.service_url}/ocr/jobs/{job_id}", timeout=10
-                )
+                response = httpx.get(f"{self.service_url}/ocr/jobs/{job_id}", timeout=10)
                 response.raise_for_status()
                 status_data = response.json()
 
                 if status_data["status"] == "completed":
                     # Job completed successfully
                     results = status_data["result"]["results"]
-                    return self._convert_results_to_ocrmac_format(
-                        results, image_dimensions, frame_paths
-                    )
+                    return self._convert_results_to_ocrmac_format(results, image_dimensions, frame_paths)
 
                 elif status_data["status"] == "failed":
                     error = status_data.get("error", "Unknown error")
@@ -110,9 +102,7 @@ class OCRServiceAdapter:
                 raise OCRServiceError(f"Failed to check job status: {e}")
 
         # Timeout
-        raise OCRServiceError(
-            f"OCR job timed out after {self.timeout} seconds (job_id: {job_id})"
-        )
+        raise OCRServiceError(f"OCR job timed out after {self.timeout} seconds (job_id: {job_id})")
 
     def _convert_results_to_ocrmac_format(
         self,

@@ -22,6 +22,7 @@ class JobStatus(Enum):
 @dataclass
 class Job:
     """Job metadata and results."""
+
     job_id: str
     status: JobStatus
     created_at: float
@@ -35,12 +36,12 @@ class Job:
     def to_dict(self) -> dict:
         """Convert to dictionary for API response."""
         data = asdict(self)
-        data['status'] = self.status.value
-        data['created_at'] = datetime.fromtimestamp(self.created_at).isoformat()
+        data["status"] = self.status.value
+        data["created_at"] = datetime.fromtimestamp(self.created_at).isoformat()
         if self.started_at:
-            data['started_at'] = datetime.fromtimestamp(self.started_at).isoformat()
+            data["started_at"] = datetime.fromtimestamp(self.started_at).isoformat()
         if self.completed_at:
-            data['completed_at'] = datetime.fromtimestamp(self.completed_at).isoformat()
+            data["completed_at"] = datetime.fromtimestamp(self.completed_at).isoformat()
         return data
 
 
@@ -60,7 +61,7 @@ class JobStore:
         Same images = same job_id = can return cached result
         """
         # Create hash of image IDs
-        content = json.dumps([img['id'] for img in images], sort_keys=True)
+        content = json.dumps([img["id"] for img in images], sort_keys=True)
         content_hash = hashlib.sha256(content.encode()).hexdigest()[:16]
 
         # Check if we've seen this before (deduplication)
@@ -86,12 +87,7 @@ class JobStore:
 
     def create_job(self, job_id: str, images_count: int) -> Job:
         """Create new job."""
-        job = Job(
-            job_id=job_id,
-            status=JobStatus.PENDING,
-            created_at=time.time(),
-            images_count=images_count
-        )
+        job = Job(job_id=job_id, status=JobStatus.PENDING, created_at=time.time(), images_count=images_count)
 
         with self._lock:
             self._jobs[job_id] = job
@@ -117,19 +113,13 @@ class JobStore:
         cutoff = time.time() - self.ttl_seconds
 
         with self._lock:
-            expired = [
-                job_id for job_id, job in self._jobs.items()
-                if job.created_at < cutoff
-            ]
+            expired = [job_id for job_id, job in self._jobs.items() if job.created_at < cutoff]
 
             for job_id in expired:
                 del self._jobs[job_id]
 
             # Also cleanup content hashes
-            self._content_hashes = {
-                h: jid for h, jid in self._content_hashes.items()
-                if jid in self._jobs
-            }
+            self._content_hashes = {h: jid for h, jid in self._content_hashes.items() if jid in self._jobs}
 
     def get_stats(self) -> dict:
         """Get storage statistics."""
@@ -139,11 +129,7 @@ class JobStore:
                 status = job.status.value
                 statuses[status] = statuses.get(status, 0) + 1
 
-            return {
-                'total_jobs': len(self._jobs),
-                'by_status': statuses,
-                'ttl_seconds': self.ttl_seconds
-            }
+            return {"total_jobs": len(self._jobs), "by_status": statuses, "ttl_seconds": self.ttl_seconds}
 
 
 # Singleton instance

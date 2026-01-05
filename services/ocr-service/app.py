@@ -33,12 +33,12 @@ try:
     from google.cloud import vision
 
     # Handle Fly.io secrets (JSON stored as environment variable)
-    if os.getenv('GOOGLE_APPLICATION_CREDENTIALS_JSON'):
-        creds_json = os.getenv('GOOGLE_APPLICATION_CREDENTIALS_JSON')
+    if os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON"):
+        creds_json = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")
         # Write to temp file for google-cloud-vision
-        with open('/tmp/gcp-credentials.json', 'w') as f:
+        with open("/tmp/gcp-credentials.json", "w") as f:
             f.write(creds_json)
-        os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = '/tmp/gcp-credentials.json'
+        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "/tmp/gcp-credentials.json"
 
     GOOGLE_CLOUD_AVAILABLE = True
 except ImportError:
@@ -46,9 +46,7 @@ except ImportError:
 
 
 app = FastAPI(
-    title="OCR Batch Processing Service",
-    description="Async batch OCR processing with cost protection",
-    version="2.0.0"
+    title="OCR Batch Processing Service", description="Async batch OCR processing with cost protection", version="2.0.0"
 )
 
 
@@ -58,12 +56,14 @@ SEPARATOR_PX = 2  # Separator between stacked images
 
 class ImageDimensions(BaseModel):
     """Image dimensions for capacity calculation."""
+
     width: int = Field(..., gt=0, description="Image width in pixels")
     height: int = Field(..., gt=0, description="Image height in pixels")
 
 
 class CapacityResponse(BaseModel):
     """Response for capacity calculation."""
+
     max_images: int
     limits: Dict[str, int]
     limiting_factor: str
@@ -72,10 +72,11 @@ class CapacityResponse(BaseModel):
 
 class ImageInput(BaseModel):
     """Input image with identifier."""
+
     id: str = Field(..., description="Unique identifier for this image")
     data: str = Field(..., description="Base64-encoded image data")
 
-    @field_validator('data')
+    @field_validator("data")
     @classmethod
     def validate_base64(cls, v: str) -> str:
         """Validate that data is valid base64."""
@@ -88,11 +89,13 @@ class ImageInput(BaseModel):
 
 class JobSubmitRequest(BaseModel):
     """Request to submit OCR job."""
+
     images: List[ImageInput] = Field(..., min_length=1)
 
 
 class JobSubmitResponse(BaseModel):
     """Response for job submission."""
+
     job_id: str
     status: str
     message: str
@@ -100,6 +103,7 @@ class JobSubmitResponse(BaseModel):
 
 class BoundingBox(BaseModel):
     """Character bounding box."""
+
     x: int
     y: int
     width: int
@@ -108,12 +112,14 @@ class BoundingBox(BaseModel):
 
 class CharacterResult(BaseModel):
     """OCR result for a single character."""
+
     text: str
     bbox: BoundingBox
 
 
 class ImageOCRResult(BaseModel):
     """OCR results for a single image."""
+
     id: str
     characters: List[CharacterResult]
     text: str
@@ -122,6 +128,7 @@ class ImageOCRResult(BaseModel):
 
 class JobResultResponse(BaseModel):
     """Response for completed job."""
+
     results: List[ImageOCRResult]
     processing_time_ms: float
     total_characters: int
@@ -130,6 +137,7 @@ class JobResultResponse(BaseModel):
 
 class JobStatusResponse(BaseModel):
     """Response for job status check."""
+
     job_id: str
     status: str
     created_at: str
@@ -168,7 +176,7 @@ def calculate_capacity(width: int, height: int) -> Tuple[int, Dict[str, int], st
         "by_height": max_by_height,
         "by_pixels": max_by_pixels,
         "by_file_size": max_by_size,
-        "by_config": max_by_config
+        "by_config": max_by_config,
     }
 
     # Find minimum (most restrictive)
@@ -219,7 +227,7 @@ def create_vertical_montage(
         raise ValueError(f"Total height {total_height}px exceeds limit {config.HEIGHT_LIMIT_PX}px")
 
     # Create montage
-    montage = Image.new('RGB', (width, total_height), (220, 220, 220))
+    montage = Image.new("RGB", (width, total_height), (220, 220, 220))
 
     metadata = []
     y_offset = 0
@@ -230,27 +238,20 @@ def create_vertical_montage(
         # Verify dimensions match
         if img.width != width or img.height != height:
             raise ValueError(
-                f"Image {img_id} dimensions {img.width}×{img.height} "
-                f"don't match expected {width}×{height}"
+                f"Image {img_id} dimensions {img.width}×{img.height} don't match expected {width}×{height}"
             )
 
         # Paste image
         montage.paste(img, (0, y_offset))
 
         # Store metadata
-        metadata.append({
-            'id': img_id,
-            'x': 0,
-            'y': y_offset,
-            'width': width,
-            'height': height
-        })
+        metadata.append({"id": img_id, "x": 0, "y": y_offset, "width": width, "height": height})
 
         y_offset += height + separator_px
 
     # Save to bytes
     buffer = BytesIO()
-    montage.save(buffer, format='JPEG', quality=95)
+    montage.save(buffer, format="JPEG", quality=95)
 
     return buffer.getvalue(), metadata
 
@@ -270,10 +271,7 @@ def call_gcp_vision_api_sync(image_bytes: bytes) -> Dict:
     start = time.time()
 
     # Call API (wrapped in circuit breaker by caller)
-    response = client.document_text_detection(
-        image=image,
-        image_context={'language_hints': ['zh']}
-    )
+    response = client.document_text_detection(image=image, image_context={"language_hints": ["zh"]})
 
     elapsed_ms = (time.time() - start) * 1000
 
@@ -291,21 +289,9 @@ def call_gcp_vision_api_sync(image_bytes: bytes) -> Dict:
                             w = max(v.x for v in vertices) - x
                             h = max(v.y for v in vertices) - y
 
-                            symbols.append({
-                                'text': symbol.text,
-                                'bbox': {
-                                    'x': x,
-                                    'y': y,
-                                    'width': w,
-                                    'height': h
-                                }
-                            })
+                            symbols.append({"text": symbol.text, "bbox": {"x": x, "y": y, "width": w, "height": h}})
 
-    return {
-        'processing_time_ms': elapsed_ms,
-        'symbols': symbols,
-        'total_characters': len(symbols)
-    }
+    return {"processing_time_ms": elapsed_ms, "symbols": symbols, "total_characters": len(symbols)}
 
 
 def distribute_characters_to_images(symbols: List[Dict], image_metadata: List[Dict]) -> List[ImageOCRResult]:
@@ -322,46 +308,33 @@ def distribute_characters_to_images(symbols: List[Dict], image_metadata: List[Di
     results = []
 
     for img_meta in image_metadata:
-        img_id = img_meta['id']
-        img_x = img_meta['x']
-        img_y = img_meta['y']
-        img_h = img_meta['height']
+        img_id = img_meta["id"]
+        img_x = img_meta["x"]
+        img_y = img_meta["y"]
+        img_h = img_meta["height"]
 
         # Find characters that fall within this image's bounds
         img_chars = []
 
         for symbol in symbols:
-            bbox = symbol['bbox']
-            char_x = bbox['x']
-            char_y = bbox['y']
+            bbox = symbol["bbox"]
+            char_x = bbox["x"]
+            char_y = bbox["y"]
 
             # Check if character center is within image bounds
-            char_center_y = char_y + bbox['height'] / 2
+            char_center_y = char_y + bbox["height"] / 2
 
-            if (char_center_y >= img_y and
-                char_center_y < img_y + img_h):
-
+            if char_center_y >= img_y and char_center_y < img_y + img_h:
                 # Transform coordinates to image-relative
                 relative_bbox = BoundingBox(
-                    x=char_x - img_x,
-                    y=char_y - img_y,
-                    width=bbox['width'],
-                    height=bbox['height']
+                    x=char_x - img_x, y=char_y - img_y, width=bbox["width"], height=bbox["height"]
                 )
 
-                img_chars.append(CharacterResult(
-                    text=symbol['text'],
-                    bbox=relative_bbox
-                ))
+                img_chars.append(CharacterResult(text=symbol["text"], bbox=relative_bbox))
 
         # Create result
-        text = ''.join(c.text for c in img_chars)
-        results.append(ImageOCRResult(
-            id=img_id,
-            characters=img_chars,
-            text=text,
-            char_count=len(img_chars)
-        ))
+        text = "".join(c.text for c in img_chars)
+        results.append(ImageOCRResult(id=img_id, characters=img_chars, text=text, char_count=len(img_chars)))
 
     return results
 
@@ -381,19 +354,18 @@ async def process_job_background(job_id: str, images: List[ImageInput]):
         # Call OCR API with circuit breaker protection
         loop = asyncio.get_event_loop()
         ocr_result = await loop.run_in_executor(
-            None,
-            lambda: circuit_breaker.call(call_gcp_vision_api_sync, montage_bytes)
+            None, lambda: circuit_breaker.call(call_gcp_vision_api_sync, montage_bytes)
         )
 
         # Distribute characters back to images
-        results = distribute_characters_to_images(ocr_result['symbols'], metadata)
+        results = distribute_characters_to_images(ocr_result["symbols"], metadata)
 
         # Build result
         result = {
-            'results': [r.model_dump() for r in results],
-            'processing_time_ms': ocr_result['processing_time_ms'],
-            'total_characters': ocr_result['total_characters'],
-            'images_processed': len(images)
+            "results": [r.model_dump() for r in results],
+            "processing_time_ms": ocr_result["processing_time_ms"],
+            "total_characters": ocr_result["total_characters"],
+            "images_processed": len(images),
         }
 
         # Update job as completed
@@ -401,27 +373,19 @@ async def process_job_background(job_id: str, images: List[ImageInput]):
             job_id,
             JobStatus.COMPLETED,
             completed_at=time.time(),
-            processing_time_ms=ocr_result['processing_time_ms'],
-            result=result
+            processing_time_ms=ocr_result["processing_time_ms"],
+            result=result,
         )
 
     except CircuitBreakerOpen as e:
         # Circuit breaker is open
         job_store.update_status(
-            job_id,
-            JobStatus.FAILED,
-            completed_at=time.time(),
-            error=f"Circuit breaker open: {str(e)}"
+            job_id, JobStatus.FAILED, completed_at=time.time(), error=f"Circuit breaker open: {str(e)}"
         )
 
     except Exception as e:
         # Job failed
-        job_store.update_status(
-            job_id,
-            JobStatus.FAILED,
-            completed_at=time.time(),
-            error=str(e)
-        )
+        job_store.update_status(job_id, JobStatus.FAILED, completed_at=time.time(), error=str(e))
 
 
 # Background cleanup task
@@ -445,7 +409,7 @@ async def root():
         "service": "OCR Batch Processing Service",
         "version": "2.0.0",
         "status": "healthy",
-        "google_cloud_available": GOOGLE_CLOUD_AVAILABLE
+        "google_cloud_available": GOOGLE_CLOUD_AVAILABLE,
     }
 
 
@@ -457,12 +421,12 @@ async def health():
     usage_stats = usage_tracker.get_usage()
 
     return {
-        "status": "healthy" if cb_status['state'] == 'closed' else "degraded",
+        "status": "healthy" if cb_status["state"] == "closed" else "degraded",
         "google_cloud_available": GOOGLE_CLOUD_AVAILABLE,
         "circuit_breaker": cb_status,
         "job_storage": job_stats,
         "usage": usage_stats,
-        "config": config.display()
+        "config": config.display(),
     }
 
 
@@ -475,8 +439,8 @@ async def get_usage():
         "limits": {
             "per_minute": config.JOBS_PER_MINUTE_LIMIT,
             "per_hour": config.JOBS_PER_HOUR_LIMIT,
-            "per_day": config.DAILY_API_CALLS_LIMIT
-        }
+            "per_day": config.DAILY_API_CALLS_LIMIT,
+        },
     }
 
 
@@ -487,16 +451,10 @@ async def get_capacity(dimensions: ImageDimensions):
 
     This helps clients determine optimal batch sizes before sending images.
     """
-    max_images, limits, limiting_factor, estimated_size = calculate_capacity(
-        dimensions.width,
-        dimensions.height
-    )
+    max_images, limits, limiting_factor, estimated_size = calculate_capacity(dimensions.width, dimensions.height)
 
     return CapacityResponse(
-        max_images=max_images,
-        limits=limits,
-        limiting_factor=limiting_factor,
-        estimated_file_size_mb=estimated_size
+        max_images=max_images, limits=limits, limiting_factor=limiting_factor, estimated_file_size_mb=estimated_size
     )
 
 
@@ -512,26 +470,17 @@ async def submit_job(request: JobSubmitRequest):
 
     # Check rate limits
     allowed, error_msg, usage_stats = usage_tracker.check_and_record(
-        config.JOBS_PER_MINUTE_LIMIT,
-        config.JOBS_PER_HOUR_LIMIT,
-        config.DAILY_API_CALLS_LIMIT
+        config.JOBS_PER_MINUTE_LIMIT, config.JOBS_PER_HOUR_LIMIT, config.DAILY_API_CALLS_LIMIT
     )
 
     if not allowed:
-        raise HTTPException(
-            status_code=429,
-            detail={
-                "error": error_msg,
-                "usage": usage_stats
-            }
-        )
+        raise HTTPException(status_code=429, detail={"error": error_msg, "usage": usage_stats})
 
     # Check circuit breaker
     cb_status = circuit_breaker.get_status()
-    if cb_status['state'] == 'open':
+    if cb_status["state"] == "open":
         raise HTTPException(
-            status_code=503,
-            detail="Service temporarily unavailable. Circuit breaker open due to repeated failures."
+            status_code=503, detail="Service temporarily unavailable. Circuit breaker open due to repeated failures."
         )
 
     # Generate job ID (with deduplication)
@@ -544,7 +493,7 @@ async def submit_job(request: JobSubmitRequest):
         return JobSubmitResponse(
             job_id=job_id,
             status="completed",
-            message="Job already completed (deduplicated). Retrieve results at GET /ocr/jobs/{id}"
+            message="Job already completed (deduplicated). Retrieve results at GET /ocr/jobs/{id}",
         )
 
     # Create new job
@@ -554,9 +503,7 @@ async def submit_job(request: JobSubmitRequest):
     asyncio.create_task(process_job_background(job_id, request.images))
 
     return JobSubmitResponse(
-        job_id=job_id,
-        status="pending",
-        message="Job submitted. Poll GET /ocr/jobs/{id} for results."
+        job_id=job_id, status="pending", message="Job submitted. Poll GET /ocr/jobs/{id} for results."
     )
 
 
@@ -575,12 +522,12 @@ async def get_job_status(job_id: str):
     response = JobStatusResponse(
         job_id=job.job_id,
         status=job.status.value,
-        created_at=job.to_dict()['created_at'],
-        started_at=job.to_dict().get('started_at'),
-        completed_at=job.to_dict().get('completed_at'),
+        created_at=job.to_dict()["created_at"],
+        started_at=job.to_dict().get("started_at"),
+        completed_at=job.to_dict().get("completed_at"),
         processing_time_ms=job.processing_time_ms,
         images_count=job.images_count,
-        error=job.error
+        error=job.error,
     )
 
     # Add result if completed
@@ -592,4 +539,5 @@ async def get_job_status(job_id: str):
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)

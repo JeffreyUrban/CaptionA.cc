@@ -8,8 +8,8 @@ from threading import Lock
 
 
 class CircuitState(Enum):
-    CLOSED = "closed"      # Normal operation
-    OPEN = "open"          # Failing, reject requests
+    CLOSED = "closed"  # Normal operation
+    OPEN = "open"  # Failing, reject requests
     HALF_OPEN = "half_open"  # Testing if recovered
 
 
@@ -62,18 +62,16 @@ class CircuitBreaker:
         """Get circuit breaker status."""
         with self._lock:
             return {
-                'state': self._state.value,
-                'failures': self._failures,
-                'threshold': self.failure_threshold,
-                'last_failure': (
-                    time.time() - self._last_failure_time
-                    if self._last_failure_time else None
-                )
+                "state": self._state.value,
+                "failures": self._failures,
+                "threshold": self.failure_threshold,
+                "last_failure": (time.time() - self._last_failure_time if self._last_failure_time else None),
             }
 
 
 class CircuitBreakerOpen(Exception):
     """Exception raised when circuit breaker is open."""
+
     pass
 
 

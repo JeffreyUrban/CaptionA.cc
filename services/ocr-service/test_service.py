@@ -18,17 +18,17 @@ def test_health():
     response = requests.get("http://localhost:8000/")
     assert response.status_code == 200
     data = response.json()
-    assert data['status'] == 'healthy'
+    assert data["status"] == "healthy"
     print("✓ Basic health check passed")
 
     # Test detailed health endpoint
     response = requests.get("http://localhost:8000/health")
     assert response.status_code == 200
     data = response.json()
-    assert 'circuit_breaker' in data
-    assert 'job_storage' in data
-    assert 'usage' in data
-    assert 'config' in data
+    assert "circuit_breaker" in data
+    assert "job_storage" in data
+    assert "usage" in data
+    assert "config" in data
     print("✓ Detailed health check passed")
     print(f"  Circuit breaker state: {data['circuit_breaker']['state']}")
 
@@ -38,24 +38,21 @@ def test_usage():
     response = requests.get("http://localhost:8000/usage")
     assert response.status_code == 200
     data = response.json()
-    assert 'usage' in data
-    assert 'limits' in data
+    assert "usage" in data
+    assert "limits" in data
     print("✓ Usage endpoint passed")
     print(f"  Jobs today: {data['usage']['jobs_today']}/{data['limits']['per_day']}")
 
 
 def test_capacity():
     """Test capacity calculation."""
-    response = requests.post(
-        "http://localhost:8000/capacity",
-        json={"width": 666, "height": 64}
-    )
+    response = requests.post("http://localhost:8000/capacity", json={"width": 666, "height": 64})
     assert response.status_code == 200
     data = response.json()
 
-    assert 'max_images' in data
-    assert 'limits' in data
-    assert 'limiting_factor' in data
+    assert "max_images" in data
+    assert "limits" in data
+    assert "limiting_factor" in data
 
     print("✓ Capacity check passed")
     print(f"  Max images for 666×64: {data['max_images']}")
@@ -85,10 +82,7 @@ def test_async_job_processing():
 
     images = []
     for frame_index, image_data in cursor.fetchall():
-        images.append({
-            "id": f"frame_{frame_index}",
-            "data": base64.b64encode(image_data).decode('utf-8')
-        })
+        images.append({"id": f"frame_{frame_index}", "data": base64.b64encode(image_data).decode("utf-8")})
 
     conn.close()
 
@@ -97,15 +91,12 @@ def test_async_job_processing():
         return
 
     # Submit job
-    response = requests.post(
-        "http://localhost:8000/ocr/jobs",
-        json={"images": images}
-    )
+    response = requests.post("http://localhost:8000/ocr/jobs", json={"images": images})
 
     assert response.status_code == 200
     submit_data = response.json()
-    assert 'job_id' in submit_data
-    job_id = submit_data['job_id']
+    assert "job_id" in submit_data
+    job_id = submit_data["job_id"]
     print(f"✓ Job submitted: {job_id}")
 
     # Poll for completion
@@ -116,13 +107,13 @@ def test_async_job_processing():
         assert response.status_code == 200
         status_data = response.json()
 
-        if status_data['status'] == 'completed':
-            assert 'result' in status_data
-            result = status_data['result']
-            assert 'results' in result
-            assert 'processing_time_ms' in result
-            assert 'total_characters' in result
-            assert len(result['results']) == len(images)
+        if status_data["status"] == "completed":
+            assert "result" in status_data
+            result = status_data["result"]
+            assert "results" in result
+            assert "processing_time_ms" in result
+            assert "total_characters" in result
+            assert len(result["results"]) == len(images)
 
             print("✓ Async job processing passed")
             print(f"  Processed {result['images_processed']} images")
@@ -131,12 +122,12 @@ def test_async_job_processing():
             print()
 
             # Verify results
-            for res in result['results']:
+            for res in result["results"]:
                 print(f"  {res['id']}: {res['char_count']} chars - {res['text'][:30]}")
 
             return
 
-        elif status_data['status'] == 'failed':
+        elif status_data["status"] == "failed":
             print(f"✗ Job failed: {status_data.get('error', 'Unknown error')}")
             assert False, f"Job failed: {status_data.get('error')}"
 
@@ -149,34 +140,23 @@ def test_async_job_processing():
 def test_job_deduplication():
     """Test that identical jobs are deduplicated."""
     # Create simple test images
-    test_images = [
-        {
-            "id": "test_1",
-            "data": base64.b64encode(b"fake_image_data_1").decode('utf-8')
-        }
-    ]
+    test_images = [{"id": "test_1", "data": base64.b64encode(b"fake_image_data_1").decode("utf-8")}]
 
     # Submit first job
-    response1 = requests.post(
-        "http://localhost:8000/ocr/jobs",
-        json={"images": test_images}
-    )
+    response1 = requests.post("http://localhost:8000/ocr/jobs", json={"images": test_images})
 
     if response1.status_code != 200:
         print("⚠ Skipping deduplication test - service not fully available")
         return
 
-    job_id_1 = response1.json()['job_id']
+    job_id_1 = response1.json()["job_id"]
 
     # Wait a moment for processing to start
     time.sleep(0.1)
 
     # Submit identical job
-    response2 = requests.post(
-        "http://localhost:8000/ocr/jobs",
-        json={"images": test_images}
-    )
-    job_id_2 = response2.json()['job_id']
+    response2 = requests.post("http://localhost:8000/ocr/jobs", json={"images": test_images})
+    job_id_2 = response2.json()["job_id"]
 
     # Job IDs should match (deduplicated)
     assert job_id_1 == job_id_2, "Identical jobs should have same job_id"
@@ -192,10 +172,10 @@ def test_rate_limiting():
     usage_response = requests.get("http://localhost:8000/usage")
     usage = usage_response.json()
 
-    assert 'limits' in usage
-    assert usage['limits']['per_minute'] > 0
-    assert usage['limits']['per_hour'] > 0
-    assert usage['limits']['per_day'] > 0
+    assert "limits" in usage
+    assert usage["limits"]["per_minute"] > 0
+    assert usage["limits"]["per_hour"] > 0
+    assert usage["limits"]["per_day"] > 0
 
     print("✓ Rate limiting configuration passed")
     print(
@@ -207,7 +187,7 @@ def test_rate_limiting():
 def main():
     """Run all tests."""
     print("Testing OCR Batch Processing Service (v2.0 - Async API)")
-    print("="*60)
+    print("=" * 60)
     print()
 
     try:
@@ -219,7 +199,7 @@ def main():
         test_async_job_processing()
 
         print()
-        print("="*60)
+        print("=" * 60)
         print("All tests passed! ✓")
 
     except requests.exceptions.ConnectionError:

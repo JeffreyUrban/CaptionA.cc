@@ -15,8 +15,8 @@ class UsageTracker:
     def __init__(self):
         self._lock = Lock()
         self._minute_requests = deque()  # Timestamps of requests in last minute
-        self._hour_requests = deque()    # Timestamps of requests in last hour
-        self._daily_requests = deque()   # Timestamps of requests in last day
+        self._hour_requests = deque()  # Timestamps of requests in last hour
+        self._daily_requests = deque()  # Timestamps of requests in last day
 
     def _cleanup_old(self, queue: deque, seconds: int):
         """Remove timestamps older than N seconds."""
@@ -24,12 +24,7 @@ class UsageTracker:
         while queue and queue[0] < cutoff:
             queue.popleft()
 
-    def check_and_record(
-        self,
-        minute_limit: int,
-        hour_limit: int,
-        daily_limit: int
-    ) -> Tuple[bool, str, Dict]:
+    def check_and_record(self, minute_limit: int, hour_limit: int, daily_limit: int) -> Tuple[bool, str, Dict]:
         """
         Check if request is allowed and record it.
 
@@ -50,9 +45,9 @@ class UsageTracker:
             daily_count = len(self._daily_requests)
 
             usage_stats = {
-                'minute': {'current': minute_count, 'limit': minute_limit},
-                'hour': {'current': hour_count, 'limit': hour_limit},
-                'day': {'current': daily_count, 'limit': daily_limit}
+                "minute": {"current": minute_count, "limit": minute_limit},
+                "hour": {"current": hour_count, "limit": hour_limit},
+                "day": {"current": daily_count, "limit": daily_limit},
             }
 
             if minute_count >= minute_limit:
@@ -82,13 +77,12 @@ class UsageTracker:
             self._cleanup_old(self._daily_requests, 86400)
 
             return {
-                'jobs_last_minute': len(self._minute_requests),
-                'jobs_last_hour': len(self._hour_requests),
-                'jobs_today': len(self._daily_requests),
-                'oldest_job_today': (
-                    datetime.fromtimestamp(self._daily_requests[0]).isoformat()
-                    if self._daily_requests else None
-                )
+                "jobs_last_minute": len(self._minute_requests),
+                "jobs_last_hour": len(self._hour_requests),
+                "jobs_today": len(self._daily_requests),
+                "oldest_job_today": (
+                    datetime.fromtimestamp(self._daily_requests[0]).isoformat() if self._daily_requests else None
+                ),
             }
 
 

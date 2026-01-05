@@ -21,10 +21,7 @@ class OCRServiceClient:
 
     def get_capacity(self, width: int, height: int) -> Dict:
         """Get maximum batch size for given image dimensions."""
-        response = requests.post(
-            f"{self.base_url}/capacity",
-            json={"width": width, "height": height}
-        )
+        response = requests.post(f"{self.base_url}/capacity", json={"width": width, "height": height})
         response.raise_for_status()
         return response.json()
 
@@ -40,22 +37,13 @@ class OCRServiceClient:
         """
         # Convert bytes to base64 for JSON serialization
         payload = {
-            "images": [
-                {
-                    "id": img["id"],
-                    "data": base64.b64encode(img["data"]).decode('utf-8')
-                }
-                for img in images
-            ]
+            "images": [{"id": img["id"], "data": base64.b64encode(img["data"]).decode("utf-8")} for img in images]
         }
 
-        response = requests.post(
-            f"{self.base_url}/ocr/jobs",
-            json=payload
-        )
+        response = requests.post(f"{self.base_url}/ocr/jobs", json=payload)
         response.raise_for_status()
         result = response.json()
-        return result['job_id']
+        return result["job_id"]
 
     def get_job_status(self, job_id: str) -> Dict:
         """
@@ -89,9 +77,9 @@ class OCRServiceClient:
         while True:
             status = self.get_job_status(job_id)
 
-            if status['status'] == 'completed':
-                return status['result']
-            elif status['status'] == 'failed':
+            if status["status"] == "completed":
+                return status["result"]
+            elif status["status"] == "failed":
                 raise RuntimeError(f"Job failed: {status.get('error', 'Unknown error')}")
 
             elapsed = time.time() - start_time
@@ -177,10 +165,7 @@ def example_usage():
 
     images = []
     for frame_index, image_data in cursor.fetchall():
-        images.append({
-            "id": f"frame_{frame_index}",
-            "data": image_data
-        })
+        images.append({"id": f"frame_{frame_index}", "data": image_data})
 
     conn.close()
 
@@ -202,7 +187,7 @@ def example_usage():
         print()
 
         # Show results per image
-        for result in results['results']:
+        for result in results["results"]:
             print(f"{result['id']}: {result['char_count']} chars - {result['text'][:50]}")
 
     except TimeoutError as e:
