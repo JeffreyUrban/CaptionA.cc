@@ -28,12 +28,10 @@ const FRAMES_PER_CHUNK = 32
 // Modulo levels with their preload ranges
 // Higher modulo = coarser sampling, larger range
 // Lower modulo = finer sampling, smaller range
+// Updated for Wasabi VP9 chunks: [16, 4, 1]
 const MODULO_LEVELS = [
-  { modulo: 32, range: 1024 },
   { modulo: 16, range: 512 },
-  { modulo: 8, range: 256 },
   { modulo: 4, range: 128 },
-  { modulo: 2, range: 64 },
   { modulo: 1, range: 32 },
 ] as const
 
@@ -83,12 +81,25 @@ function buildQueueForModulo(
     const chunkEnd = chunkStart + chunkSize - 1
     const chunkFrames: number[] = []
 
-    // Collect ALL frames at modulo positions within this chunk
-    // Chunks are atomic - we load all frames or none (cache check handles skip)
+    // Collect frames at modulo positions within this chunk
+    // Hybrid duplication: skip frames that belong to a coarser modulo level
+    // - modulo 16: only frames where index % 16 === 0
+    // - modulo 4: only frames where index % 4 === 0 AND index % 16 !== 0
+    // - modulo 1: ALL frames (no skipping)
     for (let i = chunkStart; i <= Math.min(chunkEnd, totalFrames - 1); i++) {
-      if (i % modulo === 0) {
+      // For modulo_1, include every frame
+      if (modulo === 1) {
         chunkFrames.push(i)
+        continue
       }
+
+      // For other modulos, only include frames at modulo spacing
+      if (i % modulo !== 0) continue
+
+      // Hybrid duplication: skip frames in coarser modulo levels
+      if (modulo === 4 && i % 16 === 0) continue
+
+      chunkFrames.push(i)
     }
 
     // Add chunk if it has frames (including edge chunks with <32 frames)
@@ -141,23 +152,134 @@ function markChunksAsRequested(
 }
 
 /**
- * Process loaded frame data and update frames map.
+ * Extract a single frame from a video element as a Blob URL.
  */
-function processLoadedFrames(
-  results: Array<{ frames: Array<{ frame_index: number; image_data: string }> }>,
-  framesMap: Map<number, Frame>
-): void {
-  for (const data of results) {
-    for (const frame of data.frames) {
-      const binaryData = atob(frame.image_data)
-      const bytes = Uint8Array.from(binaryData, char => char.charCodeAt(0))
-      const blob = new Blob([bytes], { type: 'image/jpeg' })
-      const imageUrl = URL.createObjectURL(blob)
-      framesMap.set(frame.frame_index, {
-        frame_index: frame.frame_index,
-        image_url: imageUrl,
-        ocr_text: '',
+async function extractFrameFromVideo(
+  video: HTMLVideoElement,
+  canvas: HTMLCanvasElement,
+  frameTime: number
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    video.currentTime = frameTime
+
+    const onSeeked = () => {
+      try {
+        canvas.width = video.videoWidth
+        canvas.height = video.videoHeight
+        const ctx = canvas.getContext('2d')
+        if (!ctx) {
+          reject(new Error('Failed to get canvas context'))
+          return
+        }
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+
+        canvas.toBlob(
+          blob => {
+            if (!blob) {
+              reject(new Error('Failed to create blob from canvas'))
+              return
+            }
+            resolve(URL.createObjectURL(blob))
+          },
+          'image/jpeg',
+          0.95
+        )
+      } catch (error) {
+        reject(error)
+      } finally {
+        video.removeEventListener('seeked', onSeeked)
+      }
+    }
+
+    video.addEventListener('seeked', onSeeked)
+    video.onerror = () => {
+      video.removeEventListener('seeked', onSeeked)
+      reject(new Error('Video error during seek'))
+    }
+  })
+}
+
+/**
+ * Process loaded VP9 WebM chunks and extract individual frames.
+ */
+async function processLoadedChunks(
+  chunks: Array<{
+    chunkIndex: number
+    signedUrl: string
+    frameIndices: number[]
+  }>,
+  framesMap: Map<number, Frame>,
+  modulo: number
+): Promise<void> {
+  const video = document.createElement('video')
+  video.muted = true
+  video.playsInline = true
+  const canvas = document.createElement('canvas')
+
+  // FPS assumption: 10 fps for VP9 chunks (matches encoding script)
+  const fps = 10
+
+  for (const chunk of chunks) {
+    try {
+      // Fetch WebM chunk from Wasabi
+      const response = await fetch(chunk.signedUrl)
+      if (!response.ok) {
+        console.error(`Failed to fetch chunk ${chunk.chunkIndex}: ${response.statusText}`)
+        continue
+      }
+
+      const blob = await response.blob()
+      const objectUrl = URL.createObjectURL(blob)
+      video.src = objectUrl
+
+      // Wait for video metadata to load
+      await new Promise<void>((resolve, reject) => {
+        video.onloadedmetadata = () => resolve()
+        video.onerror = () => reject(new Error('Failed to load video metadata'))
       })
+
+      // Extract each frame from the chunk
+      // First, build the actual sequence of frames in this chunk (accounting for hybrid duplication)
+      const framesInChunk: number[] = []
+
+      if (modulo === 1) {
+        // modulo_1: ALL frames (every single frame, no skipping)
+        for (let i = 0; i < 32; i++) {
+          framesInChunk.push(chunk.chunkIndex + i)
+        }
+      } else {
+        // modulo_4 and modulo_16: frames at modulo spacing with hybrid duplication
+        for (let i = chunk.chunkIndex; framesInChunk.length < 32; i += modulo) {
+          // Skip frames that belong to coarser modulo levels (hybrid duplication)
+          if (modulo === 4 && i % 16 === 0) continue
+
+          framesInChunk.push(i)
+        }
+      }
+
+      for (const frameIndex of chunk.frameIndices) {
+        // Find the actual position of this frame in the chunk's frame sequence
+        const framePositionInChunk = framesInChunk.indexOf(frameIndex)
+
+        if (framePositionInChunk === -1) {
+          console.warn(`Frame ${frameIndex} not found in chunk ${chunk.chunkIndex}`)
+          continue
+        }
+
+        const frameTime = framePositionInChunk / fps
+
+        const imageUrl = await extractFrameFromVideo(video, canvas, frameTime)
+        framesMap.set(frameIndex, {
+          frame_index: frameIndex,
+          image_url: imageUrl,
+          ocr_text: '',
+        })
+      }
+
+      // Clean up object URL
+      URL.revokeObjectURL(objectUrl)
+    } catch (error) {
+      console.error(`Error processing chunk ${chunk.chunkIndex}:`, error)
     }
   }
 }
@@ -244,7 +366,7 @@ export function useBoundaryFrameLoader({
 
           let finestQueue = buildQueueForModulo(
             jumpTarget, // Load around target, not current position
-            5, // Level 5 = modulo 1 (finest, exact frames)
+            2, // Level 2 = modulo 1 (finest, exact frames)
             totalFrames,
             loadedChunksRef.current,
             requestedChunksRef.current
@@ -260,15 +382,21 @@ export function useBoundaryFrameLoader({
             const batchPromises = batch.map(async chunk => {
               const indicesParam = chunk.frames.join(',')
               const response = await fetch(
-                `/api/frames/${encodedVideoId}/batch?indices=${indicesParam}`
+                `/api/frames/${encodedVideoId}/batch-signed-urls?modulo=${chunk.modulo}&indices=${indicesParam}`
               )
               return response.json() as Promise<{
-                frames: Array<{ frame_index: number; image_data: string }>
+                chunks: Array<{
+                  chunkIndex: number
+                  signedUrl: string
+                  frameIndices: number[]
+                }>
               }>
             })
 
             const results = await Promise.all(batchPromises)
-            processLoadedFrames(results, framesRef.current)
+            // Flatten chunks from all responses
+            const allChunks = results.flatMap(r => r.chunks)
+            await processLoadedChunks(allChunks, framesRef.current, 1)
             updateCacheAfterLoad(batch, loadedChunksRef.current, requestedChunksRef.current)
           }
 
@@ -328,17 +456,24 @@ export function useBoundaryFrameLoader({
           const batchPromises = batch.map(async chunk => {
             const indicesParam = chunk.frames.join(',')
             const response = await fetch(
-              `/api/frames/${encodedVideoId}/batch?indices=${indicesParam}`
+              `/api/frames/${encodedVideoId}/batch-signed-urls?modulo=${chunk.modulo}&indices=${indicesParam}`
             )
             return response.json() as Promise<{
-              frames: Array<{ frame_index: number; image_data: string }>
+              chunks: Array<{
+                chunkIndex: number
+                signedUrl: string
+                frameIndices: number[]
+              }>
             }>
           })
 
           const results = await Promise.all(batchPromises)
 
+          // Flatten chunks from all responses
+          const allChunks = results.flatMap(r => r.chunks)
+
           // Update framesRef directly (RAF loop will pick up changes)
-          processLoadedFrames(results, framesRef.current)
+          await processLoadedChunks(allChunks, framesRef.current, batch[0]?.modulo ?? 1)
 
           // Update cache
           updateCacheAfterLoad(batch, loadedChunksRef.current, requestedChunksRef.current)
