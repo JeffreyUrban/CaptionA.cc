@@ -29,6 +29,7 @@ class CircuitBreaker:
         with self._lock:
             if self._state == CircuitState.OPEN:
                 # Check if timeout expired
+                assert self._last_failure_time is not None, "Circuit breaker is open but no failure time recorded"
                 if time.time() - self._last_failure_time >= self.timeout_seconds:
                     self._state = CircuitState.HALF_OPEN
                     self._failures = 0

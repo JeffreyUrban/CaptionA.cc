@@ -8,7 +8,7 @@ This demonstrates how to use the async job API from external orchestration code.
 import base64
 import time
 from pathlib import Path
-from typing import Dict, List
+from typing import Any, Dict, List
 
 import requests
 
@@ -25,7 +25,7 @@ class OCRServiceClient:
         response.raise_for_status()
         return response.json()
 
-    def submit_job(self, images: List[Dict[str, any]]) -> str:
+    def submit_job(self, images: List[Dict[str, Any]]) -> str:
         """
         Submit OCR job for async processing.
 
@@ -88,7 +88,7 @@ class OCRServiceClient:
 
             time.sleep(poll_interval)
 
-    def process_batch(self, images: List[Dict[str, any]], timeout: float = 60) -> Dict:
+    def process_batch(self, images: List[Dict[str, Any]], timeout: float = 60) -> Dict:
         """
         Submit job and wait for results (convenience method).
 

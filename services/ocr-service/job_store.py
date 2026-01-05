@@ -72,6 +72,7 @@ class JobStore:
 
                 # If completed recently, reuse it
                 if existing_job and existing_job.status == JobStatus.COMPLETED:
+                    assert existing_job.completed_at is not None, "Completed job has no completion time"
                     age = time.time() - existing_job.completed_at
                     if age < self.ttl_seconds:
                         return existing_job_id  # Reuse existing result

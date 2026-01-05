@@ -7,6 +7,7 @@ Compares vertical stacking vs grid layouts to see which is more robust for OCR.
 import argparse
 import json
 import sqlite3
+import time
 from io import BytesIO
 from pathlib import Path
 from typing import List, Tuple
@@ -14,13 +15,12 @@ from typing import List, Tuple
 from PIL import Image
 
 try:
-    import time
-
     from google.cloud import vision
 
     GOOGLE_CLOUD_AVAILABLE = True
 except ImportError:
     GOOGLE_CLOUD_AVAILABLE = False
+    vision = None  # type: ignore
 
 
 def load_cropped_frames(db_path: Path, frame_indices: List[int]) -> List[Tuple[int, bytes, int, int]]:
@@ -95,14 +95,14 @@ def create_grid(frames: List[Tuple], cols: int, separator_px: int = 2) -> bytes:
 
 def call_gcp_vision(image_bytes: bytes) -> dict:
     """Call Google Cloud Vision API."""
-    if not GOOGLE_CLOUD_AVAILABLE:
+    if not GOOGLE_CLOUD_AVAILABLE or vision is None:
         raise RuntimeError("google-cloud-vision not available")
 
     client = vision.ImageAnnotatorClient()
     image = vision.Image(content=image_bytes)
 
     start = time.time()
-    response = client.document_text_detection(image=image, image_context={"language_hints": ["zh"]})
+    response = client.document_text_detection(image=image, image_context={"language_hints": ["zh"]})  # type: ignore
     elapsed_ms = (time.time() - start) * 1000
 
     symbols = []

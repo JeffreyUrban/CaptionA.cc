@@ -33,8 +33,8 @@ try:
     from google.cloud import vision
 
     # Handle Fly.io secrets (JSON stored as environment variable)
-    if os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON"):
-        creds_json = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")
+    creds_json = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")
+    if creds_json:
         # Write to temp file for google-cloud-vision
         with open("/tmp/gcp-credentials.json", "w") as f:
             f.write(creds_json)
@@ -43,6 +43,7 @@ try:
     GOOGLE_CLOUD_AVAILABLE = True
 except ImportError:
     GOOGLE_CLOUD_AVAILABLE = False
+    vision = None  # type: ignore
 
 
 app = FastAPI(
@@ -262,7 +263,7 @@ def call_gcp_vision_api_sync(image_bytes: bytes) -> Dict:
 
     Returns structured results with character-level bounding boxes.
     """
-    if not GOOGLE_CLOUD_AVAILABLE:
+    if not GOOGLE_CLOUD_AVAILABLE or vision is None:
         raise RuntimeError("google-cloud-vision not available")
 
     client = vision.ImageAnnotatorClient()
@@ -271,7 +272,7 @@ def call_gcp_vision_api_sync(image_bytes: bytes) -> Dict:
     start = time.time()
 
     # Call API (wrapped in circuit breaker by caller)
-    response = client.document_text_detection(image=image, image_context={"language_hints": ["zh"]})
+    response = client.document_text_detection(image=image, image_context={"language_hints": ["zh"]})  # type: ignore
 
     elapsed_ms = (time.time() - start) * 1000
 
