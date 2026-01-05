@@ -9,9 +9,10 @@ Provides access to Supabase for:
 """
 
 import os
-from typing import Any, Optional
-from supabase import create_client, Client
 from datetime import datetime
+from typing import Any
+
+from supabase import Client, create_client
 
 
 def get_supabase_client() -> Client:
@@ -41,7 +42,7 @@ def get_supabase_client() -> Client:
 class VideoRepository:
     """Repository for video operations in Supabase"""
 
-    def __init__(self, client: Optional[Client] = None):
+    def __init__(self, client: Client | None = None):
         self.client = client or get_supabase_client()
 
     def create_video(
@@ -49,9 +50,9 @@ class VideoRepository:
         tenant_id: str,
         filename: str,
         storage_key: str,
-        size_bytes: Optional[int] = None,
-        duration_seconds: Optional[float] = None,
-        uploaded_by_user_id: Optional[str] = None,
+        size_bytes: int | None = None,
+        duration_seconds: float | None = None,
+        uploaded_by_user_id: str | None = None,
     ) -> dict[str, Any]:
         """
         Create a new video entry in the catalog.
@@ -84,7 +85,7 @@ class VideoRepository:
         self,
         video_id: str,
         status: str,
-        prefect_flow_run_id: Optional[str] = None,
+        prefect_flow_run_id: str | None = None,
     ) -> dict[str, Any]:
         """
         Update video processing status.
@@ -130,7 +131,7 @@ class VideoRepository:
         )
         return response.data[0] if response.data else {}
 
-    def get_video(self, video_id: str) -> Optional[dict[str, Any]]:
+    def get_video(self, video_id: str) -> dict[str, Any] | None:
         """Get video by ID"""
         response = (
             self.client.table("videos")
@@ -196,15 +197,15 @@ class VideoRepository:
 class SearchIndexRepository:
     """Repository for video search index operations"""
 
-    def __init__(self, client: Optional[Client] = None):
+    def __init__(self, client: Client | None = None):
         self.client = client or get_supabase_client()
 
     def upsert_frame_text(
         self,
         video_id: str,
         frame_index: int,
-        ocr_text: Optional[str] = None,
-        caption_text: Optional[str] = None,
+        ocr_text: str | None = None,
+        caption_text: str | None = None,
     ) -> dict[str, Any]:
         """
         Upsert text for a video frame into the search index.
@@ -230,7 +231,7 @@ class SearchIndexRepository:
         return response.data[0] if response.data else {}
 
     def search_text(
-        self, query: str, tenant_id: Optional[str] = None, limit: int = 50
+        self, query: str, tenant_id: str | None = None, limit: int = 50
     ) -> list[dict[str, Any]]:
         """
         Full-text search across video frames.
@@ -258,15 +259,15 @@ class SearchIndexRepository:
 class TrainingCohortRepository:
     """Repository for training cohort operations"""
 
-    def __init__(self, client: Optional[Client] = None):
+    def __init__(self, client: Client | None = None):
         self.client = client or get_supabase_client()
 
     def create_cohort(
         self,
         cohort_id: str,
-        language: Optional[str] = None,
-        domain: Optional[str] = None,
-        snapshot_storage_key: Optional[str] = None,
+        language: str | None = None,
+        domain: str | None = None,
+        snapshot_storage_key: str | None = None,
     ) -> dict[str, Any]:
         """Create a new training cohort"""
         data = {
@@ -283,11 +284,11 @@ class TrainingCohortRepository:
     def update_cohort_stats(
         self,
         cohort_id: str,
-        total_videos: Optional[int] = None,
-        total_frames: Optional[int] = None,
-        total_annotations: Optional[int] = None,
-        wandb_run_id: Optional[str] = None,
-        git_commit: Optional[str] = None,
+        total_videos: int | None = None,
+        total_frames: int | None = None,
+        total_annotations: int | None = None,
+        wandb_run_id: str | None = None,
+        git_commit: str | None = None,
     ) -> dict[str, Any]:
         """Update cohort statistics"""
         data = {}

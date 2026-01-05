@@ -18,10 +18,10 @@ from typing import Any
 
 import requests
 from prefect import flow, task
-from prefect.artifacts import create_link_artifact, create_table_artifact
+from prefect.artifacts import create_table_artifact
 
 # Import our Supabase client
-from ..supabase_client import VideoRepository, SearchIndexRepository
+from ..supabase_client import SearchIndexRepository, VideoRepository
 
 
 @task(
