@@ -19,12 +19,11 @@ from prefect import flow, task
 
 # Import vp9_utils package
 try:
-    from vp9_utils import encode_video_chunks, upload_chunks_to_wasabi
     from frames_db.storage import (
         init_vp9_encoding_status,
         update_vp9_encoding_status,
-        get_vp9_encoding_status,
     )
+    from vp9_utils import encode_video_chunks, upload_chunks_to_wasabi
 except ImportError as e:
     logging.warning(f"Failed to import vp9_utils or frames_db: {e}")
     logging.warning("VP9 encoding will not be available")
