@@ -1,0 +1,51 @@
+# Fly.io configuration for OCR service
+# Naming convention: captionacc-{service-name}
+# This keeps all CaptionA.cc services grouped together
+app = "captionacc-ocr"
+primary_region = "ord"  # Chicago - change to your preferred region
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8000"
+
+  # Cost Protection Limits (easily adjustable)
+  DAILY_API_CALLS_LIMIT = "1000"        # Max API calls per day
+  JOBS_PER_MINUTE_LIMIT = "10"          # Max jobs per minute
+  JOBS_PER_HOUR_LIMIT = "100"           # Max jobs per hour
+
+  # Technical Limits (from testing - don't change without re-testing)
+  MAX_FRAMES_PER_JOB = "950"            # Tested max (JPEG limit ~992)
+  HEIGHT_LIMIT_PX = "50000"             # Conservative height limit
+  FILE_SIZE_LIMIT_MB = "15"             # Conservative file size
+  PIXEL_LIMIT = "50000000"              # Total pixels limit
+
+  # Job Management
+  JOB_RESULT_TTL_SECONDS = "3600"       # Keep results for 1 hour
+  MAX_CONCURRENT_JOBS = "5"             # Max parallel jobs
+
+  # Circuit Breaker
+  CIRCUIT_BREAKER_THRESHOLD = "5"       # Failures before opening
+  CIRCUIT_BREAKER_TIMEOUT_SECONDS = "300"  # Wait 5min before retry
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = true    # Scale to zero when idle
+  auto_start_machines = true   # Auto-start on requests
+  min_machines_running = 0     # True scale-to-zero
+  processes = ["app"]
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 2
+  memory_mb = 2048
+
+# Health check
+[[http_service.checks]]
+  grace_period = "10s"
+  interval = "30s"
+  method = "GET"
+  timeout = "5s"
+  path = "/"
