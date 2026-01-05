@@ -4,20 +4,30 @@ OCR Batch Processing Service
 
 Independent microservice for batch OCR processing using vertical montage stacking.
 Handles any set of identically-dimensioned images and returns structured results.
+
+Features:
+- Async job processing (non-blocking)
+- Rate limiting and daily limits
+- Circuit breaker for GCP failures
+- Job deduplication and caching
 """
 
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field, field_validator
 from typing import List, Dict, Optional, Tuple
 from io import BytesIO
 from PIL import Image
 import asyncio
 import time
-import math
 import base64
 
 import os
-import json
+
+# Import protection modules
+from config import config
+from rate_limiter import usage_tracker
+from circuit_breaker import circuit_breaker, CircuitBreakerOpen
+from job_store import job_store, JobStatus
 
 try:
     from google.cloud import vision
@@ -37,15 +47,12 @@ except ImportError:
 
 app = FastAPI(
     title="OCR Batch Processing Service",
-    description="Batch OCR processing with automatic montage optimization",
-    version="1.0.0"
+    description="Async batch OCR processing with cost protection",
+    version="2.0.0"
 )
 
 
-# Configuration constants
-HEIGHT_LIMIT = 50000  # Conservative height limit (below JPEG 65,500px)
-FILE_SIZE_LIMIT_MB = 15  # Conservative file size limit
-PIXEL_LIMIT = 50000000  # Total pixel limit
+# Configuration constants from config
 SEPARATOR_PX = 2  # Separator between stacked images
 
 
@@ -79,6 +86,18 @@ class ImageInput(BaseModel):
             raise ValueError("Invalid base64 data")
 
 
+class JobSubmitRequest(BaseModel):
+    """Request to submit OCR job."""
+    images: List[ImageInput] = Field(..., min_length=1)
+
+
+class JobSubmitResponse(BaseModel):
+    """Response for job submission."""
+    job_id: str
+    status: str
+    message: str
+
+
 class BoundingBox(BaseModel):
     """Character bounding box."""
     x: int
@@ -101,46 +120,63 @@ class ImageOCRResult(BaseModel):
     char_count: int
 
 
-class BatchOCRResponse(BaseModel):
-    """Response for batch OCR processing."""
+class JobResultResponse(BaseModel):
+    """Response for completed job."""
     results: List[ImageOCRResult]
     processing_time_ms: float
     total_characters: int
     images_processed: int
 
 
-def calculate_capacity(width: int, height: int) -> Tuple[int, Dict[str, int], str]:
+class JobStatusResponse(BaseModel):
+    """Response for job status check."""
+    job_id: str
+    status: str
+    created_at: str
+    started_at: Optional[str] = None
+    completed_at: Optional[str] = None
+    processing_time_ms: Optional[float] = None
+    images_count: int
+    result: Optional[JobResultResponse] = None
+    error: Optional[str] = None
+
+
+def calculate_capacity(width: int, height: int) -> Tuple[int, Dict[str, int], str, float]:
     """
     Calculate maximum number of images that can be safely processed.
 
     Returns:
-        (max_images, limits_dict, limiting_factor)
+        (max_images, limits_dict, limiting_factor, estimated_file_size_mb)
     """
     # Calculate max by height
-    max_by_height = (HEIGHT_LIMIT + SEPARATOR_PX) // (height + SEPARATOR_PX)
+    max_by_height = (config.HEIGHT_LIMIT_PX + SEPARATOR_PX) // (height + SEPARATOR_PX)
 
     # Calculate max by total pixels
-    max_by_pixels = PIXEL_LIMIT // (width * height)
+    max_by_pixels = config.PIXEL_LIMIT // (width * height)
 
     # Estimate max by file size (rough estimate based on observed compression)
     # Based on test: 950 frames @ 666×64 = 15.41 MB
-    # Bytes per frame ≈ (15.41 * 1024 * 1024) / 950 ≈ 17,018 bytes/frame
-    # Adjusted by pixel ratio
     reference_bytes_per_frame = (15.41 * 1024 * 1024) / 950
     reference_pixels_per_frame = 666 * 64
     estimated_bytes_per_frame = reference_bytes_per_frame * (width * height) / reference_pixels_per_frame
-    max_by_size = int((FILE_SIZE_LIMIT_MB * 1024 * 1024) / estimated_bytes_per_frame)
+    max_by_size = int((config.FILE_SIZE_LIMIT_MB * 1024 * 1024) / estimated_bytes_per_frame)
+
+    # Apply configured max frames limit
+    max_by_config = config.MAX_FRAMES_PER_JOB
 
     limits = {
         "by_height": max_by_height,
         "by_pixels": max_by_pixels,
-        "by_file_size": max_by_size
+        "by_file_size": max_by_size,
+        "by_config": max_by_config
     }
 
     # Find minimum (most restrictive)
-    max_images = min(max_by_height, max_by_pixels, max_by_size)
+    max_images = min(max_by_height, max_by_pixels, max_by_size, max_by_config)
 
-    if max_images == max_by_height:
+    if max_images == max_by_config:
+        limiting_factor = "config_limit"
+    elif max_images == max_by_height:
         limiting_factor = "height"
     elif max_images == max_by_pixels:
         limiting_factor = "total_pixels"
@@ -177,8 +213,8 @@ def create_vertical_montage(images: List[Tuple[str, bytes]], separator_px: int =
     total_height = sum(height for _ in images) + (len(images) - 1) * separator_px
 
     # Check height limit
-    if total_height > HEIGHT_LIMIT:
-        raise ValueError(f"Total height {total_height}px exceeds limit {HEIGHT_LIMIT}px")
+    if total_height > config.HEIGHT_LIMIT_PX:
+        raise ValueError(f"Total height {total_height}px exceeds limit {config.HEIGHT_LIMIT_PX}px")
 
     # Create montage
     montage = Image.new('RGB', (width, total_height), (220, 220, 220))
@@ -214,9 +250,9 @@ def create_vertical_montage(images: List[Tuple[str, bytes]], separator_px: int =
     return buffer.getvalue(), metadata
 
 
-async def call_gcp_vision_api(image_bytes: bytes) -> Dict:
+def call_gcp_vision_api_sync(image_bytes: bytes) -> Dict:
     """
-    Call Google Cloud Vision API for document text detection.
+    Call Google Cloud Vision API for document text detection (synchronous).
 
     Returns structured results with character-level bounding boxes.
     """
@@ -228,14 +264,10 @@ async def call_gcp_vision_api(image_bytes: bytes) -> Dict:
 
     start = time.time()
 
-    # Run in executor to avoid blocking
-    loop = asyncio.get_event_loop()
-    response = await loop.run_in_executor(
-        None,
-        lambda: client.document_text_detection(
-            image=image,
-            image_context={'language_hints': ['zh']}
-        )
+    # Call API (wrapped in circuit breaker by caller)
+    response = client.document_text_detection(
+        image=image,
+        image_context={'language_hints': ['zh']}
     )
 
     elapsed_ms = (time.time() - start) * 1000
@@ -330,13 +362,117 @@ def distribute_characters_to_images(symbols: List[Dict], image_metadata: List[Di
     return results
 
 
+async def process_job_background(job_id: str, images: List[ImageInput]):
+    """Background task to process OCR job."""
+    try:
+        # Update status to processing
+        job_store.update_status(job_id, JobStatus.PROCESSING, started_at=time.time())
+
+        # Decode base64 and convert to format for montage creation
+        image_list = [(img.id, base64.b64decode(img.data)) for img in images]
+
+        # Create montage
+        montage_bytes, metadata = create_vertical_montage(image_list)
+
+        # Call OCR API with circuit breaker protection
+        loop = asyncio.get_event_loop()
+        ocr_result = await loop.run_in_executor(
+            None,
+            lambda: circuit_breaker.call(call_gcp_vision_api_sync, montage_bytes)
+        )
+
+        # Distribute characters back to images
+        results = distribute_characters_to_images(ocr_result['symbols'], metadata)
+
+        # Build result
+        result = {
+            'results': [r.model_dump() for r in results],
+            'processing_time_ms': ocr_result['processing_time_ms'],
+            'total_characters': ocr_result['total_characters'],
+            'images_processed': len(images)
+        }
+
+        # Update job as completed
+        job_store.update_status(
+            job_id,
+            JobStatus.COMPLETED,
+            completed_at=time.time(),
+            processing_time_ms=ocr_result['processing_time_ms'],
+            result=result
+        )
+
+    except CircuitBreakerOpen as e:
+        # Circuit breaker is open
+        job_store.update_status(
+            job_id,
+            JobStatus.FAILED,
+            completed_at=time.time(),
+            error=f"Circuit breaker open: {str(e)}"
+        )
+
+    except Exception as e:
+        # Job failed
+        job_store.update_status(
+            job_id,
+            JobStatus.FAILED,
+            completed_at=time.time(),
+            error=str(e)
+        )
+
+
+# Background cleanup task
+async def cleanup_task():
+    """Periodically cleanup old jobs."""
+    while True:
+        await asyncio.sleep(300)  # Every 5 minutes
+        job_store.cleanup_old_jobs()
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Start background tasks."""
+    asyncio.create_task(cleanup_task())
+
+
 @app.get("/")
 async def root():
     """Health check endpoint."""
     return {
         "service": "OCR Batch Processing Service",
+        "version": "2.0.0",
         "status": "healthy",
         "google_cloud_available": GOOGLE_CLOUD_AVAILABLE
+    }
+
+
+@app.get("/health")
+async def health():
+    """Detailed health check with system status."""
+    cb_status = circuit_breaker.get_status()
+    job_stats = job_store.get_stats()
+    usage_stats = usage_tracker.get_usage()
+
+    return {
+        "status": "healthy" if cb_status['state'] == 'closed' else "degraded",
+        "google_cloud_available": GOOGLE_CLOUD_AVAILABLE,
+        "circuit_breaker": cb_status,
+        "job_storage": job_stats,
+        "usage": usage_stats,
+        "config": config.display()
+    }
+
+
+@app.get("/usage")
+async def get_usage():
+    """Get usage statistics."""
+    usage_stats = usage_tracker.get_usage()
+    return {
+        "usage": usage_stats,
+        "limits": {
+            "per_minute": config.JOBS_PER_MINUTE_LIMIT,
+            "per_hour": config.JOBS_PER_HOUR_LIMIT,
+            "per_day": config.DAILY_API_CALLS_LIMIT
+        }
     }
 
 
@@ -360,44 +496,94 @@ async def get_capacity(dimensions: ImageDimensions):
     )
 
 
-@app.post("/ocr/batch", response_model=BatchOCRResponse)
-async def process_batch(images: List[ImageInput]):
+@app.post("/ocr/jobs", response_model=JobSubmitResponse)
+async def submit_job(request: JobSubmitRequest):
     """
-    Process a batch of identically-sized images and return OCR results per image.
+    Submit OCR job for async processing.
 
-    Images are automatically arranged in a vertical montage for efficient processing.
-    Results are returned with original image IDs for easy mapping.
+    Returns job_id immediately. Poll GET /ocr/jobs/{id} for results.
     """
-    if not images:
-        raise HTTPException(status_code=400, detail="No images provided")
-
     if not GOOGLE_CLOUD_AVAILABLE:
         raise HTTPException(status_code=503, detail="Google Cloud Vision not available")
 
-    try:
-        # Decode base64 and convert to format for montage creation
-        image_list = [(img.id, base64.b64decode(img.data)) for img in images]
+    # Check rate limits
+    allowed, error_msg, usage_stats = usage_tracker.check_and_record(
+        config.JOBS_PER_MINUTE_LIMIT,
+        config.JOBS_PER_HOUR_LIMIT,
+        config.DAILY_API_CALLS_LIMIT
+    )
 
-        # Create montage
-        montage_bytes, metadata = create_vertical_montage(image_list)
-
-        # Call OCR API
-        ocr_result = await call_gcp_vision_api(montage_bytes)
-
-        # Distribute characters back to images
-        results = distribute_characters_to_images(ocr_result['symbols'], metadata)
-
-        return BatchOCRResponse(
-            results=results,
-            processing_time_ms=ocr_result['processing_time_ms'],
-            total_characters=ocr_result['total_characters'],
-            images_processed=len(images)
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "error": error_msg,
+                "usage": usage_stats
+            }
         )
 
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Processing error: {str(e)}")
+    # Check circuit breaker
+    cb_status = circuit_breaker.get_status()
+    if cb_status['state'] == 'open':
+        raise HTTPException(
+            status_code=503,
+            detail=f"Service temporarily unavailable. Circuit breaker open due to repeated failures."
+        )
+
+    # Generate job ID (with deduplication)
+    images_data = [{"id": img.id} for img in request.images]
+    job_id = job_store.generate_job_id(images_data)
+
+    # Check if this is a deduplicated job
+    existing_job = job_store.get_job(job_id)
+    if existing_job and existing_job.status == JobStatus.COMPLETED:
+        return JobSubmitResponse(
+            job_id=job_id,
+            status="completed",
+            message="Job already completed (deduplicated). Retrieve results at GET /ocr/jobs/{id}"
+        )
+
+    # Create new job
+    job_store.create_job(job_id, len(request.images))
+
+    # Start background processing
+    asyncio.create_task(process_job_background(job_id, request.images))
+
+    return JobSubmitResponse(
+        job_id=job_id,
+        status="pending",
+        message="Job submitted. Poll GET /ocr/jobs/{id} for results."
+    )
+
+
+@app.get("/ocr/jobs/{job_id}", response_model=JobStatusResponse)
+async def get_job_status(job_id: str):
+    """
+    Get job status and results.
+
+    Poll this endpoint to check if job is complete.
+    """
+    job = job_store.get_job(job_id)
+
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    response = JobStatusResponse(
+        job_id=job.job_id,
+        status=job.status.value,
+        created_at=job.to_dict()['created_at'],
+        started_at=job.to_dict().get('started_at'),
+        completed_at=job.to_dict().get('completed_at'),
+        processing_time_ms=job.processing_time_ms,
+        images_count=job.images_count,
+        error=job.error
+    )
+
+    # Add result if completed
+    if job.status == JobStatus.COMPLETED and job.result:
+        response.result = JobResultResponse(**job.result)
+
+    return response
 
 
 if __name__ == "__main__":

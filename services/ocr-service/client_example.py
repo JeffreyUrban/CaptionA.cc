@@ -2,11 +2,12 @@
 """
 Example client for OCR Batch Processing Service
 
-This demonstrates how to use the service from external orchestration code.
+This demonstrates how to use the async job API from external orchestration code.
 """
 
 import requests
 import base64
+import time
 from pathlib import Path
 from typing import List, Dict
 
@@ -26,15 +27,15 @@ class OCRServiceClient:
         response.raise_for_status()
         return response.json()
 
-    def process_batch(self, images: List[Dict[str, any]]) -> Dict:
+    def submit_job(self, images: List[Dict[str, any]]) -> str:
         """
-        Process batch of images.
+        Submit OCR job for async processing.
 
         Args:
             images: List of dicts with 'id' and 'data' (bytes)
 
         Returns:
-            OCR results
+            job_id to poll for results
         """
         # Convert bytes to base64 for JSON serialization
         payload = {
@@ -48,9 +49,79 @@ class OCRServiceClient:
         }
 
         response = requests.post(
-            f"{self.base_url}/ocr/batch",
+            f"{self.base_url}/ocr/jobs",
             json=payload
         )
+        response.raise_for_status()
+        result = response.json()
+        return result['job_id']
+
+    def get_job_status(self, job_id: str) -> Dict:
+        """
+        Get job status and results.
+
+        Returns job status dict with 'status' field.
+        If status is 'completed', includes 'result' field with OCR results.
+        """
+        response = requests.get(f"{self.base_url}/ocr/jobs/{job_id}")
+        response.raise_for_status()
+        return response.json()
+
+    def wait_for_job(self, job_id: str, poll_interval: float = 0.5, timeout: float = 60) -> Dict:
+        """
+        Poll job until complete or timeout.
+
+        Args:
+            job_id: Job ID to poll
+            poll_interval: Seconds between polls
+            timeout: Max seconds to wait
+
+        Returns:
+            Job result dict
+
+        Raises:
+            TimeoutError: If job doesn't complete in time
+            RuntimeError: If job fails
+        """
+        start_time = time.time()
+
+        while True:
+            status = self.get_job_status(job_id)
+
+            if status['status'] == 'completed':
+                return status['result']
+            elif status['status'] == 'failed':
+                raise RuntimeError(f"Job failed: {status.get('error', 'Unknown error')}")
+
+            elapsed = time.time() - start_time
+            if elapsed > timeout:
+                raise TimeoutError(f"Job {job_id} did not complete within {timeout}s")
+
+            time.sleep(poll_interval)
+
+    def process_batch(self, images: List[Dict[str, any]], timeout: float = 60) -> Dict:
+        """
+        Submit job and wait for results (convenience method).
+
+        Args:
+            images: List of dicts with 'id' and 'data' (bytes)
+            timeout: Max seconds to wait
+
+        Returns:
+            OCR results
+        """
+        job_id = self.submit_job(images)
+        return self.wait_for_job(job_id, timeout=timeout)
+
+    def get_health(self) -> Dict:
+        """Get service health status."""
+        response = requests.get(f"{self.base_url}/health")
+        response.raise_for_status()
+        return response.json()
+
+    def get_usage(self) -> Dict:
+        """Get rate limit usage statistics."""
+        response = requests.get(f"{self.base_url}/usage")
         response.raise_for_status()
         return response.json()
 
@@ -60,6 +131,18 @@ def example_usage():
     import sqlite3
 
     client = OCRServiceClient()
+
+    # Check service health
+    print("Checking service health...")
+    health = client.get_health()
+    print(f"Service status: {health['status']}")
+    print(f"Circuit breaker: {health['circuit_breaker']['state']}")
+    print()
+
+    # Check usage
+    usage = client.get_usage()
+    print(f"Usage today: {usage['usage']['jobs_today']}/{usage['limits']['per_day']}")
+    print()
 
     # Example: Load cropped frames from database
     video_dir = Path("local/data/95/95b2d9b2-2e2c-462c-9e2a-fb9a50c57398")
@@ -103,17 +186,29 @@ def example_usage():
 
     print(f"Processing {len(images)} images...")
 
-    # Process batch
-    results = client.process_batch(images)
+    # Submit job
+    job_id = client.submit_job(images)
+    print(f"Job submitted: {job_id}")
+    print("Polling for results...")
 
-    print(f"Processed {results['images_processed']} images")
-    print(f"Total characters: {results['total_characters']}")
-    print(f"Processing time: {results['processing_time_ms']:.0f}ms")
-    print()
+    # Wait for completion
+    try:
+        results = client.wait_for_job(job_id)
 
-    # Show results per image
-    for result in results['results']:
-        print(f"{result['id']}: {result['char_count']} chars - {result['text'][:50]}")
+        print(f"✓ Job completed!")
+        print(f"Processed {results['images_processed']} images")
+        print(f"Total characters: {results['total_characters']}")
+        print(f"Processing time: {results['processing_time_ms']:.0f}ms")
+        print()
+
+        # Show results per image
+        for result in results['results']:
+            print(f"{result['id']}: {result['char_count']} chars - {result['text'][:50]}")
+
+    except TimeoutError as e:
+        print(f"✗ {e}")
+    except RuntimeError as e:
+        print(f"✗ {e}")
 
 
 if __name__ == "__main__":
