@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
-import { Link, useLocation } from 'react-router'
+import { Link, useLocation, useNavigate } from 'react-router'
 
 import { UploadProgress } from '~/components/UploadProgress'
+import { useAuth } from '~/components/auth/AuthProvider'
 
 const navigation = [
   { name: 'Home', href: '/' },
@@ -136,6 +137,73 @@ function ThemeSwitcher() {
   )
 }
 
+function UserMenu() {
+  const { user, signOut } = useAuth()
+  const navigate = useNavigate()
+  const [isOpen, setIsOpen] = useState(false)
+
+  const handleSignOut = async () => {
+    await signOut()
+    setIsOpen(false)
+    navigate('/login')
+  }
+
+  if (!user) {
+    return (
+      <Link
+        to="/login"
+        className="rounded-lg px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+      >
+        Sign In
+      </Link>
+    )
+  }
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+      >
+        <div className="h-8 w-8 rounded-full bg-teal-600 flex items-center justify-center text-white">
+          {user.email?.[0]?.toUpperCase() ?? 'U'}
+        </div>
+        <span className="hidden sm:inline">{user.email}</span>
+      </button>
+
+      {isOpen && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)} />
+          <div className="absolute right-0 z-20 mt-2 w-48 rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-800">
+            <div className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
+              <div className="font-medium truncate">{user.email}</div>
+            </div>
+            <button
+              onClick={() => void handleSignOut()}
+              className="flex w-full items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+            >
+              <svg
+                className="h-5 w-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={1.5}
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9"
+                />
+              </svg>
+              Sign Out
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 interface AppLayoutProps {
   children: React.ReactNode
   fullScreen?: boolean
@@ -178,10 +246,11 @@ export function AppLayout({ children, fullScreen = false }: AppLayoutProps) {
               </div>
             </div>
 
-            {/* Upload Progress & Theme Switcher */}
+            {/* Upload Progress, Theme Switcher & User Menu */}
             <div className="flex items-center gap-2">
               <UploadProgress />
               <ThemeSwitcher />
+              <UserMenu />
             </div>
           </div>
 

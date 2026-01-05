@@ -11,6 +11,8 @@ import React, {
 } from 'react'
 import { useLocation } from 'react-router'
 
+import { AuthProvider } from '~/components/auth/AuthProvider'
+
 // Custom hook to track the previous value
 function usePrevious<T>(value: T) {
   const ref = useRef<T | undefined>(undefined)
@@ -103,7 +105,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <AppContext.Provider value={{ previousPathname }}>
-      <ThemeProvider>{children}</ThemeProvider>
+      <ThemeProvider>
+        <AuthProvider>{children}</AuthProvider>
+      </ThemeProvider>
     </AppContext.Provider>
   )
 }
