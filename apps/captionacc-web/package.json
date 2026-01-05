@@ -30,6 +30,7 @@
     "@heroicons/react": "^2.2.0",
     "@react-router/node": "^7.1.1",
     "@react-router/serve": "^7.1.1",
+    "@supabase/supabase-js": "^2.89.0",
     "@tailwindcss/typography": "^0.5.19",
     "@tus/file-store": "^2.0.0",
     "@tus/server": "^2.3.0",

@@ -71,7 +71,7 @@ pyrightconfig.json.user
 *.ipynb_checkpoints/
 
 # Documentation
-docs/_build/
+supabase/docs/_build/
 site/
 
 # Node/TypeScript (for frontend projects)
@@ -112,3 +112,7 @@ local/
 /CLAUDE.md
 /packages/*/src/*/_version.py
 tsconfig.tsbuildinfo
+
+# Supabase CLI temp files
+supabase/.temp/
+supabase/.branches/
