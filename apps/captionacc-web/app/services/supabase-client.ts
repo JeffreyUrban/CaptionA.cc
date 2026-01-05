@@ -8,9 +8,8 @@
  * - Cross-video search
  */
 
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type Session } from '@supabase/supabase-js'
 
-import type { Session } from '@supabase/supabase-js'
 import type { Database } from '../types/supabase'
 
 // Environment variables - use import.meta.env for Vite
