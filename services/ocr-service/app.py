@@ -30,7 +30,7 @@ from pydantic import BaseModel, Field, field_validator
 from rate_limiter import usage_tracker
 
 try:
-    from google.cloud import vision
+    from google.cloud import vision  # type: ignore
 
     # Handle Fly.io secrets (JSON stored as environment variable)
     creds_json = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")

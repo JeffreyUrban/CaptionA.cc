@@ -15,7 +15,7 @@ from typing import List, Tuple
 from PIL import Image
 
 try:
-    from google.cloud import vision
+    from google.cloud import vision  # type: ignore
 
     GOOGLE_CLOUD_AVAILABLE = True
 except ImportError:
