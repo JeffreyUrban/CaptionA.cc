@@ -12,22 +12,22 @@ Features:
 - Job deduplication and caching
 """
 
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field, field_validator
-from typing import List, Dict, Optional, Tuple
-from io import BytesIO
-from PIL import Image
 import asyncio
-import time
 import base64
-
 import os
+import time
+from io import BytesIO
+from typing import Dict, List, Optional, Tuple
+
+from circuit_breaker import CircuitBreakerOpen, circuit_breaker
 
 # Import protection modules
 from config import config
+from fastapi import FastAPI, HTTPException
+from job_store import JobStatus, job_store
+from PIL import Image
+from pydantic import BaseModel, Field, field_validator
 from rate_limiter import usage_tracker
-from circuit_breaker import circuit_breaker, CircuitBreakerOpen
-from job_store import job_store, JobStatus
 
 try:
     from google.cloud import vision
@@ -527,7 +527,7 @@ async def submit_job(request: JobSubmitRequest):
     if cb_status['state'] == 'open':
         raise HTTPException(
             status_code=503,
-            detail=f"Service temporarily unavailable. Circuit breaker open due to repeated failures."
+            detail="Service temporarily unavailable. Circuit breaker open due to repeated failures."
         )
 
     # Generate job ID (with deduplication)

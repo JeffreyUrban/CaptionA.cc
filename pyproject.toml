@@ -59,7 +59,7 @@ extend-exclude = [
     "*/_version.py",  # Exclude auto-generated version files from all ruff checks
     "**/*/_version.py",
     "services/ocr-service",  # Standalone service with its own linting rules
-    "scripts/",  # Scripts directory with different linting standards
+    "scripts",  # Scripts directory with different linting standards
 ]
 
 [tool.ruff.lint]

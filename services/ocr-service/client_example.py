@@ -5,11 +5,12 @@ Example client for OCR Batch Processing Service
 This demonstrates how to use the async job API from external orchestration code.
 """
 
-import requests
 import base64
 import time
 from pathlib import Path
-from typing import List, Dict
+from typing import Dict, List
+
+import requests
 
 
 class OCRServiceClient:
@@ -168,7 +169,7 @@ def example_usage():
 
     # Load a batch of frames
     batch_size = min(50, capacity['max_images'])
-    cursor.execute(f"""
+    cursor.execute("""
         SELECT frame_index, image_data
         FROM cropped_frames
         WHERE frame_index IN (255, 1204, 1735, 1876, 1972)
@@ -195,7 +196,7 @@ def example_usage():
     try:
         results = client.wait_for_job(job_id)
 
-        print(f"✓ Job completed!")
+        print("✓ Job completed!")
         print(f"Processed {results['images_processed']} images")
         print(f"Total characters: {results['total_characters']}")
         print(f"Processing time: {results['processing_time_ms']:.0f}ms")

@@ -2,14 +2,14 @@
 In-memory job storage with TTL and deduplication.
 """
 
-import time
 import hashlib
 import json
-from threading import Lock
-from typing import Dict, Optional, List
-from enum import Enum
-from dataclasses import dataclass, asdict
+import time
+from dataclasses import asdict, dataclass
 from datetime import datetime
+from enum import Enum
+from threading import Lock
+from typing import Dict, List, Optional
 
 
 class JobStatus(Enum):

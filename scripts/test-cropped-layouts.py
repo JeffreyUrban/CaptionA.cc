@@ -11,11 +11,12 @@ from io import BytesIO
 from pathlib import Path
 from typing import List, Tuple
 
-from PIL import Image, ImageDraw
+from PIL import Image
 
 try:
-    from google.cloud import vision
     import time
+
+    from google.cloud import vision
     GOOGLE_CLOUD_AVAILABLE = True
 except ImportError:
     GOOGLE_CLOUD_AVAILABLE = False
@@ -148,8 +149,8 @@ def main():
     cropping_db = Path(selection['cropping_db'])
     frame_indices = selection['frame_indices']
 
-    print(f"Testing cropped frame layouts")
-    print(f"="*80)
+    print("Testing cropped frame layouts")
+    print("="*80)
     print(f"Video: {video_id}")
     print(f"Frame count: {len(frame_indices)}")
     print(f"Frame range: {min(frame_indices)} to {max(frame_indices)}")
@@ -235,7 +236,7 @@ def main():
     with open(args.output_file, 'w') as f:
         json.dump(results, f, indent=2)
 
-    print(f"="*80)
+    print("="*80)
     print(f"Results saved to: {args.output_file}")
 
     if args.call_api and GOOGLE_CLOUD_AVAILABLE:

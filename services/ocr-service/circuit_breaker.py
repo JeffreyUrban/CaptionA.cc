@@ -3,8 +3,8 @@ Circuit breaker pattern to prevent cascading failures.
 """
 
 import time
-from threading import Lock
 from enum import Enum
+from threading import Lock
 
 
 class CircuitState(Enum):

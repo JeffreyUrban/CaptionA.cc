@@ -4,9 +4,9 @@ Rate limiting and usage tracking for cost protection.
 
 import time
 from collections import deque
+from datetime import datetime
 from threading import Lock
 from typing import Dict, Tuple
-from datetime import datetime, timedelta
 
 
 class UsageTracker:

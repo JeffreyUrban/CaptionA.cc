@@ -5,11 +5,12 @@ Test script for OCR Batch Processing Service
 Validates the service is working correctly with sample data.
 """
 
-import requests
 import base64
 import sqlite3
 import time
 from pathlib import Path
+
+import requests
 
 
 def test_health():
@@ -56,7 +57,7 @@ def test_capacity():
     assert 'limits' in data
     assert 'limiting_factor' in data
 
-    print(f"✓ Capacity check passed")
+    print("✓ Capacity check passed")
     print(f"  Max images for 666×64: {data['max_images']}")
     print(f"  Limiting factor: {data['limiting_factor']}")
 
@@ -123,7 +124,7 @@ def test_async_job_processing():
             assert 'total_characters' in result
             assert len(result['results']) == len(images)
 
-            print(f"✓ Async job processing passed")
+            print("✓ Async job processing passed")
             print(f"  Processed {result['images_processed']} images")
             print(f"  Total characters: {result['total_characters']}")
             print(f"  Processing time: {result['processing_time_ms']:.0f}ms")
@@ -162,7 +163,7 @@ def test_job_deduplication():
     )
 
     if response1.status_code != 200:
-        print(f"⚠ Skipping deduplication test - service not fully available")
+        print("⚠ Skipping deduplication test - service not fully available")
         return
 
     job_id_1 = response1.json()['job_id']
