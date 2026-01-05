@@ -316,7 +316,7 @@ def update_vp9_encoding_status(
         if updates:
             query = f"""
                 UPDATE vp9_encoding_status
-                SET {', '.join(updates)}
+                SET {", ".join(updates)}
                 WHERE video_id = ? AND frame_type = ?
             """
             cursor.execute(query, params)

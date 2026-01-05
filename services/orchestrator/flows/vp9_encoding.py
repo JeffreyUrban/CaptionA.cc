@@ -104,7 +104,9 @@ def encode_vp9_chunks_task(
                 ),
             )
 
-            print(f"Encoding complete: {result['chunks_encoded']} chunks, {result['total_frames']} frames")
+            print(
+                f"Encoding complete: {result['chunks_encoded']} chunks, {result['total_frames']} frames"
+            )
 
             # Update database with encoding results
             update_vp9_encoding_status(
@@ -178,12 +180,12 @@ def upload_vp9_chunks_task(
             frame_type=frame_type,
             user_id="default_user",  # TODO: Replace with actual user ID from Supabase
             environment=environment,
-            progress_callback=lambda curr, total: print(
-                f"Upload progress: {curr}/{total} chunks"
-            ),
+            progress_callback=lambda curr, total: print(f"Upload progress: {curr}/{total} chunks"),
         )
 
-        print(f"Upload complete: {result['chunks_uploaded']} chunks, {result['total_size_bytes'] / 1024 / 1024:.1f} MB")
+        print(
+            f"Upload complete: {result['chunks_uploaded']} chunks, {result['total_size_bytes'] / 1024 / 1024:.1f} MB"
+        )
 
         # Update database with upload results
         update_vp9_encoding_status(

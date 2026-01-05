@@ -12,6 +12,7 @@ FrameType = Literal["cropped", "full"]
 
 class UploadResult(TypedDict):
     """Result from upload operation."""
+
     chunks_uploaded: int
     total_size_bytes: int
     s3_keys: list[str]
@@ -26,18 +27,18 @@ def get_s3_client():
     Raises:
         ValueError: If required environment variables are missing
     """
-    required_vars = ['WASABI_REGION', 'WASABI_ACCESS_KEY', 'WASABI_SECRET_KEY']
+    required_vars = ["WASABI_REGION", "WASABI_ACCESS_KEY", "WASABI_SECRET_KEY"]
     missing = [var for var in required_vars if not os.getenv(var)]
 
     if missing:
         raise ValueError(f"Missing required environment variables: {', '.join(missing)}")
 
     return boto3.client(
-        's3',
+        "s3",
         endpoint_url=f"https://s3.{os.getenv('WASABI_REGION')}.wasabisys.com",
-        aws_access_key_id=os.getenv('WASABI_ACCESS_KEY'),
-        aws_secret_access_key=os.getenv('WASABI_SECRET_KEY'),
-        region_name=os.getenv('WASABI_REGION')
+        aws_access_key_id=os.getenv("WASABI_ACCESS_KEY"),
+        aws_secret_access_key=os.getenv("WASABI_SECRET_KEY"),
+        region_name=os.getenv("WASABI_REGION"),
     )
 
 
@@ -47,7 +48,7 @@ def build_s3_key(
     modulo: int,
     filename: str,
     user_id: str = "default_user",
-    environment: str = "dev"
+    environment: str = "dev",
 ) -> str:
     """Build S3 object key for a chunk file.
 
@@ -65,12 +66,7 @@ def build_s3_key(
     return f"{environment}/users/{user_id}/videos/{video_id}/{frame_type}_frames/modulo_{modulo}/{filename}"
 
 
-def upload_chunk(
-    s3_client,
-    local_path: Path,
-    s3_key: str,
-    bucket: str
-) -> None:
+def upload_chunk(s3_client, local_path: Path, s3_key: str, bucket: str) -> None:
     """Upload a single chunk to Wasabi.
 
     Args:
@@ -82,12 +78,7 @@ def upload_chunk(
     Raises:
         ClientError: If upload fails
     """
-    s3_client.upload_file(
-        str(local_path),
-        bucket,
-        s3_key,
-        ExtraArgs={'ContentType': 'video/webm'}
-    )
+    s3_client.upload_file(str(local_path), bucket, s3_key, ExtraArgs={"ContentType": "video/webm"})
 
 
 def upload_chunks_to_wasabi(
@@ -96,7 +87,7 @@ def upload_chunks_to_wasabi(
     frame_type: FrameType,
     user_id: str = "default_user",
     environment: str = "dev",
-    progress_callback: Callable[[int, int], None] | None = None
+    progress_callback: Callable[[int, int], None] | None = None,
 ) -> UploadResult:
     """Upload chunks to Wasabi S3.
 
@@ -114,7 +105,7 @@ def upload_chunks_to_wasabi(
     Raises:
         ValueError: If bucket not configured or upload fails
     """
-    bucket = os.getenv('WASABI_BUCKET')
+    bucket = os.getenv("WASABI_BUCKET")
     if not bucket:
         raise ValueError("WASABI_BUCKET environment variable not set")
 
@@ -127,7 +118,7 @@ def upload_chunks_to_wasabi(
 
     for idx, chunk_path in enumerate(chunk_files):
         # Extract modulo from path: .../modulo_16/chunk_*.webm
-        modulo = int(chunk_path.parent.name.split('_')[1])
+        modulo = int(chunk_path.parent.name.split("_")[1])
 
         # Build S3 key
         s3_key = build_s3_key(
@@ -136,7 +127,7 @@ def upload_chunks_to_wasabi(
             modulo=modulo,
             filename=chunk_path.name,
             user_id=user_id,
-            environment=environment
+            environment=environment,
         )
 
         # Upload chunk
@@ -150,11 +141,7 @@ def upload_chunks_to_wasabi(
         if progress_callback:
             progress_callback(idx + 1, total_chunks)
 
-    return {
-        "chunks_uploaded": len(uploaded_keys),
-        "total_size_bytes": total_size_bytes,
-        "s3_keys": uploaded_keys
-    }
+    return {"chunks_uploaded": len(uploaded_keys), "total_size_bytes": total_size_bytes, "s3_keys": uploaded_keys}
 
 
 def test_wasabi_connection() -> bool:
@@ -164,7 +151,7 @@ def test_wasabi_connection() -> bool:
         True if connection successful, False otherwise
     """
     try:
-        bucket = os.getenv('WASABI_BUCKET')
+        bucket = os.getenv("WASABI_BUCKET")
         if not bucket:
             return False
 

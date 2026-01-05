@@ -11,6 +11,7 @@ FrameType = Literal["cropped", "full"]
 
 class EncodingResult(TypedDict):
     """Result from encoding operation."""
+
     chunks_encoded: int
     total_frames: int
     output_dir: Path
@@ -18,10 +19,7 @@ class EncodingResult(TypedDict):
     modulo_levels: list[int]
 
 
-def get_frames_from_db(
-    db_path: Path,
-    frame_type: FrameType = "cropped"
-) -> list[tuple[int, bytes, int, int]]:
+def get_frames_from_db(db_path: Path, frame_type: FrameType = "cropped") -> list[tuple[int, bytes, int, int]]:
     """Extract frames from database.
 
     Args:
@@ -49,8 +47,7 @@ def get_frames_from_db(
 
 
 def organize_frames_by_modulo(
-    frames: list[tuple[int, bytes, int, int]],
-    modulo_levels: list[int]
+    frames: list[tuple[int, bytes, int, int]], modulo_levels: list[int]
 ) -> dict[int, list[tuple[int, bytes, int, int]]]:
     """Organize frames into modulo levels.
 
@@ -95,10 +92,7 @@ def organize_frames_by_modulo(
     return organized
 
 
-def write_frames_to_temp_dir(
-    frames: list[tuple[int, bytes, int, int]],
-    temp_dir: Path
-) -> tuple[int, int]:
+def write_frames_to_temp_dir(frames: list[tuple[int, bytes, int, int]], temp_dir: Path) -> tuple[int, int]:
     """Write frames as JPEG files to temporary directory.
 
     Args:
@@ -120,13 +114,7 @@ def write_frames_to_temp_dir(
     return width, height
 
 
-def encode_chunk(
-    input_dir: Path,
-    output_path: Path,
-    width: int,
-    height: int,
-    crf: int = 30
-) -> None:
+def encode_chunk(input_dir: Path, output_path: Path, width: int, height: int, crf: int = 30) -> None:
     """Encode frames into VP9 WebM chunk using ffmpeg.
 
     Args:
@@ -145,18 +133,27 @@ def encode_chunk(
     # -pix_fmt yuv420p: Pixel format for compatibility
 
     cmd = [
-        'ffmpeg',
-        '-framerate', '10',  # 10 fps (100ms per frame)
-        '-pattern_type', 'glob',
-        '-i', str(input_dir / 'frame_*.jpg'),
-        '-c:v', 'libvpx-vp9',
-        '-crf', str(crf),
-        '-b:v', '0',
-        '-row-mt', '1',
-        '-g', '32',
-        '-pix_fmt', 'yuv420p',
-        '-y',  # Overwrite output file
-        str(output_path)
+        "ffmpeg",
+        "-framerate",
+        "10",  # 10 fps (100ms per frame)
+        "-pattern_type",
+        "glob",
+        "-i",
+        str(input_dir / "frame_*.jpg"),
+        "-c:v",
+        "libvpx-vp9",
+        "-crf",
+        str(crf),
+        "-b:v",
+        "0",
+        "-row-mt",
+        "1",
+        "-g",
+        "32",
+        "-pix_fmt",
+        "yuv420p",
+        "-y",  # Overwrite output file
+        str(output_path),
     ]
 
     subprocess.run(cmd, check=True, capture_output=True)
@@ -168,7 +165,7 @@ def encode_modulo_chunks(
     output_dir: Path,
     chunk_size: int = 32,
     crf: int = 30,
-    progress_callback: Callable[[int, int], None] | None = None
+    progress_callback: Callable[[int, int], None] | None = None,
 ) -> list[Path]:
     """Encode all chunks for a modulo level.
 
@@ -225,7 +222,7 @@ def encode_video_chunks(
     modulo_levels: list[int] | None = None,
     frames_per_chunk: int = 32,
     crf: int = 30,
-    progress_callback: Callable[[int, int], None] | None = None
+    progress_callback: Callable[[int, int], None] | None = None,
 ) -> EncodingResult:
     """Encode frames to VP9 WebM chunks.
 
@@ -271,7 +268,7 @@ def encode_video_chunks(
             modulo_output_dir,
             chunk_size=frames_per_chunk,
             crf=crf,
-            progress_callback=progress_callback
+            progress_callback=progress_callback,
         )
 
         all_chunk_files.extend(chunk_paths)
@@ -282,5 +279,5 @@ def encode_video_chunks(
         "total_frames": len(frames),
         "output_dir": output_base,
         "chunk_files": all_chunk_files,
-        "modulo_levels": modulo_levels
+        "modulo_levels": modulo_levels,
     }

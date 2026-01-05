@@ -69,11 +69,7 @@ def organize_frames_by_modulo(
     Returns:
         Dict mapping modulo level to list of frames
     """
-    organized = {
-        16: [],
-        4: [],
-        1: []
-    }
+    organized = {16: [], 4: [], 1: []}
 
     for frame in frames:
         frame_index = frame[0]
@@ -133,18 +129,27 @@ def encode_chunk(input_dir: Path, output_path: Path, width: int, height: int) ->
     # -pix_fmt yuv420p: Pixel format for compatibility
 
     cmd = [
-        'ffmpeg',
-        '-framerate', '10',  # 10 fps (100ms per frame)
-        '-pattern_type', 'glob',
-        '-i', str(input_dir / 'frame_*.jpg'),
-        '-c:v', 'libvpx-vp9',
-        '-crf', '30',
-        '-b:v', '0',
-        '-row-mt', '1',
-        '-g', '32',
-        '-pix_fmt', 'yuv420p',
-        '-y',  # Overwrite output file
-        str(output_path)
+        "ffmpeg",
+        "-framerate",
+        "10",  # 10 fps (100ms per frame)
+        "-pattern_type",
+        "glob",
+        "-i",
+        str(input_dir / "frame_*.jpg"),
+        "-c:v",
+        "libvpx-vp9",
+        "-crf",
+        "30",
+        "-b:v",
+        "0",
+        "-row-mt",
+        "1",
+        "-g",
+        "32",
+        "-pix_fmt",
+        "yuv420p",
+        "-y",  # Overwrite output file
+        str(output_path),
     ]
 
     subprocess.run(cmd, check=True, capture_output=True)
@@ -213,21 +218,16 @@ def upload_to_wasabi(local_path: Path, s3_key: str) -> str:
         Public URL to uploaded file
     """
     s3_client = boto3.client(
-        's3',
+        "s3",
         endpoint_url=f"https://s3.{os.getenv('WASABI_REGION')}.wasabisys.com",
-        aws_access_key_id=os.getenv('WASABI_ACCESS_KEY'),
-        aws_secret_access_key=os.getenv('WASABI_SECRET_KEY'),
-        region_name=os.getenv('WASABI_REGION')
+        aws_access_key_id=os.getenv("WASABI_ACCESS_KEY"),
+        aws_secret_access_key=os.getenv("WASABI_SECRET_KEY"),
+        region_name=os.getenv("WASABI_REGION"),
     )
 
-    bucket = os.getenv('WASABI_BUCKET')
+    bucket = os.getenv("WASABI_BUCKET")
 
-    s3_client.upload_file(
-        str(local_path),
-        bucket,
-        s3_key,
-        ExtraArgs={'ContentType': 'video/webm'}
-    )
+    s3_client.upload_file(str(local_path), bucket, s3_key, ExtraArgs={"ContentType": "video/webm"})
 
     # Generate public URL (will use signed URLs in production)
     url = f"https://s3.{os.getenv('WASABI_REGION')}.wasabisys.com/{bucket}/{s3_key}"
@@ -489,10 +489,10 @@ def generate_test_page(video_id: str, modulo_chunks: Dict[int, List[str]], outpu
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Encode video frames into VP9 chunks for Wasabi')
-    parser.add_argument('--video-id', required=True, help='Video UUID')
-    parser.add_argument('--upload', action='store_true', help='Upload chunks to Wasabi')
-    parser.add_argument('--output-dir', default='./output/vp9-chunks', help='Output directory for chunks')
+    parser = argparse.ArgumentParser(description="Encode video frames into VP9 chunks for Wasabi")
+    parser.add_argument("--video-id", required=True, help="Video UUID")
+    parser.add_argument("--upload", action="store_true", help="Upload chunks to Wasabi")
+    parser.add_argument("--output-dir", default="./output/vp9-chunks", help="Output directory for chunks")
     args = parser.parse_args()
 
     video_id = args.video_id
@@ -539,10 +539,9 @@ def main():
             modulo_chunks[modulo] = [str(p.relative_to(output_base.parent)) for p in chunk_paths]
 
     # Calculate total size
-    total_size_mb = sum(
-        sum(p.stat().st_size for p in output_base.glob(f"modulo_{m}/*.webm"))
-        for m in [16, 4, 1]
-    ) / (1024 * 1024)
+    total_size_mb = sum(sum(p.stat().st_size for p in output_base.glob(f"modulo_{m}/*.webm")) for m in [16, 4, 1]) / (
+        1024 * 1024
+    )
 
     print("\n📊 Summary:")
     print(f"   Total size: {total_size_mb:.1f} MB")
@@ -557,5 +556,5 @@ def main():
     return 0
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     exit(main())

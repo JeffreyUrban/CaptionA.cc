@@ -342,7 +342,9 @@ def crop_frames_flow(
         print("VP9 encoding flow triggered successfully")
     except Exception as encoding_error:
         # Don't fail the crop_frames flow if VP9 encoding fails
-        print(f"Warning: VP9 encoding failed (cropped frames still available in SQLite): {encoding_error}")
+        print(
+            f"Warning: VP9 encoding failed (cropped frames still available in SQLite): {encoding_error}"
+        )
 
     return {
         "video_id": video_id,
