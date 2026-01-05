@@ -10,7 +10,7 @@ Provides access to Supabase for:
 
 import os
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 
 from supabase import Client, create_client
 
@@ -77,7 +77,7 @@ class VideoRepository:
         }
 
         response = self.client.table("videos").insert(data).execute()
-        return response.data[0] if response.data else {}
+        return response.data[0] if response.data else {}  # type: ignore[return-value]
 
     def update_video_status(
         self,
@@ -101,7 +101,7 @@ class VideoRepository:
             data["prefect_flow_run_id"] = prefect_flow_run_id
 
         response = self.client.table("videos").update(data).eq("id", video_id).execute()
-        return response.data[0] if response.data else {}
+        return response.data[0] if response.data else {}  # type: ignore[return-value]
 
     def update_annotations_db_key(self, video_id: str, annotations_db_key: str) -> dict[str, Any]:
         """
@@ -120,12 +120,12 @@ class VideoRepository:
             .eq("id", video_id)
             .execute()
         )
-        return response.data[0] if response.data else {}
+        return response.data[0] if response.data else {}  # type: ignore[return-value]
 
     def get_video(self, video_id: str) -> dict[str, Any] | None:
         """Get video by ID"""
         response = self.client.table("videos").select("*").eq("id", video_id).single().execute()
-        return response.data if response.data else None
+        return response.data if response.data else None  # type: ignore[return-value]
 
     def get_tenant_videos(
         self, tenant_id: str, include_deleted: bool = False
@@ -137,7 +137,7 @@ class VideoRepository:
             query = query.is_("deleted_at", "null")
 
         response = query.execute()
-        return response.data if response.data else []
+        return response.data if response.data else []  # type: ignore[return-value]
 
     def lock_video(self, video_id: str, user_id: str) -> dict[str, Any]:
         """Lock a video for editing by a specific user"""
@@ -152,7 +152,7 @@ class VideoRepository:
             .eq("id", video_id)
             .execute()
         )
-        return response.data[0] if response.data else {}
+        return response.data[0] if response.data else {}  # type: ignore[return-value]
 
     def unlock_video(self, video_id: str) -> dict[str, Any]:
         """Unlock a video"""
@@ -167,7 +167,7 @@ class VideoRepository:
             .eq("id", video_id)
             .execute()
         )
-        return response.data[0] if response.data else {}
+        return response.data[0] if response.data else {}  # type: ignore[return-value]
 
     def soft_delete_video(self, video_id: str) -> dict[str, Any]:
         """Soft delete a video"""
@@ -182,7 +182,7 @@ class VideoRepository:
             .eq("id", video_id)
             .execute()
         )
-        return response.data[0] if response.data else {}
+        return response.data[0] if response.data else {}  # type: ignore[return-value]
 
 
 class SearchIndexRepository:
@@ -219,7 +219,7 @@ class SearchIndexRepository:
         }
 
         response = self.client.table("video_search_index").upsert(data).execute()
-        return response.data[0] if response.data else {}
+        return response.data[0] if response.data else {}  # type: ignore[return-value]
 
     def search_text(
         self, query: str, tenant_id: str | None = None, limit: int = 50
@@ -241,7 +241,7 @@ class SearchIndexRepository:
             self.client.table("video_search_index")
             .select("*")
             .text_search("search_vector", query)
-            .limit(limit)
+            .limit(limit)  # type: ignore[return-value]
             .execute()
         )
         return response.data if response.data else []
@@ -270,7 +270,7 @@ class TrainingCohortRepository:
         }
 
         response = self.client.table("training_cohorts").insert(data).execute()
-        return response.data[0] if response.data else {}
+        return response.data[0] if response.data else {}  # type: ignore[return-value]
 
     def update_cohort_stats(
         self,
@@ -295,7 +295,7 @@ class TrainingCohortRepository:
             data["git_commit"] = git_commit
 
         response = self.client.table("training_cohorts").update(data).eq("id", cohort_id).execute()
-        return response.data[0] if response.data else {}
+        return response.data[0] if response.data else {}  # type: ignore[return-value]
 
     def add_video_to_cohort(
         self,
@@ -315,4 +315,4 @@ class TrainingCohortRepository:
         }
 
         response = self.client.table("cohort_videos").insert(data).execute()
-        return response.data[0] if response.data else {}
+        return response.data[0] if response.data else {}  # type: ignore[return-value]
