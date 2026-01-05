@@ -149,7 +149,8 @@ def process_frame_ocr_with_retry(
     else:  # ocrmac backend
         if ocrmac is None:
             raise RuntimeError(
-                "ocrmac is not available on this platform. This function requires macOS with the ocrmac package installed."
+                "ocrmac is not available on this platform. "
+                "This function requires macOS with the ocrmac package installed."
             )
 
         last_error = None
@@ -160,7 +161,9 @@ def process_frame_ocr_with_retry(
             signal.alarm(timeout)
 
             try:
-                annotations = ocrmac.OCR(str(image_path), framework="livetext", language_preference=[language]).recognize()
+                annotations = ocrmac.OCR(
+                    str(image_path), framework="livetext", language_preference=[language]
+                ).recognize()
 
                 # Cancel the alarm
                 signal.alarm(0)
@@ -312,7 +315,8 @@ def process_frames_directory(
     else:  # ocrmac backend
         if ocrmac is None:
             raise RuntimeError(
-                "ocrmac is not available on this platform. This function requires macOS with the ocrmac package installed."
+                "ocrmac is not available on this platform. "
+                "This function requires macOS with the ocrmac package installed."
             )
 
         # Use worker pool as before
