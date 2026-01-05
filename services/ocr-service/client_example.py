@@ -168,7 +168,6 @@ def example_usage():
     print()
 
     # Load a batch of frames
-    batch_size = min(50, capacity['max_images'])
     cursor.execute("""
         SELECT frame_index, image_data
         FROM cropped_frames

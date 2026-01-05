@@ -189,7 +189,9 @@ def calculate_capacity(width: int, height: int) -> Tuple[int, Dict[str, int], st
     return max_images, limits, limiting_factor, estimated_file_size_mb
 
 
-def create_vertical_montage(images: List[Tuple[str, bytes]], separator_px: int = SEPARATOR_PX) -> Tuple[bytes, List[Dict]]:
+def create_vertical_montage(
+    images: List[Tuple[str, bytes]], separator_px: int = SEPARATOR_PX
+) -> Tuple[bytes, List[Dict]]:
     """
     Create vertical montage from list of images.
 
@@ -227,7 +229,10 @@ def create_vertical_montage(images: List[Tuple[str, bytes]], separator_px: int =
 
         # Verify dimensions match
         if img.width != width or img.height != height:
-            raise ValueError(f"Image {img_id} dimensions {img.width}×{img.height} don't match expected {width}×{height}")
+            raise ValueError(
+                f"Image {img_id} dimensions {img.width}×{img.height} "
+                f"don't match expected {width}×{height}"
+            )
 
         # Paste image
         montage.paste(img, (0, y_offset))
@@ -320,7 +325,6 @@ def distribute_characters_to_images(symbols: List[Dict], image_metadata: List[Di
         img_id = img_meta['id']
         img_x = img_meta['x']
         img_y = img_meta['y']
-        img_w = img_meta['width']
         img_h = img_meta['height']
 
         # Find characters that fall within this image's bounds

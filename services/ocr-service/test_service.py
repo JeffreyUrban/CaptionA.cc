@@ -198,7 +198,10 @@ def test_rate_limiting():
     assert usage['limits']['per_day'] > 0
 
     print("✓ Rate limiting configuration passed")
-    print(f"  Limits: {usage['limits']['per_minute']}/min, {usage['limits']['per_hour']}/hour, {usage['limits']['per_day']}/day")
+    print(
+        f"  Limits: {usage['limits']['per_minute']}/min, "
+        f"{usage['limits']['per_hour']}/hour, {usage['limits']['per_day']}/day"
+    )
 
 
 def main():
