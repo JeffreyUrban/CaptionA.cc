@@ -15,12 +15,11 @@ import tempfile
 from pathlib import Path
 from typing import Any, Literal
 
-from prefect import flow, task
-
 from frames_db.storage import (
     init_vp9_encoding_status,
     update_vp9_encoding_status,
 )
+from prefect import flow, task
 from vp9_utils import encode_video_chunks, upload_chunks_to_wasabi
 
 FrameType = Literal["cropped", "full"]
