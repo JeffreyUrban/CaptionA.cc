@@ -6,6 +6,8 @@ requires-python = ">=3.11"
 dependencies = [
     "prefect>=3.0.0",
     "requests>=2.31.0",
+    "vp9-utils",
+    "frames-db",
 ]
 
 [project.optional-dependencies]

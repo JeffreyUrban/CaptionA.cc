@@ -19,6 +19,9 @@ import requests
 from prefect import flow, task
 from prefect.artifacts import create_table_artifact
 
+# Import VP9 encoding flow for deferred encoding
+from .vp9_encoding import encode_vp9_chunks_flow
+
 
 @task(
     name="extract-cropped-frames",
@@ -326,6 +329,20 @@ def crop_frames_flow(
     except Exception as webhook_error:
         # Don't fail the flow if webhook fails
         print(f"Warning: Failed to send webhook notification: {webhook_error}")
+
+    # Trigger VP9 encoding and Wasabi upload (deferred - runs after user notification)
+    try:
+        print("Starting VP9 encoding for cropped frames (background job)")
+        encode_vp9_chunks_flow(
+            video_id=video_id,
+            db_path=db_path,
+            frame_type="cropped",
+            modulo_levels=[16, 4, 1],  # Hierarchical preview levels
+        )
+        print("VP9 encoding flow triggered successfully")
+    except Exception as encoding_error:
+        # Don't fail the crop_frames flow if VP9 encoding fails
+        print(f"Warning: VP9 encoding failed (cropped frames still available in SQLite): {encoding_error}")
 
     return {
         "video_id": video_id,
