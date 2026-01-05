@@ -518,9 +518,7 @@ class TestVP9EncodingStatus:
         )
 
         # Initialize full
-        init_vp9_encoding_status(
-            db_path=temp_db, video_id="test-video-123", frame_type="full", modulo_levels=[1]
-        )
+        init_vp9_encoding_status(db_path=temp_db, video_id="test-video-123", frame_type="full", modulo_levels=[1])
 
         # Get both statuses
         cropped_status = get_vp9_encoding_status(temp_db, "test-video-123", "cropped")
