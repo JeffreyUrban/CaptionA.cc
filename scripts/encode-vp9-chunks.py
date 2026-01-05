@@ -98,7 +98,13 @@ def write_frames_to_temp_dir(frames: List[Tuple[int, bytes, int, int]], temp_dir
 
     Returns:
         (width, height) of first frame
+
+    Raises:
+        ValueError: If frames list is empty
     """
+    if not frames:
+        raise ValueError("Cannot write frames: frames list is empty")
+
     width, height = None, None
 
     for i, (frame_index, image_data, w, h) in enumerate(frames):
@@ -108,6 +114,7 @@ def write_frames_to_temp_dir(frames: List[Tuple[int, bytes, int, int]], temp_dir
         frame_path = temp_dir / f"frame_{i:06d}.jpg"
         frame_path.write_bytes(image_data)
 
+    assert width is not None and height is not None  # For type checker
     return width, height
 
 
