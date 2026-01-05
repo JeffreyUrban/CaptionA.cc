@@ -32,9 +32,7 @@ def get_supabase_client() -> Client:
     key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
 
     if not url or not key:
-        raise ValueError(
-            "SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set in environment"
-        )
+        raise ValueError("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set in environment")
 
     return create_client(url, key)
 
@@ -102,17 +100,10 @@ class VideoRepository:
         if prefect_flow_run_id:
             data["prefect_flow_run_id"] = prefect_flow_run_id
 
-        response = (
-            self.client.table("videos")
-            .update(data)
-            .eq("id", video_id)
-            .execute()
-        )
+        response = self.client.table("videos").update(data).eq("id", video_id).execute()
         return response.data[0] if response.data else {}
 
-    def update_annotations_db_key(
-        self, video_id: str, annotations_db_key: str
-    ) -> dict[str, Any]:
+    def update_annotations_db_key(self, video_id: str, annotations_db_key: str) -> dict[str, Any]:
         """
         Update the Wasabi storage key for the annotations database.
 
@@ -133,13 +124,7 @@ class VideoRepository:
 
     def get_video(self, video_id: str) -> dict[str, Any] | None:
         """Get video by ID"""
-        response = (
-            self.client.table("videos")
-            .select("*")
-            .eq("id", video_id)
-            .single()
-            .execute()
-        )
+        response = self.client.table("videos").select("*").eq("id", video_id).single().execute()
         return response.data if response.data else None
 
     def get_tenant_videos(
@@ -158,10 +143,12 @@ class VideoRepository:
         """Lock a video for editing by a specific user"""
         response = (
             self.client.table("videos")
-            .update({
-                "locked_by_user_id": user_id,
-                "locked_at": datetime.utcnow().isoformat(),
-            })
+            .update(
+                {
+                    "locked_by_user_id": user_id,
+                    "locked_at": datetime.utcnow().isoformat(),
+                }
+            )
             .eq("id", video_id)
             .execute()
         )
@@ -171,10 +158,12 @@ class VideoRepository:
         """Unlock a video"""
         response = (
             self.client.table("videos")
-            .update({
-                "locked_by_user_id": None,
-                "locked_at": None,
-            })
+            .update(
+                {
+                    "locked_by_user_id": None,
+                    "locked_at": None,
+                }
+            )
             .eq("id", video_id)
             .execute()
         )
@@ -184,10 +173,12 @@ class VideoRepository:
         """Soft delete a video"""
         response = (
             self.client.table("videos")
-            .update({
-                "status": "soft_deleted",
-                "deleted_at": datetime.utcnow().isoformat(),
-            })
+            .update(
+                {
+                    "status": "soft_deleted",
+                    "deleted_at": datetime.utcnow().isoformat(),
+                }
+            )
             .eq("id", video_id)
             .execute()
         )
@@ -303,12 +294,7 @@ class TrainingCohortRepository:
         if git_commit:
             data["git_commit"] = git_commit
 
-        response = (
-            self.client.table("training_cohorts")
-            .update(data)
-            .eq("id", cohort_id)
-            .execute()
-        )
+        response = self.client.table("training_cohorts").update(data).eq("id", cohort_id).execute()
         return response.data[0] if response.data else {}
 
     def add_video_to_cohort(

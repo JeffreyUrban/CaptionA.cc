@@ -354,9 +354,7 @@ def process_video_with_supabase_flow(
         # Update local database
         conn = sqlite3.connect(db_path)
         try:
-            conn.execute(
-                "UPDATE processing_status SET status = 'processing_failed' WHERE id = 1"
-            )
+            conn.execute("UPDATE processing_status SET status = 'processing_failed' WHERE id = 1")
             conn.commit()
         finally:
             conn.close()
