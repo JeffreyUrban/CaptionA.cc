@@ -21,11 +21,9 @@ Usage:
 import argparse
 import json
 import os
-import shutil
 import sqlite3
 import subprocess
 import tempfile
-from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List, Tuple
 
@@ -58,7 +56,9 @@ def get_frames_from_db(db_path: Path) -> List[Tuple[int, bytes, int, int]]:
     return frames
 
 
-def organize_frames_by_modulo(frames: List[Tuple[int, bytes, int, int]]) -> Dict[int, List[Tuple[int, bytes, int, int]]]:
+def organize_frames_by_modulo(
+    frames: List[Tuple[int, bytes, int, int]],
+) -> Dict[int, List[Tuple[int, bytes, int, int]]]:
     """Organize frames into modulo levels [16, 4, 1].
 
     Hybrid duplication strategy:
@@ -89,7 +89,7 @@ def organize_frames_by_modulo(frames: List[Tuple[int, bytes, int, int]]) -> Dict
         if frame_index % 16 == 0:
             organized[16].append(frame)
 
-    print(f"\n📊 Frame distribution:")
+    print("\n📊 Frame distribution:")
     print(f"   modulo_16: {len(organized[16])} frames")
     print(f"   modulo_4:  {len(organized[4])} frames")
     print(f"   modulo_1:  {len(organized[1])} frames")
@@ -150,7 +150,12 @@ def encode_chunk(input_dir: Path, output_path: Path, width: int, height: int) ->
     subprocess.run(cmd, check=True, capture_output=True)
 
 
-def encode_modulo_chunks(modulo: int, frames: List[Tuple[int, bytes, int, int]], output_dir: Path, chunk_size: int = 32) -> List[Path]:
+def encode_modulo_chunks(
+    modulo: int,
+    frames: List[Tuple[int, bytes, int, int]],
+    output_dir: Path,
+    chunk_size: int = 32,
+) -> List[Path]:
     """Encode all chunks for a modulo level.
 
     Args:
@@ -539,7 +544,7 @@ def main():
         for m in [16, 4, 1]
     ) / (1024 * 1024)
 
-    print(f"\n📊 Summary:")
+    print("\n📊 Summary:")
     print(f"   Total size: {total_size_mb:.1f} MB")
     print(f"   Duplication ratio: {total_size_mb / (sum(len(f[1]) for f in frames) / 1024 / 1024):.2f}x")
 
