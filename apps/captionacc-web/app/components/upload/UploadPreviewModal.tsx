@@ -5,8 +5,8 @@
  * User must confirm before upload starts
  */
 
-import { useState, useEffect, useMemo } from 'react'
 import { XMarkIcon } from '@heroicons/react/20/solid'
+import { useState, useEffect, useMemo } from 'react'
 
 import {
   type UploadFile,
