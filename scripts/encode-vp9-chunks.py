@@ -59,12 +59,12 @@ def get_frames_from_db(db_path: Path) -> List[Tuple[int, bytes, int, int]]:
 def organize_frames_by_modulo(
     frames: List[Tuple[int, bytes, int, int]],
 ) -> Dict[int, List[Tuple[int, bytes, int, int]]]:
-    """Organize frames into modulo levels [16, 4, 1].
+    """Organize frames into modulo levels [16, 4, 1] without duplication.
 
-    Hybrid duplication strategy:
+    Non-duplicating strategy:
     - modulo_16: frames where index % 16 == 0
     - modulo_4: frames where index % 4 == 0 AND index % 16 != 0
-    - modulo_1: ALL frames
+    - modulo_1: frames where index % 4 != 0 (i.e., NOT in modulo_4 or modulo_16)
 
     Returns:
         Dict mapping modulo level to list of frames
@@ -74,16 +74,17 @@ def organize_frames_by_modulo(
     for frame in frames:
         frame_index = frame[0]
 
-        # modulo_1 gets ALL frames
-        organized[1].append(frame)
-
-        # modulo_4 gets frames divisible by 4 (but not by 16)
-        if frame_index % 4 == 0 and frame_index % 16 != 0:
-            organized[4].append(frame)
-
         # modulo_16 gets frames divisible by 16
         if frame_index % 16 == 0:
             organized[16].append(frame)
+
+        # modulo_4 gets frames divisible by 4 (but not by 16)
+        elif frame_index % 4 == 0:
+            organized[4].append(frame)
+
+        # modulo_1 gets frames NOT divisible by 4
+        else:
+            organized[1].append(frame)
 
     print("\n📊 Frame distribution:")
     print(f"   modulo_16: {len(organized[16])} frames")

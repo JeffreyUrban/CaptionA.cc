@@ -19,6 +19,7 @@ interface UseBoundaryAnnotationDataParams {
 interface UseBoundaryAnnotationDataReturn {
   // State refs (for RAF loop synchronization)
   activeAnnotationRef: React.RefObject<Annotation | null>
+  nextAnnotationRef: React.RefObject<Annotation | null> // Next annotation for preloading
   annotationsRef: React.RefObject<Annotation[]>
   markedStartRef: React.RefObject<number | null>
   markedEndRef: React.RefObject<number | null>
@@ -69,6 +70,7 @@ export function useBoundaryAnnotationData({
 }: UseBoundaryAnnotationDataParams): UseBoundaryAnnotationDataReturn {
   // State refs
   const activeAnnotationRef = useRef<Annotation | null>(null)
+  const nextAnnotationRef = useRef<Annotation | null>(null)
   const annotationsRef = useRef<Annotation[]>([])
   const markedStartRef = useRef<number | null>(null)
   const markedEndRef = useRef<number | null>(null)
@@ -118,6 +120,9 @@ export function useBoundaryAnnotationData({
 
     // Next: available if cache has annotations
     hasNextAnnotationRef.current = annotationCacheRef.current.length > 0
+
+    // Update next annotation ref for preloading
+    nextAnnotationRef.current = annotationCacheRef.current[0] ?? null
   }, [])
 
   // Load initial annotation on mount
@@ -664,6 +669,7 @@ export function useBoundaryAnnotationData({
   return {
     // State refs
     activeAnnotationRef,
+    nextAnnotationRef,
     annotationsRef,
     markedStartRef,
     markedEndRef,

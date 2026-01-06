@@ -49,12 +49,12 @@ def get_frames_from_db(db_path: Path, frame_type: FrameType = "cropped") -> list
 def organize_frames_by_modulo(
     frames: list[tuple[int, bytes, int, int]], modulo_levels: list[int]
 ) -> dict[int, list[tuple[int, bytes, int, int]]]:
-    """Organize frames into modulo levels.
+    """Organize frames into modulo levels without duplication.
 
     For cropped frames with [16, 4, 1]:
     - modulo_16: frames where index % 16 == 0
     - modulo_4: frames where index % 4 == 0 AND index % 16 != 0
-    - modulo_1: ALL frames
+    - modulo_1: frames where index % 4 != 0 (i.e., NOT in modulo_4 or modulo_16)
 
     For full frames with [1]:
     - modulo_1: ALL frames
@@ -73,21 +73,21 @@ def organize_frames_by_modulo(
         organized[1] = frames
         return organized
 
-    # Hybrid duplication strategy for multi-level
+    # Non-duplicating strategy for multi-level
     for frame in frames:
         frame_index = frame[0]
-
-        # modulo_1 gets ALL frames
-        if 1 in modulo_levels:
-            organized[1].append(frame)
-
-        # modulo_4 gets frames divisible by 4 (but not by higher levels)
-        if 4 in modulo_levels and frame_index % 4 == 0 and frame_index % 16 != 0:
-            organized[4].append(frame)
 
         # modulo_16 gets frames divisible by 16
         if 16 in modulo_levels and frame_index % 16 == 0:
             organized[16].append(frame)
+
+        # modulo_4 gets frames divisible by 4 (but not by higher levels)
+        elif 4 in modulo_levels and frame_index % 4 == 0:
+            organized[4].append(frame)
+
+        # modulo_1 gets frames NOT divisible by 4 (i.e., not in higher levels)
+        elif 1 in modulo_levels:
+            organized[1].append(frame)
 
     return organized
 
