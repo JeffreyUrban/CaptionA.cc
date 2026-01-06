@@ -92,8 +92,12 @@ function checkVideoForErrors(video: {
   }
 }
 
-export async function loader() {
+export async function loader({ request }: { request: Request }) {
   try {
+    // Require platform admin access
+    const { requirePlatformAdmin } = await import('~/services/platform-admin')
+    await requirePlatformAdmin(request)
+
     console.log('[AdminAPI] Scanning for failed crop_frames videos...')
 
     const videos = getAllVideos()

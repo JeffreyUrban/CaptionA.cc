@@ -18,6 +18,7 @@ export function SignUpForm({ onSuccess, onSwitchToLogin }: SignUpFormProps) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [fullName, setFullName] = useState('')
+  const [inviteCode, setInviteCode] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
@@ -28,7 +29,36 @@ export function SignUpForm({ onSuccess, onSwitchToLogin }: SignUpFormProps) {
     setLoading(true)
 
     try {
-      await signUp(email, password, { full_name: fullName })
+      // Validate invite code first
+      if (!inviteCode || inviteCode.trim().length === 0) {
+        throw new Error('Invite code is required')
+      }
+
+      // Sign up with Supabase Auth
+      const { user } = await signUp(email, password, { full_name: fullName })
+
+      if (!user) {
+        throw new Error('Signup failed - no user returned')
+      }
+
+      // Complete signup with invite code (creates tenant and profile)
+      const response = await fetch('/api/auth/complete-signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.id,
+          email: user.email,
+          fullName,
+          inviteCode: inviteCode.trim().toUpperCase(),
+        }),
+      })
+
+      const result = await response.json()
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Failed to complete signup')
+      }
+
       setSuccess(true)
       setTimeout(() => {
         onSuccess?.()
@@ -65,6 +95,25 @@ export function SignUpForm({ onSuccess, onSwitchToLogin }: SignUpFormProps) {
         )}
 
         <form onSubmit={handleSubmit}>
+          <div className="mb-4">
+            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="inviteCode">
+              Invite Code
+            </label>
+            <input
+              id="inviteCode"
+              type="text"
+              value={inviteCode}
+              onChange={e => setInviteCode(e.target.value.toUpperCase())}
+              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline font-mono"
+              placeholder="PREVIEW-XXXXXXXX"
+              required
+              disabled={loading}
+            />
+            <p className="text-gray-600 text-xs mt-1">
+              CaptionA.cc is currently invite-only. Enter your invite code to sign up.
+            </p>
+          </div>
+
           <div className="mb-4">
             <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="fullName">
               Full Name

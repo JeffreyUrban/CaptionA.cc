@@ -24,13 +24,15 @@ const WASABI_ENDPOINT = `https://s3.${WASABI_REGION}.wasabisys.com`
 const WASABI_BUCKET = process.env['WASABI_BUCKET'] || 'caption-acc-prod'
 const ENVIRONMENT = process.env['ENVIRONMENT'] || 'dev'
 
-// Initialize S3 client
+// Initialize S3 client with READ-ONLY credentials
 const s3Client = new S3Client({
   region: WASABI_REGION,
   endpoint: WASABI_ENDPOINT,
   credentials: {
-    accessKeyId: process.env['WASABI_ACCESS_KEY'] || '',
-    secretAccessKey: process.env['WASABI_SECRET_KEY'] || '',
+    accessKeyId:
+      process.env['WASABI_ACCESS_KEY_READONLY'] || process.env['WASABI_ACCESS_KEY'] || '',
+    secretAccessKey:
+      process.env['WASABI_SECRET_KEY_READONLY'] || process.env['WASABI_SECRET_KEY'] || '',
   },
   forcePathStyle: true, // Required for Wasabi - use path-style URLs instead of virtual-hosted-style
 })
