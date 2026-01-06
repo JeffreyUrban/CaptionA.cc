@@ -1,6 +1,7 @@
 import { ElDisclosure } from '@tailwindplus/elements/react'
 import { clsx } from 'clsx/lite'
 import { type ComponentProps, type ReactNode, useId } from 'react'
+
 import { Container } from '../elements/container'
 import { Subheading } from '../elements/subheading'
 import { Text } from '../elements/text'

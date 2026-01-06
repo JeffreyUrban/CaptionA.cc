@@ -1,5 +1,6 @@
 import { clsx } from 'clsx/lite'
 import type { ComponentProps, ReactNode } from 'react'
+
 import { ChevronIcon } from '../icons/chevron-icon'
 
 export function AnnouncementBadge({

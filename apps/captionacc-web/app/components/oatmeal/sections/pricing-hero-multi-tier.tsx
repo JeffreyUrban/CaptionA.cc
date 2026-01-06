@@ -1,6 +1,7 @@
 import { ElTabGroup, ElTabList, ElTabPanels } from '@tailwindplus/elements/react'
 import { clsx } from 'clsx/lite'
 import type { ComponentProps, ReactNode } from 'react'
+
 import { Container } from '../elements/container'
 import { Heading } from '../elements/heading'
 import { Text } from '../elements/text'

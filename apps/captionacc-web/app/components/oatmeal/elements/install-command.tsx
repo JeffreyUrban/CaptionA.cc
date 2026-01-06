@@ -1,6 +1,7 @@
 import { ElCopyable } from '@tailwindplus/elements/react'
 import { clsx } from 'clsx/lite'
 import type { ComponentProps, ReactNode } from 'react'
+
 import { CheckmarkIcon } from '../icons/checkmark-icon'
 import { Squares2StackedIcon } from '../icons/squares-2-stacked-icon'
 

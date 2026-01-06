@@ -1,5 +1,6 @@
 import { clsx } from 'clsx/lite'
 import { useId, type ComponentProps, type ReactNode } from 'react'
+
 import { Section } from '../elements/section'
 
 export function Stat({
