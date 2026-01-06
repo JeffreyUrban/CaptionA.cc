@@ -247,6 +247,191 @@ class SearchIndexRepository:
         return response.data if response.data else []
 
 
+class CroppedFramesVersionRepository:
+    """Repository for cropped frames version operations"""
+
+    def __init__(self, client: Client | None = None):
+        self.client = client or get_supabase_client()
+
+    def get_next_version(self, video_id: str) -> int:
+        """
+        Get the next version number for a video's cropped frames.
+
+        Args:
+            video_id: Video UUID
+
+        Returns:
+            Next version number (1 for first version)
+        """
+        response = self.client.rpc(
+            "get_next_cropped_frames_version", {"p_video_id": video_id}
+        ).execute()
+        return response.data if response.data else 1  # type: ignore[return-value]
+
+    def create_version(
+        self,
+        video_id: str,
+        tenant_id: str,
+        version: int,
+        storage_prefix: str,
+        crop_bounds: dict[str, int],
+        frame_rate: float = 10.0,
+        layout_db_storage_key: str | None = None,
+        layout_db_hash: str | None = None,
+        created_by_user_id: str | None = None,
+        prefect_flow_run_id: str | None = None,
+    ) -> dict[str, Any]:
+        """
+        Create a new cropped frames version record.
+
+        Args:
+            video_id: Video UUID
+            tenant_id: Tenant UUID
+            version: Version number
+            storage_prefix: Wasabi storage prefix for chunks
+            crop_bounds: Crop bounds dict {left, top, right, bottom}
+            frame_rate: Frame extraction rate in Hz
+            layout_db_storage_key: Wasabi key for layout.db
+            layout_db_hash: SHA-256 hash of layout.db
+            created_by_user_id: User UUID who initiated
+            prefect_flow_run_id: Prefect flow run UUID
+
+        Returns:
+            Created version record
+        """
+        data = {
+            "video_id": video_id,
+            "tenant_id": tenant_id,
+            "version": version,
+            "storage_prefix": storage_prefix,
+            "crop_bounds": crop_bounds,
+            "frame_rate": frame_rate,
+            "layout_db_storage_key": layout_db_storage_key,
+            "layout_db_hash": layout_db_hash,
+            "created_by_user_id": created_by_user_id,
+            "prefect_flow_run_id": prefect_flow_run_id,
+            "status": "processing",
+        }
+
+        response = self.client.table("cropped_frames_versions").insert(data).execute()
+        return response.data[0] if response.data else {}  # type: ignore[return-value]
+
+    def update_version_chunks(
+        self,
+        version_id: str,
+        chunk_count: int,
+        total_frames: int,
+        total_size_bytes: int,
+    ) -> dict[str, Any]:
+        """
+        Update chunk metadata for a version.
+
+        Args:
+            version_id: Version UUID
+            chunk_count: Number of WebM chunks
+            total_frames: Total frames across chunks
+            total_size_bytes: Total size in bytes
+
+        Returns:
+            Updated version record
+        """
+        data = {
+            "chunk_count": chunk_count,
+            "total_frames": total_frames,
+            "total_size_bytes": total_size_bytes,
+        }
+
+        response = (
+            self.client.table("cropped_frames_versions").update(data).eq("id", version_id).execute()
+        )
+        return response.data[0] if response.data else {}  # type: ignore[return-value]
+
+    def update_version_status(self, version_id: str, status: str) -> dict[str, Any]:
+        """
+        Update version status.
+
+        Args:
+            version_id: Version UUID
+            status: One of: processing, active, archived, failed
+
+        Returns:
+            Updated version record
+        """
+        response = (
+            self.client.table("cropped_frames_versions")
+            .update({"status": status})
+            .eq("id", version_id)
+            .execute()
+        )
+        return response.data[0] if response.data else {}  # type: ignore[return-value]
+
+    def activate_version(self, version_id: str) -> None:
+        """
+        Activate a version (archives previous active version).
+
+        Args:
+            version_id: Version UUID to activate
+        """
+        self.client.rpc("activate_cropped_frames_version", {"p_version_id": version_id}).execute()
+
+    def get_active_version(self, video_id: str) -> dict[str, Any] | None:
+        """
+        Get the active cropped frames version for a video.
+
+        Args:
+            video_id: Video UUID
+
+        Returns:
+            Active version record or None
+        """
+        response = (
+            self.client.table("cropped_frames_versions")
+            .select("*")
+            .eq("video_id", video_id)
+            .eq("status", "active")
+            .execute()
+        )
+        return response.data[0] if response.data else None  # type: ignore[return-value]
+
+    def get_version(self, version_id: str) -> dict[str, Any] | None:
+        """
+        Get a cropped frames version by ID.
+
+        Args:
+            version_id: Version UUID
+
+        Returns:
+            Version record or None
+        """
+        response = (
+            self.client.table("cropped_frames_versions")
+            .select("*")
+            .eq("id", version_id)
+            .single()
+            .execute()
+        )
+        return response.data if response.data else None  # type: ignore[return-value]
+
+    def get_all_versions(self, video_id: str) -> list[dict[str, Any]]:
+        """
+        Get all cropped frames versions for a video (including archived).
+
+        Args:
+            video_id: Video UUID
+
+        Returns:
+            List of version records
+        """
+        response = (
+            self.client.table("cropped_frames_versions")
+            .select("*")
+            .eq("video_id", video_id)
+            .order("version", desc=True)
+            .execute()
+        )
+        return response.data if response.data else []  # type: ignore[return-value]
+
+
 class TrainingCohortRepository:
     """Repository for training cohort operations"""
 

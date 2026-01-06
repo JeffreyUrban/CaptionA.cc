@@ -126,7 +126,7 @@ export async function deleteAllVideoThumbnails(tenantId: string, videoId: string
   }
 
   // Delete all files
-  const filePaths = files.map(file => `${folderPath}/${file.name}`)
+  const filePaths = files.map((file: { name: string }) => `${folderPath}/${file.name}`)
   const { error: deleteError } = await supabase.storage.from(THUMBNAILS_BUCKET).remove(filePaths)
 
   if (deleteError) {

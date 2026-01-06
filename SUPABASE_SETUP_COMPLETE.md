@@ -7,7 +7,6 @@ Supabase has been configured for CaptionA.cc with account management, video cata
 ### 1. ✅ Installed Dependencies
 - **@supabase/supabase-js** - Supabase JavaScript client (web app)
 - **supabase** - Supabase Python client (orchestrator)
-- Removed Wasabi/boto3 dependencies
 
 ### 2. ✅ Configured Supabase
 - **config.toml** - Local Supabase configuration with storage buckets
@@ -113,19 +112,7 @@ User Browser
     │
     ├─── Auth ──────────────► Supabase Auth
     ├─── Video List ────────► Supabase DB (videos table)
-    ├─── Upload Video ──────► Supabase Storage (videos bucket)
-    └─── Download DB ───────► Supabase Storage (databases bucket)
-                                    │
-                                    ├─── Annotate Locally (SQLite)
-                                    │
-                                    └─── Upload Changes
-                                              │
-                                              ▼
-                                    Prefect Flow (Process Video)
-                                              │
-                                              ├─── Update Supabase DB
-                                              ├─── Store in Supabase Storage
-                                              └─── Index for Search
+    TBD
 ```
 
 ## Key Features
@@ -143,9 +130,7 @@ User Browser
 - Soft delete with `deleted_at` timestamp
 
 ### 📦 Supabase Storage
-- Videos and databases stored in Supabase Storage
 - RLS policies based on folder structure: `{tenant_id}/{video_id}/...`
-- No external S3/Wasabi needed
 - File size limits: 500MB videos, 100MB databases
 
 ### 🔍 Cross-Video Search
@@ -158,29 +143,6 @@ User Browser
 - Flows update Supabase status during processing
 - Webhooks notify web app when flows complete
 - Service role key bypasses RLS for system operations
-
-## What's Different from Wasabi Setup
-
-### Removed:
-- ❌ Wasabi client code
-- ❌ boto3 dependency
-- ❌ External S3 configuration
-- ❌ Wasabi CORS setup
-
-### Simplified:
-- ✅ Everything in Supabase (database + storage)
-- ✅ Single authentication system
-- ✅ Unified permission model (RLS)
-- ✅ Simpler local development setup
-
-### Trade-offs:
-- **Pro**: Simpler architecture, fewer moving parts
-- **Pro**: Built-in RLS for security
-- **Pro**: Easier local development
-- **Con**: Storage limits (100GB free tier, then paid)
-- **Con**: Less control over storage infrastructure
-
-For production with large storage needs, Wasabi can still be added back.
 
 ## Next Steps
 
@@ -222,7 +184,6 @@ npx supabase gen types typescript --local > app/types/supabase.ts
 
 ### TypeScript Integration
 - ✅ `app/services/supabase-client.ts` - Client setup
-- ✅ `app/services/video-upload-supabase.ts` - Upload implementation
 - ✅ `app/components/auth/` - Auth UI components
 
 ### Python Integration
