@@ -238,5 +238,273 @@ def queue_retrain_video_model(
     sys.exit(exit_code)
 
 
+@app.command("upload-and-process")
+def queue_upload_and_process(
+    video_path: str,
+    video_id: str,
+    filename: str,
+    file_size: int,
+    tenant_id: str = "00000000-0000-0000-0000-000000000001",
+    frame_rate: float = 0.1,
+    uploaded_by_user_id: str | None = None,
+):
+    """Queue upload and processing (Wasabi-based workflow with split databases)."""
+
+    async def _queue():
+        try:
+            parameters = {
+                "local_video_path": video_path,
+                "video_id": video_id,
+                "filename": filename,
+                "file_size": file_size,
+                "tenant_id": tenant_id,
+                "frame_rate": frame_rate,
+            }
+
+            # Add optional parameter only if provided
+            if uploaded_by_user_id:
+                parameters["uploaded_by_user_id"] = uploaded_by_user_id
+
+            # Prefect type stubs incorrectly type run_deployment as returning FlowRun directly
+            flow_run = await run_deployment(  # type: ignore[misc]
+                name="upload-and-process-video/production",
+                parameters=parameters,
+                timeout=0,
+                tags=["upload", "processing", "high-priority"],
+            )
+
+            result = {
+                "flowRunId": str(flow_run.id),
+                "status": "queued",
+                "priority": "high",
+            }
+            print(json.dumps(result))
+            return 0
+
+        except Exception as e:
+            error = {"error": str(e), "status": "failed"}
+            print(json.dumps(error), file=sys.stderr)
+            return 1
+
+    exit_code = asyncio.run(_queue())
+    sys.exit(exit_code)
+
+
+@app.command("crop-frames-to-webm")
+def queue_crop_frames_to_webm(
+    video_id: str,
+    crop_bounds: str,  # JSON string: '{"left":0,"top":0,"right":100,"bottom":100}'
+    tenant_id: str = "00000000-0000-0000-0000-000000000001",
+    filename: str | None = None,
+    frame_rate: float = 10.0,
+    created_by_user_id: str | None = None,
+):
+    """Queue cropped frames WebM chunking (versioned frameset generation)."""
+
+    async def _queue():
+        try:
+            # Parse crop bounds JSON
+            bounds = json.loads(crop_bounds)
+
+            parameters = {
+                "video_id": video_id,
+                "tenant_id": tenant_id,
+                "crop_bounds": bounds,
+                "frame_rate": frame_rate,
+            }
+
+            # Add optional parameters only if provided
+            if filename:
+                parameters["filename"] = filename
+            if created_by_user_id:
+                parameters["created_by_user_id"] = created_by_user_id
+
+            # Prefect type stubs incorrectly type run_deployment as returning FlowRun directly
+            flow_run = await run_deployment(  # type: ignore[misc]
+                name="crop-frames-to-webm/production",
+                parameters=parameters,
+                timeout=0,
+                tags=["crop-frames", "webm", "user-initiated", "high-priority"],
+            )
+
+            result = {
+                "flowRunId": str(flow_run.id),
+                "status": "queued",
+                "priority": "high",
+            }
+            print(json.dumps(result))
+            return 0
+
+        except Exception as e:
+            error = {"error": str(e), "status": "failed"}
+            print(json.dumps(error), file=sys.stderr)
+            return 1
+
+    exit_code = asyncio.run(_queue())
+    sys.exit(exit_code)
+
+
+@app.command("download-for-layout-annotation")
+def queue_download_for_layout_annotation(
+    video_id: str,
+    output_dir: str,
+    tenant_id: str = "00000000-0000-0000-0000-000000000001",
+):
+    """Queue download of files needed for layout annotation."""
+
+    async def _queue():
+        try:
+            parameters = {
+                "video_id": video_id,
+                "output_dir": output_dir,
+                "tenant_id": tenant_id,
+            }
+
+            # Prefect type stubs incorrectly type run_deployment as returning FlowRun directly
+            flow_run = await run_deployment(  # type: ignore[misc]
+                name="download-for-layout-annotation/production",
+                parameters=parameters,
+                timeout=0,
+                tags=["download", "layout-annotation", "user-initiated"],
+            )
+
+            result = {
+                "flowRunId": str(flow_run.id),
+                "status": "queued",
+            }
+            print(json.dumps(result))
+            return 0
+
+        except Exception as e:
+            error = {"error": str(e), "status": "failed"}
+            print(json.dumps(error), file=sys.stderr)
+            return 1
+
+    exit_code = asyncio.run(_queue())
+    sys.exit(exit_code)
+
+
+@app.command("upload-layout-db")
+def queue_upload_layout_db(
+    video_id: str,
+    layout_db_path: str,
+    tenant_id: str = "00000000-0000-0000-0000-000000000001",
+    trigger_crop_regen: bool = True,
+):
+    """Queue upload of annotated layout.db to Wasabi."""
+
+    async def _queue():
+        try:
+            parameters = {
+                "video_id": video_id,
+                "layout_db_path": layout_db_path,
+                "tenant_id": tenant_id,
+                "trigger_crop_regen": trigger_crop_regen,
+            }
+
+            # Prefect type stubs incorrectly type run_deployment as returning FlowRun directly
+            flow_run = await run_deployment(  # type: ignore[misc]
+                name="upload-layout-db/production",
+                parameters=parameters,
+                timeout=0,
+                tags=["upload", "layout-annotation", "user-initiated", "high-priority"],
+            )
+
+            result = {
+                "flowRunId": str(flow_run.id),
+                "status": "queued",
+            }
+            print(json.dumps(result))
+            return 0
+
+        except Exception as e:
+            error = {"error": str(e), "status": "failed"}
+            print(json.dumps(error), file=sys.stderr)
+            return 1
+
+    exit_code = asyncio.run(_queue())
+    sys.exit(exit_code)
+
+
+@app.command("download-for-caption-annotation")
+def queue_download_for_caption_annotation(
+    video_id: str,
+    output_dir: str,
+    tenant_id: str = "00000000-0000-0000-0000-000000000001",
+):
+    """Queue download of captions.db for caption annotation."""
+
+    async def _queue():
+        try:
+            parameters = {
+                "video_id": video_id,
+                "output_dir": output_dir,
+                "tenant_id": tenant_id,
+            }
+
+            # Prefect type stubs incorrectly type run_deployment as returning FlowRun directly
+            flow_run = await run_deployment(  # type: ignore[misc]
+                name="download-for-caption-annotation/production",
+                parameters=parameters,
+                timeout=0,
+                tags=["download", "caption-annotation", "user-initiated"],
+            )
+
+            result = {
+                "flowRunId": str(flow_run.id),
+                "status": "queued",
+            }
+            print(json.dumps(result))
+            return 0
+
+        except Exception as e:
+            error = {"error": str(e), "status": "failed"}
+            print(json.dumps(error), file=sys.stderr)
+            return 1
+
+    exit_code = asyncio.run(_queue())
+    sys.exit(exit_code)
+
+
+@app.command("upload-captions-db")
+def queue_upload_captions_db(
+    video_id: str,
+    captions_db_path: str,
+    tenant_id: str = "00000000-0000-0000-0000-000000000001",
+):
+    """Queue upload of annotated captions.db to Wasabi."""
+
+    async def _queue():
+        try:
+            parameters = {
+                "video_id": video_id,
+                "captions_db_path": captions_db_path,
+                "tenant_id": tenant_id,
+            }
+
+            # Prefect type stubs incorrectly type run_deployment as returning FlowRun directly
+            flow_run = await run_deployment(  # type: ignore[misc]
+                name="upload-captions-db/production",
+                parameters=parameters,
+                timeout=0,
+                tags=["upload", "caption-annotation", "user-initiated", "high-priority"],
+            )
+
+            result = {
+                "flowRunId": str(flow_run.id),
+                "status": "queued",
+            }
+            print(json.dumps(result))
+            return 0
+
+        except Exception as e:
+            error = {"error": str(e), "status": "failed"}
+            print(json.dumps(error), file=sys.stderr)
+            return 1
+
+    exit_code = asyncio.run(_queue())
+    sys.exit(exit_code)
+
+
 if __name__ == "__main__":
     app()
