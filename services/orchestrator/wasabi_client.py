@@ -268,6 +268,41 @@ class WasabiClient:
         response = self.s3_client.head_object(Bucket=self.bucket_name, Key=storage_key)
         return response["ContentLength"]
 
+    def generate_presigned_url(
+        self,
+        storage_key: str,
+        expiration: int = 900,
+    ) -> str:
+        """
+        Generate a presigned URL for downloading a file from Wasabi.
+
+        This allows browser to download files directly without exposing credentials.
+        Used for: cropped frame chunks, annotation databases, video files.
+
+        Args:
+            storage_key: S3 key (path) of the file
+            expiration: URL expiration time in seconds (default: 900 = 15 minutes)
+
+        Returns:
+            Presigned URL valid for specified duration
+
+        Example:
+            url = client.generate_presigned_url(
+                "tenant_id/video_id/layout.db",
+                expiration=900
+            )
+            # Browser can download using this URL for next 15 minutes
+        """
+        url = self.s3_client.generate_presigned_url(
+            'get_object',
+            Params={
+                'Bucket': self.bucket_name,
+                'Key': storage_key
+            },
+            ExpiresIn=expiration
+        )
+        return url
+
     @staticmethod
     def _guess_content_type(path: Path) -> str | None:
         """Guess MIME type from file extension"""

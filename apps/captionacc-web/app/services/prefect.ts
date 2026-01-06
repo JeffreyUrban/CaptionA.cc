@@ -46,6 +46,7 @@ interface QueueFlowOptions {
   fileSize?: number
   tenantId?: string
   uploadedByUserId?: string
+  triggerCropRegen?: boolean
 }
 
 interface QueueFlowResult {
@@ -68,7 +69,9 @@ function queueFlow(
     | 'update-base-model'
     | 'retrain-video-model'
     | 'upload-and-process'
-    | 'crop-frames-to-webm',
+    | 'crop-frames-to-webm'
+    | 'download-for-layout-annotation'
+    | 'upload-layout-db',
   options: QueueFlowOptions
 ): Promise<QueueFlowResult> {
   return new Promise((resolve, reject) => {
@@ -161,6 +164,29 @@ function queueFlow(
       }
       if (options.uploadedByUserId) {
         args.push('--created-by-user-id', options.uploadedByUserId)
+      }
+    } else if (flowType === 'download-for-layout-annotation') {
+      // download-for-layout-annotation flow
+      if (!options.videoId || !options.outputDir) {
+        reject(new Error('videoId and outputDir required for download-for-layout-annotation flow'))
+        return
+      }
+      args = [flowType, options.videoId, options.outputDir]
+      if (options.tenantId) {
+        args.push('--tenant-id', options.tenantId)
+      }
+    } else if (flowType === 'upload-layout-db') {
+      // upload-layout-db flow
+      if (!options.videoId || !options.dbPath) {
+        reject(new Error('videoId and dbPath required for upload-layout-db flow'))
+        return
+      }
+      args = [flowType, options.videoId, options.dbPath]
+      if (options.tenantId) {
+        args.push('--tenant-id', options.tenantId)
+      }
+      if (options.triggerCropRegen !== undefined) {
+        args.push('--trigger-crop-regen', options.triggerCropRegen.toString())
       }
     } else {
       // full-frames and crop-frames have the original structure
@@ -434,5 +460,57 @@ export async function queueCropFramesToWebm(options: {
   })
 
   log(`[Prefect] Crop frames to WebM flow queued: ${result.flowRunId} (status: ${result.status})`)
+  return result
+}
+
+/**
+ * Queue download of files needed for layout annotation
+ *
+ * Downloads from Wasabi:
+ * - video.db (full frames for annotation UI)
+ * - fullOCR.db (OCR results for suggested regions)
+ * - layout.db (if exists - to continue previous annotations)
+ */
+export async function queueDownloadForLayoutAnnotation(options: {
+  videoId: string
+  outputDir: string
+  tenantId?: string
+}): Promise<QueueFlowResult> {
+  log(`[Prefect] Queuing download for layout annotation: ${options.videoId}`)
+
+  const result = await queueFlow('download-for-layout-annotation', {
+    videoId: options.videoId,
+    outputDir: options.outputDir,
+    tenantId: options.tenantId,
+  })
+
+  log(
+    `[Prefect] Download for layout annotation flow queued: ${result.flowRunId} (status: ${result.status})`
+  )
+  return result
+}
+
+/**
+ * Queue upload of annotated layout.db to Wasabi
+ *
+ * Uploads layout.db and optionally triggers cropped frames regeneration
+ * if crop bounds have changed.
+ */
+export async function queueUploadLayoutDb(options: {
+  videoId: string
+  layoutDbPath: string
+  tenantId?: string
+  triggerCropRegen?: boolean
+}): Promise<QueueFlowResult> {
+  log(`[Prefect] Queuing upload of layout.db for ${options.videoId}`)
+
+  const result = await queueFlow('upload-layout-db', {
+    videoId: options.videoId,
+    dbPath: options.layoutDbPath,
+    tenantId: options.tenantId,
+    triggerCropRegen: options.triggerCropRegen,
+  })
+
+  log(`[Prefect] Upload layout.db flow queued: ${result.flowRunId} (status: ${result.status})`)
   return result
 }

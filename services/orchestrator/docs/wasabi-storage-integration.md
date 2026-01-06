@@ -520,16 +520,171 @@ ALTER TABLE videos
 ADD COLUMN current_cropped_frames_version INTEGER;
 ```
 
+## Layout Annotation Workflow
+
+**Flows:** `download-for-layout-annotation` and `upload-layout-db`
+
+This workflow handles the bidirectional synchronization of layout.db with Wasabi for caption layout annotation.
+
+### Download Flow (`download_for_layout_annotation_flow`)
+
+Downloads the necessary files for layout annotation from Wasabi to a local directory.
+
+**Workflow Steps:**
+
+1. **Download video.db**
+   - Contains full frames (0.1Hz) as JPEG BLOBs
+   - Required for annotation UI to display frames
+   - Immutable - never changes after initial processing
+
+2. **Download fullOCR.db**
+   - Contains OCR detection results with bounding boxes
+   - Provides suggested caption regions for user validation
+   - Helps accelerate layout annotation process
+
+3. **Download layout.db (if exists)**
+   - Contains existing layout annotations
+   - Allows continuing previous annotation sessions
+   - If doesn't exist, user starts fresh annotations
+
+**Queue from TypeScript:**
+
+```typescript
+import { queueDownloadForLayoutAnnotation } from '~/services/prefect'
+
+const result = await queueDownloadForLayoutAnnotation({
+  videoId: 'a4f2b8c3-1234-5678-90ab-cdef12345678',
+  outputDir: '/local/annotation_workspace/video_abc123/',
+  tenantId: '00000000-0000-0000-0000-000000000001'  // optional
+})
+
+console.log(`Download queued: ${result.flowRunId}`)
+```
+
+**Queue from Python:**
+
+```python
+from queue_flow import queue_download_for_layout_annotation
+
+queue_download_for_layout_annotation(
+    video_id='a4f2b8c3-1234-5678-90ab-cdef12345678',
+    output_dir='/local/annotation_workspace/video_abc123/',
+    tenant_id='00000000-0000-0000-0000-000000000001'
+)
+```
+
+**Output:**
+
+```python
+{
+  'video_id': 'a4f2b8c3-1234-5678-90ab-cdef12345678',
+  'status': 'completed',
+  'video_db_path': '/local/annotation_workspace/video_abc123/video.db',
+  'fullOCR_db_path': '/local/annotation_workspace/video_abc123/fullOCR.db',
+  'layout_db_path': '/local/annotation_workspace/video_abc123/layout.db',  # or None
+  'layout_exists': True  # or False
+}
+```
+
+### Upload Flow (`upload_layout_db_flow`)
+
+Uploads the annotated layout.db to Wasabi after user completes layout annotations.
+
+**Workflow Steps:**
+
+1. **Upload layout.db to Wasabi**
+   - Storage key: `{tenant_id}/{video_id}/layout.db`
+   - Overwrites previous version
+   - Contains user annotations from layout annotation session
+
+2. **Detect Crop Bounds Changes**
+   - Compares crop bounds in uploaded layout.db with active cropped frames version
+   - Checks if caption layout regions have changed significantly
+   - Determines if new cropped frameset needs to be generated
+
+3. **Trigger Cropped Frames Regeneration (optional)**
+   - If `trigger_crop_regen=True` and bounds changed:
+     - Automatically queues `crop-frames-to-webm` flow
+     - Generates new versioned frameset with updated crop bounds
+     - Annotation workflows resume when new version is active
+
+**Queue from TypeScript:**
+
+```typescript
+import { queueUploadLayoutDb } from '~/services/prefect'
+
+const result = await queueUploadLayoutDb({
+  videoId: 'a4f2b8c3-1234-5678-90ab-cdef12345678',
+  layoutDbPath: '/local/annotation_workspace/video_abc123/layout.db',
+  tenantId: '00000000-0000-0000-0000-000000000001',  // optional
+  triggerCropRegen: true  // optional, defaults to true
+})
+
+console.log(`Upload queued: ${result.flowRunId}`)
+```
+
+**Queue from Python:**
+
+```python
+from queue_flow import queue_upload_layout_db
+
+queue_upload_layout_db(
+    video_id='a4f2b8c3-1234-5678-90ab-cdef12345678',
+    layout_db_path='/local/annotation_workspace/video_abc123/layout.db',
+    tenant_id='00000000-0000-0000-0000-000000000001',
+    trigger_crop_regen=True
+)
+```
+
+**Output:**
+
+```python
+{
+  'video_id': 'a4f2b8c3-1234-5678-90ab-cdef12345678',
+  'storage_key': '00000000-.../a4f2b8c3-.../layout.db',
+  'status': 'completed',
+  'bounds_changed': True,  # or False
+  'crop_regen_triggered': True  # or False
+}
+```
+
+### Layout.db Schema
+
+**Tables:**
+
+- **full_frame_box_labels**: User annotations marking caption regions
+  - Bounding boxes for caption areas on full frames
+  - Classification labels (caption vs. non-caption)
+  - User corrections to OCR-detected regions
+
+- **box_classification_model**: Trained Naive Bayes model
+  - Serialized sklearn model
+  - Predicts caption regions on new frames
+  - Updated as user provides more annotations
+
+### Crop Bounds Detection
+
+The workflow extracts crop bounds from layout.db annotations and compares them with the active cropped frames version:
+
+- If no active version exists → always regenerate
+- If bounds changed significantly → trigger regeneration (if enabled)
+- If bounds unchanged → no regeneration needed
+
+**Note:** Current implementation has placeholder logic for crop bounds extraction from `full_frame_box_labels` table. This will be fully implemented when the crop bounds calculation algorithm is finalized.
+
+### Integration with Cropped Frames
+
+When crop bounds change:
+1. Upload flow detects the change
+2. Queues new `crop-frames-to-webm` flow
+3. New version generated with updated bounds
+4. Previous version archived (retained for ML training)
+5. App switches to new active version
+6. Caption annotation workflows resume
+
 ## Future Workflows
 
 These workflows are designed but not yet implemented:
-
-### Layout Annotation
-1. Download video.db and fullOCR.db from Wasabi
-2. User annotates caption layout regions
-3. Update layout.db locally
-4. Upload layout.db to Wasabi
-5. Trigger cropped frames regeneration if bounds changed
 
 ### Caption Annotation
 1. Download captions.db from Wasabi (if exists)
