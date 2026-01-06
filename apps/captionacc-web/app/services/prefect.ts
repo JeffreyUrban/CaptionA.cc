@@ -42,6 +42,11 @@ interface QueueFlowOptions {
   trainingSource?: string
   retrainVideos?: boolean
   updatePredictions?: boolean
+  filename?: string
+  fileSize?: number
+  tenantId?: string
+  uploadedByUserId?: string
+  triggerCropRegen?: boolean
 }
 
 interface QueueFlowResult {
@@ -62,7 +67,13 @@ function queueFlow(
     | 'crop-frames'
     | 'caption-median-ocr'
     | 'update-base-model'
-    | 'retrain-video-model',
+    | 'retrain-video-model'
+    | 'upload-and-process'
+    | 'crop-frames-to-webm'
+    | 'download-for-layout-annotation'
+    | 'upload-layout-db'
+    | 'download-for-caption-annotation'
+    | 'upload-captions-db',
   options: QueueFlowOptions
 ): Promise<QueueFlowResult> {
   return new Promise((resolve, reject) => {
@@ -110,6 +121,94 @@ function queueFlow(
       args = [flowType, options.videoId, options.dbPath]
       if (options.updatePredictions !== undefined) {
         args.push(options.updatePredictions.toString())
+      }
+    } else if (flowType === 'upload-and-process') {
+      // upload-and-process flow (new Wasabi-based workflow with split databases)
+      if (!options.videoPath || !options.videoId || !options.filename || !options.fileSize) {
+        reject(
+          new Error(
+            'videoPath, videoId, filename, and fileSize required for upload-and-process flow'
+          )
+        )
+        return
+      }
+      args = [
+        flowType,
+        options.videoPath,
+        options.videoId,
+        options.filename,
+        options.fileSize.toString(),
+      ]
+      if (options.tenantId) {
+        args.push('--tenant-id', options.tenantId)
+      }
+      if (options.frameRate !== undefined && options.frameRate !== 0.1) {
+        args.push('--frame-rate', options.frameRate.toString())
+      }
+      if (options.uploadedByUserId) {
+        args.push('--uploaded-by-user-id', options.uploadedByUserId)
+      }
+    } else if (flowType === 'crop-frames-to-webm') {
+      // crop-frames-to-webm flow (versioned cropped frames as WebM chunks)
+      if (!options.videoId || !options.cropBounds) {
+        reject(new Error('videoId and cropBounds required for crop-frames-to-webm flow'))
+        return
+      }
+      args = [flowType, options.videoId, JSON.stringify(options.cropBounds)]
+      if (options.tenantId) {
+        args.push('--tenant-id', options.tenantId)
+      }
+      if (options.filename) {
+        args.push('--filename', options.filename)
+      }
+      if (options.frameRate !== undefined && options.frameRate !== 10.0) {
+        args.push('--frame-rate', options.frameRate.toString())
+      }
+      if (options.uploadedByUserId) {
+        args.push('--created-by-user-id', options.uploadedByUserId)
+      }
+    } else if (flowType === 'download-for-layout-annotation') {
+      // download-for-layout-annotation flow
+      if (!options.videoId || !options.outputDir) {
+        reject(new Error('videoId and outputDir required for download-for-layout-annotation flow'))
+        return
+      }
+      args = [flowType, options.videoId, options.outputDir]
+      if (options.tenantId) {
+        args.push('--tenant-id', options.tenantId)
+      }
+    } else if (flowType === 'upload-layout-db') {
+      // upload-layout-db flow
+      if (!options.videoId || !options.dbPath) {
+        reject(new Error('videoId and dbPath required for upload-layout-db flow'))
+        return
+      }
+      args = [flowType, options.videoId, options.dbPath]
+      if (options.tenantId) {
+        args.push('--tenant-id', options.tenantId)
+      }
+      if (options.triggerCropRegen !== undefined) {
+        args.push('--trigger-crop-regen', options.triggerCropRegen.toString())
+      }
+    } else if (flowType === 'download-for-caption-annotation') {
+      // download-for-caption-annotation flow
+      if (!options.videoId || !options.outputDir) {
+        reject(new Error('videoId and outputDir required for download-for-caption-annotation flow'))
+        return
+      }
+      args = [flowType, options.videoId, options.outputDir]
+      if (options.tenantId) {
+        args.push('--tenant-id', options.tenantId)
+      }
+    } else if (flowType === 'upload-captions-db') {
+      // upload-captions-db flow
+      if (!options.videoId || !options.dbPath) {
+        reject(new Error('videoId and dbPath required for upload-captions-db flow'))
+        return
+      }
+      args = [flowType, options.videoId, options.dbPath]
+      if (options.tenantId) {
+        args.push('--tenant-id', options.tenantId)
       }
     } else {
       // full-frames and crop-frames have the original structure
@@ -307,5 +406,175 @@ export async function queueVideoModelRetrain(options: {
   })
 
   log(`[Prefect] Video model retrain flow queued: ${result.flowRunId} (status: ${result.status})`)
+  return result
+}
+
+/**
+ * Queue upload and processing flow (Wasabi-based workflow with split databases)
+ *
+ * Handles complete video upload pipeline:
+ * - Upload video to Wasabi
+ * - Extract full frames → video.db → upload to Wasabi
+ * - Run OCR → fullOCR.db → upload to Wasabi
+ * - Create Supabase catalog entry
+ * - Index OCR content for search
+ *
+ * Later workflows (user-initiated):
+ * - Layout annotation → layout.db
+ * - Crop frames → WebM chunks
+ * - Caption annotation → captions.db
+ */
+export async function queueUploadAndProcessing(options: {
+  videoPath: string
+  videoId: string
+  filename: string
+  fileSize: number
+  tenantId?: string
+  frameRate?: number
+  uploadedByUserId?: string
+}): Promise<QueueFlowResult> {
+  log(`[Prefect] Queuing upload and processing for ${options.videoId}`)
+
+  const result = await queueFlow('upload-and-process', {
+    ...options,
+    frameRate: options.frameRate ?? 0.1,
+  })
+
+  log(`[Prefect] Upload and processing flow queued: ${result.flowRunId} (status: ${result.status})`)
+  return result
+}
+
+/**
+ * Queue cropped frames WebM chunking flow (versioned frameset generation)
+ *
+ * Generates versioned cropped frames as VP9/WebM chunks:
+ * - Download video and layout.db from Wasabi
+ * - Extract cropped frames at 10Hz
+ * - Encode frames as VP9/WebM chunks
+ * - Upload chunks to Wasabi with version number
+ * - Activate new version (archives previous version)
+ *
+ * The app always uses the latest "active" version for annotation workflows.
+ * Previous versions are archived but retained for ML training reproducibility.
+ */
+export async function queueCropFramesToWebm(options: {
+  videoId: string
+  cropBounds: {
+    left: number
+    top: number
+    right: number
+    bottom: number
+  }
+  tenantId?: string
+  filename?: string
+  frameRate?: number
+  createdByUserId?: string
+}): Promise<QueueFlowResult> {
+  log(`[Prefect] Queuing cropped frames WebM chunking for ${options.videoId}`)
+
+  const result = await queueFlow('crop-frames-to-webm', {
+    videoId: options.videoId,
+    cropBounds: options.cropBounds,
+    tenantId: options.tenantId,
+    filename: options.filename,
+    frameRate: options.frameRate ?? 10.0,
+    uploadedByUserId: options.createdByUserId,
+  })
+
+  log(`[Prefect] Crop frames to WebM flow queued: ${result.flowRunId} (status: ${result.status})`)
+  return result
+}
+
+/**
+ * Queue download of files needed for layout annotation
+ *
+ * Downloads from Wasabi:
+ * - video.db (full frames for annotation UI)
+ * - fullOCR.db (OCR results for suggested regions)
+ * - layout.db (if exists - to continue previous annotations)
+ */
+export async function queueDownloadForLayoutAnnotation(options: {
+  videoId: string
+  outputDir: string
+  tenantId?: string
+}): Promise<QueueFlowResult> {
+  log(`[Prefect] Queuing download for layout annotation: ${options.videoId}`)
+
+  const result = await queueFlow('download-for-layout-annotation', {
+    videoId: options.videoId,
+    outputDir: options.outputDir,
+    tenantId: options.tenantId,
+  })
+
+  log(
+    `[Prefect] Download for layout annotation flow queued: ${result.flowRunId} (status: ${result.status})`
+  )
+  return result
+}
+
+/**
+ * Queue upload of annotated layout.db to Wasabi
+ *
+ * Uploads layout.db and optionally triggers cropped frames regeneration
+ * if crop bounds have changed.
+ */
+export async function queueUploadLayoutDb(options: {
+  videoId: string
+  layoutDbPath: string
+  tenantId?: string
+  triggerCropRegen?: boolean
+}): Promise<QueueFlowResult> {
+  log(`[Prefect] Queuing upload of layout.db for ${options.videoId}`)
+
+  const result = await queueFlow('upload-layout-db', {
+    videoId: options.videoId,
+    dbPath: options.layoutDbPath,
+    tenantId: options.tenantId,
+    triggerCropRegen: options.triggerCropRegen,
+  })
+
+  log(`[Prefect] Upload layout.db flow queued: ${result.flowRunId} (status: ${result.status})`)
+  return result
+}
+
+/**
+ * Queue download of captions.db for caption annotation
+ */
+export async function queueDownloadForCaptionAnnotation(options: {
+  videoId: string
+  outputDir: string
+  tenantId?: string
+}): Promise<QueueFlowResult> {
+  log(`[Prefect] Queuing download for caption annotation: ${options.videoId}`)
+
+  const result = await queueFlow('download-for-caption-annotation', {
+    videoId: options.videoId,
+    outputDir: options.outputDir,
+    tenantId: options.tenantId,
+  })
+
+  log(
+    `[Prefect] Download for caption annotation flow queued: ${result.flowRunId} (status: ${result.status})`
+  )
+  return result
+}
+
+/**
+ * Queue upload of annotated captions.db to Wasabi
+ */
+export async function queueUploadCaptionsDb(options: {
+  videoId: string
+  captionsDbPath: string
+  tenantId?: string
+}): Promise<QueueFlowResult> {
+  log(`[Prefect] Queuing upload of captions.db for ${options.videoId}`)
+
+  const result = await queueFlow('upload-captions-db', {
+    videoId: options.videoId,
+    dbPath: options.captionsDbPath,
+    tenantId: options.tenantId,
+  })
+
+  log(`[Prefect] Upload captions.db flow queued: ${result.flowRunId} (status: ${result.status})`)
   return result
 }
