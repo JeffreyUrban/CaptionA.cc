@@ -1,15 +1,16 @@
 import { CaptionTextForm } from '~/components/annotation/CaptionTextForm'
 import { CombinedImageDisplay } from '~/components/annotation/CombinedImageDisplay'
 import { FrameViewer } from '~/components/annotation/FrameViewer'
+import type { Frame } from '~/types/boundaries'
 import type { AnnotationData, TextStyle } from '~/types/text-annotation'
 
 interface TextAnnotationContentPanelProps {
-  videoId: string
   currentAnnotation: AnnotationData | null
   queueLength: number
 
   // Frame navigation
   currentFrameIndex: number
+  currentFrame: Frame | undefined
   onMouseDown: (e: React.MouseEvent) => void
   imageContainerRef: (node: HTMLDivElement | null) => (() => void) | undefined
 
@@ -24,10 +25,10 @@ interface TextAnnotationContentPanelProps {
  * Contains the frame viewer, OCR display, text editor, and combined image.
  */
 export function TextAnnotationContentPanel({
-  videoId,
   currentAnnotation,
   queueLength,
   currentFrameIndex,
+  currentFrame,
   onMouseDown,
   imageContainerRef,
   text,
@@ -49,10 +50,10 @@ export function TextAnnotationContentPanel({
       {/* Frame-by-Frame View */}
       <div>
         <FrameViewer
-          videoId={videoId}
           currentFrameIndex={currentFrameIndex}
           startFrameIndex={currentAnnotation.annotation.start_frame_index}
           endFrameIndex={currentAnnotation.annotation.end_frame_index}
+          frame={currentFrame}
           imageContainerRef={imageContainerRef}
           onMouseDown={onMouseDown}
         />

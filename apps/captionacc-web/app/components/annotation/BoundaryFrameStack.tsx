@@ -49,27 +49,53 @@ export function BoundaryFrameStack({
             return null
           }
 
-          // Find finest available frame by checking coarsest to finest
-          // Check coarsest first (loads first, widest coverage) but keep finest found
-          let alignedFrameIndex = framePosition
-          let frame = frames.get(alignedFrameIndex)
+          // Check if exact frame exists at this position
+          const exactFrame = frames.get(framePosition)
 
-          if (!frame) {
-            // Check from coarse to fine, keeping the finest available
-            // Short-circuit if a level is missing (finer levels won't exist yet)
-            for (const modulo of [32, 16, 8, 4, 2]) {
-              const testIndex = Math.round(framePosition / modulo) * modulo
-              const testFrame = frames.get(testIndex)
-              if (testFrame) {
-                frame = testFrame
-                alignedFrameIndex = testIndex
-                // Stop if we found the exact frame requested
-                if (alignedFrameIndex === framePosition) break
-                // Continue checking for finer frames
-              } else {
-                // Missing this level, finer levels won't exist - stop checking
+          let prevFrame: Frame | undefined
+          let prevFrameIndex: number | undefined
+          let nextFrame: Frame | undefined
+          let nextFrameIndex: number | undefined
+          let prevOpacity = 1
+          let nextOpacity = 1
+
+          if (!exactFrame) {
+            // Find nearest loaded frames by searching nearby positions
+            // Check a limited range around current position for efficiency
+            const searchRange = 32
+
+            // Find nearest previous frame
+            for (let i = framePosition - 1; i >= Math.max(0, framePosition - searchRange); i--) {
+              if (frames.has(i)) {
+                prevFrame = frames.get(i)
+                prevFrameIndex = i
                 break
               }
+            }
+
+            // Find nearest next frame
+            for (
+              let i = framePosition + 1;
+              i <= Math.min(totalFrames - 1, framePosition + searchRange);
+              i++
+            ) {
+              if (frames.has(i)) {
+                nextFrame = frames.get(i)
+                nextFrameIndex = i
+                break
+              }
+            }
+
+            // Calculate linear interpolation weights if we have both neighbors
+            if (
+              prevFrame &&
+              nextFrame &&
+              prevFrameIndex !== undefined &&
+              nextFrameIndex !== undefined
+            ) {
+              const totalDist = nextFrameIndex - prevFrameIndex
+              prevOpacity = (nextFrameIndex - framePosition) / totalDist
+              nextOpacity = (framePosition - prevFrameIndex) / totalDist
             }
           }
 
@@ -180,28 +206,55 @@ export function BoundaryFrameStack({
                 }}
                 className={`relative overflow-hidden cursor-pointer ${borderClasses}`}
               >
-                {/* Frame image */}
-                {frame ? (
+                {/* Frame rendering with interpolation between nearest neighbors */}
+                {exactFrame ? (
+                  // Case 1: Exact frame exists - show it at 100%
                   <img
-                    src={frame.image_url}
-                    alt={`Frame ${alignedFrameIndex}`}
+                    src={exactFrame.image_url}
+                    alt={`Frame ${framePosition}`}
                     className="w-full"
                     draggable={false}
                     onError={e => {
-                      // Fallback for missing images
                       const target = e.target as HTMLImageElement
                       target.style.display = 'none'
                       const parent = target.parentElement
                       if (parent) {
                         parent.innerHTML += `
                           <div class="flex items-center justify-center bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400" style="width: 100%; height: 100%;">
-                            Frame ${alignedFrameIndex}
+                            Frame ${framePosition}
                           </div>
                         `
                       }
                     }}
                   />
+                ) : prevFrame && nextFrame ? (
+                  // Case 2: Have both neighbors - interpolate with linear weights
+                  <div className="relative w-full h-full">
+                    <img
+                      src={prevFrame.image_url}
+                      alt={`Frame ${prevFrameIndex} (prev)`}
+                      className="absolute inset-0 w-full"
+                      style={{ opacity: prevOpacity }}
+                      draggable={false}
+                    />
+                    <img
+                      src={nextFrame.image_url}
+                      alt={`Frame ${nextFrameIndex} (next)`}
+                      className="absolute inset-0 w-full"
+                      style={{ opacity: nextOpacity }}
+                      draggable={false}
+                    />
+                  </div>
+                ) : prevFrame ? (
+                  // Case 3: Have only one neighbor - show it
+                  <img
+                    src={prevFrame.image_url}
+                    alt={`Frame ${prevFrameIndex}`}
+                    className="w-full"
+                    draggable={false}
+                  />
                 ) : (
+                  // Case 4: No frames loaded yet
                   <div className="flex w-full h-full items-center justify-center bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
                     Loading frame {framePosition}...
                   </div>

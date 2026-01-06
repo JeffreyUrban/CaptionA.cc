@@ -7,11 +7,14 @@ import { ErrorBanner } from '~/components/annotation/ErrorBanner'
 import { TextAnnotationContentPanel } from '~/components/annotation/TextAnnotationContentPanel'
 import { TextAnnotationControlsPanel } from '~/components/annotation/TextAnnotationControlsPanel'
 import { TextAnnotationHelpModal } from '~/components/annotation/TextAnnotationHelpModal'
+import { useBoundaryFrameLoader } from '~/hooks/useBoundaryFrameLoader'
 import { useTextAnnotationData } from '~/hooks/useTextAnnotationData'
 import { useTextAnnotationFrameNav } from '~/hooks/useTextAnnotationFrameNav'
 import { useTextAnnotationKeyboard } from '~/hooks/useTextAnnotationKeyboard'
 import { useTextAnnotationPreferences } from '~/hooks/useTextAnnotationPreferences'
+import { useVideoMetadata } from '~/hooks/useVideoMetadata'
 import { useVideoTouched } from '~/hooks/useVideoTouched'
+import type { Frame } from '~/types/boundaries'
 
 // Loader function to expose environment variables
 export async function loader() {
@@ -80,6 +83,32 @@ export default function AnnotateText() {
     containerRef: frameContainerRef,
   })
 
+  // Video metadata for frame loading
+  const { metadata, loading: isLoadingMetadata } = useVideoMetadata(videoId)
+
+  // Frame loading state
+  const framesRef = useRef<Map<number, Frame>>(new Map())
+  const currentFrameIndexRef = useRef<number>(currentFrameIndex)
+  const jumpRequestedRef = useRef<boolean>(false)
+  const jumpTargetRef = useRef<number | null>(null)
+
+  // Sync current frame index to ref
+  currentFrameIndexRef.current = currentFrameIndex
+
+  // Load frames from Wasabi
+  useBoundaryFrameLoader({
+    videoId,
+    currentFrameIndexRef,
+    jumpRequestedRef,
+    jumpTargetRef,
+    totalFrames: metadata?.totalFrames ?? 0,
+    framesRef,
+    isReady: !isLoadingMetadata && !!videoId && !!metadata,
+  })
+
+  // Get current frame from loaded frames
+  const currentFrame = framesRef.current.get(currentFrameIndex)
+
   // Combined ref callback that handles both preferences ResizeObserver and regular ref
   const combinedContainerRef = useCallback(
     (node: HTMLDivElement | null) => {
@@ -140,10 +169,10 @@ export default function AnnotateText() {
 
         <div className="flex h-full flex-1 gap-6 overflow-hidden">
           <TextAnnotationContentPanel
-            videoId={videoId}
             currentAnnotation={currentAnnotation}
             queueLength={queue.length}
             currentFrameIndex={currentFrameIndex}
+            currentFrame={currentFrame}
             onMouseDown={handleDragStart}
             imageContainerRef={combinedContainerRef}
             text={text}
