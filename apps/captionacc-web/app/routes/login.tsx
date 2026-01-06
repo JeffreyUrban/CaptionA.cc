@@ -17,18 +17,20 @@ export default function LoginPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-        <div className="text-gray-600 dark:text-gray-400">Loading...</div>
+      <div className="min-h-screen flex items-center justify-center bg-olive-100 dark:bg-olive-950">
+        <div className="text-olive-700 dark:text-olive-400">Loading...</div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen flex items-center justify-center bg-olive-100 dark:bg-olive-950">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-2">CaptionA.cc</h1>
-          <p className="text-gray-600 dark:text-gray-400">Caption Annotation Platform</p>
+          <h1 className="font-display text-4xl font-bold text-olive-950 dark:text-white mb-2">
+            Caption<span className="font-semibold">A.cc</span>
+          </h1>
+          <p className="text-olive-700 dark:text-olive-400">Caption Annotation Platform</p>
         </div>
         <LoginForm
           onSuccess={() => void navigate('/')}
