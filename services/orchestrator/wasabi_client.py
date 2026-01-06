@@ -294,12 +294,9 @@ class WasabiClient:
             # Browser can download using this URL for next 15 minutes
         """
         url = self.s3_client.generate_presigned_url(
-            'get_object',
-            Params={
-                'Bucket': self.bucket_name,
-                'Key': storage_key
-            },
-            ExpiresIn=expiration
+            "get_object",
+            Params={"Bucket": self.bucket_name, "Key": storage_key},
+            ExpiresIn=expiration,
         )
         return url
 
@@ -385,7 +382,9 @@ class WasabiClient:
             chunk_dir = chunk_type
 
         if modulo is not None:
-            return f"{tenant_id}/{video_id}/{chunk_dir}/modulo_{modulo}/chunk_{chunk_index:04d}.webm"
+            return (
+                f"{tenant_id}/{video_id}/{chunk_dir}/modulo_{modulo}/chunk_{chunk_index:04d}.webm"
+            )
         else:
             return f"{tenant_id}/{video_id}/{chunk_dir}/chunk_{chunk_index:04d}.webm"
 

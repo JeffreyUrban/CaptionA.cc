@@ -132,7 +132,9 @@ def extract_cropped_frames(
     Path(output_dir).mkdir(parents=True, exist_ok=True)
 
     # Format crop bounds as string
-    crop_str = f"{crop_bounds['left']},{crop_bounds['top']},{crop_bounds['right']},{crop_bounds['bottom']}"
+    crop_str = (
+        f"{crop_bounds['left']},{crop_bounds['top']},{crop_bounds['right']},{crop_bounds['bottom']}"
+    )
 
     # Get absolute path to crop_frames pipeline
     pipeline_dir = Path(__file__).parent.parent.parent.parent / "data-pipelines" / "crop_frames"
@@ -256,7 +258,9 @@ def encode_frames_to_webm_chunks(
                 continue
 
             # Get actual frame files for this chunk
-            chunk_frame_files = [frame_files[idx] for idx in chunk_frame_indices if idx < len(frame_files)]
+            chunk_frame_files = [
+                frame_files[idx] for idx in chunk_frame_indices if idx < len(frame_files)
+            ]
 
             if not chunk_frame_files:
                 continue
@@ -308,7 +312,7 @@ def encode_frames_to_webm_chunks(
                 total_chunk_count += 1
                 print(
                     f"[WebM] ✓ Encoded modulo_{modulo}/chunk_{chunk_index:04d}.webm "
-                    f"({len(chunk_frame_files)} frames, indices {chunk_start_idx}-{chunk_end_idx-1})"
+                    f"({len(chunk_frame_files)} frames, indices {chunk_start_idx}-{chunk_end_idx - 1})"
                 )
 
             finally:
@@ -319,7 +323,9 @@ def encode_frames_to_webm_chunks(
 
         print(f"[WebM] Modulo {modulo}: {chunk_index} chunks")
 
-    print(f"\n[WebM] Encoded {total_chunk_count} total chunks across {len(MODULO_LEVELS)} modulo levels")
+    print(
+        f"\n[WebM] Encoded {total_chunk_count} total chunks across {len(MODULO_LEVELS)} modulo levels"
+    )
 
     return output_dir, total_chunk_count, all_chunks
 

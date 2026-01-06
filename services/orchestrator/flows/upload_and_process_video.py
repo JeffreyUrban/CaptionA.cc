@@ -208,6 +208,7 @@ def extract_full_frames_to_video_db(
 
     # Get frame count from video.db
     import sqlite3
+
     conn = sqlite3.connect(output_db_abs)
     try:
         frame_count = conn.execute("SELECT COUNT(*) FROM full_frames").fetchone()[0]
@@ -248,6 +249,7 @@ def run_ocr_to_full_ocr_db(
     # TODO: Replace with actual OCR pipeline when available
     # For now, create empty fullOCR.db with schema
     import sqlite3
+
     conn = sqlite3.connect(ocr_db_abs)
     try:
         conn.execute("""
@@ -292,6 +294,7 @@ def index_video_ocr_content(video_id: str, full_ocr_db_path: str) -> int:
     """
     try:
         import sqlite3
+
         search_repo = SearchIndexRepository()
         conn = sqlite3.connect(full_ocr_db_path)
 

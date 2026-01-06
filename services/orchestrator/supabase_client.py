@@ -263,7 +263,9 @@ class CroppedFramesVersionRepository:
         Returns:
             Next version number (1 for first version)
         """
-        response = self.client.rpc("get_next_cropped_frames_version", {"p_video_id": video_id}).execute()
+        response = self.client.rpc(
+            "get_next_cropped_frames_version", {"p_video_id": video_id}
+        ).execute()
         return response.data if response.data else 1  # type: ignore[return-value]
 
     def create_version(
