@@ -49,14 +49,14 @@ def download_captions_db_from_wasabi(
     Returns:
         Tuple of (local_path, sha256_hash)
     """
-    print(f"[Wasabi] Downloading captions.db")
+    print("[Wasabi] Downloading captions.db")
 
     client = get_wasabi_client()
     storage_key = WasabiClient.build_storage_key(tenant_id, video_id, "captions.db")
 
     # Check if file exists
     if not client.file_exists(storage_key):
-        print(f"[Wasabi] captions.db does not exist yet (will be created)")
+        print("[Wasabi] captions.db does not exist yet (will be created)")
         return "", ""
 
     client.download_file(storage_key=storage_key, local_path=local_path)
@@ -96,7 +96,7 @@ def upload_captions_db_to_wasabi(
     Returns:
         Storage key where captions.db was uploaded
     """
-    print(f"[Wasabi] Uploading captions.db")
+    print("[Wasabi] Uploading captions.db")
 
     client = get_wasabi_client()
     storage_key = WasabiClient.build_storage_key(tenant_id, video_id, "captions.db")
@@ -162,7 +162,7 @@ def upload_captions_db_flow(
         except Exception as e:
             print(f"⚠️  Failed to send webhook: {e}")
 
-        print(f"\n✅ Captions.db upload complete!")
+        print("\n✅ Captions.db upload complete!")
 
         return {
             "video_id": video_id,
@@ -235,11 +235,11 @@ def download_for_caption_annotation_flow(
 
         captions_exists = bool(captions_db_path)
         if captions_exists:
-            print(f"✅ captions.db exists - continuing previous annotations")
+            print("✅ captions.db exists - continuing previous annotations")
         else:
-            print(f"ℹ️  captions.db does not exist - starting fresh annotations")
+            print("ℹ️  captions.db does not exist - starting fresh annotations")
 
-        print(f"\n✅ Download complete!")
+        print("\n✅ Download complete!")
 
         return {
             "video_id": video_id,

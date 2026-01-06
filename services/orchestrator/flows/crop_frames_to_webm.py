@@ -15,7 +15,6 @@ The app always uses the latest "active" version for annotation workflows.
 
 import hashlib
 import os
-import shutil
 import subprocess
 import tempfile
 from pathlib import Path
@@ -79,7 +78,7 @@ def download_layout_db_from_wasabi(
     Returns:
         Tuple of (local_path, sha256_hash)
     """
-    print(f"[Wasabi] Downloading layout.db")
+    print("[Wasabi] Downloading layout.db")
 
     client = get_wasabi_client()
     storage_key = WasabiClient.build_storage_key(tenant_id, video_id, "layout.db")
@@ -209,7 +208,7 @@ def encode_frames_to_webm_chunks(
     Returns:
         Tuple of (output_dir, total_chunk_count, list of (modulo, chunk_path) tuples)
     """
-    print(f"[WebM] Encoding frames to hierarchical VP9/WebM chunks")
+    print("[WebM] Encoding frames to hierarchical VP9/WebM chunks")
     print(f"[WebM] Modulo levels: {MODULO_LEVELS}")
     print(f"[WebM] Frames per chunk: {FRAMES_PER_CHUNK}")
     print(f"[WebM] CRF: {crf}, Bitrate: {bitrate}")
@@ -448,7 +447,7 @@ def update_version_metadata(
     total_size_bytes: int,
 ) -> None:
     """Update version record with chunk metadata."""
-    print(f"[Supabase] Updating version metadata")
+    print("[Supabase] Updating version metadata")
 
     versions_repo = CroppedFramesVersionRepository()
 
@@ -474,7 +473,7 @@ def activate_version(version_id: str) -> None:
     versions_repo = CroppedFramesVersionRepository()
     versions_repo.activate_version(version_id)
 
-    print(f"[Supabase] Version activated (previous version archived)")
+    print("[Supabase] Version activated (previous version archived)")
 
 
 @flow(
@@ -640,7 +639,7 @@ def crop_frames_to_webm_flow(
                 description=f"Cropped frames v{version} for {video_id}",
             )
 
-            print(f"\n✅ Cropped frames generation complete!")
+            print("\n✅ Cropped frames generation complete!")
             print(f"📊 Version: v{version}")
             print(f"📊 Frames: {total_frames}, Chunks: {chunk_count}")
             print(f"📊 Size: {total_size_bytes / 1024 / 1024:.2f} MB")

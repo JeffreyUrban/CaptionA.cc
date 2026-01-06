@@ -204,7 +204,7 @@ def extract_full_frames_to_video_db(
         print(f"STDERR: {result.stderr}")
         raise RuntimeError(f"full_frames pipeline failed: {result.stderr}")
 
-    print(f"[video.db] Frame extraction complete")
+    print("[video.db] Frame extraction complete")
 
     # Get frame count from video.db
     import sqlite3
@@ -228,7 +228,7 @@ def extract_full_frames_to_video_db(
     tags=["video-processing", "ocr"],
     log_prints=True,
 )
-def run_ocr_to_fullOCR_db(
+def run_ocr_to_full_ocr_db(
     video_db_path: str,
     output_ocr_db_path: str,
 ) -> dict[str, Any]:
@@ -240,7 +240,6 @@ def run_ocr_to_fullOCR_db(
     """
     print(f"[fullOCR.db] Running OCR on frames from {video_db_path}")
 
-    video_db_abs = str(Path(video_db_path).resolve())
     ocr_db_abs = str(Path(output_ocr_db_path).resolve())
 
     # Ensure parent directory exists
@@ -287,14 +286,14 @@ def run_ocr_to_fullOCR_db(
     tags=["supabase", "search"],
     log_prints=True,
 )
-def index_video_ocr_content(video_id: str, fullOCR_db_path: str) -> int:
+def index_video_ocr_content(video_id: str, full_ocr_db_path: str) -> int:
     """
     Index OCR content from fullOCR.db in Supabase for cross-video search.
     """
     try:
         import sqlite3
         search_repo = SearchIndexRepository()
-        conn = sqlite3.connect(fullOCR_db_path)
+        conn = sqlite3.connect(full_ocr_db_path)
 
         try:
             cursor = conn.execute(
@@ -391,7 +390,7 @@ def upload_and_process_video_flow(
     # Prepare paths for split databases
     video_dir = Path(local_video_path).parent
     video_db_path = video_dir / "video.db"
-    fullOCR_db_path = video_dir / "fullOCR.db"
+    full_ocr_db_path = video_dir / "fullOCR.db"
 
     try:
         # Step 1: Upload video to Wasabi
@@ -437,15 +436,15 @@ def upload_and_process_video_flow(
 
         # Step 6: Run OCR and create fullOCR.db
         print("\n🔍 Step 6/7: Running OCR and creating fullOCR.db...")
-        ocr_result = run_ocr_to_fullOCR_db(
+        ocr_result = run_ocr_to_full_ocr_db(
             video_db_path=str(video_db_path),
-            output_ocr_db_path=str(fullOCR_db_path),
+            output_ocr_db_path=str(full_ocr_db_path),
         )
 
         # Step 7: Upload fullOCR.db to Wasabi
         print("\n📤 Step 7/7: Uploading fullOCR.db to Wasabi...")
         upload_database_to_wasabi(
-            local_db_path=str(fullOCR_db_path),
+            local_db_path=str(full_ocr_db_path),
             tenant_id=tenant_id,
             video_id=video_id,
             db_name="fullOCR.db",
@@ -453,7 +452,7 @@ def upload_and_process_video_flow(
 
         # Step 8: Index OCR content for search
         print("\n🔍 Step 8/7: Indexing OCR content for search...")
-        indexed_frames = index_video_ocr_content(video_id, str(fullOCR_db_path))
+        indexed_frames = index_video_ocr_content(video_id, str(full_ocr_db_path))
 
         # Update status to active
         update_supabase_status(video_id, "active", flow_run_id)

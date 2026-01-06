@@ -14,15 +14,13 @@ Layout.db contains:
 
 import hashlib
 import os
-import sqlite3
-import tempfile
 from pathlib import Path
 from typing import Any
 
 import requests
 from prefect import flow, task
 
-from ..supabase_client import CroppedFramesVersionRepository, VideoRepository
+from ..supabase_client import CroppedFramesVersionRepository
 from ..wasabi_client import WasabiClient, get_wasabi_client
 
 # Default tenant for development
@@ -99,7 +97,7 @@ def upload_layout_db_to_wasabi(
     Returns:
         Storage key where layout.db was uploaded
     """
-    print(f"[Wasabi] Uploading layout.db")
+    print("[Wasabi] Uploading layout.db")
 
     client = get_wasabi_client()
     storage_key = WasabiClient.build_storage_key(tenant_id, video_id, "layout.db")
@@ -137,21 +135,21 @@ def detect_crop_bounds_change(
     Returns:
         Tuple of (bounds_changed, new_crop_bounds)
     """
-    print(f"[Detection] Checking for crop bounds changes")
+    print("[Detection] Checking for crop bounds changes")
 
     # Get crop bounds from layout.db
     # This requires reading the full_frame_box_labels table and computing bounds
     # For now, we'll return a placeholder
     # TODO: Implement actual crop bounds extraction from layout.db
 
-    print(f"[Detection] TODO: Extract crop bounds from layout.db")
+    print("[Detection] TODO: Extract crop bounds from layout.db")
 
     # Get active cropped frames version
     versions_repo = CroppedFramesVersionRepository()
     active_version = versions_repo.get_active_version(video_id)
 
     if not active_version:
-        print(f"[Detection] No active cropped frames version exists")
+        print("[Detection] No active cropped frames version exists")
         return True, None  # Treat as changed if no version exists
 
     previous_bounds = active_version.get("crop_bounds")
@@ -238,7 +236,7 @@ def upload_layout_db_flow(
         except Exception as e:
             print(f"⚠️  Failed to send webhook: {e}")
 
-        print(f"\n✅ Layout.db upload complete!")
+        print("\n✅ Layout.db upload complete!")
 
         return {
             "video_id": video_id,
@@ -316,15 +314,15 @@ def download_for_layout_annotation_flow(
 
         # Step 2: Download fullOCR.db
         print("\n📥 Step 2/3: Downloading fullOCR.db...")
-        fullOCR_db_path = str(Path(output_dir) / "fullOCR.db")
-        fullOCR_db_path, fullOCR_db_hash = download_database_from_wasabi(
+        full_ocr_db_path = str(Path(output_dir) / "fullOCR.db")
+        full_ocr_db_path, full_ocr_db_hash = download_database_from_wasabi(
             tenant_id=tenant_id,
             video_id=video_id,
             db_name="fullOCR.db",
-            local_path=fullOCR_db_path,
+            local_path=full_ocr_db_path,
         )
 
-        if not fullOCR_db_path:
+        if not full_ocr_db_path:
             raise RuntimeError("fullOCR.db not found in Wasabi - OCR not complete yet")
 
         # Step 3: Download layout.db (optional - may not exist yet)
@@ -339,17 +337,17 @@ def download_for_layout_annotation_flow(
 
         layout_exists = bool(layout_db_path)
         if layout_exists:
-            print(f"✅ layout.db exists - continuing previous annotations")
+            print("✅ layout.db exists - continuing previous annotations")
         else:
-            print(f"ℹ️  layout.db does not exist - starting fresh annotations")
+            print("ℹ️  layout.db does not exist - starting fresh annotations")
 
-        print(f"\n✅ Download complete!")
+        print("\n✅ Download complete!")
 
         return {
             "video_id": video_id,
             "status": "completed",
             "video_db_path": video_db_path,
-            "fullOCR_db_path": fullOCR_db_path,
+            "fullOCR_db_path": full_ocr_db_path,
             "layout_db_path": layout_db_path if layout_exists else None,
             "layout_exists": layout_exists,
         }
