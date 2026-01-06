@@ -11,6 +11,7 @@ import { isbot } from 'isbot'
 import { renderToPipeableStream } from 'react-dom/server'
 import { ServerRouter, type AppLoadContext, type EntryContext } from 'react-router'
 
+import { requireBasicAuth } from '~/middleware/basic-auth'
 import { startPeriodicCleanup } from '~/services/video-cleanup'
 
 const ABORT_DELAY = 5_000
@@ -31,6 +32,12 @@ export default function handleRequest(
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   loadContext: AppLoadContext
 ) {
+  // Check basic auth for preview sites
+  const authResponse = requireBasicAuth(request)
+  if (authResponse) {
+    return authResponse
+  }
+
   return isbot(request.headers.get('user-agent') ?? '')
     ? handleBotRequest(request, responseStatusCode, responseHeaders, routerContext)
     : handleBrowserRequest(request, responseStatusCode, responseHeaders, routerContext)
