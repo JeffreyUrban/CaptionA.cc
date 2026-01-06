@@ -12,12 +12,32 @@ import { createClient, type Session } from '@supabase/supabase-js'
 
 import type { Database } from '../types/supabase'
 
-// Environment variables - use import.meta.env for Vite
-// Fallback to local Supabase defaults for development
-const supabaseUrl = import.meta.env['VITE_SUPABASE_URL'] || 'http://localhost:54321'
-const supabaseAnonKey =
-  import.meta.env['VITE_SUPABASE_ANON_KEY'] ||
+// Local Supabase demo keys - These are Supabase's standard public keys for local development
+// Documented at: https://supabase.com/docs/guides/cli/local-development
+// These keys are safe to commit - they only work with `supabase start` on localhost:54321
+// Production keys are NEVER in code - only in environment variables/secrets
+const LOCAL_SUPABASE_URL = 'http://localhost:54321'
+const LOCAL_SUPABASE_ANON_KEY =
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0'
+const LOCAL_SUPABASE_SERVICE_ROLE_KEY =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU'
+
+// Use environment variables if provided, otherwise default to local
+const supabaseUrl = import.meta.env['VITE_SUPABASE_URL'] || LOCAL_SUPABASE_URL
+const supabaseAnonKey = import.meta.env['VITE_SUPABASE_ANON_KEY'] || LOCAL_SUPABASE_ANON_KEY
+
+// Determine schema based on environment
+const isLocal = supabaseUrl === LOCAL_SUPABASE_URL
+const supabaseSchema = isLocal
+  ? 'public' // Local Supabase uses public schema
+  : import.meta.env['VITE_SUPABASE_SCHEMA'] || 'captionacc_production' // Online uses named schemas
+
+// Log Supabase connection info in development
+if (import.meta.env.DEV) {
+  console.log(
+    `🔌 Supabase: ${isLocal ? 'LOCAL' : 'ONLINE'} (${supabaseUrl}) [schema: ${supabaseSchema}]`
+  )
+}
 
 /**
  * Create a Supabase client for use in client-side code
@@ -28,6 +48,9 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
+  },
+  db: {
+    schema: supabaseSchema, // Set PostgreSQL schema
   },
 })
 
@@ -42,13 +65,15 @@ export function createServerSupabaseClient() {
   }
 
   const serviceRoleKey =
-    import.meta.env['VITE_SUPABASE_SERVICE_ROLE_KEY'] ||
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU'
+    import.meta.env['VITE_SUPABASE_SERVICE_ROLE_KEY'] || LOCAL_SUPABASE_SERVICE_ROLE_KEY
 
   return createClient<Database>(supabaseUrl, serviceRoleKey, {
     auth: {
       persistSession: false,
       autoRefreshToken: false,
+    },
+    db: {
+      schema: supabaseSchema, // Set PostgreSQL schema (same as client)
     },
   })
 }

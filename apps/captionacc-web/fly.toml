@@ -8,6 +8,14 @@ primary_region = 'ewr'
 
 [build]
 
+[env]
+  NODE_ENV = "production"
+  ENVIRONMENT = "production"
+  # Schema is set in secrets, but can be overridden here for staging
+  # VITE_SUPABASE_SCHEMA = "captionacc_staging"  # Uncomment for staging deployments
+  # Supabase credentials are set via secrets (not here for security)
+  # Use: flyctl secrets set VITE_SUPABASE_URL=... VITE_SUPABASE_SCHEMA=... VITE_SUPABASE_ANON_KEY=... VITE_SUPABASE_SERVICE_ROLE_KEY=...
+
 [http_service]
   internal_port = 3000
   force_https = true
