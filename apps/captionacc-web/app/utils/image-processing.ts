@@ -179,36 +179,33 @@ export async function getOrGenerateCombinedImage(
     return outputPath
   }
 
-  // Generate new combined image from database
-  const dbPath = getDbPath(videoPath)
-  if (!dbPath) {
-    throw new Error(`Database not found for video: ${videoPath}`)
+  // Generate new combined image from Wasabi frames
+  console.log(
+    `[getOrGenerateCombinedImage] Generating for annotation ${annotationId}, frames ${startFrame}-${endFrame}`
+  )
+  const { extractFramesFromWasabi } = await import('~/services/wasabi-storage.server')
+
+  // Build list of frame indices to fetch
+  const frameIndices: number[] = []
+  for (let i = startFrame; i <= endFrame; i++) {
+    frameIndices.push(i)
   }
 
-  // Load all frames in the range from database
-  const db = new Database(dbPath, { readonly: true })
-  const frameBuffers: sharp.Sharp[] = []
+  console.log(`[getOrGenerateCombinedImage] Fetching ${frameIndices.length} frames from Wasabi`)
 
-  try {
-    const stmt = db.prepare(`
-      SELECT image_data
-      FROM cropped_frames
-      WHERE frame_index >= ? AND frame_index <= ?
-      ORDER BY frame_index
-    `)
+  // Extract frames from Wasabi
+  const frameBuffersRaw = await extractFramesFromWasabi(videoPath, frameIndices)
 
-    const rows = stmt.all(startFrame, endFrame) as Array<{ image_data: Buffer }>
-
-    for (const row of rows) {
-      frameBuffers.push(sharp(row.image_data))
-    }
-  } finally {
-    db.close()
-  }
-
-  if (frameBuffers.length === 0) {
+  if (frameBuffersRaw.length === 0) {
     throw new Error(`No frames found in range ${startFrame}-${endFrame}`)
   }
+
+  console.log(
+    `[getOrGenerateCombinedImage] Successfully extracted ${frameBuffersRaw.length} frames`
+  )
+
+  // Convert buffers to sharp instances
+  const frameBuffers: sharp.Sharp[] = frameBuffersRaw.map(buffer => sharp(buffer))
 
   // Get metadata from first frame
   const firstCropFrame = frameBuffers[0]

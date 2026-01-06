@@ -7,8 +7,16 @@
  * - Uses temporary user ID (default_user) until Supabase auth integration
  */
 
+import { execFile } from 'child_process'
+import { mkdtemp, rm, readFile, writeFile } from 'fs/promises'
+import { tmpdir } from 'os'
+import { join } from 'path'
+import { promisify } from 'util'
+
 import { S3Client, ListObjectsV2Command, GetObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
+
+const execFileAsync = promisify(execFile)
 
 // Environment configuration
 const WASABI_REGION = process.env['WASABI_REGION'] || 'us-east-1'
@@ -136,5 +144,125 @@ export async function getVideoChunkMetadata(
     modulo_16: modulo16,
     modulo_4: modulo4,
     modulo_1: modulo1,
+  }
+}
+
+/**
+ * Extract specific frames from Wasabi WebM chunks server-side
+ * Returns buffers that can be used with sharp for image processing
+ */
+export async function extractFramesFromWasabi(
+  videoId: string,
+  frameIndices: number[],
+  userId: string = PLACEHOLDER_USER_ID
+): Promise<Buffer[]> {
+  if (frameIndices.length === 0) {
+    return []
+  }
+
+  // Use modulo 1 (finest resolution) for combined images
+  const modulo = 1
+  const availableChunks = await listChunks(videoId, modulo, userId)
+
+  if (availableChunks.length === 0) {
+    throw new Error(`No chunks found for video ${videoId} at modulo ${modulo}`)
+  }
+
+  // Determine which chunk each frame belongs to
+  const frameToChunk = new Map<number, number>()
+  const chunkToFrames = new Map<number, number[]>()
+
+  for (const frameIndex of frameIndices) {
+    // Find which chunk contains this frame
+    let chunkIndex = -1
+    for (let i = 0; i < availableChunks.length; i++) {
+      const currentChunk = availableChunks[i]!
+      const nextChunk = availableChunks[i + 1]
+      const minFrame = currentChunk
+      const maxFrame = nextChunk ? nextChunk - 1 : Infinity
+
+      if (frameIndex >= minFrame && frameIndex <= maxFrame) {
+        chunkIndex = currentChunk
+        break
+      }
+    }
+
+    if (chunkIndex === -1) {
+      throw new Error(`Frame ${frameIndex} not found in any chunk`)
+    }
+
+    frameToChunk.set(frameIndex, chunkIndex)
+    if (!chunkToFrames.has(chunkIndex)) {
+      chunkToFrames.set(chunkIndex, [])
+    }
+    chunkToFrames.get(chunkIndex)!.push(frameIndex)
+  }
+
+  // Create temporary directory for processing
+  const tempDir = await mkdtemp(join(tmpdir(), 'wasabi-frames-'))
+
+  try {
+    const frameBufferMap = new Map<number, Buffer>()
+
+    // Process each chunk
+    for (const [chunkIndex, framesInChunk] of chunkToFrames.entries()) {
+      // Generate signed URL and download chunk
+      const signedUrl = await generateSignedUrl(videoId, modulo, chunkIndex, userId)
+      const chunkPath = join(tempDir, `chunk_${chunkIndex}.webm`)
+
+      // Download chunk
+      const response = await fetch(signedUrl)
+      if (!response.ok) {
+        throw new Error(`Failed to download chunk ${chunkIndex}: ${response.statusText}`)
+      }
+      const arrayBuffer = await response.arrayBuffer()
+      await writeFile(chunkPath, Buffer.from(arrayBuffer))
+
+      // Extract each frame from this chunk using ffmpeg
+      for (const frameIndex of framesInChunk) {
+        // Calculate position within chunk (0-indexed within chunk)
+        const positionInChunk = frameIndex - chunkIndex
+        const outputPath = join(tempDir, `frame_${frameIndex}.jpg`)
+
+        // Use ffmpeg to extract the specific frame
+        // -ss seeks to frame position, -i input file, -vframes 1 extracts one frame
+        try {
+          await execFileAsync('ffmpeg', [
+            '-y', // Overwrite output files
+            '-loglevel',
+            'error',
+            '-i',
+            chunkPath,
+            '-vf',
+            `select=eq(n\\,${positionInChunk})`,
+            '-vframes',
+            '1',
+            '-q:v',
+            '2', // High quality
+            outputPath,
+          ])
+        } catch (error) {
+          throw new Error(
+            `Failed to extract frame ${frameIndex} from chunk ${chunkIndex}: ${(error as Error).message}`
+          )
+        }
+
+        // Read the extracted frame
+        const buffer = await readFile(outputPath)
+        frameBufferMap.set(frameIndex, buffer)
+      }
+    }
+
+    // Return buffers in the order requested
+    return frameIndices.map(idx => {
+      const buffer = frameBufferMap.get(idx)
+      if (!buffer) {
+        throw new Error(`Frame ${idx} was not extracted`)
+      }
+      return buffer
+    })
+  } finally {
+    // Clean up temporary directory
+    await rm(tempDir, { recursive: true, force: true })
   }
 }
