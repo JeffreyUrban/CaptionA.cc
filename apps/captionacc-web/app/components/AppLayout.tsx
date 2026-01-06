@@ -89,7 +89,7 @@ function ThemeSwitcher() {
     { id: 'system' as Theme, name: 'System', icon: ComputerIcon },
   ] as const
 
-  const currentThemeData = themes.find(t => t.id === theme) ?? themes[2]
+  const currentThemeData = themes.find((t) => t.id === theme) ?? themes[2]
   const CurrentIcon = currentThemeData.icon
   const currentName = currentThemeData.name
 
@@ -97,7 +97,7 @@ function ThemeSwitcher() {
     <div className="relative">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+        className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-olive-950 hover:bg-olive-950/10 dark:text-white dark:hover:bg-white/10"
       >
         <CurrentIcon className="h-5 w-5" />
         <span className="hidden sm:inline">{currentName}</span>
@@ -106,15 +106,15 @@ function ThemeSwitcher() {
       {isOpen && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)} />
-          <div className="absolute right-0 z-20 mt-2 w-48 rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-800">
-            {themes.map(themeOption => (
+          <div className="absolute right-0 z-20 mt-2 w-48 rounded-lg border border-olive-950/10 bg-white py-1 shadow-lg dark:border-white/10 dark:bg-olive-900">
+            {themes.map((themeOption) => (
               <button
                 key={themeOption.id}
                 onClick={() => handleThemeChange(themeOption.id)}
-                className={`flex w-full items-center gap-3 px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 ${
+                className={`flex w-full items-center gap-3 px-4 py-2 text-sm hover:bg-olive-950/5 dark:hover:bg-white/5 ${
                   theme === themeOption.id
-                    ? 'text-teal-600 dark:text-teal-400'
-                    : 'text-gray-700 dark:text-gray-300'
+                    ? 'text-olive-600 dark:text-olive-400'
+                    : 'text-olive-950 dark:text-white'
                 }`}
               >
                 <themeOption.icon className="h-5 w-5" />
@@ -152,7 +152,7 @@ function UserMenu() {
     return (
       <Link
         to="/login"
-        className="rounded-lg px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+        className="rounded-lg px-3 py-2 text-sm font-medium text-olive-950 hover:bg-olive-950/10 dark:text-white dark:hover:bg-white/10"
       >
         Sign In
       </Link>
@@ -163,9 +163,9 @@ function UserMenu() {
     <div className="relative">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+        className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-olive-950 hover:bg-olive-950/10 dark:text-white dark:hover:bg-white/10"
       >
-        <div className="h-8 w-8 rounded-full bg-teal-600 flex items-center justify-center text-white">
+        <div className="h-8 w-8 rounded-full bg-olive-600 flex items-center justify-center text-white dark:bg-olive-400 dark:text-olive-950">
           {user.email?.[0]?.toUpperCase() ?? 'U'}
         </div>
         <span className="hidden sm:inline">{user.email}</span>
@@ -174,13 +174,13 @@ function UserMenu() {
       {isOpen && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)} />
-          <div className="absolute right-0 z-20 mt-2 w-48 rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-800">
-            <div className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
+          <div className="absolute right-0 z-20 mt-2 w-48 rounded-lg border border-olive-950/10 bg-white py-1 shadow-lg dark:border-white/10 dark:bg-olive-900">
+            <div className="px-4 py-2 text-sm text-olive-950 dark:text-white border-b border-olive-950/10 dark:border-white/10">
               <div className="font-medium truncate">{user.email}</div>
             </div>
             <button
               onClick={() => void handleSignOut()}
-              className="flex w-full items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+              className="flex w-full items-center gap-3 px-4 py-2 text-sm text-olive-950 hover:bg-olive-950/5 dark:text-white dark:hover:bg-white/5"
             >
               <svg
                 className="h-5 w-5"
@@ -214,20 +214,20 @@ export function AppLayout({ children, fullScreen = false }: AppLayoutProps) {
 
   return (
     <div
-      className={`min-h-screen bg-gray-50 dark:bg-gray-950 ${fullScreen ? 'h-screen overflow-hidden' : ''}`}
+      className={`min-h-screen bg-olive-100 dark:bg-olive-950 ${fullScreen ? 'h-screen overflow-hidden' : ''}`}
     >
       {/* Top Navigation Bar */}
-      <nav className="sticky top-0 z-40 border-b border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
+      <nav className="sticky top-0 z-40 border-b border-olive-950/10 bg-white dark:border-white/10 dark:bg-olive-900">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 items-center justify-between">
             {/* Logo and Navigation */}
             <div className="flex items-center gap-8">
-              <Link to="/" className="text-xl font-bold text-gray-900 dark:text-white">
-                CaptionA.cc
+              <Link to="/" className="font-display text-xl font-bold text-olive-950 dark:text-white">
+                Caption<span className="font-semibold">A.cc</span>
               </Link>
 
               <div className="hidden md:flex md:gap-1">
-                {navigation.map(item => {
+                {navigation.map((item) => {
                   const isActive = location.pathname === item.href
                   return (
                     <Link
@@ -235,8 +235,8 @@ export function AppLayout({ children, fullScreen = false }: AppLayoutProps) {
                       to={item.href}
                       className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                         isActive
-                          ? 'bg-gray-100 text-teal-600 dark:bg-gray-800 dark:text-teal-400'
-                          : 'text-gray-700 hover:bg-gray-100 hover:text-teal-600 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-teal-400'
+                          ? 'bg-olive-950/10 text-olive-600 dark:bg-white/10 dark:text-olive-400'
+                          : 'text-olive-950 hover:bg-olive-950/5 hover:text-olive-600 dark:text-white dark:hover:bg-white/5 dark:hover:text-olive-400'
                       }`}
                     >
                       {item.name}
@@ -256,7 +256,7 @@ export function AppLayout({ children, fullScreen = false }: AppLayoutProps) {
 
           {/* Mobile Navigation */}
           <div className="flex gap-1 pb-3 md:hidden">
-            {navigation.map(item => {
+            {navigation.map((item) => {
               const isActive = location.pathname === item.href
               return (
                 <Link
@@ -264,8 +264,8 @@ export function AppLayout({ children, fullScreen = false }: AppLayoutProps) {
                   to={item.href}
                   className={`flex-1 rounded-lg px-3 py-2 text-center text-sm font-medium transition-colors ${
                     isActive
-                      ? 'bg-gray-100 text-teal-600 dark:bg-gray-800 dark:text-teal-400'
-                      : 'text-gray-700 hover:bg-gray-100 hover:text-teal-600 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-teal-400'
+                      ? 'bg-olive-950/10 text-olive-600 dark:bg-white/10 dark:text-olive-400'
+                      : 'text-olive-950 hover:bg-olive-950/5 hover:text-olive-600 dark:text-white dark:hover:bg-white/5 dark:hover:text-olive-400'
                   }`}
                 >
                   {item.name}
