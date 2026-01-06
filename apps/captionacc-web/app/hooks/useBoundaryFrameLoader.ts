@@ -2,13 +2,41 @@
  * Hook for hierarchical frame loading with priority queue and LRU caching.
  * Loads frames at different modulo levels (coarse to fine) based on proximity to current frame.
  *
+ * LOADING STRATEGIES:
+ *
+ * 1. **Normal Progressive Loading** (Common case - user scrolling/working):
+ *    - Loads coarse-to-fine (modulo_16 → modulo_4 → modulo_1)
+ *    - Centered on current frame position
+ *    - Triggers when moved >3 frames
+ *
+ * 2. **Jump Loading** (Explicit navigation - Jump to Frame, Prev button):
+ *    - HIGHEST PRIORITY - preloading pauses if jump requested
+ *    - Loads modulo_1 (finest) frames FIRST around jump target
+ *    - Blocks navigation until exact frames are loaded
+ *    - Then does normal progressive loading
+ *    - Triggered by: jumpRequestedRef = true, jumpTargetRef = target frame
+ *
+ * 3. **Next Annotation Preloading** (Background optimization):
+ *    - LOWEST PRIORITY - yields to jumps and scrolling
+ *    - Starts immediately when next annotation identified
+ *    - Loads ALL frames for short annotations (<500 frames)
+ *    - Loads boundaries + overview for long annotations (>500 frames)
+ *    - Automatically pauses if user initiates a jump
+ *    - Runs once per annotation (tracked by ID)
+ *
+ * CACHE MANAGEMENT:
+ * - Chunks overlapping active annotation ±20 frames: PINNED (never evicted)
+ * - Chunks overlapping next annotation ±20 frames: PINNED (never evicted)
+ * - Other chunks: LRU eviction when over per-modulo limits
+ * - Total cache: ~75-130MB (40+50+60 chunks across 3 modulos)
+ *
  * This is extracted from the main BoundaryWorkflow component to reduce complexity.
  * The original loadFrameHierarchy function had complexity of 22.
  */
 
 import { useEffect, useRef } from 'react'
 
-import type { Frame } from '~/types/boundaries'
+import type { Annotation, Frame } from '~/types/boundaries'
 
 interface UseBoundaryFrameLoaderParams {
   videoId: string
@@ -18,12 +46,23 @@ interface UseBoundaryFrameLoaderParams {
   totalFrames: number
   framesRef: React.RefObject<Map<number, Frame>> // Now passed from parent
   isReady: boolean // Only start loading when metadata is loaded
+  activeAnnotation: Annotation | null // Current annotation being worked on
+  nextAnnotation: Annotation | null // Next annotation to preload
 }
 
-// LRU cache configuration
-const MAX_CHUNKS_PER_MODULO = 5
-const MAX_CONCURRENT_REQUESTS = 6
+// Cache configuration - optimized for seamless next annotation workflow
+// Goal: User never waits when advancing to next annotation
+// Strategy: Immediately preload next annotation as soon as it's identified
+const MAX_CHUNKS_PER_MODULO = {
+  16: 40, // ~20-40MB, covers ±10,240 frame indices - multiple annotations
+  4: 50, // ~25-50MB, covers ±6,400 frame indices
+  1: 60, // ~30-60MB, covers ±1,440 actual frames
+} as const
+
+const MAX_CONCURRENT_REQUESTS = 8 // Increased for faster loading
 const FRAMES_PER_CHUNK = 32
+const MAX_PRELOAD_ANNOTATION_SPAN = 500 // Max frames to fully preload for next annotation (all modulos)
+const BOUNDARY_BUFFER = 20 // Frames to pin around annotation boundaries (start-20 to end+20)
 
 // Modulo levels with their preload ranges
 // Higher modulo = coarser sampling, larger range
@@ -82,24 +121,23 @@ function buildQueueForModulo(
     const chunkFrames: number[] = []
 
     // Collect frames at modulo positions within this chunk
-    // Hybrid duplication: skip frames that belong to a coarser modulo level
+    // Non-duplicating strategy: each frame belongs to exactly one modulo level
     // - modulo 16: only frames where index % 16 === 0
     // - modulo 4: only frames where index % 4 === 0 AND index % 16 !== 0
-    // - modulo 1: ALL frames (no skipping)
+    // - modulo 1: only frames where index % 4 !== 0
     for (let i = chunkStart; i <= Math.min(chunkEnd, totalFrames - 1); i++) {
-      // For modulo_1, include every frame
-      if (modulo === 1) {
+      // modulo_16: frames divisible by 16
+      if (modulo === 16 && i % 16 === 0) {
         chunkFrames.push(i)
-        continue
       }
-
-      // For other modulos, only include frames at modulo spacing
-      if (i % modulo !== 0) continue
-
-      // Hybrid duplication: skip frames in coarser modulo levels
-      if (modulo === 4 && i % 16 === 0) continue
-
-      chunkFrames.push(i)
+      // modulo_4: frames divisible by 4 but not by 16
+      else if (modulo === 4 && i % 4 === 0 && i % 16 !== 0) {
+        chunkFrames.push(i)
+      }
+      // modulo_1: frames not divisible by 4
+      else if (modulo === 1 && i % 4 !== 0) {
+        chunkFrames.push(i)
+      }
     }
 
     // Add chunk if it has frames (including edge chunks with <32 frames)
@@ -239,21 +277,27 @@ async function processLoadedChunks(
       })
 
       // Extract each frame from the chunk
-      // First, build the actual sequence of frames in this chunk (accounting for hybrid duplication)
+      // Build the actual sequence of frames in this chunk (non-duplicating strategy)
       const framesInChunk: number[] = []
 
-      if (modulo === 1) {
-        // modulo_1: ALL frames (every single frame, no skipping)
-        for (let i = 0; i < 32; i++) {
-          framesInChunk.push(chunk.chunkIndex + i)
-        }
-      } else {
-        // modulo_4 and modulo_16: frames at modulo spacing with hybrid duplication
-        for (let i = chunk.chunkIndex; framesInChunk.length < 32; i += modulo) {
-          // Skip frames that belong to coarser modulo levels (hybrid duplication)
-          if (modulo === 4 && i % 16 === 0) continue
-
+      if (modulo === 16) {
+        // modulo_16: frames divisible by 16
+        for (let i = chunk.chunkIndex; framesInChunk.length < 32; i += 16) {
           framesInChunk.push(i)
+        }
+      } else if (modulo === 4) {
+        // modulo_4: frames divisible by 4 but not by 16
+        for (let i = chunk.chunkIndex; framesInChunk.length < 32; i += 4) {
+          if (i % 16 !== 0) {
+            framesInChunk.push(i)
+          }
+        }
+      } else if (modulo === 1) {
+        // modulo_1: frames NOT divisible by 4
+        for (let i = chunk.chunkIndex; framesInChunk.length < 32; i++) {
+          if (i % 4 !== 0) {
+            framesInChunk.push(i)
+          }
         }
       }
 
@@ -285,12 +329,50 @@ async function processLoadedChunks(
 }
 
 /**
- * Move chunks from requested to loaded cache with LRU eviction.
+ * Check if a chunk is pinned (should not be evicted).
+ * Chunks are pinned if they overlap with active or next annotation ranges,
+ * including a BOUNDARY_BUFFER frame buffer around boundaries for smooth navigation.
+ */
+function isChunkPinned(
+  chunkStart: number,
+  modulo: number,
+  activeAnnotation: Annotation | null,
+  nextAnnotation: Annotation | null
+): boolean {
+  const chunkSize = FRAMES_PER_CHUNK * modulo
+  const chunkEnd = chunkStart + chunkSize - 1
+
+  // Check if chunk overlaps with active annotation (with buffer)
+  if (activeAnnotation) {
+    const start = Math.max(0, activeAnnotation.start_frame_index - BOUNDARY_BUFFER)
+    const end = activeAnnotation.end_frame_index + BOUNDARY_BUFFER
+    if (chunkStart <= end && chunkEnd >= start) {
+      return true
+    }
+  }
+
+  // Check if chunk overlaps with next annotation (with buffer)
+  if (nextAnnotation) {
+    const start = Math.max(0, nextAnnotation.start_frame_index - BOUNDARY_BUFFER)
+    const end = nextAnnotation.end_frame_index + BOUNDARY_BUFFER
+    if (chunkStart <= end && chunkEnd >= start) {
+      return true
+    }
+  }
+
+  return false
+}
+
+/**
+ * Move chunks from requested to loaded cache with smart eviction.
+ * Uses per-modulo limits and respects pinned chunks.
  */
 function updateCacheAfterLoad(
   batch: QueueChunk[],
   loadedChunks: Map<number, number[]>,
-  requestedChunks: Map<number, Set<number>>
+  requestedChunks: Map<number, Set<number>>,
+  activeAnnotation: Annotation | null,
+  nextAnnotation: Annotation | null
 ): void {
   for (const chunk of batch) {
     const chunkFirstFrame = chunk.frames[0]
@@ -305,15 +387,101 @@ function updateCacheAfterLoad(
       inFlight.delete(chunkStart)
     }
 
-    // Add to loaded cache (with LRU eviction)
+    // Add to loaded cache (with smart eviction)
     const cache = loadedChunks.get(chunk.modulo) ?? []
     if (!loadedChunks.has(chunk.modulo)) {
       loadedChunks.set(chunk.modulo, cache)
     }
+
     const shouldAdd = !cache.includes(chunkStart)
-    if (shouldAdd) cache.push(chunkStart)
-    if (cache.length > MAX_CHUNKS_PER_MODULO) cache.shift()
+    if (shouldAdd) {
+      cache.push(chunkStart)
+
+      // Evict oldest unpinned chunks if over limit
+      const maxChunks =
+        MAX_CHUNKS_PER_MODULO[chunk.modulo as keyof typeof MAX_CHUNKS_PER_MODULO] ?? 20
+      while (cache.length > maxChunks) {
+        // Find first unpinned chunk to evict
+        let evicted = false
+        for (let i = 0; i < cache.length; i++) {
+          const candidateChunk = cache[i]!
+          if (!isChunkPinned(candidateChunk, chunk.modulo, activeAnnotation, nextAnnotation)) {
+            cache.splice(i, 1)
+            evicted = true
+            break
+          }
+        }
+        // If all chunks are pinned, stop trying to evict
+        if (!evicted) break
+      }
+    }
   }
+}
+
+/**
+ * Build preload queue for next annotation.
+ * Aggressively loads all frames for next annotation to ensure zero wait time.
+ *
+ * Note: Preloaded chunks are automatically pinned by isChunkPinned() which includes
+ * a ±20 frame buffer around annotation boundaries for smooth navigation.
+ */
+function buildNextAnnotationQueue(
+  nextAnnotation: Annotation,
+  totalFrames: number,
+  loadedChunks: Map<number, number[]>,
+  requestedChunks: Map<number, Set<number>>
+): QueueChunk[] {
+  const chunks: QueueChunk[] = []
+  const span = nextAnnotation.end_frame_index - nextAnnotation.start_frame_index
+
+  // If annotation is too long, only preload boundaries + coarse overview
+  if (span > MAX_PRELOAD_ANNOTATION_SPAN) {
+    // Load modulo_16 across entire annotation (quick overview)
+    chunks.push(
+      ...buildQueueForModulo(
+        Math.floor((nextAnnotation.start_frame_index + nextAnnotation.end_frame_index) / 2),
+        0, // modulo_16
+        totalFrames,
+        loadedChunks,
+        requestedChunks
+      )
+    )
+
+    // Load modulo_4 near start and end (boundary precision)
+    // range=128 ensures we get frames well beyond the ±20 boundary buffer
+    chunks.push(
+      ...buildQueueForModulo(
+        nextAnnotation.start_frame_index,
+        1,
+        totalFrames,
+        loadedChunks,
+        requestedChunks
+      )
+    )
+    chunks.push(
+      ...buildQueueForModulo(
+        nextAnnotation.end_frame_index,
+        1,
+        totalFrames,
+        loadedChunks,
+        requestedChunks
+      )
+    )
+  } else {
+    // Annotation is short enough - load ALL frames across all modulos
+    const centerFrame = Math.floor(
+      (nextAnnotation.start_frame_index + nextAnnotation.end_frame_index) / 2
+    )
+
+    // Load all modulo levels for complete coverage
+    for (let levelIndex = 0; levelIndex < MODULO_LEVELS.length; levelIndex++) {
+      chunks.push(
+        ...buildQueueForModulo(centerFrame, levelIndex, totalFrames, loadedChunks, requestedChunks)
+      )
+    }
+  }
+
+  return chunks
 }
 
 /**
@@ -327,9 +495,12 @@ export function useBoundaryFrameLoader({
   totalFrames,
   framesRef,
   isReady,
+  activeAnnotation,
+  nextAnnotation,
 }: UseBoundaryFrameLoaderParams): void {
   const loadedChunksRef = useRef<Map<number, number[]>>(new Map())
   const requestedChunksRef = useRef<Map<number, Set<number>>>(new Map())
+  const lastPreloadedAnnotationIdRef = useRef<number | null>(null)
 
   useEffect(() => {
     if (!isReady || !videoId || totalFrames === 0) return
@@ -337,6 +508,7 @@ export function useBoundaryFrameLoader({
     let cancelled = false
     let lastLoadedFrame = -1000 // Track last frame we loaded around
     let isLoading = false // Prevent concurrent executions
+    let isPreloading = false // Track if we're preloading next annotation
 
     const loadFrameHierarchy = async () => {
       if (cancelled || isLoading) return
@@ -348,9 +520,9 @@ export function useBoundaryFrameLoader({
       // Read current frame from ref (always gets latest value)
       const currentFrameIndex = currentFrameIndexRef.current ?? 0
 
-      // Only reload if we've moved significantly (more than 16 frames)
+      // Only reload if we've moved significantly (more than 3 frames)
       // Skip this check if there's a pending jump
-      if (!isJump && Math.abs(currentFrameIndex - lastLoadedFrame) < 16) {
+      if (!isJump && Math.abs(currentFrameIndex - lastLoadedFrame) < 3) {
         return
       }
 
@@ -397,7 +569,13 @@ export function useBoundaryFrameLoader({
             // Flatten chunks from all responses
             const allChunks = results.flatMap(r => r.chunks)
             await processLoadedChunks(allChunks, framesRef.current, 1)
-            updateCacheAfterLoad(batch, loadedChunksRef.current, requestedChunksRef.current)
+            updateCacheAfterLoad(
+              batch,
+              loadedChunksRef.current,
+              requestedChunksRef.current,
+              activeAnnotation,
+              nextAnnotation
+            )
           }
 
           // All exact frames loaded - NOW jump to target
@@ -476,7 +654,13 @@ export function useBoundaryFrameLoader({
           await processLoadedChunks(allChunks, framesRef.current, batch[0]?.modulo ?? 1)
 
           // Update cache
-          updateCacheAfterLoad(batch, loadedChunksRef.current, requestedChunksRef.current)
+          updateCacheAfterLoad(
+            batch,
+            loadedChunksRef.current,
+            requestedChunksRef.current,
+            activeAnnotation,
+            nextAnnotation
+          )
         }
 
         // Update lastLoadedFrame after successful load (use captured target, not current)
@@ -488,6 +672,87 @@ export function useBoundaryFrameLoader({
       }
     }
 
+    // Preload next annotation frames in background (runs concurrently with main loading)
+    // Note: This is background work and yields priority to explicit jumps
+    const preloadNextAnnotation = async () => {
+      if (cancelled || isPreloading || !nextAnnotation) return
+
+      // Check if we've already preloaded this annotation
+      if (lastPreloadedAnnotationIdRef.current === nextAnnotation.id) return
+
+      // Yield priority to explicit user navigation (Jump to Frame, Prev button, etc.)
+      // If a jump is requested, pause preloading until it completes
+      if (jumpRequestedRef.current) {
+        console.log('[useBoundaryFrameLoader] Deferring preload - jump in progress')
+        return
+      }
+
+      isPreloading = true
+
+      try {
+        const encodedVideoId = encodeURIComponent(videoId)
+        const queue = buildNextAnnotationQueue(
+          nextAnnotation,
+          totalFrames,
+          loadedChunksRef.current,
+          requestedChunksRef.current
+        )
+
+        console.log(
+          `[useBoundaryFrameLoader] Preloading next annotation ${nextAnnotation.id} (${queue.length} chunks)`
+        )
+
+        // Process chunks in batches
+        while (queue.length > 0) {
+          if (cancelled) return
+
+          // Yield priority to explicit jumps that occur during preloading
+          if (jumpRequestedRef.current) {
+            console.log('[useBoundaryFrameLoader] Pausing preload - jump requested')
+            isPreloading = false
+            return
+          }
+
+          const batch = queue.splice(0, MAX_CONCURRENT_REQUESTS)
+          markChunksAsRequested(batch, requestedChunksRef.current)
+
+          const batchPromises = batch.map(async chunk => {
+            const indicesParam = chunk.frames.join(',')
+            const response = await fetch(
+              `/api/frames/${encodedVideoId}/batch-signed-urls?modulo=${chunk.modulo}&indices=${indicesParam}`
+            )
+            return response.json() as Promise<{
+              chunks: Array<{
+                chunkIndex: number
+                signedUrl: string
+                frameIndices: number[]
+              }>
+            }>
+          })
+
+          const results = await Promise.all(batchPromises)
+          const allChunks = results.flatMap(r => r.chunks)
+          await processLoadedChunks(allChunks, framesRef.current, batch[0]?.modulo ?? 1)
+          updateCacheAfterLoad(
+            batch,
+            loadedChunksRef.current,
+            requestedChunksRef.current,
+            activeAnnotation,
+            nextAnnotation
+          )
+        }
+
+        lastPreloadedAnnotationIdRef.current = nextAnnotation.id
+        console.log(
+          `[useBoundaryFrameLoader] Preloading complete for annotation ${nextAnnotation.id}`
+        )
+      } catch (error: unknown) {
+        console.error('Failed to preload next annotation:', error)
+      } finally {
+        isPreloading = false
+      }
+    }
+
     // Poll every 100ms to check if we need to load more frames
     const pollInterval = setInterval(() => {
       void loadFrameHierarchy()
@@ -496,11 +761,18 @@ export function useBoundaryFrameLoader({
     // Initial load
     void loadFrameHierarchy()
 
+    // Start preloading immediately (runs once per nextAnnotation change)
+    // Effect will re-run when nextAnnotation changes, triggering new preload
+    void preloadNextAnnotation()
+
     return () => {
       cancelled = true
       clearInterval(pollInterval)
     }
     // Note: currentFrameIndexRef is NOT in dependencies - we read from it via polling
     // This allows continuous monitoring without effect re-triggering
-  }, [totalFrames, videoId, isReady])
+    // nextAnnotation and activeAnnotation ARE in deps:
+    // - nextAnnotation: triggers immediate preload when next annotation changes
+    // - activeAnnotation: updates cache pinning to protect current annotation frames
+  }, [totalFrames, videoId, isReady, nextAnnotation, activeAnnotation])
 }
