@@ -67,7 +67,8 @@ function queueFlow(
     | 'caption-median-ocr'
     | 'update-base-model'
     | 'retrain-video-model'
-    | 'upload-and-process',
+    | 'upload-and-process'
+    | 'crop-frames-to-webm',
   options: QueueFlowOptions
 ): Promise<QueueFlowResult> {
   return new Promise((resolve, reject) => {
@@ -141,6 +142,25 @@ function queueFlow(
       }
       if (options.uploadedByUserId) {
         args.push('--uploaded-by-user-id', options.uploadedByUserId)
+      }
+    } else if (flowType === 'crop-frames-to-webm') {
+      // crop-frames-to-webm flow (versioned cropped frames as WebM chunks)
+      if (!options.videoId || !options.cropBounds) {
+        reject(new Error('videoId and cropBounds required for crop-frames-to-webm flow'))
+        return
+      }
+      args = [flowType, options.videoId, JSON.stringify(options.cropBounds)]
+      if (options.tenantId) {
+        args.push('--tenant-id', options.tenantId)
+      }
+      if (options.filename) {
+        args.push('--filename', options.filename)
+      }
+      if (options.frameRate !== undefined && options.frameRate !== 10.0) {
+        args.push('--frame-rate', options.frameRate.toString())
+      }
+      if (options.uploadedByUserId) {
+        args.push('--created-by-user-id', options.uploadedByUserId)
       }
     } else {
       // full-frames and crop-frames have the original structure
@@ -373,5 +393,46 @@ export async function queueUploadAndProcessing(options: {
   })
 
   log(`[Prefect] Upload and processing flow queued: ${result.flowRunId} (status: ${result.status})`)
+  return result
+}
+
+/**
+ * Queue cropped frames WebM chunking flow (versioned frameset generation)
+ *
+ * Generates versioned cropped frames as VP9/WebM chunks:
+ * - Download video and layout.db from Wasabi
+ * - Extract cropped frames at 10Hz
+ * - Encode frames as VP9/WebM chunks
+ * - Upload chunks to Wasabi with version number
+ * - Activate new version (archives previous version)
+ *
+ * The app always uses the latest "active" version for annotation workflows.
+ * Previous versions are archived but retained for ML training reproducibility.
+ */
+export async function queueCropFramesToWebm(options: {
+  videoId: string
+  cropBounds: {
+    left: number
+    top: number
+    right: number
+    bottom: number
+  }
+  tenantId?: string
+  filename?: string
+  frameRate?: number
+  createdByUserId?: string
+}): Promise<QueueFlowResult> {
+  log(`[Prefect] Queuing cropped frames WebM chunking for ${options.videoId}`)
+
+  const result = await queueFlow('crop-frames-to-webm', {
+    videoId: options.videoId,
+    cropBounds: options.cropBounds,
+    tenantId: options.tenantId,
+    filename: options.filename,
+    frameRate: options.frameRate ?? 10.0,
+    uploadedByUserId: options.createdByUserId,
+  })
+
+  log(`[Prefect] Crop frames to WebM flow queued: ${result.flowRunId} (status: ${result.status})`)
   return result
 }

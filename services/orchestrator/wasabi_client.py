@@ -155,8 +155,8 @@ class WasabiClient:
 
         Example:
             client.download_file(
-                "tenant_id/video_id/annotations.db",
-                "/local/data/annotations.db"
+                "tenant_id/video_id/video.db",
+                "/local/data/video.db"
             )
         """
         local_path = Path(local_path)
@@ -314,29 +314,79 @@ class WasabiClient:
         video_id: str,
         chunk_type: str,
         chunk_index: int,
+        version: int | None = None,
+        modulo: int | None = None,
     ) -> str:
         """
         Build a storage key for a cropped frame chunk (WebM/VP9 format).
+
+        Supports hierarchical modulo-based chunking for progressive loading.
 
         Args:
             tenant_id: Tenant UUID
             video_id: Video UUID
             chunk_type: Type of chunk (e.g., "cropped_frames")
             chunk_index: Chunk index (0-based)
+            version: Optional version number for versioned chunks
+            modulo: Optional modulo level (1, 2, 4, 8, 16, 32) for hierarchical loading
 
         Returns:
-            Storage key (e.g., "tenant_id/video_id/cropped_frames/chunk_0000.webm")
+            Storage key (e.g., "tenant_id/video_id/cropped_frames_v1/modulo_32/chunk_0000.webm")
 
         Example:
             key = WasabiClient.build_chunk_storage_key(
                 "00000000-0000-0000-0000-000000000001",
                 "a4f2b8c3-1234-5678-90ab-cdef12345678",
                 "cropped_frames",
-                0
+                0,
+                version=1,
+                modulo=32
             )
-            # Returns: "00000000-0000-0000-0000-000000000001/a4f2b8c3-1234-5678-90ab-cdef12345678/cropped_frames/chunk_0000.webm"
+            # Returns: "00000000-.../cropped_frames_v1/modulo_32/chunk_0000.webm"
         """
-        return f"{tenant_id}/{video_id}/{chunk_type}/chunk_{chunk_index:04d}.webm"
+        if version is not None:
+            chunk_dir = f"{chunk_type}_v{version}"
+        else:
+            chunk_dir = chunk_type
+
+        if modulo is not None:
+            return f"{tenant_id}/{video_id}/{chunk_dir}/modulo_{modulo}/chunk_{chunk_index:04d}.webm"
+        else:
+            return f"{tenant_id}/{video_id}/{chunk_dir}/chunk_{chunk_index:04d}.webm"
+
+    @staticmethod
+    def build_chunk_prefix(
+        tenant_id: str,
+        video_id: str,
+        chunk_type: str,
+        version: int | None = None,
+    ) -> str:
+        """
+        Build a storage prefix for all chunks of a specific type/version.
+
+        Args:
+            tenant_id: Tenant UUID
+            video_id: Video UUID
+            chunk_type: Type of chunk (e.g., "cropped_frames")
+            version: Optional version number for versioned chunks
+
+        Returns:
+            Storage prefix (e.g., "tenant_id/video_id/cropped_frames_v1/")
+
+        Example:
+            prefix = WasabiClient.build_chunk_prefix(
+                "00000000-0000-0000-0000-000000000001",
+                "a4f2b8c3-1234-5678-90ab-cdef12345678",
+                "cropped_frames",
+                version=1
+            )
+            # Returns: "00000000-0000-0000-0000-000000000001/a4f2b8c3-1234-5678-90ab-cdef12345678/cropped_frames_v1/"
+        """
+        if version is not None:
+            chunk_dir = f"{chunk_type}_v{version}"
+        else:
+            chunk_dir = chunk_type
+        return f"{tenant_id}/{video_id}/{chunk_dir}/"
 
 
 def get_wasabi_client() -> WasabiClient:

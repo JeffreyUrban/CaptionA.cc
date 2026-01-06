@@ -290,5 +290,59 @@ def queue_upload_and_process(
     sys.exit(exit_code)
 
 
+@app.command("crop-frames-to-webm")
+def queue_crop_frames_to_webm(
+    video_id: str,
+    crop_bounds: str,  # JSON string: '{"left":0,"top":0,"right":100,"bottom":100}'
+    tenant_id: str = "00000000-0000-0000-0000-000000000001",
+    filename: str | None = None,
+    frame_rate: float = 10.0,
+    created_by_user_id: str | None = None,
+):
+    """Queue cropped frames WebM chunking (versioned frameset generation)."""
+
+    async def _queue():
+        try:
+            # Parse crop bounds JSON
+            bounds = json.loads(crop_bounds)
+
+            parameters = {
+                "video_id": video_id,
+                "tenant_id": tenant_id,
+                "crop_bounds": bounds,
+                "frame_rate": frame_rate,
+            }
+
+            # Add optional parameters only if provided
+            if filename:
+                parameters["filename"] = filename
+            if created_by_user_id:
+                parameters["created_by_user_id"] = created_by_user_id
+
+            # Prefect type stubs incorrectly type run_deployment as returning FlowRun directly
+            flow_run = await run_deployment(  # type: ignore[misc]
+                name="crop-frames-to-webm/production",
+                parameters=parameters,
+                timeout=0,
+                tags=["crop-frames", "webm", "user-initiated", "high-priority"],
+            )
+
+            result = {
+                "flowRunId": str(flow_run.id),
+                "status": "queued",
+                "priority": "high",
+            }
+            print(json.dumps(result))
+            return 0
+
+        except Exception as e:
+            error = {"error": str(e), "status": "failed"}
+            print(json.dumps(error), file=sys.stderr)
+            return 1
+
+    exit_code = asyncio.run(_queue())
+    sys.exit(exit_code)
+
+
 if __name__ == "__main__":
     app()
