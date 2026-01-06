@@ -389,17 +389,52 @@ Response:
 
 ### Frame Loading Strategy
 
-**Progressive loading:**
+**Three-tier priority system** (ensures instant navigation for all workflows):
 
-1. Load current frame immediately
-2. Load ±1 frames (high priority)
-3. Load remaining visible frames (lower priority)
-4. Preload ±10 frames in background
+**1. Jump Loading (HIGHEST PRIORITY)**:
 
-**Caching:**
+When user explicitly navigates (Jump to Frame, Prev button, keyboard shortcuts):
 
-- Cache loaded frames in memory
-- Evict frames >50 frames away from current
+- Preloading pauses immediately (yields bandwidth)
+- Loads modulo_1 (finest, every non-4th frame) FIRST around jump target (±32 frames)
+- **Blocks navigation** until exact frames loaded
+- User sees high-quality frames immediately on arrival
+- Then continues normal progressive loading
+
+**2. Normal Progressive Loading (MEDIUM PRIORITY)**:
+
+During normal scrolling/annotation work:
+
+- Loads coarse-to-fine hierarchy: modulo_16 → modulo_4 → modulo_1
+- **modulo_16**: Every 16th frame, range ±512 frames (coarse overview)
+- **modulo_4**: Every 4th frame (excluding 16th), range ±128 frames (fine detail)
+- **modulo_1**: Remaining frames (excluding 4th), range ±32 frames (complete coverage)
+- Triggers when moved >3 frames
+- Runs continuously (100ms polling)
+
+**3. Next Annotation Preloading (LOWEST PRIORITY)**:
+
+Background optimization for seamless "Next" workflow:
+
+- Starts **immediately** when next annotation identified
+- Runs once per annotation (tracked by ID)
+- **Automatically yields** to explicit jumps
+- For short annotations (<500 frames):
+  - Loads ALL modulos completely
+  - **Goal**: User clicks "Next" → sees frames instantly (no wait)
+- For long annotations (>500 frames):
+  - Loads modulo_16 across annotation (overview)
+  - Loads modulo_4 near boundaries (precision)
+  - Defers modulo_1 until user arrives
+
+**Caching with Smart Pinning:**
+
+- Per-modulo cache limits: 40/50/60 chunks (modulo 16/4/1)
+- **Pinned chunks** (never evicted):
+  - Active annotation: `[start-20, end+20]` frames (smooth boundary adjustments)
+  - Next annotation: `[start-20, end+20]` frames (instant navigation)
+- Unpinned chunks: LRU eviction when over limit
+- Total cache: ~75-130MB (very reasonable for modern browsers)
 
 ### Scroll Performance
 

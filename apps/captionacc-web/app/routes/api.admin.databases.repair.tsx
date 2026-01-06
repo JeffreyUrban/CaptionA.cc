@@ -9,6 +9,10 @@ import { repairAllDatabases } from '~/services/database-repair-service'
 
 export const action: ActionFunction = async ({ request }) => {
   try {
+    // Require platform admin access
+    const { requirePlatformAdmin } = await import('~/services/platform-admin')
+    await requirePlatformAdmin(request)
+
     const body = await request.json()
     const targetVersion = body.targetVersion ?? CURRENT_SCHEMA_VERSION
     const force = body.force ?? false

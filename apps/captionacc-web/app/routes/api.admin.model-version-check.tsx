@@ -17,6 +17,10 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   try {
+    // Require platform admin access
+    const { requirePlatformAdmin } = await import('~/services/platform-admin')
+    await requirePlatformAdmin(request)
+
     console.log('[AdminAPI] Starting model version check...')
 
     const results = await runModelVersionCheck()

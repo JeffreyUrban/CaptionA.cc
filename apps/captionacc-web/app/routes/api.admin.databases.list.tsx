@@ -12,6 +12,10 @@ import { errorResponse, jsonResponse } from '~/utils/api-responses'
 
 export async function loader({ request }: LoaderFunctionArgs) {
   try {
+    // Require platform admin access
+    const { requirePlatformAdmin } = await import('~/services/platform-admin')
+    await requirePlatformAdmin(request)
+
     const url = new URL(request.url)
     const filters: {
       version?: number

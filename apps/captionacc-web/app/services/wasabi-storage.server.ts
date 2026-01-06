@@ -24,13 +24,15 @@ const WASABI_ENDPOINT = `https://s3.${WASABI_REGION}.wasabisys.com`
 const WASABI_BUCKET = process.env['WASABI_BUCKET'] || 'caption-acc-prod'
 const ENVIRONMENT = process.env['ENVIRONMENT'] || 'dev'
 
-// Initialize S3 client
+// Initialize S3 client with READ-ONLY credentials
 const s3Client = new S3Client({
   region: WASABI_REGION,
   endpoint: WASABI_ENDPOINT,
   credentials: {
-    accessKeyId: process.env['WASABI_ACCESS_KEY'] || '',
-    secretAccessKey: process.env['WASABI_SECRET_KEY'] || '',
+    accessKeyId:
+      process.env['WASABI_ACCESS_KEY_READONLY'] || process.env['WASABI_ACCESS_KEY'] || '',
+    secretAccessKey:
+      process.env['WASABI_SECRET_KEY_READONLY'] || process.env['WASABI_SECRET_KEY'] || '',
   },
   forcePathStyle: true, // Required for Wasabi - use path-style URLs instead of virtual-hosted-style
 })
@@ -148,6 +150,40 @@ export async function getVideoChunkMetadata(
 }
 
 /**
+ * Build list of frame indices in a chunk for a given modulo level (non-duplicating strategy)
+ */
+function getFramesInChunk(
+  chunkIndex: number,
+  modulo: number,
+  framesPerChunk: number = 32
+): number[] {
+  const frames: number[] = []
+
+  if (modulo === 16) {
+    // modulo_16: frames divisible by 16
+    for (let i = chunkIndex; frames.length < framesPerChunk; i += 16) {
+      frames.push(i)
+    }
+  } else if (modulo === 4) {
+    // modulo_4: frames divisible by 4 but not by 16
+    for (let i = chunkIndex; frames.length < framesPerChunk; i += 4) {
+      if (i % 16 !== 0) {
+        frames.push(i)
+      }
+    }
+  } else if (modulo === 1) {
+    // modulo_1: frames NOT divisible by 4
+    for (let i = chunkIndex; frames.length < framesPerChunk; i++) {
+      if (i % 4 !== 0) {
+        frames.push(i)
+      }
+    }
+  }
+
+  return frames
+}
+
+/**
  * Extract specific frames from Wasabi WebM chunks server-side
  * Returns buffers that can be used with sharp for image processing
  */
@@ -175,14 +211,10 @@ export async function extractFramesFromWasabi(
   for (const frameIndex of frameIndices) {
     // Find which chunk contains this frame
     let chunkIndex = -1
-    for (let i = 0; i < availableChunks.length; i++) {
-      const currentChunk = availableChunks[i]!
-      const nextChunk = availableChunks[i + 1]
-      const minFrame = currentChunk
-      const maxFrame = nextChunk ? nextChunk - 1 : Infinity
-
-      if (frameIndex >= minFrame && frameIndex <= maxFrame) {
-        chunkIndex = currentChunk
+    for (const availableChunk of availableChunks) {
+      const framesInChunk = getFramesInChunk(availableChunk, modulo)
+      if (framesInChunk.includes(frameIndex)) {
+        chunkIndex = availableChunk
         break
       }
     }
@@ -218,10 +250,17 @@ export async function extractFramesFromWasabi(
       const arrayBuffer = await response.arrayBuffer()
       await writeFile(chunkPath, Buffer.from(arrayBuffer))
 
+      // Build the actual sequence of frames in this chunk
+      const framesSequence = getFramesInChunk(chunkIndex, modulo)
+
       // Extract each frame from this chunk using ffmpeg
       for (const frameIndex of framesInChunk) {
-        // Calculate position within chunk (0-indexed within chunk)
-        const positionInChunk = frameIndex - chunkIndex
+        // Find position within chunk (0-indexed)
+        const positionInChunk = framesSequence.indexOf(frameIndex)
+        if (positionInChunk === -1) {
+          throw new Error(`Frame ${frameIndex} not found in chunk ${chunkIndex}`)
+        }
+
         const outputPath = join(tempDir, `frame_${frameIndex}.jpg`)
 
         // Use ffmpeg to extract the specific frame

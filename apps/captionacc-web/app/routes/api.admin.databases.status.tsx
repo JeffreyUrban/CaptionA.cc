@@ -8,8 +8,12 @@
 import { getDatabaseStatusSummary } from '~/services/database-admin-service'
 import { errorResponse, jsonResponse } from '~/utils/api-responses'
 
-export async function loader() {
+export async function loader({ request }: { request: Request }) {
   try {
+    // Require platform admin access
+    const { requirePlatformAdmin } = await import('~/services/platform-admin')
+    await requirePlatformAdmin(request)
+
     const summary = getDatabaseStatusSummary()
     return jsonResponse(summary)
   } catch (error) {

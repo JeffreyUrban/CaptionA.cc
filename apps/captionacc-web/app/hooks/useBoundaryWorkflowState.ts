@@ -139,6 +139,8 @@ export function useBoundaryWorkflowState({
     totalFrames,
     framesRef,
     isReady: !isLoadingMetadata && isInitialized,
+    activeAnnotation: annotationData.activeAnnotationRef.current,
+    nextAnnotation: annotationData.nextAnnotationRef.current,
   })
 
   const { cursorStyleRef, handleDragStart } = useBoundaryDragScroll({

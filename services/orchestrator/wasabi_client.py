@@ -37,8 +37,16 @@ class WasabiClient:
             bucket_name: S3 bucket name
             region: Wasabi region
         """
-        self.access_key = access_key or os.environ.get("WASABI_ACCESS_KEY")
-        self.secret_key = secret_key or os.environ.get("WASABI_SECRET_KEY")
+        self.access_key = (
+            access_key
+            or os.environ.get("WASABI_ACCESS_KEY_READWRITE")
+            or os.environ.get("WASABI_ACCESS_KEY")
+        )
+        self.secret_key = (
+            secret_key
+            or os.environ.get("WASABI_SECRET_KEY_READWRITE")
+            or os.environ.get("WASABI_SECRET_KEY")
+        )
         self.bucket_name = bucket_name
         self.region = region
 

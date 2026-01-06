@@ -1,0 +1,48 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowListCaptionAccProdBucketOnly",
+      "Effect": "Allow",
+      "Action": [
+        "s3:ListBucket",
+        "s3:GetBucketLocation",
+        "s3:GetBucketVersioning",
+        "s3:ListBucketVersions"
+      ],
+      "Resource": "arn:aws:s3:::caption-acc-prod"
+    },
+    {
+      "Sid": "AllowFullAccessToCaptionAccProdObjects",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:GetObjectVersion",
+        "s3:PutObject",
+        "s3:DeleteObject",
+        "s3:DeleteObjectVersion",
+        "s3:ListMultipartUploadParts",
+        "s3:AbortMultipartUpload"
+      ],
+      "Resource": "arn:aws:s3:::caption-acc-prod/*"
+    },
+    {
+      "Sid": "DenyAccessToAllOtherBuckets",
+      "Effect": "Deny",
+      "Action": "s3:*",
+      "NotResource": [
+        "arn:aws:s3:::caption-acc-prod",
+        "arn:aws:s3:::caption-acc-prod/*"
+      ]
+    },
+    {
+      "Sid": "DenyListAllBuckets",
+      "Effect": "Deny",
+      "Action": [
+        "s3:ListAllMyBuckets",
+        "s3:GetBucketLocation"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

@@ -15,8 +15,12 @@ import {
   notFoundResponse,
 } from '~/utils/api-responses'
 
-export async function loader({ params }: LoaderFunctionArgs) {
+export async function loader({ params, request }: LoaderFunctionArgs) {
   try {
+    // Require platform admin access
+    const { requirePlatformAdmin } = await import('~/services/platform-admin')
+    await requirePlatformAdmin(request)
+
     const { videoId } = params
 
     if (!videoId) {
