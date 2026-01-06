@@ -11,17 +11,17 @@
 Migrate frame storage from SQLite BLOBs to Wasabi object storage with WebM VP9 encoded chunks to:
 
 - **Reduce bandwidth costs**: Direct browser downloads from Wasabi (free egress) vs fly.io (paid egress)
-- **Reduce storage size**: 205MB SQLite → ~75MB VP9 chunks (64% reduction)
+- **Reduce storage size**: 205MB SQLite → ~60MB VP9 chunks (71% reduction)
 - **Enable multi-tenancy**: Clean user separation for future Supabase auth integration
 - **Improve performance**: Hardware-accelerated VP9 decode + adaptive loading based on annotation length
 
 **Key Design Decisions**:
 
 - **Modulo levels**: [16, 4, 1] (3 levels, powers of 4, optimized for scrolling and jumps)
-- **Non-duplicating strategy**: Each frame stored in exactly ONE modulo level (no duplication, ~30MB per video)
+- **Non-duplicating strategy**: Each frame stored in exactly ONE modulo level (no duplication, ~60MB per video)
 - **Three-tier loading priorities**: Jump loading (highest), normal progressive (medium), next annotation preload (lowest)
 - **Smart cache pinning**: Active + next annotation frames protected from eviction (±20 frame buffer)
-- **Storage per video**: ~30MB (vs 205MB SQLite, 85% reduction)
+- **Storage per video**: ~60MB (vs 205MB SQLite, 71% reduction)
 
 **Based on real annotation data**: 28,449 confirmed annotations analyzed (median 1.4 sec, P95 3.7 sec)
 
@@ -197,12 +197,12 @@ else:  # frame_index % 4 != 0
 - Modulo 4: ~5,625 frames
 - Modulo 1: ~22,500 frames
 - **Total: ~30,000 frames (NO duplication, 1.0x)**
-- With VP9 compression: **~30MB per video**
+- With VP9 compression: **~60MB per video**
 
 **Benefits of non-duplicating approach**:
 
 - ✅ **No storage waste**: Every frame stored once (vs 1.25x with duplication)
-- ✅ **60% storage reduction** (~30MB vs ~75MB)
+- ✅ **20% storage reduction** (~60MB vs ~75MB, saves 7,500 duplicate frames)
 - ✅ **Lower bandwidth**: No duplicate frames to download
 - ✅ **Simpler cache management**: No deduplication logic needed
 - ✅ **Better coverage**: Same progressive loading, less storage
