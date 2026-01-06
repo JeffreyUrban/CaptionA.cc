@@ -238,5 +238,57 @@ def queue_retrain_video_model(
     sys.exit(exit_code)
 
 
+@app.command("upload-and-process")
+def queue_upload_and_process(
+    video_path: str,
+    video_id: str,
+    filename: str,
+    file_size: int,
+    tenant_id: str = "00000000-0000-0000-0000-000000000001",
+    frame_rate: float = 0.1,
+    uploaded_by_user_id: str | None = None,
+):
+    """Queue upload and processing (Wasabi-based workflow with split databases)."""
+
+    async def _queue():
+        try:
+            parameters = {
+                "local_video_path": video_path,
+                "video_id": video_id,
+                "filename": filename,
+                "file_size": file_size,
+                "tenant_id": tenant_id,
+                "frame_rate": frame_rate,
+            }
+
+            # Add optional parameter only if provided
+            if uploaded_by_user_id:
+                parameters["uploaded_by_user_id"] = uploaded_by_user_id
+
+            # Prefect type stubs incorrectly type run_deployment as returning FlowRun directly
+            flow_run = await run_deployment(  # type: ignore[misc]
+                name="upload-and-process-video/production",
+                parameters=parameters,
+                timeout=0,
+                tags=["upload", "processing", "high-priority"],
+            )
+
+            result = {
+                "flowRunId": str(flow_run.id),
+                "status": "queued",
+                "priority": "high",
+            }
+            print(json.dumps(result))
+            return 0
+
+        except Exception as e:
+            error = {"error": str(e), "status": "failed"}
+            print(json.dumps(error), file=sys.stderr)
+            return 1
+
+    exit_code = asyncio.run(_queue())
+    sys.exit(exit_code)
+
+
 if __name__ == "__main__":
     app()

@@ -42,6 +42,10 @@ interface QueueFlowOptions {
   trainingSource?: string
   retrainVideos?: boolean
   updatePredictions?: boolean
+  filename?: string
+  fileSize?: number
+  tenantId?: string
+  uploadedByUserId?: string
 }
 
 interface QueueFlowResult {
@@ -62,7 +66,8 @@ function queueFlow(
     | 'crop-frames'
     | 'caption-median-ocr'
     | 'update-base-model'
-    | 'retrain-video-model',
+    | 'retrain-video-model'
+    | 'upload-and-process',
   options: QueueFlowOptions
 ): Promise<QueueFlowResult> {
   return new Promise((resolve, reject) => {
@@ -110,6 +115,32 @@ function queueFlow(
       args = [flowType, options.videoId, options.dbPath]
       if (options.updatePredictions !== undefined) {
         args.push(options.updatePredictions.toString())
+      }
+    } else if (flowType === 'upload-and-process') {
+      // upload-and-process flow (new Wasabi-based workflow with split databases)
+      if (!options.videoPath || !options.videoId || !options.filename || !options.fileSize) {
+        reject(
+          new Error(
+            'videoPath, videoId, filename, and fileSize required for upload-and-process flow'
+          )
+        )
+        return
+      }
+      args = [
+        flowType,
+        options.videoPath,
+        options.videoId,
+        options.filename,
+        options.fileSize.toString(),
+      ]
+      if (options.tenantId) {
+        args.push('--tenant-id', options.tenantId)
+      }
+      if (options.frameRate !== undefined && options.frameRate !== 0.1) {
+        args.push('--frame-rate', options.frameRate.toString())
+      }
+      if (options.uploadedByUserId) {
+        args.push('--uploaded-by-user-id', options.uploadedByUserId)
       }
     } else {
       // full-frames and crop-frames have the original structure
@@ -307,5 +338,40 @@ export async function queueVideoModelRetrain(options: {
   })
 
   log(`[Prefect] Video model retrain flow queued: ${result.flowRunId} (status: ${result.status})`)
+  return result
+}
+
+/**
+ * Queue upload and processing flow (Wasabi-based workflow with split databases)
+ *
+ * Handles complete video upload pipeline:
+ * - Upload video to Wasabi
+ * - Extract full frames → video.db → upload to Wasabi
+ * - Run OCR → fullOCR.db → upload to Wasabi
+ * - Create Supabase catalog entry
+ * - Index OCR content for search
+ *
+ * Later workflows (user-initiated):
+ * - Layout annotation → layout.db
+ * - Crop frames → WebM chunks
+ * - Caption annotation → captions.db
+ */
+export async function queueUploadAndProcessing(options: {
+  videoPath: string
+  videoId: string
+  filename: string
+  fileSize: number
+  tenantId?: string
+  frameRate?: number
+  uploadedByUserId?: string
+}): Promise<QueueFlowResult> {
+  log(`[Prefect] Queuing upload and processing for ${options.videoId}`)
+
+  const result = await queueFlow('upload-and-process', {
+    ...options,
+    frameRate: options.frameRate ?? 0.1,
+  })
+
+  log(`[Prefect] Upload and processing flow queued: ${result.flowRunId} (status: ${result.status})`)
   return result
 }
