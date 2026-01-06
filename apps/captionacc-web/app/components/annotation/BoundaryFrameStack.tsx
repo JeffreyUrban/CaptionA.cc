@@ -99,10 +99,6 @@ export function BoundaryFrameStack({
             }
           }
 
-          // For compatibility with existing code, set frame/alignedFrameIndex
-          const frame = exactFrame || prevFrame
-          const alignedFrameIndex = exactFrame ? framePosition : (prevFrameIndex ?? framePosition)
-
           // Current indicator based on position, not aligned frame
           const isCurrent = framePosition === currentFrameIndex
           const opacity = getOpacity(framePosition)
@@ -249,11 +245,11 @@ export function BoundaryFrameStack({
                       draggable={false}
                     />
                   </div>
-                ) : frame ? (
-                  // Case 3: Have only one neighbor (or prev only) - show it
+                ) : prevFrame ? (
+                  // Case 3: Have only one neighbor - show it
                   <img
-                    src={frame.image_url}
-                    alt={`Frame ${alignedFrameIndex}`}
+                    src={prevFrame.image_url}
+                    alt={`Frame ${prevFrameIndex}`}
                     className="w-full"
                     draggable={false}
                   />

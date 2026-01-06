@@ -1,8 +1,10 @@
+import type { Frame } from '~/types/boundaries'
+
 interface FrameViewerProps {
-  videoId: string
   currentFrameIndex: number
   startFrameIndex: number
   endFrameIndex: number
+  frame: Frame | undefined
   imageContainerRef?:
     | ((node: HTMLDivElement | null) => (() => void) | undefined)
     | React.RefObject<HTMLDivElement>
@@ -10,10 +12,10 @@ interface FrameViewerProps {
 }
 
 export function FrameViewer({
-  videoId,
   currentFrameIndex,
   startFrameIndex,
   endFrameIndex,
+  frame,
   imageContainerRef,
   onMouseDown,
 }: FrameViewerProps) {
@@ -37,12 +39,18 @@ export function FrameViewer({
         onMouseDown={onMouseDown}
         style={{ userSelect: 'none' }}
       >
-        <img
-          src={`/api/frames/${encodeURIComponent(videoId)}/${currentFrameIndex}.jpg`}
-          alt={`Frame ${currentFrameIndex}`}
-          className="h-auto w-full"
-          draggable={false}
-        />
+        {frame ? (
+          <img
+            src={frame.image_url}
+            alt={`Frame ${currentFrameIndex}`}
+            className="h-auto w-full"
+            draggable={false}
+          />
+        ) : (
+          <div className="flex h-64 items-center justify-center text-gray-500 dark:text-gray-400">
+            Loading frame {currentFrameIndex}...
+          </div>
+        )}
       </div>
     </div>
   )
