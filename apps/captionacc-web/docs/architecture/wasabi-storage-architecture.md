@@ -18,10 +18,10 @@ Migrate frame storage from SQLite BLOBs to Wasabi object storage with WebM VP9 e
 **Key Design Decisions**:
 
 - **Modulo levels**: [16, 4, 1] (3 levels, powers of 4, optimized for scrolling and jumps)
-- **Hybrid duplication**: Modulo 1 contains all frames (duplicative), higher modulos non-duplicative (1.25x overhead)
-- **Adaptive loading**: Different strategies for short vs long annotations based on real data analysis
-- **Browser cache deduplication**: Skip re-decoding frames already cached from higher modulos
-- **Storage per video**: ~75MB (vs 205MB SQLite, 99% cost reduction)
+- **Non-duplicating strategy**: Each frame stored in exactly ONE modulo level (no duplication, ~30MB per video)
+- **Three-tier loading priorities**: Jump loading (highest), normal progressive (medium), next annotation preload (lowest)
+- **Smart cache pinning**: Active + next annotation frames protected from eviction (±20 frame buffer)
+- **Storage per video**: ~30MB (vs 205MB SQLite, 85% reduction)
 
 **Based on real annotation data**: 28,449 confirmed annotations analyzed (median 1.4 sec, P95 3.7 sec)
 
@@ -144,7 +144,7 @@ Browser downloads directly from Wasabi (free egress)
 
 ## Data Storage Design
 
-### WebM VP9 Encoded Chunks - Hybrid Duplication Strategy
+### WebM VP9 Encoded Chunks - Non-Duplicating Strategy
 
 **Based on real annotation data** (28,449 confirmed annotations analyzed):
 
@@ -155,93 +155,110 @@ Browser downloads directly from Wasabi (free egress)
 
 ### Modulo Levels: [16, 4, 1]
 
-**3 levels (powers of 4), optimized for scrolling and jumps**:
+**3 levels (powers of 4), non-duplicating - each frame stored exactly once**:
 
 **Modulo 16** (every 1.6 sec):
 
-- ~1,875 frames total
+- ~1,875 frames total (frames where index % 16 === 0)
 - Coarse overview for 50-minute videos
 - Captures annotation boundaries well
 - For ±200 frame scroll: ~25 frames (good coverage)
 
 **Modulo 4** (every 0.4 sec):
 
-- ~5,625 frames (excluding multiples of 16)
+- ~5,625 frames (frames where index % 4 === 0 AND index % 16 !== 0)
 - Fine detail for scrolling within annotations
 - Smooth scrubbing
+- **Excludes multiples of 16** (no duplication)
 
-**Modulo 1** (all frames):
+**Modulo 1** (remaining frames):
 
-- ~30,000 frames (complete, ALL frames)
-- **Duplicative** - contains frames from all higher modulos
-- Fast fine detail loading (no merging needed)
+- ~22,500 frames (frames where index % 4 !== 0)
+- **Fills the gaps** between modulo_4 and modulo_16 frames
+- **No duplication** - only contains frames not in higher modulos
 
-### Hybrid Duplication Structure
+### Non-Duplicating Frame Assignment
 
-**Higher modulos (16, 4)**: Non-duplicative among themselves
+**Each frame stored in exactly one modulo level**:
 
 ```python
-# Frame assignment for higher modulos
+# Frame assignment - mutually exclusive
 if frame_index % 16 == 0:
-    store_in("modulo_16")
+    store_in("modulo_16")      # 1,875 frames
 elif frame_index % 4 == 0:
-    store_in("modulo_4")   # Excludes multiples of 16
-```
-
-**Modulo 1**: Full chunks with ALL frames (duplicative)
-
-```
-modulo_1/chunk_0000.webm  (frames 0-31, complete sequential)
-modulo_1/chunk_0001.webm  (frames 32-63, complete sequential)
-...
+    store_in("modulo_4")       # 5,625 frames (excludes mod 16)
+else:  # frame_index % 4 != 0
+    store_in("modulo_1")       # 22,500 frames (remaining)
 ```
 
 **Storage calculation**:
 
 - Modulo 16: ~1,875 frames
 - Modulo 4: ~5,625 frames
-- Modulo 1: **~30,000 frames** (all)
-- **Total: ~37,500 frames = 1.25x duplication**
-- With VP9 compression: **~70-80MB per video**
+- Modulo 1: ~22,500 frames
+- **Total: ~30,000 frames (NO duplication, 1.0x)**
+- With VP9 compression: **~30MB per video**
 
-**Benefits of hybrid approach**:
+**Benefits of non-duplicating approach**:
 
-- ✅ **Fast fine detail** (common case): Just load modulo_1 chunks, no merging
-- ✅ **Fast coarse overview**: Load 16→4 for quick orientation
-- ✅ **Only 25% storage overhead** (vs 300% for full duplication)
-- ✅ **Simpler**: 3 levels instead of 4
-- ✅ **Better coverage**: Modulo 16 provides 25 frames in ±200 frame window
+- ✅ **No storage waste**: Every frame stored once (vs 1.25x with duplication)
+- ✅ **60% storage reduction** (~30MB vs ~75MB)
+- ✅ **Lower bandwidth**: No duplicate frames to download
+- ✅ **Simpler cache management**: No deduplication logic needed
+- ✅ **Better coverage**: Same progressive loading, less storage
 
-### Adaptive Loading Strategy
+### Three-Tier Loading Strategy
 
-**Short annotations** (<30 frames, ~75% of cases):
+**1. Jump Loading (HIGHEST PRIORITY)**:
 
-- Range: ±50 frames (±5 sec)
-- Priority: [4, 1, 16] → fine detail first
-- Optimized for typical 1-3 second captions
+When user explicitly navigates (Jump to Frame, Prev button):
 
-**Medium annotations** (30-100 frames, ~20% of cases):
+- **Preloading pauses immediately** (yields bandwidth)
+- Loads modulo_1 (finest) frames FIRST around jump target (range ±32)
+- **Blocks navigation** until exact frames loaded
+- Ensures user sees high-quality frames immediately on arrival
+- Then continues with normal progressive loading
 
-- Range: ±100 frames (±10 sec)
-- Priority: [16, 4, 1] → balanced approach
+**2. Normal Progressive Loading (MEDIUM PRIORITY)**:
 
-**Long annotations** (>100 frames, ~5% of cases):
+During normal scrolling/annotation work:
 
-- Range: ±(annotation_length × 1.5) frames → proportional context
-- Priority: [16, 4, 1] → coarse overview first
-- For 300-frame annotation: load ±450 frames
+- Loads coarse-to-fine: modulo_16 → modulo_4 → modulo_1
+- Centered on current frame position
+- Ranges: 16=±512, 4=±128, 1=±32 frames
+- Triggers when moved >3 frames
+- Runs continuously (100ms polling)
+
+**3. Next Annotation Preloading (LOWEST PRIORITY)**:
+
+Background optimization for seamless "Next" workflow:
+
+- Starts **immediately** when next annotation identified
+- Runs once per annotation (tracked by ID)
+- **Automatically yields** to explicit jumps
+- For short annotations (<500 frames):
+  - Loads ALL modulos completely
+  - User sees instant high-quality frames when clicking "Next"
+- For long annotations (>500 frames):
+  - Loads modulo_16 across annotation (overview)
+  - Loads modulo_4 near boundaries (precision)
+  - Defers modulo_1 until user arrives
 
 ```typescript
-function getLoadingStrategy(annotationLength: number) {
-  if (annotationLength < 30) {
-    return { range: 50, modulos: [4, 1, 16] }
-  } else if (annotationLength < 100) {
-    return { range: 100, modulos: [16, 4, 1] }
-  } else {
-    return {
-      range: Math.ceil(annotationLength * 1.5),
-      modulos: [16, 4, 1],
-    }
+// Three-tier priority system
+function loadFrames() {
+  // Priority 1: Explicit jump (blocks navigation)
+  if (jumpRequested) {
+    await loadJumpFrames(jumpTarget, (modulo = 1), (range = 32))
+    completeNavigation()
+  }
+
+  // Priority 2: Normal progressive (continuous)
+  await loadProgressiveFrames(currentFrame, [16, 4, 1])
+
+  // Priority 3: Next annotation preload (yields to jumps)
+  if (!jumpRequested && nextAnnotation) {
+    await preloadNextAnnotation(nextAnnotation)
   }
 }
 ```
@@ -268,52 +285,53 @@ ffmpeg -i frames_%04d.jpg \
   chunk.webm
 ```
 
-### Browser Frame Cache with Deduplication
+### Browser Frame Cache with Smart Pinning
 
-**Problem**: Frames in modulo 16, 4 also appear in modulo_1 chunks
+**Cache Strategy**: Protect current and next annotation frames from eviction
 
-- Without deduplication: ~7,500 frames decoded twice (~22MB extra memory)
+- Per-modulo cache limits: modulo_16=40 chunks, modulo_4=50 chunks, modulo_1=60 chunks
+- Total cache: ~75-130MB (very reasonable for modern browsers)
 
-**Solution**: Frame cache keyed by frame_index only
+**Cache Pinning**:
+
+- Active annotation: Frames from `[start-20, end+20]` are PINNED (never evicted)
+- Next annotation: Frames from `[start-20, end+20]` are PINNED (never evicted)
+- Other chunks: LRU eviction when over per-modulo limits
 
 ```typescript
-class FrameCache {
-  private cache = new Map<number, ImageBitmap>() // Key: frame_index
-  private lru: number[] = []
-  private maxFrames = 500
+function isChunkPinned(
+  chunkStart: number,
+  modulo: number,
+  activeAnnotation: Annotation | null,
+  nextAnnotation: Annotation | null
+): boolean {
+  const BOUNDARY_BUFFER = 20 // Frames around annotation boundaries
+  const chunkEnd = chunkStart + 32 * modulo - 1
 
-  set(frameIndex: number, bitmap: ImageBitmap) {
-    if (this.cache.has(frameIndex)) {
-      return // Skip if already cached from higher modulo
-    }
-
-    this.cache.set(frameIndex, bitmap)
-    this.lru.push(frameIndex)
-
-    // LRU eviction
-    if (this.lru.length > this.maxFrames) {
-      const oldest = this.lru.shift()
-      if (oldest !== undefined) {
-        this.cache.delete(oldest)
-      }
-    }
+  // Check active annotation (with ±20 buffer)
+  if (activeAnnotation) {
+    const start = Math.max(0, activeAnnotation.start - BOUNDARY_BUFFER)
+    const end = activeAnnotation.end + BOUNDARY_BUFFER
+    if (chunkStart <= end && chunkEnd >= start) return true
   }
 
-  has(frameIndex: number): boolean {
-    return this.cache.has(frameIndex)
+  // Check next annotation (with ±20 buffer)
+  if (nextAnnotation) {
+    const start = Math.max(0, nextAnnotation.start - BOUNDARY_BUFFER)
+    const end = nextAnnotation.end + BOUNDARY_BUFFER
+    if (chunkStart <= end && chunkEnd >= start) return true
   }
 
-  get(frameIndex: number): ImageBitmap | undefined {
-    return this.cache.get(frameIndex)
-  }
+  return false
 }
 ```
 
 **Benefits**:
 
-- ✅ Save ~22MB memory per video
-- ✅ **Faster modulo_1 decoding** - skip 7,500 already-decoded frames
-- ✅ More efficient LRU cache (no duplicate entries)
+- ✅ **Instant navigation to next annotation** - frames already loaded & pinned
+- ✅ **Smooth boundary adjustments** - ±20 buffer ensures frames available
+- ✅ **No thrashing** - pinned chunks protected during navigation
+- ✅ **Large cache** - 150 chunks total supports multiple annotations resident
 
 ### Frame Extraction
 
@@ -415,17 +433,40 @@ Browser creates object URLs and displays images
 
 **Current Implementation** (`useBoundaryFrameLoader.ts`):
 
-- 6 modulo levels: [32, 16, 8, 4, 2, 1] with ranges [1024, 512, 256, 128, 64, 32]
-- Chunks of 32 frames per request (dynamically calculated)
-- LRU cache: keeps last 5 chunks per modulo level
-- Concurrent fetches: up to 6 chunks in parallel
+**Three-tier priority system**:
 
-**No changes needed** - this design works identically with individual Wasabi frames:
+1. **Jump Loading** (highest priority):
+   - Explicit navigation (Jump to Frame, Prev button)
+   - Preloading pauses immediately
+   - Loads modulo_1 (finest) frames FIRST at jump target
+   - Blocks navigation until frames loaded
+   - Then continues normal progressive loading
 
-1. Frontend calculates which frames to fetch (same logic)
-2. Frontend requests batch of signed URLs (new endpoint)
-3. Frontend fetches individual frames from Wasabi (instead of decoding base64)
-4. Frontend caches and displays (same logic)
+2. **Normal Progressive Loading** (medium priority):
+   - Loads coarse-to-fine: modulo_16 → modulo_4 → modulo_1
+   - Ranges: [16: ±512, 4: ±128, 1: ±32 frames]
+   - Triggers when moved >3 frames
+   - Runs continuously (100ms polling)
+
+3. **Next Annotation Preloading** (lowest priority):
+   - Starts immediately when next annotation identified
+   - Yields to explicit jumps
+   - Loads ALL modulos for short annotations (<500 frames)
+   - Loads overview + boundaries for long annotations
+
+**Cache Management**:
+
+- Per-modulo limits: 40/50/60 chunks (modulo 16/4/1)
+- Smart pinning: Active + next annotation ±20 frames protected
+- LRU eviction for unpinned chunks
+- Concurrent fetches: up to 8 chunks in parallel
+
+**Integration with Wasabi**:
+
+1. Frontend calculates which frames to fetch (three-tier priority)
+2. Frontend requests batch of signed URLs from API
+3. Frontend fetches VP9 WebM chunks from Wasabi
+4. Frontend decodes, caches, and displays frames
 
 ---
 

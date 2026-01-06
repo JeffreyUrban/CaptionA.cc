@@ -5,6 +5,40 @@ import { generateBatchSignedUrls, listChunks } from '~/services/wasabi-storage.s
 const FRAMES_PER_CHUNK = 32
 
 /**
+ * Build list of frame indices in a chunk for a given modulo level (non-duplicating strategy)
+ */
+function getFramesInChunk(
+  chunkIndex: number,
+  modulo: number,
+  framesPerChunk: number = 32
+): number[] {
+  const frames: number[] = []
+
+  if (modulo === 16) {
+    // modulo_16: frames divisible by 16
+    for (let i = chunkIndex; frames.length < framesPerChunk; i += 16) {
+      frames.push(i)
+    }
+  } else if (modulo === 4) {
+    // modulo_4: frames divisible by 4 but not by 16
+    for (let i = chunkIndex; frames.length < framesPerChunk; i += 4) {
+      if (i % 16 !== 0) {
+        frames.push(i)
+      }
+    }
+  } else if (modulo === 1) {
+    // modulo_1: frames NOT divisible by 4
+    for (let i = chunkIndex; frames.length < framesPerChunk; i++) {
+      if (i % 4 !== 0) {
+        frames.push(i)
+      }
+    }
+  }
+
+  return frames
+}
+
+/**
  * API endpoint: GET /api/frames/:videoId/batch-signed-urls?modulo=X&indices=1,2,3,...
  *
  * Returns signed Wasabi URLs for VP9 WebM chunks containing the requested frames.
@@ -65,33 +99,26 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
       })
     }
 
-    // Build a mapping of frame ranges to chunk indices
-    // Each chunk contains 32 frames at the modulo spacing
-    const chunkRanges: Array<{ chunkIndex: number; minFrame: number; maxFrame: number }> = []
-
-    for (let i = 0; i < availableChunks.length; i++) {
-      const chunkIndex = availableChunks[i]!
-      const nextChunkIndex = availableChunks[i + 1]
-
-      chunkRanges.push({
-        chunkIndex,
-        minFrame: chunkIndex,
-        maxFrame: nextChunkIndex ? nextChunkIndex - 1 : Infinity,
-      })
-    }
-
-    // Group requested frames by which chunk they belong to
+    // Group requested frames by which chunk they belong to (using non-duplicating strategy)
     const chunkToFrames = new Map<number, number[]>()
 
     for (const frameIndex of frameIndices) {
       // Find which chunk this frame belongs to
-      const chunk = chunkRanges.find(c => frameIndex >= c.minFrame && frameIndex <= c.maxFrame)
+      let foundChunk: number | null = null
 
-      if (chunk) {
-        if (!chunkToFrames.has(chunk.chunkIndex)) {
-          chunkToFrames.set(chunk.chunkIndex, [])
+      for (const chunkIndex of availableChunks) {
+        const framesInChunk = getFramesInChunk(chunkIndex, modulo)
+        if (framesInChunk.includes(frameIndex)) {
+          foundChunk = chunkIndex
+          break
         }
-        chunkToFrames.get(chunk.chunkIndex)!.push(frameIndex)
+      }
+
+      if (foundChunk !== null) {
+        if (!chunkToFrames.has(foundChunk)) {
+          chunkToFrames.set(foundChunk, [])
+        }
+        chunkToFrames.get(foundChunk)!.push(frameIndex)
       }
     }
 

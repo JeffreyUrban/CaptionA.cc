@@ -104,6 +104,8 @@ export default function AnnotateText() {
     totalFrames: metadata?.totalFrames ?? 0,
     framesRef,
     isReady: !isLoadingMetadata && !!videoId && !!metadata,
+    activeAnnotation: null, // Text annotation doesn't use this workflow
+    nextAnnotation: null, // No next annotation preloading for text workflow
   })
 
   // Get current frame from loaded frames
