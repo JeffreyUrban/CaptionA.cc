@@ -541,6 +541,8 @@ def crop_frames_to_webm_flow(
                 if not video_record:
                     raise ValueError(f"Video not found: {video_id}")
                 filename = video_record["filename"]
+                if not filename:
+                    raise ValueError(f"Video filename not set in database for video: {video_id}")
 
             # Step 1: Download video from Wasabi
             print("\n📥 Step 1/8: Downloading video from Wasabi...")
