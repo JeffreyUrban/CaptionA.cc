@@ -682,16 +682,130 @@ When crop bounds change:
 5. App switches to new active version
 6. Caption annotation workflows resume
 
-## Future Workflows
+## Caption Annotation Workflow
 
-These workflows are designed but not yet implemented:
+**Flows:** `download-for-caption-annotation` and `upload-captions-db`
 
-### Caption Annotation
-1. Download captions.db from Wasabi (if exists)
-2. Stream active version WebM chunks on-demand
-3. User annotates caption boundaries and text
-4. Update captions.db locally
-5. Upload captions.db to Wasabi
+This workflow handles the bidirectional synchronization of captions.db with Wasabi for caption text annotation.
+
+### Download Flow (`download_for_caption_annotation_flow`)
+
+Downloads captions.db (if exists) from Wasabi to continue previous annotation sessions.
+
+**Workflow Steps:**
+
+1. **Download captions.db (if exists)**
+   - Contains existing caption boundaries and text
+   - Allows continuing previous annotation sessions
+   - If doesn't exist, user starts fresh annotations
+
+**Note:** Cropped frame WebM chunks are streamed on-demand by the browser using signed URLs, so they are not downloaded in this flow. The browser requests chunks as needed during annotation.
+
+**Queue from TypeScript:**
+
+```typescript
+import { queueDownloadForCaptionAnnotation } from '~/services/prefect'
+
+const result = await queueDownloadForCaptionAnnotation({
+  videoId: 'a4f2b8c3-1234-5678-90ab-cdef12345678',
+  outputDir: '/local/annotation_workspace/video_abc123/',
+  tenantId: '00000000-0000-0000-0000-000000000001'  // optional
+})
+
+console.log(`Download queued: ${result.flowRunId}`)
+```
+
+**Queue from Python:**
+
+```python
+from queue_flow import queue_download_for_caption_annotation
+
+queue_download_for_caption_annotation(
+    video_id='a4f2b8c3-1234-5678-90ab-cdef12345678',
+    output_dir='/local/annotation_workspace/video_abc123/',
+    tenant_id='00000000-0000-0000-0000-000000000001'
+)
+```
+
+**Output:**
+
+```python
+{
+  'video_id': 'a4f2b8c3-1234-5678-90ab-cdef12345678',
+  'status': 'completed',
+  'captions_db_path': '/local/annotation_workspace/video_abc123/captions.db',  # or None
+  'captions_exists': True  # or False
+}
+```
+
+### Upload Flow (`upload_captions_db_flow`)
+
+Uploads the annotated captions.db to Wasabi after user completes caption annotations.
+
+**Workflow Steps:**
+
+1. **Upload captions.db to Wasabi**
+   - Storage key: `{tenant_id}/{video_id}/captions.db`
+   - Overwrites previous version
+   - Contains user annotations from caption annotation session
+
+**Queue from TypeScript:**
+
+```typescript
+import { queueUploadCaptionsDb } from '~/services/prefect'
+
+const result = await queueUploadCaptionsDb({
+  videoId: 'a4f2b8c3-1234-5678-90ab-cdef12345678',
+  captionsDbPath: '/local/annotation_workspace/video_abc123/captions.db',
+  tenantId: '00000000-0000-0000-0000-000000000001'  // optional
+})
+
+console.log(`Upload queued: ${result.flowRunId}`)
+```
+
+**Queue from Python:**
+
+```python
+from queue_flow import queue_upload_captions_db
+
+queue_upload_captions_db(
+    video_id='a4f2b8c3-1234-5678-90ab-cdef12345678',
+    captions_db_path='/local/annotation_workspace/video_abc123/captions.db',
+    tenant_id='00000000-0000-0000-0000-000000000001'
+)
+```
+
+**Output:**
+
+```python
+{
+  'video_id': 'a4f2b8c3-1234-5678-90ab-cdef12345678',
+  'storage_key': '00000000-.../a4f2b8c3-.../captions.db',
+  'status': 'completed'
+}
+```
+
+### Captions.db Schema
+
+**Tables:**
+
+- **captions**: Caption boundaries and text content
+  - start_frame: Frame index where caption begins
+  - end_frame: Frame index where caption ends
+  - text: Caption text content
+  - User annotations marking temporal boundaries
+
+### WebM Chunk Streaming
+
+During caption annotation, the browser streams cropped frame chunks on-demand:
+
+1. Browser requests signed URL for specific chunk (e.g., `chunk_0005.webm` at modulo 1)
+2. API validates permissions and generates signed URL
+3. Browser downloads and displays chunk
+4. User annotates captions while watching frames
+5. Chunks loaded progressively based on viewport position
+
+This eliminates the need to download all chunks upfront - only requested chunks are fetched.
 
 ## Performance Characteristics
 

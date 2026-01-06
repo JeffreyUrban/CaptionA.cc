@@ -71,7 +71,9 @@ function queueFlow(
     | 'upload-and-process'
     | 'crop-frames-to-webm'
     | 'download-for-layout-annotation'
-    | 'upload-layout-db',
+    | 'upload-layout-db'
+    | 'download-for-caption-annotation'
+    | 'upload-captions-db',
   options: QueueFlowOptions
 ): Promise<QueueFlowResult> {
   return new Promise((resolve, reject) => {
@@ -187,6 +189,26 @@ function queueFlow(
       }
       if (options.triggerCropRegen !== undefined) {
         args.push('--trigger-crop-regen', options.triggerCropRegen.toString())
+      }
+    } else if (flowType === 'download-for-caption-annotation') {
+      // download-for-caption-annotation flow
+      if (!options.videoId || !options.outputDir) {
+        reject(new Error('videoId and outputDir required for download-for-caption-annotation flow'))
+        return
+      }
+      args = [flowType, options.videoId, options.outputDir]
+      if (options.tenantId) {
+        args.push('--tenant-id', options.tenantId)
+      }
+    } else if (flowType === 'upload-captions-db') {
+      // upload-captions-db flow
+      if (!options.videoId || !options.dbPath) {
+        reject(new Error('videoId and dbPath required for upload-captions-db flow'))
+        return
+      }
+      args = [flowType, options.videoId, options.dbPath]
+      if (options.tenantId) {
+        args.push('--tenant-id', options.tenantId)
       }
     } else {
       // full-frames and crop-frames have the original structure
@@ -512,5 +534,47 @@ export async function queueUploadLayoutDb(options: {
   })
 
   log(`[Prefect] Upload layout.db flow queued: ${result.flowRunId} (status: ${result.status})`)
+  return result
+}
+
+/**
+ * Queue download of captions.db for caption annotation
+ */
+export async function queueDownloadForCaptionAnnotation(options: {
+  videoId: string
+  outputDir: string
+  tenantId?: string
+}): Promise<QueueFlowResult> {
+  log(`[Prefect] Queuing download for caption annotation: ${options.videoId}`)
+
+  const result = await queueFlow('download-for-caption-annotation', {
+    videoId: options.videoId,
+    outputDir: options.outputDir,
+    tenantId: options.tenantId,
+  })
+
+  log(
+    `[Prefect] Download for caption annotation flow queued: ${result.flowRunId} (status: ${result.status})`
+  )
+  return result
+}
+
+/**
+ * Queue upload of annotated captions.db to Wasabi
+ */
+export async function queueUploadCaptionsDb(options: {
+  videoId: string
+  captionsDbPath: string
+  tenantId?: string
+}): Promise<QueueFlowResult> {
+  log(`[Prefect] Queuing upload of captions.db for ${options.videoId}`)
+
+  const result = await queueFlow('upload-captions-db', {
+    videoId: options.videoId,
+    dbPath: options.captionsDbPath,
+    tenantId: options.tenantId,
+  })
+
+  log(`[Prefect] Upload captions.db flow queued: ${result.flowRunId} (status: ${result.status})`)
   return result
 }

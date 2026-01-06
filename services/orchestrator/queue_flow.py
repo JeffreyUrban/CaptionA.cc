@@ -426,5 +426,85 @@ def queue_upload_layout_db(
     sys.exit(exit_code)
 
 
+@app.command("download-for-caption-annotation")
+def queue_download_for_caption_annotation(
+    video_id: str,
+    output_dir: str,
+    tenant_id: str = "00000000-0000-0000-0000-000000000001",
+):
+    """Queue download of captions.db for caption annotation."""
+
+    async def _queue():
+        try:
+            parameters = {
+                "video_id": video_id,
+                "output_dir": output_dir,
+                "tenant_id": tenant_id,
+            }
+
+            # Prefect type stubs incorrectly type run_deployment as returning FlowRun directly
+            flow_run = await run_deployment(  # type: ignore[misc]
+                name="download-for-caption-annotation/production",
+                parameters=parameters,
+                timeout=0,
+                tags=["download", "caption-annotation", "user-initiated"],
+            )
+
+            result = {
+                "flowRunId": str(flow_run.id),
+                "status": "queued",
+            }
+            print(json.dumps(result))
+            return 0
+
+        except Exception as e:
+            error = {"error": str(e), "status": "failed"}
+            print(json.dumps(error), file=sys.stderr)
+            return 1
+
+    exit_code = asyncio.run(_queue())
+    sys.exit(exit_code)
+
+
+@app.command("upload-captions-db")
+def queue_upload_captions_db(
+    video_id: str,
+    captions_db_path: str,
+    tenant_id: str = "00000000-0000-0000-0000-000000000001",
+):
+    """Queue upload of annotated captions.db to Wasabi."""
+
+    async def _queue():
+        try:
+            parameters = {
+                "video_id": video_id,
+                "captions_db_path": captions_db_path,
+                "tenant_id": tenant_id,
+            }
+
+            # Prefect type stubs incorrectly type run_deployment as returning FlowRun directly
+            flow_run = await run_deployment(  # type: ignore[misc]
+                name="upload-captions-db/production",
+                parameters=parameters,
+                timeout=0,
+                tags=["upload", "caption-annotation", "user-initiated", "high-priority"],
+            )
+
+            result = {
+                "flowRunId": str(flow_run.id),
+                "status": "queued",
+            }
+            print(json.dumps(result))
+            return 0
+
+        except Exception as e:
+            error = {"error": str(e), "status": "failed"}
+            print(json.dumps(error), file=sys.stderr)
+            return 1
+
+    exit_code = asyncio.run(_queue())
+    sys.exit(exit_code)
+
+
 if __name__ == "__main__":
     app()
