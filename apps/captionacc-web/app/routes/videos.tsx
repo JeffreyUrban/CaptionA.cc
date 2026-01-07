@@ -165,14 +165,14 @@ function PageHeader({ onCreateFolder }: { onCreateFolder: () => void }) {
   return (
     <div className="sm:flex sm:items-center sm:justify-between">
       <div className="sm:flex-auto">
-        <h1 className="text-base font-semibold text-gray-900 dark:text-gray-200">Videos</h1>
-        <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+        <h1 className="text-base font-semibold text-olive-950 dark:text-white">Videos</h1>
+        <p className="mt-2 text-sm text-olive-700 dark:text-olive-400">
           A list of all videos with annotation statistics and progress.
         </p>
       </div>
       <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex sm:items-center sm:gap-4">
         {/* Legend */}
-        <div className="flex items-center gap-4 text-xs text-gray-600 dark:text-gray-400">
+        <div className="flex items-center gap-4 text-xs text-olive-700 dark:text-olive-400">
           <div className="flex items-center gap-1.5">
             <div className="w-3 h-3 rounded-sm bg-teal-500" />
             <span>Confirmed</span>
@@ -194,14 +194,14 @@ function PageHeader({ onCreateFolder }: { onCreateFolder: () => void }) {
         <div className="flex items-center gap-3">
           <button
             onClick={onCreateFolder}
-            className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            className="inline-flex items-center gap-2 px-4 py-2 border border-olive-950/10 dark:border-white/10 text-sm font-medium rounded-md text-olive-950 dark:text-white bg-white dark:bg-olive-900 hover:bg-olive-950/5 dark:hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-olive-600"
           >
             <PlusIcon className="h-4 w-4" />
             New Folder
           </button>
           <Link
             to="/upload"
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-olive-600 hover:bg-olive-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-olive-600 dark:bg-olive-400 dark:text-olive-950 dark:hover:bg-olive-300"
           >
             Upload Videos
           </Link>
@@ -228,7 +228,7 @@ function SearchControls({
       <div className="relative flex-1 rounded-md shadow-sm">
         <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
           <MagnifyingGlassIcon
-            className="h-5 w-5 text-gray-500 dark:text-gray-500"
+            className="h-5 w-5 text-olive-600 dark:text-olive-500"
             aria-hidden="true"
           />
         </div>
@@ -236,20 +236,20 @@ function SearchControls({
           type="text"
           value={searchQuery}
           onChange={e => onSearchChange(e.target.value)}
-          className="block w-full rounded-md border-0 py-1.5 pl-10 text-gray-900 dark:text-white dark:bg-gray-800 ring-1 ring-inset ring-gray-300 dark:ring-gray-700 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:ring-2 focus:ring-inset focus:ring-indigo-600 dark:focus:ring-indigo-500 sm:text-sm"
+          className="block w-full rounded-md border-0 py-1.5 pl-10 text-olive-950 dark:text-white dark:bg-olive-900 ring-1 ring-inset ring-olive-950/10 dark:ring-white/10 placeholder:text-olive-500 dark:placeholder:text-olive-600 focus:ring-2 focus:ring-inset focus:ring-olive-600 dark:focus:ring-olive-400 sm:text-sm"
           placeholder="Search videos..."
         />
       </div>
       <div className="flex gap-2">
         <button
           onClick={onExpandAll}
-          className="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+          className="px-3 py-1.5 text-sm font-medium text-olive-950 dark:text-white bg-white dark:bg-olive-900 border border-olive-950/10 dark:border-white/10 rounded-md hover:bg-olive-950/5 dark:hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-olive-600"
         >
           Expand All
         </button>
         <button
           onClick={onCollapseAll}
-          className="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+          className="px-3 py-1.5 text-sm font-medium text-olive-950 dark:text-white bg-white dark:bg-olive-900 border border-olive-950/10 dark:border-white/10 rounded-md hover:bg-olive-950/5 dark:hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-olive-600"
         >
           Collapse All
         </button>

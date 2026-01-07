@@ -19,7 +19,7 @@ export default function App() {
   return (
     <html
       lang="en"
-      className="h-full bg-white dark:bg-gray-950 antialiased"
+      className="h-full bg-olive-100 dark:bg-olive-950 antialiased"
       suppressHydrationWarning
     >
       <head>
@@ -28,10 +28,24 @@ export default function App() {
         <Meta />
         <Links />
         <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@100..900&display=swap"
+          rel="stylesheet"
+        />
         <title>CaptionA.cc - Caption Annotation Platform</title>
         <script src="/set-theme.js"></script>
+        {/* Umami Analytics */}
+        {import.meta.env['VITE_UMAMI_WEBSITE_ID'] && import.meta.env['VITE_UMAMI_SRC'] && (
+          <script
+            defer
+            src={import.meta.env['VITE_UMAMI_SRC']}
+            data-website-id={import.meta.env['VITE_UMAMI_WEBSITE_ID']}
+          />
+        )}
       </head>
-      <body className="h-full">
+      <body className="h-full bg-olive-100 dark:bg-olive-950">
         <Providers>
           <Outlet /> {/* This renders the current route */}
         </Providers>
@@ -78,7 +92,7 @@ export function ErrorBoundary() {
   }
 
   return (
-    <html lang="en" className="h-full bg-white dark:bg-gray-950">
+    <html lang="en" className="h-full bg-olive-100 dark:bg-olive-950">
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -86,7 +100,7 @@ export function ErrorBoundary() {
         <Links />
         <title>Error - CaptionA.cc</title>
       </head>
-      <body className="h-full">
+      <body className="h-full bg-olive-100 dark:bg-olive-950">
         <Providers>
           <NotFound {...props} />
         </Providers>
