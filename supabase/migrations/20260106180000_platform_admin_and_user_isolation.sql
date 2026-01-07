@@ -6,7 +6,7 @@
 -- ============================================================================
 
 -- Platform admins have cross-tenant access for system administration
-CREATE TABLE platform_admins (
+CREATE TABLE captionacc_production.platform_admins (
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
   admin_level TEXT NOT NULL CHECK (admin_level IN ('super_admin', 'support')),
   granted_by UUID REFERENCES auth.users(id),
@@ -16,14 +16,14 @@ CREATE TABLE platform_admins (
 );
 
 -- Enable RLS on platform_admins to protect the list of admins
-ALTER TABLE platform_admins ENABLE ROW LEVEL SECURITY;
+ALTER TABLE captionacc_production.platform_admins ENABLE ROW LEVEL SECURITY;
 
 -- Only platform admins can see who else is a platform admin
 CREATE POLICY "Platform admins see each other"
-  ON platform_admins FOR SELECT
+  ON captionacc_production.platform_admins FOR SELECT
   USING (
     EXISTS (
-      SELECT 1 FROM platform_admins
+      SELECT 1 FROM captionacc_production.platform_admins
       WHERE user_id = auth.uid()
       AND revoked_at IS NULL
     )
@@ -31,10 +31,10 @@ CREATE POLICY "Platform admins see each other"
 
 -- Only platform admins can grant/revoke admin access
 CREATE POLICY "Platform admins manage admin grants"
-  ON platform_admins FOR ALL
+  ON captionacc_production.platform_admins FOR ALL
   USING (
     EXISTS (
-      SELECT 1 FROM platform_admins
+      SELECT 1 FROM captionacc_production.platform_admins
       WHERE user_id = auth.uid()
       AND admin_level = 'super_admin'
       AND revoked_at IS NULL
@@ -72,7 +72,7 @@ CREATE OR REPLACE FUNCTION is_platform_admin()
 RETURNS BOOLEAN AS $$
 BEGIN
   RETURN EXISTS (
-    SELECT 1 FROM platform_admins
+    SELECT 1 FROM captionacc_production.platform_admins
     WHERE user_id = auth.uid()
     AND revoked_at IS NULL
   );
@@ -335,7 +335,7 @@ CREATE INDEX idx_platform_admin_audit_created ON platform_admin_audit(created_at
 -- COMMENTS
 -- ============================================================================
 
-COMMENT ON TABLE platform_admins IS 'Platform administrators with cross-tenant access. Separate from tenant-level roles.';
+COMMENT ON TABLE captionacc_production.platform_admins IS 'Platform administrators with cross-tenant access. Separate from tenant-level roles.';
 COMMENT ON TABLE platform_admin_audit IS 'Audit log for platform admin actions. Critical for compliance and debugging.';
 COMMENT ON COLUMN captionacc_production.user_profiles.role IS 'Tenant-level role: owner (tenant admin) or member (regular user). Distinct from platform admin.';
 COMMENT ON FUNCTION is_platform_admin() IS 'Returns true if current user is an active platform admin (super_admin or support).';

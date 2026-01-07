@@ -4,7 +4,7 @@
 
 -- Access tiers table
 -- Defines what features each tier can access
-CREATE TABLE IF NOT EXISTS access_tiers (
+CREATE TABLE IF NOT EXISTS captionacc_production.access_tiers (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   description TEXT,
@@ -14,11 +14,11 @@ CREATE TABLE IF NOT EXISTS access_tiers (
 
 -- Add access tier fields to user_profiles
 ALTER TABLE captionacc_production.user_profiles
-  ADD COLUMN IF NOT EXISTS access_tier_id TEXT DEFAULT 'demo' REFERENCES access_tiers(id),
+  ADD COLUMN IF NOT EXISTS access_tier_id TEXT DEFAULT 'demo' REFERENCES captionacc_production.access_tiers(id),
   ADD COLUMN IF NOT EXISTS access_notes TEXT;
 
 -- Insert tier definitions
-INSERT INTO access_tiers (id, name, description, features) VALUES
+INSERT INTO captionacc_production.access_tiers (id, name, description, features) VALUES
   ('demo', 'Demo Access', 'Read-only access to demo videos only', '{
     "max_videos": 0,
     "max_storage_gb": 0,
@@ -64,7 +64,7 @@ BEGIN
   END IF;
 
   SELECT features INTO v_features
-  FROM access_tiers
+  FROM captionacc_production.access_tiers
   WHERE id = v_tier_id;
 
   RETURN COALESCE((v_features->p_feature)::BOOLEAN, FALSE);
@@ -77,7 +77,7 @@ SET access_tier_id = 'active'
 WHERE access_tier_id IS NULL OR access_tier_id = 'demo';
 
 -- Comments for documentation
-COMMENT ON TABLE access_tiers IS 'Defines feature access levels. Billing/payment managed separately.';
+COMMENT ON TABLE captionacc_production.access_tiers IS 'Defines feature access levels. Billing/payment managed separately.';
 COMMENT ON COLUMN captionacc_production.user_profiles.access_tier_id IS 'User access level - controls feature access independent of billing';
 COMMENT ON COLUMN captionacc_production.user_profiles.access_notes IS 'Admin notes about why tier was changed';
 COMMENT ON FUNCTION has_feature_access IS 'Check if user has access to a specific feature based on their tier';
