@@ -47,14 +47,21 @@ CREATE POLICY "Platform admins manage admin grants"
 
 -- Migrate existing roles: 'admin' → 'owner', 'user' → 'member'
 -- Remove 'annotator' role (no longer needed)
-UPDATE user_profiles SET role = 'owner' WHERE role = 'admin';
-UPDATE user_profiles SET role = 'member' WHERE role = 'user';
-UPDATE user_profiles SET role = 'member' WHERE role = 'annotator'; -- fallback if any exist
+-- NOTE: These updates are conditional - only run if user_profiles table exists
+DO $$
+BEGIN
+  IF EXISTS (SELECT FROM information_schema.tables
+             WHERE table_schema = 'captionacc_production'
+             AND table_name = 'user_profiles') THEN
+    UPDATE captionacc_production.user_profiles SET role = 'owner' WHERE role = 'admin';
+    UPDATE captionacc_production.user_profiles SET role = 'member' WHERE role = 'user';
+    UPDATE captionacc_production.user_profiles SET role = 'member' WHERE role = 'annotator';
 
--- Update CHECK constraint to new role names
-ALTER TABLE user_profiles DROP CONSTRAINT IF EXISTS user_profiles_role_check;
-ALTER TABLE user_profiles ADD CONSTRAINT user_profiles_role_check
-  CHECK (role IN ('owner', 'member'));
+    ALTER TABLE captionacc_production.user_profiles DROP CONSTRAINT IF EXISTS user_profiles_role_check;
+    ALTER TABLE captionacc_production.user_profiles ADD CONSTRAINT user_profiles_role_check
+      CHECK (role IN ('owner', 'member'));
+  END IF;
+END $$;
 
 -- ============================================================================
 -- PART 3: Helper Functions
@@ -77,7 +84,7 @@ CREATE OR REPLACE FUNCTION is_tenant_owner(tenant_uuid UUID)
 RETURNS BOOLEAN AS $$
 BEGIN
   RETURN EXISTS (
-    SELECT 1 FROM user_profiles
+    SELECT 1 FROM captionacc_production.user_profiles
     WHERE id = auth.uid()
     AND tenant_id = tenant_uuid
     AND role = 'owner'
@@ -88,7 +95,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
 -- Get tenant_id for current user
 CREATE OR REPLACE FUNCTION current_user_tenant_id()
 RETURNS UUID AS $$
-  SELECT tenant_id FROM user_profiles WHERE id = auth.uid() LIMIT 1;
+  SELECT tenant_id FROM captionacc_production.user_profiles WHERE id = auth.uid() LIMIT 1;
 $$ LANGUAGE SQL SECURITY DEFINER STABLE;
 
 -- ============================================================================
@@ -96,13 +103,13 @@ $$ LANGUAGE SQL SECURITY DEFINER STABLE;
 -- ============================================================================
 
 -- Drop old policies
-DROP POLICY IF EXISTS "Users can view tenant videos" ON videos;
-DROP POLICY IF EXISTS "Users can insert videos" ON videos;
-DROP POLICY IF EXISTS "Users can update tenant videos" ON videos;
+DROP POLICY IF EXISTS "Users can view tenant videos" ON captionacc_production.videos;
+DROP POLICY IF EXISTS "Users can insert videos" ON captionacc_production.videos;
+DROP POLICY IF EXISTS "Users can update tenant videos" ON captionacc_production.videos;
 
 -- Members can view only their own videos
 CREATE POLICY "Members view own videos"
-  ON videos FOR SELECT
+  ON captionacc_production.videos FOR SELECT
   USING (
     uploaded_by_user_id = auth.uid()
     AND deleted_at IS NULL
@@ -110,10 +117,10 @@ CREATE POLICY "Members view own videos"
 
 -- Owners can view all videos in their tenant
 CREATE POLICY "Owners view tenant videos"
-  ON videos FOR SELECT
+  ON captionacc_production.videos FOR SELECT
   USING (
     tenant_id IN (
-      SELECT tenant_id FROM user_profiles
+      SELECT tenant_id FROM captionacc_production.user_profiles
       WHERE id = auth.uid() AND role = 'owner'
     )
     AND deleted_at IS NULL
@@ -121,12 +128,12 @@ CREATE POLICY "Owners view tenant videos"
 
 -- Platform admins can view all videos (for support/debugging)
 CREATE POLICY "Platform admins view all videos"
-  ON videos FOR SELECT
+  ON captionacc_production.videos FOR SELECT
   USING (is_platform_admin());
 
 -- Any authenticated user can insert videos into their own tenant
 CREATE POLICY "Users insert videos in own tenant"
-  ON videos FOR INSERT
+  ON captionacc_production.videos FOR INSERT
   WITH CHECK (
     tenant_id = current_user_tenant_id()
     AND uploaded_by_user_id = auth.uid()
@@ -134,154 +141,154 @@ CREATE POLICY "Users insert videos in own tenant"
 
 -- Users can update their own videos
 CREATE POLICY "Users update own videos"
-  ON videos FOR UPDATE
+  ON captionacc_production.videos FOR UPDATE
   USING (uploaded_by_user_id = auth.uid());
 
 -- Owners can update any video in their tenant
 CREATE POLICY "Owners update tenant videos"
-  ON videos FOR UPDATE
+  ON captionacc_production.videos FOR UPDATE
   USING (
     tenant_id IN (
-      SELECT tenant_id FROM user_profiles
+      SELECT tenant_id FROM captionacc_production.user_profiles
       WHERE id = auth.uid() AND role = 'owner'
     )
   );
 
 -- Platform admins can update any video
 CREATE POLICY "Platform admins update all videos"
-  ON videos FOR UPDATE
+  ON captionacc_production.videos FOR UPDATE
   USING (is_platform_admin());
 
 -- Users can soft delete their own videos
 CREATE POLICY "Users soft delete own videos"
-  ON videos FOR DELETE
+  ON captionacc_production.videos FOR DELETE
   USING (uploaded_by_user_id = auth.uid());
 
 -- Owners can soft delete any video in their tenant
 CREATE POLICY "Owners soft delete tenant videos"
-  ON videos FOR DELETE
+  ON captionacc_production.videos FOR DELETE
   USING (
     tenant_id IN (
-      SELECT tenant_id FROM user_profiles
+      SELECT tenant_id FROM captionacc_production.user_profiles
       WHERE id = auth.uid() AND role = 'owner'
     )
   );
 
 -- Platform admins can delete any video
 CREATE POLICY "Platform admins delete all videos"
-  ON videos FOR DELETE
+  ON captionacc_production.videos FOR DELETE
   USING (is_platform_admin());
 
 -- ============================================================================
 -- PART 5: Update RLS Policies - User Profiles Table
 -- ============================================================================
 
-DROP POLICY IF EXISTS "Users can view own profile" ON user_profiles;
-DROP POLICY IF EXISTS "Users can update own profile" ON user_profiles;
+DROP POLICY IF EXISTS "Users can view own profile" ON captionacc_production.user_profiles;
+DROP POLICY IF EXISTS "Users can update own profile" ON captionacc_production.user_profiles;
 
 -- Users can view their own profile
 CREATE POLICY "Users view own profile"
-  ON user_profiles FOR SELECT
+  ON captionacc_production.user_profiles FOR SELECT
   USING (id = auth.uid());
 
 -- Owners can view all profiles in their tenant
 CREATE POLICY "Owners view tenant profiles"
-  ON user_profiles FOR SELECT
+  ON captionacc_production.user_profiles FOR SELECT
   USING (
     tenant_id IN (
-      SELECT tenant_id FROM user_profiles
+      SELECT tenant_id FROM captionacc_production.user_profiles
       WHERE id = auth.uid() AND role = 'owner'
     )
   );
 
 -- Platform admins can view all profiles
 CREATE POLICY "Platform admins view all profiles"
-  ON user_profiles FOR SELECT
+  ON captionacc_production.user_profiles FOR SELECT
   USING (is_platform_admin());
 
 -- Users can update their own profile (except role and tenant_id)
 CREATE POLICY "Users update own profile"
-  ON user_profiles FOR UPDATE
+  ON captionacc_production.user_profiles FOR UPDATE
   USING (id = auth.uid())
   WITH CHECK (
     id = auth.uid()
-    AND role = (SELECT role FROM user_profiles WHERE id = auth.uid())
-    AND tenant_id = (SELECT tenant_id FROM user_profiles WHERE id = auth.uid())
+    AND role = (SELECT role FROM captionacc_production.user_profiles WHERE id = auth.uid())
+    AND tenant_id = (SELECT tenant_id FROM captionacc_production.user_profiles WHERE id = auth.uid())
   );
 
 -- Owners can update profiles in their tenant (including role changes)
 CREATE POLICY "Owners update tenant profiles"
-  ON user_profiles FOR UPDATE
+  ON captionacc_production.user_profiles FOR UPDATE
   USING (
     tenant_id IN (
-      SELECT tenant_id FROM user_profiles
+      SELECT tenant_id FROM captionacc_production.user_profiles
       WHERE id = auth.uid() AND role = 'owner'
     )
   )
   WITH CHECK (
     tenant_id IN (
-      SELECT tenant_id FROM user_profiles
+      SELECT tenant_id FROM captionacc_production.user_profiles
       WHERE id = auth.uid() AND role = 'owner'
     )
   );
 
 -- Platform admins can update any profile
 CREATE POLICY "Platform admins update all profiles"
-  ON user_profiles FOR UPDATE
+  ON captionacc_production.user_profiles FOR UPDATE
   USING (is_platform_admin());
 
 -- ============================================================================
 -- PART 6: Update RLS Policies - Tenants Table
 -- ============================================================================
 
-DROP POLICY IF EXISTS "Users can view own tenant" ON tenants;
+DROP POLICY IF EXISTS "Users can view own tenant" ON captionacc_production.tenants;
 
 -- Users can view their own tenant
 CREATE POLICY "Users view own tenant"
-  ON tenants FOR SELECT
+  ON captionacc_production.tenants FOR SELECT
   USING (
-    id IN (SELECT tenant_id FROM user_profiles WHERE id = auth.uid())
+    id IN (SELECT tenant_id FROM captionacc_production.user_profiles WHERE id = auth.uid())
   );
 
 -- Only owners can update tenant settings
 CREATE POLICY "Owners update tenant"
-  ON tenants FOR UPDATE
+  ON captionacc_production.tenants FOR UPDATE
   USING (
     id IN (
-      SELECT tenant_id FROM user_profiles
+      SELECT tenant_id FROM captionacc_production.user_profiles
       WHERE id = auth.uid() AND role = 'owner'
     )
   );
 
 -- Platform admins can view and update all tenants
 CREATE POLICY "Platform admins manage all tenants"
-  ON tenants FOR ALL
+  ON captionacc_production.tenants FOR ALL
   USING (is_platform_admin());
 
 -- ============================================================================
 -- PART 7: Update RLS Policies - Search Index
 -- ============================================================================
 
-DROP POLICY IF EXISTS "Users can search tenant videos" ON video_search_index;
+DROP POLICY IF EXISTS "Users can search tenant videos" ON captionacc_production.video_search_index;
 
 -- Members can search only their own videos
 CREATE POLICY "Members search own videos"
-  ON video_search_index FOR SELECT
+  ON captionacc_production.video_search_index FOR SELECT
   USING (
     video_id IN (
-      SELECT id FROM videos
+      SELECT id FROM captionacc_production.videos
       WHERE uploaded_by_user_id = auth.uid()
     )
   );
 
 -- Owners can search all videos in their tenant
 CREATE POLICY "Owners search tenant videos"
-  ON video_search_index FOR SELECT
+  ON captionacc_production.video_search_index FOR SELECT
   USING (
     video_id IN (
-      SELECT id FROM videos
+      SELECT id FROM captionacc_production.videos
       WHERE tenant_id IN (
-        SELECT tenant_id FROM user_profiles
+        SELECT tenant_id FROM captionacc_production.user_profiles
         WHERE id = auth.uid() AND role = 'owner'
       )
     )
@@ -289,7 +296,7 @@ CREATE POLICY "Owners search tenant videos"
 
 -- Platform admins can search all videos
 CREATE POLICY "Platform admins search all videos"
-  ON video_search_index FOR SELECT
+  ON captionacc_production.video_search_index FOR SELECT
   USING (is_platform_admin());
 
 -- ============================================================================
@@ -301,7 +308,7 @@ CREATE TABLE IF NOT EXISTS platform_admin_audit (
   id BIGSERIAL PRIMARY KEY,
   admin_user_id UUID REFERENCES auth.users(id),
   action TEXT NOT NULL,
-  target_tenant_id UUID REFERENCES tenants(id),
+  target_tenant_id UUID REFERENCES captionacc_production.tenants(id),
   target_user_id UUID REFERENCES auth.users(id),
   target_resource_id UUID,
   resource_type TEXT, -- 'video', 'tenant', 'user', etc.
@@ -330,6 +337,6 @@ CREATE INDEX idx_platform_admin_audit_created ON platform_admin_audit(created_at
 
 COMMENT ON TABLE platform_admins IS 'Platform administrators with cross-tenant access. Separate from tenant-level roles.';
 COMMENT ON TABLE platform_admin_audit IS 'Audit log for platform admin actions. Critical for compliance and debugging.';
-COMMENT ON COLUMN user_profiles.role IS 'Tenant-level role: owner (tenant admin) or member (regular user). Distinct from platform admin.';
+COMMENT ON COLUMN captionacc_production.user_profiles.role IS 'Tenant-level role: owner (tenant admin) or member (regular user). Distinct from platform admin.';
 COMMENT ON FUNCTION is_platform_admin() IS 'Returns true if current user is an active platform admin (super_admin or support).';
 COMMENT ON FUNCTION is_tenant_owner(UUID) IS 'Returns true if current user is an owner of the specified tenant.';

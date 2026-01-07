@@ -1,65 +1,88 @@
 /**
  * Rename a video in the video library
- * Updates the display_path in the database (storage paths are immutable UUIDs)
+ * Updates the display_path in Supabase (storage paths are immutable UUIDs)
  */
-import Database from 'better-sqlite3'
 import type { ActionFunctionArgs } from 'react-router'
 
-import { getDbPath, resolveDisplayPath } from '~/utils/video-paths'
+import { createServerSupabaseClient } from '~/services/supabase-client'
+import {
+  badRequestResponse,
+  conflictResponse,
+  errorResponse,
+  jsonResponse,
+} from '~/utils/api-responses'
+import { requireAuth, requireVideoOwnership } from '~/utils/api-auth'
 
 export async function action({ request }: ActionFunctionArgs) {
   if (request.method !== 'PATCH') {
-    return Response.json({ error: 'Method not allowed' }, { status: 405 })
+    return errorResponse('Method not allowed', 405)
   }
 
-  const body = await request.json()
-  const { oldPath, newName } = body
-
-  if (!oldPath || !newName) {
-    return Response.json({ error: 'oldPath and newName are required' }, { status: 400 })
-  }
-
-  // Validate new name
-  const trimmedNewName = newName.trim()
-  if (!/^[a-zA-Z0-9_\-\s]+$/.test(trimmedNewName)) {
-    return Response.json({ error: 'Video name contains invalid characters' }, { status: 400 })
-  }
-
-  // Calculate new display path (same parent directory, new name)
-  const pathParts = oldPath.split('/')
-  pathParts[pathParts.length - 1] = trimmedNewName
-  const newPath = pathParts.join('/')
-
-  // Check if old video exists by resolving its display path
-  const dbPath = getDbPath(oldPath)
-  if (!dbPath) {
-    return Response.json({ error: 'Video does not exist' }, { status: 404 })
-  }
-
-  // Check if new path already exists
-  const existingNewPath = resolveDisplayPath(newPath)
-  if (existingNewPath) {
-    return Response.json({ error: 'A video with this name already exists' }, { status: 409 })
-  }
-
-  // Update the display_path in the database
   try {
-    const db = new Database(dbPath)
-    try {
-      db.prepare(
-        `
-        UPDATE video_metadata
-        SET display_path = ?
-        WHERE id = 1
-      `
-      ).run(newPath)
+    // Authenticate user
+    const authContext = await requireAuth(request)
 
-      return Response.json({ success: true, oldPath, newPath })
-    } finally {
-      db.close()
+    const body = await request.json()
+    const { oldPath, newName } = body
+
+    if (!oldPath || !newName) {
+      return badRequestResponse('oldPath and newName are required')
     }
+
+    // Validate new name
+    const trimmedNewName = newName.trim()
+    if (!/^[a-zA-Z0-9_\-\s]+$/.test(trimmedNewName)) {
+      return badRequestResponse('Video name contains invalid characters')
+    }
+
+    // Calculate new display path (same parent directory, new name)
+    const pathParts = oldPath.split('/')
+    pathParts[pathParts.length - 1] = trimmedNewName
+    const newPath = pathParts.join('/')
+
+    const supabase = createServerSupabaseClient()
+
+    // Find video by old display_path
+    const { data: video, error: fetchError } = await supabase
+      .from('videos')
+      .select('id, display_path')
+      .eq('display_path', oldPath)
+      .is('deleted_at', null)
+      .single()
+
+    if (fetchError || !video) {
+      return errorResponse('Video not found', 404)
+    }
+
+    // Verify ownership
+    await requireVideoOwnership(authContext, video.id)
+
+    // Check if new path already exists
+    const { data: existingVideo } = await supabase
+      .from('videos')
+      .select('id')
+      .eq('display_path', newPath)
+      .is('deleted_at', null)
+      .single()
+
+    if (existingVideo) {
+      return conflictResponse('A video with this name already exists')
+    }
+
+    // Update the display_path
+    const { error: updateError } = await supabase
+      .from('videos')
+      .update({ display_path: newPath })
+      .eq('id', video.id)
+
+    if (updateError) {
+      console.error('Failed to rename video:', updateError)
+      return errorResponse('Failed to rename video', 500)
+    }
+
+    return jsonResponse({ success: true, oldPath, newPath })
   } catch (error) {
-    console.error('Failed to rename video:', error)
-    return Response.json({ error: 'Failed to rename video' }, { status: 500 })
+    console.error('Error renaming video:', error)
+    return errorResponse(error instanceof Error ? error.message : 'Unknown error', 500)
   }
 }

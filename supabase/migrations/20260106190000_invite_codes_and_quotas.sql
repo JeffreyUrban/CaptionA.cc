@@ -73,25 +73,32 @@ COMMENT ON COLUMN tenants.daily_upload_limit IS 'Maximum video uploads per day.'
 -- ============================================================================
 
 -- Add approval status to user profiles
-ALTER TABLE user_profiles
-  ADD COLUMN IF NOT EXISTS approval_status TEXT DEFAULT 'pending',
-  ADD COLUMN IF NOT EXISTS approved_by UUID REFERENCES auth.users(id),
-  ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ,
-  ADD COLUMN IF NOT EXISTS invite_code_used TEXT REFERENCES invite_codes(code);
+-- NOTE: These updates are conditional - only run if user_profiles table exists
+DO $$
+BEGIN
+  IF EXISTS (SELECT FROM information_schema.tables
+             WHERE table_schema = 'captionacc_production'
+             AND table_name = 'user_profiles') THEN
+    ALTER TABLE captionacc_production.user_profiles
+      ADD COLUMN IF NOT EXISTS approval_status TEXT DEFAULT 'pending',
+      ADD COLUMN IF NOT EXISTS approved_by UUID REFERENCES auth.users(id),
+      ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ,
+      ADD COLUMN IF NOT EXISTS invite_code_used TEXT REFERENCES invite_codes(code);
 
--- Add constraint for approval status
-ALTER TABLE user_profiles
-  DROP CONSTRAINT IF EXISTS check_approval_status;
+    ALTER TABLE captionacc_production.user_profiles
+      DROP CONSTRAINT IF EXISTS check_approval_status;
 
-ALTER TABLE user_profiles
-  ADD CONSTRAINT check_approval_status
-  CHECK (approval_status IN ('pending', 'approved', 'rejected'));
+    ALTER TABLE captionacc_production.user_profiles
+      ADD CONSTRAINT check_approval_status
+      CHECK (approval_status IN ('pending', 'approved', 'rejected'));
+
+    COMMENT ON COLUMN captionacc_production.user_profiles.approval_status IS 'User approval state: pending, approved, rejected. Controls access to features.';
+    COMMENT ON COLUMN captionacc_production.user_profiles.invite_code_used IS 'Invite code used during signup. NULL if admin-created user.';
+  END IF;
+END $$;
 
 -- Auto-approve users who sign up with valid invite codes (handled in app logic)
 -- Manual approval for others (if we allow that in future)
-
-COMMENT ON COLUMN user_profiles.approval_status IS 'User approval state: pending, approved, rejected. Controls access to features.';
-COMMENT ON COLUMN user_profiles.invite_code_used IS 'Invite code used during signup. NULL if admin-created user.';
 
 -- ============================================================================
 -- PART 4: Usage Tracking
