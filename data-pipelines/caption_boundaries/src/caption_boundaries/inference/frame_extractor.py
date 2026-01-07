@@ -139,17 +139,20 @@ def extract_frame_from_chunk(
 class ChunkCache:
     """LRU cache for downloaded VP9 chunks.
 
-    Limited benefit: Only useful during Modal's 5-minute warm period when:
-    1. Multiple jobs arrive for the SAME video within 5 minutes
-    2. Those jobs need overlapping chunks
+    Primary use case: A/B testing model versions on the same video.
 
-    This is rare because:
-    - Most jobs are for different videos
-    - Single job downloads all needed chunks upfront
-    - Chunks are small (~1-2MB), re-downloading is fast
+    When running inference with multiple model versions on the same video:
+    1. First model: Downloads chunks from Wasabi
+    2. Second model: Reuses cached chunks (same video, different model)
 
-    The cache is here for warm period optimization, but in practice provides
-    minimal benefit. Consider removing if complexity outweighs gains.
+    This is useful when:
+    - Testing new model versions (run old + new model on same video)
+    - Comparing model predictions (diff two model outputs)
+    - Multiple jobs for same video arrive within 5-min warm period
+
+    Note: Chunks are video-specific, not model-specific. Once downloaded,
+    any model version can use them. Cache persists for Modal's 5-minute
+    container idle period.
     """
 
     def __init__(self, max_size_mb: int = 1024):
