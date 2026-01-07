@@ -36,7 +36,7 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: uv sync --only-group dev
+        run: uv sync --all-extras
 
       - name: Run ruff (lint)
         working-directory: data-pipelines/crop_frames
