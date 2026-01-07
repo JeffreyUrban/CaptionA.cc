@@ -82,9 +82,10 @@ def get_supabase_client(require_production: bool = False, schema: str | None = N
     # Create client
     client = create_client(url, key)
 
-    # Set schema for PostgREST queries
-    # Note: This sets the search_path for database queries
-    client.postgrest.schema(schema)
+    # Store schema preference for use in queries
+    # Note: The supabase-py library requires using .schema() on each query
+    # So we store it as an attribute for consumers to use
+    client._preferred_schema = schema  # type: ignore
 
     return client
 
