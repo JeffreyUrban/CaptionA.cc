@@ -139,7 +139,17 @@ def extract_frame_from_chunk(
 class ChunkCache:
     """LRU cache for downloaded VP9 chunks.
 
-    Useful during warm period where multiple jobs may access same chunks.
+    Limited benefit: Only useful during Modal's 5-minute warm period when:
+    1. Multiple jobs arrive for the SAME video within 5 minutes
+    2. Those jobs need overlapping chunks
+
+    This is rare because:
+    - Most jobs are for different videos
+    - Single job downloads all needed chunks upfront
+    - Chunks are small (~1-2MB), re-downloading is fast
+
+    The cache is here for warm period optimization, but in practice provides
+    minimal benefit. Consider removing if complexity outweighs gains.
     """
 
     def __init__(self, max_size_mb: int = 1024):
