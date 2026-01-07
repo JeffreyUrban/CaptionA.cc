@@ -12,9 +12,10 @@ Triggered after:
 """
 
 import uuid
-from typing import Any
+from typing import Any, cast
 
 from caption_boundaries.inference.config import MODAL_CONFIG, format_frame_count_limit_message
+from caption_boundaries.inference.inference_repository import InferenceRunRow
 from prefect import flow, task
 from prefect.artifacts import create_table_artifact
 from services.orchestrator.monitoring.rejection_logger import log_rejection
@@ -60,10 +61,11 @@ def check_existing_run(
     )
 
     if response.data:
-        print(f"  ✓ Found existing run: {response.data['run_id']}")
-        print(f"    Storage: {response.data['wasabi_storage_key']}")
-        print(f"    Pairs: {response.data['total_pairs']}")
-        return response.data
+        run_data = cast(InferenceRunRow, response.data)
+        print(f"  ✓ Found existing run: {run_data['run_id']}")
+        print(f"    Storage: {run_data['wasabi_storage_key']}")
+        print(f"    Pairs: {run_data['total_pairs']}")
+        return cast(dict[str, Any], run_data)
     else:
         print("  No existing run found - inference needed")
         return None
@@ -110,7 +112,8 @@ def generate_frame_pairs(
     if not response.data:
         raise ValueError(f"Video not found: {video_id}")
 
-    frame_count = response.data.get("frame_count")
+    video_data = cast(dict[str, Any], response.data)
+    frame_count = video_data.get("frame_count")
     if not frame_count:
         raise ValueError(f"Video {video_id} has no frame_count")
 

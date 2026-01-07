@@ -4,9 +4,28 @@ Records rejected jobs in Supabase for monitoring and triggers alerts.
 """
 
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal, TypedDict, cast
 
 from services.orchestrator.supabase_client import get_supabase_client
+
+
+class RejectionRow(TypedDict):
+    """Supabase boundary_inference_rejections table row structure."""
+
+    id: str
+    video_id: str
+    tenant_id: str
+    rejection_type: str
+    rejection_message: str
+    frame_count: int | None
+    estimated_cost_usd: float | None
+    cropped_frames_version: int | None
+    model_version: str | None
+    priority: str | None
+    acknowledged: bool
+    acknowledged_at: str | None
+    acknowledged_by: str | None
+    created_at: str
 
 RejectionType = Literal[
     "frame_count_exceeded",
@@ -86,7 +105,7 @@ def log_rejection(
         print(f"   Video: {video_id}")
 
 
-def get_unacknowledged_rejections(limit: int = 100) -> list[dict]:
+def get_unacknowledged_rejections(limit: int = 100) -> list[RejectionRow]:
     """Get recent unacknowledged rejections for monitoring.
 
     Args:
@@ -107,7 +126,7 @@ def get_unacknowledged_rejections(limit: int = 100) -> list[dict]:
         .execute()
     )
 
-    return response.data
+    return cast(list[RejectionRow], response.data)
 
 
 def acknowledge_rejection(rejection_id: str, acknowledged_by: str | None = None) -> None:
@@ -132,7 +151,7 @@ def acknowledge_rejection(rejection_id: str, acknowledged_by: str | None = None)
     ).eq("id", rejection_id).execute()
 
 
-def get_rejection_summary(days: int = 7) -> dict:
+def get_rejection_summary(days: int = 7) -> dict[str, Any]:
     """Get summary statistics for rejections in last N days.
 
     Useful for monitoring dashboard and capacity planning.
@@ -154,7 +173,7 @@ def get_rejection_summary(days: int = 7) -> dict:
             },
         ).execute()
         if response.data:
-            return response.data
+            return cast(dict[str, Any], response.data)
     except Exception:
         # RPC doesn't exist yet, fall back to simple query
         pass

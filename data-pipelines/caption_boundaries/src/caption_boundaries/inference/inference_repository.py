@@ -5,12 +5,49 @@ Provides fast indexed lookups for completed inference runs and active job monito
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any
+from typing import Any, TypedDict, cast
 
 from rich.console import Console
 from supabase import Client, create_client
 
 console = Console(stderr=True)
+
+
+class InferenceRunRow(TypedDict):
+    """Supabase boundary_inference_runs table row structure."""
+
+    id: str
+    run_id: str
+    video_id: str
+    tenant_id: str
+    cropped_frames_version: int
+    model_version: str
+    model_checkpoint_path: str | None
+    wasabi_storage_key: str
+    file_size_bytes: int | None
+    total_pairs: int
+    processing_time_seconds: float | None
+    started_at: str  # ISO format timestamp
+    completed_at: str  # ISO format timestamp
+    created_at: str  # ISO format timestamp
+
+
+class InferenceJobRow(TypedDict):
+    """Supabase boundary_inference_jobs table row structure."""
+
+    id: str
+    run_id: str
+    video_id: str
+    tenant_id: str
+    cropped_frames_version: int
+    model_version: str
+    priority: str
+    status: str
+    started_at: str | None  # ISO format timestamp
+    completed_at: str | None  # ISO format timestamp
+    error_message: str | None
+    inference_run_id: str | None
+    created_at: str  # ISO format timestamp
 
 
 @dataclass
@@ -33,7 +70,7 @@ class InferenceRun:
     created_at: datetime
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> InferenceRun:
+    def from_dict(cls, data: InferenceRunRow) -> InferenceRun:
         """Create from Supabase row."""
         return cls(
             id=data["id"],
@@ -71,7 +108,7 @@ class InferenceJob:
     created_at: datetime
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> InferenceJob:
+    def from_dict(cls, data: InferenceJobRow) -> InferenceJob:
         """Create from Supabase row."""
         return cls(
             id=data["id"],
@@ -165,7 +202,8 @@ class BoundaryInferenceRunRepository:
         )
 
         if response.data:
-            return InferenceRun.from_dict(response.data)
+            # Supabase maybe_single() returns a dict or None
+            return InferenceRun.from_dict(cast(InferenceRunRow, response.data))
         return None
 
     def register_run(
@@ -225,8 +263,10 @@ class BoundaryInferenceRunRepository:
         if not response.data:
             raise ValueError("Failed to register inference run")
 
+        # Supabase insert returns a list of dicts
+        data_list = cast(list[InferenceRunRow], response.data)
         console.print(f"[green]✓ Registered inference run in Supabase: {run_id}[/green]")
-        return InferenceRun.from_dict(response.data[0])
+        return InferenceRun.from_dict(data_list[0])
 
     def get_runs_for_video(
         self,
@@ -255,7 +295,7 @@ class BoundaryInferenceRunRepository:
             query = query.limit(limit)
 
         response = query.execute()
-        return [InferenceRun.from_dict(row) for row in response.data]
+        return [InferenceRun.from_dict(row) for row in cast(list[InferenceRunRow], response.data)]
 
     def get_runs_for_model(
         self,
@@ -284,7 +324,7 @@ class BoundaryInferenceRunRepository:
             query = query.limit(limit)
 
         response = query.execute()
-        return [InferenceRun.from_dict(row) for row in response.data]
+        return [InferenceRun.from_dict(row) for row in cast(list[InferenceRunRow], response.data)]
 
     def get_runs_for_tenant(
         self,
@@ -313,7 +353,7 @@ class BoundaryInferenceRunRepository:
             query = query.limit(limit)
 
         response = query.execute()
-        return [InferenceRun.from_dict(row) for row in response.data]
+        return [InferenceRun.from_dict(row) for row in cast(list[InferenceRunRow], response.data)]
 
     # Job queue methods
 
@@ -352,7 +392,7 @@ class BoundaryInferenceRunRepository:
             raise ValueError("Failed to create inference job")
 
         console.print(f"[cyan]Created inference job: {response.data[0]['id']}[/cyan]")
-        return InferenceJob.from_dict(response.data[0])
+        return InferenceJob.from_dict(cast(list[InferenceJobRow], response.data)[0])
 
     def update_job_status(
         self,
@@ -392,7 +432,7 @@ class BoundaryInferenceRunRepository:
         if not response.data:
             raise ValueError(f"Failed to update job {job_id}")
 
-        return InferenceJob.from_dict(response.data[0])
+        return InferenceJob.from_dict(cast(list[InferenceJobRow], response.data)[0])
 
     def get_pending_jobs(self, limit: int = 10) -> list[InferenceJob]:
         """Get pending jobs ordered by priority and creation time.
@@ -429,9 +469,9 @@ class BoundaryInferenceRunRepository:
                 .limit(remaining)
                 .execute()
             )
-            low_priority_data = low_priority.data
+            low_priority_data = cast(list[InferenceJobRow], low_priority.data)
 
-        all_jobs = high_priority.data + low_priority_data
+        all_jobs = cast(list[InferenceJobRow], high_priority.data) + low_priority_data
         return [InferenceJob.from_dict(row) for row in all_jobs]
 
     def get_jobs_for_video(self, video_id: str) -> list[InferenceJob]:
@@ -451,4 +491,4 @@ class BoundaryInferenceRunRepository:
             .execute()
         )
 
-        return [InferenceJob.from_dict(row) for row in response.data]
+        return [InferenceJob.from_dict(row) for row in cast(list[InferenceJobRow], response.data)]
