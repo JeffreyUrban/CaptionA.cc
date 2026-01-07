@@ -62,12 +62,17 @@ export async function action({ request }: ActionFunctionArgs) {
     // Verify ownership
     await requireVideoOwnership(authContext, video.id, request)
 
+    // Validate display_path exists
+    if (!video.display_path) {
+      return badRequestResponse('Video display_path is missing')
+    }
+
     // Extract video name from current display_path
     const pathParts = video.display_path.split('/')
     const videoName = pathParts[pathParts.length - 1]
 
     // Build new display_path
-    const newPath = targetFolder ? `${targetFolder}/${videoName}` : videoName
+    const newPath = targetFolder ? `${targetFolder}/${videoName}` : (videoName ?? '')
 
     // Prevent moving to current location
     if (video.display_path === newPath) {

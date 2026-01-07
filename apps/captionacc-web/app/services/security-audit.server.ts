@@ -9,6 +9,7 @@
  * - Suspicious activity patterns
  */
 
+import type { Json } from '~/types/supabase'
 import { createServerSupabaseClient } from '~/services/supabase-client'
 
 export type SecurityEventType =
@@ -59,7 +60,7 @@ export async function logSecurityEvent(event: SecurityAuditEvent): Promise<void>
       request_path: event.requestPath || null,
       request_method: event.requestMethod || null,
       error_message: event.errorMessage || null,
-      metadata: event.metadata || null,
+      metadata: (event.metadata as Json) || null,
     })
 
     // Log critical events to console for immediate visibility

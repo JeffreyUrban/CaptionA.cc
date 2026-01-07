@@ -97,7 +97,7 @@ export async function getVideoPermissions(
         .eq('id', videoId)
         .single()
 
-      canAnnotate = isInFirstThree && !currentVideo?.deleted_at
+      canAnnotate = !!isInFirstThree && !currentVideo?.deleted_at
     } else if (profile?.access_tier_id === 'active') {
       canAnnotate = true
     }

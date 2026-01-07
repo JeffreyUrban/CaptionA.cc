@@ -73,6 +73,12 @@ export async function requireAuth(request: Request): Promise<AuthContext> {
     throw new Response('Account pending approval', { status: 403 })
   }
 
+  // Validate required profile fields
+  if (!profile.tenant_id || !profile.role) {
+    await logAuthFailure(request, `Incomplete user profile for ${user.id}`)
+    throw new Response('Incomplete user profile', { status: 500 })
+  }
+
   // Check if platform admin
   const isAdmin = await isPlatformAdmin(user.id)
 
@@ -83,7 +89,7 @@ export async function requireAuth(request: Request): Promise<AuthContext> {
     user,
     userId: user.id,
     tenantId: profile.tenant_id,
-    role: profile.role,
+    role: profile.role as 'owner' | 'member',
     isPlatformAdmin: isAdmin,
   }
 }
@@ -128,7 +134,7 @@ export async function requireVideoOwnership(
 
   if (!isOwner && !isTenantOwner) {
     // CRITICAL: Check if this is a cross-tenant access attempt
-    if (video.tenant_id !== authContext.tenantId && request) {
+    if (video.tenant_id && video.tenant_id !== authContext.tenantId && request) {
       // Log cross-tenant access attempt (CRITICAL security event)
       await logCrossTenantAttempt(
         request,
