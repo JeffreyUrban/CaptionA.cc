@@ -19,6 +19,7 @@ from prefect import flow, task
 from prefect.artifacts import create_table_artifact
 
 from caption_boundaries.inference.config import MODAL_CONFIG, format_frame_count_limit_message
+from services.orchestrator.monitoring.rejection_logger import log_rejection
 from services.orchestrator.supabase_client import get_supabase_client
 
 
@@ -78,6 +79,9 @@ def check_existing_run(
 def generate_frame_pairs(
     video_id: str,
     tenant_id: str,
+    model_version: str | None = None,
+    cropped_frames_version: int | None = None,
+    priority: str | None = None,
 ) -> list[tuple[int, int]]:
     """Generate consecutive frame pairs for boundary detection.
 
@@ -88,9 +92,15 @@ def generate_frame_pairs(
     Args:
         video_id: Video UUID
         tenant_id: Tenant UUID
+        model_version: Model version (for rejection logging)
+        cropped_frames_version: Frame version (for rejection logging)
+        priority: Job priority (for rejection logging)
 
     Returns:
         List of (frame1_index, frame2_index) tuples
+
+    Raises:
+        ValueError: If frame count exceeds configured limit
     """
     print(f"Generating frame pairs for video {video_id}")
 
@@ -109,7 +119,19 @@ def generate_frame_pairs(
     # Validate frame count against configured limit
     # See: data-pipelines/caption_boundaries/src/caption_boundaries/inference/config.py
     if frame_count > MODAL_CONFIG.max_frame_count:
-        raise ValueError(format_frame_count_limit_message(frame_count, MODAL_CONFIG))
+        # Log rejection for monitoring
+        rejection_message = format_frame_count_limit_message(frame_count, MODAL_CONFIG)
+        log_rejection(
+            video_id=video_id,
+            tenant_id=tenant_id,
+            rejection_type="frame_count_exceeded",
+            rejection_message=rejection_message,
+            frame_count=frame_count,
+            cropped_frames_version=cropped_frames_version,
+            model_version=model_version,
+            priority=priority,
+        )
+        raise ValueError(rejection_message)
 
     # Warning for videos approaching the limit
     if frame_count > MODAL_CONFIG.frame_count_warning_threshold:
@@ -235,8 +257,14 @@ def boundary_inference_flow(
             "storage_key": existing_run["wasabi_storage_key"],
         }
 
-    # Step 2: Generate frame pairs
-    frame_pairs = generate_frame_pairs(video_id, tenant_id)
+    # Step 2: Generate frame pairs (with rejection logging)
+    frame_pairs = generate_frame_pairs(
+        video_id=video_id,
+        tenant_id=tenant_id,
+        model_version=model_version,
+        cropped_frames_version=cropped_frames_version,
+        priority=priority,
+    )
 
     # Step 2.5: Estimate cost (transparency + validation)
     from caption_boundaries.inference.config import estimate_job_cost
@@ -252,7 +280,7 @@ def boundary_inference_flow(
     # Safety check: reject if too expensive
     # See: data-pipelines/caption_boundaries/src/caption_boundaries/inference/config.py
     if cost_estimate["estimated_cost_usd"] > MODAL_CONFIG.max_cost_per_job_usd:
-        raise ValueError(
+        rejection_message = (
             f"Job too expensive: ${cost_estimate['estimated_cost_usd']:.2f} "
             f"(threshold: ${MODAL_CONFIG.max_cost_per_job_usd:.2f}). "
             f"Frame pairs: {len(frame_pairs):,}\n"
@@ -260,6 +288,21 @@ def boundary_inference_flow(
             f"To process this job, increase max_cost_per_job_usd in:\n"
             f"data-pipelines/caption_boundaries/src/caption_boundaries/inference/config.py"
         )
+
+        # Log rejection for monitoring
+        log_rejection(
+            video_id=video_id,
+            tenant_id=tenant_id,
+            rejection_type="cost_exceeded",
+            rejection_message=rejection_message,
+            frame_count=len(frame_pairs) + 1,
+            estimated_cost_usd=cost_estimate["estimated_cost_usd"],
+            cropped_frames_version=cropped_frames_version,
+            model_version=model_version,
+            priority=priority,
+        )
+
+        raise ValueError(rejection_message)
 
     # Step 3: Generate unique run ID
     run_id = str(uuid.uuid4())

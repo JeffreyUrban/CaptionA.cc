@@ -526,6 +526,139 @@ def run_boundary_inference_batch(...):
 - Adds complexity, usually not needed
 - Modal's built-in timeouts are sufficient for most cases
 
+## Rejection Monitoring & Alerting (✅ Implemented)
+
+**Problem:** Team doesn't know when jobs are rejected until users report issues.
+
+**Solution:** Automatic rejection logging and monitoring dashboard.
+
+### How It Works
+
+When jobs are rejected (frame count exceeded, cost exceeded, etc.):
+1. **Log to Supabase** - Creates record in `boundary_inference_rejections` table
+2. **Print alert** - Logs 🚨 REJECTION LOGGED to Prefect output
+3. **Track metadata** - Stores video ID, rejection type, cost estimate, etc.
+4. **Enable monitoring** - Dashboard queries and CLI tools for visibility
+
+### Rejection Types Tracked
+
+```python
+# Rejection types with automatic logging:
+- frame_count_exceeded   # Video too long for configured limit
+- cost_exceeded          # Estimated job cost too high
+- validation_failed      # Input validation error
+- rate_limited           # Too many recent requests
+- queue_full             # Inference queue at capacity
+```
+
+### Checking for Rejections
+
+**CLI Monitor (recommended for daily checks):**
+```bash
+python services/orchestrator/monitoring/check_rejections.py
+```
+
+Output:
+```
+═══════════════════════════════════════════════════════
+   Boundary Inference Rejections Monitor
+═══════════════════════════════════════════════════════
+
+Total rejections: 5
+
+By type:
+  • frame_count_exceeded: 3
+  • cost_exceeded: 2
+
+⚠️  5 unacknowledged rejection(s)
+
+┌────────────┬──────────────────────┬──────────────┬────────┐
+│ Age        │ Type                 │ Video ID     │ Frames │
+├────────────┼──────────────────────┼──────────────┼────────┤
+│ 2h ago     │ frame_count_exceeded │ 61c3123f     │ 250,000│
+└────────────┴──────────────────────┴──────────────┴────────┘
+
+Recommendations:
+  1. Review rejections to determine if limits need adjustment
+  2. Check if videos are valid or data errors
+  3. Update config.py if supporting longer videos
+```
+
+**Dashboard Query (Supabase):**
+```sql
+-- Unacknowledged rejections
+SELECT
+  created_at,
+  rejection_type,
+  video_id,
+  frame_count,
+  estimated_cost_usd,
+  LEFT(rejection_message, 100) as message
+FROM captionacc_production.boundary_inference_rejections
+WHERE NOT acknowledged
+ORDER BY created_at DESC;
+```
+
+**Programmatic Access:**
+```python
+from services.orchestrator.monitoring import get_unacknowledged_rejections
+
+rejections = get_unacknowledged_rejections(limit=50)
+if rejections:
+    print(f"⚠️  {len(rejections)} unacknowledged rejections")
+```
+
+### Acknowledging Rejections
+
+After reviewing and taking action:
+```python
+from services.orchestrator.monitoring import acknowledge_rejection
+
+acknowledge_rejection(
+    rejection_id="550e8400-e29b-41d4-a716-446655440000",
+    acknowledged_by="admin-uuid"  # optional
+)
+```
+
+### Alerting Setup
+
+**Option 1: Cron job (simple)**
+```bash
+# Check daily at 9am
+0 9 * * * cd /path/to/project && python services/orchestrator/monitoring/check_rejections.py
+```
+
+**Option 2: Prefect scheduled flow**
+```python
+@flow(schedule=IntervalSchedule(interval=timedelta(hours=12)))
+def monitor_rejections():
+    rejections = get_unacknowledged_rejections(limit=10)
+    if rejections:
+        send_alert(f"{len(rejections)} unacknowledged rejections")
+```
+
+**Option 3: Real-time webhook (Supabase trigger)**
+```sql
+-- Trigger notification on new rejection
+CREATE TRIGGER rejection_alert
+  AFTER INSERT ON boundary_inference_rejections
+  FOR EACH ROW
+  EXECUTE FUNCTION notify_team();
+```
+
+### Response Workflow
+
+1. **Detect** - Alert fires or daily check shows rejections
+2. **Investigate** - Review rejection details via CLI or dashboard
+3. **Categorize**:
+   - Valid video, limit too low → Increase `config.py` limit
+   - Bad data/corruption → Fix video metadata
+   - Edge case → Document and acknowledge
+4. **Act** - Update config, fix data, or deploy fix
+5. **Acknowledge** - Mark as reviewed to clear from queue
+
+See [services/orchestrator/monitoring/README.md](../../../services/orchestrator/monitoring/README.md) for complete monitoring documentation.
+
 ## Summary
 
 **Critical safeguards (implement before production):**
