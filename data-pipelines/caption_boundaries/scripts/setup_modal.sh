@@ -13,7 +13,7 @@ echo ""
 # Check if Modal is installed
 if ! command -v modal &> /dev/null; then
     echo "❌ Modal CLI not found. Installing..."
-    pip install modal
+    uv pip install modal
 else
     echo "✓ Modal CLI installed: $(modal --version)"
 fi
