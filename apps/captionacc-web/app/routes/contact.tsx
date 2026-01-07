@@ -100,13 +100,13 @@ export default function Contact() {
       from_name: 'CaptionA.cc Contact Form',
       subject: 'New Contact Form Submission - CaptionA.cc',
     },
-    onSuccess: (_msg) => {
+    onSuccess: _msg => {
       setIsSuccess(true)
       setResult('Thank you! Your message has been sent successfully.')
       setIsSubmitting(false)
       reset()
     },
-    onError: (_msg) => {
+    onError: _msg => {
       setIsSuccess(false)
       setResult('Sorry, there was an error sending your message. Please try again.')
       setIsSubmitting(false)
@@ -173,7 +173,7 @@ export default function Contact() {
 
           <div className="mt-16 sm:mt-20">
             <form
-              onSubmit={(e) => {
+              onSubmit={e => {
                 void handleSubmit(handleFormSubmit)(e)
               }}
               className="max-w-2xl"

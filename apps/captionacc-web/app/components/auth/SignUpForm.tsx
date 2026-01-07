@@ -127,7 +127,7 @@ export function SignUpForm({ onSuccess, onSwitchToLogin }: SignUpFormProps) {
               id="fullName"
               type="text"
               value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
+              onChange={e => setFullName(e.target.value)}
               className="shadow appearance-none border border-olive-950/10 dark:border-white/10 rounded w-full py-2 px-3 text-olive-950 dark:text-white bg-white dark:bg-olive-950 leading-tight focus:outline-none focus:border-olive-600 dark:focus:border-olive-400"
               placeholder="John Doe"
               required
@@ -146,7 +146,7 @@ export function SignUpForm({ onSuccess, onSwitchToLogin }: SignUpFormProps) {
               id="email"
               type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={e => setEmail(e.target.value)}
               className="shadow appearance-none border border-olive-950/10 dark:border-white/10 rounded w-full py-2 px-3 text-olive-950 dark:text-white bg-white dark:bg-olive-950 leading-tight focus:outline-none focus:border-olive-600 dark:focus:border-olive-400"
               placeholder="you@example.com"
               required
@@ -165,7 +165,7 @@ export function SignUpForm({ onSuccess, onSwitchToLogin }: SignUpFormProps) {
               id="password"
               type="password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={e => setPassword(e.target.value)}
               className="shadow appearance-none border border-olive-950/10 dark:border-white/10 rounded w-full py-2 px-3 text-olive-950 dark:text-white bg-white dark:bg-olive-950 leading-tight focus:outline-none focus:border-olive-600 dark:focus:border-olive-400"
               placeholder="••••••••"
               required

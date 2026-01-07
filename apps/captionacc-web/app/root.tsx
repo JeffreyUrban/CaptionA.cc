@@ -45,7 +45,7 @@ export default function App() {
           />
         )}
       </head>
-      <body className="h-full">
+      <body className="h-full bg-olive-100 dark:bg-olive-950">
         <Providers>
           <Outlet /> {/* This renders the current route */}
         </Providers>
@@ -100,7 +100,7 @@ export function ErrorBoundary() {
         <Links />
         <title>Error - CaptionA.cc</title>
       </head>
-      <body className="h-full">
+      <body className="h-full bg-olive-100 dark:bg-olive-950">
         <Providers>
           <NotFound {...props} />
         </Providers>

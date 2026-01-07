@@ -155,7 +155,7 @@ export function WaitlistForm() {
             <div className="space-y-4">
               {/* East Asian Scripts */}
               <div>
-                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-olive-600 dark:text-olive-500">
+                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-olive-600 dark:text-olive-400">
                   East Asian Scripts
                 </div>
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -230,7 +230,7 @@ export function WaitlistForm() {
 
               {/* Latin & European Scripts */}
               <div>
-                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-olive-600 dark:text-olive-500">
+                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-olive-600 dark:text-olive-400">
                   Latin & European Scripts
                 </div>
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -272,7 +272,7 @@ export function WaitlistForm() {
 
               {/* Middle Eastern & South Asian Scripts */}
               <div>
-                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-olive-600 dark:text-olive-500">
+                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-olive-600 dark:text-olive-400">
                   Middle Eastern & South Asian Scripts
                 </div>
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -325,7 +325,7 @@ export function WaitlistForm() {
 
               {/* Other Scripts */}
               <div>
-                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-olive-600 dark:text-olive-500">
+                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-olive-600 dark:text-olive-400">
                   Other Scripts
                 </div>
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -516,7 +516,7 @@ export function WaitlistForm() {
             >
               Tell us about your needs
             </label>
-            <p className="mt-1 text-xs text-olive-600 dark:text-olive-500">
+            <p className="mt-1 text-xs text-olive-600 dark:text-olive-400">
               What are you trying to accomplish? What's been frustrating about existing tools?
             </p>
             <textarea
@@ -535,7 +535,7 @@ export function WaitlistForm() {
             >
               Interested in specific features or integrations?
             </label>
-            <p className="mt-1 text-xs text-olive-600 dark:text-olive-500">
+            <p className="mt-1 text-xs text-olive-600 dark:text-olive-400">
               For example: specific subtitle formats, API access, batch processing, study material
               exports, etc.
             </p>
@@ -555,7 +555,7 @@ export function WaitlistForm() {
             >
               Anything else we should know?
             </label>
-            <p className="mt-1 text-xs text-olive-600 dark:text-olive-500">
+            <p className="mt-1 text-xs text-olive-600 dark:text-olive-400">
               Any other context about your workflow, volume, or requirements?
             </p>
             <textarea
@@ -592,7 +592,7 @@ export function WaitlistForm() {
 
       {/* Privacy Note */}
       <div className="border-t border-olive-950/10 pt-6 dark:border-white/10">
-        <p className="text-xs text-olive-600 dark:text-olive-500">
+        <p className="text-xs text-olive-600 dark:text-olive-400">
           We'll only use your email to contact you about early access. No spam, ever.
         </p>
       </div>

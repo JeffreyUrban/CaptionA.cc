@@ -1,5 +1,7 @@
 @import 'tailwindcss';
 
+@variant dark (.dark &);
+
 @theme {
   --font-display: 'Instrument Serif', serif;
   --font-sans: 'Inter', system-ui, sans-serif;
@@ -24,9 +26,9 @@
     background-color: var(--color-olive-100);
     --scroll-padding-top: 0;
     scroll-padding-top: var(--scroll-padding-top);
+  }
 
-    @variant dark {
-      background-color: var(--color-olive-950);
-    }
+  html.dark {
+    background-color: var(--color-olive-950);
   }
 }

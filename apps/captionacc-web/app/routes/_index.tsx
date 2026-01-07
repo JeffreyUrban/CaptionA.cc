@@ -1,5 +1,6 @@
 import type { MetaFunction } from 'react-router'
 
+import { ThemeSwitcher } from '~/components/ThemeSwitcher'
 import { WaitlistForm } from '~/components/WaitlistForm'
 import { ButtonLink } from '~/components/oatmeal/elements/button'
 import { Container } from '~/components/oatmeal/elements/container'
@@ -67,9 +68,12 @@ export default function Home() {
           </>
         }
         actions={
-          <ButtonLink href="#waitlist-form" size="lg">
-            Join Waitlist
-          </ButtonLink>
+          <>
+            <ThemeSwitcher />
+            <ButtonLink href="#waitlist-form" size="lg">
+              Join Waitlist
+            </ButtonLink>
+          </>
         }
       />
 
@@ -96,7 +100,7 @@ export default function Home() {
         <Section
           eyebrow="The Problem"
           headline="Why Existing Tools Waste Your Time"
-          className="bg-olive-950/2.5 dark:bg-white/5"
+          className="bg-olive-950/2.5 dark:bg-olive-900"
         >
           <FeaturesThreeColumn
             features={
@@ -127,6 +131,7 @@ export default function Home() {
           eyebrow="The Solution"
           headline="High Accuracy, Less Work"
           subheadline="CaptionA.cc delivers professional-grade subtitle extraction designed for demanding workflows."
+          className="bg-olive-100 dark:bg-olive-950"
         >
           <FeaturesThreeColumn
             features={
@@ -155,7 +160,7 @@ export default function Home() {
         <Section
           eyebrow="Proven Quality"
           headline="Built on Real-World Testing"
-          className="bg-olive-950/2.5 dark:bg-white/5"
+          className="bg-olive-950/2.5 dark:bg-olive-900"
         >
           <div className="grid grid-cols-1 gap-10 sm:grid-cols-3">
             <div className="text-center">
@@ -191,6 +196,7 @@ export default function Home() {
           eyebrow="Process"
           headline="Simple Workflow, Professional Results"
           subheadline="Typical TV show: ~1000 captions per hour. Built to minimize corrections—most videos need only light verification."
+          className="bg-olive-100 dark:bg-olive-950"
         >
           <div className="grid grid-cols-1 gap-12 lg:grid-cols-3">
             <div>
@@ -269,11 +275,15 @@ export default function Home() {
               Request Early Access
             </ButtonLink>
           }
-          className="bg-olive-950/2.5 dark:bg-white/5"
+          className="bg-olive-950/2.5 dark:bg-olive-900"
         />
 
         {/* FAQ Section */}
-        <FAQsAccordion id="faq" headline="Frequently Asked Questions">
+        <FAQsAccordion
+          id="faq"
+          headline="Frequently Asked Questions"
+          className="bg-olive-100 dark:bg-olive-950"
+        >
           <Faq
             question="What types of videos work best?"
             answer={
@@ -335,7 +345,7 @@ export default function Home() {
         </FAQsAccordion>
 
         {/* Waitlist Form Section */}
-        <section id="waitlist-form" className="bg-olive-950/2.5 py-16 dark:bg-white/5">
+        <section id="waitlist-form" className="bg-olive-950/2.5 py-16 dark:bg-olive-900">
           <Container>
             <div className="mx-auto max-w-2xl text-center">
               <h2 className="font-display text-4xl font-semibold tracking-tight text-olive-950 dark:text-white sm:text-5xl">
@@ -346,7 +356,7 @@ export default function Home() {
               </p>
             </div>
             <div className="mx-auto mt-16 max-w-2xl">
-              <div className="rounded-lg bg-white p-8 shadow-sm dark:bg-olive-900">
+              <div className="rounded-lg bg-white p-8 shadow-sm dark:bg-olive-950">
                 <WaitlistForm />
               </div>
             </div>
