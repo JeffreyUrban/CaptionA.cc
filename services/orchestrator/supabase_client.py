@@ -26,10 +26,7 @@ LOCAL_SUPABASE_SERVICE_ROLE_KEY = (
 )
 
 
-def get_supabase_client(
-    require_production: bool = False,
-    schema: str | None = None
-) -> Client:
+def get_supabase_client(require_production: bool = False, schema: str | None = None) -> Client:
     """
     Create a Supabase client using service role credentials with schema support.
 
