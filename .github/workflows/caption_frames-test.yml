@@ -10,7 +10,7 @@ on:
 
 # Cancel old runs when new commits are pushed
 concurrency:
-  group: {% raw %}${{ github.workflow }}-${{ github.ref }}{% endraw %}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -28,7 +28,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "PYTHON_VERSION_MAX_KICKOFF"
+          python-version: "3.13"
 
       - name: Install dependencies
         run: |
@@ -66,16 +66,15 @@ jobs:
     timeout-minutes: 15  # Prevent jobs from hanging indefinitely
     strategy:
       matrix:
-        python-version: ["PYTHON_VERSION_MIN_KICKOFF", "PYTHON_VERSION_MAX_KICKOFF"]
-#        python-version: ["PYTHON_VERSION_MIN_KICKOFF", "PYTHON_VERSION_INTERMEDIATE_1_KICKOFF", "PYTHON_VERSION_INTERMEDIATE_2_KICKOFF", "PYTHON_VERSION_INTERMEDIATE_3_KICKOFF", "PYTHON_VERSION_INTERMEDIATE_4_KICKOFF", "PYTHON_VERSION_MAX_KICKOFF"]
+        python-version: ["3.11", "3.13"]
 
     steps:
       - uses: actions/checkout@v6
 
-      - name: Set up Python {% raw %}${{ matrix.python-version }}{% endraw %}
+      - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
-          python-version: {% raw %}${{ matrix.python-version }}{% endraw %}
+          python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
         run: |
@@ -86,10 +85,10 @@ jobs:
         env:
           COLUMNS: 120  # Set terminal width for consistent Rich output formatting
         run: |
-          pytest --cov=src/{{ cookiecutter.project_slug }} --cov-report=xml --cov-report=term --cov-fail-under=0
+          pytest --cov=src/crop_frames --cov-report=xml --cov-report=term --cov-fail-under=0
 
       - name: Upload coverage to Codecov
-        if: matrix.python-version == 'PYTHON_VERSION_MAX_KICKOFF'
+        if: matrix.python-version == '3.13'
         uses: codecov/codecov-action@v4
         with:
           file: ./coverage.xml
