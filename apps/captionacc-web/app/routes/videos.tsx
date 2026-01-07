@@ -7,12 +7,9 @@
  * - Table components extracted to ~/components/videos/VideoTable.tsx
  */
 
-import { existsSync, readFileSync } from 'fs'
-import { resolve } from 'path'
-
 import { MagnifyingGlassIcon, PlusIcon } from '@heroicons/react/20/solid'
 import { useState, useMemo } from 'react'
-import { useLoaderData, Link, useRevalidator } from 'react-router'
+import { useLoaderData, Link, useRevalidator, redirect } from 'react-router'
 
 import { AppLayout } from '~/components/AppLayout'
 import {
@@ -32,116 +29,54 @@ import { useTreeNavigation } from '~/hooks/useTreeNavigation'
 import { useVideoDragDrop } from '~/hooks/useVideoDragDrop'
 import { useVideoOperations } from '~/hooks/useVideoOperations'
 import { useVideoStats } from '~/hooks/useVideoStats'
-import type { FoldersMetadata } from '~/types/videos'
-import { getAllVideos } from '~/utils/video-paths'
+import { createServerSupabaseClient } from '~/services/supabase-client'
 import {
   buildVideoTree,
   calculateVideoCounts,
   sortTreeNodes,
   type TreeNode,
-  type FolderNode,
   type VideoInfo,
 } from '~/utils/video-tree'
-
-// =============================================================================
-// Helper Functions - Server Side
-// =============================================================================
-
-function readEmptyFolders(dataDir: string): string[] {
-  const foldersMetaPath = resolve(dataDir, '.folders.json')
-  try {
-    if (existsSync(foldersMetaPath)) {
-      const content = readFileSync(foldersMetaPath, 'utf-8')
-      const metadata: FoldersMetadata = JSON.parse(content)
-      return metadata.emptyFolders ?? []
-    }
-  } catch {
-    // If file doesn't exist or is invalid, return empty
-  }
-  return []
-}
-
-/**
- * Insert empty folders into the tree as FolderNodes
- */
-function insertEmptyFolders(tree: TreeNode[], emptyFolders: string[]): TreeNode[] {
-  for (const folderPath of emptyFolders) {
-    const segments = folderPath.split('/')
-    let currentLevel = tree
-    // Navigate/create the folder structure
-    for (let i = 0; i < segments.length; i++) {
-      const segment = segments[i]
-      if (!segment) continue
-
-      const path = segments.slice(0, i + 1).join('/')
-
-      // Find existing node at this level
-      let node = currentLevel.find(n => n.name === segment)
-
-      if (!node) {
-        // Create new folder node
-        const folderNode: FolderNode = {
-          type: 'folder',
-          name: segment,
-          path,
-          children: [],
-          stats: {
-            totalAnnotations: 0,
-            pendingReview: 0,
-            confirmedAnnotations: 0,
-            predictedAnnotations: 0,
-            gapAnnotations: 0,
-            progress: 0,
-            totalFrames: 0,
-            coveredFrames: 0,
-            hasOcrData: false,
-            layoutApproved: false,
-            boundaryPendingReview: 0,
-            textPendingReview: 0,
-            badges: [],
-          },
-          videoCount: 0,
-        }
-        currentLevel.push(folderNode)
-        node = folderNode
-      }
-
-      // Move to next level
-      if (node.type === 'folder') {
-        currentLevel = node.children
-      }
-    }
-  }
-
-  return tree
-}
 
 // =============================================================================
 // Loader
 // =============================================================================
 
 export async function loader() {
-  const dataDir = resolve(process.cwd(), '..', '..', 'local', 'data')
+  const supabase = createServerSupabaseClient()
 
-  if (!existsSync(dataDir)) {
+  // Get authenticated user
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser()
+
+  if (!user || error) {
+    throw redirect('/auth/login')
+  }
+
+  // Query videos table - RLS automatically filters by tenant/user
+  const { data: videos, error: videosError } = await supabase
+    .from('videos')
+    .select('id, filename, display_path, status, uploaded_at, is_demo')
+    .is('deleted_at', null)
+    .order('uploaded_at', { ascending: false })
+
+  if (videosError) {
+    console.error('Failed to fetch videos:', videosError)
     return { tree: [] }
   }
 
-  // Get all videos with their metadata
-  const allVideos = getAllVideos()
-
-  // Convert to VideoInfo objects using UUID as primary key
-  const videos: VideoInfo[] = allVideos.map(video => ({
-    videoId: video.videoId, // UUID (stable identifier)
-    displayPath: video.displayPath, // For tree structure and display
-  }))
+  // Transform to VideoInfo format expected by tree builder
+  const videoList: VideoInfo[] =
+    videos?.map(v => ({
+      videoId: v.id,
+      displayPath: v.display_path || v.filename || v.id,
+      isDemo: v.is_demo || false,
+    })) || []
 
   // Build tree structure from videos only (without stats - will be loaded client-side)
-  let tree = buildVideoTree(videos)
-
-  // Get empty folders from metadata and insert them as proper FolderNodes
-  const emptyFolders = readEmptyFolders(dataDir)
-  tree = insertEmptyFolders(tree, emptyFolders)
+  let tree = buildVideoTree(videoList)
 
   // Calculate video counts for each folder
   tree.forEach(node => {
