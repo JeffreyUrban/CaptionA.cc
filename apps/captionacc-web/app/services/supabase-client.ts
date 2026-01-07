@@ -13,10 +13,8 @@ import { createClient, type Session } from '@supabase/supabase-js'
 import type { Database } from '../types/supabase'
 
 // Type alias for production database using captionacc_production schema
-// This remaps the schema to 'public' for TypeScript inference while
-// the runtime schema is set via db.schema option
-// We merge Tables from captionacc_production with Functions from public
-// since security functions are in public schema
+// We merge Functions from both captionacc_production and public schemas
+// since security audit functions are defined in public schema
 type ProductionDatabase = {
   public: {
     Tables: Database['captionacc_production']['Tables']
@@ -41,14 +39,12 @@ const LOCAL_SUPABASE_SERVICE_ROLE_KEY =
 const supabaseUrl = import.meta.env['VITE_SUPABASE_URL'] || LOCAL_SUPABASE_URL
 const supabaseAnonKey = import.meta.env['VITE_SUPABASE_ANON_KEY'] || LOCAL_SUPABASE_ANON_KEY
 
-// Determine schema based on environment
-const isLocal = supabaseUrl === LOCAL_SUPABASE_URL
-const supabaseSchema = isLocal
-  ? 'public' // Local Supabase uses public schema
-  : import.meta.env['VITE_SUPABASE_SCHEMA'] || 'captionacc_production' // Online uses named schemas
+// Both local and remote use captionacc_production schema for consistency
+const supabaseSchema = import.meta.env['VITE_SUPABASE_SCHEMA'] || 'captionacc_production'
 
 // Log Supabase connection info in development
 if (import.meta.env.DEV) {
+  const isLocal = supabaseUrl === LOCAL_SUPABASE_URL
   console.log(
     `🔌 Supabase: ${isLocal ? 'LOCAL' : 'ONLINE'} (${supabaseUrl}) [schema: ${supabaseSchema}]`
   )
@@ -57,8 +53,7 @@ if (import.meta.env.DEV) {
 /**
  * Create a Supabase client for use in client-side code
  * Uses the anon key which respects RLS policies
- * TypeScript uses ProductionDatabase to see captionacc_production tables
- * Runtime uses db.schema option to connect to correct schema
+ * Both local and remote use captionacc_production schema
  */
 export const supabase = createClient<ProductionDatabase>(supabaseUrl, supabaseAnonKey, {
   auth: {
@@ -75,8 +70,7 @@ export const supabase = createClient<ProductionDatabase>(supabaseUrl, supabaseAn
  * Create a Supabase client for server-side operations
  * Uses the service role key which bypasses RLS (use carefully)
  * Only available on the server
- * TypeScript uses ProductionDatabase to see captionacc_production tables
- * Runtime uses db.schema option to connect to correct schema
+ * Both local and remote use captionacc_production schema
  */
 export function createServerSupabaseClient() {
   if (typeof window !== 'undefined') {
