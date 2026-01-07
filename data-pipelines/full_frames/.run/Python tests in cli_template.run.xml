@@ -1,5 +1,5 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="pytest in /Users/jurban/PycharmProjects/CaptionA.cc-claude2/data-pipelines/full-frames" type="tests" factoryName="py.test" nameIsGenerated="true">
+  <configuration default="false" name="pytest in /Users/jurban/PycharmProjects/CaptionA.cc/data-pipelines/full-frames" type="tests" factoryName="py.test" nameIsGenerated="true">
     <module name="full-frames" />
     <option name="ENV_FILES" value="" />
     <option name="INTERPRETER_OPTIONS" value="" />
