@@ -33,7 +33,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const supabase = createServerSupabaseClient()
 
     switch (view) {
-      case 'critical':
+      case 'critical': {
         // Get critical security events
         const criticalEvents = await getCriticalEvents(hoursBack)
         return jsonResponse({
@@ -42,8 +42,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
           events: criticalEvents,
           count: criticalEvents.length,
         })
+      }
 
-      case 'attacks':
+      case 'attacks': {
         // Detect repeated cross-tenant access attempts (potential attacks)
         const attacks = await getRepeatedCrossTenantAttempts(5, minutesBack)
         return jsonResponse({
@@ -53,8 +54,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
           attacks,
           count: attacks.length,
         })
+      }
 
-      case 'recent':
+      case 'recent': {
         // Get recent security events (all severities)
         const { data: recentEvents, error } = await supabase
           .from('security_audit_log')
@@ -72,8 +74,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
           events: recentEvents,
           count: recentEvents.length,
         })
+      }
 
-      case 'metrics':
+      case 'metrics': {
         // Get aggregated security metrics
         const { data: metrics, error: metricsError } = await supabase
           .from('security_metrics')
@@ -82,7 +85,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           .limit(24) // Last 24 hours
 
         if (metricsError) {
-          console.error('[Security Monitoring] Failed to fetch metrics:', error)
+          console.error('[Security Monitoring] Failed to fetch metrics:', metricsError)
           return errorResponse('Failed to fetch security metrics', 500)
         }
 
@@ -92,8 +95,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
           buckets: metrics,
           count: metrics.length,
         })
+      }
 
-      case 'user':
+      case 'user': {
         // Get security summary for specific user
         const userId = url.searchParams.get('userId')
 
@@ -118,6 +122,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           userId,
           summary: userSummary?.[0] || null,
         })
+      }
 
       default:
         return errorResponse(`Unknown view: ${view}`, 400)
