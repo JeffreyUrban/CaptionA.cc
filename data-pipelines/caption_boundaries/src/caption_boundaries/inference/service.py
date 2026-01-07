@@ -220,17 +220,15 @@ def run_boundary_inference_batch(
     )
 
     # Real implementation
-    import tempfile
-    from collections import defaultdict
-
-    import torch
-    from caption_boundaries.inference.batch_predictor import BatchBoundaryPredictor
-    from caption_boundaries.inference.boundaries_db import PairResult, create_boundaries_db
-    from caption_boundaries.inference.frame_extractor import extract_frame_from_chunk
-
     # Import WasabiClient from services
     # TODO: Move to shared package to avoid import path issues in Modal
     import sys
+    import tempfile
+    from collections import defaultdict
+
+    from caption_boundaries.inference.batch_predictor import BatchBoundaryPredictor
+    from caption_boundaries.inference.boundaries_db import PairResult, create_boundaries_db
+    from caption_boundaries.inference.frame_extractor import extract_frame_from_chunk
 
     sys.path.insert(0, "/root")  # Assume services code is available
     from services.orchestrator.wasabi_client import WasabiClient
@@ -261,7 +259,7 @@ def run_boundary_inference_batch(
         print(f"  Downloaded in {time.time() - download_start:.2f}s\n")
 
         # Step 2: Load model
-        print(f"[2/8] Loading model checkpoint...")
+        print("[2/8] Loading model checkpoint...")
         model_load_start = time.time()
         checkpoint_path = Path(f"/models/{model_version}.pt")
         if not checkpoint_path.exists():
@@ -387,7 +385,8 @@ def run_boundary_inference_batch(
         backward_predictions = [all_predictions[i * 2 + 1] for i in range(len(valid_indices))]
 
         inference_end = time.time()
-        print(f"  Completed {len(forward_predictions)} pairs (bidirectional) in {inference_end - inference_start:.2f}s\n")
+        inference_time = inference_end - inference_start
+        print(f"  Completed {len(forward_predictions)} pairs (bidirectional) in {inference_time:.2f}s\n")
 
         # Step 6: Create boundaries database
         print("[6/8] Creating boundaries database...")
@@ -551,7 +550,7 @@ def main():
     print(f"  Device: {result1['device']}")
     print(f"  GPU: {result1.get('gpu_name', 'N/A')}")
     print(f"  Memory: {result1.get('gpu_memory_gb', 'N/A')} GB")
-    print(f"\n  Metrics:")
+    print("\n  Metrics:")
     print(f"    Cold start: {result1['metrics']['is_cold_start']}")
     print(f"    Init time: {result1['metrics']['initialization_ms']:.1f} ms")
 
@@ -563,7 +562,7 @@ def main():
     result2 = test_inference.remote()
 
     print("\n✅ Test Results:")
-    print(f"  Metrics:")
+    print("  Metrics:")
     print(f"    Cold start: {result2['metrics']['is_cold_start']}")
     print(f"    Container uptime: {result2['metrics']['container_uptime_s']:.1f} sec")
     print(f"    Init time: {result2['metrics']['initialization_ms']:.1f} ms")
@@ -583,7 +582,7 @@ def main():
 
     print("\n✅ Batch Inference Results:")
     print(f"  Processed: {len(result3['results'])} pairs")
-    print(f"  Metrics:")
+    print("  Metrics:")
     for key, value in result3["metrics"].items():
         if value is not None:
             if isinstance(value, float):
@@ -598,9 +597,10 @@ def main():
 
     print("\n💡 Usage Pattern Insights:")
     print(f"  - Cold start overhead: {result1['metrics']['initialization_ms']:.0f} ms")
-    print(f"  - Warm start benefit: Container reuse within 5 min idle period")
+    print("  - Warm start benefit: Container reuse within 5 min idle period")
     print(f"  - Current throughput: {result3['metrics']['pairs_per_second']:.1f} pairs/sec (placeholder)")
-    print(f"  - Estimated time for 25k pairs: {25000 / result3['metrics']['pairs_per_second'] / 60:.1f} min (placeholder)")
+    estimated_min = 25000 / result3['metrics']['pairs_per_second'] / 60
+    print(f"  - Estimated time for 25k pairs: {estimated_min:.1f} min (placeholder)")
 
 
 if __name__ == "__main__":

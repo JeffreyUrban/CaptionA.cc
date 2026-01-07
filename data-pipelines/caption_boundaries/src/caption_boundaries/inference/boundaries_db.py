@@ -43,7 +43,7 @@ class PairResult:
     processing_time_ms: float | None = None
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "PairResult":
+    def from_dict(cls, data: dict[str, Any]) -> PairResult:
         """Create from dictionary."""
         return cls(
             frame1_index=data["frame1_index"],

@@ -12,11 +12,12 @@ from pathlib import Path
 src_path = Path(__file__).parent.parent / "src"
 sys.path.insert(0, str(src_path))
 
-from caption_boundaries.inference.frame_extractor import (
+from rich.console import Console  # noqa: E402
+
+from caption_boundaries.inference.frame_extractor import (  # noqa: E402
     calculate_frame_offset,
     determine_modulo_for_frame,
 )
-from rich.console import Console
 
 console = Console()
 

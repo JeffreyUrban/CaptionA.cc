@@ -7,7 +7,7 @@ Optimized for Modal GPU inference on full videos.
 import sqlite3
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 import numpy as np
 import torch
@@ -143,7 +143,6 @@ class BatchBoundaryPredictor:
 
         # Compute normalized position and size
         crop_width = self.crop_right - self.crop_left
-        crop_height = self.crop_bottom - self.crop_top
 
         x_center = (self.crop_left + self.crop_right) / 2
         y_center = (self.crop_top + self.crop_bottom) / 2
@@ -271,7 +270,7 @@ class BatchBoundaryPredictor:
                 probs = torch.softmax(logits, dim=1).cpu().numpy()
 
             # Extract predictions
-            for j, prob_dist in enumerate(probs):
+            for _j, prob_dist in enumerate(probs):
                 pred_idx = int(np.argmax(prob_dist))
                 predicted_label = self.labels[pred_idx]
 
@@ -286,5 +285,5 @@ class BatchBoundaryPredictor:
             if (i + batch_size) % 1000 == 0 or i + batch_size >= len(frame_pairs):
                 console.print(f"  Processed {min(i + batch_size, len(frame_pairs))}/{len(frame_pairs)} pairs")
 
-        console.print(f"[green]✓ Batch inference complete[/green]")
+        console.print("[green]✓ Batch inference complete[/green]")
         return results

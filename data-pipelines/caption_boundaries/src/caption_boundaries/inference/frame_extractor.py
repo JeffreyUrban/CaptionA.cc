@@ -6,7 +6,6 @@ Ported from TypeScript web client (useBoundaryFrameLoader.ts).
 import os
 import tempfile
 from pathlib import Path
-from typing import Any
 
 import cv2
 import numpy as np
@@ -99,7 +98,7 @@ def extract_frame_from_chunk(
         response = requests.get(signed_url, timeout=30)
         response.raise_for_status()
     except requests.RequestException as e:
-        raise ValueError(f"Failed to download chunk: {e}")
+        raise ValueError(f"Failed to download chunk: {e}") from e
 
     with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as f:
         f.write(response.content)

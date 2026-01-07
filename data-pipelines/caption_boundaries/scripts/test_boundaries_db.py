@@ -136,7 +136,7 @@ def test_create_and_read_db():
         assert metadata["total_pairs"] == 100
         assert metadata["model_checkpoint_path"] == "/models/test_checkpoint.pt"
 
-        console.print(f"[green]✓ Metadata matches:[/green]")
+        console.print("[green]✓ Metadata matches:[/green]")
         console.print(f"    Run ID: {metadata['run_id']}")
         console.print(f"    Model: {metadata['model_version']}")
         console.print(f"    Total pairs: {metadata['total_pairs']}")
@@ -215,10 +215,10 @@ def test_large_batch():
         # Get file size
         file_size_mb = db_path.stat().st_size / 1024 / 1024
 
-        console.print(f"[green]✓ Large database created successfully[/green]")
+        console.print("[green]✓ Large database created successfully[/green]")
         console.print(f"    Creation time: {create_time:.2f}s")
         console.print(f"    File size: {file_size_mb:.2f} MB")
-        console.print(f"    Pairs: 25,000")
+        console.print("    Pairs: 25,000")
 
         # Verify read performance
         console.print("  Reading database...")

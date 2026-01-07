@@ -11,14 +11,12 @@ Triggered after:
 - On-demand: Admin requests inference with new model version
 """
 
-import os
 import uuid
 from typing import Any
 
+from caption_boundaries.inference.config import MODAL_CONFIG, format_frame_count_limit_message
 from prefect import flow, task
 from prefect.artifacts import create_table_artifact
-
-from caption_boundaries.inference.config import MODAL_CONFIG, format_frame_count_limit_message
 from services.orchestrator.monitoring.rejection_logger import log_rejection
 from services.orchestrator.supabase_client import get_supabase_client
 
@@ -43,7 +41,7 @@ def check_existing_run(
     Returns:
         Existing run dict if found, None otherwise
     """
-    print(f"Checking for existing boundary inference run:")
+    print("Checking for existing boundary inference run:")
     print(f"  Video: {video_id}")
     print(f"  Frames version: {cropped_frames_version}")
     print(f"  Model: {model_version[:16]}...")
@@ -136,7 +134,7 @@ def generate_frame_pairs(
     # Warning for videos approaching the limit
     if frame_count > MODAL_CONFIG.frame_count_warning_threshold:
         print(f"⚠️  WARNING: Frame count {frame_count:,} is close to limit ({MODAL_CONFIG.max_frame_count:,})")
-        print(f"   Consider reviewing inference/config.py if this is expected.")
+        print("   Consider reviewing inference/config.py if this is expected.")
 
     # Generate consecutive pairs
     pairs = [(i, i + 1) for i in range(frame_count - 1)]
@@ -174,7 +172,7 @@ def invoke_modal_inference(
     Returns:
         Inference results with storage_key and metrics
     """
-    print(f"Invoking Modal inference function:")
+    print("Invoking Modal inference function:")
     print(f"  Run ID: {run_id}")
     print(f"  Video: {video_id}")
     print(f"  Frame pairs: {len(frame_pairs)}")
@@ -195,7 +193,7 @@ def invoke_modal_inference(
             frame_pairs=frame_pairs,
         )
 
-        print(f"\n✓ Modal inference complete:")
+        print("\n✓ Modal inference complete:")
         print(f"  Storage key: {result['results']['storage_key']}")
         print(f"  Successful: {result['results']['successful']}/{result['results']['total_pairs']}")
         print(f"  Failed: {result['results']['failed']}")
@@ -272,7 +270,7 @@ def boundary_inference_flow(
     # Add 1 back to get frame count from pairs count
     cost_estimate = estimate_job_cost(len(frame_pairs) + 1, MODAL_CONFIG)
 
-    print(f"\n💰 Cost Estimate:")
+    print("\n💰 Cost Estimate:")
     print(f"  Frame pairs: {cost_estimate['frame_pairs']:,}")
     print(f"  Estimated time: {cost_estimate['estimated_seconds']:.0f}s ({cost_estimate['estimated_seconds']/60:.1f} min)")
     print(f"  Estimated cost: ${cost_estimate['estimated_cost_usd']:.4f}")

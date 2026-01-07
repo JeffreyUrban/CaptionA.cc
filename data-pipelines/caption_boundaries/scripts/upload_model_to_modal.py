@@ -72,11 +72,11 @@ def main():
         print(f"⚠️  Warning: Expected .pt file, got {args.checkpoint.suffix}")
 
     # Compute file hash for verification
-    print(f"📊 Computing file hash...")
+    print("📊 Computing file hash...")
     file_hash = compute_file_hash(args.checkpoint)
     file_size_mb = args.checkpoint.stat().st_size / (1024 * 1024)
 
-    print(f"\n📦 Model Checkpoint Details:")
+    print("\n📦 Model Checkpoint Details:")
     print(f"   File: {args.checkpoint.name}")
     print(f"   Size: {file_size_mb:.1f} MB")
     print(f"   Hash: {file_hash[:16]}...")
@@ -86,7 +86,7 @@ def main():
     remote_filename = f"{args.model_version}_{file_hash[:8]}.pt"
     remote_path = f"/checkpoints/{remote_filename}"
 
-    print(f"\n🚀 Uploading to Modal...")
+    print("\n🚀 Uploading to Modal...")
     print(f"   Volume: {args.volume}")
     print(f"   Path: {remote_path}")
 
@@ -97,13 +97,13 @@ def main():
         # Check if file already exists
         try:
             existing_files = list(volume.listdir("/checkpoints"))
-            if remote_filename in [f for f in existing_files]:
+            if remote_filename in existing_files:
                 if not args.force:
-                    print(f"\n⚠️  Checkpoint already exists in volume!")
-                    print(f"   Use --force to overwrite")
+                    print("\n⚠️  Checkpoint already exists in volume!")
+                    print("   Use --force to overwrite")
                     exit(1)
                 else:
-                    print(f"   Overwriting existing checkpoint...")
+                    print("   Overwriting existing checkpoint...")
         except Exception:
             # Directory might not exist yet, that's fine
             pass
@@ -142,23 +142,23 @@ def main():
 
                 if result["success"]:
                     uploaded_size_mb = result["size"] / (1024 * 1024)
-                    print(f"\n✅ Upload successful!")
+                    print("\n✅ Upload successful!")
                     print(f"   Uploaded: {uploaded_size_mb:.1f} MB")
                     print(f"   Location: {result['path']}")
 
                     # Verify size matches
                     if abs(uploaded_size_mb - file_size_mb) > 0.1:
-                        print(f"\n⚠️  WARNING: Size mismatch!")
+                        print("\n⚠️  WARNING: Size mismatch!")
                         print(f"   Local: {file_size_mb:.1f} MB")
                         print(f"   Remote: {uploaded_size_mb:.1f} MB")
                     else:
-                        print(f"   ✓ Size verified")
+                        print("   ✓ Size verified")
 
                     # Print usage instructions
-                    print(f"\n📝 To use this checkpoint in inference:")
+                    print("\n📝 To use this checkpoint in inference:")
                     print(f"   Model version: {args.model_version}")
                     print(f"   Checkpoint hash: {file_hash[:8]}")
-                    print(f"\n   The inference service will automatically load from:")
+                    print("\n   The inference service will automatically load from:")
                     print(f"   /models{remote_path}")
 
                 else:
@@ -184,7 +184,7 @@ def main():
     except Exception:
         print(f"   - {remote_filename} (just uploaded)")
 
-    print(f"\n✅ Model checkpoint ready for inference!")
+    print("\n✅ Model checkpoint ready for inference!")
 
 
 if __name__ == "__main__":

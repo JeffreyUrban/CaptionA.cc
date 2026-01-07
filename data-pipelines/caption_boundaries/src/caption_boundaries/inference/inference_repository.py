@@ -7,9 +7,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-from supabase import Client, create_client
-
 from rich.console import Console
+from supabase import Client, create_client
 
 console = Console(stderr=True)
 
@@ -34,7 +33,7 @@ class InferenceRun:
     created_at: datetime
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "InferenceRun":
+    def from_dict(cls, data: dict[str, Any]) -> InferenceRun:
         """Create from Supabase row."""
         return cls(
             id=data["id"],
@@ -72,7 +71,7 @@ class InferenceJob:
     created_at: datetime
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "InferenceJob":
+    def from_dict(cls, data: dict[str, Any]) -> InferenceJob:
         """Create from Supabase row."""
         return cls(
             id=data["id"],

@@ -15,7 +15,6 @@ from datetime import datetime
 
 from rich.console import Console
 from rich.table import Table
-
 from services.orchestrator.monitoring.rejection_logger import (
     get_rejection_summary,
     get_unacknowledged_rejections,
