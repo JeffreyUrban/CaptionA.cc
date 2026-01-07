@@ -7,6 +7,7 @@ on:
       - 'apps/captionacc-web/**'
     branches:
       - main
+  workflow_dispatch:  # Allow manual triggering
 jobs:
   deploy:
     name: Deploy app
@@ -26,6 +27,11 @@ jobs:
             VITE_SUPABASE_SCHEMA="captionacc_production" \
             VITE_SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}" \
             VITE_SUPABASE_SERVICE_ROLE_KEY="${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            WASABI_ACCESS_KEY_READONLY="${{ secrets.WASABI_ACCESS_KEY_READONLY }}" \
+            WASABI_SECRET_KEY_READONLY="${{ secrets.WASABI_SECRET_KEY_READONLY }}" \
+            WASABI_BUCKET="${{ secrets.WASABI_BUCKET }}" \
+            WASABI_REGION="${{ secrets.WASABI_REGION }}" \
+            ENVIRONMENT="production" \
             --app captionacc-web
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
