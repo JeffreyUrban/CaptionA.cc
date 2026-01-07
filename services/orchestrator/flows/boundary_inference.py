@@ -105,6 +105,15 @@ def generate_frame_pairs(
     if not frame_count:
         raise ValueError(f"Video {video_id} has no frame_count")
 
+    # Sanity check: prevent unreasonable videos
+    # 100k pairs = ~2.7hr video at 10Hz (edge case but valid)
+    # 200k pairs = ~5.5hr video (suspicious, likely error)
+    if frame_count > 200_000:
+        raise ValueError(
+            f"Frame count too high: {frame_count} (max 200k). "
+            f"This would cost ~${frame_count / 100 / 3600 * 1.10:.2f}"
+        )
+
     # Generate consecutive pairs
     pairs = [(i, i + 1) for i in range(frame_count - 1)]
 
@@ -226,6 +235,24 @@ def boundary_inference_flow(
 
     # Step 2: Generate frame pairs
     frame_pairs = generate_frame_pairs(video_id, tenant_id)
+
+    # Step 2.5: Estimate cost (transparency + validation)
+    estimated_seconds = len(frame_pairs) / 100  # ~100 pairs/sec throughput
+    estimated_hours = estimated_seconds / 3600
+    estimated_cost = estimated_hours * 1.10  # A10G: $1.10/hr
+
+    print(f"\n💰 Cost Estimate:")
+    print(f"  Frame pairs: {len(frame_pairs):,}")
+    print(f"  Estimated time: {estimated_seconds:.0f}s ({estimated_seconds/60:.1f} min)")
+    print(f"  Estimated cost: ${estimated_cost:.4f}")
+
+    # Safety check: reject if too expensive
+    # $1 threshold = ~91 minutes of processing = ~550k pairs (edge case)
+    if estimated_cost > 1.0:
+        raise ValueError(
+            f"Job too expensive: ${estimated_cost:.2f} (threshold: $1.00). "
+            f"Frame pairs: {len(frame_pairs):,}"
+        )
 
     # Step 3: Generate unique run ID
     run_id = str(uuid.uuid4())

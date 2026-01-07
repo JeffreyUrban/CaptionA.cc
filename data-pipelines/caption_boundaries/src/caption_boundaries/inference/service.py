@@ -165,8 +165,10 @@ def test_inference():
     image=image,
     gpu="A10G",
     volumes={"/models": model_volume},
-    timeout=3600,
-    container_idle_timeout=300,
+    timeout=3600,  # 1 hour max (safety: 10-15x expected time)
+    container_idle_timeout=300,  # 5 min idle shutdown (cost control)
+    concurrency_limit=5,  # Max 5 parallel containers ($5.50/hr ceiling)
+    allow_concurrent_inputs=50,  # Queue up to 50 jobs (prevent unbounded growth)
     secrets=[
         modal.Secret.from_name("wasabi-credentials"),
         modal.Secret.from_name("supabase-credentials"),
