@@ -11,7 +11,7 @@
  * - 503 Service Unavailable: Critical system failure
  */
 
-import { json, type LoaderFunctionArgs } from '@remix-run/node'
+import { type LoaderFunctionArgs } from 'react-router'
 
 import { createServerSupabaseClient } from '~/services/supabase-client'
 import { listChunks } from '~/services/wasabi-storage.server'
@@ -107,14 +107,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
   // Return appropriate HTTP status
   const httpStatus = health.status === 'unhealthy' ? 503 : 200
 
-  return json(
-    {
+  return new Response(
+    JSON.stringify({
       ...health,
       response_time_ms: totalTime,
-    },
+    }),
     {
       status: httpStatus,
       headers: {
+        'Content-Type': 'application/json',
         'Cache-Control': 'no-cache, no-store, must-revalidate',
       },
     }

@@ -74,8 +74,8 @@ async def health_check(response: Response) -> dict[str, Any]:
         start = time.time()
         supabase = get_supabase_client()
 
-        # Lightweight query
-        result = supabase.table("videos").select("id").limit(1).execute()
+        # Lightweight query to verify connection
+        supabase.table("videos").select("id").limit(1).execute()
 
         response_ms = int((time.time() - start) * 1000)
 
