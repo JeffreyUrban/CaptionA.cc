@@ -52,10 +52,10 @@ def log_rejection(
         rejections should not block the rejection itself.
     """
     try:
-        supabase = get_supabase_client()
+        supabase = get_supabase_client(schema="captionacc_production")
 
         # Insert rejection record
-        supabase.table("boundary_inference_rejections").insert(
+        supabase.schema("captionacc_production").table("boundary_inference_rejections").insert(
             {
                 "video_id": video_id,
                 "tenant_id": tenant_id,
@@ -95,10 +95,11 @@ def get_unacknowledged_rejections(limit: int = 100) -> list[dict]:
     Returns:
         List of rejection records ordered by most recent
     """
-    supabase = get_supabase_client()
+    supabase = get_supabase_client(schema="captionacc_production")
 
     response = (
-        supabase.table("boundary_inference_rejections")
+        supabase.schema("captionacc_production")
+        .table("boundary_inference_rejections")
         .select("*")
         .eq("acknowledged", False)
         .order("created_at", desc=True)
@@ -116,7 +117,7 @@ def acknowledge_rejection(rejection_id: str, acknowledged_by: str | None = None)
         rejection_id: Rejection UUID
         acknowledged_by: User ID who acknowledged (optional)
     """
-    supabase = get_supabase_client()
+    supabase = get_supabase_client(schema="captionacc_production")
 
     update_data = {
         "acknowledged": True,
@@ -126,7 +127,9 @@ def acknowledge_rejection(rejection_id: str, acknowledged_by: str | None = None)
     if acknowledged_by:
         update_data["acknowledged_by"] = acknowledged_by
 
-    supabase.table("boundary_inference_rejections").update(update_data).eq("id", rejection_id).execute()
+    supabase.schema("captionacc_production").table("boundary_inference_rejections").update(update_data).eq(
+        "id", rejection_id
+    ).execute()
 
 
 def get_rejection_summary(days: int = 7) -> dict:
@@ -140,38 +143,42 @@ def get_rejection_summary(days: int = 7) -> dict:
     Returns:
         Dict with rejection counts by type and trend data
     """
-    supabase = get_supabase_client()
+    supabase = get_supabase_client(schema="captionacc_production")
 
-    # Query rejections from last N days
-    response = (
-        supabase.rpc(
-            "get_rejection_summary",
-            {
-                "days_back": days,
-            },
+    # Try to use RPC function if it exists (future optimization)
+    try:
+        response = (
+            supabase.rpc(
+                "get_rejection_summary",
+                {
+                    "days_back": days,
+                },
+            )
+            .execute()
         )
+        if response.data:
+            return response.data
+    except Exception:
+        # RPC doesn't exist yet, fall back to simple query
+        pass
+
+    # Fallback: Simple query with client-side aggregation
+    response = (
+        supabase.schema("captionacc_production")
+        .table("boundary_inference_rejections")
+        .select("rejection_type, created_at")
+        .gte("created_at", f"now() - interval '{days} days'")
         .execute()
     )
 
-    # If RPC doesn't exist yet, fall back to simple query
-    if not response.data:
-        response = (
-            supabase.table("boundary_inference_rejections")
-            .select("rejection_type, created_at")
-            .gte("created_at", f"now() - interval '{days} days'")
-            .execute()
-        )
+    # Aggregate by type
+    summary = {}
+    for record in response.data:
+        rejection_type = record["rejection_type"]
+        summary[rejection_type] = summary.get(rejection_type, 0) + 1
 
-        # Aggregate by type
-        summary = {}
-        for record in response.data:
-            rejection_type = record["rejection_type"]
-            summary[rejection_type] = summary.get(rejection_type, 0) + 1
-
-        return {
-            "days": days,
-            "total_rejections": len(response.data),
-            "by_type": summary,
-        }
-
-    return response.data
+    return {
+        "days": days,
+        "total_rejections": len(response.data),
+        "by_type": summary,
+    }

@@ -111,7 +111,7 @@ def main():
     console.print("  3. Update config.py if supporting longer videos")
     console.print("  4. Mark as acknowledged after reviewing:")
     console.print("     [dim]from services.orchestrator.monitoring.rejection_logger import acknowledge_rejection[/dim]")
-    console.print("     [dim]acknowledge_rejection(rejection_id='...'")[/dim]\n")
+    console.print("     [dim]acknowledge_rejection(rejection_id='...')[/dim]\n")
 
 
 if __name__ == "__main__":
