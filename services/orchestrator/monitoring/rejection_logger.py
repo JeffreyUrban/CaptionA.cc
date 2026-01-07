@@ -27,6 +27,7 @@ class RejectionRow(TypedDict):
     acknowledged_by: str | None
     created_at: str
 
+
 RejectionType = Literal[
     "frame_count_exceeded",
     "cost_exceeded",
