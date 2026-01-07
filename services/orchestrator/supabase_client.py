@@ -55,12 +55,10 @@ def get_supabase_client(
         SUPABASE_URL: Supabase instance URL (default: http://localhost:54321)
         SUPABASE_SERVICE_ROLE_KEY: Service role key (default: demo key)
         SUPABASE_SCHEMA: PostgreSQL schema name (default: auto-detected)
-        ENVIRONMENT: 'dev' | 'production' (optional, for logging)
     """
     # Get from environment or use local defaults
     url = os.environ.get("SUPABASE_URL", LOCAL_SUPABASE_URL)
     key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", LOCAL_SUPABASE_SERVICE_ROLE_KEY)
-    environment = os.environ.get("ENVIRONMENT", "dev")
 
     is_local = url == LOCAL_SUPABASE_URL
 
