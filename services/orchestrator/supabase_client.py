@@ -14,27 +14,79 @@ from typing import Any
 
 from supabase import Client, create_client
 
+# Local Supabase demo keys - These are Supabase's standard public keys for local development
+# Documented at: https://supabase.com/docs/guides/cli/local-development
+# These keys are safe to commit - they only work with `supabase start` on localhost:54321
+# Production keys are NEVER in code - only in environment variables/secrets
+LOCAL_SUPABASE_URL = "http://localhost:54321"
+LOCAL_SUPABASE_SERVICE_ROLE_KEY = (
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
+    "eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0."
+    "EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU"
+)
 
-def get_supabase_client() -> Client:
+
+def get_supabase_client(require_production: bool = False, schema: str | None = None) -> Client:
     """
-    Create a Supabase client using service role credentials.
+    Create a Supabase client using service role credentials with schema support.
 
     The orchestrator uses service role credentials to bypass RLS
     for system-level operations like updating video processing status.
 
+    Args:
+        require_production: If True, raises error if using local Supabase.
+                          Useful for production deployments to ensure
+                          proper configuration.
+        schema: PostgreSQL schema to use. If None, determined automatically:
+                - Local: 'public' (default PostgreSQL schema)
+                - Online: from SUPABASE_SCHEMA env var or 'captionacc_production'
+                Options: 'public', 'captionacc_production', 'captionacc_staging'
+
     Returns:
-        Supabase client instance
+        Supabase client instance configured for specified schema
 
     Raises:
-        ValueError: If required environment variables are not set
+        ValueError: If require_production=True and using local Supabase
+
+    Environment Variables:
+        SUPABASE_URL: Supabase instance URL (default: http://localhost:54321)
+        SUPABASE_SERVICE_ROLE_KEY: Service role key (default: demo key)
+        SUPABASE_SCHEMA: PostgreSQL schema name (default: auto-detected)
     """
-    url = os.environ.get("SUPABASE_URL")
-    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+    # Get from environment or use local defaults
+    url = os.environ.get("SUPABASE_URL", LOCAL_SUPABASE_URL)
+    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", LOCAL_SUPABASE_SERVICE_ROLE_KEY)
 
-    if not url or not key:
-        raise ValueError("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set in environment")
+    is_local = url == LOCAL_SUPABASE_URL
 
-    return create_client(url, key)
+    # Determine schema if not explicitly provided
+    if schema is None:
+        if is_local:
+            # Local Supabase uses public schema
+            schema = "public"
+        else:
+            # Online Supabase uses named schemas
+            schema = os.environ.get("SUPABASE_SCHEMA", "captionacc_production")
+
+    # Safety check for production deployments
+    if require_production and is_local:
+        raise ValueError(
+            "Production Supabase required but local configuration detected. "
+            "Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables."
+        )
+
+    # Log environment for debugging
+    env_label = "LOCAL" if is_local else "ONLINE"
+    print(f"🔌 Supabase: {env_label} ({url}) [schema: {schema}]")
+
+    # Create client
+    client = create_client(url, key)
+
+    # Set schema for PostgREST queries
+    # Note: This sets the search_path for database queries
+    client.postgrest.schema(schema)
+
+    return client
 
 
 class VideoRepository:
