@@ -233,15 +233,15 @@ def run_boundary_inference_batch(
     sys.path.insert(0, "/root")  # Assume services code is available
     from services.orchestrator.wasabi_client import WasabiClient
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Starting Inference Job: {run_id}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f"Video: {video_id}")
     print(f"Tenant: {tenant_id}")
     print(f"Frames version: {cropped_frames_version}")
     print(f"Model version: {model_version[:16]}...")
     print(f"Frame pairs: {len(frame_pairs)}")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     # Initialize Wasabi client
     wasabi = WasabiClient()
@@ -296,7 +296,7 @@ def run_boundary_inference_batch(
 
         # Generate signed URLs using WasabiClient
         signed_urls = {}
-        for (chunk_idx, modulo) in needed_chunks.keys():
+        for chunk_idx, modulo in needed_chunks.keys():
             storage_key = wasabi.build_chunk_storage_key(
                 tenant_id=tenant_id,
                 video_id=video_id,
@@ -376,9 +376,7 @@ def run_boundary_inference_batch(
 
         # Run batch prediction on all directions at once
         # Batch size configured in config.py for GPU memory optimization
-        all_predictions = predictor.predict_batch(
-            bidirectional_pairs, batch_size=MODAL_CONFIG.inference_batch_size
-        )
+        all_predictions = predictor.predict_batch(bidirectional_pairs, batch_size=MODAL_CONFIG.inference_batch_size)
 
         # Split predictions back into forward/backward pairs
         forward_predictions = [all_predictions[i * 2] for i in range(len(valid_indices))]
@@ -515,9 +513,9 @@ def run_boundary_inference_batch(
         _is_cold_start = False
 
     # Log summary
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Inference Job Complete: {run_id}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f"Container: {'COLD START' if is_cold else 'WARM START'}")
     print(f"Total pairs: {metrics.total_frame_pairs}")
     print(f"Successful: {metrics.successful_inferences}")
@@ -527,7 +525,7 @@ def run_boundary_inference_batch(
     print(f"Total job time: {metrics.total_job_duration_ms / 1000:.2f} sec")
     if metrics.peak_memory_mb:
         print(f"Peak GPU memory: {metrics.peak_memory_mb:.1f} MB")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     return {
         "status": "success",
@@ -599,7 +597,7 @@ def main():
     print(f"  - Cold start overhead: {result1['metrics']['initialization_ms']:.0f} ms")
     print("  - Warm start benefit: Container reuse within 5 min idle period")
     print(f"  - Current throughput: {result3['metrics']['pairs_per_second']:.1f} pairs/sec (placeholder)")
-    estimated_min = 25000 / result3['metrics']['pairs_per_second'] / 60
+    estimated_min = 25000 / result3["metrics"]["pairs_per_second"] / 60
     print(f"  - Estimated time for 25k pairs: {estimated_min:.1f} min (placeholder)")
 
 

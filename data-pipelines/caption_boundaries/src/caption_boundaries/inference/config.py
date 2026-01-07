@@ -141,6 +141,7 @@ MODAL_CONFIG = ModalInferenceConfig()
 # COST ESTIMATION HELPERS
 # ============================================================================
 
+
 def estimate_job_cost(frame_count: int, config: ModalInferenceConfig = MODAL_CONFIG) -> dict[str, float]:
     """Estimate cost and time for a video with given frame count.
 
@@ -183,7 +184,7 @@ def format_frame_count_limit_message(
         f"❌ Frame count too high: {frame_count:,} frames (limit: {config.max_frame_count:,})\n"
         f"\n"
         f"This video would cost ~${estimate['estimated_cost_usd']:.2f} "
-        f"and take ~{estimate['estimated_seconds']/60:.0f} minutes to process.\n"
+        f"and take ~{estimate['estimated_seconds'] / 60:.0f} minutes to process.\n"
         f"\n"
         f"To process this video:\n"
         f"1. Review cost implications above\n"

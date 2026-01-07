@@ -133,13 +133,15 @@ def generate_frame_pairs(
 
     # Warning for videos approaching the limit
     if frame_count > MODAL_CONFIG.frame_count_warning_threshold:
-        print(f"⚠️  WARNING: Frame count {frame_count:,} is close to limit ({MODAL_CONFIG.max_frame_count:,})")
+        print(
+            f"⚠️  WARNING: Frame count {frame_count:,} is close to limit ({MODAL_CONFIG.max_frame_count:,})"
+        )
         print("   Consider reviewing inference/config.py if this is expected.")
 
     # Generate consecutive pairs
     pairs = [(i, i + 1) for i in range(frame_count - 1)]
 
-    print(f"  Generated {len(pairs)} frame pairs (0..{frame_count-2})")
+    print(f"  Generated {len(pairs)} frame pairs (0..{frame_count - 2})")
 
     return pairs
 
@@ -272,7 +274,9 @@ def boundary_inference_flow(
 
     print("\n💰 Cost Estimate:")
     print(f"  Frame pairs: {cost_estimate['frame_pairs']:,}")
-    print(f"  Estimated time: {cost_estimate['estimated_seconds']:.0f}s ({cost_estimate['estimated_seconds']/60:.1f} min)")
+    print(
+        f"  Estimated time: {cost_estimate['estimated_seconds']:.0f}s ({cost_estimate['estimated_seconds'] / 60:.1f} min)"
+    )
     print(f"  Estimated cost: ${cost_estimate['estimated_cost_usd']:.4f}")
 
     # Safety check: reject if too expensive

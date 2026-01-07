@@ -127,9 +127,9 @@ def acknowledge_rejection(rejection_id: str, acknowledged_by: str | None = None)
     if acknowledged_by:
         update_data["acknowledged_by"] = acknowledged_by
 
-    supabase.schema("captionacc_production").table("boundary_inference_rejections").update(update_data).eq(
-        "id", rejection_id
-    ).execute()
+    supabase.schema("captionacc_production").table("boundary_inference_rejections").update(
+        update_data
+    ).eq("id", rejection_id).execute()
 
 
 def get_rejection_summary(days: int = 7) -> dict:
@@ -147,15 +147,12 @@ def get_rejection_summary(days: int = 7) -> dict:
 
     # Try to use RPC function if it exists (future optimization)
     try:
-        response = (
-            supabase.rpc(
-                "get_rejection_summary",
-                {
-                    "days_back": days,
-                },
-            )
-            .execute()
-        )
+        response = supabase.rpc(
+            "get_rejection_summary",
+            {
+                "days_back": days,
+            },
+        ).execute()
         if response.data:
             return response.data
     except Exception:

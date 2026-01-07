@@ -43,9 +43,7 @@ def test_frame_offset_calculation():
         # Verify modulo detection
         detected_modulo = determine_modulo_for_frame(frame_idx)
         if detected_modulo != expected_modulo:
-            console.print(
-                f"[red]✗ Frame {frame_idx}: expected modulo {expected_modulo}, got {detected_modulo}[/red]"
-            )
+            console.print(f"[red]✗ Frame {frame_idx}: expected modulo {expected_modulo}, got {detected_modulo}[/red]")
             continue
 
         # Verify offset calculation
@@ -55,9 +53,7 @@ def test_frame_offset_calculation():
                 console.print(f"[green]✓ Frame {frame_idx}: modulo {detected_modulo}, offset {offset}[/green]")
                 passed += 1
             else:
-                console.print(
-                    f"[red]✗ Frame {frame_idx}: expected offset {expected_offset}, got {offset}[/red]"
-                )
+                console.print(f"[red]✗ Frame {frame_idx}: expected offset {expected_offset}, got {offset}[/red]")
         except ValueError as e:
             console.print(f"[red]✗ Frame {frame_idx}: {e}[/red]")
 

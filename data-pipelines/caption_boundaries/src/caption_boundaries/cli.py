@@ -157,10 +157,10 @@ def train(
         raise typer.Exit(code=1) from e
 
 
-
 # Removed: Local inference command deprecated
 # Frame storage migrated from SQLite BLOBs to Wasabi VP9 chunks
 # Use Modal serverless inference instead (see inference/service.py)
+
 
 @app.command()
 def analyze(

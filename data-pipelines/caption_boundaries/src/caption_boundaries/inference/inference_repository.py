@@ -387,12 +387,7 @@ class BoundaryInferenceRunRepository:
         if inference_run_id:
             data["inference_run_id"] = inference_run_id
 
-        response = (
-            self.client.table("boundary_inference_jobs")
-            .update(data)
-            .eq("id", job_id)
-            .execute()
-        )
+        response = self.client.table("boundary_inference_jobs").update(data).eq("id", job_id).execute()
 
         if not response.data:
             raise ValueError(f"Failed to update job {job_id}")

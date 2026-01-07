@@ -88,7 +88,11 @@ def main():
         rejection_type = rejection["rejection_type"]
         video_id = rejection["video_id"][:8]  # First 8 chars
         frame_count = f"{rejection['frame_count']:,}" if rejection.get("frame_count") else "N/A"
-        cost = f"${rejection['estimated_cost_usd']:.2f}" if rejection.get("estimated_cost_usd") else "N/A"
+        cost = (
+            f"${rejection['estimated_cost_usd']:.2f}"
+            if rejection.get("estimated_cost_usd")
+            else "N/A"
+        )
 
         # Extract key detail from message
         message = rejection["rejection_message"]
@@ -109,7 +113,9 @@ def main():
     console.print("  2. Check if videos are valid or data errors")
     console.print("  3. Update config.py if supporting longer videos")
     console.print("  4. Mark as acknowledged after reviewing:")
-    console.print("     [dim]from services.orchestrator.monitoring.rejection_logger import acknowledge_rejection[/dim]")
+    console.print(
+        "     [dim]from services.orchestrator.monitoring.rejection_logger import acknowledge_rejection[/dim]"
+    )
     console.print("     [dim]acknowledge_rejection(rejection_id='...')[/dim]\n")
 
 

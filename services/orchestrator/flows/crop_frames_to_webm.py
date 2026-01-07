@@ -672,7 +672,9 @@ def crop_frames_to_webm_flow(
             try:
                 model_version = os.getenv("BOUNDARY_MODEL_VERSION")
                 if model_version:
-                    print(f"\n[Boundary Inference] Triggering inference with model {model_version[:16]}...")
+                    print(
+                        f"\n[Boundary Inference] Triggering inference with model {model_version[:16]}..."
+                    )
                     from services.orchestrator.flows.boundary_inference import (
                         boundary_inference_flow,
                     )

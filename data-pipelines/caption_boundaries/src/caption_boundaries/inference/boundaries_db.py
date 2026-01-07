@@ -194,9 +194,7 @@ def create_boundaries_db(
             )
 
             if (i + batch_size) % 5000 == 0 or i + batch_size >= len(results):
-                console.print(
-                    f"[cyan]  Inserted {min(i + batch_size, len(results))}/{len(results)} results[/cyan]"
-                )
+                console.print(f"[cyan]  Inserted {min(i + batch_size, len(results))}/{len(results)} results[/cyan]")
 
         conn.commit()
 
