@@ -7,9 +7,9 @@
 import type { Database } from '~/types/supabase'
 import { createServerSupabaseClient } from './supabase-client'
 
-type InviteCodeRow = Database['public']['Tables']['invite_codes']['Row']
-type TenantInsert = Database['public']['Tables']['tenants']['Insert']
-type UserProfileInsert = Database['public']['Tables']['user_profiles']['Insert']
+type InviteCodeRow = Database['captionacc_production']['Tables']['invite_codes']['Row']
+type TenantInsert = Database['captionacc_production']['Tables']['tenants']['Insert']
+type UserProfileInsert = Database['captionacc_production']['Tables']['user_profiles']['Insert']
 
 export interface InviteCodeValidation {
   valid: boolean

@@ -5,7 +5,7 @@
 -- PART 1: Invite Codes System
 -- ============================================================================
 
-CREATE TABLE invite_codes (
+CREATE TABLE captionacc_production.invite_codes (
   code TEXT PRIMARY KEY,
   created_by UUID REFERENCES auth.users(id),
   used_by UUID REFERENCES auth.users(id),
@@ -19,87 +19,94 @@ CREATE TABLE invite_codes (
 );
 
 -- Enable RLS
-ALTER TABLE invite_codes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE captionacc_production.invite_codes ENABLE ROW LEVEL SECURITY;
 
 -- Only platform admins can view invite codes
 CREATE POLICY "Platform admins view invite codes"
-  ON invite_codes FOR SELECT
+  ON captionacc_production.invite_codes FOR SELECT
   USING (is_platform_admin());
 
 -- Only platform admins can create invite codes
 CREATE POLICY "Platform admins create invite codes"
-  ON invite_codes FOR INSERT
+  ON captionacc_production.invite_codes FOR INSERT
   WITH CHECK (is_platform_admin());
 
 -- Platform admins can update invite codes (e.g., revoke)
 CREATE POLICY "Platform admins update invite codes"
-  ON invite_codes FOR UPDATE
+  ON captionacc_production.invite_codes FOR UPDATE
   USING (is_platform_admin());
 
-CREATE INDEX idx_invite_codes_used_by ON invite_codes(used_by);
-CREATE INDEX idx_invite_codes_created_by ON invite_codes(created_by);
+CREATE INDEX idx_invite_codes_used_by ON captionacc_production.invite_codes(used_by);
+CREATE INDEX idx_invite_codes_created_by ON captionacc_production.invite_codes(created_by);
 
-COMMENT ON TABLE invite_codes IS 'Invite codes for controlled signup during preview. Only platform admins can generate.';
+COMMENT ON TABLE captionacc_production.invite_codes IS 'Invite codes for controlled signup during preview. Only platform admins can generate.';
 
 -- ============================================================================
 -- PART 2: Update Tenant Quotas (More Restrictive for Preview)
 -- ============================================================================
 
 -- Update default storage quota to 100MB (was 100GB)
-ALTER TABLE tenants
+ALTER TABLE captionacc_production.tenants
   ALTER COLUMN storage_quota_gb SET DEFAULT 0.1;  -- 100MB in GB
 
 -- Add video count and processing limits
-ALTER TABLE tenants
+ALTER TABLE captionacc_production.tenants
   ADD COLUMN IF NOT EXISTS video_count_limit INTEGER DEFAULT 5,
   ADD COLUMN IF NOT EXISTS processing_minutes_limit INTEGER DEFAULT 30,
   ADD COLUMN IF NOT EXISTS daily_upload_limit INTEGER DEFAULT 3;
 
 -- Update existing tenants to have preview limits
-UPDATE tenants
+UPDATE captionacc_production.tenants
 SET storage_quota_gb = 0.1,
     video_count_limit = 5,
     processing_minutes_limit = 30,
     daily_upload_limit = 3
 WHERE storage_quota_gb > 0.1 OR video_count_limit IS NULL;
 
-COMMENT ON COLUMN tenants.storage_quota_gb IS 'Storage quota in GB. Default 0.1GB (100MB) for preview.';
-COMMENT ON COLUMN tenants.video_count_limit IS 'Maximum number of active videos per tenant.';
-COMMENT ON COLUMN tenants.processing_minutes_limit IS 'Maximum processing minutes per month.';
-COMMENT ON COLUMN tenants.daily_upload_limit IS 'Maximum video uploads per day.';
+COMMENT ON COLUMN captionacc_production.tenants.storage_quota_gb IS 'Storage quota in GB. Default 0.1GB (100MB) for preview.';
+COMMENT ON COLUMN captionacc_production.tenants.video_count_limit IS 'Maximum number of active videos per tenant.';
+COMMENT ON COLUMN captionacc_production.tenants.processing_minutes_limit IS 'Maximum processing minutes per month.';
+COMMENT ON COLUMN captionacc_production.tenants.daily_upload_limit IS 'Maximum video uploads per day.';
 
 -- ============================================================================
 -- PART 3: User Approval Status
 -- ============================================================================
 
 -- Add approval status to user profiles
-ALTER TABLE user_profiles
-  ADD COLUMN IF NOT EXISTS approval_status TEXT DEFAULT 'pending',
-  ADD COLUMN IF NOT EXISTS approved_by UUID REFERENCES auth.users(id),
-  ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ,
-  ADD COLUMN IF NOT EXISTS invite_code_used TEXT REFERENCES invite_codes(code);
+-- NOTE: These updates are conditional - only run if user_profiles table exists
+DO $$
+BEGIN
+  IF EXISTS (SELECT FROM information_schema.tables
+             WHERE table_schema = 'captionacc_production'
+             AND table_name = 'user_profiles') THEN
+    ALTER TABLE captionacc_production.user_profiles
+      ADD COLUMN IF NOT EXISTS approval_status TEXT DEFAULT 'pending',
+      ADD COLUMN IF NOT EXISTS approved_by UUID REFERENCES auth.users(id),
+      ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ,
+      ADD COLUMN IF NOT EXISTS invite_code_used TEXT REFERENCES captionacc_production.invite_codes(code);
 
--- Add constraint for approval status
-ALTER TABLE user_profiles
-  DROP CONSTRAINT IF EXISTS check_approval_status;
+    ALTER TABLE captionacc_production.user_profiles
+      DROP CONSTRAINT IF EXISTS check_approval_status;
 
-ALTER TABLE user_profiles
-  ADD CONSTRAINT check_approval_status
-  CHECK (approval_status IN ('pending', 'approved', 'rejected'));
+    ALTER TABLE captionacc_production.user_profiles
+      ADD CONSTRAINT check_approval_status
+      CHECK (approval_status IN ('pending', 'approved', 'rejected'));
+
+    COMMENT ON COLUMN captionacc_production.user_profiles.approval_status IS 'User approval state: pending, approved, rejected. Controls access to features.';
+    COMMENT ON COLUMN captionacc_production.user_profiles.invite_code_used IS 'Invite code used during signup. NULL if admin-created user.';
+  END IF;
+END $$;
 
 -- Auto-approve users who sign up with valid invite codes (handled in app logic)
 -- Manual approval for others (if we allow that in future)
-
-COMMENT ON COLUMN user_profiles.approval_status IS 'User approval state: pending, approved, rejected. Controls access to features.';
-COMMENT ON COLUMN user_profiles.invite_code_used IS 'Invite code used during signup. NULL if admin-created user.';
 
 -- ============================================================================
 -- PART 4: Usage Tracking
 -- ============================================================================
 
-CREATE TABLE IF NOT EXISTS usage_metrics (
+CREATE TABLE IF NOT EXISTS captionacc_production.usage_metrics (
   id BIGSERIAL PRIMARY KEY,
-  tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
+  tenant_id UUID REFERENCES captionacc_production.tenants(id) ON DELETE CASCADE,
   metric_type TEXT NOT NULL,  -- 'storage_gb', 'processing_minutes', 'video_count', 'uploads_today'
   metric_value NUMERIC NOT NULL,
   cost_estimate_usd NUMERIC,
@@ -107,83 +114,83 @@ CREATE TABLE IF NOT EXISTS usage_metrics (
   recorded_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_usage_tenant_date ON usage_metrics(tenant_id, recorded_at DESC);
-CREATE INDEX idx_usage_type_date ON usage_metrics(metric_type, recorded_at DESC);
+CREATE INDEX idx_usage_tenant_date ON captionacc_production.usage_metrics(tenant_id, recorded_at DESC);
+CREATE INDEX idx_usage_type_date ON captionacc_production.usage_metrics(metric_type, recorded_at DESC);
 
 -- Enable RLS
-ALTER TABLE usage_metrics ENABLE ROW LEVEL SECURITY;
+ALTER TABLE captionacc_production.usage_metrics ENABLE ROW LEVEL SECURITY;
 
 -- Owners can view their own tenant's usage
 CREATE POLICY "Owners view tenant usage"
-  ON usage_metrics FOR SELECT
+  ON captionacc_production.usage_metrics FOR SELECT
   USING (
     tenant_id IN (
-      SELECT tenant_id FROM user_profiles
+      SELECT tenant_id FROM captionacc_production.user_profiles
       WHERE id = auth.uid() AND role = 'owner'
     )
   );
 
 -- Platform admins can view all usage
 CREATE POLICY "Platform admins view all usage"
-  ON usage_metrics FOR SELECT
+  ON captionacc_production.usage_metrics FOR SELECT
   USING (is_platform_admin());
 
-COMMENT ON TABLE usage_metrics IS 'Track resource usage for quotas and cost monitoring.';
+COMMENT ON TABLE captionacc_production.usage_metrics IS 'Track resource usage for quotas and cost monitoring.';
 
 -- ============================================================================
 -- PART 5: Daily Upload Tracking
 -- ============================================================================
 
-CREATE TABLE daily_uploads (
-  tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
+CREATE TABLE captionacc_production.daily_uploads (
+  tenant_id UUID REFERENCES captionacc_production.tenants(id) ON DELETE CASCADE,
   upload_date DATE NOT NULL,
   upload_count INTEGER DEFAULT 0,
   total_bytes BIGINT DEFAULT 0,
   PRIMARY KEY (tenant_id, upload_date)
 );
 
-CREATE INDEX idx_daily_uploads_date ON daily_uploads(upload_date DESC);
+CREATE INDEX idx_daily_uploads_date ON captionacc_production.daily_uploads(upload_date DESC);
 
 -- Enable RLS
-ALTER TABLE daily_uploads ENABLE ROW LEVEL SECURITY;
+ALTER TABLE captionacc_production.daily_uploads ENABLE ROW LEVEL SECURITY;
 
 -- Owners can view their own tenant's upload stats
 CREATE POLICY "Owners view tenant uploads"
-  ON daily_uploads FOR SELECT
+  ON captionacc_production.daily_uploads FOR SELECT
   USING (
     tenant_id IN (
-      SELECT tenant_id FROM user_profiles
+      SELECT tenant_id FROM captionacc_production.user_profiles
       WHERE id = auth.uid() AND role = 'owner'
     )
   );
 
 -- Platform admins can view all
 CREATE POLICY "Platform admins view all uploads"
-  ON daily_uploads FOR SELECT
+  ON captionacc_production.daily_uploads FOR SELECT
   USING (is_platform_admin());
 
-COMMENT ON TABLE daily_uploads IS 'Track daily uploads per tenant for rate limiting.';
+COMMENT ON TABLE captionacc_production.daily_uploads IS 'Track daily uploads per tenant for rate limiting.';
 
 -- ============================================================================
 -- PART 6: Update RLS Policies - Videos (Add Approval Check)
 -- ============================================================================
 
 -- Drop and recreate upload policy to include approval check
-DROP POLICY IF EXISTS "Users insert videos in own tenant" ON videos;
+DROP POLICY IF EXISTS "Users insert videos in own tenant" ON captionacc_production.videos;
 
 CREATE POLICY "Approved users insert videos in own tenant"
-  ON videos FOR INSERT
+  ON captionacc_production.videos FOR INSERT
   WITH CHECK (
     tenant_id = current_user_tenant_id()
     AND uploaded_by_user_id = auth.uid()
     AND EXISTS (
-      SELECT 1 FROM user_profiles
+      SELECT 1 FROM captionacc_production.user_profiles
       WHERE id = auth.uid()
       AND approval_status = 'approved'
     )
   );
 
-COMMENT ON POLICY "Approved users insert videos in own tenant" ON videos IS
+COMMENT ON POLICY "Approved users insert videos in own tenant" ON captionacc_production.videos IS
   'Only approved users can upload videos. Prevents unapproved signups from using resources.';
 
 -- ============================================================================
@@ -220,7 +227,7 @@ BEGIN
   -- Check storage quota
   SELECT COALESCE(SUM(size_bytes), 0) / 1073741824.0  -- Convert to GB
   INTO v_current_usage_gb
-  FROM videos
+  FROM captionacc_production.videos
   WHERE tenant_id = p_tenant_id
     AND deleted_at IS NULL;
 
@@ -231,7 +238,7 @@ BEGIN
   -- Check video count limit
   SELECT COUNT(*)
   INTO v_video_count
-  FROM videos
+  FROM captionacc_production.videos
   WHERE tenant_id = p_tenant_id
     AND deleted_at IS NULL;
 
@@ -242,7 +249,7 @@ BEGIN
   -- Check daily upload limit
   SELECT COALESCE(upload_count, 0)
   INTO v_today_uploads
-  FROM daily_uploads
+  FROM captionacc_production.daily_uploads
   WHERE tenant_id = p_tenant_id
     AND upload_date = CURRENT_DATE;
 
@@ -279,7 +286,7 @@ BEGIN
     t.daily_upload_limit
   FROM tenants t
   LEFT JOIN videos v ON v.tenant_id = t.id AND v.deleted_at IS NULL
-  LEFT JOIN daily_uploads du ON du.tenant_id = t.id AND du.upload_date = CURRENT_DATE
+  LEFT JOIN captionacc_production.daily_uploads du ON du.tenant_id = t.id AND du.upload_date = CURRENT_DATE
   WHERE t.id = p_tenant_id
   GROUP BY t.id, t.storage_quota_gb, t.video_count_limit, t.daily_upload_limit, du.upload_count;
 END;
