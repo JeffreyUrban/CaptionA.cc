@@ -44,7 +44,7 @@ async def root():
 
 
 @app.get("/health")
-async def health_check(response: Response) -> dict[str, Any]:
+async def health_check(response: Response) -> JSONResponse:
     """
     Lightweight health check endpoint.
 
