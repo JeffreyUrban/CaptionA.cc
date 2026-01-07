@@ -46,27 +46,27 @@ COMMENT ON TABLE invite_codes IS 'Invite codes for controlled signup during prev
 -- ============================================================================
 
 -- Update default storage quota to 100MB (was 100GB)
-ALTER TABLE tenants
+ALTER TABLE captionacc_production.tenants
   ALTER COLUMN storage_quota_gb SET DEFAULT 0.1;  -- 100MB in GB
 
 -- Add video count and processing limits
-ALTER TABLE tenants
+ALTER TABLE captionacc_production.tenants
   ADD COLUMN IF NOT EXISTS video_count_limit INTEGER DEFAULT 5,
   ADD COLUMN IF NOT EXISTS processing_minutes_limit INTEGER DEFAULT 30,
   ADD COLUMN IF NOT EXISTS daily_upload_limit INTEGER DEFAULT 3;
 
 -- Update existing tenants to have preview limits
-UPDATE tenants
+UPDATE captionacc_production.tenants
 SET storage_quota_gb = 0.1,
     video_count_limit = 5,
     processing_minutes_limit = 30,
     daily_upload_limit = 3
 WHERE storage_quota_gb > 0.1 OR video_count_limit IS NULL;
 
-COMMENT ON COLUMN tenants.storage_quota_gb IS 'Storage quota in GB. Default 0.1GB (100MB) for preview.';
-COMMENT ON COLUMN tenants.video_count_limit IS 'Maximum number of active videos per tenant.';
-COMMENT ON COLUMN tenants.processing_minutes_limit IS 'Maximum processing minutes per month.';
-COMMENT ON COLUMN tenants.daily_upload_limit IS 'Maximum video uploads per day.';
+COMMENT ON COLUMN captionacc_production.tenants.storage_quota_gb IS 'Storage quota in GB. Default 0.1GB (100MB) for preview.';
+COMMENT ON COLUMN captionacc_production.tenants.video_count_limit IS 'Maximum number of active videos per tenant.';
+COMMENT ON COLUMN captionacc_production.tenants.processing_minutes_limit IS 'Maximum processing minutes per month.';
+COMMENT ON COLUMN captionacc_production.tenants.daily_upload_limit IS 'Maximum video uploads per day.';
 
 -- ============================================================================
 -- PART 3: User Approval Status
@@ -106,7 +106,7 @@ END $$;
 
 CREATE TABLE IF NOT EXISTS usage_metrics (
   id BIGSERIAL PRIMARY KEY,
-  tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
+  tenant_id UUID REFERENCES captionacc_production.tenants(id) ON DELETE CASCADE,
   metric_type TEXT NOT NULL,  -- 'storage_gb', 'processing_minutes', 'video_count', 'uploads_today'
   metric_value NUMERIC NOT NULL,
   cost_estimate_usd NUMERIC,
@@ -125,7 +125,7 @@ CREATE POLICY "Owners view tenant usage"
   ON usage_metrics FOR SELECT
   USING (
     tenant_id IN (
-      SELECT tenant_id FROM user_profiles
+      SELECT tenant_id FROM captionacc_production.user_profiles
       WHERE id = auth.uid() AND role = 'owner'
     )
   );
@@ -142,7 +142,7 @@ COMMENT ON TABLE usage_metrics IS 'Track resource usage for quotas and cost moni
 -- ============================================================================
 
 CREATE TABLE daily_uploads (
-  tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
+  tenant_id UUID REFERENCES captionacc_production.tenants(id) ON DELETE CASCADE,
   upload_date DATE NOT NULL,
   upload_count INTEGER DEFAULT 0,
   total_bytes BIGINT DEFAULT 0,
@@ -159,7 +159,7 @@ CREATE POLICY "Owners view tenant uploads"
   ON daily_uploads FOR SELECT
   USING (
     tenant_id IN (
-      SELECT tenant_id FROM user_profiles
+      SELECT tenant_id FROM captionacc_production.user_profiles
       WHERE id = auth.uid() AND role = 'owner'
     )
   );
@@ -176,21 +176,21 @@ COMMENT ON TABLE daily_uploads IS 'Track daily uploads per tenant for rate limit
 -- ============================================================================
 
 -- Drop and recreate upload policy to include approval check
-DROP POLICY IF EXISTS "Users insert videos in own tenant" ON videos;
+DROP POLICY IF EXISTS "Users insert videos in own tenant" ON captionacc_production.videos;
 
 CREATE POLICY "Approved users insert videos in own tenant"
-  ON videos FOR INSERT
+  ON captionacc_production.videos FOR INSERT
   WITH CHECK (
     tenant_id = current_user_tenant_id()
     AND uploaded_by_user_id = auth.uid()
     AND EXISTS (
-      SELECT 1 FROM user_profiles
+      SELECT 1 FROM captionacc_production.user_profiles
       WHERE id = auth.uid()
       AND approval_status = 'approved'
     )
   );
 
-COMMENT ON POLICY "Approved users insert videos in own tenant" ON videos IS
+COMMENT ON POLICY "Approved users insert videos in own tenant" ON captionacc_production.videos IS
   'Only approved users can upload videos. Prevents unapproved signups from using resources.';
 
 -- ============================================================================
@@ -227,7 +227,7 @@ BEGIN
   -- Check storage quota
   SELECT COALESCE(SUM(size_bytes), 0) / 1073741824.0  -- Convert to GB
   INTO v_current_usage_gb
-  FROM videos
+  FROM captionacc_production.videos
   WHERE tenant_id = p_tenant_id
     AND deleted_at IS NULL;
 
@@ -238,7 +238,7 @@ BEGIN
   -- Check video count limit
   SELECT COUNT(*)
   INTO v_video_count
-  FROM videos
+  FROM captionacc_production.videos
   WHERE tenant_id = p_tenant_id
     AND deleted_at IS NULL;
 

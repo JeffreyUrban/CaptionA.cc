@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS access_tiers (
 );
 
 -- Add access tier fields to user_profiles
-ALTER TABLE user_profiles
+ALTER TABLE captionacc_production.user_profiles
   ADD COLUMN IF NOT EXISTS access_tier_id TEXT DEFAULT 'demo' REFERENCES access_tiers(id),
   ADD COLUMN IF NOT EXISTS access_notes TEXT;
 
@@ -72,12 +72,12 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
 
 -- Update existing users to 'active' tier (grandfather preview users)
-UPDATE user_profiles
+UPDATE captionacc_production.user_profiles
 SET access_tier_id = 'active'
 WHERE access_tier_id IS NULL OR access_tier_id = 'demo';
 
 -- Comments for documentation
 COMMENT ON TABLE access_tiers IS 'Defines feature access levels. Billing/payment managed separately.';
-COMMENT ON COLUMN user_profiles.access_tier_id IS 'User access level - controls feature access independent of billing';
-COMMENT ON COLUMN user_profiles.access_notes IS 'Admin notes about why tier was changed';
+COMMENT ON COLUMN captionacc_production.user_profiles.access_tier_id IS 'User access level - controls feature access independent of billing';
+COMMENT ON COLUMN captionacc_production.user_profiles.access_notes IS 'Admin notes about why tier was changed';
 COMMENT ON FUNCTION has_feature_access IS 'Check if user has access to a specific feature based on their tier';
