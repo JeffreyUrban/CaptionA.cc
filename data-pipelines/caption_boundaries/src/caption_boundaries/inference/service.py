@@ -167,6 +167,10 @@ def test_inference():
     volumes={"/models": model_volume},
     timeout=3600,
     container_idle_timeout=300,
+    secrets=[
+        modal.Secret.from_name("wasabi-credentials"),
+        modal.Secret.from_name("supabase-credentials"),
+    ],
 )
 def run_boundary_inference_batch(
     video_id: str,
@@ -243,7 +247,7 @@ def run_boundary_inference_batch(
         tmp_path = Path(tmpdir)
 
         # Step 1: Download layout.db
-        print("[1/7] Downloading layout.db from Wasabi...")
+        print("[1/8] Downloading layout.db from Wasabi...")
         download_start = time.time()
         layout_storage_key = f"videos/{tenant_id}/{video_id}/layout.db"
         layout_db_path = tmp_path / "layout.db"
@@ -251,7 +255,7 @@ def run_boundary_inference_batch(
         print(f"  Downloaded in {time.time() - download_start:.2f}s\n")
 
         # Step 2: Load model
-        print(f"[2/7] Loading model checkpoint...")
+        print(f"[2/8] Loading model checkpoint...")
         model_load_start = time.time()
         checkpoint_path = Path(f"/models/{model_version}.pt")
         if not checkpoint_path.exists():
@@ -266,7 +270,7 @@ def run_boundary_inference_batch(
         print(f"  Loaded in {metrics.model_load_duration_ms:.0f}ms\n")
 
         # Step 3: Determine needed chunks and generate signed URLs
-        print("[3/7] Generating signed URLs for VP9 chunks...")
+        print("[3/8] Generating signed URLs for VP9 chunks...")
         url_start = time.time()
 
         # Group frame indices by chunk
@@ -302,7 +306,7 @@ def run_boundary_inference_batch(
         print(f"  Generated {len(signed_urls)} signed URLs in {time.time() - url_start:.2f}s\n")
 
         # Step 4: Extract frames
-        print("[4/7] Extracting frames from VP9 chunks...")
+        print("[4/8] Extracting frames from VP9 chunks...")
         extract_start = time.time()
 
         # Extract unique frame indices
@@ -347,7 +351,7 @@ def run_boundary_inference_batch(
 
         # Step 5: Run bidirectional inference
         # Process both directions together for efficiency and completeness
-        print("[5/7] Running bidirectional batch inference...")
+        print("[5/8] Running bidirectional batch inference...")
         inference_start = time.time()
 
         # Prepare bidirectional batches: for each pair, process both directions together
@@ -377,7 +381,7 @@ def run_boundary_inference_batch(
         print(f"  Completed {len(forward_predictions)} pairs (bidirectional) in {inference_end - inference_start:.2f}s\n")
 
         # Step 6: Create boundaries database
-        print("[6/7] Creating boundaries database...")
+        print("[6/8] Creating boundaries database...")
         db_start = time.time()
 
         pair_results = []
@@ -431,7 +435,7 @@ def run_boundary_inference_batch(
         print(f"  Created database in {time.time() - db_start:.2f}s\n")
 
         # Step 7: Upload boundaries database to Wasabi
-        print("[7/7] Uploading boundaries database to Wasabi...")
+        print("[7/8] Uploading boundaries database to Wasabi...")
         upload_start = time.time()
 
         # Build storage key for boundaries database
@@ -441,7 +445,45 @@ def run_boundary_inference_batch(
         storage_key = f"videos/{tenant_id}/{video_id}/boundaries/{boundaries_filename}"
 
         wasabi.upload_file(db_path, storage_key, content_type="application/x-sqlite3")
+        file_size_bytes = db_path.stat().st_size
         print(f"  Uploaded to {storage_key} in {time.time() - upload_start:.2f}s\n")
+
+        # Step 8: Register run in Supabase
+        print("[8/8] Registering inference run in Supabase...")
+        register_start = time.time()
+
+        try:
+            from caption_boundaries.inference.inference_repository import BoundaryInferenceRunRepository
+
+            # Initialize repository with environment credentials
+            supabase_url = os.environ.get("SUPABASE_URL")
+            supabase_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+
+            if not supabase_url or not supabase_key:
+                print("  [WARNING] Supabase credentials not set, skipping registration")
+            else:
+                repo = BoundaryInferenceRunRepository(supabase_url, supabase_key)
+
+                # Register completed run
+                repo.register_run(
+                    run_id=run_id,
+                    video_id=video_id,
+                    tenant_id=tenant_id,
+                    cropped_frames_version=cropped_frames_version,
+                    model_version=model_version,
+                    wasabi_storage_key=storage_key,
+                    total_pairs=len(pair_results),
+                    started_at=started_at,
+                    completed_at=completed_at,
+                    file_size_bytes=file_size_bytes,
+                    processing_time_seconds=(completed_at - started_at).total_seconds(),
+                    model_checkpoint_path=str(checkpoint_path),
+                )
+
+                print(f"  Registered in Supabase in {time.time() - register_start:.2f}s\n")
+        except Exception as e:
+            print(f"  [ERROR] Failed to register in Supabase: {e}")
+            # Don't fail the job if Supabase registration fails
 
         # Return results with storage key
         results = {
@@ -449,6 +491,7 @@ def run_boundary_inference_batch(
             "total_pairs": len(pair_results),
             "successful": metrics.successful_inferences,
             "failed": metrics.failed_inferences,
+            "file_size_bytes": file_size_bytes,
         }
 
     # Compute derived metrics
