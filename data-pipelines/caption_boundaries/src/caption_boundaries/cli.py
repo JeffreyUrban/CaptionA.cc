@@ -157,89 +157,10 @@ def train(
         raise typer.Exit(code=1) from e
 
 
-@app.command()
-def infer(
-    video_db: Path = typer.Argument(..., help="Path to video annotations.db"),
-    checkpoint: Path = typer.Option(..., "--checkpoint", "-c", help="Model checkpoint path"),
-    confidence_threshold: float = typer.Option(0.8, "--confidence", help="Minimum prediction confidence"),
-    ocr_confidence_min: float = typer.Option(0.7, "--ocr-min", help="Minimum OCR confidence"),
-    output_json: Path = typer.Option(None, "--output", "-o", help="Save results to JSON file"),
-    show_all_transitions: bool = typer.Option(False, "--all", help="Show all transitions (not just boundaries)"),
-):
-    """Run boundary prediction inference on a video.
 
-    Examples:
-        # Basic inference
-        caption_boundaries infer local/data/61/61c3*/annotations.db \\
-            --checkpoint local/models/caption_boundaries/experiments/production_baseline/checkpoints/best.pt
-
-        # With quality checks
-        caption_boundaries infer local/data/61/61c3*/annotations.db \\
-            --checkpoint best.pt --confidence 0.9 --ocr-min 0.8
-
-        # Save results to file
-        caption_boundaries infer video.db --checkpoint best.pt --output results.json
-    """
-    from caption_boundaries.inference import BoundaryPredictor
-
-    try:
-        console.print(f"\n[cyan]Running inference on:[/cyan] {video_db}")
-        console.print(f"[cyan]Model:[/cyan] {checkpoint}")
-        console.print(f"[cyan]Confidence threshold:[/cyan] {confidence_threshold}")
-
-        # Initialize predictor
-        predictor = BoundaryPredictor(checkpoint_path=checkpoint)
-
-        # Run prediction with quality checks
-        results = predictor.predict_with_quality_checks(
-            video_db_path=video_db,
-            confidence_threshold=confidence_threshold,
-            ocr_confidence_min=ocr_confidence_min,
-        )
-
-        # Display results
-        console.print(f"\n[green]✓[/green] Found {results['num_boundaries']} boundaries")
-        console.print(f"[yellow]⚠[/yellow] Flagged {results['num_flagged']} for quality issues")
-
-        # Show boundaries
-        if results["boundaries"]:
-            console.print("\n[cyan]Predicted Boundaries:[/cyan]")
-            for i, boundary in enumerate(results["boundaries"], 1):
-                console.print(
-                    f"  {i}. Frames {boundary['frame1_index']} → {boundary['frame2_index']}: "
-                    f"{boundary['predicted_label']} (conf={boundary['confidence']:.3f})"
-                )
-
-        # Show flagged boundaries
-        if results["quality"]["flagged_boundaries"]:
-            console.print("\n[yellow]Flagged Boundaries:[/yellow]")
-            for boundary in results["quality"]["flagged_boundaries"]:
-                console.print(
-                    f"  Frames {boundary['frame1_index']} → {boundary['frame2_index']}: {', '.join(boundary['flags'])}"
-                )
-
-        # Save to file if requested
-        if output_json:
-            import json
-
-            with open(output_json, "w") as f:
-                # Convert to JSON-serializable format
-                json_results = {
-                    "boundaries": results["boundaries"],
-                    "quality_stats": results["quality"]["quality_stats"],
-                    "num_boundaries": results["num_boundaries"],
-                    "num_flagged": results["num_flagged"],
-                }
-                json.dump(json_results, f, indent=2)
-            console.print(f"\n[green]✓[/green] Results saved to {output_json}")
-
-    except Exception as e:
-        console.print(f"[red]✗ Inference failed:[/red] {e}")
-        import traceback
-
-        traceback.print_exc()
-        raise typer.Exit(code=1) from e
-
+# Removed: Local inference command deprecated
+# Frame storage migrated from SQLite BLOBs to Wasabi VP9 chunks
+# Use Modal serverless inference instead (see inference/service.py)
 
 @app.command()
 def analyze(

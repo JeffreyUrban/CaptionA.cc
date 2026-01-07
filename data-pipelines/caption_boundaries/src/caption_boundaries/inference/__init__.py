@@ -18,12 +18,10 @@ from caption_boundaries.inference.inference_repository import (
     InferenceJob,
     InferenceRun,
 )
-from caption_boundaries.inference.predictor import BoundaryPredictor
 from caption_boundaries.inference.quality_checks import run_quality_checks
 
 __all__ = [
-    "BoundaryPredictor",  # Original predictor for database frames (local inference)
-    "BatchBoundaryPredictor",  # Adapted for Modal with extracted frames
+    "BatchBoundaryPredictor",
     "run_quality_checks",
     "extract_frame_from_chunk",
     "batch_extract_frames",
