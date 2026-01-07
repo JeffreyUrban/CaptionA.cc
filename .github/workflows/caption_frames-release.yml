@@ -19,7 +19,10 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "PYTHON_VERSION_MAX_KICKOFF"
+          python-version: "3.13"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
 
       - name: Install build dependencies
         run: |
@@ -27,14 +30,16 @@ jobs:
           pip install build hatch-vcs
 
       - name: Build package
+        working-directory: data-pipelines/crop_frames
         run: python -m build
 
       - name: Verify version matches tag
+        working-directory: data-pipelines/crop_frames
         run: |
           TAG_VERSION=${GITHUB_REF#refs/tags/v}
           echo "Tag version: $TAG_VERSION"
           pip install dist/*.whl
-          BUILT_VERSION=$(python -c "import {{ cookiecutter.project_slug }}; print({{ cookiecutter.project_slug }}.__version__)")
+          BUILT_VERSION=$(python -c "import crop_frames; print(crop_frames.__version__)")
           echo "Built version: $BUILT_VERSION"
           if [ "$TAG_VERSION" != "$BUILT_VERSION" ]; then
             echo "❌ Version mismatch: tag=$TAG_VERSION, built=$BUILT_VERSION"
@@ -46,8 +51,10 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/*.tar.gz
-            dist/*.whl
+            data-pipelines/crop_frames/dist/*.tar.gz
+            data-pipelines/crop_frames/dist/*.whl
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: data-pipelines/crop_frames/dist/
