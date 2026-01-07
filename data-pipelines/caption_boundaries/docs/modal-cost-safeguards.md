@@ -2,6 +2,22 @@
 
 **Last Updated:** 2026-01-07
 
+## Configuration File
+
+**IMPORTANT:** All cost and safety limits are centralized in:
+```
+data-pipelines/caption_boundaries/src/caption_boundaries/inference/config.py
+```
+
+This file contains:
+- Frame count limits (max video length)
+- Concurrency limits (max parallel containers)
+- Timeout settings (hung process protection)
+- Cost thresholds (job rejection limits)
+- Batch sizes (GPU memory optimization)
+
+**Review this file before modifying any limits.** The configuration includes detailed documentation about cost implications and when to adjust each setting.
+
 ## Overview
 
 Modal GPU inference costs ~$1.10/hr for A10G. For 25k frame pairs at ~100 pairs/sec, each job takes ~4-5 minutes = **~$0.08-0.10 per video**. While individual jobs are cheap, runaway scenarios could rack up significant costs.

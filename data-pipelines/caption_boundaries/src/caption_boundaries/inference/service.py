@@ -15,6 +15,10 @@ try:
 except ImportError:
     modal = None  # Optional dependency
 
+# Import configuration for Modal limits
+# See: data-pipelines/caption_boundaries/src/caption_boundaries/inference/config.py
+from caption_boundaries.inference.config import MODAL_CONFIG
+
 
 @dataclass
 class InferenceMetrics:
@@ -163,12 +167,12 @@ def test_inference():
 
 @stub.function(
     image=image,
-    gpu="A10G",
+    gpu=MODAL_CONFIG.gpu_type,
     volumes={"/models": model_volume},
-    timeout=3600,  # 1 hour max (safety: 10-15x expected time)
-    container_idle_timeout=300,  # 5 min idle shutdown (cost control)
-    concurrency_limit=5,  # Max 5 parallel containers ($5.50/hr ceiling)
-    allow_concurrent_inputs=50,  # Queue up to 50 jobs (prevent unbounded growth)
+    timeout=MODAL_CONFIG.timeout_seconds,  # Hard timeout (see config.py)
+    container_idle_timeout=MODAL_CONFIG.container_idle_timeout_seconds,  # Idle shutdown (see config.py)
+    concurrency_limit=MODAL_CONFIG.concurrency_limit,  # Max parallel containers (see config.py)
+    allow_concurrent_inputs=MODAL_CONFIG.allow_concurrent_inputs,  # Queue limit (see config.py)
     secrets=[
         modal.Secret.from_name("wasabi-credentials"),
         modal.Secret.from_name("supabase-credentials"),
@@ -373,7 +377,10 @@ def run_boundary_inference_batch(
                 metrics.failed_inferences += 1
 
         # Run batch prediction on all directions at once
-        all_predictions = predictor.predict_batch(bidirectional_pairs, batch_size=64)
+        # Batch size configured in config.py for GPU memory optimization
+        all_predictions = predictor.predict_batch(
+            bidirectional_pairs, batch_size=MODAL_CONFIG.inference_batch_size
+        )
 
         # Split predictions back into forward/backward pairs
         forward_predictions = [all_predictions[i * 2] for i in range(len(valid_indices))]

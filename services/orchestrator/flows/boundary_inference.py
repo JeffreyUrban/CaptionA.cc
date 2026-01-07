@@ -18,6 +18,7 @@ from typing import Any
 from prefect import flow, task
 from prefect.artifacts import create_table_artifact
 
+from caption_boundaries.inference.config import MODAL_CONFIG, format_frame_count_limit_message
 from services.orchestrator.supabase_client import get_supabase_client
 
 
@@ -105,14 +106,15 @@ def generate_frame_pairs(
     if not frame_count:
         raise ValueError(f"Video {video_id} has no frame_count")
 
-    # Sanity check: prevent unreasonable videos
-    # 100k pairs = ~2.7hr video at 10Hz (edge case but valid)
-    # 200k pairs = ~5.5hr video (suspicious, likely error)
-    if frame_count > 200_000:
-        raise ValueError(
-            f"Frame count too high: {frame_count} (max 200k). "
-            f"This would cost ~${frame_count / 100 / 3600 * 1.10:.2f}"
-        )
+    # Validate frame count against configured limit
+    # See: data-pipelines/caption_boundaries/src/caption_boundaries/inference/config.py
+    if frame_count > MODAL_CONFIG.max_frame_count:
+        raise ValueError(format_frame_count_limit_message(frame_count, MODAL_CONFIG))
+
+    # Warning for videos approaching the limit
+    if frame_count > MODAL_CONFIG.frame_count_warning_threshold:
+        print(f"⚠️  WARNING: Frame count {frame_count:,} is close to limit ({MODAL_CONFIG.max_frame_count:,})")
+        print(f"   Consider reviewing inference/config.py if this is expected.")
 
     # Generate consecutive pairs
     pairs = [(i, i + 1) for i in range(frame_count - 1)]
@@ -237,21 +239,26 @@ def boundary_inference_flow(
     frame_pairs = generate_frame_pairs(video_id, tenant_id)
 
     # Step 2.5: Estimate cost (transparency + validation)
-    estimated_seconds = len(frame_pairs) / 100  # ~100 pairs/sec throughput
-    estimated_hours = estimated_seconds / 3600
-    estimated_cost = estimated_hours * 1.10  # A10G: $1.10/hr
+    from caption_boundaries.inference.config import estimate_job_cost
+
+    # Add 1 back to get frame count from pairs count
+    cost_estimate = estimate_job_cost(len(frame_pairs) + 1, MODAL_CONFIG)
 
     print(f"\n💰 Cost Estimate:")
-    print(f"  Frame pairs: {len(frame_pairs):,}")
-    print(f"  Estimated time: {estimated_seconds:.0f}s ({estimated_seconds/60:.1f} min)")
-    print(f"  Estimated cost: ${estimated_cost:.4f}")
+    print(f"  Frame pairs: {cost_estimate['frame_pairs']:,}")
+    print(f"  Estimated time: {cost_estimate['estimated_seconds']:.0f}s ({cost_estimate['estimated_seconds']/60:.1f} min)")
+    print(f"  Estimated cost: ${cost_estimate['estimated_cost_usd']:.4f}")
 
     # Safety check: reject if too expensive
-    # $1 threshold = ~91 minutes of processing = ~550k pairs (edge case)
-    if estimated_cost > 1.0:
+    # See: data-pipelines/caption_boundaries/src/caption_boundaries/inference/config.py
+    if cost_estimate["estimated_cost_usd"] > MODAL_CONFIG.max_cost_per_job_usd:
         raise ValueError(
-            f"Job too expensive: ${estimated_cost:.2f} (threshold: $1.00). "
-            f"Frame pairs: {len(frame_pairs):,}"
+            f"Job too expensive: ${cost_estimate['estimated_cost_usd']:.2f} "
+            f"(threshold: ${MODAL_CONFIG.max_cost_per_job_usd:.2f}). "
+            f"Frame pairs: {len(frame_pairs):,}\n"
+            f"\n"
+            f"To process this job, increase max_cost_per_job_usd in:\n"
+            f"data-pipelines/caption_boundaries/src/caption_boundaries/inference/config.py"
         )
 
     # Step 3: Generate unique run ID
