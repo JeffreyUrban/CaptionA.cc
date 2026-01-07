@@ -36,14 +36,13 @@ jobs:
             SUPABASE_URL="${{ secrets.SUPABASE_URL }}" \
             SUPABASE_SCHEMA="captionacc_production" \
             SUPABASE_SERVICE_ROLE_KEY="${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
-            PREFECT_API_URL="${{ secrets.PREFECT_API_URL }}" \
-            PREFECT_API_KEY="${{ secrets.PREFECT_API_KEY }}" \
             WASABI_ACCESS_KEY_READWRITE="${{ secrets.WASABI_ACCESS_KEY_READWRITE }}" \
             WASABI_SECRET_KEY_READWRITE="${{ secrets.WASABI_SECRET_KEY_READWRITE }}" \
             WASABI_BUCKET="${{ secrets.WASABI_BUCKET }}" \
             WASABI_REGION="${{ secrets.WASABI_REGION }}" \
             ENVIRONMENT="production" \
             --app captionacc-orchestrator
+          # TODO: Add PREFECT_API_URL and PREFECT_API_KEY when Prefect server is deployed as separate service
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
