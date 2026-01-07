@@ -76,6 +76,9 @@ if modal:
             "numpy",
             "rich",
             "requests",
+            "boto3",
+            "pillow",
+            "supabase",
         )
         .apt_install("libgl1-mesa-glx", "libglib2.0-0")
     )
@@ -203,46 +206,231 @@ def run_boundary_inference_batch(
         total_frame_pairs=len(frame_pairs),
     )
 
-    # TODO: Implement actual inference
-    # This is a placeholder that will be filled in Phase 3
+    # Real implementation
+    import tempfile
+    from collections import defaultdict
 
-    # Measure model loading (placeholder)
-    model_load_start = time.time()
-    # model = load_model(model_version)  # TODO
-    time.sleep(0.1)  # Simulate model loading
-    metrics.model_load_duration_ms = (time.time() - model_load_start) * 1000
+    import torch
+    from caption_boundaries.inference.batch_predictor import BatchBoundaryPredictor
+    from caption_boundaries.inference.boundaries_db import PairResult, compute_model_version_hash, create_boundaries_db
+    from caption_boundaries.inference.frame_extractor import extract_frame_from_chunk
+    from caption_boundaries.inference.wasabi_storage import WasabiStorage
 
-    # Simulate inference
-    inference_start = time.time()
-    results = []
+    print(f"\n{'='*60}")
+    print(f"Starting Inference Job: {run_id}")
+    print(f"{'='*60}")
+    print(f"Video: {video_id}")
+    print(f"Tenant: {tenant_id}")
+    print(f"Frames version: {cropped_frames_version}")
+    print(f"Model version: {model_version[:16]}...")
+    print(f"Frame pairs: {len(frame_pairs)}")
+    print(f"{'='*60}\n")
 
-    for i, (frame1, frame2) in enumerate(frame_pairs):
-        pair_start = time.time()
+    # Initialize Wasabi storage
+    storage = WasabiStorage()
 
-        # TODO: Actual inference
-        # result = predict_pair(frame1, frame2)
+    # Create temp directory for this job
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_path = Path(tmpdir)
 
-        # Placeholder
-        result = {
-            "frame1_index": frame1,
-            "frame2_index": frame2,
-            "forward_predicted_label": "same",
-            "forward_confidence": 0.95,
-            "backward_predicted_label": "same",
-            "backward_confidence": 0.93,
-            "processing_time_ms": (time.time() - pair_start) * 1000,
+        # Step 1: Download layout.db
+        print("[1/7] Downloading layout.db from Wasabi...")
+        download_start = time.time()
+        layout_db_path = storage.download_layout_db(tenant_id, video_id, tmp_path)
+        print(f"  Downloaded in {time.time() - download_start:.2f}s\n")
+
+        # Step 2: Load model
+        print(f"[2/7] Loading model checkpoint...")
+        model_load_start = time.time()
+        checkpoint_path = Path(f"/models/{model_version}.pt")
+        if not checkpoint_path.exists():
+            raise FileNotFoundError(f"Model checkpoint not found: {checkpoint_path}")
+
+        predictor = BatchBoundaryPredictor(
+            checkpoint_path=checkpoint_path,
+            layout_db_path=layout_db_path,
+            device="cuda" if torch.cuda.is_available() else "cpu",
+        )
+        metrics.model_load_duration_ms = (time.time() - model_load_start) * 1000
+        print(f"  Loaded in {metrics.model_load_duration_ms:.0f}ms\n")
+
+        # Step 3: Determine needed chunks and generate signed URLs
+        print("[3/7] Generating signed URLs for VP9 chunks...")
+        url_start = time.time()
+
+        # Group frame indices by chunk
+        needed_chunks: dict[tuple[int, int], set[int]] = defaultdict(set)
+        for frame1_idx, frame2_idx in frame_pairs:
+            for frame_idx in [frame1_idx, frame2_idx]:
+                # Determine modulo level
+                if frame_idx % 16 == 0:
+                    modulo = 16
+                elif frame_idx % 4 == 0:
+                    modulo = 4
+                else:
+                    modulo = 1
+
+                # Calculate chunk index
+                chunk_size = 32 * modulo
+                chunk_index = (frame_idx // chunk_size) * modulo
+                needed_chunks[(chunk_index, modulo)].add(frame_idx)
+
+        # Generate signed URLs
+        chunk_indices = [chunk_idx for chunk_idx, _ in needed_chunks.keys()]
+        modulos = [modulo for _, modulo in needed_chunks.keys()]
+
+        signed_urls = storage.generate_chunk_signed_urls(
+            tenant_id=tenant_id,
+            video_id=video_id,
+            cropped_frames_version=cropped_frames_version,
+            chunk_indices=chunk_indices,
+            modulos=modulos,
+            expiration=3600,
+        )
+        print(f"  Generated {len(signed_urls)} signed URLs in {time.time() - url_start:.2f}s\n")
+
+        # Step 4: Extract frames
+        print("[4/7] Extracting frames from VP9 chunks...")
+        extract_start = time.time()
+
+        # Extract unique frame indices
+        unique_frames = set()
+        for frame1_idx, frame2_idx in frame_pairs:
+            unique_frames.add(frame1_idx)
+            unique_frames.add(frame2_idx)
+
+        extracted_frames = {}
+        for frame_idx in sorted(unique_frames):
+            # Determine chunk
+            if frame_idx % 16 == 0:
+                modulo = 16
+            elif frame_idx % 4 == 0:
+                modulo = 4
+            else:
+                modulo = 1
+
+            chunk_size = 32 * modulo
+            chunk_index = (frame_idx // chunk_size) * modulo
+
+            if chunk_index not in signed_urls:
+                print(f"  [WARNING] Missing signed URL for chunk {chunk_index}, skipping frame {frame_idx}")
+                metrics.failed_inferences += 1
+                continue
+
+            try:
+                frame = extract_frame_from_chunk(
+                    signed_url=signed_urls[chunk_index],
+                    frame_index=frame_idx,
+                    modulo=modulo,
+                )
+                # Convert to PIL
+                from PIL import Image as PILImage
+
+                extracted_frames[frame_idx] = PILImage.fromarray(frame)
+            except Exception as e:
+                print(f"  [ERROR] Failed to extract frame {frame_idx}: {e}")
+                metrics.failed_inferences += 1
+
+        print(f"  Extracted {len(extracted_frames)} frames in {time.time() - extract_start:.2f}s\n")
+
+        # Step 5: Run inference
+        print("[5/7] Running batch inference...")
+        inference_start = time.time()
+
+        # Prepare frame pairs for batch prediction
+        valid_pairs = []
+        valid_indices = []
+        for i, (frame1_idx, frame2_idx) in enumerate(frame_pairs):
+            if frame1_idx in extracted_frames and frame2_idx in extracted_frames:
+                valid_pairs.append((extracted_frames[frame1_idx], extracted_frames[frame2_idx]))
+                valid_indices.append(i)
+            else:
+                metrics.failed_inferences += 1
+
+        # Run batch prediction
+        forward_predictions = predictor.predict_batch(valid_pairs, batch_size=32)
+
+        # For backward, swap frame order
+        backward_pairs = [(f2, f1) for f1, f2 in valid_pairs]
+        backward_predictions = predictor.predict_batch(backward_pairs, batch_size=32)
+
+        inference_end = time.time()
+        print(f"  Completed in {inference_end - inference_start:.2f}s\n")
+
+        # Step 6: Create boundaries database
+        print("[6/7] Creating boundaries database...")
+        db_start = time.time()
+
+        pair_results = []
+        for i, orig_idx in enumerate(valid_indices):
+            frame1_idx, frame2_idx = frame_pairs[orig_idx]
+            forward_pred = forward_predictions[i]
+            backward_pred = backward_predictions[i]
+
+            pair_result = PairResult(
+                frame1_index=frame1_idx,
+                frame2_index=frame2_idx,
+                forward_predicted_label=forward_pred["predicted_label"],
+                forward_confidence=forward_pred["confidence"],
+                forward_prob_same=forward_pred["probabilities"]["same"],
+                forward_prob_different=forward_pred["probabilities"]["different"],
+                forward_prob_empty_empty=forward_pred["probabilities"]["empty_empty"],
+                forward_prob_empty_valid=forward_pred["probabilities"]["empty_valid"],
+                forward_prob_valid_empty=forward_pred["probabilities"]["valid_empty"],
+                backward_predicted_label=backward_pred["predicted_label"],
+                backward_confidence=backward_pred["confidence"],
+                backward_prob_same=backward_pred["probabilities"]["same"],
+                backward_prob_different=backward_pred["probabilities"]["different"],
+                backward_prob_empty_empty=backward_pred["probabilities"]["empty_empty"],
+                backward_prob_empty_valid=backward_pred["probabilities"]["empty_valid"],
+                backward_prob_valid_empty=backward_pred["probabilities"]["valid_empty"],
+                processing_time_ms=None,
+            )
+            pair_results.append(pair_result)
+
+        metrics.successful_inferences = len(pair_results)
+
+        # Create database
+        from caption_boundaries.inference.boundaries_db import get_db_filename
+
+        db_filename = get_db_filename(cropped_frames_version, model_version, run_id)
+        db_path = tmp_path / db_filename
+
+        started_at = datetime.fromtimestamp(job_start)
+        completed_at = datetime.now()
+
+        create_boundaries_db(
+            db_path=db_path,
+            cropped_frames_version=cropped_frames_version,
+            model_version=model_version,
+            run_id=run_id,
+            started_at=started_at,
+            completed_at=completed_at,
+            results=pair_results,
+            model_checkpoint_path=str(checkpoint_path),
+        )
+        print(f"  Created database in {time.time() - db_start:.2f}s\n")
+
+        # Step 7: Upload boundaries database to Wasabi
+        print("[7/7] Uploading boundaries database to Wasabi...")
+        upload_start = time.time()
+        storage_key = storage.upload_boundaries_db(
+            local_path=db_path,
+            tenant_id=tenant_id,
+            video_id=video_id,
+            boundaries_version=cropped_frames_version,
+            model_version=model_version,
+            run_id=run_id,
+        )
+        print(f"  Uploaded in {time.time() - upload_start:.2f}s\n")
+
+        # Return results with storage key
+        results = {
+            "storage_key": storage_key,
+            "total_pairs": len(pair_results),
+            "successful": metrics.successful_inferences,
+            "failed": metrics.failed_inferences,
         }
-
-        results.append(result)
-        metrics.successful_inferences += 1
-
-        # Log progress every 1000 pairs
-        if (i + 1) % 1000 == 0:
-            elapsed = time.time() - inference_start
-            rate = (i + 1) / elapsed
-            print(f"Progress: {i + 1}/{len(frame_pairs)} pairs ({rate:.1f} pairs/sec)")
-
-    inference_end = time.time()
 
     # Compute derived metrics
     metrics.compute_derived_metrics(inference_start, inference_end)

@@ -1,5 +1,6 @@
 """Inference pipeline for caption boundary detection."""
 
+from caption_boundaries.inference.batch_predictor import BatchBoundaryPredictor
 from caption_boundaries.inference.boundaries_db import (
     PairResult,
     compute_model_version_hash,
@@ -19,9 +20,11 @@ from caption_boundaries.inference.inference_repository import (
 )
 from caption_boundaries.inference.predictor import BoundaryPredictor
 from caption_boundaries.inference.quality_checks import run_quality_checks
+from caption_boundaries.inference.wasabi_storage import WasabiStorage, get_wasabi_storage
 
 __all__ = [
     "BoundaryPredictor",
+    "BatchBoundaryPredictor",
     "run_quality_checks",
     "extract_frame_from_chunk",
     "batch_extract_frames",
@@ -34,4 +37,6 @@ __all__ = [
     "BoundaryInferenceRunRepository",
     "InferenceRun",
     "InferenceJob",
+    "WasabiStorage",
+    "get_wasabi_storage",
 ]
