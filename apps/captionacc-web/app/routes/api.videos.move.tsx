@@ -60,7 +60,7 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     // Verify ownership
-    await requireVideoOwnership(authContext, video.id)
+    await requireVideoOwnership(authContext, video.id, request)
 
     // Extract video name from current display_path
     const pathParts = video.display_path.split('/')

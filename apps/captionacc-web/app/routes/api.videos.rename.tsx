@@ -55,7 +55,7 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     // Verify ownership
-    await requireVideoOwnership(authContext, video.id)
+    await requireVideoOwnership(authContext, video.id, request)
 
     // Check if new path already exists
     const { data: existingVideo } = await supabase

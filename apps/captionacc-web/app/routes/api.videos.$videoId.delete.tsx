@@ -109,7 +109,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
   try {
     // Authenticate and authorize
     const authContext = await requireAuth(request)
-    await requireVideoOwnership(authContext, videoId)
+    await requireVideoOwnership(authContext, videoId, request)
 
     const supabase = createServerSupabaseClient()
 
