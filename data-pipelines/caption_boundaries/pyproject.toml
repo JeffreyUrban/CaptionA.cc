@@ -31,10 +31,12 @@ dependencies = [
 
     # Database
     "sqlalchemy>=2.0.0",
+    "supabase>=2.0.0",  # For inference run tracking
 
     # Utilities
     "python-Levenshtein>=0.21.0",
     "pydantic>=2.0.0",
+    "requests>=2.31.0",  # For downloading VP9/WebM chunks
 
     # Internal packages
     "frames_db",

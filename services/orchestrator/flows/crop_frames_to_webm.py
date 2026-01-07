@@ -668,6 +668,35 @@ def crop_frames_to_webm_flow(
             except Exception as e:
                 print(f"⚠️  Failed to send completion webhook: {e}")
 
+            # Trigger boundary inference (deferred, high priority)
+            try:
+                model_version = os.getenv("BOUNDARY_MODEL_VERSION")
+                if model_version:
+                    print(
+                        f"\n[Boundary Inference] Triggering inference with model {model_version[:16]}..."
+                    )
+                    from services.orchestrator.flows.boundary_inference import (
+                        boundary_inference_flow,
+                    )
+
+                    # Run boundary inference flow (will be queued by Prefect)
+                    boundary_inference_flow.apply_async(  # type: ignore[attr-defined]
+                        kwargs={
+                            "video_id": video_id,
+                            "tenant_id": tenant_id,
+                            "cropped_frames_version": version,
+                            "model_version": model_version,
+                            "priority": "high",
+                            "skip_if_exists": True,
+                        }
+                    )
+                    print("[Boundary Inference] ✓ Inference flow queued")
+                else:
+                    print("[Boundary Inference] Skipping - BOUNDARY_MODEL_VERSION not set")
+            except Exception as e:
+                print(f"⚠️  Failed to trigger boundary inference: {e}")
+                # Don't fail the main flow if boundary inference fails to queue
+
             return {
                 "video_id": video_id,
                 "version": version,
