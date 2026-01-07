@@ -1,0 +1,53 @@
+# Deploy Orchestrator Service to Fly.io
+# This workflow deploys the orchestrator service when changes are pushed to main
+
+name: Deploy Orchestrator
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'services/orchestrator/**'
+      - '.github/workflows/deploy-orchestrator.yml'
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  deploy:
+    name: Deploy to Fly.io
+    runs-on: ubuntu-latest
+    # Only deploy from main branch
+    if: github.ref == 'refs/heads/main'
+
+    defaults:
+      run:
+        working-directory: services/orchestrator
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Fly.io CLI
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Configure Fly.io secrets
+        run: |
+          flyctl secrets set \
+            SUPABASE_URL="${{ secrets.SUPABASE_URL }}" \
+            SUPABASE_SCHEMA="captionacc_production" \
+            SUPABASE_SERVICE_ROLE_KEY="${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            PREFECT_API_URL="${{ secrets.PREFECT_API_URL }}" \
+            PREFECT_API_KEY="${{ secrets.PREFECT_API_KEY }}" \
+            WASABI_ACCESS_KEY_READWRITE="${{ secrets.WASABI_ACCESS_KEY_READWRITE }}" \
+            WASABI_SECRET_KEY_READWRITE="${{ secrets.WASABI_SECRET_KEY_READWRITE }}" \
+            WASABI_BUCKET="${{ secrets.WASABI_BUCKET }}" \
+            WASABI_REGION="${{ secrets.WASABI_REGION }}" \
+            ENVIRONMENT="production" \
+            --app captionacc-orchestrator
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Deploy to Fly.io
+        run: flyctl deploy --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
