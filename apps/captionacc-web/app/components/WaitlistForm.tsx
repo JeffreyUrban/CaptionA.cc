@@ -32,13 +32,13 @@ export function WaitlistForm() {
       from_name: 'CaptionA.cc Waitlist',
       subject: 'New Waitlist Signup - CaptionA.cc',
     },
-    onSuccess: msg => {
+    onSuccess: _msg => {
       setIsSuccess(true)
       setResult("Thank you for joining our waitlist! We'll be in touch soon.")
       setIsSubmitting(false)
       reset()
     },
-    onError: msg => {
+    onError: _msg => {
       setIsSuccess(false)
       setResult('Something went wrong. Please try again or contact us directly.')
       setIsSubmitting(false)
@@ -73,7 +73,7 @@ export function WaitlistForm() {
           </svg>
         </div>
         <h3 className="text-lg/7 font-semibold text-olive-950 dark:text-white">
-          You're on the list!
+          You&apos;re on the list!
         </h3>
         <p className="mt-2 text-sm/7 text-olive-700 dark:text-olive-400">{result}</p>
       </div>
@@ -81,7 +81,7 @@ export function WaitlistForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-8">
+    <form onSubmit={e => void handleSubmit(handleFormSubmit)(e)} className="space-y-8">
       {/* Required Fields */}
       <div className="space-y-6">
         <div>
@@ -491,7 +491,7 @@ export function WaitlistForm() {
                   className="mt-1 h-4 w-4 border-olive-950/10 text-olive-950 focus:ring-olive-950 dark:border-white/10 dark:bg-olive-900 dark:focus:ring-olive-300"
                 />
                 <span className="ml-2 text-sm text-olive-700 dark:text-olive-400">
-                  Timing doesn't matter much (just need the text)
+                  Timing doesn&apos;t matter much (just need the text)
                 </span>
               </label>
               <label className="flex items-start">
@@ -517,7 +517,7 @@ export function WaitlistForm() {
               Tell us about your needs
             </label>
             <p className="mt-1 text-xs text-olive-600 dark:text-olive-400">
-              What are you trying to accomplish? What's been frustrating about existing tools?
+              What are you trying to accomplish? What&apos;s been frustrating about existing tools?
             </p>
             <textarea
               {...register('needs')}
@@ -593,7 +593,7 @@ export function WaitlistForm() {
       {/* Privacy Note */}
       <div className="border-t border-olive-950/10 pt-6 dark:border-white/10">
         <p className="text-xs text-olive-600 dark:text-olive-400">
-          We'll only use your email to contact you about early access. No spam, ever.
+          We&apos;ll only use your email to contact you about early access. No spam, ever.
         </p>
       </div>
 

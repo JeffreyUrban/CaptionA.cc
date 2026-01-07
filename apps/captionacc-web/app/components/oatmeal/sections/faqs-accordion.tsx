@@ -21,8 +21,8 @@ export function Faq({
       <button
         type="button"
         id={`${id}-question`}
-        command="--toggle"
-        commandfor={`${id}-answer`}
+        data-command="--toggle"
+        data-commandfor={`${id}-answer`}
         className="flex w-full items-start justify-between gap-6 py-4 text-left text-base/7 text-olive-950 dark:text-white"
       >
         {question}

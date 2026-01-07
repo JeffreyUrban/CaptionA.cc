@@ -29,8 +29,8 @@ export function InstallCommand({
         <ElCopyable id="snippet">{snippet}</ElCopyable>
       </div>
       <button
-        command="--copy"
-        commandfor="snippet"
+        data-command="--copy"
+        data-commandfor="snippet"
         type="button"
         className="group relative flex size-9 items-center justify-center rounded-full after:absolute after:-inset-1 hover:bg-olive-950/10 dark:hover:bg-white/10 after:pointer-fine:hidden"
       >

@@ -235,7 +235,7 @@ function SearchControls({
         <input
           type="text"
           value={searchQuery}
-          onChange={(e) => onSearchChange(e.target.value)}
+          onChange={e => onSearchChange(e.target.value)}
           className="block w-full rounded-md border-0 py-1.5 pl-10 text-olive-950 dark:text-white dark:bg-olive-900 ring-1 ring-inset ring-olive-950/10 dark:ring-white/10 placeholder:text-olive-500 dark:placeholder:text-olive-600 focus:ring-2 focus:ring-inset focus:ring-olive-600 dark:focus:ring-olive-400 sm:text-sm"
           placeholder="Search videos..."
         />

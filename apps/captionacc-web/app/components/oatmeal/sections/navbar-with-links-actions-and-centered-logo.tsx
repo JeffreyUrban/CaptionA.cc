@@ -69,8 +69,8 @@ export function NavbarWithLinksActionsAndCenteredLogo({
             <div className="flex shrink-0 items-center gap-5">{actions}</div>
 
             <button
-              command="show-modal"
-              commandfor="mobile-menu"
+              data-command="show-modal"
+              data-commandfor="mobile-menu"
               aria-label="Toggle menu"
               className="inline-flex rounded-full p-1.5 text-olive-950 hover:bg-olive-950/10 lg:hidden dark:text-white dark:hover:bg-white/10"
             >
@@ -90,8 +90,8 @@ export function NavbarWithLinksActionsAndCenteredLogo({
             <ElDialogPanel className="fixed inset-0 bg-olive-100 px-6 py-6 lg:px-10 dark:bg-olive-950">
               <div className="flex justify-end">
                 <button
-                  command="close"
-                  commandfor="mobile-menu"
+                  data-command="close"
+                  data-commandfor="mobile-menu"
                   aria-label="Toggle menu"
                   className="inline-flex rounded-full p-1.5 text-olive-950 hover:bg-olive-950/10 dark:text-white dark:hover:bg-white/10"
                 >

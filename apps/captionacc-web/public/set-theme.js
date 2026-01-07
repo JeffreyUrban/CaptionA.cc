@@ -1,7 +1,7 @@
 ;(function () {
   const theme = localStorage.getItem('theme') || 'system'
 
-  const applyTheme = (theme) => {
+  const applyTheme = theme => {
     const html = document.documentElement
 
     if (theme === 'system') {

@@ -96,9 +96,12 @@ export function SignUpForm({ onSuccess, onSwitchToLogin }: SignUpFormProps) {
           </div>
         )}
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={e => void handleSubmit(e)}>
           <div className="mb-4">
-            <label className="block text-olive-950 dark:text-white text-sm font-bold mb-2" htmlFor="inviteCode">
+            <label
+              className="block text-olive-950 dark:text-white text-sm font-bold mb-2"
+              htmlFor="inviteCode"
+            >
               Invite Code
             </label>
             <input

@@ -19,7 +19,7 @@ function UserMenu() {
   const handleSignOut = async () => {
     await signOut()
     setIsOpen(false)
-    navigate('/login')
+    void navigate('/login')
   }
 
   if (!user) {
