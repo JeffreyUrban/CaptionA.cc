@@ -189,13 +189,14 @@ def get_rejection_summary(days: int = 7) -> dict[str, Any]:
     )
 
     # Aggregate by type
+    rejection_data = cast(list[RejectionRow], response.data)
     summary = {}
-    for record in response.data:
+    for record in rejection_data:
         rejection_type = record["rejection_type"]
         summary[rejection_type] = summary.get(rejection_type, 0) + 1
 
     return {
         "days": days,
-        "total_rejections": len(response.data),
+        "total_rejections": len(rejection_data),
         "by_type": summary,
     }

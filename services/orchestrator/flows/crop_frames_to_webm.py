@@ -680,7 +680,7 @@ def crop_frames_to_webm_flow(
                     )
 
                     # Run boundary inference flow (will be queued by Prefect)
-                    boundary_inference_flow.apply_async(
+                    boundary_inference_flow.apply_async(  # type: ignore[attr-defined]
                         kwargs={
                             "video_id": video_id,
                             "tenant_id": tenant_id,

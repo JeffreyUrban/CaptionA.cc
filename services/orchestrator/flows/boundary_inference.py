@@ -189,7 +189,7 @@ def invoke_modal_inference(
         from caption_boundaries.inference.service import run_boundary_inference_batch
 
         # Call Modal function (blocks until complete)
-        result = run_boundary_inference_batch.remote(
+        result = run_boundary_inference_batch.remote(  # type: ignore[attr-defined]
             video_id=video_id,
             tenant_id=tenant_id,
             cropped_frames_version=cropped_frames_version,
