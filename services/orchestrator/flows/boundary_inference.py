@@ -60,7 +60,7 @@ def check_existing_run(
         .execute()
     )
 
-    if response.data:
+    if response and response.data:
         run_data = cast(InferenceRunRow, response.data)
         print(f"  ✓ Found existing run: {run_data['run_id']}")
         print(f"    Storage: {run_data['wasabi_storage_key']}")
@@ -390,8 +390,9 @@ def run_inference_for_video(
     if not response.data:
         raise ValueError(f"Video not found: {video_id}")
 
-    tenant_id = response.data["tenant_id"]
-    cropped_frames_version = response.data["cropped_frames_version"]
+    video_data = cast(dict[str, Any], response.data)
+    tenant_id = video_data["tenant_id"]
+    cropped_frames_version = video_data["cropped_frames_version"]
 
     # Run flow
     return boundary_inference_flow(

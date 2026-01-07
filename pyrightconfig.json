@@ -6,6 +6,8 @@
   "exclude": [
     "**/node_modules",
     "**/__pycache__",
-    "**/.*"
+    "**/.*",
+    "**/inference/service.py",
+    "**/upload_model_to_modal.py"
   ]
 }

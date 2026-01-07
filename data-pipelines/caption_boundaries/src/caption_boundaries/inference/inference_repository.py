@@ -119,10 +119,10 @@ class InferenceJob:
             status=data["status"],
             priority=data["priority"],
             started_at=datetime.fromisoformat(data["started_at"].replace("Z", "+00:00"))
-            if data.get("started_at")
+            if data["started_at"]
             else None,
             completed_at=datetime.fromisoformat(data["completed_at"].replace("Z", "+00:00"))
-            if data.get("completed_at")
+            if data["completed_at"]
             else None,
             error_message=data.get("error_message"),
             inference_run_id=data.get("inference_run_id"),
@@ -201,7 +201,7 @@ class BoundaryInferenceRunRepository:
             .execute()
         )
 
-        if response.data:
+        if response and response.data:
             # Supabase maybe_single() returns a dict or None
             return InferenceRun.from_dict(cast(InferenceRunRow, response.data))
         return None
@@ -391,8 +391,9 @@ class BoundaryInferenceRunRepository:
         if not response.data:
             raise ValueError("Failed to create inference job")
 
-        console.print(f"[cyan]Created inference job: {response.data[0]['id']}[/cyan]")
-        return InferenceJob.from_dict(cast(list[InferenceJobRow], response.data)[0])
+        job_data = cast(list[InferenceJobRow], response.data)
+        console.print(f"[cyan]Created inference job: {job_data[0]['id']}[/cyan]")
+        return InferenceJob.from_dict(job_data[0])
 
     def update_job_status(
         self,
