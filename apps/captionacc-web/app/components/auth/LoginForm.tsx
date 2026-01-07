@@ -37,18 +37,23 @@ export function LoginForm({ onSuccess, onSwitchToSignUp }: LoginFormProps) {
 
   return (
     <div className="w-full max-w-md mx-auto">
-      <div className="bg-white shadow-md rounded-lg px-8 pt-6 pb-8 mb-4">
-        <h2 className="text-2xl font-bold mb-6 text-center">Sign In</h2>
+      <div className="bg-white dark:bg-olive-900 shadow-md rounded-lg px-8 pt-6 pb-8 mb-4">
+        <h2 className="text-2xl font-bold mb-6 text-center text-olive-950 dark:text-white">
+          Sign In
+        </h2>
 
         {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4 dark:bg-red-950/20 dark:border-red-400/20 dark:text-red-100">
             {error}
           </div>
         )}
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={e => void handleSubmit(e)}>
           <div className="mb-4">
-            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="email">
+            <label
+              className="block text-olive-950 dark:text-white text-sm font-bold mb-2"
+              htmlFor="email"
+            >
               Email
             </label>
             <input
@@ -56,7 +61,7 @@ export function LoginForm({ onSuccess, onSwitchToSignUp }: LoginFormProps) {
               type="email"
               value={email}
               onChange={e => setEmail(e.target.value)}
-              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+              className="shadow appearance-none border border-olive-950/10 dark:border-white/10 rounded w-full py-2 px-3 text-olive-950 dark:text-white bg-white dark:bg-olive-950 leading-tight focus:outline-none focus:border-olive-600 dark:focus:border-olive-400"
               placeholder="you@example.com"
               required
               disabled={loading}
@@ -64,7 +69,10 @@ export function LoginForm({ onSuccess, onSwitchToSignUp }: LoginFormProps) {
           </div>
 
           <div className="mb-6">
-            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="password">
+            <label
+              className="block text-olive-950 dark:text-white text-sm font-bold mb-2"
+              htmlFor="password"
+            >
               Password
             </label>
             <input
@@ -72,7 +80,7 @@ export function LoginForm({ onSuccess, onSwitchToSignUp }: LoginFormProps) {
               type="password"
               value={password}
               onChange={e => setPassword(e.target.value)}
-              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+              className="shadow appearance-none border border-olive-950/10 dark:border-white/10 rounded w-full py-2 px-3 text-olive-950 dark:text-white bg-white dark:bg-olive-950 leading-tight focus:outline-none focus:border-olive-600 dark:focus:border-olive-400"
               placeholder="••••••••"
               required
               disabled={loading}
@@ -90,7 +98,7 @@ export function LoginForm({ onSuccess, onSwitchToSignUp }: LoginFormProps) {
           <div className="text-center">
             <button
               onClick={onSwitchToSignUp}
-              className="text-blue-500 hover:text-blue-700 text-sm"
+              className="text-olive-600 hover:text-olive-700 dark:text-olive-400 dark:hover:text-olive-300 text-sm"
               type="button"
             >
               Don&apos;t have an account? Sign up
