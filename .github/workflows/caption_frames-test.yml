@@ -21,6 +21,9 @@ jobs:
   quality:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: data-pipelines/crop_frames
 
     steps:
       - uses: actions/checkout@v6
@@ -64,6 +67,9 @@ jobs:
     needs: [quality, link-check]  # Run tests after both quality and link checks pass
     runs-on: ubuntu-latest
     timeout-minutes: 15  # Prevent jobs from hanging indefinitely
+    defaults:
+      run:
+        working-directory: data-pipelines/crop_frames
     strategy:
       matrix:
         python-version: ["3.11", "3.13"]

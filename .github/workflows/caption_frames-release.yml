@@ -11,6 +11,9 @@ permissions:
 jobs:
   build-and-publish:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: data-pipelines/crop_frames
 
     steps:
       - uses: actions/checkout@v4
