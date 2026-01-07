@@ -66,9 +66,9 @@ class InferenceMetrics:
             self.pairs_per_second = self.successful_inferences / ((inference_end - inference_start) or 1)
 
 
-# Modal app stub
+# Modal app
 if modal:
-    stub = modal.App("boundary-inference")
+    app = modal.App("boundary-inference")
 
     # GPU image with dependencies
     # Note: Frame extraction happens on GPU time - optimize this in future by:
@@ -99,7 +99,7 @@ if modal:
     _is_cold_start = True
 
 
-@stub.function(
+@app.function(
     image=image,
     gpu="A10G",  # ~$1.10/hr
     volumes={"/models": model_volume},
@@ -165,7 +165,7 @@ def test_inference():
     return result
 
 
-@stub.function(
+@app.function(
     image=image,
     gpu=MODAL_CONFIG.gpu_type,
     volumes={"/models": model_volume},
@@ -534,7 +534,7 @@ def run_boundary_inference_batch(
     }
 
 
-@stub.local_entrypoint()
+@app.local_entrypoint()
 def main():
     """Test Modal deployment locally."""
     print("🚀 Testing Modal inference service...")
