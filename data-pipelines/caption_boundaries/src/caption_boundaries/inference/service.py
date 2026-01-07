@@ -67,6 +67,9 @@ if modal:
     stub = modal.App("boundary-inference")
 
     # GPU image with dependencies
+    # Note: Frame extraction happens on GPU time - optimize this in future by:
+    # - Pre-extracting frames before Modal call, OR
+    # - Using GPU-accelerated image decoding (NVDEC)
     image = (
         modal.Image.debian_slim(python_version="3.11")
         .pip_install(
@@ -212,9 +215,15 @@ def run_boundary_inference_batch(
 
     import torch
     from caption_boundaries.inference.batch_predictor import BatchBoundaryPredictor
-    from caption_boundaries.inference.boundaries_db import PairResult, compute_model_version_hash, create_boundaries_db
+    from caption_boundaries.inference.boundaries_db import PairResult, create_boundaries_db
     from caption_boundaries.inference.frame_extractor import extract_frame_from_chunk
-    from caption_boundaries.inference.wasabi_storage import WasabiStorage
+
+    # Import WasabiClient from services
+    # TODO: Move to shared package to avoid import path issues in Modal
+    import sys
+
+    sys.path.insert(0, "/root")  # Assume services code is available
+    from services.orchestrator.wasabi_client import WasabiClient
 
     print(f"\n{'='*60}")
     print(f"Starting Inference Job: {run_id}")
@@ -226,8 +235,8 @@ def run_boundary_inference_batch(
     print(f"Frame pairs: {len(frame_pairs)}")
     print(f"{'='*60}\n")
 
-    # Initialize Wasabi storage
-    storage = WasabiStorage()
+    # Initialize Wasabi client
+    wasabi = WasabiClient()
 
     # Create temp directory for this job
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -236,7 +245,9 @@ def run_boundary_inference_batch(
         # Step 1: Download layout.db
         print("[1/7] Downloading layout.db from Wasabi...")
         download_start = time.time()
-        layout_db_path = storage.download_layout_db(tenant_id, video_id, tmp_path)
+        layout_storage_key = f"videos/{tenant_id}/{video_id}/layout.db"
+        layout_db_path = tmp_path / "layout.db"
+        wasabi.download_file(layout_storage_key, layout_db_path)
         print(f"  Downloaded in {time.time() - download_start:.2f}s\n")
 
         # Step 2: Load model
@@ -275,18 +286,19 @@ def run_boundary_inference_batch(
                 chunk_index = (frame_idx // chunk_size) * modulo
                 needed_chunks[(chunk_index, modulo)].add(frame_idx)
 
-        # Generate signed URLs
-        chunk_indices = [chunk_idx for chunk_idx, _ in needed_chunks.keys()]
-        modulos = [modulo for _, modulo in needed_chunks.keys()]
+        # Generate signed URLs using WasabiClient
+        signed_urls = {}
+        for (chunk_idx, modulo) in needed_chunks.keys():
+            storage_key = wasabi.build_chunk_storage_key(
+                tenant_id=tenant_id,
+                video_id=video_id,
+                chunk_type="cropped_frames",
+                chunk_index=chunk_idx,
+                version=cropped_frames_version,
+                modulo=modulo,
+            )
+            signed_urls[chunk_idx] = wasabi.generate_presigned_url(storage_key, expiration=3600)
 
-        signed_urls = storage.generate_chunk_signed_urls(
-            tenant_id=tenant_id,
-            video_id=video_id,
-            cropped_frames_version=cropped_frames_version,
-            chunk_indices=chunk_indices,
-            modulos=modulos,
-            expiration=3600,
-        )
         print(f"  Generated {len(signed_urls)} signed URLs in {time.time() - url_start:.2f}s\n")
 
         # Step 4: Extract frames
@@ -333,29 +345,36 @@ def run_boundary_inference_batch(
 
         print(f"  Extracted {len(extracted_frames)} frames in {time.time() - extract_start:.2f}s\n")
 
-        # Step 5: Run inference
-        print("[5/7] Running batch inference...")
+        # Step 5: Run bidirectional inference
+        # Process both directions together for efficiency and completeness
+        print("[5/7] Running bidirectional batch inference...")
         inference_start = time.time()
 
-        # Prepare frame pairs for batch prediction
-        valid_pairs = []
+        # Prepare bidirectional batches: for each pair, process both directions together
+        # This ensures we complete database rows atomically and makes better use of GPU batching
+        bidirectional_pairs = []
         valid_indices = []
+
         for i, (frame1_idx, frame2_idx) in enumerate(frame_pairs):
             if frame1_idx in extracted_frames and frame2_idx in extracted_frames:
-                valid_pairs.append((extracted_frames[frame1_idx], extracted_frames[frame2_idx]))
+                f1 = extracted_frames[frame1_idx]
+                f2 = extracted_frames[frame2_idx]
+                # Add both directions: (f1, f2) for forward, (f2, f1) for backward
+                bidirectional_pairs.append((f1, f2))
+                bidirectional_pairs.append((f2, f1))
                 valid_indices.append(i)
             else:
                 metrics.failed_inferences += 1
 
-        # Run batch prediction
-        forward_predictions = predictor.predict_batch(valid_pairs, batch_size=32)
+        # Run batch prediction on all directions at once
+        all_predictions = predictor.predict_batch(bidirectional_pairs, batch_size=64)
 
-        # For backward, swap frame order
-        backward_pairs = [(f2, f1) for f1, f2 in valid_pairs]
-        backward_predictions = predictor.predict_batch(backward_pairs, batch_size=32)
+        # Split predictions back into forward/backward pairs
+        forward_predictions = [all_predictions[i * 2] for i in range(len(valid_indices))]
+        backward_predictions = [all_predictions[i * 2 + 1] for i in range(len(valid_indices))]
 
         inference_end = time.time()
-        print(f"  Completed in {inference_end - inference_start:.2f}s\n")
+        print(f"  Completed {len(forward_predictions)} pairs (bidirectional) in {inference_end - inference_start:.2f}s\n")
 
         # Step 6: Create boundaries database
         print("[6/7] Creating boundaries database...")
@@ -414,15 +433,15 @@ def run_boundary_inference_batch(
         # Step 7: Upload boundaries database to Wasabi
         print("[7/7] Uploading boundaries database to Wasabi...")
         upload_start = time.time()
-        storage_key = storage.upload_boundaries_db(
-            local_path=db_path,
-            tenant_id=tenant_id,
-            video_id=video_id,
-            boundaries_version=cropped_frames_version,
-            model_version=model_version,
-            run_id=run_id,
-        )
-        print(f"  Uploaded in {time.time() - upload_start:.2f}s\n")
+
+        # Build storage key for boundaries database
+        from caption_boundaries.inference.boundaries_db import get_db_filename
+
+        boundaries_filename = get_db_filename(cropped_frames_version, model_version, run_id)
+        storage_key = f"videos/{tenant_id}/{video_id}/boundaries/{boundaries_filename}"
+
+        wasabi.upload_file(db_path, storage_key, content_type="application/x-sqlite3")
+        print(f"  Uploaded to {storage_key} in {time.time() - upload_start:.2f}s\n")
 
         # Return results with storage key
         results = {

@@ -20,11 +20,10 @@ from caption_boundaries.inference.inference_repository import (
 )
 from caption_boundaries.inference.predictor import BoundaryPredictor
 from caption_boundaries.inference.quality_checks import run_quality_checks
-from caption_boundaries.inference.wasabi_storage import WasabiStorage, get_wasabi_storage
 
 __all__ = [
-    "BoundaryPredictor",
-    "BatchBoundaryPredictor",
+    "BoundaryPredictor",  # Original predictor for database frames (local inference)
+    "BatchBoundaryPredictor",  # Adapted for Modal with extracted frames
     "run_quality_checks",
     "extract_frame_from_chunk",
     "batch_extract_frames",
@@ -37,6 +36,4 @@ __all__ = [
     "BoundaryInferenceRunRepository",
     "InferenceRun",
     "InferenceJob",
-    "WasabiStorage",
-    "get_wasabi_storage",
 ]
