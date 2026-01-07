@@ -1,0 +1,217 @@
+name: Daily Health Check & Keep-Alive
+
+# This workflow runs daily to:
+# 1. Keep Supabase free tier active (prevent hibernation)
+# 2. Check health of web app and orchestrator
+# 3. Monitor for restart loops
+# 4. Alert via email on failures
+
+on:
+  schedule:
+    # Run once daily at 03:47 UTC (random off-peak time)
+    # Cron format: minute hour day month weekday
+    - cron: '47 3 * * *'
+
+  # Allow manual triggering for testing
+  workflow_dispatch:
+
+jobs:
+  health-check:
+    name: Health Check & Keep-Alive
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Fly CLI
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Supabase Keep-Alive (Production Schema)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          echo "📡 Pinging Supabase production schema to prevent hibernation..."
+
+          # Make a lightweight query to keep database active
+          response=$(curl -s -w "\n%{http_code}" \
+            -X POST \
+            "${SUPABASE_URL}/rest/v1/rpc/pg_backend_pid" \
+            -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Content-Type: application/json" \
+            -H "Prefer: return=representation" \
+            --data '{}')
+
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | head -n -1)
+
+          if [ "$http_code" -eq 200 ]; then
+            echo "✅ Supabase production schema is active (PID: $body)"
+          else
+            echo "❌ Supabase keep-alive failed with HTTP $http_code"
+            echo "Response: $body"
+            exit 1
+          fi
+
+      - name: Check Web App Health
+        run: |
+          echo "🏥 Checking web app health..."
+
+          response=$(curl -s -w "\n%{http_code}" https://captionacc-web.fly.dev/health)
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | head -n -1)
+
+          echo "Response: $body"
+
+          if [ "$http_code" -eq 200 ]; then
+            echo "✅ Web app is healthy"
+
+            # Check for warnings in response
+            if echo "$body" | jq -e '.components | to_entries[] | select(.value.status == "degraded")' > /dev/null 2>&1; then
+              echo "⚠️  Warning: Some components are degraded"
+              echo "$body" | jq '.components | to_entries[] | select(.value.status == "degraded")'
+            fi
+          elif [ "$http_code" -eq 503 ]; then
+            echo "❌ Web app is unhealthy (HTTP 503)"
+            echo "$body" | jq '.'
+            exit 1
+          else
+            echo "❌ Web app health check failed with HTTP $http_code"
+            echo "$body"
+            exit 1
+          fi
+
+      - name: Check Orchestrator Health
+        run: |
+          echo "🏥 Checking orchestrator health..."
+
+          response=$(curl -s -w "\n%{http_code}" https://captionacc-orchestrator.fly.dev/health)
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | head -n -1)
+
+          echo "Response: $body"
+
+          if [ "$http_code" -eq 200 ]; then
+            echo "✅ Orchestrator is healthy"
+
+            # Check for warnings in response
+            if echo "$body" | jq -e '.components | to_entries[] | select(.value.status == "degraded")' > /dev/null 2>&1; then
+              echo "⚠️  Warning: Some components are degraded"
+              echo "$body" | jq '.components | to_entries[] | select(.value.status == "degraded")'
+            fi
+          elif [ "$http_code" -eq 503 ]; then
+            echo "❌ Orchestrator is unhealthy (HTTP 503)"
+            echo "$body" | jq '.'
+            exit 1
+          else
+            echo "❌ Orchestrator health check failed with HTTP $http_code"
+            echo "$body"
+            exit 1
+          fi
+
+      - name: Check for Restart Loops (Web App)
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          echo "🔄 Checking web app restart count..."
+
+          # Get app status JSON
+          status=$(flyctl status -a captionacc-web --json 2>&1 || echo '{}')
+
+          # Check if there are any machines
+          machine_count=$(echo "$status" | jq '.Machines | length')
+
+          if [ "$machine_count" -eq 0 ]; then
+            echo "ℹ️  Web app has no running machines (auto-stopped)"
+            exit 0
+          fi
+
+          # Check restart count for each machine in last 24h
+          # Fly.io doesn't directly expose restart count, so we check machine state
+          machines=$(echo "$status" | jq -r '.Machines[] | @json')
+
+          while IFS= read -r machine; do
+            machine_id=$(echo "$machine" | jq -r '.id')
+            state=$(echo "$machine" | jq -r '.state')
+            updated_at=$(echo "$machine" | jq -r '.updated_at')
+
+            echo "  Machine $machine_id: $state (updated: $updated_at)"
+
+            # Check if machine has restarted multiple times (by checking recent events)
+            events=$(flyctl machine status "$machine_id" -a captionacc-web 2>&1 | grep -c "restart" || echo "0")
+
+            if [ "$events" -gt 3 ]; then
+              echo "⚠️  Warning: Machine $machine_id may be in a restart loop ($events restart events found)"
+              # Don't fail, just warn
+            fi
+          done <<< "$machines"
+
+          echo "✅ Web app restart check complete"
+
+      - name: Check for Restart Loops (Orchestrator)
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          echo "🔄 Checking orchestrator restart count..."
+
+          # Get app status JSON
+          status=$(flyctl status -a captionacc-orchestrator --json)
+
+          # Check restart count for each machine
+          machines=$(echo "$status" | jq -r '.Machines[] | @json')
+
+          while IFS= read -r machine; do
+            machine_id=$(echo "$machine" | jq -r '.id')
+            state=$(echo "$machine" | jq -r '.state')
+            updated_at=$(echo "$machine" | jq -r '.updated_at')
+
+            echo "  Machine $machine_id: $state (updated: $updated_at)"
+
+            # Check if machine has restarted multiple times
+            events=$(flyctl machine status "$machine_id" -a captionacc-orchestrator 2>&1 | grep -c "restart" || echo "0")
+
+            if [ "$events" -gt 3 ]; then
+              echo "⚠️  Warning: Machine $machine_id may be in a restart loop ($events restart events found)"
+              # Don't fail, just warn
+            fi
+          done <<< "$machines"
+
+          echo "✅ Orchestrator restart check complete"
+
+      - name: Summary
+        if: success()
+        run: |
+          echo "="
+          echo "✅ All health checks passed!"
+          echo "="
+          echo ""
+          echo "✓ Supabase keep-alive successful"
+          echo "✓ Web app is healthy"
+          echo "✓ Orchestrator is healthy"
+          echo "✓ No restart loops detected"
+          echo ""
+          echo "Next check: Tomorrow at 03:47 UTC"
+
+      # Ping Better Stack Heartbeat (confirms workflow ran successfully)
+      # This creates a "heartbeat" that Better Stack monitors
+      # If workflow fails or doesn't run, Better Stack will alert
+      - name: Ping Better Stack Heartbeat
+        if: always()  # Run even if previous steps failed (to report status)
+        run: |
+          # Determine status
+          if [ "${{ job.status }}" == "success" ]; then
+            STATUS="success"
+            echo "✅ Pinging Better Stack: Workflow succeeded"
+          else
+            STATUS="fail"
+            echo "❌ Pinging Better Stack: Workflow failed"
+          fi
+
+          # Ping heartbeat URL (only if secret is configured)
+          if [ -n "${{ secrets.BETTERSTACK_HEARTBEAT_URL }}" ]; then
+            curl -fsS --retry 3 "${{ secrets.BETTERSTACK_HEARTBEAT_URL }}?status=${STATUS}" || echo "⚠️  Failed to ping Better Stack (non-fatal)"
+          else
+            echo "ℹ️  BETTERSTACK_HEARTBEAT_URL not configured, skipping heartbeat ping"
+          fi

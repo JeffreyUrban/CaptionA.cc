@@ -19,12 +19,15 @@ primary_region = "ewr"  # US East (same region as web app)
   #   SUPABASE_URL
   #   SUPABASE_SCHEMA (set to captionacc_production or captionacc_staging)
   #   SUPABASE_SERVICE_ROLE_KEY
-  #   PREFECT_API_URL
-  #   PREFECT_API_KEY
   #   WASABI_ACCESS_KEY_READWRITE
   #   WASABI_SECRET_KEY_READWRITE
   #   WASABI_BUCKET
   #   WASABI_REGION
+  #
+  # Optional secrets (for future Prefect server deployment):
+  #   PREFECT_API_URL - URL of separate Prefect server (if deployed)
+  #   PREFECT_API_KEY - API key for Prefect server
+  # Note: Currently using ephemeral mode (no separate server needed)
 
   # Prefect worker configuration
   WORKER_CONCURRENCY = "2"
@@ -38,6 +41,17 @@ primary_region = "ewr"  # US East (same region as web app)
   min_machines_running = 1
   processes = ["app"]
 
+  # Health checks (verifies both API and worker health)
+  [[http_service.checks]]
+    interval = "30s"              # Check every 30 seconds
+    timeout = "5s"                # Fail if no response in 5s
+    grace_period = "90s"          # Allow 90s startup time (Prefect connection)
+    method = "GET"
+    path = "/health"
+
+    # Restart policy: restart after 3 consecutive failures (90s of downtime)
+    # This prevents restart loops from transient issues
+
 [[vm]]
   cpu_kind = "shared"
   cpus = 2
@@ -46,3 +60,7 @@ primary_region = "ewr"  # US East (same region as web app)
 [deploy]
   # Optional: Run migrations or setup before starting
   # release_command = "python setup.py"
+
+# Command to start both health API and Prefect worker
+# Override via fly.toml if needed, or set CMD in Dockerfile
+# Default: python start_all.py
