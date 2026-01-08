@@ -74,14 +74,18 @@ async def health_check(response: Response) -> JSONResponse:
         start = time.time()
         supabase = get_supabase_client()
 
-        # Lightweight query to verify connection
-        supabase.table("videos").select("id").limit(1).execute()
+        # Get the preferred schema from the client
+        schema = getattr(supabase, "_preferred_schema", "public")
+
+        # Lightweight query to verify connection (with proper schema)
+        supabase.schema(schema).table("videos").select("id").limit(1).execute()
 
         response_ms = int((time.time() - start) * 1000)
 
         health_status["components"]["supabase"] = {
             "status": "healthy",
             "response_ms": response_ms,
+            "schema": schema,
         }
     except Exception as e:
         health_status["components"]["supabase"] = {
