@@ -2,10 +2,12 @@
 # See https://fly.io/docs/reference/configuration/ for details
 
 app = "captionacc-orchestrator"
-primary_region = "ewr"  # US East (same region as web app)
+primary_region = "ewr"
 
 [build]
   dockerfile = "Dockerfile"
+  build-target = ""
+  [build.args]
 
 [env]
   # Environment identifier
