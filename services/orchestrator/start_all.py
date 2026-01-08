@@ -105,11 +105,23 @@ def main():
     print("CaptionA.cc Orchestrator Service")
     print("=" * 80)
     print()
-    print("Starting:")
-    print("  1. Health API (port 8000)")
-    print("  2. Prefect Worker (video processing)")
+
+    # Check if we should start the Prefect worker
+    has_prefect_api = bool(os.getenv("PREFECT_API_URL"))
+
+    if has_prefect_api:
+        print("Starting:")
+        print("  1. Health API (port 8000)")
+        print("  2. Prefect Worker (video processing)")
+    else:
+        print("Starting:")
+        print("  1. Health API (port 8000)")
+        print()
+        print("⚠️  Prefect Worker disabled (PREFECT_API_URL not set)")
+        print("   Running in health-check-only mode")
+
     print()
-    print("Press Ctrl+C to stop both services")
+    print("Press Ctrl+C to stop services")
     print("=" * 80)
     print()
 
@@ -120,24 +132,28 @@ def main():
     # Give API time to start
     time.sleep(2)
 
-    # Start worker in a separate process
-    worker_process = multiprocessing.Process(target=run_worker_process, name="prefect-worker")
-    worker_process.start()
+    # Start worker in a separate process (only if Prefect API is configured)
+    worker_process = None
+    if has_prefect_api:
+        worker_process = multiprocessing.Process(target=run_worker_process, name="prefect-worker")
+        worker_process.start()
 
     # Handle graceful shutdown
     def signal_handler(signum, frame):
         print("\n\n⚠️  Shutdown signal received, stopping services...")
         api_process.terminate()
-        worker_process.terminate()
+        if worker_process:
+            worker_process.terminate()
 
         # Wait for processes to stop (with timeout)
         api_process.join(timeout=5)
-        worker_process.join(timeout=5)
+        if worker_process:
+            worker_process.join(timeout=5)
 
         # Force kill if still running
         if api_process.is_alive():
             api_process.kill()
-        if worker_process.is_alive():
+        if worker_process and worker_process.is_alive():
             worker_process.kill()
 
         print("✅ All services stopped")
@@ -157,7 +173,8 @@ def main():
                 api_process = multiprocessing.Process(target=run_health_api, name="health-api")
                 api_process.start()
 
-            if not worker_process.is_alive():
+            # Only monitor worker if it was started
+            if worker_process and not worker_process.is_alive():
                 print("⚠️  Worker crashed, restarting...")
                 worker_process = multiprocessing.Process(
                     target=run_worker_process, name="prefect-worker"
