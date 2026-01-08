@@ -27,7 +27,7 @@ primary_region = 'ewr'
     soft_limit = 20
 
 [[vm]]
-  memory = '512mb'
+  memory = '256mb'
   cpu_kind = 'shared'
   cpus = 1
 
