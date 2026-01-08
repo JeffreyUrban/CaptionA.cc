@@ -11,7 +11,6 @@ const supabaseUrl = process.env['VITE_SUPABASE_URL'] || 'http://localhost:54321'
 const supabaseAnonKey =
   process.env['VITE_SUPABASE_ANON_KEY'] ||
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0'
-const supabaseSchema = process.env['VITE_SUPABASE_SCHEMA'] || 'captionacc_production'
 
 /**
  * Create a Supabase client for server-side use with cookie access
@@ -41,10 +40,6 @@ export function createSupabaseServerClient(request: Request, responseHeaders: He
         const cookieString = `${name}=; Path=${options.path || '/'}; Max-Age=0`
         responseHeaders.append('Set-Cookie', cookieString)
       },
-    },
-    // @ts-expect-error - schema is dynamic based on environment
-    db: {
-      schema: supabaseSchema,
     },
   })
 }

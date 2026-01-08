@@ -26,17 +26,10 @@ const LOCAL_SUPABASE_SERVICE_ROLE_KEY =
 const supabaseUrl = import.meta.env['VITE_SUPABASE_URL'] || LOCAL_SUPABASE_URL
 const supabaseAnonKey = import.meta.env['VITE_SUPABASE_ANON_KEY'] || LOCAL_SUPABASE_ANON_KEY
 
-// Determine schema based on environment
-const isLocal = supabaseUrl === LOCAL_SUPABASE_URL
-const supabaseSchema = isLocal
-  ? 'public' // Local Supabase uses public schema
-  : import.meta.env['VITE_SUPABASE_SCHEMA'] || 'captionacc_production' // Online uses named schemas
-
 // Log Supabase connection info in development
 if (import.meta.env.DEV) {
-  console.log(
-    `🔌 Supabase: ${isLocal ? 'LOCAL' : 'ONLINE'} (${supabaseUrl}) [schema: ${supabaseSchema}]`
-  )
+  const isLocal = supabaseUrl === LOCAL_SUPABASE_URL
+  console.log(`🔌 Supabase: ${isLocal ? 'LOCAL' : 'ONLINE'} (${supabaseUrl})`)
 }
 
 /**
@@ -70,10 +63,6 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
       },
     },
   },
-  // @ts-expect-error - schema is dynamic based on environment
-  db: {
-    schema: supabaseSchema, // Set PostgreSQL schema
-  },
 })
 
 /**
@@ -93,10 +82,6 @@ export function createServerSupabaseClient() {
     auth: {
       persistSession: false,
       autoRefreshToken: false,
-    },
-    // @ts-expect-error - schema is dynamic based on environment
-    db: {
-      schema: supabaseSchema, // Set PostgreSQL schema (same as client)
     },
   })
 }
