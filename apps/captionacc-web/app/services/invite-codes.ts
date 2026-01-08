@@ -40,7 +40,7 @@ export async function validateInviteCode(code: string): Promise<InviteCodeValida
   const { data: inviteCode, error } = await supabase
     .from('invite_codes')
     .select('*')
-    .eq('code', normalizedCode)
+    .eq('code' as never, normalizedCode as never)
     .single()
 
   console.log('[validateInviteCode] Query result:', { data: inviteCode, error })
@@ -50,19 +50,32 @@ export async function validateInviteCode(code: string): Promise<InviteCodeValida
     return { valid: false, error: 'Invalid invite code' }
   }
 
+  // Type guard for invite code properties
+  type InviteCodeData = {
+    code: string
+    expires_at: string | null
+    uses_count: number | null
+    max_uses: number | null
+  }
+
   // Check if expired
-  if (inviteCode.expires_at && new Date(inviteCode.expires_at) < new Date()) {
-    return { valid: false, error: 'Invite code has expired' }
+  if ('expires_at' in inviteCode && (inviteCode as unknown as InviteCodeData).expires_at) {
+    const expiresAt = (inviteCode as unknown as InviteCodeData).expires_at
+    if (expiresAt && new Date(expiresAt) < new Date()) {
+      return { valid: false, error: 'Invite code has expired' }
+    }
   }
 
   // Check if max uses reached
-  const usesCount = inviteCode.uses_count ?? 0
-  const maxUses = inviteCode.max_uses ?? 1
+  const usesCount =
+    'uses_count' in inviteCode ? ((inviteCode as unknown as InviteCodeData).uses_count ?? 0) : 0
+  const maxUses =
+    'max_uses' in inviteCode ? ((inviteCode as unknown as InviteCodeData).max_uses ?? 1) : 1
   if (usesCount >= maxUses) {
     return { valid: false, error: 'Invite code has been fully used' }
   }
 
-  return { valid: true, code: inviteCode.code }
+  return { valid: true, code: (inviteCode as unknown as InviteCodeData).code }
 }
 
 /**
@@ -79,22 +92,22 @@ export async function markInviteCodeAsUsed(code: string, userId: string): Promis
     .update({
       used_by: userId,
       used_at: new Date().toISOString(),
-    })
-    .eq('code', code)
+    } as never)
+    .eq('code' as never, code as never)
 
   // Increment uses_count separately
   const { data: current } = await supabase
     .from('invite_codes')
     .select('uses_count')
-    .eq('code', code)
+    .eq('code' as never, code as never)
     .single()
 
-  if (current) {
-    const currentCount = current.uses_count ?? 0
+  if (current && 'uses_count' in current) {
+    const currentCount = (current as unknown as { uses_count: number | null }).uses_count ?? 0
     await supabase
       .from('invite_codes')
-      .update({ uses_count: currentCount + 1 })
-      .eq('code', code)
+      .update({ uses_count: currentCount + 1 } as never)
+      .eq('code' as never, code as never)
   }
 }
 
@@ -116,12 +129,13 @@ export async function createTenantForUser(userId: string, email: string): Promis
   const { data: existingTenant } = await supabase
     .from('tenants')
     .select('id')
-    .eq('slug', tenantSlug)
+    .eq('slug' as never, tenantSlug as never)
     .single()
 
-  if (existingTenant) {
-    console.log('[createTenantForUser] Tenant already exists, reusing:', existingTenant.id)
-    return existingTenant.id
+  if (existingTenant && 'id' in existingTenant) {
+    const tenantId = (existingTenant as unknown as { id: string }).id
+    console.log('[createTenantForUser] Tenant already exists, reusing:', tenantId)
+    return tenantId
   }
 
   const tenantData: TenantInsert = {
@@ -132,15 +146,15 @@ export async function createTenantForUser(userId: string, email: string): Promis
 
   const { data: tenant, error } = await supabase
     .from('tenants')
-    .insert(tenantData)
+    .insert(tenantData as never)
     .select()
     .single()
 
-  if (error || !tenant) {
+  if (error || !tenant || !('id' in tenant)) {
     throw new Error('Failed to create tenant: ' + (error?.message ?? 'Unknown error'))
   }
 
-  return tenant.id
+  return (tenant as unknown as { id: string }).id
 }
 
 /**
@@ -163,7 +177,7 @@ export async function createUserProfile(
   const { data: existingProfile } = await supabase
     .from('user_profiles')
     .select('id')
-    .eq('id', userId)
+    .eq('id' as never, userId as never)
     .single()
 
   if (existingProfile) {
@@ -178,7 +192,7 @@ export async function createUserProfile(
     role: 'owner', // B2C: user is owner of their own tenant
   }
 
-  const { error } = await supabase.from('user_profiles').insert(profileData)
+  const { error } = await supabase.from('user_profiles').insert(profileData as never)
 
   if (error) {
     throw new Error('Failed to create user profile: ' + error.message)

@@ -72,7 +72,7 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   // Find all videos in this folder (display_path starts with folderPath/)
-  const allVideos = getAllVideos()
+  const allVideos = await getAllVideos()
   const videosToMove = allVideos.filter(
     v => v.displayPath.startsWith(`${folderPath}/`) || v.displayPath === folderPath
   )

@@ -34,7 +34,7 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   // Get all videos to find those in this folder
-  const allVideos = getAllVideos()
+  const allVideos = await getAllVideos()
 
   // Find videos in the old folder path
   const oldPathPrefix = oldPath + '/'

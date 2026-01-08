@@ -113,7 +113,7 @@ export function getOriginalPath(video: VideoFilePreview): string {
 
 /**
  * Collapse single-video folders to avoid unnecessary nesting.
- * Only collapses if the target folder doesn't already exist in local/data.
+ * Only collapses if the target folder doesn't already exist in local/processing.
  * Stops collapsing when reaching an existing folder.
  *
  * Example: "level1/level2/video.mp4" where level2 only has one video
@@ -171,7 +171,7 @@ export async function collapseSingleVideoFolders(
 
       // Collapse if the parent folder:
       // 1. Would only have this one video (from current upload batch)
-      // 2. Doesn't already exist in local/data
+      // 2. Doesn't already exist in local/processing
       if (folderCounts.get(parentFolder) === 1 && !existingFolders.has(parentFolder)) {
         totalCollapses++
 

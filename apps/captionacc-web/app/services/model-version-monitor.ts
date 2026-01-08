@@ -324,7 +324,7 @@ export async function runModelVersionCheck(): Promise<{
   errors: number
   changedVideos: Array<{ displayPath: string; oldVersion: string | null; newVersion: string }>
 }> {
-  const videos = getAllVideos()
+  const videos = await getAllVideos()
   const results: RecalculationResult[] = []
 
   console.log(
@@ -332,7 +332,7 @@ export async function runModelVersionCheck(): Promise<{
   )
 
   for (const video of videos) {
-    const dbPath = `${process.cwd()}/../../local/data/${video.storagePath}/annotations.db`
+    const dbPath = `${process.cwd()}/../../local/processing/${video.storagePath}/annotations.db`
     const result = checkVideoModelVersion(dbPath)
 
     if (result) {

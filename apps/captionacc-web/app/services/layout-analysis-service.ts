@@ -1464,8 +1464,8 @@ function transformLayoutConfig(row: VideoLayoutConfigRow): LayoutConfig {
  * @returns Layout configuration, or null if not found
  * @throws Error if database is not found
  */
-export function getLayoutConfig(videoId: string): LayoutConfig | null {
-  const result = getAnnotationDatabase(videoId)
+export async function getLayoutConfig(videoId: string): Promise<LayoutConfig | null> {
+  const result = await getAnnotationDatabase(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -1499,7 +1499,7 @@ export async function updateLayoutConfig(
   videoId: string,
   input: UpdateLayoutConfigInput
 ): Promise<UpdateLayoutConfigResult> {
-  const result = getWritableDatabase(videoId)
+  const result = await getWritableDatabase(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -1575,7 +1575,7 @@ export async function updateLayoutConfig(
  * @throws Error if database or required data is not found
  */
 export async function resetCropBounds(videoId: string): Promise<ResetCropBoundsResult> {
-  const result = getWritableDatabase(videoId)
+  const result = await getWritableDatabase(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -1669,8 +1669,8 @@ export async function resetCropBounds(videoId: string): Promise<ResetCropBoundsR
  * @param approved - Whether layout is approved
  * @throws Error if database is not found
  */
-export function setLayoutApproved(videoId: string, approved: boolean): void {
-  const result = getWritableDatabase(videoId)
+export async function setLayoutApproved(videoId: string, approved: boolean): Promise<void> {
+  const result = await getWritableDatabase(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -1846,8 +1846,11 @@ function processBox(
  * @returns Array of box data for visualization
  * @throws Error if database is not found
  */
-export function getLayoutAnalysisBoxes(videoId: string, frameIndex?: number): LayoutAnalysisBox[] {
-  const result = getWritableDatabase(videoId)
+export async function getLayoutAnalysisBoxes(
+  videoId: string,
+  frameIndex?: number
+): Promise<LayoutAnalysisBox[]> {
+  const result = await getWritableDatabase(videoId)
   if (!result.success) throw new Error('Database not found')
   const db = result.db
 

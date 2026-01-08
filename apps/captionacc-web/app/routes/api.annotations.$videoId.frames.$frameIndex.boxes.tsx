@@ -35,7 +35,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
   if (!frameIndexResult.success) return frameIndexResult.response
 
   try {
-    const result = getFrameBoxes(videoIdResult.value, frameIndexResult.value)
+    const result = await getFrameBoxes(videoIdResult.value, frameIndexResult.value)
     return jsonResponse(result)
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error'
@@ -76,7 +76,11 @@ export async function action({ params, request }: ActionFunctionArgs) {
   }
 
   try {
-    const result = saveBoxAnnotations(videoIdResult.value, frameIndexResult.value, annotations)
+    const result = await saveBoxAnnotations(
+      videoIdResult.value,
+      frameIndexResult.value,
+      annotations
+    )
     return jsonResponse({
       success: result.success,
       annotatedCount: result.annotatedCount,

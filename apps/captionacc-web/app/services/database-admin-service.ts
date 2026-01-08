@@ -19,7 +19,7 @@ import Database from 'better-sqlite3'
 import { getSchemaPath } from '~/db/schema-loader'
 import { parseSchemaNames, type TableSchemaNames } from '~/utils/schema-parser'
 
-const LOCAL_DATA_DIR = process.env['LOCAL_DATA_DIR'] ?? '../../local/data'
+const LOCAL_DATA_DIR = process.env['LOCAL_DATA_DIR'] ?? '../../local/processing'
 
 // Get __dirname for path resolution
 const __filename = fileURLToPath(import.meta.url)
@@ -88,7 +88,7 @@ function findAllDatabases(): string[] {
 
 /**
  * Extract video ID from database path
- * Path format: .../local/data/{hash}/{uuid}/annotations.db
+ * Path format: .../local/processing/{hash}/{uuid}/annotations.db
  */
 function extractVideoId(dbPath: string): string {
   const parts = dbPath.split('/')

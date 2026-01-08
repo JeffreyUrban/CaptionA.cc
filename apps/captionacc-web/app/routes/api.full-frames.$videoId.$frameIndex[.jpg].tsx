@@ -19,7 +19,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
   }
 
   // Construct path to annotations.db
-  const dbPath = getDbPath(videoId)
+  const dbPath = await getDbPath(videoId)
   if (!dbPath) {
     return new Response('Video not found', { status: 404 })
   }

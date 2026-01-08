@@ -31,13 +31,13 @@ export async function action({ request }: ActionFunctionArgs) {
   const newPath = pathParts.join('/')
 
   // Check if old video exists by resolving its display path
-  const dbPath = getDbPath(oldPath)
+  const dbPath = await getDbPath(oldPath)
   if (!dbPath) {
     return Response.json({ error: 'Video does not exist' }, { status: 404 })
   }
 
   // Check if new path already exists
-  const existingNewPath = resolveDisplayPath(newPath)
+  const existingNewPath = await resolveDisplayPath(newPath)
   if (existingNewPath) {
     return Response.json({ error: 'A video with this name already exists' }, { status: 409 })
   }

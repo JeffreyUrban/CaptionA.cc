@@ -31,7 +31,7 @@ export async function generateCombinedImage(
   startFrame: number,
   endFrame: number
 ): Promise<string> {
-  const dbPath = getDbPath(videoPath)
+  const dbPath = await getDbPath(videoPath)
   if (!dbPath) {
     throw new Error(`Database not found for video: ${videoPath}`)
   }
@@ -101,7 +101,7 @@ export async function generateCombinedImage(
   }
 
   // Create output directory if it doesn't exist
-  const videoDir = getVideoDir(videoPath)
+  const videoDir = await getVideoDir(videoPath)
   if (!videoDir) {
     throw new Error(`Video directory not found for: ${videoPath}`)
   }
@@ -136,8 +136,11 @@ export async function generateCombinedImage(
  * @param annotationId - Annotation ID
  * @returns Path to combined image if it exists, null otherwise
  */
-export function getCombinedImagePath(videoPath: string, annotationId: number): string | null {
-  const videoDir = getVideoDir(videoPath)
+export async function getCombinedImagePath(
+  videoPath: string,
+  annotationId: number
+): Promise<string | null> {
+  const videoDir = await getVideoDir(videoPath)
   if (!videoDir) {
     return null
   }
@@ -162,7 +165,7 @@ export async function getOrGenerateCombinedImage(
   startFrame: number,
   endFrame: number
 ): Promise<string> {
-  const videoDir = getVideoDir(videoPath)
+  const videoDir = await getVideoDir(videoPath)
   if (!videoDir) {
     throw new Error(`Video directory not found for: ${videoPath}`)
   }
@@ -264,8 +267,8 @@ export async function getOrGenerateCombinedImage(
  * @param videoPath - Relative path to video
  * @param annotationId - Annotation ID
  */
-export function deleteCombinedImage(videoPath: string, annotationId: number): void {
-  const videoDir = getVideoDir(videoPath)
+export async function deleteCombinedImage(videoPath: string, annotationId: number): Promise<void> {
+  const videoDir = await getVideoDir(videoPath)
   if (!videoDir) {
     return
   }

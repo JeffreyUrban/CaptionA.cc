@@ -40,11 +40,11 @@ const MAX_CROP_FRAMES_RETRIES = 123
  * Queue a crop_frames job
  * Called when user approves layout annotation or during auto-recovery
  */
-export function queueCropFramesProcessing(job: CropFramesJob): void {
+export async function queueCropFramesProcessing(job: CropFramesJob): Promise<void> {
   console.log(`[CropFramesQueue] Queuing ${job.videoPath} (queue size: ${cropFramesQueue.length})`)
 
   // Immediately create status record so badge system shows "Queued" state
-  const dbPath = getDbPath(job.videoId)
+  const dbPath = await getDbPath(job.videoId)
   if (dbPath && existsSync(dbPath)) {
     try {
       const db = new Database(dbPath)
@@ -125,12 +125,12 @@ async function processCropFramesJob(job: CropFramesJob): Promise<void> {
   console.log(`[CropFrames] Starting crop_frames for ${videoPath}`)
 
   // Validate paths
-  const dbPath = getDbPath(videoId)
+  const dbPath = await getDbPath(videoId)
   if (!dbPath) {
     throw new Error(`Database not found for ${videoPath}`)
   }
 
-  const videoDir = getVideoDir(videoId)
+  const videoDir = await getVideoDir(videoId)
   if (!videoDir) {
     throw new Error(`Video directory not found for ${videoPath}`)
   }
@@ -636,8 +636,8 @@ function recoverStalledProcess(
  * Recover stalled crop_frames jobs on server startup
  * Also auto-triggers processing if layout approved but crop_frames never started
  */
-export function recoverStalledCropFrames(videoId: string, videoPath: string): void {
-  const dbPath = getDbPath(videoId)
+export async function recoverStalledCropFrames(videoId: string, videoPath: string): Promise<void> {
+  const dbPath = await getDbPath(videoId)
   if (!dbPath || !existsSync(dbPath)) {
     return
   }

@@ -45,7 +45,7 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   // Get video metadata
-  const metadata = getVideoMetadata(videoPath)
+  const metadata = await getVideoMetadata(videoPath)
   if (!metadata) {
     return Response.json({ error: 'Video not found' }, { status: 404 })
   }
@@ -63,7 +63,7 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   // Check for name conflict in target folder
-  const allVideos = getAllVideos()
+  const allVideos = await getAllVideos()
   const conflictingVideo = allVideos.find(
     v => v.displayPath === newPath && v.storagePath !== metadata.storagePath
   )

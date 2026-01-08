@@ -51,7 +51,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
     }
 
     // Delegate to service layer
-    const result = bulkAnnotateRectangle(videoIdResult.value, frameIndexResult.value, {
+    const result = await bulkAnnotateRectangle(videoIdResult.value, frameIndexResult.value, {
       rectangle,
       action,
     })

@@ -110,7 +110,7 @@ class UploadManager {
   /**
    * Create and start a TUS upload instance
    */
-  private createTusUpload(uploadId: string, retryCount: number = 0): void {
+  private async createTusUpload(uploadId: string, retryCount: number = 0): Promise<void> {
     const store = useUploadStore.getState()
     const uploadMetadata = store.activeUploads[uploadId]
     const file = this.uploadFiles.get(uploadId)
@@ -142,6 +142,12 @@ class UploadManager {
       `[UploadManager] Starting ${uploadMetadata.relativePath} (attempt ${retryCount + 1}/${MAX_RETRIES + 1})`
     )
 
+    // Get auth token from Supabase session
+    const { supabase } = await import('~/services/supabase-client')
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+
     const upload = new tus.Upload(file, {
       endpoint: '/api/upload',
       retryDelays: RETRY_DELAYS,
@@ -153,6 +159,12 @@ class UploadManager {
         filetype: uploadMetadata.fileType,
         videoPath,
       },
+
+      headers: session?.access_token
+        ? {
+            Authorization: `Bearer ${session.access_token}`,
+          }
+        : {},
 
       onError: (error: Error | tus.DetailedError) => {
         // Log full error details for debugging

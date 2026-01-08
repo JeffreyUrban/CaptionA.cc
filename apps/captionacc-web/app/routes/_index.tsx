@@ -1,5 +1,4 @@
-import type { LoaderFunctionArgs, MetaFunction } from 'react-router'
-import { redirect } from 'react-router'
+import { redirect, type LoaderFunctionArgs, type MetaFunction } from 'react-router'
 
 import { supabase } from '~/services/supabase-client'
 import { ThemeSwitcher } from '~/components/ThemeSwitcher'

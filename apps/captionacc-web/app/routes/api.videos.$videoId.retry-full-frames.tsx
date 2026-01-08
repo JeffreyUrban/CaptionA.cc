@@ -24,7 +24,7 @@ export async function action({ params }: ActionFunctionArgs) {
   const videoId = decodeURIComponent(encodedVideoId)
 
   try {
-    const dbPath = getDbPath(videoId)
+    const dbPath = await getDbPath(videoId)
     if (!dbPath) {
       return new Response(JSON.stringify({ error: 'Video not found' }), {
         status: 404,
@@ -78,7 +78,7 @@ export async function action({ params }: ActionFunctionArgs) {
       videoPath = metadata?.display_path ?? videoId
 
       // Find video file
-      const videoDir = getVideoDir(videoId)
+      const videoDir = await getVideoDir(videoId)
       if (!videoDir) {
         return new Response(
           JSON.stringify({
@@ -161,7 +161,7 @@ export async function action({ params }: ActionFunctionArgs) {
     }
 
     // Queue the full_frames job immediately via Prefect
-    const videoDir = getVideoDir(videoId)
+    const videoDir = await getVideoDir(videoId)
     if (!videoDir) {
       throw new Error('Failed to resolve video directory')
     }

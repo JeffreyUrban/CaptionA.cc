@@ -39,14 +39,21 @@ if (import.meta.env.DEV) {
  * IMPORTANT: Uses localStorage (default) for JWT token storage
  * This is the standard Supabase pattern - simple and adequate security with proper XSS prevention
  */
-export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true,
-    // Using default storage (localStorage) - no custom storage needed
-  },
-})
+export const supabase = createClient<Database, 'captionacc_production'>(
+  supabaseUrl,
+  supabaseAnonKey,
+  {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+      // Using default storage (localStorage) - no custom storage needed
+    },
+    db: {
+      schema: 'captionacc_production',
+    },
+  }
+)
 
 /**
  * Create a Supabase client for server-side operations
@@ -61,10 +68,13 @@ export function createServerSupabaseClient() {
   const serviceRoleKey =
     import.meta.env['VITE_SUPABASE_SERVICE_ROLE_KEY'] || LOCAL_SUPABASE_SERVICE_ROLE_KEY
 
-  return createClient<Database>(supabaseUrl, serviceRoleKey, {
+  return createClient<Database, 'captionacc_production'>(supabaseUrl, serviceRoleKey, {
     auth: {
       persistSession: false,
       autoRefreshToken: false,
+    },
+    db: {
+      schema: 'captionacc_production',
     },
   })
 }
@@ -90,14 +100,22 @@ export async function getCurrentUser() {
  * Get the user's tenant ID from their profile
  */
 export async function getUserTenantId(userId: string): Promise<string | null> {
-  const { data, error } = await supabase.from('user_profiles').select('*').eq('id', userId).single()
+  const { data, error } = await supabase
+    .from('user_profiles')
+    .select('*')
+    .eq('id' as never, userId as never)
+    .single()
 
   if (error) {
     console.error('Error fetching user tenant:', error)
     return null
   }
 
-  return data?.tenant_id ?? null
+  if (data && 'tenant_id' in data) {
+    return (data as unknown as { tenant_id: string | null }).tenant_id ?? null
+  }
+
+  return null
 }
 
 /**

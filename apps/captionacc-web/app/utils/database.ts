@@ -62,7 +62,7 @@ export interface TransactionOptions {
  * @returns DatabaseResult with database instance or error response
  *
  * @example
- * const result = getAnnotationDatabase(videoId)
+ * const result = await getAnnotationDatabase(videoId)
  * if (!result.success) return result.response
  * const db = result.db
  * try {
@@ -71,8 +71,11 @@ export interface TransactionOptions {
  *   db.close()
  * }
  */
-export function getAnnotationDatabase(videoId: string): DatabaseResult {
-  const dbPath = getDbPath(videoId)
+export async function getAnnotationDatabase(videoId: string): Promise<DatabaseResult> {
+  const { existsSync } = await import('fs')
+  const Database = (await import('better-sqlite3')).default
+
+  const dbPath = await getDbPath(videoId)
   if (!dbPath) {
     return {
       success: false,
@@ -111,8 +114,11 @@ export function getAnnotationDatabase(videoId: string): DatabaseResult {
  * @param videoId - Video identifier (UUID or display path)
  * @returns DatabaseResult with database instance or error response
  */
-export function getWritableDatabase(videoId: string): DatabaseResult {
-  const dbPath = getDbPath(videoId)
+export async function getWritableDatabase(videoId: string): Promise<DatabaseResult> {
+  const { existsSync } = await import('fs')
+  const Database = (await import('better-sqlite3')).default
+
+  const dbPath = await getDbPath(videoId)
   if (!dbPath) {
     return {
       success: false,
@@ -158,15 +164,18 @@ export function getWritableDatabase(videoId: string): DatabaseResult {
  * @returns DatabaseResult with database instance or error response
  *
  * @example
- * const result = getOrCreateAnnotationDatabase(videoId)
+ * const result = await getOrCreateAnnotationDatabase(videoId)
  * if (!result.success) return result.response
  * const { db, created } = result
  */
-export function getOrCreateAnnotationDatabase(
+export async function getOrCreateAnnotationDatabase(
   videoId: string
-): DatabaseResult & { created?: boolean } {
+): Promise<DatabaseResult & { created?: boolean }> {
+  const { existsSync } = await import('fs')
+  const Database = (await import('better-sqlite3')).default
+
   // First check if video directory exists
-  const videoDir = getVideoDir(videoId)
+  const videoDir = await getVideoDir(videoId)
   if (!videoDir) {
     return {
       success: false,
@@ -174,7 +183,7 @@ export function getOrCreateAnnotationDatabase(
     }
   }
 
-  const dbPath = getDbPath(videoId)
+  const dbPath = await getDbPath(videoId)
   const dbExists = dbPath !== null && existsSync(dbPath)
 
   // If dbPath is null but videoDir exists, we need to construct the path
@@ -248,11 +257,11 @@ export async function withDatabase<T extends Response>(
   // Get database connection
   let result: DatabaseResult & { created?: boolean }
   if (createIfMissing) {
-    result = getOrCreateAnnotationDatabase(videoId)
+    result = await getOrCreateAnnotationDatabase(videoId)
   } else if (readonly) {
-    result = getAnnotationDatabase(videoId)
+    result = await getAnnotationDatabase(videoId)
   } else {
-    result = getWritableDatabase(videoId)
+    result = await getWritableDatabase(videoId)
   }
 
   if (!result.success) {
@@ -322,7 +331,9 @@ export async function withDatabaseNoTransaction<T extends Response>(
 ): Promise<T | Response> {
   const { readonly = false } = options
 
-  const result = readonly ? getAnnotationDatabase(videoId) : getWritableDatabase(videoId)
+  const result = readonly
+    ? await getAnnotationDatabase(videoId)
+    : await getWritableDatabase(videoId)
 
   if (!result.success) {
     return result.response

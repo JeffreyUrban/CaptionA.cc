@@ -84,7 +84,7 @@ async function cleanupVideo(videoId: string, videoDir: string, pid: string | nul
   console.log(`[VideoDelete] Starting cleanup for: ${videoId}`)
 
   // Get the UUID for Prefect flow cancellation
-  const metadata = getVideoMetadata(videoId)
+  const metadata = await getVideoMetadata(videoId)
   if (metadata?.videoId) {
     await cancelPrefectFlows(metadata.videoId)
   }
@@ -145,8 +145,8 @@ export async function action({ params }: ActionFunctionArgs) {
 
   try {
     // Resolve video paths (videoId can be display_path or UUID)
-    const dbPath = getDbPath(videoId)
-    const videoDir = getVideoDir(videoId)
+    const dbPath = await getDbPath(videoId)
+    const videoDir = await getVideoDir(videoId)
 
     if (!dbPath || !videoDir) {
       return new Response(

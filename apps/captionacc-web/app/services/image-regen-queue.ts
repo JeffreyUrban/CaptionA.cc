@@ -25,7 +25,7 @@ export async function regenerateAnnotationImage(
   videoId: string,
   annotationId: number
 ): Promise<boolean> {
-  const result = getWritableDatabase(videoId)
+  const result = await getWritableDatabase(videoId)
   if (!result.success) {
     console.error(`[ImageRegenQueue] Database not found for video: ${videoId}`)
     return false
@@ -91,7 +91,7 @@ export async function processPendingRegenerations(
 ): Promise<number> {
   try {
     // Get all annotations needing regeneration
-    const annotations = listAnnotations(videoId, 0, 999999, false, undefined)
+    const annotations = await listAnnotations(videoId, 0, 999999, false, undefined)
 
     const needingRegen = annotations
       .filter(ann => ann.imageNeedsRegen)
@@ -131,8 +131,8 @@ export async function processPendingRegenerations(
  * @param videoId - Video identifier
  * @returns Number of annotations needing regeneration
  */
-export function getPendingRegenerationCount(videoId: string): number {
-  const result = getWritableDatabase(videoId)
+export async function getPendingRegenerationCount(videoId: string): Promise<number> {
+  const result = await getWritableDatabase(videoId)
   if (!result.success) {
     return 0
   }

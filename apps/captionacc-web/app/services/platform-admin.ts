@@ -6,6 +6,7 @@
  */
 
 import { createServerSupabaseClient } from './supabase-client'
+import type { Database } from '~/types/supabase'
 
 /**
  * Check if a user is a platform admin
@@ -19,7 +20,7 @@ export async function isPlatformAdmin(userId: string): Promise<boolean> {
   const { data, error } = await supabase
     .from('platform_admins')
     .select('user_id, admin_level, revoked_at')
-    .eq('user_id', userId)
+    .eq('user_id' as never, userId as never)
     .is('revoked_at', null)
     .single()
 
@@ -64,9 +65,10 @@ export async function requirePlatformAdmin(request: Request): Promise<string> {
     process.env['VITE_SUPABASE_ANON_KEY'] ||
     'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0'
 
-  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  const supabase = createClient<Database, 'captionacc_production'>(supabaseUrl, supabaseAnonKey, {
     auth: { persistSession: false, autoRefreshToken: false },
     global: { headers: { Authorization: `Bearer ${accessToken}` } },
+    db: { schema: 'captionacc_production' },
   })
 
   // Get user from access token
@@ -103,7 +105,7 @@ export async function getPlatformAdminLevel(
   const { data, error } = await supabase
     .from('platform_admins')
     .select('admin_level')
-    .eq('user_id', userId)
+    .eq('user_id' as never, userId as never)
     .is('revoked_at', null)
     .single()
 

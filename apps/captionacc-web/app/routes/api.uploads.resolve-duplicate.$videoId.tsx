@@ -23,7 +23,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
   }
 
   // Get database path for this video
-  const dbPath = getDbPath(videoId)
+  const dbPath = await getDbPath(videoId)
   if (!dbPath) {
     return Response.json({ error: 'Video not found' }, { status: 404 })
   }
@@ -96,7 +96,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       console.log(`[DuplicateResolution] Keeping both: ${videoMetadata.display_path}`)
     } else if (decision === 'replace_existing') {
       // Hard delete the existing video and finalize this one
-      const duplicateDbPath = getDbPath(duplicateInfo.duplicate_of_video_id)
+      const duplicateDbPath = await getDbPath(duplicateInfo.duplicate_of_video_id)
       if (duplicateDbPath) {
         const duplicateDb = new Database(duplicateDbPath)
 

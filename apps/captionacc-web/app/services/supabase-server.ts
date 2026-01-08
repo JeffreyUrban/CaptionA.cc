@@ -12,6 +12,14 @@ const supabaseAnonKey =
   process.env['VITE_SUPABASE_ANON_KEY'] ||
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0'
 
+interface CookieOptions {
+  path?: string
+  maxAge?: number
+  sameSite?: 'Lax' | 'Strict' | 'None'
+  secure?: boolean
+  httpOnly?: boolean
+}
+
 /**
  * Create a Supabase client for server-side use with cookie access
  *
@@ -23,22 +31,23 @@ const supabaseAnonKey =
 export function createSupabaseServerClient(request: Request, responseHeaders: Headers) {
   return createServerClient<Database>(supabaseUrl, supabaseAnonKey, {
     cookies: {
-      get(name: string) {
+      getAll() {
         const cookies = request.headers.get('Cookie')
-        if (!cookies) return undefined
+        if (!cookies) return []
 
-        const cookie = cookies.split(';').find(c => c.trim().startsWith(`${name}=`))
-        if (!cookie) return undefined
-
-        return cookie.split('=')[1]
+        return cookies
+          .split(';')
+          .map(cookie => {
+            const [name, ...valueParts] = cookie.trim().split('=')
+            return { name: name || '', value: valueParts.join('=') || '' }
+          })
+          .filter(cookie => cookie.name && cookie.value)
       },
-      set(name: string, value: string, options: any) {
-        const cookieString = `${name}=${value}; Path=${options.path || '/'}; Max-Age=${options.maxAge || 3600}; SameSite=${options.sameSite || 'Lax'}${options.secure ? '; Secure' : ''}${options.httpOnly ? '; HttpOnly' : ''}`
-        responseHeaders.append('Set-Cookie', cookieString)
-      },
-      remove(name: string, options: any) {
-        const cookieString = `${name}=; Path=${options.path || '/'}; Max-Age=0`
-        responseHeaders.append('Set-Cookie', cookieString)
+      setAll(cookiesToSet) {
+        cookiesToSet.forEach(({ name, value, options }) => {
+          const cookieString = `${name}=${value}; Path=${options?.path || '/'}; Max-Age=${options?.maxAge || 3600}; SameSite=${options?.sameSite || 'Lax'}${options?.secure ? '; Secure' : ''}${options?.httpOnly ? '; HttpOnly' : ''}`
+          responseHeaders.append('Set-Cookie', cookieString)
+        })
       },
     },
   })

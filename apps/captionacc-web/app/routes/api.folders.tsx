@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'fs'
 import { resolve } from 'path'
 
 import type { FoldersMetadata } from '~/types/videos'
-import { getAllVideos } from '~/utils/video-paths'
+import { getAllVideos, type VideoMetadata } from '~/utils/video-paths'
 
 interface FolderItem {
   path: string
@@ -15,7 +15,7 @@ interface FolderItem {
  * - "a_bite_of_china"
  * - "a_bite_of_china/1"
  */
-function extractFoldersFromVideos(videos: ReturnType<typeof getAllVideos>): FolderItem[] {
+function extractFoldersFromVideos(videos: VideoMetadata[]): FolderItem[] {
   const folderSet = new Set<string>()
 
   // Extract all folder paths from video display paths
@@ -64,7 +64,7 @@ function getEmptyFolders(): string[] {
  */
 export async function loader() {
   // Get all videos and extract their folder paths
-  const videos = getAllVideos()
+  const videos = await getAllVideos()
   const folders = extractFoldersFromVideos(videos)
 
   // Add empty folders from metadata
