@@ -45,7 +45,7 @@ CREATE POLICY "Users can view tenant thumbnails"
   USING (
     bucket_id = 'thumbnails'
     AND (storage.foldername(name))[1] IN (
-      SELECT tenant_id::text FROM user_profiles WHERE id = auth.uid()
+      SELECT tenant_id::text FROM captionacc_production.user_profiles WHERE id = auth.uid()
     )
   );
 
@@ -54,7 +54,7 @@ CREATE POLICY "Users can upload thumbnails for tenant"
   WITH CHECK (
     bucket_id = 'thumbnails'
     AND (storage.foldername(name))[1] IN (
-      SELECT tenant_id::text FROM user_profiles WHERE id = auth.uid()
+      SELECT tenant_id::text FROM captionacc_production.user_profiles WHERE id = auth.uid()
     )
   );
 
@@ -63,7 +63,7 @@ CREATE POLICY "Users can update tenant thumbnails"
   USING (
     bucket_id = 'thumbnails'
     AND (storage.foldername(name))[1] IN (
-      SELECT tenant_id::text FROM user_profiles WHERE id = auth.uid()
+      SELECT tenant_id::text FROM captionacc_production.user_profiles WHERE id = auth.uid()
     )
   );
 
@@ -72,7 +72,7 @@ CREATE POLICY "Users can delete tenant thumbnails"
   USING (
     bucket_id = 'thumbnails'
     AND (storage.foldername(name))[1] IN (
-      SELECT tenant_id::text FROM user_profiles WHERE id = auth.uid()
+      SELECT tenant_id::text FROM captionacc_production.user_profiles WHERE id = auth.uid()
     )
   );
 
@@ -82,7 +82,7 @@ CREATE POLICY "Users can view tenant videos"
   USING (
     bucket_id = 'videos'
     AND (storage.foldername(name))[1] IN (
-      SELECT tenant_id::text FROM user_profiles WHERE id = auth.uid()
+      SELECT tenant_id::text FROM captionacc_production.user_profiles WHERE id = auth.uid()
     )
   );
 
@@ -91,7 +91,7 @@ CREATE POLICY "Users can upload videos for tenant"
   WITH CHECK (
     bucket_id = 'videos'
     AND (storage.foldername(name))[1] IN (
-      SELECT tenant_id::text FROM user_profiles WHERE id = auth.uid()
+      SELECT tenant_id::text FROM captionacc_production.user_profiles WHERE id = auth.uid()
     )
   );
 
@@ -100,7 +100,7 @@ CREATE POLICY "Users can update tenant videos"
   USING (
     bucket_id = 'videos'
     AND (storage.foldername(name))[1] IN (
-      SELECT tenant_id::text FROM user_profiles WHERE id = auth.uid()
+      SELECT tenant_id::text FROM captionacc_production.user_profiles WHERE id = auth.uid()
     )
   );
 
@@ -109,7 +109,7 @@ CREATE POLICY "Users can delete tenant videos"
   USING (
     bucket_id = 'videos'
     AND (storage.foldername(name))[1] IN (
-      SELECT tenant_id::text FROM user_profiles WHERE id = auth.uid()
+      SELECT tenant_id::text FROM captionacc_production.user_profiles WHERE id = auth.uid()
     )
   );
 
@@ -119,7 +119,7 @@ CREATE POLICY "Users can view tenant databases"
   USING (
     bucket_id = 'databases'
     AND (storage.foldername(name))[1] IN (
-      SELECT tenant_id::text FROM user_profiles WHERE id = auth.uid()
+      SELECT tenant_id::text FROM captionacc_production.user_profiles WHERE id = auth.uid()
     )
   );
 
@@ -128,7 +128,7 @@ CREATE POLICY "Users can upload databases for tenant"
   WITH CHECK (
     bucket_id = 'databases'
     AND (storage.foldername(name))[1] IN (
-      SELECT tenant_id::text FROM user_profiles WHERE id = auth.uid()
+      SELECT tenant_id::text FROM captionacc_production.user_profiles WHERE id = auth.uid()
     )
   );
 
@@ -137,7 +137,7 @@ CREATE POLICY "Users can update tenant databases"
   USING (
     bucket_id = 'databases'
     AND (storage.foldername(name))[1] IN (
-      SELECT tenant_id::text FROM user_profiles WHERE id = auth.uid()
+      SELECT tenant_id::text FROM captionacc_production.user_profiles WHERE id = auth.uid()
     )
   );
 
@@ -146,12 +146,12 @@ CREATE POLICY "Users can delete tenant databases"
   USING (
     bucket_id = 'databases'
     AND (storage.foldername(name))[1] IN (
-      SELECT tenant_id::text FROM user_profiles WHERE id = auth.uid()
+      SELECT tenant_id::text FROM captionacc_production.user_profiles WHERE id = auth.uid()
     )
   );
 
 -- Create demo tenant
-INSERT INTO tenants (id, name, slug, storage_quota_gb)
+INSERT INTO captionacc_production.tenants (id, name, slug, storage_quota_gb)
 VALUES
   ('00000000-0000-0000-0000-000000000001', 'Demo Organization', 'demo', 100)
 ON CONFLICT (id) DO NOTHING;

@@ -36,11 +36,13 @@ jobs:
         if: steps.check-python.outputs.has_python == 'true'
 
         uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
 
       - name: Install dependencies
         if: steps.check-python.outputs.has_python == 'true'
 
-        run: uv sync --all-extras
+        run: uv sync --only-group dev
 
       - name: Lint with ruff
         if: steps.check-python.outputs.has_python == 'true'
@@ -138,6 +140,8 @@ jobs:
         if: steps.check-python.outputs.has_python == 'true'
 
         uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
 
       - name: Install dependencies
         if: steps.check-python.outputs.has_python == 'true'
@@ -181,6 +185,8 @@ jobs:
       - name: Install uv
         if: steps.check-python.outputs.has_python == 'true'
         uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
 
       - name: Install dependencies
         if: steps.check-python.outputs.has_python == 'true'
