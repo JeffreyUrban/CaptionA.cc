@@ -39,8 +39,8 @@ primary_region = "ewr"
 
 [[vm]]
   cpu_kind = "shared"
-  cpus = 2
-  memory_mb = 2048
+  cpus = 1
+  memory_mb = 256
 
 # Health check
 [[http_service.checks]]
