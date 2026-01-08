@@ -2,7 +2,7 @@
 # Naming convention: captionacc-{service-name}
 # This keeps all CaptionA.cc services grouped together
 app = "captionacc-ocr"
-primary_region = "ord"  # Chicago - change to your preferred region
+primary_region = "ewr"
 
 [build]
   dockerfile = "Dockerfile"

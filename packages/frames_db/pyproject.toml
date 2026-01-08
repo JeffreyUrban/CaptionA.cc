@@ -51,6 +51,9 @@ root = "../.."
 [tool.hatch.build.targets.wheel]
 packages = ["src/frames_db"]
 
+[tool.hatch.build.hooks.vcs]
+version-file = "src/frames_db/_version.py"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
@@ -75,6 +78,3 @@ exclude_lines = [
     "if __name__ == .__main__.:",
     "if TYPE_CHECKING:",
 ]
-
-[tool.hatch.build.hooks.vcs]
-version-file = "src/frames_db/_version.py"

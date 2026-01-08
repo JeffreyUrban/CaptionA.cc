@@ -1,12 +1,17 @@
-app = 'captionacc-umami'
-primary_region = 'sjc'
+app = 'umami'
+primary_region = 'ewr'
 
 [build]
   image = 'ghcr.io/umami-software/umami:postgresql-latest'
 
+[experimental]
+  enable_consul = false
+  private_network = false
+
 [env]
   DATABASE_TYPE = 'postgresql'
   PORT = '3000'
+  NODE_OPTIONS = '--dns-result-order=ipv4first'
 
 [http_service]
   internal_port = 3000
