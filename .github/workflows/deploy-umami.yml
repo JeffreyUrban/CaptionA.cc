@@ -1,13 +1,13 @@
-name: Deploy OCR Service
+name: Deploy Umami Analytics
 
 on:
   push:
     branches:
       - main
     paths:
-      # Only trigger when OCR service files change
-      - 'services/ocr-service/**'
-      - '.github/workflows/deploy-ocr-service.yml'
+      # Only trigger when Umami service files change
+      - 'infrastructure/umami/**'
+      - '.github/workflows/deploy-umami.yml'
   workflow_dispatch:  # Allow manual triggers
 
 jobs:
@@ -27,7 +27,7 @@ jobs:
 
       - name: Deploy to Fly.io
         run: flyctl deploy --remote-only
-        working-directory: ./services/ocr-service
+        working-directory: ./infrastructure/umami
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
@@ -37,12 +37,12 @@ jobs:
           sleep 10
 
           # Get the app URL from fly.toml app name
-          APP_URL="captionacc-ocr.fly.dev"
+          APP_URL="umami.fly.dev"
 
-          # Health check
+          # Health check (Umami root path)
           curl -f https://${APP_URL}/ || exit 1
 
           echo "✅ Deployment successful: https://${APP_URL}"
-        working-directory: ./services/ocr-service
+        working-directory: ./infrastructure/umami
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
