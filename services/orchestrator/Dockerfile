@@ -17,11 +17,8 @@ WORKDIR /app
 COPY packages/frames_db ./packages/frames_db
 COPY packages/vp9_utils ./packages/vp9_utils
 
-# Install local packages with VCS version override for Docker builds
-# frames_db uses hatch-vcs which needs git context, so we set a pretend version
-ENV SETUPTOOLS_SCM_PRETEND_VERSION_FOR_FRAMES_DB=0.1.dev0
+# Install local packages (frames_db uses fallback version when .git is not available)
 RUN pip install --no-cache-dir ./packages/frames_db ./packages/vp9_utils
-ENV SETUPTOOLS_SCM_PRETEND_VERSION_FOR_FRAMES_DB=
 
 # Copy orchestrator code
 COPY services/orchestrator/ .
