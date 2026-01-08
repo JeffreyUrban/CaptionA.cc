@@ -36,32 +36,15 @@ if (import.meta.env.DEV) {
  * Create a Supabase client for use in client-side code
  * Uses the anon key which respects RLS policies
  *
- * IMPORTANT: Uses cookie storage (not localStorage) so sessions are accessible server-side
+ * IMPORTANT: Uses localStorage (default) for JWT token storage
+ * This is the standard Supabase pattern - simple and adequate security with proper XSS prevention
  */
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
-    storage: {
-      getItem: key => {
-        if (typeof document === 'undefined') return null
-        const cookies = document.cookie.split(';')
-        const cookie = cookies.find(c => c.trim().startsWith(`${key}=`))
-        if (!cookie) return null
-        const value = cookie.split('=')[1]
-        if (!value) return null
-        return decodeURIComponent(value)
-      },
-      setItem: (key, value) => {
-        if (typeof document === 'undefined') return
-        document.cookie = `${key}=${encodeURIComponent(value)}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax`
-      },
-      removeItem: key => {
-        if (typeof document === 'undefined') return
-        document.cookie = `${key}=; path=/; max-age=0`
-      },
-    },
+    // Using default storage (localStorage) - no custom storage needed
   },
 })
 

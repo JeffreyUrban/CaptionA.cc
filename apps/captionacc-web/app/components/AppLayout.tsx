@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Link, useLocation, useNavigate, useMatches } from 'react-router'
+import { useState, useEffect } from 'react'
+import { Link, useLocation, useNavigate } from 'react-router'
 
 import { ThemeSwitcher } from '~/components/ThemeSwitcher'
 import { UploadProgress } from '~/components/UploadProgress'
@@ -84,13 +84,33 @@ interface AppLayoutProps {
 
 export function AppLayout({ children, fullScreen = false }: AppLayoutProps) {
   const location = useLocation()
-  const matches = useMatches()
+  const { session } = useAuth()
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false)
 
-  // Get admin status from root loader (server-side)
-  const rootData = matches.find(match => match.id === 'root')?.data as
-    | { isPlatformAdmin: boolean }
-    | undefined
-  const isPlatformAdmin = rootData?.isPlatformAdmin ?? false
+  // Fetch admin status client-side when user is authenticated
+  useEffect(() => {
+    async function checkAdminStatus() {
+      if (!session?.access_token) {
+        setIsPlatformAdmin(false)
+        return
+      }
+
+      try {
+        const response = await fetch('/api/auth/is-platform-admin', {
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        })
+        const data = (await response.json()) as { isPlatformAdmin: boolean }
+        setIsPlatformAdmin(data.isPlatformAdmin)
+      } catch (error) {
+        console.error('Failed to check admin status:', error)
+        setIsPlatformAdmin(false)
+      }
+    }
+
+    void checkAdminStatus()
+  }, [session?.access_token])
 
   // Build navigation items dynamically
   const navItems = [...navigation]

@@ -5,8 +5,6 @@
  * Platform admins have cross-tenant access for system administration.
  */
 
-import { redirect } from 'react-router'
-
 import { createServerSupabaseClient } from './supabase-client'
 
 /**
@@ -33,47 +31,58 @@ export async function isPlatformAdmin(userId: string): Promise<boolean> {
 }
 
 /**
- * Require platform admin access for a route
+ * Require platform admin access for API routes
  *
- * Call this in route loaders to protect admin routes.
- * Throws a redirect to /login if not authenticated or not a platform admin.
+ * Call this in API route loaders to protect admin endpoints.
+ * Expects Authorization header with Bearer token.
+ * Throws appropriate error responses if not authenticated or not a platform admin.
  *
  * @param request - The request object from the loader
  * @returns The authenticated user ID if platform admin
- * @throws Redirect to login if not authenticated or not admin
+ * @throws Response with error status if not authenticated or not admin
  *
  * @example
  * export async function loader({ request }: LoaderFunctionArgs) {
- *   const responseHeaders = new Headers()
- *   await requirePlatformAdmin(request, responseHeaders)
+ *   const userId = await requirePlatformAdmin(request)
  *   // ... rest of loader logic
- *   return { data }, { headers: responseHeaders }
  * }
  */
-export async function requirePlatformAdmin(
-  request: Request,
-  responseHeaders: Headers = new Headers()
-): Promise<string> {
-  // Use SSR-aware Supabase client that can read cookies
-  const { createSupabaseServerClient } = await import('~/services/supabase-server')
-  const supabase = createSupabaseServerClient(request, responseHeaders)
+export async function requirePlatformAdmin(request: Request): Promise<string> {
+  // Get access token from Authorization header
+  const authHeader = request.headers.get('Authorization')
 
-  // Get user from session cookie
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    throw new Response('Unauthorized: Missing or invalid authorization', { status: 401 })
+  }
+
+  const accessToken = authHeader.replace('Bearer ', '')
+
+  // Create Supabase client with access token
+  const { createClient } = await import('@supabase/supabase-js')
+  const supabaseUrl = process.env['VITE_SUPABASE_URL'] || 'http://localhost:54321'
+  const supabaseAnonKey =
+    process.env['VITE_SUPABASE_ANON_KEY'] ||
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0'
+
+  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { headers: { Authorization: `Bearer ${accessToken}` } },
+  })
+
+  // Get user from access token
   const {
     data: { user },
     error,
-  } = await supabase.auth.getUser()
+  } = await supabase.auth.getUser(accessToken)
 
   if (error || !user) {
-    // Not authenticated - redirect to login
-    throw redirect('/login?redirectTo=/admin')
+    throw new Response('Unauthorized: Invalid token', { status: 401 })
   }
 
   // Check if user is platform admin (using service role to bypass RLS)
   const isAdmin = await isPlatformAdmin(user.id)
 
   if (!isAdmin) {
-    // Authenticated but not admin - return 403
     throw new Response('Forbidden: Platform admin access required', { status: 403 })
   }
 

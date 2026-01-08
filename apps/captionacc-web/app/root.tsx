@@ -1,3 +1,14 @@
+// Self-hosted fonts (works in China, better performance)
+// Import common Inter weights (300-700 covers most use cases)
+import '@fontsource/inter/300.css'
+import '@fontsource/inter/400.css'
+import '@fontsource/inter/500.css'
+import '@fontsource/inter/600.css'
+import '@fontsource/inter/700.css'
+// Import Instrument Serif for display text
+import '@fontsource/instrument-serif/400.css'
+import '@fontsource/instrument-serif/400-italic.css'
+
 import '~/styles/tailwind.css'
 import {
   isRouteErrorResponse,
@@ -8,7 +19,6 @@ import {
   Outlet,
   useRouteError,
   type LinksFunction,
-  type LoaderFunctionArgs,
 } from 'react-router'
 
 import { NotFound, NotFoundProps } from '~/components/NotFound'
@@ -17,36 +27,32 @@ import { Providers } from '~/providers'
 export const links: LinksFunction = () => []
 
 /**
- * Root loader - provides auth status to all routes
+ * Root loader
+ *
+ * Note: Auth is client-side only (localStorage) so no user data provided here.
+ * Use AuthProvider/useAuth hook to access authentication state in components.
  */
-export async function loader({ request }: LoaderFunctionArgs) {
-  const responseHeaders = new Headers()
+export async function loader() {
+  // Set security headers via headers export below
+  return {}
+}
 
-  // Use SSR-aware Supabase client
-  const { createSupabaseServerClient } = await import('~/services/supabase-server')
-  const { isPlatformAdmin } = await import('~/services/platform-admin')
-
-  const supabase = createSupabaseServerClient(request, responseHeaders)
-
-  // Get user from session cookie
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  // Check admin status if user is authenticated
-  let isAdmin = false
-  if (user) {
-    isAdmin = await isPlatformAdmin(user.id)
-  }
+/**
+ * Security headers - prevent XSS attacks
+ */
+export function headers() {
+  // Content Security Policy
+  const csp = [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
+    "style-src 'self' 'unsafe-inline'",
+    "font-src 'self'",
+    "img-src 'self' data: https:",
+    "connect-src 'self' http://localhost:54321 https://*.supabase.co wss://*.supabase.co",
+  ].join('; ')
 
   return {
-    user: user
-      ? {
-          id: user.id,
-          email: user.email,
-        }
-      : null,
-    isPlatformAdmin: isAdmin,
+    'Content-Security-Policy': csp,
   }
 }
 
@@ -63,12 +69,6 @@ export default function App() {
         <Meta />
         <Links />
         <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@100..900&display=swap"
-          rel="stylesheet"
-        />
         <title>CaptionA.cc - Caption Annotation Platform</title>
         <script src="/set-theme.js"></script>
         {/* Umami Analytics */}

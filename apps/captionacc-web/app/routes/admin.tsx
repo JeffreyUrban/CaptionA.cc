@@ -3,9 +3,10 @@
  */
 
 import { useEffect, useState } from 'react'
-import { useLoaderData } from 'react-router'
+import { useLoaderData, useNavigate } from 'react-router'
 
 import { AppLayout } from '~/components/AppLayout'
+import { useAuth } from '~/components/auth/AuthProvider'
 import type { DatabaseInfo, StatusSummary } from '~/services/database-admin-service'
 
 interface FailedVideo {
@@ -57,6 +58,7 @@ function DatabaseAdministration({
   LATEST_SCHEMA_VERSION,
   hasLatestSchema,
 }: DatabaseAdministrationProps) {
+  const { session } = useAuth()
   const [summary, setSummary] = useState<StatusSummary | null>(null)
   const [databases, setDatabases] = useState<DatabaseInfo[]>([])
   const [loading, setLoading] = useState(true)
@@ -68,10 +70,25 @@ function DatabaseAdministration({
     loadStatus()
   }, [])
 
+  // Helper function for authenticated API calls
+  const authenticatedFetch = async (url: string, options: RequestInit = {}) => {
+    if (!session?.access_token) {
+      throw new Error('No access token available')
+    }
+
+    return fetch(url, {
+      ...options,
+      headers: {
+        ...options.headers,
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    })
+  }
+
   async function loadStatus() {
     setLoading(true)
     try {
-      const response = await fetch('/api/admin/databases/status')
+      const response = await authenticatedFetch('/api/admin/databases/status')
       const data = await response.json()
       setSummary(data)
     } catch (error) {
@@ -83,7 +100,7 @@ function DatabaseAdministration({
 
   async function loadDetails() {
     try {
-      const response = await fetch('/api/admin/databases/list')
+      const response = await authenticatedFetch('/api/admin/databases/list')
       const data = await response.json()
       setDatabases(data.databases)
       setShowDetails(true)
@@ -99,7 +116,7 @@ function DatabaseAdministration({
       setRepairResult(null)
 
       try {
-        const response = await fetch('/api/admin/databases/repair', {
+        const response = await authenticatedFetch('/api/admin/databases/repair', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ targetVersion, force: false }),
@@ -167,7 +184,7 @@ function DatabaseAdministration({
     setRepairing(true)
 
     try {
-      const response = await fetch('/api/admin/databases/repair', {
+      const response = await authenticatedFetch('/api/admin/databases/repair', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ targetVersion, force: true }),
@@ -511,11 +528,10 @@ function DatabaseAdministration({
 }
 
 // Loader to get schema versions (server-side only)
-export async function loader({ request }: { request: Request }) {
-  // Require platform admin access (server-side security)
-  const responseHeaders = new Headers()
-  const { requirePlatformAdmin } = await import('~/services/platform-admin')
-  await requirePlatformAdmin(request, responseHeaders)
+export async function loader() {
+  // Note: With localStorage auth, server-side auth checks are not possible
+  // Admin protection is enforced at API endpoints (which check Authorization header)
+  // Client-side: AppLayout checks admin status and shows/hides admin nav link
 
   // Import on server side only
   const { CURRENT_SCHEMA_VERSION, LATEST_SCHEMA_VERSION } = await import('~/db/migrate')
@@ -536,21 +552,73 @@ export async function loader({ request }: { request: Request }) {
 export default function AdminPage() {
   const { CURRENT_SCHEMA_VERSION, LATEST_SCHEMA_VERSION, hasLatestSchema } =
     useLoaderData<typeof loader>()
+  const { session, user } = useAuth()
+  const navigate = useNavigate()
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null)
   const [failedVideos, setFailedVideos] = useState<FailedVideo[]>([])
   const [loadingFailed, setLoadingFailed] = useState(true)
   const [retryingVideos, setRetryingVideos] = useState<Set<string>>(new Set())
   const [modelVersionStats, setModelVersionStats] = useState<ModelVersionStats | null>(null)
   const [runningModelCheck, setRunningModelCheck] = useState(false)
 
-  // Load failed videos on mount
+  // Check admin status on mount
   useEffect(() => {
-    void loadFailedVideos()
-  }, [])
+    async function checkAdmin() {
+      if (!session?.access_token || !user) {
+        navigate('/login?redirectTo=/admin')
+        return
+      }
+
+      try {
+        const response = await fetch('/api/auth/is-platform-admin', {
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        })
+        const data = (await response.json()) as { isPlatformAdmin: boolean }
+
+        if (!data.isPlatformAdmin) {
+          alert('Access denied: Platform admin privileges required')
+          navigate('/')
+          return
+        }
+
+        setIsAdmin(true)
+      } catch (error) {
+        console.error('Failed to check admin status:', error)
+        navigate('/')
+      }
+    }
+
+    void checkAdmin()
+  }, [session, user, navigate])
+
+  // Load failed videos on mount (only if admin check passes)
+  useEffect(() => {
+    if (isAdmin === true) {
+      void loadFailedVideos()
+    }
+  }, [isAdmin])
+
+  // Helper function for authenticated API calls
+  const authenticatedFetch = async (url: string, options: RequestInit = {}) => {
+    if (!session?.access_token) {
+      throw new Error('No access token available')
+    }
+
+    return fetch(url, {
+      ...options,
+      headers: {
+        ...options.headers,
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    })
+  }
 
   const loadFailedVideos = async () => {
     setLoadingFailed(true)
     try {
-      const response = await fetch('/api/admin/failed-crop-frames')
+      const response = await authenticatedFetch('/api/admin/failed-crop-frames')
       const data = await response.json()
       setFailedVideos(data.videos ?? [])
     } catch (error) {
@@ -595,7 +663,7 @@ export default function AdminPage() {
   const runModelVersionCheck = async () => {
     setRunningModelCheck(true)
     try {
-      const response = await fetch('/api/admin/model-version-check', {
+      const response = await authenticatedFetch('/api/admin/model-version-check', {
         method: 'POST',
       })
 
@@ -612,6 +680,20 @@ export default function AdminPage() {
     } finally {
       setRunningModelCheck(false)
     }
+  }
+
+  // Show loading while checking admin status
+  if (isAdmin === null) {
+    return (
+      <AppLayout>
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-olive-600 dark:border-olive-400"></div>
+            <p className="mt-4 text-gray-600 dark:text-gray-400">Verifying admin access...</p>
+          </div>
+        </div>
+      </AppLayout>
+    )
   }
 
   return (
