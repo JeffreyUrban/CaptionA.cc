@@ -4,6 +4,7 @@
  * For more information, see https://reactrouter.com/file-conventions/entry.client
  */
 
+import '@tailwindplus/elements' // Initialize dialog/popover polyfills and command handlers
 import { startTransition, StrictMode } from 'react'
 import { hydrateRoot } from 'react-dom/client'
 import { HydratedRouter } from 'react-router/dom'

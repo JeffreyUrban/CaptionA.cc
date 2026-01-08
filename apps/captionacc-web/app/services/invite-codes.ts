@@ -7,9 +7,9 @@
 import type { Database } from '~/types/supabase'
 import { createServerSupabaseClient } from './supabase-client'
 
-type InviteCodeRow = Database['public']['Tables']['invite_codes']['Row']
-type TenantInsert = Database['public']['Tables']['tenants']['Insert']
-type UserProfileInsert = Database['public']['Tables']['user_profiles']['Insert']
+type InviteCodeRow = Database['captionacc_production']['Tables']['invite_codes']['Row']
+type TenantInsert = Database['captionacc_production']['Tables']['tenants']['Insert']
+type UserProfileInsert = Database['captionacc_production']['Tables']['user_profiles']['Insert']
 
 export interface InviteCodeValidation {
   valid: boolean
@@ -24,19 +24,29 @@ export interface InviteCodeValidation {
  * @returns Validation result
  */
 export async function validateInviteCode(code: string): Promise<InviteCodeValidation> {
+  console.log('[validateInviteCode] Called with code:', code)
+
   if (!code || code.trim().length === 0) {
+    console.log('[validateInviteCode] Code is empty')
     return { valid: false, error: 'Invite code is required' }
   }
 
   const supabase = createServerSupabaseClient()
+  const normalizedCode = code.trim().toUpperCase()
+
+  console.log('[validateInviteCode] Normalized code:', normalizedCode)
+  console.log('[validateInviteCode] Querying invite_codes table...')
 
   const { data: inviteCode, error } = await supabase
     .from('invite_codes')
     .select('*')
-    .eq('code', code.trim().toUpperCase())
+    .eq('code', normalizedCode)
     .single()
 
+  console.log('[validateInviteCode] Query result:', { data: inviteCode, error })
+
   if (error || !inviteCode) {
+    console.log('[validateInviteCode] Invalid - error or no data')
     return { valid: false, error: 'Invalid invite code' }
   }
 
@@ -102,13 +112,22 @@ export async function createTenantForUser(userId: string, email: string): Promis
   const tenantName = email.split('@')[0] + "'s Workspace"
   const tenantSlug = userId // Use user ID as slug for uniqueness
 
+  // Check if tenant already exists
+  const { data: existingTenant } = await supabase
+    .from('tenants')
+    .select('id')
+    .eq('slug', tenantSlug)
+    .single()
+
+  if (existingTenant) {
+    console.log('[createTenantForUser] Tenant already exists, reusing:', existingTenant.id)
+    return existingTenant.id
+  }
+
   const tenantData: TenantInsert = {
     name: tenantName,
     slug: tenantSlug,
-    storage_quota_gb: 0.1, // 100MB default for preview
-    video_count_limit: 5,
-    processing_minutes_limit: 30,
-    daily_upload_limit: 3,
+    storage_quota_gb: 1, // 1GB default for preview (integer type)
   }
 
   const { data: tenant, error } = await supabase
@@ -140,14 +159,23 @@ export async function createUserProfile(
 ): Promise<void> {
   const supabase = createServerSupabaseClient()
 
+  // Check if profile already exists
+  const { data: existingProfile } = await supabase
+    .from('user_profiles')
+    .select('id')
+    .eq('id', userId)
+    .single()
+
+  if (existingProfile) {
+    console.log('[createUserProfile] Profile already exists for user:', userId)
+    return
+  }
+
   const profileData: UserProfileInsert = {
     id: userId,
     tenant_id: tenantId,
     full_name: fullName ?? null,
     role: 'owner', // B2C: user is owner of their own tenant
-    approval_status: inviteCode ? 'approved' : 'pending', // Auto-approve if invite code used
-    invite_code_used: inviteCode,
-    approved_at: inviteCode ? new Date().toISOString() : null,
   }
 
   const { error } = await supabase.from('user_profiles').insert(profileData)

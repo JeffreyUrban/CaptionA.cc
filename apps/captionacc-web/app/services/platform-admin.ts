@@ -36,7 +36,7 @@ export async function isPlatformAdmin(userId: string): Promise<boolean> {
  * Require platform admin access for a route
  *
  * Call this in route loaders to protect admin routes.
- * Throws a redirect to /auth/login if not authenticated or not a platform admin.
+ * Throws a redirect to /login if not authenticated or not a platform admin.
  *
  * @param request - The request object from the loader
  * @returns The authenticated user ID if platform admin
@@ -44,15 +44,21 @@ export async function isPlatformAdmin(userId: string): Promise<boolean> {
  *
  * @example
  * export async function loader({ request }: LoaderFunctionArgs) {
- *   await requirePlatformAdmin(request)
+ *   const responseHeaders = new Headers()
+ *   await requirePlatformAdmin(request, responseHeaders)
  *   // ... rest of loader logic
+ *   return { data }, { headers: responseHeaders }
  * }
  */
-export async function requirePlatformAdmin(request: Request): Promise<string> {
-  const supabase = createServerSupabaseClient()
+export async function requirePlatformAdmin(
+  request: Request,
+  responseHeaders: Headers = new Headers()
+): Promise<string> {
+  // Use SSR-aware Supabase client that can read cookies
+  const { createSupabaseServerClient } = await import('~/services/supabase-server')
+  const supabase = createSupabaseServerClient(request, responseHeaders)
 
-  // Get session from request headers
-  // In React Router / Remix, the auth cookie is passed in the request
+  // Get user from session cookie
   const {
     data: { user },
     error,
@@ -60,10 +66,10 @@ export async function requirePlatformAdmin(request: Request): Promise<string> {
 
   if (error || !user) {
     // Not authenticated - redirect to login
-    throw redirect('/auth/login?redirectTo=/admin')
+    throw redirect('/login?redirectTo=/admin')
   }
 
-  // Check if user is platform admin
+  // Check if user is platform admin (using service role to bypass RLS)
   const isAdmin = await isPlatformAdmin(user.id)
 
   if (!isAdmin) {
@@ -98,25 +104,4 @@ export async function getPlatformAdminLevel(
 
   // Type assertion needed until Database types are regenerated
   return (data as { admin_level: 'super_admin' | 'support' }).admin_level
-}
-
-/**
- * Check if current user (client-side) is platform admin
- *
- * This should only be used for UI display logic.
- * Real authorization must happen server-side.
- *
- * @returns true if current client-side user is platform admin
- */
-export async function checkPlatformAdminClient(): Promise<boolean> {
-  try {
-    // Call a server endpoint to check
-    const response = await fetch('/api/auth/is-platform-admin')
-    if (!response.ok) return false
-
-    const data = await response.json()
-    return data.isPlatformAdmin === true
-  } catch {
-    return false
-  }
 }

@@ -8,12 +8,47 @@ import {
   Outlet,
   useRouteError,
   type LinksFunction,
+  type LoaderFunctionArgs,
 } from 'react-router'
 
 import { NotFound, NotFoundProps } from '~/components/NotFound'
 import { Providers } from '~/providers'
 
 export const links: LinksFunction = () => []
+
+/**
+ * Root loader - provides auth status to all routes
+ */
+export async function loader({ request }: LoaderFunctionArgs) {
+  const responseHeaders = new Headers()
+
+  // Use SSR-aware Supabase client
+  const { createSupabaseServerClient } = await import('~/services/supabase-server')
+  const { isPlatformAdmin } = await import('~/services/platform-admin')
+
+  const supabase = createSupabaseServerClient(request, responseHeaders)
+
+  // Get user from session cookie
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  // Check admin status if user is authenticated
+  let isAdmin = false
+  if (user) {
+    isAdmin = await isPlatformAdmin(user.id)
+  }
+
+  return {
+    user: user
+      ? {
+          id: user.id,
+          email: user.email,
+        }
+      : null,
+    isPlatformAdmin: isAdmin,
+  }
+}
 
 export default function App() {
   return (

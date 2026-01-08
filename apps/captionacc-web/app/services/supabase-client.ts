@@ -42,13 +42,35 @@ if (import.meta.env.DEV) {
 /**
  * Create a Supabase client for use in client-side code
  * Uses the anon key which respects RLS policies
+ *
+ * IMPORTANT: Uses cookie storage (not localStorage) so sessions are accessible server-side
  */
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
+    storage: {
+      getItem: key => {
+        if (typeof document === 'undefined') return null
+        const cookies = document.cookie.split(';')
+        const cookie = cookies.find(c => c.trim().startsWith(`${key}=`))
+        if (!cookie) return null
+        const value = cookie.split('=')[1]
+        if (!value) return null
+        return decodeURIComponent(value)
+      },
+      setItem: (key, value) => {
+        if (typeof document === 'undefined') return
+        document.cookie = `${key}=${encodeURIComponent(value)}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax`
+      },
+      removeItem: key => {
+        if (typeof document === 'undefined') return
+        document.cookie = `${key}=; path=/; max-age=0`
+      },
+    },
   },
+  // @ts-expect-error - schema is dynamic based on environment
   db: {
     schema: supabaseSchema, // Set PostgreSQL schema
   },
@@ -72,6 +94,7 @@ export function createServerSupabaseClient() {
       persistSession: false,
       autoRefreshToken: false,
     },
+    // @ts-expect-error - schema is dynamic based on environment
     db: {
       schema: supabaseSchema, // Set PostgreSQL schema (same as client)
     },
@@ -99,11 +122,7 @@ export async function getCurrentUser() {
  * Get the user's tenant ID from their profile
  */
 export async function getUserTenantId(userId: string): Promise<string | null> {
-  const { data, error } = await supabase
-    .from('user_profiles')
-    .select('*')
-    .eq('id', userId)
-    .single<Database['public']['Tables']['user_profiles']['Row']>()
+  const { data, error } = await supabase.from('user_profiles').select('*').eq('id', userId).single()
 
   if (error) {
     console.error('Error fetching user tenant:', error)

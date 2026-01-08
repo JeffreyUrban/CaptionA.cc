@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router'
+import { Link, useLocation, useNavigate, useMatches } from 'react-router'
 
 import { ThemeSwitcher } from '~/components/ThemeSwitcher'
 import { UploadProgress } from '~/components/UploadProgress'
@@ -8,7 +8,6 @@ import { useAuth } from '~/components/auth/AuthProvider'
 const navigation = [
   { name: 'Home', href: '/' },
   { name: 'Videos', href: '/videos' },
-  { name: 'Admin', href: '/admin' },
 ]
 
 function UserMenu() {
@@ -85,6 +84,19 @@ interface AppLayoutProps {
 
 export function AppLayout({ children, fullScreen = false }: AppLayoutProps) {
   const location = useLocation()
+  const matches = useMatches()
+
+  // Get admin status from root loader (server-side)
+  const rootData = matches.find(match => match.id === 'root')?.data as
+    | { isPlatformAdmin: boolean }
+    | undefined
+  const isPlatformAdmin = rootData?.isPlatformAdmin ?? false
+
+  // Build navigation items dynamically
+  const navItems = [...navigation]
+  if (isPlatformAdmin) {
+    navItems.push({ name: 'Admin', href: '/admin' })
+  }
 
   return (
     <div
@@ -104,7 +116,7 @@ export function AppLayout({ children, fullScreen = false }: AppLayoutProps) {
               </Link>
 
               <div className="hidden md:flex md:gap-1">
-                {navigation.map(item => {
+                {navItems.map(item => {
                   const isActive = location.pathname === item.href
                   return (
                     <Link
@@ -133,7 +145,7 @@ export function AppLayout({ children, fullScreen = false }: AppLayoutProps) {
 
           {/* Mobile Navigation */}
           <div className="flex gap-1 pb-3 md:hidden">
-            {navigation.map(item => {
+            {navItems.map(item => {
               const isActive = location.pathname === item.href
               return (
                 <Link

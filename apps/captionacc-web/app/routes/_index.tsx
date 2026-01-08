@@ -1,5 +1,7 @@
-import type { MetaFunction } from 'react-router'
+import type { LoaderFunctionArgs, MetaFunction } from 'react-router'
+import { redirect } from 'react-router'
 
+import { supabase } from '~/services/supabase-client'
 import { ThemeSwitcher } from '~/components/ThemeSwitcher'
 import { WaitlistForm } from '~/components/WaitlistForm'
 import { ButtonLink } from '~/components/oatmeal/elements/button'
@@ -31,6 +33,20 @@ export const meta: MetaFunction = () => {
         'Professional-grade hardcoded subtitle extraction with exceptional accuracy and frame-accurate timing. Join our waitlist for early access.',
     },
   ]
+}
+
+export async function loader({ request }: LoaderFunctionArgs) {
+  // Check if user is authenticated
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+
+  // If authenticated, redirect to videos page
+  if (session?.user) {
+    return redirect('/videos')
+  }
+
+  return null
 }
 
 export default function Home() {
@@ -65,11 +81,23 @@ export default function Home() {
             >
               FAQ
             </a>
+            <a
+              href="/login"
+              className="text-sm/7 font-medium text-olive-950 hover:bg-olive-950/10 rounded-full px-3 py-1 dark:text-white dark:hover:bg-white/10 lg:hidden"
+            >
+              Sign In
+            </a>
           </>
         }
         actions={
           <>
             <ThemeSwitcher />
+            <a
+              href="/login"
+              className="text-sm font-medium text-olive-950 hover:text-olive-600 dark:text-white dark:hover:text-olive-400 transition-colors max-lg:hidden"
+            >
+              Sign In
+            </a>
             <ButtonLink href="#waitlist-form" size="lg">
               Join Waitlist
             </ButtonLink>

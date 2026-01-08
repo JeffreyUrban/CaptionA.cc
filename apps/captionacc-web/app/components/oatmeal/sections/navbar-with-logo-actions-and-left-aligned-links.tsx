@@ -1,6 +1,5 @@
-import { ElDialog, ElDialogPanel } from '@tailwindplus/elements/react'
+import { useState, type ComponentProps, type ReactNode } from 'react'
 import { clsx } from 'clsx/lite'
-import type { ComponentProps, ReactNode } from 'react'
 
 export function NavbarLink({
   children,
@@ -55,6 +54,8 @@ export function NavbarWithLogoActionsAndLeftAlignedLinks({
   links: ReactNode
   actions: ReactNode
 } & ComponentProps<'header'>) {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+
   return (
     <header
       className={clsx('sticky top-0 z-10 bg-olive-100 dark:bg-olive-950', className)}
@@ -71,8 +72,7 @@ export function NavbarWithLogoActionsAndLeftAlignedLinks({
             <div className="flex shrink-0 items-center gap-5">{actions}</div>
 
             <button
-              data-command="show-modal"
-              data-commandfor="mobile-menu"
+              onClick={() => setMobileMenuOpen(true)}
               aria-label="Toggle menu"
               className="inline-flex rounded-full p-1.5 text-olive-950 hover:bg-olive-950/10 lg:hidden dark:text-white dark:hover:bg-white/10"
             >
@@ -87,14 +87,20 @@ export function NavbarWithLogoActionsAndLeftAlignedLinks({
           </div>
         </div>
 
-        <ElDialog className="lg:hidden">
-          <dialog id="mobile-menu" className="backdrop:bg-transparent">
-            <ElDialogPanel className="fixed inset-0 bg-olive-100 px-6 py-6 lg:px-10 dark:bg-olive-950">
+        {/* Mobile menu */}
+        {mobileMenuOpen && (
+          <div className="fixed inset-0 z-50 lg:hidden">
+            {/* Backdrop */}
+            <div
+              className="fixed inset-0 bg-black/20 dark:bg-black/40"
+              onClick={() => setMobileMenuOpen(false)}
+            />
+            {/* Panel - slide in from right */}
+            <div className="fixed inset-y-0 right-0 w-full max-w-sm bg-olive-100 px-6 py-6 shadow-xl dark:bg-olive-950">
               <div className="flex justify-end">
                 <button
-                  data-command="close"
-                  data-commandfor="mobile-menu"
-                  aria-label="Toggle menu"
+                  onClick={() => setMobileMenuOpen(false)}
+                  aria-label="Close menu"
                   className="inline-flex rounded-full p-1.5 text-olive-950 hover:bg-olive-950/10 dark:text-white dark:hover:bg-white/10"
                 >
                   <svg
@@ -110,9 +116,9 @@ export function NavbarWithLogoActionsAndLeftAlignedLinks({
                 </button>
               </div>
               <div className="mt-6 flex flex-col gap-6">{links}</div>
-            </ElDialogPanel>
-          </dialog>
-        </ElDialog>
+            </div>
+          </div>
+        )}
       </nav>
     </header>
   )

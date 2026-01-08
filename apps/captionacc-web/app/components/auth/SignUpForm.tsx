@@ -60,9 +60,8 @@ export function SignUpForm({ onSuccess, onSwitchToLogin }: SignUpFormProps) {
       }
 
       setSuccess(true)
-      setTimeout(() => {
-        onSuccess?.()
-      }, 2000)
+      // Email confirmation required - show success message
+      // User will be redirected to /videos after confirming email
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sign up failed')
     } finally {

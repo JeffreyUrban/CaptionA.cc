@@ -512,9 +512,10 @@ function DatabaseAdministration({
 
 // Loader to get schema versions (server-side only)
 export async function loader({ request }: { request: Request }) {
-  // Require platform admin access
+  // Require platform admin access (server-side security)
+  const responseHeaders = new Headers()
   const { requirePlatformAdmin } = await import('~/services/platform-admin')
-  await requirePlatformAdmin(request)
+  await requirePlatformAdmin(request, responseHeaders)
 
   // Import on server side only
   const { CURRENT_SCHEMA_VERSION, LATEST_SCHEMA_VERSION } = await import('~/db/migrate')

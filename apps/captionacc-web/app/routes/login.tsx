@@ -8,10 +8,10 @@ export default function LoginPage() {
   const navigate = useNavigate()
   const { user, loading } = useAuth()
 
-  // Redirect to home if already logged in
+  // Redirect to videos if already logged in
   useEffect(() => {
     if (!loading && user) {
-      void navigate('/')
+      void navigate('/videos')
     }
   }, [user, loading, navigate])
 
@@ -33,7 +33,7 @@ export default function LoginPage() {
           <p className="text-olive-700 dark:text-olive-400">Caption Annotation Platform</p>
         </div>
         <LoginForm
-          onSuccess={() => void navigate('/')}
+          onSuccess={() => void navigate('/videos')}
           onSwitchToSignUp={() => void navigate('/signup')}
         />
       </div>

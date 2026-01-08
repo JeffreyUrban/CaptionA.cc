@@ -1,0 +1,50 @@
+/**
+ * Server-side Supabase client for React Router SSR
+ *
+ * Uses cookies for session management so server-side loaders can authenticate users.
+ */
+
+import { createServerClient } from '@supabase/ssr'
+import type { Database } from '~/types/supabase'
+
+const supabaseUrl = process.env['VITE_SUPABASE_URL'] || 'http://localhost:54321'
+const supabaseAnonKey =
+  process.env['VITE_SUPABASE_ANON_KEY'] ||
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0'
+const supabaseSchema = process.env['VITE_SUPABASE_SCHEMA'] || 'captionacc_production'
+
+/**
+ * Create a Supabase client for server-side use with cookie access
+ *
+ * This client can read/write cookies, allowing server-side loaders to authenticate users.
+ *
+ * @param request - The request object (to read cookies)
+ * @param response - The response headers (to set cookies)
+ */
+export function createSupabaseServerClient(request: Request, responseHeaders: Headers) {
+  return createServerClient<Database>(supabaseUrl, supabaseAnonKey, {
+    cookies: {
+      get(name: string) {
+        const cookies = request.headers.get('Cookie')
+        if (!cookies) return undefined
+
+        const cookie = cookies.split(';').find(c => c.trim().startsWith(`${name}=`))
+        if (!cookie) return undefined
+
+        return cookie.split('=')[1]
+      },
+      set(name: string, value: string, options: any) {
+        const cookieString = `${name}=${value}; Path=${options.path || '/'}; Max-Age=${options.maxAge || 3600}; SameSite=${options.sameSite || 'Lax'}${options.secure ? '; Secure' : ''}${options.httpOnly ? '; HttpOnly' : ''}`
+        responseHeaders.append('Set-Cookie', cookieString)
+      },
+      remove(name: string, options: any) {
+        const cookieString = `${name}=; Path=${options.path || '/'}; Max-Age=0`
+        responseHeaders.append('Set-Cookie', cookieString)
+      },
+    },
+    // @ts-expect-error - schema is dynamic based on environment
+    db: {
+      schema: supabaseSchema,
+    },
+  })
+}
