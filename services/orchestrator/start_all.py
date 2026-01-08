@@ -44,18 +44,18 @@ async def run_prefect_worker():
     print("Starting CaptionA.cc Prefect Worker")
     print("=" * 80)
 
-    # Check Prefect connection
-    try:
-        async with get_client() as client:
-            await client.hello()
-            print("✅ Connected to Prefect Cloud successfully\n")
-    except Exception as e:
-        print(f"❌ Failed to connect to Prefect: {e}\n")
-        print("Troubleshooting:")
-        print("  1. Make sure PREFECT_API_URL and PREFECT_API_KEY are set")
-        print("  2. Check your internet connection")
-        print("  3. Verify Prefect Cloud is accessible")
-        sys.exit(1)
+    # Check Prefect connection (optional - only for Prefect Cloud)
+    # In ephemeral mode, this check is skipped
+    if os.getenv("PREFECT_API_URL"):
+        try:
+            async with get_client() as client:
+                await client.hello()
+                print("✅ Connected to Prefect Cloud successfully\n")
+        except Exception as e:
+            print(f"⚠️  Warning: Failed to connect to Prefect Cloud: {e}")
+            print("Continuing in ephemeral mode...\n")
+    else:
+        print("✅ Running in ephemeral mode (no Prefect Cloud connection)\n")
 
     # Configuration
     work_pool_name = "video-processing-pool"
