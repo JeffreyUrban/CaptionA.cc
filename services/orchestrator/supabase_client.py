@@ -156,20 +156,20 @@ class VideoRepository:
         response = self.client.table("videos").update(data).eq("id", video_id).execute()
         return response.data[0] if response.data else {}  # type: ignore[return-value]
 
-    def update_annotations_db_key(self, video_id: str, annotations_db_key: str) -> dict[str, Any]:
+    def update_captions_db_key(self, video_id: str, captions_db_key: str) -> dict[str, Any]:
         """
         Update the Wasabi storage key for the annotations database.
 
         Args:
             video_id: Video UUID
-            annotations_db_key: Wasabi storage key for annotations.db
+            captions_db_key: Wasabi storage key for captions.db
 
         Returns:
             Updated video record
         """
         response = (
             self.client.table("videos")
-            .update({"annotations_db_key": annotations_db_key})
+            .update({"captions_db_key": captions_db_key})
             .eq("id", video_id)
             .execute()
         )

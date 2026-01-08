@@ -187,7 +187,7 @@ export async function getOrCreateAnnotationDatabase(
   const dbExists = dbPath !== null && existsSync(dbPath)
 
   // If dbPath is null but videoDir exists, we need to construct the path
-  const actualDbPath = dbPath ?? `${videoDir}/annotations.db`
+  const actualDbPath = dbPath ?? `${videoDir}/captions.db`
 
   try {
     // Run migrations if database already exists

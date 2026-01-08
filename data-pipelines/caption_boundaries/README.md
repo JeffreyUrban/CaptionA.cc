@@ -48,7 +48,7 @@ caption_boundaries train my_dataset --name exp_full --no-balanced-sampling --epo
 ### 3. Run Inference
 
 ```bash
-caption_boundaries infer path/to/video/annotations.db \
+caption_boundaries infer path/to/video/captions.db \
     --checkpoint checkpoints/best.pt \
     --version v1.0
 ```
@@ -56,7 +56,7 @@ caption_boundaries infer path/to/video/annotations.db \
 ### 4. Quality Analysis
 
 ```bash
-caption_boundaries analyze path/to/video/annotations.db
+caption_boundaries analyze path/to/video/captions.db
 ```
 
 ## Architecture

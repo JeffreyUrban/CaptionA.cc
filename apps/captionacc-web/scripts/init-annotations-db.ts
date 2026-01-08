@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * Initialize annotations database for a video
+ * Initialize captions database for a video
  *
- * Usage: node scripts/init-annotations-db.ts <video_path>
- * Example: node scripts/init-annotations-db.ts content_name/video_id
+ * Usage: node scripts/init-captions-db.ts <video_path>
+ * Example: node scripts/init-captions-db.ts content_name/video_id
  */
 
 import { readFileSync, mkdirSync } from 'fs'
@@ -14,8 +14,8 @@ import Database from 'better-sqlite3'
 const videoPath = process.argv[2]
 
 if (!videoPath) {
-  console.error('Usage: node scripts/init-annotations-db.ts <video_path>')
-  console.error('Example: node scripts/init-annotations-db.ts show_name/video_id')
+  console.error('Usage: node scripts/init-captions-db.ts <video_path>')
+  console.error('Example: node scripts/init-captions-db.ts show_name/video_id')
   process.exit(1)
 }
 
@@ -27,10 +27,10 @@ const dbPath = resolve(
   'local',
   'data',
   ...videoPath.split('/'),
-  'annotations.db'
+  'captions.db'
 )
 
-console.log(`Initializing annotations database at: ${dbPath}`)
+console.log(`Initializing captions database at: ${dbPath}`)
 
 // Ensure directory exists
 mkdirSync(dirname(dbPath), { recursive: true })

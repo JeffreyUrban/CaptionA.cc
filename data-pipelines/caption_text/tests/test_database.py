@@ -19,7 +19,7 @@ from caption_text.database import (
 def mock_db():
     """Create a temporary database with test data."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        db_path = Path(tmpdir) / "annotations.db"
+        db_path = Path(tmpdir) / "captions.db"
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
 
@@ -84,7 +84,7 @@ def mock_db():
 def test_get_database_path():
     """Test database path resolution."""
     video_dir = Path("/path/to/video")
-    expected = Path("/path/to/video/annotations.db")
+    expected = Path("/path/to/video/captions.db")
     assert get_database_path(video_dir) == expected
 
 

@@ -40,7 +40,7 @@ def generate_median_frame(
     Generate per-pixel median frame from caption's cropped frame range.
 
     Args:
-        db_path: Path to annotations.db
+        db_path: Path to captions.db
         caption_id: Caption ID to process
         output_path: Path to save median frame image
 
@@ -187,7 +187,7 @@ def update_caption_ocr_result(
     Update caption with OCR result and set status flags.
 
     Args:
-        db_path: Path to annotations.db
+        db_path: Path to captions.db
         caption_id: Caption ID to update
         ocr_text: OCR extracted text
     """
@@ -229,7 +229,7 @@ def update_caption_ocr_status(
     Update caption median_ocr_status field.
 
     Args:
-        db_path: Path to annotations.db
+        db_path: Path to captions.db
         caption_id: Caption ID to update
         status: New status value
         error_message: Optional error message for 'error' status
@@ -289,7 +289,7 @@ def caption_median_ocr_flow(
 
     Args:
         video_id: Video UUID
-        db_path: Path to annotations.db
+        db_path: Path to captions.db
         video_dir: Video directory path
         caption_ids: List of caption IDs to process
         language: OCR language preference

@@ -294,9 +294,9 @@ video_repo.update_video_status(
 )
 
 # Update database storage key
-video_repo.update_annotations_db_key(
+video_repo.update_captions_db_key(
     video_id="a4f2b8c3-...",
-    annotations_db_key="tenant/video/fullOCR.db"
+    captions_db_key="tenant/video/fullOCR.db"
 )
 ```
 

@@ -242,7 +242,7 @@ export async function runOCROnFramesV2(
     'local',
     'data',
     ...videoPath.split('/'),
-    'annotations.db'
+    'captions.db'
   )
 
   console.log(`Loading frames from database: ${dbPath}`)

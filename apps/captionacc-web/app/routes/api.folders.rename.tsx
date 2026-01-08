@@ -82,7 +82,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
       // Get database path from storage path
       const { storagePath } = video
-      const dbPath = resolve(dataDir, ...storagePath.split('/'), 'annotations.db')
+      const dbPath = resolve(dataDir, ...storagePath.split('/'), 'captions.db')
 
       // Update display_path in database
       const db = new Database(dbPath)

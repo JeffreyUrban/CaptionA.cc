@@ -46,7 +46,7 @@ def extract_cropped_frames(
 
     Args:
         video_path: Full path to video file
-        db_path: Path to annotations.db
+        db_path: Path to captions.db
         output_dir: Directory to write cropped frames
         crop_bounds: Dict with keys: left, top, right, bottom
         crop_bounds_version: Version of crop bounds (from layout_config)
@@ -127,7 +127,7 @@ def update_crop_status(db_path: str, status: str) -> None:
     Update crop_frames_status table in database.
 
     Args:
-        db_path: Path to annotations.db
+        db_path: Path to captions.db
         status: New status value (e.g., 'complete')
     """
     print(f"Updating crop status to: {status}")
@@ -194,7 +194,7 @@ def crop_frames_flow(
     Args:
         video_id: Video UUID
         video_path: Full path to video file
-        db_path: Path to annotations.db
+        db_path: Path to captions.db
         output_dir: Directory for cropped frame output
         crop_bounds: Crop bounds from layout annotation (left, top, right, bottom)
         crop_bounds_version: Version from video_layout_config table

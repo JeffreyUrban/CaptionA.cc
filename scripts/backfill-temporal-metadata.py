@@ -30,7 +30,7 @@ def get_database_paths(data_dir: Path) -> list[tuple[Path, Path]]:
     """
     databases = []
 
-    # Pattern: local/data/*/*/annotations.db
+    # Pattern: local/data/*/*/captions.db
     for parent_dir in sorted(data_dir.iterdir()):
         if not parent_dir.is_dir():
             continue
@@ -39,7 +39,7 @@ def get_database_paths(data_dir: Path) -> list[tuple[Path, Path]]:
             if not video_dir.is_dir():
                 continue
 
-            db_path = video_dir / "annotations.db"
+            db_path = video_dir / "captions.db"
             if not db_path.exists():
                 continue
 

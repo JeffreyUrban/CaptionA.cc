@@ -81,7 +81,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
   // Update display_path in database
   const dataDir = resolve(process.cwd(), '..', '..', 'local', 'data')
-  const dbPath = resolve(dataDir, ...metadata.storagePath.split('/'), 'annotations.db')
+  const dbPath = resolve(dataDir, ...metadata.storagePath.split('/'), 'captions.db')
 
   if (!existsSync(dbPath)) {
     return Response.json({ error: 'Video database not found' }, { status: 500 })

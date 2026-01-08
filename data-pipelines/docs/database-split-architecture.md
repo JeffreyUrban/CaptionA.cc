@@ -269,7 +269,7 @@ conn = sqlite3.connect('layout.db')  # Default is read-write
 ### Before (Old Structure)
 ```
 local/data/{hash}/{video_id}/
-  annotations.db          # 100-500 MB monolithic database
+  captions.db          # 100-500 MB monolithic database
   20220219.mp4           # Source video
 ```
 
@@ -282,13 +282,13 @@ local/data/{hash}/{video_id}/
   layout.db              # 0.05-20 MB (frequent)
   captions.db            # 0.1-2 MB (frequent)
   state.db            # <0.1 MB (local only)
-  annotations.db.old     # Backup of original
+  captions.db.old     # Backup of original
   20220219.mp4          # Source video
 ```
 
 ### Migration Script
 
-Automated migration splits existing `annotations.db` files:
+Automated migration splits existing `captions.db` files:
 
 ```bash
 # Preview migration

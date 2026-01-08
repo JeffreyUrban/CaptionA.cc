@@ -88,7 +88,7 @@ function cleanupStaleUploads() {
             'local',
             'data',
             ...metadataObj.metadata.storagePath.split('/'),
-            'annotations.db'
+            'captions.db'
           )
 
           if (existsSync(dbPath)) {

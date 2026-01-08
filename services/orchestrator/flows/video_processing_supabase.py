@@ -56,18 +56,18 @@ def update_supabase_status(
     tags=["supabase", "storage"],
     log_prints=True,
 )
-def update_annotations_db_key(video_id: str, annotations_db_key: str) -> None:
+def update_captions_db_key(video_id: str, captions_db_key: str) -> None:
     """
     Update the Wasabi storage key for annotations database.
 
     Args:
         video_id: Video UUID
-        annotations_db_key: Wasabi storage key (e.g., wasabi://videos/{tenant}/{video}/annotations.db)
+        captions_db_key: Wasabi storage key (e.g., wasabi://videos/{tenant}/{video}/captions.db)
     """
     try:
         video_repo = VideoRepository()
-        video_repo.update_annotations_db_key(
-            video_id=video_id, annotations_db_key=annotations_db_key
+        video_repo.update_captions_db_key(
+            video_id=video_id, captions_db_key=captions_db_key
         )
         print(f"✓ Supabase: Updated annotations DB key for {video_id}")
     except Exception as e:
@@ -85,7 +85,7 @@ def index_video_content(video_id: str, db_path: str) -> int:
 
     Args:
         video_id: Video UUID
-        db_path: Path to annotations.db with OCR results
+        db_path: Path to captions.db with OCR results
 
     Returns:
         Number of frames indexed
@@ -141,7 +141,7 @@ def extract_full_frames(
 
     Args:
         video_path: Full path to video file
-        db_path: Path to annotations.db
+        db_path: Path to captions.db
         output_dir: Directory to write frames
         frame_rate: Frame extraction rate in Hz (default 0.1 = every 10 seconds)
 
@@ -220,7 +220,7 @@ def process_video_with_supabase_flow(
     Args:
         video_id: Video UUID (matches Supabase videos.id)
         video_path: Full path to video file
-        db_path: Path to annotations.db
+        db_path: Path to captions.db
         output_dir: Directory for frame output
         frame_rate: Frame extraction rate in Hz
 

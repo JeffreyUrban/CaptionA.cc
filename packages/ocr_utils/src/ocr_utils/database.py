@@ -1,6 +1,6 @@
 """Database operations for OCR results.
 
-Provides generic functions for writing OCR results to annotations.db tables.
+Provides generic functions for writing OCR results to captions.db tables.
 Currently used with full_frame_ocr table.
 """
 
@@ -14,7 +14,7 @@ def ensure_ocr_table(db_path: Path, table_name: str) -> None:
     Creates a normalized table schema with one row per OCR box.
 
     Args:
-        db_path: Path to annotations.db file
+        db_path: Path to captions.db file
         table_name: Table name (e.g., 'full_frame_ocr')
     """
     conn = sqlite3.connect(db_path)
@@ -55,7 +55,7 @@ def write_ocr_result_to_database(
 
     Args:
         ocr_result: OCR result dictionary from process_frame_ocr_with_retry
-        db_path: Path to annotations.db file
+        db_path: Path to captions.db file
         table_name: Table name (e.g., 'full_frame_ocr')
 
     Returns:
@@ -120,7 +120,7 @@ def load_ocr_for_frame(
     """Load OCR annotations for a specific frame.
 
     Args:
-        db_path: Path to annotations.db file
+        db_path: Path to captions.db file
         frame_index: Frame index to load
         table_name: Table name (e.g., 'full_frame_ocr')
 
@@ -161,7 +161,7 @@ def load_ocr_for_frame_range(
     """Load OCR annotations for a range of frames.
 
     Args:
-        db_path: Path to annotations.db file
+        db_path: Path to captions.db file
         start_frame: Start frame index (inclusive)
         end_frame: End frame index (inclusive)
         table_name: Table name (e.g., 'full_frame_ocr')

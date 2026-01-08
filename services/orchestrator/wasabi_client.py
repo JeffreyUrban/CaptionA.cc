@@ -333,7 +333,7 @@ class WasabiClient:
         Args:
             tenant_id: Tenant UUID
             video_id: Video UUID
-            filename: Filename (e.g., "video.mp4", "annotations.db")
+            filename: Filename (e.g., "video.mp4", "captions.db")
 
         Returns:
             Storage key (e.g., "tenant_id/video_id/video.mp4")

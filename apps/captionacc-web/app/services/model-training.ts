@@ -13,15 +13,7 @@ import { completeProcessing } from './processing-status-tracker'
  * Get path to annotations database for a video.
  */
 function getAnnotationsDatabasePath(videoId: string): string {
-  return resolve(
-    process.cwd(),
-    '..',
-    '..',
-    'local',
-    'data',
-    ...videoId.split('/'),
-    'annotations.db'
-  )
+  return resolve(process.cwd(), '..', '..', 'local', 'data', ...videoId.split('/'), 'captions.db')
 }
 
 /**

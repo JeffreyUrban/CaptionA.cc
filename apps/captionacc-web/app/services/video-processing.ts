@@ -86,7 +86,7 @@ function processNextInQueue(): void {
  * Mark a video as having an error during processing
  * Updates status to 'error' with message and details
  *
- * @param dbPath - Path to the video's annotations.db
+ * @param dbPath - Path to the video's captions.db
  * @param message - Human-readable error message
  * @param details - Additional error details (will be JSON stringified)
  */
@@ -114,7 +114,7 @@ function markVideoAsError(dbPath: string, message: string, details: object): voi
  * Mark a video as starting processing
  * Updates status to 'extracting_frames', increments attempts, sets start time
  *
- * @param dbPath - Path to the video's annotations.db
+ * @param dbPath - Path to the video's captions.db
  */
 function markVideoAsProcessing(dbPath: string): void {
   const db = new Database(dbPath)
@@ -137,7 +137,7 @@ function markVideoAsProcessing(dbPath: string): void {
  * Mark a video as having completed processing successfully
  * Updates status to 'processing_complete' and sets all progress to 1.0
  *
- * @param dbPath - Path to the video's annotations.db
+ * @param dbPath - Path to the video's captions.db
  */
 function markVideoAsComplete(dbPath: string): void {
   if (!existsSync(dbPath)) return
@@ -164,7 +164,7 @@ function markVideoAsComplete(dbPath: string): void {
  * Update heartbeat timestamp to detect stalled processing
  * Silently handles errors (video may have been deleted during processing)
  *
- * @param dbPath - Path to the video's annotations.db
+ * @param dbPath - Path to the video's captions.db
  */
 function updateVideoHeartbeat(dbPath: string): void {
   if (!existsSync(dbPath)) return
@@ -191,7 +191,7 @@ function updateVideoHeartbeat(dbPath: string): void {
  * Update OCR progress in the database
  * Silently handles errors (video may have been deleted during processing)
  *
- * @param dbPath - Path to the video's annotations.db
+ * @param dbPath - Path to the video's captions.db
  * @param progress - Progress ratio (0.0 to 1.0)
  */
 function updateVideoProgress(dbPath: string, progress: number): void {
@@ -218,7 +218,7 @@ function updateVideoProgress(dbPath: string, progress: number): void {
 /**
  * Store the process PID for potential cancellation
  *
- * @param dbPath - Path to the video's annotations.db
+ * @param dbPath - Path to the video's captions.db
  * @param pid - Process ID of the spawned pipeline
  */
 function storeProcessPid(dbPath: string, pid: number): void {
@@ -265,7 +265,7 @@ function parseProgressFromOutput(data: string): number | null {
  * 1. Extracts frames at 0.1Hz (10x sampling)
  * 2. Runs OCR on all frames
  * 3. Analyzes subtitle region layout
- * 4. Writes results to annotations.db
+ * 4. Writes results to captions.db
  */
 export async function triggerVideoProcessing(options: ProcessingOptions): Promise<void> {
   const { videoPath, videoFile, videoId } = options

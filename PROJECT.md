@@ -71,12 +71,6 @@ The video is divided into audio segments and burned-in captions. Audio segments 
 
 ### Core Data Models
 
-**Raw Annotation Tables** (read-only for production):
-- **caption_annotations**: Raw ML-generated caption data from pipeline
-  - Source of truth for initial caption detection
-  - Not altered by production application
-  - Used to populate production `captions` table
-
 **ML Pipeline Models**:
 - **Annotation**: User/admin corrections for ML feedback
   - (caption_id/audio_segment_id, correction_type, old_value, new_value, corrected_by, corrected_at, issue_description)

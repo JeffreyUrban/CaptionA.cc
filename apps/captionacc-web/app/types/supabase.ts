@@ -520,7 +520,7 @@ export type Database = {
       }
       videos: {
         Row: {
-          annotations_db_key: string | null
+          captions_db_key: string | null
           current_cropped_frames_version: number | null
           deleted_at: string | null
           duration_seconds: number | null
@@ -537,7 +537,7 @@ export type Database = {
           video_path: string
         }
         Insert: {
-          annotations_db_key?: string | null
+          captions_db_key?: string | null
           current_cropped_frames_version?: number | null
           deleted_at?: string | null
           duration_seconds?: number | null
@@ -554,7 +554,7 @@ export type Database = {
           video_path: string
         }
         Update: {
-          annotations_db_key?: string | null
+          captions_db_key?: string | null
           current_cropped_frames_version?: number | null
           deleted_at?: string | null
           duration_seconds?: number | null
@@ -824,7 +824,7 @@ export type Database = {
       }
       videos: {
         Row: {
-          annotations_db_key: string | null
+          captions_db_key: string | null
           current_cropped_frames_version: number | null
           deleted_at: string | null
           duration_seconds: number | null
@@ -841,7 +841,7 @@ export type Database = {
           uploaded_by_user_id: string | null
         }
         Insert: {
-          annotations_db_key?: string | null
+          captions_db_key?: string | null
           current_cropped_frames_version?: number | null
           deleted_at?: string | null
           duration_seconds?: number | null
@@ -858,7 +858,7 @@ export type Database = {
           uploaded_by_user_id?: string | null
         }
         Update: {
-          annotations_db_key?: string | null
+          captions_db_key?: string | null
           current_cropped_frames_version?: number | null
           deleted_at?: string | null
           duration_seconds?: number | null

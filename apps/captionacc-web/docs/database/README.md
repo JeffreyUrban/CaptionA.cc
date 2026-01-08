@@ -2,7 +2,7 @@
 
 ## Per-Video SQLite Design
 
-**Decision:** One `annotations.db` SQLite file per video, stored in hash-bucketed directories.
+**Decision:** One `captions.db` SQLite file per video, stored in hash-bucketed directories.
 
 **Structure:**
 
@@ -10,7 +10,7 @@
 local/data/
   {hash_prefix}/          # First 2 chars of video UUID (bucketing)
     {video_uuid}/         # Full video UUID
-      annotations.db      # Video-specific database
+      captions.db      # Video-specific database
       {video_id}.mp4
       crop_frames/
 ```

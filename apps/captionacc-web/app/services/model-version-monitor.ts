@@ -332,7 +332,7 @@ export async function runModelVersionCheck(): Promise<{
   )
 
   for (const video of videos) {
-    const dbPath = `${process.cwd()}/../../local/processing/${video.storagePath}/annotations.db`
+    const dbPath = `${process.cwd()}/../../local/processing/${video.storagePath}/captions.db`
     const result = checkVideoModelVersion(dbPath)
 
     if (result) {

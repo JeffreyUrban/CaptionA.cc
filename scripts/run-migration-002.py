@@ -22,7 +22,7 @@ def get_database_paths(data_dir: Path) -> list[Path]:
         for video_dir in sorted(parent_dir.iterdir()):
             if not video_dir.is_dir():
                 continue
-            db_path = video_dir / "annotations.db"
+            db_path = video_dir / "captions.db"
             if db_path.exists():
                 databases.append(db_path)
     return databases

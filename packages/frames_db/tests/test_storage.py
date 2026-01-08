@@ -24,7 +24,7 @@ from PIL import Image
 @pytest.fixture
 def temp_db(tmp_path: Path) -> Path:
     """Create temporary database with schema."""
-    db_path = tmp_path / "test_annotations.db"
+    db_path = tmp_path / "test_captions.db"
 
     # Create schema
     conn = sqlite3.connect(db_path)

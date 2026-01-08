@@ -18,7 +18,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
     return new Response('Invalid frameIndex', { status: 400 })
   }
 
-  // Construct path to annotations.db
+  // Construct path to captions.db
   const dbPath = await getDbPath(videoId)
   if (!dbPath) {
     return new Response('Video not found', { status: 404 })

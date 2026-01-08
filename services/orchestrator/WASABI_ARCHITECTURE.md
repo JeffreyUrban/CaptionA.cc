@@ -25,7 +25,7 @@ CaptionA.cc uses a hybrid storage architecture:
 
 - **state.db**: Local-only ephemeral state (UI preferences, processing status)
 - **cropping.db**: REPLACED by WebM chunks (legacy database, no longer used)
-- **annotations.db**: DEPRECATED - replaced by split database architecture
+- **captions.db**: DEPRECATED - replaced by split database architecture
 
 ## Split Database Architecture
 
@@ -184,12 +184,12 @@ DEFAULT_TENANT_ID=00000000-0000-0000-0000-000000000001
 
 ## Migration Notes
 
-### From Monolithic annotations.db
+### From Monolithic captions.db
 
 Old structure (deprecated):
 ```
 local/data/{hash}/{video_id}/
-  └── annotations.db  # All data in one file
+  └── captions.db  # All data in one file
 ```
 
 New structure:

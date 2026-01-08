@@ -1,6 +1,6 @@
 """Database operations for crop_frames pipeline.
 
-Writes cropped frame images to the cropped_frames table in annotations.db.
+Writes cropped frame images to the cropped_frames table in captions.db.
 """
 
 from collections.abc import Callable
@@ -10,22 +10,22 @@ from PIL import Image
 
 
 def get_database_path(output_dir: Path) -> Path:
-    """Get annotations.db path from crop_frames output directory.
+    """Get captions.db path from crop_frames output directory.
 
     Args:
         output_dir: Path to crop_frames output directory
                    (e.g., local/data/show_name/video_id/crop_frames)
 
     Returns:
-        Path to annotations.db file
+        Path to captions.db file
 
     Example:
         >>> get_database_path(Path("local/data/show_name/video_id/crop_frames"))
-        Path("local/data/show_name/video_id/annotations.db")
+        Path("local/data/show_name/video_id/captions.db")
     """
     # Go up one level from crop_frames to video directory
     video_dir = output_dir.parent
-    return video_dir / "annotations.db"
+    return video_dir / "captions.db"
 
 
 def write_frames_to_database(
@@ -43,7 +43,7 @@ def write_frames_to_database(
 
     Args:
         frames_dir: Directory containing frame images (frame_*.jpg)
-        db_path: Path to annotations.db file
+        db_path: Path to captions.db file
         crop_bounds: Crop bounds as (left, top, right, bottom) in pixels
         crop_bounds_version: Crop bounds version number (from video_layout_config)
         progress_callback: Optional callback (current, total) -> None
@@ -55,7 +55,7 @@ def write_frames_to_database(
     Example:
         >>> write_frames_to_database(
         ...     frames_dir=Path("local/data/show/video/crop_frames"),
-        ...     db_path=Path("local/data/show/video/annotations.db"),
+        ...     db_path=Path("local/data/show/video/captions.db"),
         ...     crop_bounds=(100, 200, 700, 250),
         ...     crop_bounds_version=1,
         ...     delete_after_write=True

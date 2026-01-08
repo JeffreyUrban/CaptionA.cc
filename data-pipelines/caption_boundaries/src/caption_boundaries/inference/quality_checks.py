@@ -63,7 +63,7 @@ def run_quality_checks(
     """Run quality checks on predicted boundaries.
 
     Args:
-        video_db_path: Path to video's annotations.db (unused, kept for API compatibility)
+        video_db_path: Path to video's captions.db (unused, kept for API compatibility)
         boundaries: List of predicted boundaries
         ocr_confidence_min: Minimum OCR confidence threshold (unused, kept for API compatibility)
 

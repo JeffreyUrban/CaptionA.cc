@@ -165,14 +165,14 @@ def train(
 @app.command()
 def analyze(
     predictions_json: Path = typer.Argument(..., help="Path to predictions JSON file"),
-    video_db: Path = typer.Option(..., "--video-db", help="Path to video annotations.db"),
+    video_db: Path = typer.Option(..., "--video-db", help="Path to video captions.db"),
     ocr_confidence_min: float = typer.Option(0.7, "--ocr-min", help="Minimum OCR confidence"),
 ):
     """Run quality checks on existing boundary predictions.
 
     Examples:
         # Analyze predictions from file
-        caption_boundaries analyze predictions.json --video-db local/data/61/61c3*/annotations.db
+        caption_boundaries analyze predictions.json --video-db local/data/61/61c3*/captions.db
     """
     import json
 
@@ -228,7 +228,7 @@ def create_dataset(
     """Create training dataset from annotated videos.
 
     Extracts frame pairs from confirmed caption boundaries in the specified
-    video directories. Supports glob patterns like 'local/data/*/*/annotations.db'.
+    video directories. Supports glob patterns like 'local/data/*/*/captions.db'.
 
     Examples:
         # Single video
@@ -242,7 +242,7 @@ def create_dataset(
     """
     from caption_boundaries.data.dataset_builder import create_training_dataset
 
-    # Expand glob patterns and find annotations.db files
+    # Expand glob patterns and find captions.db files
     video_db_paths = []
     for pattern in video_dirs:
         if "*" in str(pattern):
@@ -251,16 +251,16 @@ def create_dataset(
 
             matches = glob.glob(str(pattern))
             for match in matches:
-                db_path = Path(match) / "annotations.db"
+                db_path = Path(match) / "captions.db"
                 if db_path.exists():
                     video_db_paths.append(db_path)
         else:
             # Direct path
-            db_path = Path(pattern) / "annotations.db"
+            db_path = Path(pattern) / "captions.db"
             if db_path.exists():
                 video_db_paths.append(db_path)
             else:
-                console.print(f"[yellow]⚠[/yellow] No annotations.db found in {pattern}")
+                console.print(f"[yellow]⚠[/yellow] No captions.db found in {pattern}")
 
     if not video_db_paths:
         console.print("[red]✗[/red] No valid video databases found")

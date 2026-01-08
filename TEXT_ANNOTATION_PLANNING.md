@@ -6,8 +6,8 @@ Implement the Text Correction workflow as specified in `apps/captionacc-web/docs
 ## Architecture Understanding
 
 ### Current State
-- **Database**: Each video has SQLite DB at `local/data/[videoPath]/annotations.db`
-- **Annotations Table**: Shared table for boundary and text data
+- **Database**: Each video has SQLite DB at `local/data/[videoPath]/captions.db`
+- **Captions Table**: Shared table for boundary and text data
   - Boundary fields: `start_frame_index`, `end_frame_index`, `boundary_state`, `boundary_pending`
   - Text fields: `text`, `text_pending`, `text_status`, `text_notes`, `text_ocr_combined`, `text_updated_at`
   - Boundary states: 'predicted', 'confirmed', 'gap' (boundary workflow only)
@@ -22,7 +22,7 @@ Implement the Text Correction workflow as specified in `apps/captionacc-web/docs
 
 ### User Clarifications
 ✓ Combined images and OCR need to be created as part of the workflow (not pre-existing)
-✓ Text annotations use same `annotations` table with additional fields:
+✓ Text annotations use same `captions` table with additional fields:
   - `text` field: NULL = not yet annotated, empty string = annotated as "no caption"
   - `text_pending`: flag for when boundaries change and text needs re-annotation
   - `text_status`: text quality indicator (separate from boundary_state)
@@ -36,7 +36,7 @@ Implement the Text Correction workflow as specified in `apps/captionacc-web/docs
 
 ### Phase 1: Database Schema Updates
 **File to modify:**
-- `app/db/annotations-schema.sql`
+- `app/db/captions-schema.sql`
 
 **Changes:**
 1. **Rename boundary-specific fields** (avoid confusion with text workflow):
@@ -66,15 +66,15 @@ Implement the Text Correction workflow as specified in `apps/captionacc-web/docs
      ocr_text TEXT,
      ocr_confidence REAL,
      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-     FOREIGN KEY (annotation_id) REFERENCES annotations(id) ON DELETE CASCADE
+     FOREIGN KEY (annotation_id) REFERENCES captions(id) ON DELETE CASCADE
    );
    CREATE INDEX idx_frames_annotation ON frames(annotation_id);
    CREATE UNIQUE INDEX idx_frames_unique ON frames(annotation_id, frame_index);
    ```
 
 4. **Add indexes**:
-   - `idx_annotations_text_pending` on (text_pending, start_frame_index)
-   - `idx_annotations_text_null` on ((text IS NULL), start_frame_index) 
+   - `idx_captions_text_pending` on (text_pending, start_frame_index)
+   - `idx_captions_text_null` on ((text IS NULL), start_frame_index) 
 
 ### Phase 2: Image & OCR Processing
 
@@ -91,7 +91,7 @@ Implement the Text Correction workflow as specified in `apps/captionacc-web/docs
 
 **OCR Execution:**
 - **Combined image OCR**:
-  - Synchronous on first load, cache result in `annotations.combined_ocr_text`
+  - Synchronous on first load, cache result in `captions.combined_ocr_text`
   - Fast enough for real-time (single image)
 - **Per-frame OCR**:
   - Async/background job triggered on text annotation load
@@ -103,13 +103,13 @@ Implement the Text Correction workflow as specified in `apps/captionacc-web/docs
 
 ### Phase 3: API Routes
 **New routes to create:**
-- `app/routes/api.annotations.$videoId.text-queue.tsx`
-  - GET: Fetch annotations needing text
+- `app/routes/api.captions.$videoId.text-queue.tsx`
+  - GET: Fetch captions needing text
   - Query: `WHERE text IS NULL OR text_pending = 1`
   - Returns list sorted by start_frame_index
   - Include annotation metadata (id, start/end frames, existing text if any)
 
-- `app/routes/api.annotations.$videoId.$id.text.tsx`
+- `app/routes/api.captions.$videoId.$id.text.tsx`
   - GET: Load single annotation for text annotation
     - Generate combined image if not cached
     - Run OCR on combined image (synchronous)
@@ -120,13 +120,13 @@ Implement the Text Correction workflow as specified in `apps/captionacc-web/docs
     - Set `text_pending = 0`
     - Return updated annotation
 
-- `app/routes/api.annotations.$videoId.$id.frames.tsx`
+- `app/routes/api.captions.$videoId.$id.frames.tsx`
   - GET: Fetch per-frame OCR results for annotation
   - Returns array: `[{ frame_index, ocr_text, ocr_confidence }, ...]`
   - Used for progressive loading as OCR completes
 
 **Modify existing:**
-- `app/routes/api.annotations.$videoId.tsx`
+- `app/routes/api.captions.$videoId.tsx`
   - GET: Add text-related fields (text, text_pending, text_status, text_notes, text_ocr_combined, text_updated_at) to responses
   - PUT: When updating boundaries (start/end frame), set `text_pending = 1` if text is not NULL
 
@@ -190,7 +190,7 @@ Implement the Text Correction workflow as specified in `apps/captionacc-web/docs
 ### Phase 6: Background OCR Processing (Optional Enhancement)
 **Python script for pre-processing:**
 - `scripts/process-text-ocr.py`
-  - Scans annotations with text_pending=1 or text IS NULL
+  - Scans captions with text_pending=1 or text IS NULL
   - Generates combined images
   - Runs OCR on combined images and individual frames
   - Populates frames table with results
@@ -199,20 +199,20 @@ Implement the Text Correction workflow as specified in `apps/captionacc-web/docs
 ## Critical Files
 
 **Schema:**
-- `app/db/annotations-schema.sql` - Rename boundary fields, add text fields, add frames table
+- `app/db/captions-schema.sql` - Rename boundary fields, add text fields, add frames table
 
 **Image Processing:**
 - `app/utils/image-processing.ts` (NEW) - Combined image generation (median algorithm)
 - `app/utils/ocr-wrapper.ts` (NEW) - OCR wrapper for ocr_utils package
   - Call Python `process_frame_ocr_with_retry()` via subprocess
-  - Extract clean text from annotations array
+  - Extract clean text from captions array
   - Handle errors and retry logic
 
 **API Routes:**
-- `app/routes/api.annotations.$videoId.text-queue.tsx` (NEW)
-- `app/routes/api.annotations.$videoId.$id.text.tsx` (NEW)
-- `app/routes/api.annotations.$videoId.$id.frames.tsx` (NEW)
-- `app/routes/api.annotations.$videoId.tsx` (MODIFY - add text_pending on boundary update)
+- `app/routes/api.captions.$videoId.text-queue.tsx` (NEW)
+- `app/routes/api.captions.$videoId.$id.text.tsx` (NEW)
+- `app/routes/api.captions.$videoId.$id.frames.tsx` (NEW)
+- `app/routes/api.captions.$videoId.tsx` (MODIFY - add text_pending on boundary update)
 
 **Main Page:**
 - `app/routes/annotate.text.tsx` (NEW)
@@ -276,7 +276,7 @@ Implement the Text Correction workflow as specified in `apps/captionacc-web/docs
 
 ## Testing Considerations
 
-- Test with annotations that have/don't have text
+- Test with captions that have/don't have text
 - Verify status field updates correctly
 - Test keyboard shortcuts (Enter, Tab, Esc)
 - Verify text alignment persists per-video
@@ -299,7 +299,7 @@ Implement the Text Correction workflow as specified in `apps/captionacc-web/docs
 - **Alternative**: Full pre-processing pipeline (more complex, but better UX if implemented)
 
 ### 3. Per-Frame OCR Storage
-**Recommendation: Add frames table to annotations.db**
+**Recommendation: Add frames table to captions.db**
 - **Why**:
   - Relational integrity (CASCADE delete)
   - Efficient queries for frame ranges
@@ -329,15 +329,7 @@ Implement the Text Correction workflow as specified in `apps/captionacc-web/docs
 
 ## Decisions
 
-### 1. OCR Provider: OCRmac (Existing Implementation)
-**Decision:** Use `packages/ocr_utils` package
-- **Package:** `ocr_utils` with macOS LiveText API via `ocrmac` library
-- **Functions:**
-  - `process_frame_ocr_with_retry(image_path, language, timeout, max_retries)`
-  - Returns: `{ image_path, framework, language_preference, annotations: [...], error? }`
-- **Wrapper needed:** Extract clean text string from annotations array
-- **Language:** Default "zh-Hans" (Simplified Chinese) or make configurable
-- **Retry logic:** Built-in timeout protection with exponential backoff
+### 1. OCR Provider: captionsacc-ocr service 
 
 ### 2. Pre-processing: On-demand with Intelligent Work-Ahead
 **Decision:** Annotation-ID-based caching with configurable work-ahead

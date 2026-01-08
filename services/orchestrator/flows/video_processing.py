@@ -37,7 +37,7 @@ def extract_full_frames(
 
     Args:
         video_path: Full path to video file
-        db_path: Path to annotations.db
+        db_path: Path to captions.db
         output_dir: Directory to write frames
         frame_rate: Frame extraction rate in Hz (default 0.1 = every 10 seconds)
 
@@ -120,7 +120,7 @@ def update_processing_status(db_path: str, status: str) -> None:
     Preserves existing database schema and status tracking.
 
     Args:
-        db_path: Path to annotations.db
+        db_path: Path to captions.db
         status: New status value (e.g., 'processing_complete')
     """
     print(f"Updating status to: {status}")
@@ -173,7 +173,7 @@ def process_video_initial_flow(
     Args:
         video_id: Video UUID
         video_path: Full path to video file
-        db_path: Path to annotations.db
+        db_path: Path to captions.db
         output_dir: Directory for frame output
         frame_rate: Frame extraction rate in Hz
 

@@ -62,7 +62,7 @@ def get_video_info(db_path: Path) -> dict | None:
         # Get database modification time
         db_mtime = db_path.stat().st_mtime
 
-        # Count annotations
+        # Count captions
         captions_count = 0
         try:
             captions_count = cursor.execute("SELECT COUNT(*) FROM captions").fetchone()[0]
@@ -129,7 +129,7 @@ def find_duplicates():
     by_display_path = defaultdict(list)
 
     # Find all databases
-    for db_path in DATA_DIR.rglob("annotations.db"):
+    for db_path in DATA_DIR.rglob("captions.db"):
         info = get_video_info(db_path)
         if info:
             by_display_path[info["display_path"]].append(info)

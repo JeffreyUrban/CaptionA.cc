@@ -374,7 +374,7 @@ function findAllDatabases(): string[] {
 
           if (stat.isDirectory()) {
             scanDir(fullPath)
-          } else if (entry === 'annotations.db' && stat.size > 0) {
+          } else if (entry === 'captions.db' && stat.size > 0) {
             databases.push(fullPath)
           }
         } catch {

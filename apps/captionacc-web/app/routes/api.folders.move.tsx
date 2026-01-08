@@ -130,7 +130,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
   // Update display_path for each video
   for (const video of videosToMove) {
-    const dbPath = resolve(dataDir, ...video.storagePath.split('/'), 'annotations.db')
+    const dbPath = resolve(dataDir, ...video.storagePath.split('/'), 'captions.db')
 
     if (!existsSync(dbPath)) {
       errors.push(`Database not found for ${video.displayPath}`)

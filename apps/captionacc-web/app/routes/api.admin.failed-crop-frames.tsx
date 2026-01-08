@@ -29,7 +29,7 @@ function checkVideoForErrors(video: {
   displayPath: string
   storagePath: string
 }): FailedVideo | null {
-  const dbPath = `${process.cwd()}/../../local/processing/${video.storagePath}/annotations.db`
+  const dbPath = `${process.cwd()}/../../local/processing/${video.storagePath}/captions.db`
 
   // Skip if database doesn't exist
   if (!existsSync(dbPath)) {

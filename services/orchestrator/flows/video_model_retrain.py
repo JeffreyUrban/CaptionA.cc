@@ -93,7 +93,7 @@ def extract_box_features(
     - User annotation features (if box has been labeled)
 
     Args:
-        db_path: Path to video annotations.db
+        db_path: Path to video captions.db
         box_ids: Specific box IDs to extract (None = all boxes)
 
     Returns:
@@ -139,7 +139,7 @@ def train_video_model(
 
     Args:
         video_id: Video UUID
-        db_path: Path to annotations.db
+        db_path: Path to captions.db
         base_model: Base model parameters
 
     Returns:
@@ -200,7 +200,7 @@ def save_video_model(
     Save trained model to box_classification_model table.
 
     Args:
-        db_path: Path to annotations.db
+        db_path: Path to captions.db
         model: Model parameters
     """
     print(f"[SaveVideoModel] Saving model to: {db_path}")
@@ -262,7 +262,7 @@ def update_box_predictions(
     3. Update full_frame_ocr table with predictions
 
     Args:
-        db_path: Path to annotations.db
+        db_path: Path to captions.db
         model: Trained model parameters
 
     Returns:
@@ -328,7 +328,7 @@ def retrain_video_model_flow(
 
     Args:
         video_id: Video UUID
-        db_path: Path to video's annotations.db
+        db_path: Path to video's captions.db
         update_predictions: Whether to update box predictions
 
     Returns:

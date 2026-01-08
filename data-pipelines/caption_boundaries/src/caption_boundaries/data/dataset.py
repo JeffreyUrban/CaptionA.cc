@@ -410,7 +410,7 @@ def _get_video_metadata(video_db_path: Path) -> dict:
     """Get video metadata from annotations database.
 
     Args:
-        video_db_path: Path to video's annotations.db
+        video_db_path: Path to video's captions.db
 
     Returns:
         Dict with video metadata
@@ -434,7 +434,7 @@ def _get_spatial_features(video_db_path: Path, frame1_index: int, frame2_index: 
     """Extract spatial features for frame pair.
 
     Args:
-        video_db_path: Path to video's annotations.db
+        video_db_path: Path to video's captions.db
         frame1_index: First frame index
         frame2_index: Second frame index
 

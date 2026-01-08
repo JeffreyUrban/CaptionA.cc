@@ -174,7 +174,7 @@ function initializeVersion(dbPath: string): { success: boolean; error?: string }
 }
 
 /**
- * Find all annotations.db files recursively
+ * Find all captions.db files recursively
  */
 function findAllDatabases(): string[] {
   const databases: string[] = []
@@ -188,7 +188,7 @@ function findAllDatabases(): string[] {
 
       if (stat.isDirectory()) {
         scanDir(fullPath)
-      } else if (entry === 'annotations.db' && stat.size > 0) {
+      } else if (entry === 'captions.db' && stat.size > 0) {
         databases.push(fullPath)
       }
     }

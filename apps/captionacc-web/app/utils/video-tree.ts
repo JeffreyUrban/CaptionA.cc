@@ -139,7 +139,7 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
     'local',
     'data',
     ...videoId.split('/'),
-    'annotations.db'
+    'captions.db'
   )
 
   if (!existsSync(dbPath)) {

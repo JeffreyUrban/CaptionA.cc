@@ -46,8 +46,8 @@ export async function resolveDisplayPath(displayPath: string): Promise<string | 
       if (entry.isDirectory()) {
         const fullPath = resolve(dir, entry.name)
 
-        // Check if this is a video directory (has annotations.db)
-        const dbPath = resolve(fullPath, 'annotations.db')
+        // Check if this is a video directory (has captions.db)
+        const dbPath = resolve(fullPath, 'captions.db')
         if (existsSync(dbPath)) {
           try {
             const db = new Database(dbPath, { readonly: true })
@@ -141,7 +141,7 @@ export async function getDbPath(pathOrId: string): Promise<string | null> {
   const videoDir = await getVideoDir(pathOrId)
   if (!videoDir) return null
 
-  const dbPath = resolve(videoDir, 'annotations.db')
+  const dbPath = resolve(videoDir, 'captions.db')
   return existsSync(dbPath) ? dbPath : null
 }
 

@@ -38,11 +38,11 @@ def find_videos_with_confirmed_boundaries(data_dir: Path, min_confirmed: int = 5
         min_confirmed: Minimum number of confirmed boundaries required
 
     Returns:
-        List of paths to annotations.db files with sufficient confirmed boundaries
+        List of paths to captions.db files with sufficient confirmed boundaries
     """
     video_dbs = []
 
-    for db_path in data_dir.glob("*/*/annotations.db"):
+    for db_path in data_dir.glob("*/*/captions.db"):
         try:
             conn = sqlite3.connect(db_path)
             cursor = conn.cursor()
@@ -77,7 +77,7 @@ def get_confirmed_captions(db_path: Path) -> list[tuple[int, int]]:
     """Get confirmed caption boundaries from video database.
 
     Args:
-        db_path: Path to video's annotations.db
+        db_path: Path to video's captions.db
 
     Returns:
         List of (start_frame_index, end_frame_index) tuples
@@ -104,7 +104,7 @@ def get_cropped_frame_indices(db_path: Path) -> list[int]:
     """Get all available cropped frame indices from video database.
 
     Args:
-        db_path: Path to video's annotations.db
+        db_path: Path to video's captions.db
 
     Returns:
         List of frame indices that exist in cropped_frames table
@@ -167,7 +167,7 @@ def extract_samples_from_video(
     """Extract training samples from a single video.
 
     Args:
-        db_path: Path to video's annotations.db
+        db_path: Path to video's captions.db
         max_samples_per_video: Maximum samples to extract per video
 
     Returns:
@@ -220,7 +220,7 @@ def create_training_dataset(
     """Create training dataset from video databases.
 
     Args:
-        video_dbs: List of paths to video annotations.db files
+        video_dbs: List of paths to video captions.db files
         training_db_path: Path to training database
         dataset_name: Name for the dataset
         description: Description of the dataset

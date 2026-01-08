@@ -42,7 +42,7 @@ class TrainingSample:
 def find_all_video_dirs(data_root: Path) -> list[Path]:
     """Find all video directories in data root.
 
-    Looks for directories containing annotations.db files.
+    Looks for directories containing captions.db files.
 
     Args:
         data_root: Root data directory (e.g., local/data/)
@@ -52,7 +52,7 @@ def find_all_video_dirs(data_root: Path) -> list[Path]:
     """
     video_dirs = []
 
-    for db_path in data_root.rglob("annotations.db"):
+    for db_path in data_root.rglob("captions.db"):
         video_dir = db_path.parent
         video_dirs.append(video_dir)
 
@@ -63,7 +63,7 @@ def get_confirmed_text_annotations(db_path: Path) -> list[dict[str, Any]]:
     """Get confirmed text annotations from a video database.
 
     Args:
-        db_path: Path to annotations.db
+        db_path: Path to captions.db
 
     Returns:
         List of caption dictionaries with confirmed text
@@ -114,7 +114,7 @@ def load_frame_from_db(db_path: Path, frame_index: int) -> Image.Image | None:
     """Load cropped frame from database.
 
     Args:
-        db_path: Path to annotations.db
+        db_path: Path to captions.db
         frame_index: Frame index to load
 
     Returns:

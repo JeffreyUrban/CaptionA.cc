@@ -277,7 +277,7 @@ async function recoverStaleProcessing(video: {
   videoId: string
 }): Promise<void> {
   const { displayPath, videoDir, videoFile, attempts, videoId } = video
-  const dbPath = resolve(videoDir, 'annotations.db')
+  const dbPath = resolve(videoDir, 'captions.db')
 
   // Check if exceeded max attempts
   if (attempts >= MAX_PROCESSING_ATTEMPTS) {

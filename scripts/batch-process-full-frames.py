@@ -17,8 +17,8 @@ from pathlib import Path
 
 
 def get_database_path(video_path: Path) -> Path:
-    """Get annotations.db path for a video file."""
-    return video_path.parent / "annotations.db"
+    """Get captions.db path for a video file."""
+    return video_path.parent / "captions.db"
 
 
 def check_full_frames_populated(db_path: Path) -> tuple[bool, int]:

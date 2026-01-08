@@ -13,7 +13,7 @@ skipped=0
 echo "Starting migration of *_old tables..."
 echo
 
-find "$LOCAL_DATA_DIR" -name "annotations.db" -type f | while read db; do
+find "$LOCAL_DATA_DIR" -name "captions.db" -type f | while read db; do
   video_id=$(basename $(dirname "$db"))
 
   # Check which _old tables exist
