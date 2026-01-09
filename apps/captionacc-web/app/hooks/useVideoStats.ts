@@ -133,17 +133,20 @@ export function useVideoStats({ tree }: UseVideoStatsParams): UseVideoStatsRetur
     const videoIdSet = new Set(videoIds)
 
     // Clean up stale entries (videos that are no longer in the tree)
-    const cachedVideoIds = Object.keys(stats)
-    const staleVideoIds = cachedVideoIds.filter(id => !videoIdSet.has(id))
+    // Skip cleanup if tree is empty (still loading) to avoid race condition
+    if (videoIds.length > 0) {
+      const cachedVideoIds = Object.keys(stats)
+      const staleVideoIds = cachedVideoIds.filter(id => !videoIdSet.has(id))
 
-    if (staleVideoIds.length > 0) {
-      console.log(
-        `[useVideoStats] Removing ${staleVideoIds.length} stale cache entries:`,
-        staleVideoIds
-      )
-      staleVideoIds.forEach(videoId => {
-        removeStats(videoId)
-      })
+      if (staleVideoIds.length > 0) {
+        console.log(
+          `[useVideoStats] Removing ${staleVideoIds.length} stale cache entries:`,
+          staleVideoIds
+        )
+        staleVideoIds.forEach(videoId => {
+          removeStats(videoId)
+        })
+      }
     }
 
     // Check for videos that were recently touched and need stats refresh
