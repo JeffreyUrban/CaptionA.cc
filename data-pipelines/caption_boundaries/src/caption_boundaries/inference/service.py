@@ -230,6 +230,7 @@ def run_boundary_inference_batch(
         download_and_extract_chunks_parallel,
         get_frames_in_chunk,
     )
+
     # Use local WasabiClient copy - services.orchestrator is not available in Modal containers
     from caption_boundaries.inference.wasabi import WasabiClient
 
@@ -284,6 +285,7 @@ def run_boundary_inference_batch(
         discover_start = time.time()
 
         import re
+
         from PIL import Image as PILImage
 
         # chunk_info: dict mapping (chunk_start, modulo) -> (storage_key, list of frame indices)
@@ -569,7 +571,7 @@ def main():
     # Test with 50 frame pairs (every 20th frame from 0-1000)
     frame_pairs = [(i, i + 1) for i in range(0, 1000, 20)]
 
-    print(f"\nTest Configuration:")
+    print("\nTest Configuration:")
     print(f"  Video ID: {VIDEO_ID}")
     print(f"  Tenant ID: {TENANT_ID}")
     print(f"  Model Version: {MODEL_VERSION}")
