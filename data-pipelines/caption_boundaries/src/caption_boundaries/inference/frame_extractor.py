@@ -261,7 +261,8 @@ def download_and_extract_chunks_parallel(
                 all_frames.update(chunk_frames)
                 completed += 1
                 if completed % 50 == 0 or completed == len(chunk_infos):
-                    console.print(f"[cyan]  Processed {completed}/{len(chunk_infos)} chunks, {len(all_frames)} frames[/cyan]")
+                    msg = f"  Processed {completed}/{len(chunk_infos)} chunks, {len(all_frames)} frames"
+                    console.print(f"[cyan]{msg}[/cyan]")
             except Exception as e:
                 console.print(f"[red]  Failed chunk {info[1]} (modulo_{info[2]}): {e}[/red]")
 
