@@ -185,8 +185,20 @@ def extract_full_frames_to_video_db(
     # Ensure parent directory exists
     Path(output_db_abs).parent.mkdir(parents=True, exist_ok=True)
 
+    # Delete existing database to ensure idempotency
+    if Path(output_db_abs).exists():
+        Path(output_db_abs).unlink()
+        print(f"[video.db] Deleted existing database for clean extraction")
+
     pipeline_dir = Path(__file__).parent.parent.parent.parent / "data-pipelines" / "full_frames"
     frames_dir = Path(output_db_abs).parent / "frames_temp"
+
+    # Clean up existing frames directory for idempotency
+    import shutil
+    if frames_dir.exists():
+        shutil.rmtree(frames_dir)
+        print(f"[video.db] Deleted existing frames temp directory")
+
     frames_dir.mkdir(parents=True, exist_ok=True)
 
     # Step 1: Extract frames to temporary directory using sample-frames CLI
@@ -297,20 +309,27 @@ def run_ocr_to_full_ocr_db(
     Creates fullOCR.db with:
     - full_frame_ocr table (OCR detections, text, confidence, bounding boxes)
     """
+    import sqlite3
+
+    from ocr_client import get_ocr_client
+
     print(f"[fullOCR.db] Running OCR on frames from {video_db_path}")
 
+    video_db_abs = str(Path(video_db_path).resolve())
     ocr_db_abs = str(Path(output_ocr_db_path).resolve())
 
     # Ensure parent directory exists
     Path(ocr_db_abs).parent.mkdir(parents=True, exist_ok=True)
 
-    # TODO: Replace with actual OCR pipeline when available
-    # For now, create empty fullOCR.db with schema
-    import sqlite3
+    # Delete existing OCR database to ensure idempotency
+    if Path(ocr_db_abs).exists():
+        Path(ocr_db_abs).unlink()
+        print(f"[fullOCR.db] Deleted existing OCR database for clean processing")
 
-    conn = sqlite3.connect(ocr_db_abs)
+    # Create fullOCR.db with schema
+    ocr_conn = sqlite3.connect(ocr_db_abs)
     try:
-        conn.execute("""
+        ocr_conn.execute("""
             CREATE TABLE IF NOT EXISTS full_frame_ocr (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 frame_id INTEGER NOT NULL,
@@ -325,18 +344,124 @@ def run_ocr_to_full_ocr_db(
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_frame_index ON full_frame_ocr(frame_index)")
-        conn.commit()
+        ocr_conn.execute("CREATE INDEX IF NOT EXISTS idx_frame_index ON full_frame_ocr(frame_index)")
+        ocr_conn.commit()
+    except Exception as e:
+        ocr_conn.close()
+        raise RuntimeError(f"Failed to create fullOCR.db schema: {e}") from e
 
-        ocr_count = conn.execute("SELECT COUNT(*) FROM full_frame_ocr").fetchone()[0]
+    # Read frames from video.db
+    video_conn = sqlite3.connect(video_db_abs)
+    try:
+        cursor = video_conn.execute("""
+            SELECT frame_index, image_data, width, height
+            FROM full_frames
+            ORDER BY frame_index
+        """)
+
+        frames_data = cursor.fetchall()
+        total_frames = len(frames_data)
+
+        if total_frames == 0:
+            print("[fullOCR.db] No frames found in video.db")
+            ocr_conn.close()
+            return {
+                "db_path": ocr_db_abs,
+                "ocr_count": 0,
+                "status": "completed",
+            }
+
+        print(f"[fullOCR.db] Found {total_frames} frames to process")
+
+        # Get frame dimensions (all frames should be same size)
+        _, _, width, height = frames_data[0]
+        print(f"[fullOCR.db] Frame dimensions: {width}×{height}")
+
+        # Get OCR service client
+        ocr_client = get_ocr_client()
+
+        # Check capacity for this frame size
+        capacity = ocr_client.get_capacity(width, height)
+        max_batch_size = capacity["max_images"]
+        print(f"[fullOCR.db] Max batch size: {max_batch_size} (limited by {capacity['limiting_factor']})")
+
+        # Calculate optimal batch size to divide frames evenly
+        if total_frames <= max_batch_size:
+            # All frames fit in one batch
+            batch_size = total_frames
+            num_batches = 1
+        else:
+            # Divide frames evenly across multiple batches
+            import math
+            num_batches = math.ceil(total_frames / max_batch_size)
+            batch_size = math.ceil(total_frames / num_batches)
+
+        print(f"[fullOCR.db] Processing {total_frames} frames in {num_batches} batches of ~{batch_size} frames each")
+
+        # Process frames in batches
+        total_detections = 0
+
+        for batch_start in range(0, total_frames, batch_size):
+            batch_end = min(batch_start + batch_size, total_frames)
+            batch_frames = frames_data[batch_start:batch_end]
+
+            batch_num = batch_start//batch_size + 1
+            print(f"[fullOCR.db] Processing batch {batch_num}/{num_batches} ({batch_end - batch_start} frames)")
+
+            # Prepare images for OCR service
+            images = []
+            for frame_index, image_data, _, _ in batch_frames:
+                images.append({
+                    "id": f"frame_{frame_index}",
+                    "data": image_data,
+                })
+
+            # Submit to OCR service and wait for results (sequential processing)
+            try:
+                result = ocr_client.process_batch(images, timeout=600)  # 10min timeout for large batches
+
+                print(f"[fullOCR.db] Batch processed: {result['total_characters']} characters in {result['processing_time_ms']:.0f}ms")
+
+                # Store OCR results in fullOCR.db
+                for ocr_result in result["results"]:
+                    frame_index = int(ocr_result["id"].replace("frame_", ""))
+
+                    for box_idx, char in enumerate(ocr_result["characters"]):
+                        bbox = char["bbox"]
+                        ocr_conn.execute("""
+                            INSERT INTO full_frame_ocr (
+                                frame_id, frame_index, box_index, text, confidence,
+                                bbox_left, bbox_top, bbox_right, bbox_bottom
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """, (
+                            frame_index,  # frame_id (same as frame_index for full frames)
+                            frame_index,
+                            box_idx,
+                            char["text"],
+                            1.0,  # Google Vision doesn't provide per-char confidence, use 1.0
+                            bbox["x"],
+                            bbox["y"],
+                            bbox["x"] + bbox["width"],
+                            bbox["y"] + bbox["height"],
+                        ))
+
+                ocr_conn.commit()
+                total_detections += result["total_characters"]
+
+            except Exception as e:
+                print(f"[fullOCR.db] Warning: Batch {batch_start//batch_size + 1} failed: {e}")
+                # Continue with next batch instead of failing entire job
+
     finally:
-        conn.close()
+        video_conn.close()
+        ocr_conn.close()
 
-    print(f"[fullOCR.db] OCR processing complete: {ocr_count} detections")
+    print(f"[fullOCR.db] OCR processing complete: {total_detections} detections from {total_frames} frames")
 
     return {
         "db_path": ocr_db_abs,
-        "ocr_count": ocr_count,
+        "ocr_count": total_detections,
+        "frames_processed": total_frames,
         "status": "completed",
     }
 
