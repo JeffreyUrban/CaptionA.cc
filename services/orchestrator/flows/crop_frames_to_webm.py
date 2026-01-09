@@ -24,8 +24,8 @@ import requests
 from prefect import flow, task
 from prefect.artifacts import create_table_artifact
 
-from ..supabase_client import CroppedFramesVersionRepository, VideoRepository
-from ..wasabi_client import WasabiClient, get_wasabi_client
+from supabase_client import CroppedFramesVersionRepository, VideoRepository
+from wasabi_client import get_wasabi_client
 
 # Default tenant for development
 DEFAULT_TENANT_ID = "00000000-0000-0000-0000-000000000001"

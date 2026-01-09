@@ -25,8 +25,8 @@ If you want the Prefect UI, asset lineage visualization, and team collaboration 
 
 ```bash
 # Create new directory
-mkdir services/prefect-server
-cd services/prefect-server
+mkdir services/prefect-service
+cd services/prefect-service
 
 # Create Dockerfile
 cat > Dockerfile <<'EOF'
@@ -44,7 +44,7 @@ EOF
 
 # Create fly.toml
 cat > fly.toml <<'EOF'
-app = "captionacc-prefect-server"
+app = "prefect"
 primary_region = "ewr"
 
 [build]
@@ -72,7 +72,7 @@ primary_region = "ewr"
 [[vm]]
   cpu_kind = "shared"
   cpus = 1
-  memory_mb = 512
+  memory_mb = 256
 EOF
 ```
 
@@ -87,20 +87,20 @@ Prefect server needs a PostgreSQL database. Use your existing Supabase:
 # Set as Fly secret
 fly secrets set \
   PREFECT_API_DATABASE_CONNECTION_URL="postgresql://postgres:xxx@xxx.supabase.co:5432/postgres" \
-  -a captionacc-prefect-server
+  -a prefect
 ```
 
 3. **Deploy Prefect Server**
 
 ```bash
-fly deploy -a captionacc-prefect-server
+fly deploy -a prefect
 ```
 
 4. **Create Prefect API Key**
 
 ```bash
 # SSH into the Prefect server
-fly ssh console -a captionacc-prefect-server
+fly ssh console -a prefect
 
 # Create API key
 prefect cloud api-key create --name orchestrator-production
@@ -114,7 +114,7 @@ Add secrets to orchestrator:
 
 ```bash
 fly secrets set \
-  PREFECT_API_URL="https://captionacc-prefect-server.fly.dev/api" \
+  PREFECT_API_URL="https://prefect.fly.dev/api" \
   PREFECT_API_KEY="pnu_xxx..." \
   -a captionacc-orchestrator
 ```
@@ -122,7 +122,7 @@ fly secrets set \
 6. **Update GitHub Secrets**
 
 Add to repository secrets:
-- `PREFECT_API_URL`: `https://captionacc-prefect-server.fly.dev/api`
+- `PREFECT_API_URL`: `https://prefect.fly.dev/api`
 - `PREFECT_API_KEY`: The API key from step 4
 
 7. **Redeploy Orchestrator**
@@ -142,15 +142,15 @@ curl https://captionacc-orchestrator.fly.dev/health | jq '.components.prefect'
 9. **Add to Better Stack**
 
 Create a new monitor in Better Stack:
-- URL: `https://captionacc-prefect-server.fly.dev/api/health`
+- URL: `https://prefect.fly.dev/api/health`
 - Check interval: 3 minutes
 
 ### Cost Estimate
 
 **Prefect Server on Fly.io:**
-- VM: shared-cpu-1x with 512MB RAM
+- VM: shared-cpu-1x with 256MB RAM
 - Storage: Supabase (existing, no extra cost)
-- Estimated cost: **~$3-5/month**
+- Estimated cost: **~$2/month**
 
 **Alternative: Prefect Cloud Hobby Plan (Free)**
 - Free tier: 5 deployments, 2 users, 7-day retention
@@ -159,7 +159,7 @@ Create a new monitor in Better Stack:
 
 ### Migration Checklist
 
-- [ ] Create `services/prefect-server/` directory
+- [ ] Create `services/prefect-service/` directory
 - [ ] Add Dockerfile and fly.toml
 - [ ] Deploy Prefect server to Fly.io
 - [ ] Configure Supabase connection string
@@ -185,7 +185,7 @@ If issues occur:
    - Everything continues to work normally
 
 3. **Debug Prefect server separately**
-   - Check logs: `fly logs -a captionacc-prefect-server`
+   - Check logs: `fly logs -a prefect`
    - Verify database connection
    - Ensure API key is valid
 
