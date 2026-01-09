@@ -3,9 +3,9 @@
  *
  * This is a thin route handler that delegates to the annotation-crud-service
  * for all business logic. It handles:
- * - GET: List annotations in a frame range
- * - POST: Create a new annotation (no overlap resolution)
- * - PUT: Update an annotation with overlap resolution
+ * - GET: List annotations in a frame range (requires view permission)
+ * - POST: Create a new annotation (requires annotate permission)
+ * - PUT: Update an annotation with overlap resolution (requires annotate permission)
  *
  * All database operations and overlap resolution logic are in the service layer.
  */
@@ -21,6 +21,7 @@ import {
   type UpdateAnnotationInput,
 } from '~/services/annotation-crud-service'
 import { jsonResponse, errorResponse, extractVideoId } from '~/utils/api-responses'
+import { requireAnnotatePermission } from '~/utils/video-permissions'
 
 // =============================================================================
 // Loader - GET annotations
@@ -30,12 +31,18 @@ import { jsonResponse, errorResponse, extractVideoId } from '~/utils/api-respons
  * GET /api/annotations/:videoId?start=N&end=M
  *
  * Fetch annotations that overlap with the specified frame range.
+ * Note: Read-only access - checking annotation permission allows viewing for demo videos too.
  */
 export async function loader({ params, request }: LoaderFunctionArgs) {
   const videoIdResult = extractVideoId(params)
   if (!videoIdResult.success) return videoIdResult.response
 
   const videoId = videoIdResult.value
+
+  // Note: For GET requests, we check annotation permission which allows view access
+  // This handles demo videos (read-only) and owned videos (read-write)
+  await requireAnnotatePermission(request, videoId)
+
   const url = new URL(request.url)
   const startFrame = parseInt(url.searchParams.get('start') ?? '0')
   const endFrame = parseInt(url.searchParams.get('end') ?? '1000')
@@ -60,12 +67,18 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
  *
  * POST: Create a new annotation without overlap resolution
  * PUT: Update an existing annotation with automatic overlap resolution
+ *
+ * Requires annotation permission (blocks demo videos and trial tier limits).
  */
 export async function action({ params, request }: ActionFunctionArgs) {
   const videoIdResult = extractVideoId(params)
   if (!videoIdResult.success) return videoIdResult.response
 
   const videoId = videoIdResult.value
+
+  // Require annotation permission for write operations
+  await requireAnnotatePermission(request, videoId)
+
   const body = await request.json()
 
   try {

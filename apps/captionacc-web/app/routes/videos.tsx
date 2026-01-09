@@ -7,12 +7,9 @@
  * - Table components extracted to ~/components/videos/VideoTable.tsx
  */
 
-import { existsSync, readFileSync } from 'fs'
-import { resolve } from 'path'
-
 import { MagnifyingGlassIcon, PlusIcon } from '@heroicons/react/20/solid'
-import { useState, useMemo, useEffect } from 'react'
-import { useLoaderData, Link, useRevalidator, type LoaderFunctionArgs } from 'react-router'
+import { useState, useMemo } from 'react'
+import { useLoaderData, Link, useRevalidator, redirect } from 'react-router'
 
 import { AppLayout } from '~/components/AppLayout'
 import {
@@ -32,105 +29,66 @@ import { useTreeNavigation } from '~/hooks/useTreeNavigation'
 import { useVideoDragDrop } from '~/hooks/useVideoDragDrop'
 import { useVideoOperations } from '~/hooks/useVideoOperations'
 import { useVideoStats } from '~/hooks/useVideoStats'
-import { supabase } from '~/services/supabase-client'
-import type { FoldersMetadata } from '~/types/videos'
+import { createServerSupabaseClient } from '~/services/supabase-client'
 import {
   buildVideoTree,
   calculateVideoCounts,
   sortTreeNodes,
   type TreeNode,
-  type FolderNode,
   type VideoInfo,
 } from '~/utils/video-tree'
-
-// =============================================================================
-// Helper Functions - Server Side
-// =============================================================================
-
-function readEmptyFolders(dataDir: string): string[] {
-  const foldersMetaPath = resolve(dataDir, '.folders.json')
-  try {
-    if (existsSync(foldersMetaPath)) {
-      const content = readFileSync(foldersMetaPath, 'utf-8')
-      const metadata: FoldersMetadata = JSON.parse(content)
-      return metadata.emptyFolders ?? []
-    }
-  } catch {
-    // If file doesn't exist or is invalid, return empty
-  }
-  return []
-}
-
-/**
- * Insert empty folders into the tree as FolderNodes
- */
-function insertEmptyFolders(tree: TreeNode[], emptyFolders: string[]): TreeNode[] {
-  for (const folderPath of emptyFolders) {
-    const segments = folderPath.split('/')
-    let currentLevel = tree
-    // Navigate/create the folder structure
-    for (let i = 0; i < segments.length; i++) {
-      const segment = segments[i]
-      if (!segment) continue
-
-      const path = segments.slice(0, i + 1).join('/')
-
-      // Find existing node at this level
-      let node = currentLevel.find(n => n.name === segment)
-
-      if (!node) {
-        // Create new folder node
-        const folderNode: FolderNode = {
-          type: 'folder',
-          name: segment,
-          path,
-          children: [],
-          stats: {
-            totalAnnotations: 0,
-            pendingReview: 0,
-            confirmedAnnotations: 0,
-            predictedAnnotations: 0,
-            gapAnnotations: 0,
-            progress: 0,
-            totalFrames: 0,
-            coveredFrames: 0,
-            hasOcrData: false,
-            layoutApproved: false,
-            boundaryPendingReview: 0,
-            textPendingReview: 0,
-            badges: [],
-          },
-          videoCount: 0,
-        }
-        currentLevel.push(folderNode)
-        node = folderNode
-      }
-
-      // Move to next level
-      if (node.type === 'folder') {
-        currentLevel = node.children
-      }
-    }
-  }
-
-  return tree
-}
 
 // =============================================================================
 // Loader
 // =============================================================================
 
-export async function loader({ request }: LoaderFunctionArgs) {
-  // Loader only handles static data (empty folders metadata)
-  // Videos are fetched client-side from Supabase (RLS enforces tenant isolation)
-  const dataDir = resolve(process.cwd(), '..', '..', 'local', 'processing')
+export async function loader() {
+  const supabase = createServerSupabaseClient()
 
-  let emptyFolders: string[] = []
-  if (existsSync(dataDir)) {
-    emptyFolders = readEmptyFolders(dataDir)
+  // Get authenticated user
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser()
+
+  if (!user || error) {
+    throw redirect('/auth/login')
   }
 
-  return { emptyFolders }
+  // Query videos table - RLS automatically filters by tenant/user
+  const { data: videos, error: videosError } = await supabase
+    .from('videos')
+    .select('id, filename, display_path, status, uploaded_at, is_demo')
+    .is('deleted_at', null)
+    .order('uploaded_at', { ascending: false })
+
+  if (videosError) {
+    console.error('Failed to fetch videos:', videosError)
+    return { tree: [] }
+  }
+
+  // Transform to VideoInfo format expected by tree builder
+  const videoList: VideoInfo[] =
+    videos?.map(v => ({
+      videoId: v.id,
+      displayPath: v.display_path || v.filename || v.id,
+      isDemo: v.is_demo || false,
+    })) || []
+
+  // Build tree structure from videos only (without stats - will be loaded client-side)
+  let tree = buildVideoTree(videoList)
+
+  // Calculate video counts for each folder
+  tree.forEach(node => {
+    if (node.type === 'folder') {
+      calculateVideoCounts(node)
+    }
+  })
+
+  // Sort tree: folders first, then videos
+  const sortedTree = sortTreeNodes(tree)
+
+  return { tree: sortedTree }
 }
 
 // =============================================================================
@@ -240,105 +198,13 @@ function SearchControls({
 // =============================================================================
 
 export default function VideosPage() {
-  const { emptyFolders } = useLoaderData<{ emptyFolders: string[] }>()
+  const { tree } = useLoaderData<{ tree: TreeNode[] }>()
   const revalidator = useRevalidator()
   const [searchQuery, setSearchQuery] = useState('')
-  const [tree, setTree] = useState<TreeNode[]>([])
-  const [loading, setLoading] = useState(true)
 
-  // Fetch videos from Supabase (client-side with RLS)
-  useEffect(() => {
-    async function fetchVideos() {
-      try {
-        setLoading(true)
-
-        // Query videos from Supabase (RLS automatically filters by tenant)
-        const { data: videos, error } = await supabase
-          .from('videos')
-          .select('id, video_path')
-          .is('deleted_at', null)
-          .order('video_path')
-
-        if (error) {
-          console.error('[Videos] Failed to fetch videos from Supabase:', error)
-          setTree([])
-          return
-        }
-
-        // Map to VideoInfo format
-        const videoInfos: VideoInfo[] = (videos ?? []).map(video => ({
-          videoId: (video as { id: string }).id,
-          displayPath: (video as { video_path: string }).video_path,
-        }))
-
-        // Build tree structure from videos
-        let newTree = buildVideoTree(videoInfos)
-
-        // Insert empty folders from metadata
-        newTree = insertEmptyFolders(newTree, emptyFolders)
-
-        // Calculate video counts for each folder
-        newTree.forEach(node => {
-          if (node.type === 'folder') {
-            calculateVideoCounts(node)
-          }
-        })
-
-        // Sort tree: folders first, then videos
-        const sortedTree = sortTreeNodes(newTree)
-
-        setTree(sortedTree)
-      } catch (error) {
-        console.error('[Videos] Error fetching videos:', error)
-        setTree([])
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    void fetchVideos()
-  }, [emptyFolders])
-
-  // Revalidation callback for all hooks - refetch videos
+  // Revalidation callback for all hooks
   const handleOperationComplete = () => {
     void revalidator.revalidate()
-    // Trigger refetch by updating a dependency
-    setLoading(true)
-
-    async function refetchVideos() {
-      try {
-        const { data: videos, error } = await supabase
-          .from('videos')
-          .select('id, video_path')
-          .is('deleted_at', null)
-          .order('video_path')
-
-        if (error) {
-          console.error('[Videos] Failed to refetch videos:', error)
-          return
-        }
-
-        const videoInfos: VideoInfo[] = (videos ?? []).map(video => ({
-          videoId: (video as { id: string }).id,
-          displayPath: (video as { video_path: string }).video_path,
-        }))
-
-        let newTree = buildVideoTree(videoInfos)
-        newTree = insertEmptyFolders(newTree, emptyFolders)
-        newTree.forEach(node => {
-          if (node.type === 'folder') {
-            calculateVideoCounts(node)
-          }
-        })
-        setTree(sortTreeNodes(newTree))
-      } catch (error) {
-        console.error('[Videos] Error refetching videos:', error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    void refetchVideos()
   }
 
   // Video stats hook
@@ -484,55 +350,45 @@ export default function VideosPage() {
             <div className="inline-block min-w-full align-middle sm:px-6 lg:px-8">
               <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 dark:ring-white dark:ring-opacity-10 sm:rounded-lg">
                 <div className="overflow-auto" style={{ maxHeight: 'calc(100vh - 25rem)' }}>
-                  {loading ? (
-                    <div className="flex items-center justify-center py-12">
-                      <div className="text-olive-500 dark:text-olive-400">Loading videos...</div>
-                    </div>
-                  ) : (
-                    <>
-                      <table className="min-w-full divide-y divide-gray-300 dark:divide-gray-700">
-                        <TableHeader
-                          draggedItem={draggedItem}
+                  <table className="min-w-full divide-y divide-gray-300 dark:divide-gray-700">
+                    <TableHeader
+                      draggedItem={draggedItem}
+                      dragOverFolder={dragOverFolder}
+                      onRootDragOver={handleRootDragOver}
+                      onRootDragLeave={handleRootDragLeave}
+                      onRootDrop={handleRootDrop}
+                    />
+                    <tbody className="divide-y divide-y-gray-200 dark:divide-gray-800 bg-white dark:bg-gray-950">
+                      {filteredTree.map(node => (
+                        <TreeRow
+                          key={node.path}
+                          node={node}
+                          depth={0}
+                          expandedPaths={expandedPaths}
+                          onToggle={toggleExpand}
+                          videoStatsMap={videoStatsMap}
+                          onStatsUpdate={updateVideoStats}
+                          isMounted={isMounted}
+                          onCreateSubfolder={openCreateFolderModal}
+                          onRenameFolder={openRenameFolderModal}
+                          onMoveFolder={openMoveFolderModal}
+                          onDeleteFolder={(path, name) => void openDeleteFolderModal(path, name)}
+                          onRenameVideo={openRenameVideoModal}
+                          onMoveVideo={openMoveVideoModal}
+                          onDeleteVideo={openDeleteVideoModal}
+                          onErrorBadgeClick={openErrorModal}
+                          onDragStart={handleDragStart}
+                          onDragEnd={handleDragEnd}
+                          onDragOver={handleDragOver}
+                          onDragLeave={handleDragLeave}
+                          onDrop={(e, path) => void handleDrop(e, path)}
                           dragOverFolder={dragOverFolder}
-                          onRootDragOver={handleRootDragOver}
-                          onRootDragLeave={handleRootDragLeave}
-                          onRootDrop={handleRootDrop}
                         />
-                        <tbody className="divide-y divide-y-gray-200 dark:divide-gray-800 bg-white dark:bg-gray-950">
-                          {filteredTree.map(node => (
-                            <TreeRow
-                              key={node.path}
-                              node={node}
-                              depth={0}
-                              expandedPaths={expandedPaths}
-                              onToggle={toggleExpand}
-                              videoStatsMap={videoStatsMap}
-                              onStatsUpdate={updateVideoStats}
-                              isMounted={isMounted}
-                              onCreateSubfolder={openCreateFolderModal}
-                              onRenameFolder={openRenameFolderModal}
-                              onMoveFolder={openMoveFolderModal}
-                              onDeleteFolder={(path, name) =>
-                                void openDeleteFolderModal(path, name)
-                              }
-                              onRenameVideo={openRenameVideoModal}
-                              onMoveVideo={openMoveVideoModal}
-                              onDeleteVideo={openDeleteVideoModal}
-                              onErrorBadgeClick={openErrorModal}
-                              onDragStart={handleDragStart}
-                              onDragEnd={handleDragEnd}
-                              onDragOver={handleDragOver}
-                              onDragLeave={handleDragLeave}
-                              onDrop={(e, path) => void handleDrop(e, path)}
-                              dragOverFolder={dragOverFolder}
-                            />
-                          ))}
-                        </tbody>
-                      </table>
+                      ))}
+                    </tbody>
+                  </table>
 
-                      {filteredTree.length === 0 && <EmptyState searchQuery={searchQuery} />}
-                    </>
-                  )}
+                  {filteredTree.length === 0 && <EmptyState searchQuery={searchQuery} />}
                 </div>
               </div>
             </div>

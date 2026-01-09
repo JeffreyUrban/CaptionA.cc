@@ -10,7 +10,7 @@ readme = "README.md"
 authors = [
     {name = "Jeffrey Urban"}
 ]
-requires-python = ">=3.13,<3.14"
+requires-python = ">=3.11"
 keywords = [
     "video",
     "frames",
@@ -44,12 +44,16 @@ dev = [
 
 [tool.hatch.version]
 source = "vcs"
+fallback-version = "0.1.dev0"
 
 [tool.hatch.version.raw-options]
 root = "../.."
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/frames_db"]
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/frames_db/_version.py"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -75,6 +79,3 @@ exclude_lines = [
     "if __name__ == .__main__.:",
     "if TYPE_CHECKING:",
 ]
-
-[tool.hatch.build.hooks.vcs]
-version-file = "src/frames_db/_version.py"

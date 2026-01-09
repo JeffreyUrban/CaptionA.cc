@@ -1,12 +1,17 @@
-app = 'captionacc-umami'
-primary_region = 'sjc'
+app = 'umami'
+primary_region = 'ewr'
 
 [build]
   image = 'ghcr.io/umami-software/umami:postgresql-latest'
 
+[experimental]
+  enable_consul = false
+  private_network = false
+
 [env]
   DATABASE_TYPE = 'postgresql'
   PORT = '3000'
+  NODE_OPTIONS = '--dns-result-order=ipv4first'
 
 [http_service]
   internal_port = 3000
@@ -20,6 +25,13 @@ primary_region = 'sjc'
     type = 'connections'
     hard_limit = 25
     soft_limit = 20
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "10s"
+    grace_period = "30s"
+    method = "GET"
+    path = "/"
 
 [[vm]]
   memory = '512mb'

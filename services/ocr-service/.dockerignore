@@ -1,9 +1,3 @@
-# Ignore everything outside this service
-../../*
-
-# But include this service
-!../../services/ocr-service/**
-
 # Python
 __pycache__/
 *.py[cod]

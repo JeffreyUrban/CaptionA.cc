@@ -12,6 +12,19 @@ import { createClient, type Session } from '@supabase/supabase-js'
 
 import type { Database } from '../types/supabase'
 
+// Type alias for production database using captionacc_production schema
+// We merge Functions from both captionacc_production and public schemas
+// since security audit functions are defined in public schema
+type ProductionDatabase = {
+  public: {
+    Tables: Database['captionacc_production']['Tables']
+    Views: Database['captionacc_production']['Views']
+    Functions: Database['captionacc_production']['Functions'] & Database['public']['Functions']
+    Enums: Database['captionacc_production']['Enums']
+    CompositeTypes: Database['captionacc_production']['CompositeTypes']
+  }
+}
+
 // Local Supabase demo keys - These are Supabase's standard public keys for local development
 // Documented at: https://supabase.com/docs/guides/cli/local-development
 // These keys are safe to commit - they only work with `supabase start` on localhost:54321
@@ -26,39 +39,38 @@ const LOCAL_SUPABASE_SERVICE_ROLE_KEY =
 const supabaseUrl = import.meta.env['VITE_SUPABASE_URL'] || LOCAL_SUPABASE_URL
 const supabaseAnonKey = import.meta.env['VITE_SUPABASE_ANON_KEY'] || LOCAL_SUPABASE_ANON_KEY
 
+// Both local and remote use captionacc_production schema for consistency
+const supabaseSchema = import.meta.env['VITE_SUPABASE_SCHEMA'] || 'captionacc_production'
+
 // Log Supabase connection info in development
 if (import.meta.env.DEV) {
   const isLocal = supabaseUrl === LOCAL_SUPABASE_URL
-  console.log(`🔌 Supabase: ${isLocal ? 'LOCAL' : 'ONLINE'} (${supabaseUrl})`)
+  console.log(
+    `🔌 Supabase: ${isLocal ? 'LOCAL' : 'ONLINE'} (${supabaseUrl}) [schema: ${supabaseSchema}]`
+  )
 }
 
 /**
  * Create a Supabase client for use in client-side code
  * Uses the anon key which respects RLS policies
- *
- * IMPORTANT: Uses localStorage (default) for JWT token storage
- * This is the standard Supabase pattern - simple and adequate security with proper XSS prevention
+ * Both local and remote use captionacc_production schema
  */
-export const supabase = createClient<Database, 'captionacc_production'>(
-  supabaseUrl,
-  supabaseAnonKey,
-  {
-    auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-      detectSessionInUrl: true,
-      // Using default storage (localStorage) - no custom storage needed
-    },
-    db: {
-      schema: 'captionacc_production',
-    },
-  }
-)
+export const supabase = createClient<ProductionDatabase>(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+  },
+  db: {
+    schema: supabaseSchema, // Set PostgreSQL schema
+  },
+})
 
 /**
  * Create a Supabase client for server-side operations
  * Uses the service role key which bypasses RLS (use carefully)
  * Only available on the server
+ * Both local and remote use captionacc_production schema
  */
 export function createServerSupabaseClient() {
   if (typeof window !== 'undefined') {
@@ -68,13 +80,13 @@ export function createServerSupabaseClient() {
   const serviceRoleKey =
     import.meta.env['VITE_SUPABASE_SERVICE_ROLE_KEY'] || LOCAL_SUPABASE_SERVICE_ROLE_KEY
 
-  return createClient<Database, 'captionacc_production'>(supabaseUrl, serviceRoleKey, {
+  return createClient<ProductionDatabase>(supabaseUrl, serviceRoleKey, {
     auth: {
       persistSession: false,
       autoRefreshToken: false,
     },
     db: {
-      schema: 'captionacc_production',
+      schema: supabaseSchema, // Set PostgreSQL schema (same as client)
     },
   })
 }
@@ -100,22 +112,14 @@ export async function getCurrentUser() {
  * Get the user's tenant ID from their profile
  */
 export async function getUserTenantId(userId: string): Promise<string | null> {
-  const { data, error } = await supabase
-    .from('user_profiles')
-    .select('*')
-    .eq('id' as never, userId as never)
-    .single()
+  const { data, error } = await supabase.from('user_profiles').select('*').eq('id', userId).single()
 
   if (error) {
     console.error('Error fetching user tenant:', error)
     return null
   }
 
-  if (data && 'tenant_id' in data) {
-    return (data as unknown as { tenant_id: string | null }).tenant_id ?? null
-  }
-
-  return null
+  return data?.tenant_id ?? null
 }
 
 /**
