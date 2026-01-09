@@ -86,8 +86,12 @@ if modal:
             "boto3",
             "pillow",
             "supabase",
+            "sqlalchemy",
+            "scikit-learn",
         )
         .apt_install("libgl1-mesa-glx", "libglib2.0-0")
+        # Add local caption_boundaries package to the image
+        .add_local_python_source("caption_boundaries")
     )
 
     # Model checkpoint volume (persistent across containers)
@@ -219,19 +223,15 @@ def run_boundary_inference_batch(
         total_frame_pairs=len(frame_pairs),
     )
 
-    # Real implementation
-    # Import WasabiClient from services
-    # TODO: Move to shared package to avoid import path issues in Modal
-    import sys
     import tempfile
     from collections import defaultdict
+    from concurrent.futures import ThreadPoolExecutor
 
     from caption_boundaries.inference.batch_predictor import BatchBoundaryPredictor
     from caption_boundaries.inference.boundaries_db import PairResult, create_boundaries_db
     from caption_boundaries.inference.frame_extractor import extract_frame_from_chunk
-
-    sys.path.insert(0, "/root")  # Assume services code is available
-    from services.orchestrator.wasabi_client import WasabiClient
+    # Use local WasabiClient copy - services.orchestrator is not available in Modal containers
+    from caption_boundaries.inference.wasabi import WasabiClient
 
     print(f"\n{'=' * 60}")
     print(f"Starting Inference Job: {run_id}")
@@ -294,9 +294,9 @@ def run_boundary_inference_batch(
                 chunk_index = (frame_idx // chunk_size) * modulo
                 needed_chunks[(chunk_index, modulo)].add(frame_idx)
 
-        # Generate signed URLs using WasabiClient
-        signed_urls = {}
-        for chunk_idx, modulo in needed_chunks.keys():
+        # Generate signed URLs using WasabiClient - keyed by (chunk_index, modulo)
+        chunk_urls = {}
+        for (chunk_idx, modulo) in needed_chunks.keys():
             storage_key = wasabi.build_chunk_storage_key(
                 tenant_id=tenant_id,
                 video_id=video_id,
@@ -305,86 +305,132 @@ def run_boundary_inference_batch(
                 version=cropped_frames_version,
                 modulo=modulo,
             )
-            signed_urls[chunk_idx] = wasabi.generate_presigned_url(storage_key, expiration=3600)
+            chunk_urls[(chunk_idx, modulo)] = wasabi.generate_presigned_url(storage_key, expiration=3600)
 
-        print(f"  Generated {len(signed_urls)} signed URLs in {time.time() - url_start:.2f}s\n")
+        print(f"  Generated {len(chunk_urls)} signed URLs in {time.time() - url_start:.2f}s\n")
 
-        # Step 4: Extract frames
-        print("[4/8] Extracting frames from VP9 chunks...")
-        extract_start = time.time()
+        # Steps 4-5: Pipelined frame extraction + GPU inference
+        # Extract frames and run inference in parallel: download batch N+1 while GPU processes batch N
+        print("[4-5/8] Pipelined frame extraction + GPU inference...")
+        pipeline_start = time.time()
 
-        # Extract unique frame indices
-        unique_frames = set()
-        for frame1_idx, frame2_idx in frame_pairs:
-            unique_frames.add(frame1_idx)
-            unique_frames.add(frame2_idx)
+        from PIL import Image as PILImage
 
-        extracted_frames = {}
-        for frame_idx in sorted(unique_frames):
-            # Determine chunk
-            if frame_idx % 16 == 0:
-                modulo = 16
-            elif frame_idx % 4 == 0:
-                modulo = 4
-            else:
-                modulo = 1
+        # Helper to extract a batch of frames
+        def extract_frames_for_batch(batch_pairs: list[tuple[int, int]]) -> dict[int, PILImage.Image]:
+            """Extract frames needed for a batch of pairs."""
+            frames_needed = set()
+            for f1_idx, f2_idx in batch_pairs:
+                frames_needed.add(f1_idx)
+                frames_needed.add(f2_idx)
 
-            chunk_size = 32 * modulo
-            chunk_index = (frame_idx // chunk_size) * modulo
+            extracted = {}
+            for frame_idx in frames_needed:
+                if frame_idx % 16 == 0:
+                    modulo = 16
+                elif frame_idx % 4 == 0:
+                    modulo = 4
+                else:
+                    modulo = 1
 
-            if chunk_index not in signed_urls:
-                print(f"  [WARNING] Missing signed URL for chunk {chunk_index}, skipping frame {frame_idx}")
-                metrics.failed_inferences += 1
-                continue
+                chunk_size = 32 * modulo
+                chunk_index = (frame_idx // chunk_size) * modulo
 
-            try:
-                frame = extract_frame_from_chunk(
-                    signed_url=signed_urls[chunk_index],
-                    frame_index=frame_idx,
-                    modulo=modulo,
-                )
-                # Convert to PIL
-                from PIL import Image as PILImage
+                # Build signed URL key
+                url_key = (chunk_index, modulo)
+                if url_key not in chunk_urls:
+                    continue
 
-                extracted_frames[frame_idx] = PILImage.fromarray(frame)
-            except Exception as e:
-                print(f"  [ERROR] Failed to extract frame {frame_idx}: {e}")
-                metrics.failed_inferences += 1
+                try:
+                    frame = extract_frame_from_chunk(
+                        signed_url=chunk_urls[url_key],
+                        frame_index=frame_idx,
+                        modulo=modulo,
+                    )
+                    extracted[frame_idx] = PILImage.fromarray(frame)
+                except Exception as e:
+                    print(f"  [ERROR] Failed to extract frame {frame_idx}: {e}")
 
-        print(f"  Extracted {len(extracted_frames)} frames in {time.time() - extract_start:.2f}s\n")
+            return extracted
 
-        # Step 5: Run bidirectional inference
-        # Process both directions together for efficiency and completeness
-        print("[5/8] Running bidirectional batch inference...")
+        # Split frame_pairs into batches for pipelined processing
+        batch_size = MODAL_CONFIG.inference_batch_size
+        num_batches = (len(frame_pairs) + batch_size - 1) // batch_size
+        batches = [frame_pairs[i * batch_size:(i + 1) * batch_size] for i in range(num_batches)]
+
+        print(f"  Processing {len(frame_pairs)} pairs in {num_batches} batches (batch_size={batch_size})")
+
+        # Results accumulators
+        all_forward_predictions = []
+        all_backward_predictions = []
+        all_valid_indices = []
+        total_extracted = 0
+        global_idx_offset = 0
+
         inference_start = time.time()
 
-        # Prepare bidirectional batches: for each pair, process both directions together
-        # This ensures we complete database rows atomically and makes better use of GPU batching
-        bidirectional_pairs = []
-        valid_indices = []
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            # Start prefetching first batch
+            current_batch_future = executor.submit(extract_frames_for_batch, batches[0])
+            next_batch_future = None
 
-        for i, (frame1_idx, frame2_idx) in enumerate(frame_pairs):
-            if frame1_idx in extracted_frames and frame2_idx in extracted_frames:
-                f1 = extracted_frames[frame1_idx]
-                f2 = extracted_frames[frame2_idx]
-                # Add both directions: (f1, f2) for forward, (f2, f1) for backward
-                bidirectional_pairs.append((f1, f2))
-                bidirectional_pairs.append((f2, f1))
-                valid_indices.append(i)
-            else:
-                metrics.failed_inferences += 1
+            for batch_idx in range(num_batches):
+                # Wait for current batch frames
+                current_frames = current_batch_future.result()
+                total_extracted += len(current_frames)
 
-        # Run batch prediction on all directions at once
-        # Batch size configured in config.py for GPU memory optimization
-        all_predictions = predictor.predict_batch(bidirectional_pairs, batch_size=MODAL_CONFIG.inference_batch_size)
+                # Start prefetching next batch (overlaps with GPU inference)
+                if batch_idx + 1 < num_batches:
+                    next_batch_future = executor.submit(extract_frames_for_batch, batches[batch_idx + 1])
 
-        # Split predictions back into forward/backward pairs
-        forward_predictions = [all_predictions[i * 2] for i in range(len(valid_indices))]
-        backward_predictions = [all_predictions[i * 2 + 1] for i in range(len(valid_indices))]
+                # Prepare bidirectional pairs for GPU
+                bidirectional_pairs = []
+                batch_valid_indices = []
+                current_batch = batches[batch_idx]
+
+                for local_idx, (frame1_idx, frame2_idx) in enumerate(current_batch):
+                    if frame1_idx in current_frames and frame2_idx in current_frames:
+                        f1 = current_frames[frame1_idx]
+                        f2 = current_frames[frame2_idx]
+                        bidirectional_pairs.append((f1, f2))  # Forward
+                        bidirectional_pairs.append((f2, f1))  # Backward
+                        batch_valid_indices.append(global_idx_offset + local_idx)
+                    else:
+                        metrics.failed_inferences += 1
+
+                # Run GPU inference on current batch
+                if bidirectional_pairs:
+                    batch_predictions = predictor.predict_batch(bidirectional_pairs, batch_size=batch_size)
+
+                    # Split into forward/backward
+                    for i in range(len(batch_valid_indices)):
+                        all_forward_predictions.append(batch_predictions[i * 2])
+                        all_backward_predictions.append(batch_predictions[i * 2 + 1])
+                    all_valid_indices.extend(batch_valid_indices)
+
+                global_idx_offset += len(current_batch)
+
+                # Move to next batch's prefetch result
+                if batch_idx + 1 < num_batches:
+                    current_batch_future = next_batch_future
+
+                # Progress update
+                if (batch_idx + 1) % 10 == 0 or batch_idx + 1 == num_batches:
+                    elapsed = time.time() - pipeline_start
+                    pairs_done = len(all_valid_indices)
+                    rate = pairs_done / elapsed if elapsed > 0 else 0
+                    print(f"  Batch {batch_idx + 1}/{num_batches}: {pairs_done} pairs @ {rate:.1f} pairs/sec")
 
         inference_end = time.time()
-        inference_time = inference_end - inference_start
-        print(f"  Completed {len(forward_predictions)} pairs (bidirectional) in {inference_time:.2f}s\n")
+        pipeline_time = inference_end - pipeline_start
+        print(f"  Extracted {total_extracted} unique frames")
+        print(f"  Completed {len(all_valid_indices)} pairs (bidirectional) in {pipeline_time:.2f}s")
+        print(f"  Throughput: {len(all_valid_indices) / pipeline_time:.1f} pairs/sec\n")
+
+        # Rename for compatibility with rest of code
+        forward_predictions = all_forward_predictions
+        backward_predictions = all_backward_predictions
+        valid_indices = all_valid_indices
 
         # Step 6: Create boundaries database
         print("[6/8] Creating boundaries database...")
