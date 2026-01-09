@@ -98,7 +98,7 @@ def upload_database_to_wasabi(
 def create_supabase_video_entry(
     tenant_id: str,
     video_id: str,
-    local_video_path: str,
+    video_path: str,
     video_storage_key: str,
     file_size: int,
     uploaded_by_user_id: str | None = None,
@@ -111,7 +111,7 @@ def create_supabase_video_entry(
     video_record = {
         "id": video_id,
         "tenant_id": tenant_id,
-        "video_path": local_video_path,
+        "video_path": video_path,
         "storage_key": video_storage_key,
         "size_bytes": file_size,
         "status": "processing",
@@ -126,7 +126,7 @@ def create_supabase_video_entry(
             print(f"[Supabase] Video entry already exists, updating: {video_id}")
             # Update existing entry
             response = video_repo.client.schema(video_repo.client._preferred_schema).table("videos").update({
-                "video_path": local_video_path,
+                "video_path": video_path,
                 "storage_key": video_storage_key,
                 "size_bytes": file_size,
                 "status": "processing",
@@ -398,6 +398,7 @@ def upload_and_process_video_flow(
     video_id: str,
     filename: str,
     file_size: int,
+    virtual_path: str | None = None,
     tenant_id: str = DEFAULT_TENANT_ID,
     frame_rate: float = 0.1,
     uploaded_by_user_id: str | None = None,
@@ -422,6 +423,7 @@ def upload_and_process_video_flow(
         video_id: Pre-generated video UUID
         filename: Original filename
         file_size: File size in bytes
+        virtual_path: Virtual file path for display (e.g., "folder1/video") - stored in database
         tenant_id: Tenant UUID (defaults to demo tenant)
         frame_rate: Frame extraction rate in Hz (default 0.1 = every 10 seconds)
         uploaded_by_user_id: User UUID who uploaded
@@ -466,7 +468,7 @@ def upload_and_process_video_flow(
         create_supabase_video_entry(
             tenant_id=tenant_id,
             video_id=video_id,
-            local_video_path=local_video_path,
+            video_path=virtual_path or filename,
             video_storage_key=video_storage_key,
             file_size=file_size,
             uploaded_by_user_id=uploaded_by_user_id,

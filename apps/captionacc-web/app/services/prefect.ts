@@ -15,6 +15,7 @@ function log(message: string) {
 interface QueueFlowOptions {
   videoId?: string
   videoPath?: string
+  virtualPath?: string
   dbPath?: string
   outputDir?: string
   videoDir?: string
@@ -126,6 +127,7 @@ async function queueFlow(
     }
     parameters = {
       local_video_path: options.videoPath,
+      virtual_path: options.virtualPath,
       video_id: options.videoId,
       filename: options.filename,
       file_size: options.fileSize,
@@ -425,6 +427,7 @@ export async function queueVideoModelRetrain(options: {
  */
 export async function queueUploadAndProcessing(options: {
   videoPath: string
+  virtualPath?: string
   videoId: string
   filename: string
   fileSize: number

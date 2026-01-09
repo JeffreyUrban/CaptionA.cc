@@ -306,6 +306,7 @@ async function handlePatchRequest(request: Request, uploadId: string): Promise<R
 
       const result = await queueUploadAndProcessing({
         videoPath: finalVideoPath,
+        virtualPath: metadata.metadata.videoPath,
         videoId: metadata.metadata.videoId!,
         filename: metadata.metadata.filename,
         fileSize: metadata.uploadLength,
