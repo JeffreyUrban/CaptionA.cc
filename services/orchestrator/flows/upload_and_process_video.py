@@ -122,7 +122,7 @@ def create_supabase_video_entry(
 
     try:
         response = (
-            video_repo.client.schema(video_repo.client._preferred_schema)
+            video_repo.client.schema(video_repo.client._preferred_schema)  # type: ignore[attr-defined]
             .table("videos")
             .insert(video_record)
             .execute()
@@ -133,7 +133,7 @@ def create_supabase_video_entry(
             print(f"[Supabase] Video entry already exists, updating: {video_id}")
             # Update existing entry
             response = (
-                video_repo.client.schema(video_repo.client._preferred_schema)
+                video_repo.client.schema(video_repo.client._preferred_schema)  # type: ignore[attr-defined]
                 .table("videos")
                 .update(
                     {
