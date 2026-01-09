@@ -21,7 +21,6 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-import requests
 from prefect import flow, task
 from prefect.artifacts import create_table_artifact
 
@@ -30,7 +29,6 @@ from wasabi_client import get_wasabi_client
 
 # Default tenant for development (will be replaced with user's tenant in production)
 DEFAULT_TENANT_ID = "00000000-0000-0000-0000-000000000001"
-
 
 @task(
     name="upload-video-to-wasabi",
@@ -57,7 +55,6 @@ def upload_video_to_wasabi(
 
     print(f"[Wasabi] Video uploaded: {storage_key}")
     return storage_key
-
 
 @task(
     name="upload-database-to-wasabi",
@@ -93,7 +90,6 @@ def upload_database_to_wasabi(
     print(f"[Wasabi] Database uploaded: {storage_key}")
     return storage_key
 
-
 @task(
     name="create-supabase-video-entry",
     tags=["supabase", "database"],
@@ -127,7 +123,6 @@ def create_supabase_video_entry(
     print(f"[Supabase] Video entry created: {video_id}")
     return response.data[0] if response.data else {}  # type: ignore[return-value]
 
-
 @task(
     name="update-supabase-status",
     tags=["supabase", "status"],
@@ -149,7 +144,6 @@ def update_supabase_status(
     )
 
     print(f"[Supabase] Status updated: {status}")
-
 
 @task(
     name="extract-full-frames-to-video-db",
@@ -221,7 +215,6 @@ def extract_full_frames_to_video_db(
         "status": "completed",
     }
 
-
 @task(
     name="run-ocr-to-fullOCR-db",
     retries=3,
@@ -282,7 +275,6 @@ def run_ocr_to_full_ocr_db(
         "status": "completed",
     }
 
-
 @task(
     name="index-video-ocr-content",
     tags=["supabase", "search"],
@@ -329,7 +321,6 @@ def index_video_ocr_content(video_id: str, full_ocr_db_path: str) -> int:
     except Exception as e:
         print(f"⚠️  Warning: Failed to index video content: {e}")
         return 0
-
 
 @flow(
     name="upload-and-process-video",
@@ -478,54 +469,4 @@ def upload_and_process_video_flow(
         print(f"\n✅ Upload and processing complete for {video_id}")
         print(f"📊 Frames: {frames_result['frame_count']}, OCR: {ocr_result['ocr_count']}")
         print(f"🔍 Indexed: {indexed_frames} frames")
-
-        # Send completion webhook
-        try:
-            webhook_url = os.getenv("WEB_APP_URL", "http://localhost:5173")
-            requests.post(
-                f"{webhook_url}/api/webhooks/prefect",
-                json={
-                    "videoId": video_id,
-                    "flowName": "upload-and-process-video",
-                    "status": "complete",
-                },
-                timeout=5,
-            )
-        except Exception as e:
-            print(f"⚠️  Failed to send completion webhook: {e}")
-
-        return {
-            "video_id": video_id,
-            "status": "completed",
-            "storage_key": video_storage_key,
-            "frame_count": frames_result["frame_count"],
-            "ocr_count": ocr_result["ocr_count"],
-            "indexed_frames": indexed_frames,
-        }
-
-    except Exception as e:
-        print(f"\n❌ Upload and processing failed for {video_id}: {e}")
-
-        # Update Supabase status to failed
-        try:
-            update_supabase_status(video_id, "failed", flow_run_id)
-        except Exception as supabase_error:
-            print(f"⚠️  Failed to update Supabase status: {supabase_error}")
-
-        # Send failure webhook
-        try:
-            webhook_url = os.getenv("WEB_APP_URL", "http://localhost:5173")
-            requests.post(
-                f"{webhook_url}/api/webhooks/prefect",
-                json={
-                    "videoId": video_id,
-                    "flowName": "upload-and-process-video",
-                    "status": "error",
-                    "error": str(e),
-                },
-                timeout=5,
-            )
-        except Exception as webhook_error:
-            print(f"⚠️  Failed to send failure webhook: {webhook_error}")
-
         raise

@@ -26,7 +26,6 @@ FrameType = Literal["cropped", "full"]
 
 logger = logging.getLogger(__name__)
 
-
 @task(
     name="encode-vp9-chunks",
     retries=2,
@@ -132,7 +131,6 @@ def encode_vp9_chunks_task(
 
             raise
 
-
 @task(
     name="upload-vp9-chunks-to-wasabi",
     retries=3,
@@ -211,7 +209,6 @@ def upload_vp9_chunks_task(
         )
 
         raise
-
 
 @flow(
     name="encode-and-upload-vp9-chunks",

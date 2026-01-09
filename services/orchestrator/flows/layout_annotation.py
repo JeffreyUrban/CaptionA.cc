@@ -17,7 +17,6 @@ import os
 from pathlib import Path
 from typing import Any
 
-import requests
 from prefect import flow, task
 
 from supabase_client import CroppedFramesVersionRepository
@@ -25,7 +24,6 @@ from wasabi_client import get_wasabi_client
 
 # Default tenant for development
 DEFAULT_TENANT_ID = "00000000-0000-0000-0000-000000000001"
-
 
 @task(
     name="download-database-from-wasabi",
@@ -75,7 +73,6 @@ def download_database_from_wasabi(
 
     return local_path, hash_hex
 
-
 @task(
     name="upload-layout-db-to-wasabi",
     tags=["wasabi", "upload"],
@@ -111,7 +108,6 @@ def upload_layout_db_to_wasabi(
     print(f"[Wasabi] layout.db uploaded: {storage_key}")
 
     return storage_key
-
 
 @task(
     name="detect-crop-bounds-change",
@@ -159,7 +155,6 @@ def detect_crop_bounds_change(
     bounds_changed = False  # Placeholder
 
     return bounds_changed, previous_bounds  # type: ignore[return-value]
-
 
 @flow(
     name="upload-layout-db",
@@ -217,141 +212,4 @@ def upload_layout_db_flow(
             # crop_frames_to_webm_flow(video_id=video_id, tenant_id=tenant_id)
 
             crop_regen_triggered = True
-            print("✅ Cropped frames regeneration queued")
-
-        # Send webhook notification
-        try:
-            webhook_url = os.getenv("WEB_APP_URL", "http://localhost:5173")
-            requests.post(
-                f"{webhook_url}/api/webhooks/prefect",
-                json={
-                    "videoId": video_id,
-                    "flowName": "upload-layout-db",
-                    "status": "complete",
-                    "boundsChanged": bounds_changed,
-                    "cropRegenTriggered": crop_regen_triggered,
-                },
-                timeout=5,
-            )
-        except Exception as e:
-            print(f"⚠️  Failed to send webhook: {e}")
-
-        print("\n✅ Layout.db upload complete!")
-
-        return {
-            "video_id": video_id,
-            "storage_key": storage_key,
-            "status": "completed",
-            "bounds_changed": bounds_changed,
-            "crop_regen_triggered": crop_regen_triggered,
-        }
-
-    except Exception as e:
-        print(f"\n❌ Layout.db upload failed: {e}")
-
-        # Send failure webhook
-        try:
-            webhook_url = os.getenv("WEB_APP_URL", "http://localhost:5173")
-            requests.post(
-                f"{webhook_url}/api/webhooks/prefect",
-                json={
-                    "videoId": video_id,
-                    "flowName": "upload-layout-db",
-                    "status": "error",
-                    "error": str(e),
-                },
-                timeout=5,
-            )
-        except Exception as webhook_error:
-            print(f"⚠️  Failed to send failure webhook: {webhook_error}")
-
-        raise
-
-
-@flow(
-    name="download-for-layout-annotation",
-    log_prints=True,
-)
-def download_for_layout_annotation_flow(
-    video_id: str,
-    output_dir: str,
-    tenant_id: str = DEFAULT_TENANT_ID,
-) -> dict[str, Any]:
-    """
-    Download necessary files for layout annotation.
-
-    This flow:
-    1. Downloads video.db from Wasabi (full frames for annotation UI)
-    2. Downloads fullOCR.db from Wasabi (OCR results for suggested regions)
-    3. Downloads layout.db from Wasabi if it exists (to continue annotations)
-
-    Args:
-        video_id: Video UUID
-        output_dir: Local directory to download files
-        tenant_id: Tenant UUID (defaults to demo tenant)
-
-    Returns:
-        Dict with paths to downloaded files
-    """
-    print(f"📥 Downloading files for layout annotation: {video_id}")
-
-    try:
-        # Ensure output directory exists
-        Path(output_dir).mkdir(parents=True, exist_ok=True)
-
-        # Step 1: Download video.db
-        print("\n📥 Step 1/3: Downloading video.db...")
-        video_db_path = str(Path(output_dir) / "video.db")
-        video_db_path, video_db_hash = download_database_from_wasabi(
-            tenant_id=tenant_id,
-            video_id=video_id,
-            db_name="video.db",
-            local_path=video_db_path,
-        )
-
-        if not video_db_path:
-            raise RuntimeError("video.db not found in Wasabi - video not processed yet")
-
-        # Step 2: Download fullOCR.db
-        print("\n📥 Step 2/3: Downloading fullOCR.db...")
-        full_ocr_db_path = str(Path(output_dir) / "fullOCR.db")
-        full_ocr_db_path, full_ocr_db_hash = download_database_from_wasabi(
-            tenant_id=tenant_id,
-            video_id=video_id,
-            db_name="fullOCR.db",
-            local_path=full_ocr_db_path,
-        )
-
-        if not full_ocr_db_path:
-            raise RuntimeError("fullOCR.db not found in Wasabi - OCR not complete yet")
-
-        # Step 3: Download layout.db (optional - may not exist yet)
-        print("\n📥 Step 3/3: Downloading layout.db (if exists)...")
-        layout_db_path = str(Path(output_dir) / "layout.db")
-        layout_db_path, layout_db_hash = download_database_from_wasabi(
-            tenant_id=tenant_id,
-            video_id=video_id,
-            db_name="layout.db",
-            local_path=layout_db_path,
-        )
-
-        layout_exists = bool(layout_db_path)
-        if layout_exists:
-            print("✅ layout.db exists - continuing previous annotations")
-        else:
-            print("ℹ️  layout.db does not exist - starting fresh annotations")
-
-        print("\n✅ Download complete!")
-
-        return {
-            "video_id": video_id,
-            "status": "completed",
-            "video_db_path": video_db_path,
-            "fullOCR_db_path": full_ocr_db_path,
-            "layout_db_path": layout_db_path if layout_exists else None,
-            "layout_exists": layout_exists,
-        }
-
-    except Exception as e:
-        print(f"\n❌ Download failed: {e}")
-        raise
+            print("✅ Cropped frames regeneration queued")        raise

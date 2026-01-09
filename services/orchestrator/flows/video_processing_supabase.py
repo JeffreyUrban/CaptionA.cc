@@ -16,13 +16,11 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-import requests
 from prefect import flow, task
 from prefect.artifacts import create_table_artifact
 
 # Import our Supabase client
 from ..supabase_client import SearchIndexRepository, VideoRepository
-
 
 @task(
     name="update-supabase-status",
@@ -50,7 +48,6 @@ def update_supabase_status(
         # Don't fail the flow if Supabase update fails
         print(f"⚠ Warning: Failed to update Supabase status: {e}")
 
-
 @task(
     name="update-annotations-db-key",
     tags=["supabase", "storage"],
@@ -72,7 +69,6 @@ def update_captions_db_key(video_id: str, captions_db_key: str) -> None:
         print(f"✓ Supabase: Updated annotations DB key for {video_id}")
     except Exception as e:
         print(f"⚠ Warning: Failed to update annotations DB key: {e}")
-
 
 @task(
     name="index-video-content",
@@ -124,7 +120,6 @@ def index_video_content(video_id: str, db_path: str) -> int:
     except Exception as e:
         print(f"⚠ Warning: Failed to index video content: {e}")
         return 0
-
 
 @task(
     name="extract-full-frames",
@@ -195,7 +190,6 @@ def extract_full_frames(
         "ocr_count": ocr_count,
     }
 
-
 @flow(
     name="process-video-with-supabase",
     log_prints=True,
@@ -259,120 +253,4 @@ def process_video_with_supabase_flow(
         conn.commit()
     finally:
         conn.close()
-
-    # Send webhook notification at START
-    try:
-        webhook_url = os.getenv("WEB_APP_URL", "http://localhost:5173")
-        requests.post(
-            f"{webhook_url}/api/webhooks/prefect",
-            json={
-                "videoId": video_id,
-                "flowName": "process-video-with-supabase",
-                "status": "started",
-            },
-            timeout=5,
-        )
-    except Exception as e:
-        print(f"⚠️  Failed to send start webhook: {e}")
-
-    try:
-        # Extract frames and run OCR
-        frames_result = extract_full_frames(
-            video_path=video_path,
-            db_path=db_path,
-            output_dir=output_dir,
-            frame_rate=frame_rate,
-        )
-
-        # Index video content in Supabase for search
-        indexed_frames = index_video_content(video_id, db_path)
-
-        # Update local database status
-        conn = sqlite3.connect(db_path)
-        try:
-            conn.execute(
-                """
-                UPDATE processing_status
-                SET status = 'processing_complete',
-                    processing_completed_at = datetime('now')
-                WHERE id = 1
-                """
-            )
-            conn.commit()
-        finally:
-            conn.close()
-
-        # Update Supabase: Mark as active
-        update_supabase_status(video_id, "active", flow_run_id)
-
-        # Create Prefect artifacts for visibility
-        create_table_artifact(
-            key=f"video-{video_id}-processing",
-            table={
-                "Video ID": [video_id],
-                "Frames Extracted": [frames_result["frame_count"]],
-                "OCR Boxes": [frames_result["ocr_count"]],
-                "Indexed Frames": [indexed_frames],
-                "Status": ["Active - Ready for Annotation"],
-            },
-            description=f"Processing complete for video {video_id}",
-        )
-
-        print(f"✅ Processing complete for {video_id}")
-        print(f"📊 Frames: {frames_result['frame_count']}, OCR: {frames_result['ocr_count']}")
-        print(f"🔍 Indexed: {indexed_frames} frames")
-
-        # Send completion webhook
-        try:
-            webhook_url = os.getenv("WEB_APP_URL", "http://localhost:5173")
-            requests.post(
-                f"{webhook_url}/api/webhooks/prefect",
-                json={
-                    "videoId": video_id,
-                    "flowName": "process-video-with-supabase",
-                    "status": "complete",
-                },
-                timeout=5,
-            )
-        except Exception as e:
-            print(f"⚠️  Failed to send completion webhook: {e}")
-
-        return {
-            "video_id": video_id,
-            "status": "completed",
-            "frame_count": frames_result["frame_count"],
-            "ocr_count": frames_result["ocr_count"],
-            "indexed_frames": indexed_frames,
-        }
-
-    except Exception as e:
-        print(f"❌ Processing failed for {video_id}: {e}")
-
-        # Update Supabase: Mark as failed
-        update_supabase_status(video_id, "failed", flow_run_id)
-
-        # Update local database
-        conn = sqlite3.connect(db_path)
-        try:
-            conn.execute("UPDATE processing_status SET status = 'processing_failed' WHERE id = 1")
-            conn.commit()
-        finally:
-            conn.close()
-
-        # Send failure webhook
-        try:
-            webhook_url = os.getenv("WEB_APP_URL", "http://localhost:5173")
-            requests.post(
-                f"{webhook_url}/api/webhooks/prefect",
-                json={
-                    "videoId": video_id,
-                    "flowName": "process-video-with-supabase",
-                    "status": "error",
-                    "error": str(e),
-                },
-                timeout=5,
-            )
-        except Exception as webhook_error:
-            print(f"⚠️  Failed to send failure webhook: {webhook_error}")
-
         raise

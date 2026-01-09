@@ -20,7 +20,6 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-import requests
 from prefect import flow, task
 from prefect.artifacts import create_table_artifact
 
@@ -37,7 +36,6 @@ FRAMES_PER_CHUNK = 32  # Exactly 32 frames per chunk (matches frontend loading s
 MODULO_LEVELS = [32, 16, 8, 4, 2, 1]  # Hierarchical sampling levels
 WEBM_CRF = 23  # Constant Rate Factor (0-63, lower = better quality)
 WEBM_BITRATE = "500k"  # Target bitrate
-
 
 @task(
     name="download-video-from-wasabi",
@@ -60,7 +58,6 @@ def download_video_from_wasabi(
 
     print(f"[Wasabi] Video downloaded: {local_path}")
     return local_path
-
 
 @task(
     name="download-layout-db-from-wasabi",
@@ -97,7 +94,6 @@ def download_layout_db_from_wasabi(
     print(f"[Wasabi] SHA-256: {hash_hex}")
 
     return local_path, hash_hex
-
 
 @task(
     name="extract-cropped-frames",
@@ -170,7 +166,6 @@ def extract_cropped_frames(
     print(f"[Crop] Extracted {frame_count} frames to {output_dir}")
 
     return output_dir, frame_count
-
 
 @task(
     name="encode-frames-to-webm-chunks",
@@ -329,7 +324,6 @@ def encode_frames_to_webm_chunks(
 
     return output_dir, total_chunk_count, all_chunks
 
-
 @task(
     name="upload-chunks-to-wasabi",
     tags=["wasabi", "upload"],
@@ -394,7 +388,6 @@ def upload_chunks_to_wasabi(
 
     return len(chunks), total_size
 
-
 @task(
     name="create-version-record",
     tags=["supabase", "version"],
@@ -440,7 +433,6 @@ def create_version_record(
 
     return version_record  # type: ignore[return-value]
 
-
 @task(
     name="update-version-metadata",
     tags=["supabase", "version"],
@@ -466,7 +458,6 @@ def update_version_metadata(
 
     print(f"[Supabase] Version metadata updated: {chunk_count} chunks, {total_frames} frames")
 
-
 @task(
     name="activate-version",
     tags=["supabase", "version"],
@@ -480,7 +471,6 @@ def activate_version(version_id: str) -> None:
     versions_repo.activate_version(version_id)
 
     print("[Supabase] Version activated (previous version archived)")
-
 
 @flow(
     name="crop-frames-to-webm",
@@ -651,86 +641,4 @@ def crop_frames_to_webm_flow(
             print(f"📊 Version: v{version}")
             print(f"📊 Frames: {total_frames}, Chunks: {chunk_count}")
             print(f"📊 Size: {total_size_bytes / 1024 / 1024:.2f} MB")
-
-            # Send completion webhook
-            try:
-                webhook_url = os.getenv("WEB_APP_URL", "http://localhost:5173")
-                requests.post(
-                    f"{webhook_url}/api/webhooks/prefect",
-                    json={
-                        "videoId": video_id,
-                        "flowName": "crop-frames-to-webm",
-                        "status": "complete",
-                        "version": version,
-                    },
-                    timeout=5,
-                )
-            except Exception as e:
-                print(f"⚠️  Failed to send completion webhook: {e}")
-
-            # Trigger boundary inference (deferred, high priority)
-            try:
-                model_version = os.getenv("BOUNDARY_MODEL_VERSION")
-                if model_version:
-                    print(
-                        f"\n[Boundary Inference] Triggering inference with model {model_version[:16]}..."
-                    )
-                    from services.orchestrator.flows.boundary_inference import (
-                        boundary_inference_flow,
-                    )
-
-                    # Run boundary inference flow (will be queued by Prefect)
-                    boundary_inference_flow.apply_async(  # type: ignore[attr-defined]
-                        kwargs={
-                            "video_id": video_id,
-                            "tenant_id": tenant_id,
-                            "cropped_frames_version": version,
-                            "model_version": model_version,
-                            "priority": "high",
-                            "skip_if_exists": True,
-                        }
-                    )
-                    print("[Boundary Inference] ✓ Inference flow queued")
-                else:
-                    print("[Boundary Inference] Skipping - BOUNDARY_MODEL_VERSION not set")
-            except Exception as e:
-                print(f"⚠️  Failed to trigger boundary inference: {e}")
-                # Don't fail the main flow if boundary inference fails to queue
-
-            return {
-                "video_id": video_id,
-                "version": version,
-                "status": "completed",
-                "total_frames": total_frames,
-                "chunk_count": chunk_count,
-                "total_size_bytes": total_size_bytes,
-            }
-
-        except Exception as e:
-            print(f"\n❌ Cropped frames generation failed for {video_id}: {e}")
-
-            # Update version status to failed if version was created
-            try:
-                if "version_id" in locals():
-                    versions_repo = CroppedFramesVersionRepository()
-                    versions_repo.update_version_status(version_id, "failed")  # type: ignore[possibly-undefined]
-            except Exception as supabase_error:
-                print(f"⚠️  Failed to update version status: {supabase_error}")
-
-            # Send failure webhook
-            try:
-                webhook_url = os.getenv("WEB_APP_URL", "http://localhost:5173")
-                requests.post(
-                    f"{webhook_url}/api/webhooks/prefect",
-                    json={
-                        "videoId": video_id,
-                        "flowName": "crop-frames-to-webm",
-                        "status": "error",
-                        "error": str(e),
-                    },
-                    timeout=5,
-                )
-            except Exception as webhook_error:
-                print(f"⚠️  Failed to send failure webhook: {webhook_error}")
-
             raise

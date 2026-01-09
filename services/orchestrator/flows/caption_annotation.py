@@ -19,14 +19,12 @@ import os
 from pathlib import Path
 from typing import Any
 
-import requests
 from prefect import flow, task
 
 from wasabi_client import get_wasabi_client
 
 # Default tenant for development
 DEFAULT_TENANT_ID = "00000000-0000-0000-0000-000000000001"
-
 
 @task(
     name="download-captions-db-from-wasabi",
@@ -74,7 +72,6 @@ def download_captions_db_from_wasabi(
 
     return local_path, hash_hex
 
-
 @task(
     name="upload-captions-db-to-wasabi",
     tags=["wasabi", "upload"],
@@ -111,7 +108,6 @@ def upload_captions_db_to_wasabi(
 
     return storage_key
 
-
 @flow(
     name="upload-captions-db",
     log_prints=True,
@@ -145,109 +141,4 @@ def upload_captions_db_flow(
             tenant_id=tenant_id,
             video_id=video_id,
             local_path=captions_db_path,
-        )
-
-        # Send webhook notification
-        try:
-            webhook_url = os.getenv("WEB_APP_URL", "http://localhost:5173")
-            requests.post(
-                f"{webhook_url}/api/webhooks/prefect",
-                json={
-                    "videoId": video_id,
-                    "flowName": "upload-captions-db",
-                    "status": "complete",
-                },
-                timeout=5,
-            )
-        except Exception as e:
-            print(f"⚠️  Failed to send webhook: {e}")
-
-        print("\n✅ Captions.db upload complete!")
-
-        return {
-            "video_id": video_id,
-            "storage_key": storage_key,
-            "status": "completed",
-        }
-
-    except Exception as e:
-        print(f"\n❌ Captions.db upload failed: {e}")
-
-        # Send failure webhook
-        try:
-            webhook_url = os.getenv("WEB_APP_URL", "http://localhost:5173")
-            requests.post(
-                f"{webhook_url}/api/webhooks/prefect",
-                json={
-                    "videoId": video_id,
-                    "flowName": "upload-captions-db",
-                    "status": "error",
-                    "error": str(e),
-                },
-                timeout=5,
-            )
-        except Exception as webhook_error:
-            print(f"⚠️  Failed to send failure webhook: {webhook_error}")
-
-        raise
-
-
-@flow(
-    name="download-for-caption-annotation",
-    log_prints=True,
-)
-def download_for_caption_annotation_flow(
-    video_id: str,
-    output_dir: str,
-    tenant_id: str = DEFAULT_TENANT_ID,
-) -> dict[str, Any]:
-    """
-    Download captions.db for caption annotation.
-
-    This flow:
-    1. Downloads captions.db from Wasabi if it exists (to continue annotations)
-
-    Note: Cropped frame WebM chunks are streamed on-demand by browser using
-    signed URLs, so they don't need to be downloaded in this flow.
-
-    Args:
-        video_id: Video UUID
-        output_dir: Local directory to download files
-        tenant_id: Tenant UUID (defaults to demo tenant)
-
-    Returns:
-        Dict with paths to downloaded files
-    """
-    print(f"📥 Downloading captions.db for annotation: {video_id}")
-
-    try:
-        # Ensure output directory exists
-        Path(output_dir).mkdir(parents=True, exist_ok=True)
-
-        # Download captions.db (optional - may not exist yet)
-        print("\n📥 Downloading captions.db (if exists)...")
-        captions_db_path = str(Path(output_dir) / "captions.db")
-        captions_db_path, captions_db_hash = download_captions_db_from_wasabi(
-            tenant_id=tenant_id,
-            video_id=video_id,
-            local_path=captions_db_path,
-        )
-
-        captions_exists = bool(captions_db_path)
-        if captions_exists:
-            print("✅ captions.db exists - continuing previous annotations")
-        else:
-            print("ℹ️  captions.db does not exist - starting fresh annotations")
-
-        print("\n✅ Download complete!")
-
-        return {
-            "video_id": video_id,
-            "status": "completed",
-            "captions_db_path": captions_db_path if captions_exists else None,
-            "captions_exists": captions_exists,
-        }
-
-    except Exception as e:
-        print(f"\n❌ Download failed: {e}")
-        raise
+        )        raise

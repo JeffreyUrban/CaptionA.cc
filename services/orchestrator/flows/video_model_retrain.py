@@ -70,7 +70,6 @@ from .base_model_update import load_base_model
 # TODO: Feature Extraction
 # =============================================================================
 
-
 @task(
     name="extract-box-features",
     tags=["feature-extraction", "ml"],
@@ -108,11 +107,9 @@ def extract_box_features(
     print(f"[ExtractFeatures] Extracted features for {len(features)} boxes")
     return features
 
-
 # =============================================================================
 # TODO: Model Training
 # =============================================================================
-
 
 @task(
     name="train-video-model",
@@ -186,7 +183,6 @@ def train_video_model(
     finally:
         conn.close()
 
-
 @task(
     name="save-video-model",
     tags=["database"],
@@ -232,11 +228,9 @@ def save_video_model(
     finally:
         conn.close()
 
-
 # =============================================================================
 # TODO: Prediction Updates
 # =============================================================================
-
 
 @task(
     name="update-box-predictions",
@@ -293,11 +287,9 @@ def update_box_predictions(
     finally:
         conn.close()
 
-
 # =============================================================================
 # Main Flow
 # =============================================================================
-
 
 @flow(
     name="retrain-video-model",

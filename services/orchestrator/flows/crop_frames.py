@@ -15,13 +15,11 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-import requests
 from prefect import flow, task
 from prefect.artifacts import create_table_artifact
 
 # Import VP9 encoding flow for deferred encoding
 from .vp9_encoding import encode_vp9_chunks_flow
-
 
 @task(
     name="extract-cropped-frames",
@@ -116,7 +114,6 @@ def extract_cropped_frames(
         "frame_count": frame_count,
     }
 
-
 @task(
     name="update-crop-status",
     tags=["database"],
@@ -164,7 +161,6 @@ def update_crop_status(db_path: str, status: str) -> None:
         conn.close()
 
     print(f"Crop status updated to: {status}")
-
 
 @flow(
     name="crop-video-frames",
@@ -258,92 +254,7 @@ def crop_frames_flow(
         )
         conn.commit()
     finally:
-        conn.close()
-
-    # Send webhook notification at START of processing
-    try:
-        webhook_url = os.getenv("WEB_APP_URL", "http://localhost:5173")
-        webhook_endpoint = f"{webhook_url}/api/webhooks/prefect"
-        webhook_payload = {
-            "videoId": video_id,
-            "flowName": "crop-video-frames",
-            "status": "started",
-        }
-        print(f"Sending start webhook to {webhook_endpoint}")
-        requests.post(webhook_endpoint, json=webhook_payload, timeout=5)
-    except Exception as e:
-        print(f"Warning: Failed to send start webhook: {e}")
-
-    # Extract cropped frames
-    result = extract_cropped_frames(
-        video_path=video_path,
-        db_path=db_path,
-        output_dir=output_dir,
-        crop_bounds=crop_bounds,
-        crop_bounds_version=crop_bounds_version,
-        frame_rate=frame_rate,
-    )
-
-    # Update status in database
-    update_crop_status(db_path=db_path, status="complete")
-
-    # Create artifact for visibility
-    create_table_artifact(
-        key=f"video-{video_id}-crop-frames",
-        table={
-            "Video ID": [video_id],
-            "Cropped Frames": [result["frame_count"]],
-            "Crop Bounds": [
-                f"({crop_bounds['left']}, {crop_bounds['top']}, {crop_bounds['right']}, {crop_bounds['bottom']})"
-            ],
-            "Status": ["Ready for Boundary Annotation"],
-        },
-        description=f"Crop frames processing complete for {video_id}",
-    )
-
-    print(f"Crop frames complete for {video_id}: {result['frame_count']} frames")
-
-    # Send webhook notification to web app
-    try:
-        webhook_url = os.getenv("WEB_APP_URL", "http://localhost:5173")
-        webhook_endpoint = f"{webhook_url}/api/webhooks/prefect"
-
-        webhook_payload = {
-            "videoId": video_id,  # UUID (stable identifier)
-            "flowName": "crop-video-frames",
-            "status": "complete",
-        }
-
-        print(f"Sending webhook to {webhook_endpoint}")
-        response = requests.post(
-            webhook_endpoint,
-            json=webhook_payload,
-            timeout=5,
-        )
-
-        if response.ok:
-            print(f"Webhook sent successfully: {response.status_code}")
-        else:
-            print(f"Webhook failed: {response.status_code} - {response.text}")
-
-    except Exception as webhook_error:
-        # Don't fail the flow if webhook fails
-        print(f"Warning: Failed to send webhook notification: {webhook_error}")
-
-    # Trigger VP9 encoding and Wasabi upload (deferred - runs after user notification)
-    try:
-        print("Starting VP9 encoding for cropped frames (background job)")
-        encode_vp9_chunks_flow(
-            video_id=video_id,
-            db_path=db_path,
-            frame_type="cropped",
-            modulo_levels=[16, 4, 1],  # Hierarchical preview levels
-        )
-        print("VP9 encoding flow triggered successfully")
-    except Exception as encoding_error:
-        # Don't fail the crop_frames flow if VP9 encoding fails
-        print(
-            f"Warning: VP9 encoding failed (cropped frames still available in SQLite): {encoding_error}"
+        conn.close()            f"Warning: VP9 encoding failed (cropped frames still available in SQLite): {encoding_error}"
         )
 
     return {

@@ -19,10 +19,8 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-import requests
 from PIL import Image
 from prefect import flow, task
-
 
 @task(
     name="generate-median-frame",
@@ -107,7 +105,6 @@ def generate_median_frame(
     finally:
         conn.close()
 
-
 @task(
     name="run-ocr-on-median-frame",
     retries=2,
@@ -172,7 +169,6 @@ def run_ocr_on_median_frame(
 
     return extracted_text
 
-
 @task(
     name="update-caption-ocr-result",
     tags=["database"],
@@ -212,7 +208,6 @@ def update_caption_ocr_result(
 
     finally:
         conn.close()
-
 
 @task(
     name="update-caption-ocr-status",
@@ -262,7 +257,6 @@ def update_caption_ocr_status(
 
     finally:
         conn.close()
-
 
 @flow(
     name="process-caption-median-ocr",
@@ -357,35 +351,6 @@ def caption_median_ocr_flow(
         print("Errors:")
         for error in errors:
             print(f"  - {error}")
-
-    # Send webhook notification to web app
-    try:
-        webhook_url = os.getenv("WEB_APP_URL", "http://localhost:5173")
-        webhook_endpoint = f"{webhook_url}/api/webhooks/prefect"
-
-        webhook_payload = {
-            "videoId": video_id,  # UUID (stable identifier)
-            "flowName": "caption-median-ocr",
-            "status": "complete" if failed_count == 0 else "error",
-            "error": "; ".join(errors) if errors else None,
-        }
-
-        print(f"Sending webhook to {webhook_endpoint}")
-        response = requests.post(
-            webhook_endpoint,
-            json=webhook_payload,
-            timeout=5,
-        )
-
-        if response.ok:
-            print(f"Webhook sent successfully: {response.status_code}")
-        else:
-            print(f"Webhook failed: {response.status_code} - {response.text}")
-
-    except Exception as webhook_error:
-        # Don't fail the flow if webhook fails
-        print(f"Warning: Failed to send webhook notification: {webhook_error}")
-
     return {
         "video_id": video_id,
         "status": "completed" if failed_count == 0 else "partial",

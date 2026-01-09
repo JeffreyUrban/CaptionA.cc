@@ -66,7 +66,6 @@ from prefect import flow, task
 # TODO: Base Model Storage
 # =============================================================================
 
-
 def get_base_model_path() -> Path:
     """
     Get path to base model file.
@@ -79,7 +78,6 @@ def get_base_model_path() -> Path:
     """
     # Placeholder: Use JSON file for now
     return Path(__file__).parent.parent / "models" / "base_model.json"
-
 
 def load_base_model() -> dict[str, Any]:
     """
@@ -108,7 +106,6 @@ def load_base_model() -> dict[str, Any]:
     with open(path) as f:
         return json.load(f)
 
-
 def save_base_model(model: dict[str, Any]) -> None:
     """
     Save base model parameters.
@@ -121,11 +118,9 @@ def save_base_model(model: dict[str, Any]) -> None:
     with open(path, "w") as f:
         json.dump(model, f, indent=2)
 
-
 # =============================================================================
 # TODO: Base Model Training
 # =============================================================================
-
 
 @task(
     name="train-base-model",
@@ -184,7 +179,6 @@ def train_base_model(
     print(f"[TrainBaseModel] Trained base model: {base_model['model_version']}")
     return base_model
 
-
 @task(
     name="update-base-model-storage",
     tags=["database"],
@@ -201,11 +195,9 @@ def update_base_model_storage(base_model: dict[str, Any]) -> None:
     save_base_model(base_model)
     print("[UpdateBaseModel] Base model saved successfully")
 
-
 # =============================================================================
 # TODO: Video Discovery
 # =============================================================================
-
 
 @task(
     name="find-videos-with-models",
@@ -236,11 +228,9 @@ def find_videos_with_models(data_dir: str) -> list[dict[str, str]]:
     print(f"[FindVideos] Found {len(videos)} videos with trained models")
     return videos
 
-
 # =============================================================================
 # Main Flow
 # =============================================================================
-
 
 @flow(
     name="update-base-model-globally",

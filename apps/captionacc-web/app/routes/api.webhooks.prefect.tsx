@@ -1,15 +1,18 @@
 /**
- * Webhook endpoint for Prefect flow notifications.
+ * Webhook endpoint for Prefect Automation notifications.
  *
- * This endpoint receives notifications from Prefect flows when they complete,
- * allowing us to invalidate the video stats cache instead of polling.
+ * This endpoint receives notifications from Prefect Automations when flow states change.
+ * Prefect automatically calls this webhook via the configured automation.
  *
- * Prefect flows should POST to this endpoint with:
+ * Payload format (from Prefect Automation):
  * {
- *   "videoId": "video-uuid-or-display-path",
- *   "flowName": "caption-median-ocr" | "crop-frames" | etc,
- *   "status": "complete" | "error",
- *   "error": "error message" (optional, if status is error)
+ *   "event": "prefect.flow-run.Completed",
+ *   "flowRunId": "prefect.flow-run.xxx",
+ *   "flowName": "upload-and-process-video",
+ *   "state": "Completed",
+ *   "timestamp": "2024-01-01T00:00:00Z",
+ *   "tags": ["upload", "processing"],
+ *   "parameters": [...]
  * }
  */
 
@@ -18,39 +21,75 @@ import { type ActionFunctionArgs } from 'react-router'
 import { sseBroadcaster } from '~/services/sse-broadcaster'
 import { errorResponse, jsonResponse } from '~/utils/api-responses'
 
-interface PrefectWebhookPayload {
-  videoId: string
+interface PrefectAutomationPayload {
+  event: string
+  flowRunId: string
   flowName: string
-  status: 'started' | 'complete' | 'error'
-  error?: string
+  state: string
+  timestamp: string
+  tags?: string[]
+  parameters?: Array<Record<string, unknown>>
+}
+
+function extractVideoId(parameters: Array<Record<string, unknown>> | undefined): string | null {
+  if (!parameters || parameters.length === 0) return null
+
+  // Look for video_id in parameters
+  for (const param of parameters) {
+    if (param['video_id']) return param['video_id'] as string
+    if (param['videoId']) return param['videoId'] as string
+  }
+  return null
+}
+
+function mapStateToStatus(state: string): 'started' | 'complete' | 'error' {
+  const lowerState = state.toLowerCase()
+  if (lowerState === 'running') return 'started'
+  if (lowerState === 'completed') return 'complete'
+  if (lowerState === 'failed' || lowerState === 'crashed') return 'error'
+  return 'complete' // default
 }
 
 export async function action({ request }: ActionFunctionArgs) {
   try {
-    const payload = (await request.json()) as PrefectWebhookPayload
+    const payload = (await request.json()) as PrefectAutomationPayload
 
     // Validate payload
-    if (!payload.videoId || !payload.flowName || !payload.status) {
-      return errorResponse('Missing required fields: videoId, flowName, status', 400)
+    if (!payload.flowName || !payload.state) {
+      return errorResponse('Missing required fields from Prefect automation', 400)
     }
+
+    // Extract video ID from parameters
+    const videoId = extractVideoId(payload.parameters)
+    if (!videoId) {
+      console.log(`[PrefectWebhook] No video ID found in flow "${payload.flowName}"`)
+      // Some flows may not have video IDs, that's OK
+      return jsonResponse({
+        success: true,
+        message: 'Webhook received but no video ID found',
+      })
+    }
+
+    // Map Prefect state to our status
+    const status = mapStateToStatus(payload.state)
 
     // Log the notification
     console.log(
-      `[PrefectWebhook] Flow "${payload.flowName}" ${payload.status} for video: ${payload.videoId}`,
-      payload.error ? `Error: ${payload.error}` : ''
+      `[PrefectWebhook] Flow "${payload.flowName}" ${status} for video: ${videoId}`,
+      payload.state !== 'Completed' && payload.state !== 'Running' ? `State: ${payload.state}` : ''
     )
 
     // Broadcast to all connected SSE clients
     sseBroadcaster.broadcast('video-stats-updated', {
-      videoId: payload.videoId,
+      videoId,
       flowName: payload.flowName,
-      status: payload.status,
-      timestamp: new Date().toISOString(),
+      status,
+      timestamp: payload.timestamp || new Date().toISOString(),
     })
 
     return jsonResponse({
       success: true,
-      message: `Webhook received for ${payload.videoId}`,
+      message: `Webhook received for ${videoId}`,
       clients: sseBroadcaster.getClientCount(),
     })
   } catch (error) {
