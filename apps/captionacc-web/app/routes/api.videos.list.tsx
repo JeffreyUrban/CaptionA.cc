@@ -20,7 +20,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   } = await supabase.auth.getUser()
 
   if (!user || error) {
-    throw redirect('/auth/login')
+    throw redirect('/login')
   }
 
   // Query videos table - RLS automatically filters by tenant/user

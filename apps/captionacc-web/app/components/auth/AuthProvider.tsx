@@ -42,14 +42,28 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Get initial session
-    void supabase.auth
-      .getSession()
-      .then(({ data: { session } }: { data: { session: Session | null } }) => {
+    // Validate session with server using getUser() instead of getSession()
+    // getSession() only reads from localStorage cache and may return stale data
+    // getUser() actually validates the token with the Supabase server
+    const initAuth = async () => {
+      const {
+        data: { user },
+        error,
+      } = await supabase.auth.getUser()
+      if (error || !user) {
+        setUser(null)
+        setSession(null)
+      } else {
+        // Get session only after confirming user is valid
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
         setSession(session)
-        setUser(session?.user ?? null)
-        setLoading(false)
-      })
+        setUser(user)
+      }
+      setLoading(false)
+    }
+    void initAuth()
 
     // Listen for auth changes
     const {
