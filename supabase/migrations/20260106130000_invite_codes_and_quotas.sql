@@ -82,15 +82,15 @@ BEGIN
   IF EXISTS (SELECT FROM information_schema.tables
              WHERE table_schema = 'public'
              AND table_name = 'tenants') THEN
-    ALTER TABLE public.tenants
+    ALTER TABLE captionacc_production.tenants
       ALTER COLUMN storage_quota_gb SET DEFAULT 0.1;
 
-    ALTER TABLE public.tenants
+    ALTER TABLE captionacc_production.tenants
       ADD COLUMN IF NOT EXISTS video_count_limit INTEGER DEFAULT 5,
       ADD COLUMN IF NOT EXISTS processing_minutes_limit INTEGER DEFAULT 30,
       ADD COLUMN IF NOT EXISTS daily_upload_limit INTEGER DEFAULT 3;
 
-    UPDATE public.tenants
+    UPDATE captionacc_production.tenants
     SET storage_quota_gb = 0.1,
         video_count_limit = 5,
         processing_minutes_limit = 30,
@@ -136,16 +136,16 @@ BEGIN
   IF EXISTS (SELECT FROM information_schema.tables
              WHERE table_schema = 'public'
              AND table_name = 'user_profiles') THEN
-    ALTER TABLE public.user_profiles
+    ALTER TABLE captionacc_production.user_profiles
       ADD COLUMN IF NOT EXISTS approval_status TEXT DEFAULT 'pending',
       ADD COLUMN IF NOT EXISTS approved_by UUID REFERENCES auth.users(id),
       ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ,
       ADD COLUMN IF NOT EXISTS invite_code_used TEXT REFERENCES captionacc_production.invite_codes(code);
 
-    ALTER TABLE public.user_profiles
+    ALTER TABLE captionacc_production.user_profiles
       DROP CONSTRAINT IF EXISTS check_approval_status;
 
-    ALTER TABLE public.user_profiles
+    ALTER TABLE captionacc_production.user_profiles
       ADD CONSTRAINT check_approval_status
       CHECK (approval_status IN ('pending', 'approved', 'rejected'));
   END IF;

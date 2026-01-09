@@ -95,7 +95,7 @@ psql postgresql://postgres:postgres@localhost:54322/postgres
 ```sql
 -- Grant super_admin access to a user
 -- Replace '<user-uuid>' with the actual user ID from auth.users
-INSERT INTO public.platform_admins (
+INSERT INTO captionacc_production.platform_admins (
   user_id,
   admin_level,
   granted_by,
@@ -149,7 +149,7 @@ Or check in Supabase Studio:
 For read-only support staff:
 
 ```sql
-INSERT INTO public.platform_admins (
+INSERT INTO captionacc_production.platform_admins (
   user_id,
   admin_level,
   granted_by,
@@ -167,7 +167,7 @@ INSERT INTO public.platform_admins (
 To revoke access without deleting the record (for audit purposes):
 
 ```sql
-UPDATE public.platform_admins
+UPDATE captionacc_production.platform_admins
 SET revoked_at = NOW()
 WHERE user_id = '<user-uuid>';
 ```

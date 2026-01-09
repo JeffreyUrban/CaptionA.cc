@@ -77,12 +77,12 @@ BEGIN
   IF EXISTS (SELECT FROM information_schema.tables
              WHERE table_schema = 'public'
              AND table_name = 'user_profiles') THEN
-    UPDATE public.user_profiles SET role = 'owner' WHERE role = 'admin';
-    UPDATE public.user_profiles SET role = 'member' WHERE role = 'user';
-    UPDATE public.user_profiles SET role = 'member' WHERE role = 'annotator';
+    UPDATE captionacc_production.user_profiles SET role = 'owner' WHERE role = 'admin';
+    UPDATE captionacc_production.user_profiles SET role = 'member' WHERE role = 'user';
+    UPDATE captionacc_production.user_profiles SET role = 'member' WHERE role = 'annotator';
 
-    ALTER TABLE public.user_profiles DROP CONSTRAINT IF EXISTS user_profiles_role_check;
-    ALTER TABLE public.user_profiles ADD CONSTRAINT user_profiles_role_check
+    ALTER TABLE captionacc_production.user_profiles DROP CONSTRAINT IF EXISTS user_profiles_role_check;
+    ALTER TABLE captionacc_production.user_profiles ADD CONSTRAINT user_profiles_role_check
       CHECK (role IN ('owner', 'member'));
   END IF;
 END $$;
@@ -123,7 +123,7 @@ BEGIN
 
   -- Fall back to public schema
   SELECT EXISTS (
-    SELECT 1 FROM public.user_profiles
+    SELECT 1 FROM captionacc_production.user_profiles
     WHERE id = auth.uid()
     AND tenant_id = tenant_uuid
     AND role = 'owner'
@@ -154,7 +154,7 @@ BEGIN
 
   -- Fall back to public schema
   SELECT tenant_id INTO v_tenant_id
-  FROM public.user_profiles
+  FROM captionacc_production.user_profiles
   WHERE id = auth.uid()
   LIMIT 1;
 

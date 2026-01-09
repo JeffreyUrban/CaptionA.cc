@@ -172,5 +172,5 @@ COMMENT ON SCHEMA umami IS 'Umami web analytics database';
 --    - Run Umami migrations
 --
 -- 6. Once verified, optionally clean up public schema:
---    -- DROP TABLE public.tenants CASCADE;
+--    -- DROP TABLE captionacc_production.tenants CASCADE;
 --    -- etc.
