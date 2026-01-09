@@ -57,8 +57,8 @@ fly apps create captionacc-umami --org personal
 ### 5. Set Secrets
 
 ```bash
-# Set DATABASE_URL (with umami schema)
-fly secrets set DATABASE_URL="postgresql://postgres:[YOUR-PASSWORD]@db.xxx.supabase.co:5432/postgres?search_path=umami" -a captionacc-umami
+# Set DATABASE_URL (with umami schema. Must use the DB password, not a Secret Key.)
+fly secrets set DATABASE_URL="postgresql://postgres:[YOUR-PASSWORD]@db.xxx.supabase.co:5432/postgres?schema=umami" -a captionacc-umami
 
 # Set HASH_SALT (use the value you generated)
 fly secrets set HASH_SALT="your_generated_hash_salt_here" -a captionacc-umami
