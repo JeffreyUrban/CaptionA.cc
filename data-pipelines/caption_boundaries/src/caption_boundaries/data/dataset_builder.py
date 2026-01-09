@@ -48,7 +48,7 @@ def find_video_file(db_path: Path) -> Path | None:
     """Find video file in the same directory as database.
 
     Args:
-        db_path: Path to annotations.db file
+        db_path: Path to captions.db file
 
     Returns:
         Path to video file if found, None otherwise
@@ -84,7 +84,7 @@ def get_video_layout_metadata(db_path: Path) -> dict:
     """Extract spatial metadata from video_layout_config table.
 
     Args:
-        db_path: Path to video's annotations.db
+        db_path: Path to video's captions.db
 
     Returns:
         Dict with spatial metadata
@@ -123,7 +123,7 @@ def extract_frame_pairs_from_captions(db_path: Path, boundary_states: list[str] 
     - Empty transitions: Frames with empty text (label: 'empty_empty', 'empty_valid', 'valid_empty')
 
     Args:
-        db_path: Path to video's annotations.db
+        db_path: Path to video's captions.db
         boundary_states: List of boundary states to include (default: ['confirmed'])
                         Options: 'confirmed', 'predicted', 'issue'
 
@@ -252,7 +252,7 @@ def _copy_frames_for_video(db, video_conn, video_hash: str, video_samples: list[
 
     Args:
         db: Training database session
-        video_conn: Open SQLite connection to video's annotations.db
+        video_conn: Open SQLite connection to video's captions.db
         video_hash: Video hash
         video_samples: List of samples for this video
     """
@@ -318,7 +318,7 @@ def _copy_ocr_viz_for_video(db, video_conn, video_hash: str, has_samples: bool, 
 
     Args:
         db: Training database session
-        video_conn: Open SQLite connection to video's annotations.db
+        video_conn: Open SQLite connection to video's captions.db
         video_hash: Video hash
         has_samples: Whether this video has training samples in the dataset
         variant: OCR visualization variant (default: 'boundaries')
@@ -375,7 +375,7 @@ def create_training_dataset(
 
     Args:
         name: Dataset name (will be used as database filename)
-        video_db_paths: List of paths to video annotations.db files
+        video_db_paths: List of paths to video captions.db files
         split_strategy: How to split data:
             - 'random': Stratified random split
         train_split_ratio: Fraction of data for training (default: 0.8)

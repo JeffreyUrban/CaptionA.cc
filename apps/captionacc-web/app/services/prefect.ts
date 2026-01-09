@@ -1,30 +1,21 @@
 /**
  * Prefect Flow Queue Client
  *
- * Queues video processing workflows to Prefect orchestrator.
- * Replaces direct pipeline spawning with durable flow queuing.
+ * Queues video processing workflows to Prefect orchestrator via REST API.
+ * Direct HTTP calls to Prefect server - no subprocess spawning needed.
  */
 
-import { spawn } from 'child_process'
-import { resolve as pathResolve } from 'path'
-import { appendFileSync } from 'fs'
-
-const logFile = pathResolve(process.cwd(), '..', '..', 'local', 'prefect-queue.log')
+const PREFECT_API_URL = process.env['PREFECT_API_URL'] || 'https://prefect-service.fly.dev/api'
 
 function log(message: string) {
   const timestamp = new Date().toISOString()
-  const logMessage = `${timestamp} ${message}\n`
-  console.log(message)
-  try {
-    appendFileSync(logFile, logMessage)
-  } catch (e) {
-    console.error('Failed to write to log file:', e)
-  }
+  console.log(`${timestamp} ${message}`)
 }
 
 interface QueueFlowOptions {
   videoId?: string
   videoPath?: string
+  virtualPath?: string
   dbPath?: string
   outputDir?: string
   videoDir?: string
@@ -56,12 +47,28 @@ interface QueueFlowResult {
 }
 
 /**
- * Queue a Prefect flow by spawning the queue_flow.py CLI
- *
- * This mimics the existing pattern of spawning Python processes,
- * but queues to Prefect instead of running directly.
+ * Deployment name mapping for flow types
  */
-function queueFlow(
+const DEPLOYMENT_NAMES: Record<string, string> = {
+  'full-frames': 'process-video-initial/production',
+  'crop-frames': 'crop-video-frames/production',
+  'caption-median-ocr': 'process-caption-median-ocr/production',
+  'update-base-model': 'update-base-model-globally/production',
+  'retrain-video-model': 'retrain-video-model/production',
+  'upload-and-process': 'upload-and-process-video/production',
+  'crop-frames-to-webm': 'crop-frames-to-webm/production',
+  'download-for-layout-annotation': 'download-for-layout-annotation/production',
+  'upload-layout-db': 'upload-layout-db/production',
+  'download-for-caption-annotation': 'download-for-caption-annotation/production',
+  'upload-captions-db': 'upload-captions-db/production',
+}
+
+/**
+ * Queue a Prefect flow via REST API
+ *
+ * Makes a direct HTTP call to the Prefect server to create a flow run.
+ */
+async function queueFlow(
   flowType:
     | 'full-frames'
     | 'crop-frames'
@@ -76,215 +83,209 @@ function queueFlow(
     | 'upload-captions-db',
   options: QueueFlowOptions
 ): Promise<QueueFlowResult> {
-  return new Promise((resolve, reject) => {
-    let args: string[] = []
+  // Build parameters based on flow type
+  let parameters: Record<string, unknown> = {}
+  let tags: string[] = []
 
-    if (flowType === 'caption-median-ocr') {
-      // caption-median-ocr has different argument structure
-      if (!options.videoDir) {
-        reject(new Error('videoDir required for caption-median-ocr flow'))
-        return
-      }
-      if (!options.captionIds || options.captionIds.length === 0) {
-        reject(new Error('captionIds required for caption-median-ocr flow'))
-        return
-      }
-      args = [
-        flowType,
-        options.videoId!,
-        options.dbPath!,
-        options.videoDir!,
-        JSON.stringify(options.captionIds!),
-      ]
-      if (options.language) {
-        args.push(options.language)
-      }
-    } else if (flowType === 'update-base-model') {
-      // update-base-model has different argument structure
-      if (!options.dataDir) {
-        reject(new Error('dataDir required for update-base-model flow'))
-        return
-      }
-      args = [flowType, options.dataDir]
-      if (options.trainingSource) {
-        args.push(options.trainingSource)
-      }
-      if (options.retrainVideos !== undefined) {
-        args.push(options.retrainVideos.toString())
-      }
-    } else if (flowType === 'retrain-video-model') {
-      // retrain-video-model has different argument structure
-      if (!options.videoId || !options.dbPath) {
-        reject(new Error('videoId and dbPath required for retrain-video-model flow'))
-        return
-      }
-      args = [flowType, options.videoId, options.dbPath]
-      if (options.updatePredictions !== undefined) {
-        args.push(options.updatePredictions.toString())
-      }
-    } else if (flowType === 'upload-and-process') {
-      // upload-and-process flow (new Wasabi-based workflow with split databases)
-      if (!options.videoPath || !options.videoId || !options.filename || !options.fileSize) {
-        reject(
-          new Error(
-            'videoPath, videoId, filename, and fileSize required for upload-and-process flow'
-          )
-        )
-        return
-      }
-      args = [
-        flowType,
-        options.videoPath,
-        options.videoId,
-        options.filename,
-        options.fileSize.toString(),
-      ]
-      if (options.tenantId) {
-        args.push('--tenant-id', options.tenantId)
-      }
-      if (options.frameRate !== undefined && options.frameRate !== 0.1) {
-        args.push('--frame-rate', options.frameRate.toString())
-      }
-      if (options.uploadedByUserId) {
-        args.push('--uploaded-by-user-id', options.uploadedByUserId)
-      }
-    } else if (flowType === 'crop-frames-to-webm') {
-      // crop-frames-to-webm flow (versioned cropped frames as WebM chunks)
-      if (!options.videoId || !options.cropBounds) {
-        reject(new Error('videoId and cropBounds required for crop-frames-to-webm flow'))
-        return
-      }
-      args = [flowType, options.videoId, JSON.stringify(options.cropBounds)]
-      if (options.tenantId) {
-        args.push('--tenant-id', options.tenantId)
-      }
-      if (options.filename) {
-        args.push('--filename', options.filename)
-      }
-      if (options.frameRate !== undefined && options.frameRate !== 10.0) {
-        args.push('--frame-rate', options.frameRate.toString())
-      }
-      if (options.uploadedByUserId) {
-        args.push('--created-by-user-id', options.uploadedByUserId)
-      }
-    } else if (flowType === 'download-for-layout-annotation') {
-      // download-for-layout-annotation flow
-      if (!options.videoId || !options.outputDir) {
-        reject(new Error('videoId and outputDir required for download-for-layout-annotation flow'))
-        return
-      }
-      args = [flowType, options.videoId, options.outputDir]
-      if (options.tenantId) {
-        args.push('--tenant-id', options.tenantId)
-      }
-    } else if (flowType === 'upload-layout-db') {
-      // upload-layout-db flow
-      if (!options.videoId || !options.dbPath) {
-        reject(new Error('videoId and dbPath required for upload-layout-db flow'))
-        return
-      }
-      args = [flowType, options.videoId, options.dbPath]
-      if (options.tenantId) {
-        args.push('--tenant-id', options.tenantId)
-      }
-      if (options.triggerCropRegen !== undefined) {
-        args.push('--trigger-crop-regen', options.triggerCropRegen.toString())
-      }
-    } else if (flowType === 'download-for-caption-annotation') {
-      // download-for-caption-annotation flow
-      if (!options.videoId || !options.outputDir) {
-        reject(new Error('videoId and outputDir required for download-for-caption-annotation flow'))
-        return
-      }
-      args = [flowType, options.videoId, options.outputDir]
-      if (options.tenantId) {
-        args.push('--tenant-id', options.tenantId)
-      }
-    } else if (flowType === 'upload-captions-db') {
-      // upload-captions-db flow
-      if (!options.videoId || !options.dbPath) {
-        reject(new Error('videoId and dbPath required for upload-captions-db flow'))
-        return
-      }
-      args = [flowType, options.videoId, options.dbPath]
-      if (options.tenantId) {
-        args.push('--tenant-id', options.tenantId)
-      }
-    } else {
-      // full-frames and crop-frames have the original structure
-      if (!options.videoPath || !options.outputDir || !options.videoId || !options.dbPath) {
-        reject(new Error('videoId, videoPath, dbPath, and outputDir required for this flow type'))
-        return
-      }
-      args = [flowType, options.videoId, options.videoPath, options.dbPath, options.outputDir]
-
-      // Add optional frame rate for full-frames as named option
-      if (
-        flowType === 'full-frames' &&
-        options.frameRate !== undefined &&
-        options.frameRate !== 0.1
-      ) {
-        args.push('--frame-rate', options.frameRate.toString())
-      }
-
-      // Add crop bounds for crop-frames
-      if (flowType === 'crop-frames') {
-        if (!options.cropBounds) {
-          reject(new Error('cropBounds required for crop-frames flow'))
-          return
-        }
-        args.push(JSON.stringify(options.cropBounds))
-        if (options.cropBoundsVersion !== undefined) {
-          args.push(options.cropBoundsVersion.toString())
-        }
-      }
+  if (flowType === 'caption-median-ocr') {
+    if (!options.videoDir || !options.captionIds || options.captionIds.length === 0) {
+      throw new Error('videoDir and captionIds required for caption-median-ocr flow')
     }
+    parameters = {
+      video_id: options.videoId!,
+      db_path: options.dbPath!,
+      video_dir: options.videoDir!,
+      caption_ids: options.captionIds!,
+      language: options.language ?? 'zh-Hans',
+    }
+    tags = ['user-initiated', 'high-priority']
+  } else if (flowType === 'update-base-model') {
+    if (!options.dataDir) {
+      throw new Error('dataDir required for update-base-model flow')
+    }
+    parameters = {
+      data_dir: options.dataDir,
+      training_source: options.trainingSource ?? 'all_videos',
+      retrain_videos: options.retrainVideos ?? true,
+    }
+    tags = ['admin', 'base-model', 'low-priority']
+  } else if (flowType === 'retrain-video-model') {
+    if (!options.videoId || !options.dbPath) {
+      throw new Error('videoId and dbPath required for retrain-video-model flow')
+    }
+    parameters = {
+      video_id: options.videoId,
+      db_path: options.dbPath,
+      update_predictions: options.updatePredictions ?? true,
+    }
+    tags = ['model-retrain', 'medium-priority']
+  } else if (flowType === 'upload-and-process') {
+    if (!options.videoPath || !options.videoId || !options.filename || !options.fileSize) {
+      throw new Error(
+        'videoPath, videoId, filename, and fileSize required for upload-and-process flow'
+      )
+    }
+    parameters = {
+      local_video_path: options.videoPath,
+      virtual_path: options.virtualPath,
+      video_id: options.videoId,
+      filename: options.filename,
+      file_size: options.fileSize,
+      tenant_id: options.tenantId ?? '00000000-0000-0000-0000-000000000001',
+      frame_rate: options.frameRate ?? 0.1,
+    }
+    if (options.uploadedByUserId) {
+      parameters['uploaded_by_user_id'] = options.uploadedByUserId
+    }
+    tags = ['upload', 'processing', 'high-priority']
+  } else if (flowType === 'crop-frames-to-webm') {
+    if (!options.videoId || !options.cropBounds) {
+      throw new Error('videoId and cropBounds required for crop-frames-to-webm flow')
+    }
+    parameters = {
+      video_id: options.videoId,
+      tenant_id: options.tenantId ?? '00000000-0000-0000-0000-000000000001',
+      crop_bounds: options.cropBounds,
+      frame_rate: options.frameRate ?? 10.0,
+    }
+    if (options.filename) {
+      parameters['filename'] = options.filename
+    }
+    if (options.uploadedByUserId) {
+      parameters['created_by_user_id'] = options.uploadedByUserId
+    }
+    tags = ['crop-frames', 'webm', 'user-initiated', 'high-priority']
+  } else if (flowType === 'download-for-layout-annotation') {
+    if (!options.videoId || !options.outputDir) {
+      throw new Error('videoId and outputDir required for download-for-layout-annotation flow')
+    }
+    parameters = {
+      video_id: options.videoId,
+      output_dir: options.outputDir,
+      tenant_id: options.tenantId ?? '00000000-0000-0000-0000-000000000001',
+    }
+    tags = ['download', 'layout-annotation', 'user-initiated']
+  } else if (flowType === 'upload-layout-db') {
+    if (!options.videoId || !options.dbPath) {
+      throw new Error('videoId and dbPath required for upload-layout-db flow')
+    }
+    parameters = {
+      video_id: options.videoId,
+      layout_db_path: options.dbPath,
+      tenant_id: options.tenantId ?? '00000000-0000-0000-0000-000000000001',
+      trigger_crop_regen: options.triggerCropRegen ?? true,
+    }
+    tags = ['upload', 'layout-annotation', 'user-initiated', 'high-priority']
+  } else if (flowType === 'download-for-caption-annotation') {
+    if (!options.videoId || !options.outputDir) {
+      throw new Error('videoId and outputDir required for download-for-caption-annotation flow')
+    }
+    parameters = {
+      video_id: options.videoId,
+      output_dir: options.outputDir,
+      tenant_id: options.tenantId ?? '00000000-0000-0000-0000-000000000001',
+    }
+    tags = ['download', 'caption-annotation', 'user-initiated']
+  } else if (flowType === 'upload-captions-db') {
+    if (!options.videoId || !options.dbPath) {
+      throw new Error('videoId and dbPath required for upload-captions-db flow')
+    }
+    parameters = {
+      video_id: options.videoId,
+      captions_db_path: options.dbPath,
+      tenant_id: options.tenantId ?? '00000000-0000-0000-0000-000000000001',
+    }
+    tags = ['upload', 'caption-annotation', 'user-initiated', 'high-priority']
+  } else if (flowType === 'full-frames') {
+    if (!options.videoPath || !options.outputDir || !options.videoId || !options.dbPath) {
+      throw new Error('videoId, videoPath, dbPath, and outputDir required for full-frames flow')
+    }
+    parameters = {
+      video_id: options.videoId,
+      video_path: options.videoPath,
+      db_path: options.dbPath,
+      output_dir: options.outputDir,
+      frame_rate: options.frameRate ?? 0.1,
+    }
+    tags = ['background', 'full-frames']
+  } else if (flowType === 'crop-frames') {
+    if (
+      !options.videoPath ||
+      !options.outputDir ||
+      !options.videoId ||
+      !options.dbPath ||
+      !options.cropBounds
+    ) {
+      throw new Error(
+        'videoId, videoPath, dbPath, outputDir, and cropBounds required for crop-frames flow'
+      )
+    }
+    parameters = {
+      video_id: options.videoId,
+      video_path: options.videoPath,
+      db_path: options.dbPath,
+      output_dir: options.outputDir,
+      crop_bounds: options.cropBounds,
+      crop_bounds_version: options.cropBoundsVersion ?? 1,
+      frame_rate: 10.0,
+    }
+    tags = ['user-initiated', 'crop-frames']
+  }
 
-    const projectRoot = pathResolve(process.cwd(), '..', '..')
-    log(`[Prefect] Spawning queue_flow.py from ${projectRoot}`)
-    log(`[Prefect] Command: uv run python services/orchestrator/queue_flow.py ${args.join(' ')}`)
+  // Get deployment name
+  const deploymentName = DEPLOYMENT_NAMES[flowType]
+  if (!deploymentName) {
+    throw new Error(`Unknown flow type: ${flowType}`)
+  }
 
-    const cmd = spawn('uv', ['run', 'python', 'services/orchestrator/queue_flow.py', ...args], {
-      cwd: projectRoot,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    })
+  // Step 1: Get deployment metadata to get flow_id and deployment_id
+  log(`[Prefect] Getting deployment metadata for ${deploymentName}`)
+  const deploymentUrl = `${PREFECT_API_URL}/deployments/name/${deploymentName}`
+  const deploymentResponse = await fetch(deploymentUrl)
 
-    let stdout = ''
-    let stderr = ''
+  if (!deploymentResponse.ok) {
+    const error = await deploymentResponse.text()
+    throw new Error(`Failed to get deployment: ${deploymentResponse.status} ${error}`)
+  }
 
-    cmd.stdout?.on('data', data => {
-      stdout += data.toString()
-    })
+  const deployment = await deploymentResponse.json()
 
-    cmd.stderr?.on('data', data => {
-      stderr += data.toString()
-    })
+  // Step 2: Create flow run
+  log(`[Prefect] Creating flow run for ${deploymentName}`)
+  const flowRunUrl = `${PREFECT_API_URL}/flow_runs/`
 
-    cmd.on('close', code => {
-      if (code === 0) {
-        try {
-          const result = JSON.parse(stdout) as QueueFlowResult
-          log(`[Prefect] ✅ Flow queued successfully: ${result.flowRunId}`)
-          resolve(result)
-        } catch (e) {
-          const errorMsg = `Failed to parse queue response: ${stdout}`
-          log(`[Prefect] ❌ ${errorMsg}`)
-          reject(new Error(errorMsg))
-        }
-      } else {
-        const error = stderr || stdout || 'Unknown error'
-        const errorMsg = `Failed to queue flow (exit ${code}): ${error}`
-        log(`[Prefect] ❌ ${errorMsg}`)
-        reject(new Error(errorMsg))
-      }
-    })
-
-    cmd.on('error', error => {
-      const errorMsg = `Failed to spawn queue command: ${error.message}`
-      log(`[Prefect] ❌ ${errorMsg}`)
-      reject(new Error(errorMsg))
-    })
+  const response = await fetch(flowRunUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      deployment_id: deployment.id,
+      flow_id: deployment.flow_id,
+      parameters,
+      tags,
+    }),
   })
+
+  if (!response.ok) {
+    const error = await response.text()
+    throw new Error(`Failed to queue flow: ${response.status} ${error}`)
+  }
+
+  const flowRun = await response.json()
+
+  const result: QueueFlowResult = {
+    flowRunId: flowRun.id,
+    status: 'queued',
+    priority: tags.includes('high-priority')
+      ? 'high'
+      : tags.includes('medium-priority')
+        ? 'medium'
+        : 'low',
+  }
+
+  log(`[Prefect] ✅ Flow queued successfully: ${result.flowRunId}`)
+  return result
 }
 
 /**
@@ -426,6 +427,7 @@ export async function queueVideoModelRetrain(options: {
  */
 export async function queueUploadAndProcessing(options: {
   videoPath: string
+  virtualPath?: string
   videoId: string
   filename: string
   fileSize: number

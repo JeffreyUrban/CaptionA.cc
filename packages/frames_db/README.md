@@ -23,7 +23,7 @@ from frames_db import write_frame_to_db, write_frames_batch
 
 # Write single frame
 write_frame_to_db(
-    db_path=Path("annotations.db"),
+    db_path=Path("captions.db"),
     frame_index=100,
     image_data=jpeg_bytes,
     width=1920,
@@ -38,7 +38,7 @@ frames = [
     (200, jpeg_bytes_200, 1920, 1080),
 ]
 write_frames_batch(
-    db_path=Path("annotations.db"),
+    db_path=Path("captions.db"),
     frames=frames,
     table="full_frames"
 )
@@ -51,7 +51,7 @@ from frames_db import get_frame_from_db, get_frames_range
 
 # Get single frame
 frame = get_frame_from_db(
-    db_path=Path("annotations.db"),
+    db_path=Path("captions.db"),
     frame_index=100,
     table="full_frames"
 )
@@ -63,7 +63,7 @@ temp_path = frame.to_temp_file()  # For tools requiring filesystem paths
 
 # Get range of frames
 frames = get_frames_range(
-    db_path=Path("annotations.db"),
+    db_path=Path("captions.db"),
     start_index=0,
     end_index=1000,
     table="cropped_frames"

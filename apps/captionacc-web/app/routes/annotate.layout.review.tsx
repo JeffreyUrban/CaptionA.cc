@@ -34,7 +34,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     throw new Response('Missing videoId', { status: 400 })
   }
 
-  const dbPath = getDbPath(videoId)
+  const dbPath = await getDbPath(videoId)
   if (!dbPath) {
     throw new Response('Video not found', { status: 404 })
   }

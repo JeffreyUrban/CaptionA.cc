@@ -18,7 +18,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const results: Record<string, { exists: boolean; filename?: string; uploadedAt?: string }> = {}
 
   // Get all videos and build a lookup map by display_path
-  const allVideos = getAllVideos()
+  const allVideos = await getAllVideos()
   const videoMap = new Map(allVideos.map(v => [v.displayPath, v]))
 
   for (const videoPath of videoPaths) {

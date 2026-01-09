@@ -6,8 +6,8 @@ import { type ActionFunctionArgs } from 'react-router'
 import { queueCropFramesProcessing } from '~/services/prefect'
 import { getDbPath, getVideoDir } from '~/utils/video-paths'
 
-function getDatabase(videoId: string): Database.Database | Response {
-  const dbPath = getDbPath(videoId)
+async function getDatabase(videoId: string): Promise<Database.Database | Response> {
+  const dbPath = await getDbPath(videoId)
   if (!dbPath) {
     return new Response('Video not found', { status: 404 })
   }
@@ -33,7 +33,7 @@ export async function action({ params }: ActionFunctionArgs) {
   const videoId = decodeURIComponent(encodedVideoId)
 
   try {
-    const db = getDatabase(videoId)
+    const db = await getDatabase(videoId)
     if (db instanceof Response) return db
 
     // Get current crop bounds from video_layout_config
@@ -69,8 +69,8 @@ export async function action({ params }: ActionFunctionArgs) {
     }
 
     // Queue the crop_frames job via Prefect
-    const dbPath = getDbPath(videoId)
-    const videoDir = getVideoDir(videoId)
+    const dbPath = await getDbPath(videoId)
+    const videoDir = await getVideoDir(videoId)
     if (!dbPath || !videoDir) {
       return new Response(
         JSON.stringify({

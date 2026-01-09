@@ -3,6 +3,8 @@
 Creates immutable per-run SQLite databases for inference results.
 """
 
+from __future__ import annotations
+
 import hashlib
 import sqlite3
 from dataclasses import dataclass

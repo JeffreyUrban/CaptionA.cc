@@ -74,7 +74,7 @@ function getDatabaseSchema(dbPath: string): Map<string, TableSchema> {
 }
 
 /**
- * Find all annotations.db files
+ * Find all captions.db files
  */
 function findAllDatabases(): string[] {
   const databases: string[] = []
@@ -88,7 +88,7 @@ function findAllDatabases(): string[] {
 
       if (stat.isDirectory()) {
         scanDir(fullPath)
-      } else if (entry === 'annotations.db' && stat.size > 0) {
+      } else if (entry === 'captions.db' && stat.size > 0) {
         databases.push(fullPath)
       }
     }

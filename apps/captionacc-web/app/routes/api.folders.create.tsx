@@ -61,7 +61,7 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   // Check if a video or folder with this exact path already exists
-  const allVideos = getAllVideos()
+  const allVideos = await getAllVideos()
   const folderPrefix = trimmedPath + '/'
 
   // Check if this exact path is already used by a video

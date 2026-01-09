@@ -19,7 +19,7 @@ def get_database_paths(data_dir: Path) -> list[Path]:
     """Find all video databases in data directory."""
     databases = []
 
-    # Pattern: local/data/*/*/annotations.db
+    # Pattern: local/data/*/*/captions.db
     for parent_dir in sorted(data_dir.iterdir()):
         if not parent_dir.is_dir():
             continue
@@ -28,7 +28,7 @@ def get_database_paths(data_dir: Path) -> list[Path]:
             if not video_dir.is_dir():
                 continue
 
-            db_path = video_dir / "annotations.db"
+            db_path = video_dir / "captions.db"
             if db_path.exists():
                 databases.append(db_path)
 

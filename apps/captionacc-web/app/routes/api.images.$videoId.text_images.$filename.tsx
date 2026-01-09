@@ -22,7 +22,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
   }
 
   // Get video directory
-  const videoDir = getVideoDir(videoId)
+  const videoDir = await getVideoDir(videoId)
   if (!videoDir) {
     return new Response('Video not found', { status: 404 })
   }

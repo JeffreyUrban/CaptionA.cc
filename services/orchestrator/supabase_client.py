@@ -13,6 +13,7 @@ from datetime import datetime
 from typing import Any
 
 from supabase import Client, create_client
+from supabase.lib.client_options import SyncClientOptions
 
 # Local Supabase demo keys - These are Supabase's standard public keys for local development
 # Documented at: https://supabase.com/docs/guides/cli/local-development
@@ -79,12 +80,11 @@ def get_supabase_client(require_production: bool = False, schema: str | None = N
     env_label = "LOCAL" if is_local else "ONLINE"
     print(f"🔌 Supabase: {env_label} ({url}) [schema: {schema}]")
 
-    # Create client
-    client = create_client(url, key)
+    # Create client with schema in options
+    options = SyncClientOptions(schema=schema)
+    client = create_client(url, key, options=options)
 
     # Store schema preference for use in queries
-    # Note: The supabase-py library requires using .schema() on each query
-    # So we store it as an attribute for consumers to use
     client._preferred_schema = schema  # type: ignore
 
     return client
@@ -99,7 +99,6 @@ class VideoRepository:
     def create_video(
         self,
         tenant_id: str,
-        filename: str,
         storage_key: str,
         size_bytes: int | None = None,
         duration_seconds: float | None = None,
@@ -110,7 +109,6 @@ class VideoRepository:
 
         Args:
             tenant_id: Tenant UUID
-            filename: Original filename
             storage_key: Wasabi storage key (e.g., wasabi://videos/{tenant_id}/{video_id}/video.mp4)
             size_bytes: File size in bytes
             duration_seconds: Video duration
@@ -121,7 +119,6 @@ class VideoRepository:
         """
         data = {
             "tenant_id": tenant_id,
-            "filename": filename,
             "storage_key": storage_key,
             "size_bytes": size_bytes,
             "duration_seconds": duration_seconds,
@@ -129,7 +126,12 @@ class VideoRepository:
             "status": "uploading",
         }
 
-        response = self.client.table("videos").insert(data).execute()
+        response = (
+            self.client.schema(self.client._preferred_schema)  # type: ignore[attr-defined]
+            .table("videos")
+            .insert(data)
+            .execute()
+        )
         return response.data[0] if response.data else {}  # type: ignore[return-value]
 
     def update_video_status(
@@ -153,23 +155,30 @@ class VideoRepository:
         if prefect_flow_run_id:
             data["prefect_flow_run_id"] = prefect_flow_run_id
 
-        response = self.client.table("videos").update(data).eq("id", video_id).execute()
+        response = (
+            self.client.schema(self.client._preferred_schema)  # type: ignore[attr-defined]
+            .table("videos")
+            .update(data)
+            .eq("id", video_id)
+            .execute()
+        )
         return response.data[0] if response.data else {}  # type: ignore[return-value]
 
-    def update_annotations_db_key(self, video_id: str, annotations_db_key: str) -> dict[str, Any]:
+    def update_captions_db_key(self, video_id: str, captions_db_key: str) -> dict[str, Any]:
         """
         Update the Wasabi storage key for the annotations database.
 
         Args:
             video_id: Video UUID
-            annotations_db_key: Wasabi storage key for annotations.db
+            captions_db_key: Wasabi storage key for captions.db
 
         Returns:
             Updated video record
         """
         response = (
-            self.client.table("videos")
-            .update({"annotations_db_key": annotations_db_key})
+            self.client.schema(self.client._preferred_schema)  # type: ignore[attr-defined]
+            .table("videos")
+            .update({"captions_db_key": captions_db_key})
             .eq("id", video_id)
             .execute()
         )
@@ -177,14 +186,26 @@ class VideoRepository:
 
     def get_video(self, video_id: str) -> dict[str, Any] | None:
         """Get video by ID"""
-        response = self.client.table("videos").select("*").eq("id", video_id).single().execute()
+        response = (
+            self.client.schema(self.client._preferred_schema)  # type: ignore[attr-defined]
+            .table("videos")
+            .select("*")
+            .eq("id", video_id)
+            .single()
+            .execute()
+        )
         return response.data if response.data else None  # type: ignore[return-value]
 
     def get_tenant_videos(
         self, tenant_id: str, include_deleted: bool = False
     ) -> list[dict[str, Any]]:
         """Get all videos for a tenant"""
-        query = self.client.table("videos").select("*").eq("tenant_id", tenant_id)
+        query = (
+            self.client.schema(self.client._preferred_schema)  # type: ignore[attr-defined]
+            .table("videos")
+            .select("*")
+            .eq("tenant_id", tenant_id)
+        )
 
         if not include_deleted:
             query = query.is_("deleted_at", "null")
@@ -195,7 +216,8 @@ class VideoRepository:
     def lock_video(self, video_id: str, user_id: str) -> dict[str, Any]:
         """Lock a video for editing by a specific user"""
         response = (
-            self.client.table("videos")
+            self.client.schema(self.client._preferred_schema)  # type: ignore[attr-defined]
+            .table("videos")
             .update(
                 {
                     "locked_by_user_id": user_id,
@@ -210,7 +232,8 @@ class VideoRepository:
     def unlock_video(self, video_id: str) -> dict[str, Any]:
         """Unlock a video"""
         response = (
-            self.client.table("videos")
+            self.client.schema(self.client._preferred_schema)  # type: ignore[attr-defined]
+            .table("videos")
             .update(
                 {
                     "locked_by_user_id": None,
@@ -225,7 +248,8 @@ class VideoRepository:
     def soft_delete_video(self, video_id: str) -> dict[str, Any]:
         """Soft delete a video"""
         response = (
-            self.client.table("videos")
+            self.client.schema(self.client._preferred_schema)  # type: ignore[attr-defined]
+            .table("videos")
             .update(
                 {
                     "status": "soft_deleted",
@@ -271,7 +295,12 @@ class SearchIndexRepository:
             "updated_at": datetime.utcnow().isoformat(),
         }
 
-        response = self.client.table("video_search_index").upsert(data).execute()
+        response = (
+            self.client.schema(self.client._preferred_schema)  # type: ignore[attr-defined]
+            .table("video_search_index")
+            .upsert(data)
+            .execute()
+        )
         return response.data[0] if response.data else {}  # type: ignore[return-value]
 
     def search_text(
@@ -291,7 +320,8 @@ class SearchIndexRepository:
         # Note: This uses the search_vector generated column
         # Full-text search query format: 'word1 & word2' or 'word1 | word2'
         response = (
-            self.client.table("video_search_index")
+            self.client.schema(self.client._preferred_schema)  # type: ignore[attr-defined]
+            .table("video_search_index")
             .select("*")
             .text_search("search_vector", query)
             .limit(limit)  # type: ignore[return-value]
@@ -316,9 +346,11 @@ class CroppedFramesVersionRepository:
         Returns:
             Next version number (1 for first version)
         """
-        response = self.client.rpc(
-            "get_next_cropped_frames_version", {"p_video_id": video_id}
-        ).execute()
+        response = (
+            self.client.schema(self.client._preferred_schema)  # type: ignore[attr-defined]
+            .rpc("get_next_cropped_frames_version", {"p_video_id": video_id})
+            .execute()
+        )
         return response.data if response.data else 1  # type: ignore[return-value]
 
     def create_version(
@@ -366,7 +398,12 @@ class CroppedFramesVersionRepository:
             "status": "processing",
         }
 
-        response = self.client.table("cropped_frames_versions").insert(data).execute()
+        response = (
+            self.client.schema(self.client._preferred_schema)  # type: ignore[attr-defined]
+            .table("cropped_frames_versions")
+            .insert(data)
+            .execute()
+        )
         return response.data[0] if response.data else {}  # type: ignore[return-value]
 
     def update_version_chunks(
@@ -395,7 +432,11 @@ class CroppedFramesVersionRepository:
         }
 
         response = (
-            self.client.table("cropped_frames_versions").update(data).eq("id", version_id).execute()
+            self.client.schema(self.client._preferred_schema)  # type: ignore[attr-defined]
+            .table("cropped_frames_versions")
+            .update(data)
+            .eq("id", version_id)
+            .execute()
         )
         return response.data[0] if response.data else {}  # type: ignore[return-value]
 
@@ -411,7 +452,8 @@ class CroppedFramesVersionRepository:
             Updated version record
         """
         response = (
-            self.client.table("cropped_frames_versions")
+            self.client.schema(self.client._preferred_schema)  # type: ignore[attr-defined]
+            .table("cropped_frames_versions")
             .update({"status": status})
             .eq("id", version_id)
             .execute()
@@ -425,7 +467,9 @@ class CroppedFramesVersionRepository:
         Args:
             version_id: Version UUID to activate
         """
-        self.client.rpc("activate_cropped_frames_version", {"p_version_id": version_id}).execute()
+        self.client.schema(
+            self.client._preferred_schema  # type: ignore[attr-defined]
+        ).rpc("activate_cropped_frames_version", {"p_version_id": version_id}).execute()
 
     def get_active_version(self, video_id: str) -> dict[str, Any] | None:
         """
@@ -438,7 +482,8 @@ class CroppedFramesVersionRepository:
             Active version record or None
         """
         response = (
-            self.client.table("cropped_frames_versions")
+            self.client.schema(self.client._preferred_schema)  # type: ignore[attr-defined]
+            .table("cropped_frames_versions")
             .select("*")
             .eq("video_id", video_id)
             .eq("status", "active")
@@ -457,7 +502,8 @@ class CroppedFramesVersionRepository:
             Version record or None
         """
         response = (
-            self.client.table("cropped_frames_versions")
+            self.client.schema(self.client._preferred_schema)  # type: ignore[attr-defined]
+            .table("cropped_frames_versions")
             .select("*")
             .eq("id", version_id)
             .single()
@@ -476,7 +522,8 @@ class CroppedFramesVersionRepository:
             List of version records
         """
         response = (
-            self.client.table("cropped_frames_versions")
+            self.client.schema(self.client._preferred_schema)  # type: ignore[attr-defined]
+            .table("cropped_frames_versions")
             .select("*")
             .eq("video_id", video_id)
             .order("version", desc=True)
@@ -507,7 +554,12 @@ class TrainingCohortRepository:
             "status": "building",
         }
 
-        response = self.client.table("training_cohorts").insert(data).execute()
+        response = (
+            self.client.schema(self.client._preferred_schema)  # type: ignore[attr-defined]
+            .table("training_cohorts")
+            .insert(data)
+            .execute()
+        )
         return response.data[0] if response.data else {}  # type: ignore[return-value]
 
     def update_cohort_stats(
@@ -532,7 +584,13 @@ class TrainingCohortRepository:
         if git_commit:
             data["git_commit"] = git_commit
 
-        response = self.client.table("training_cohorts").update(data).eq("id", cohort_id).execute()
+        response = (
+            self.client.schema(self.client._preferred_schema)  # type: ignore[attr-defined]
+            .table("training_cohorts")
+            .update(data)
+            .eq("id", cohort_id)
+            .execute()
+        )
         return response.data[0] if response.data else {}  # type: ignore[return-value]
 
     def add_video_to_cohort(
@@ -552,5 +610,10 @@ class TrainingCohortRepository:
             "annotations_contributed": annotations_contributed,
         }
 
-        response = self.client.table("cohort_videos").insert(data).execute()
+        response = (
+            self.client.schema(self.client._preferred_schema)  # type: ignore[attr-defined]
+            .table("cohort_videos")
+            .insert(data)
+            .execute()
+        )
         return response.data[0] if response.data else {}  # type: ignore[return-value]

@@ -18,7 +18,8 @@ import { parseSchemaFull, type ColumnDefinition } from '~/utils/schema-parser'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
-const LOCAL_DATA_DIR = process.env['LOCAL_DATA_DIR'] ?? join(__dirname, '../../../../local/data')
+const LOCAL_DATA_DIR =
+  process.env['LOCAL_DATA_DIR'] ?? join(__dirname, '../../../../local/processing')
 const SCHEMA_DIR = join(__dirname, '../db')
 
 /**
@@ -373,7 +374,7 @@ function findAllDatabases(): string[] {
 
           if (stat.isDirectory()) {
             scanDir(fullPath)
-          } else if (entry === 'annotations.db' && stat.size > 0) {
+          } else if (entry === 'captions.db' && stat.size > 0) {
             databases.push(fullPath)
           }
         } catch {

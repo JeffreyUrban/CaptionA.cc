@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Split video databases by update patterns for efficient DVC versioning.
 
-Splits annotations.db into:
+Splits captions.db into:
 - video.db: Immutable source frames and metadata
 - fullOCR.db: Frame-level OCR detection results (occasional re-runs)
 - cropping.db: Cropped frames + layout config (updated together)
@@ -50,7 +50,7 @@ DATABASE_TABLES = {
 
 
 def get_video_directories(data_dir: Path) -> list[Path]:
-    """Find all video directories containing annotations.db."""
+    """Find all video directories containing captions.db."""
     video_dirs = []
     for hash_dir in data_dir.iterdir():
         if not hash_dir.is_dir() or hash_dir.name.startswith("."):
@@ -58,7 +58,7 @@ def get_video_directories(data_dir: Path) -> list[Path]:
         for video_dir in hash_dir.iterdir():
             if not video_dir.is_dir():
                 continue
-            db_path = video_dir / "annotations.db"
+            db_path = video_dir / "captions.db"
             if db_path.exists():
                 video_dirs.append(video_dir)
     return sorted(video_dirs)
@@ -84,8 +84,8 @@ def get_table_rows(conn: sqlite3.Connection, table_name: str) -> int:
 
 
 def split_database(video_dir: Path, dry_run: bool = False) -> dict:
-    """Split a single video's annotations.db into three separate databases."""
-    original_db = video_dir / "annotations.db"
+    """Split a single video's captions.db into three separate databases."""
+    original_db = video_dir / "captions.db"
     backup_db = video_dir / f"annotations_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
 
     stats = {
@@ -178,13 +178,13 @@ def split_database(video_dir: Path, dry_run: bool = False) -> dict:
         for conn in output_connections.values():
             conn.close()
 
-    # Rename original annotations.db to .old (keep as backup)
-    old_db = video_dir / "annotations.db.old"
+    # Rename original captions.db to .old (keep as backup)
+    old_db = video_dir / "captions.db.old"
     if not old_db.exists():  # Don't overwrite existing .old file
-        print("  Renaming annotations.db → annotations.db.old...")
+        print("  Renaming captions.db → captions.db.old...")
         original_db.rename(old_db)
     else:
-        print("  Removing original annotations.db (backup already exists)...")
+        print("  Removing original captions.db (backup already exists)...")
         original_db.unlink()
 
     return stats

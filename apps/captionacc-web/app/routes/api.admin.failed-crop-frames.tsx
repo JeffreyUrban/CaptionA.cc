@@ -29,7 +29,7 @@ function checkVideoForErrors(video: {
   displayPath: string
   storagePath: string
 }): FailedVideo | null {
-  const dbPath = `${process.cwd()}/../../local/data/${video.storagePath}/annotations.db`
+  const dbPath = `${process.cwd()}/../../local/processing/${video.storagePath}/captions.db`
 
   // Skip if database doesn't exist
   if (!existsSync(dbPath)) {
@@ -100,7 +100,7 @@ export async function loader({ request }: { request: Request }) {
 
     console.log('[AdminAPI] Scanning for failed crop_frames videos...')
 
-    const videos = getAllVideos()
+    const videos = await getAllVideos()
     const failedVideos: FailedVideo[] = []
 
     for (const video of videos) {

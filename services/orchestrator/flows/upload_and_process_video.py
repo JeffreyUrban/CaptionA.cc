@@ -16,17 +16,15 @@ Later workflows (user-initiated):
 - Caption annotation → captions.db
 """
 
-import os
 import subprocess
 from pathlib import Path
 from typing import Any
 
-import requests
 from prefect import flow, task
 from prefect.artifacts import create_table_artifact
 
-from ..supabase_client import SearchIndexRepository, VideoRepository
-from ..wasabi_client import get_wasabi_client
+from supabase_client import SearchIndexRepository, VideoRepository
+from wasabi_client import get_wasabi_client
 
 # Default tenant for development (will be replaced with user's tenant in production)
 DEFAULT_TENANT_ID = "00000000-0000-0000-0000-000000000001"
@@ -102,7 +100,7 @@ def upload_database_to_wasabi(
 def create_supabase_video_entry(
     tenant_id: str,
     video_id: str,
-    filename: str,
+    video_path: str,
     video_storage_key: str,
     file_size: int,
     uploaded_by_user_id: str | None = None,
@@ -115,16 +113,42 @@ def create_supabase_video_entry(
     video_record = {
         "id": video_id,
         "tenant_id": tenant_id,
-        "filename": filename,
+        "video_path": video_path,
         "storage_key": video_storage_key,
         "size_bytes": file_size,
         "status": "processing",
         "uploaded_by_user_id": uploaded_by_user_id,
     }
 
-    response = video_repo.client.table("videos").insert(video_record).execute()
+    try:
+        response = (
+            video_repo.client.schema(video_repo.client._preferred_schema)  # type: ignore[attr-defined]
+            .table("videos")
+            .insert(video_record)
+            .execute()
+        )
+        print(f"[Supabase] Video entry created: {video_id}")
+    except Exception as e:
+        if "duplicate key" in str(e) or "already exists" in str(e):
+            print(f"[Supabase] Video entry already exists, updating: {video_id}")
+            # Update existing entry
+            response = (
+                video_repo.client.schema(video_repo.client._preferred_schema)  # type: ignore[attr-defined]
+                .table("videos")
+                .update(
+                    {
+                        "video_path": video_path,
+                        "storage_key": video_storage_key,
+                        "size_bytes": file_size,
+                        "status": "processing",
+                    }
+                )
+                .eq("id", video_id)
+                .execute()
+            )
+        else:
+            raise
 
-    print(f"[Supabase] Video entry created: {video_id}")
     return response.data[0] if response.data else {}  # type: ignore[return-value]
 
 
@@ -178,8 +202,24 @@ def extract_full_frames_to_video_db(
     # Ensure parent directory exists
     Path(output_db_abs).parent.mkdir(parents=True, exist_ok=True)
 
-    pipeline_dir = Path(__file__).parent.parent.parent.parent / "data-pipelines" / "full_frames"
+    # Delete existing database to ensure idempotency
+    if Path(output_db_abs).exists():
+        Path(output_db_abs).unlink()
+        print("[video.db] Deleted existing database for clean extraction")
 
+    pipeline_dir = Path(__file__).parent.parent.parent.parent / "data-pipelines" / "full_frames"
+    frames_dir = Path(output_db_abs).parent / "frames_temp"
+
+    # Clean up existing frames directory for idempotency
+    import shutil
+
+    if frames_dir.exists():
+        shutil.rmtree(frames_dir)
+        print("[video.db] Deleted existing frames temp directory")
+
+    frames_dir.mkdir(parents=True, exist_ok=True)
+
+    # Step 1: Extract frames to temporary directory using sample-frames CLI
     result = subprocess.run(
         [
             "uv",
@@ -187,10 +227,10 @@ def extract_full_frames_to_video_db(
             "python",
             "-m",
             "full_frames",
-            "extract",
+            "sample-frames",
             video_path_abs,
-            "--output-db",
-            output_db_abs,
+            "--output-dir",
+            str(frames_dir),
             "--frame-rate",
             str(frame_rate),
         ],
@@ -202,7 +242,58 @@ def extract_full_frames_to_video_db(
 
     if result.returncode != 0:
         print(f"STDERR: {result.stderr}")
-        raise RuntimeError(f"full_frames pipeline failed: {result.stderr}")
+        raise RuntimeError(f"full_frames sample-frames failed: {result.stderr}")
+
+    print("[video.db] Frame extraction to directory complete")
+
+    # Step 2: Write frames to video.db using frames_db package
+    import sqlite3
+
+    from frames_db import write_frames_batch
+    from PIL import Image
+
+    # Create video.db with the proper schema
+    conn = sqlite3.connect(output_db_abs)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS full_frames (
+            frame_index INTEGER PRIMARY KEY,
+            image_data BLOB NOT NULL,
+            width INTEGER NOT NULL,
+            height INTEGER NOT NULL,
+            file_size INTEGER NOT NULL
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS video_metadata (
+            video_path TEXT PRIMARY KEY,
+            duration_seconds REAL,
+            video_hash TEXT
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+    # Collect frame data
+    frame_files = sorted(frames_dir.glob("frame_*.jpg"))
+    frames = []
+    for frame_file in frame_files:
+        frame_index = int(frame_file.stem.split("_")[1])
+        image_data = frame_file.read_bytes()
+        img = Image.open(frame_file)
+        width, height = img.size
+        frames.append((frame_index, image_data, width, height))
+
+    # Write frames to video.db
+    write_frames_batch(
+        db_path=Path(output_db_abs),
+        frames=frames,
+        table="full_frames",
+    )
+
+    # Clean up temporary frames directory
+    import shutil
+
+    shutil.rmtree(frames_dir)
 
     print("[video.db] Frame extraction complete")
 
@@ -239,20 +330,27 @@ def run_ocr_to_full_ocr_db(
     Creates fullOCR.db with:
     - full_frame_ocr table (OCR detections, text, confidence, bounding boxes)
     """
+    import sqlite3
+
+    from ocr_client import get_ocr_client
+
     print(f"[fullOCR.db] Running OCR on frames from {video_db_path}")
 
+    video_db_abs = str(Path(video_db_path).resolve())
     ocr_db_abs = str(Path(output_ocr_db_path).resolve())
 
     # Ensure parent directory exists
     Path(ocr_db_abs).parent.mkdir(parents=True, exist_ok=True)
 
-    # TODO: Replace with actual OCR pipeline when available
-    # For now, create empty fullOCR.db with schema
-    import sqlite3
+    # Delete existing OCR database to ensure idempotency
+    if Path(ocr_db_abs).exists():
+        Path(ocr_db_abs).unlink()
+        print("[fullOCR.db] Deleted existing OCR database for clean processing")
 
-    conn = sqlite3.connect(ocr_db_abs)
+    # Create fullOCR.db with schema
+    ocr_conn = sqlite3.connect(ocr_db_abs)
     try:
-        conn.execute("""
+        ocr_conn.execute("""
             CREATE TABLE IF NOT EXISTS full_frame_ocr (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 frame_id INTEGER NOT NULL,
@@ -267,18 +365,144 @@ def run_ocr_to_full_ocr_db(
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_frame_index ON full_frame_ocr(frame_index)")
-        conn.commit()
+        ocr_conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_frame_index ON full_frame_ocr(frame_index)"
+        )
+        ocr_conn.commit()
+    except Exception as e:
+        ocr_conn.close()
+        raise RuntimeError(f"Failed to create fullOCR.db schema: {e}") from e
 
-        ocr_count = conn.execute("SELECT COUNT(*) FROM full_frame_ocr").fetchone()[0]
+    # Read frames from video.db
+    video_conn = sqlite3.connect(video_db_abs)
+    try:
+        cursor = video_conn.execute("""
+            SELECT frame_index, image_data, width, height
+            FROM full_frames
+            ORDER BY frame_index
+        """)
+
+        frames_data = cursor.fetchall()
+        total_frames = len(frames_data)
+
+        if total_frames == 0:
+            print("[fullOCR.db] No frames found in video.db")
+            ocr_conn.close()
+            return {
+                "db_path": ocr_db_abs,
+                "ocr_count": 0,
+                "status": "completed",
+            }
+
+        print(f"[fullOCR.db] Found {total_frames} frames to process")
+
+        # Get frame dimensions (all frames should be same size)
+        _, _, width, height = frames_data[0]
+        print(f"[fullOCR.db] Frame dimensions: {width}×{height}")
+
+        # Get OCR service client
+        ocr_client = get_ocr_client()
+
+        # Check capacity for this frame size
+        capacity = ocr_client.get_capacity(width, height)
+        max_batch_size = capacity["max_images"]
+        print(
+            f"[fullOCR.db] Max batch size: {max_batch_size} (limited by {capacity['limiting_factor']})"
+        )
+
+        # Calculate optimal batch size to divide frames evenly
+        if total_frames <= max_batch_size:
+            # All frames fit in one batch
+            batch_size = total_frames
+            num_batches = 1
+        else:
+            # Divide frames evenly across multiple batches
+            import math
+
+            num_batches = math.ceil(total_frames / max_batch_size)
+            batch_size = math.ceil(total_frames / num_batches)
+
+        print(
+            f"[fullOCR.db] Processing {total_frames} frames in {num_batches} batches of ~{batch_size} frames each"
+        )
+
+        # Process frames in batches
+        total_detections = 0
+
+        for batch_start in range(0, total_frames, batch_size):
+            batch_end = min(batch_start + batch_size, total_frames)
+            batch_frames = frames_data[batch_start:batch_end]
+
+            batch_num = batch_start // batch_size + 1
+            print(
+                f"[fullOCR.db] Processing batch {batch_num}/{num_batches} ({batch_end - batch_start} frames)"
+            )
+
+            # Prepare images for OCR service
+            images = []
+            for frame_index, image_data, _, _ in batch_frames:
+                images.append(
+                    {
+                        "id": f"frame_{frame_index}",
+                        "data": image_data,
+                    }
+                )
+
+            # Submit to OCR service and wait for results (sequential processing)
+            try:
+                result = ocr_client.process_batch(
+                    images, timeout=600
+                )  # 10min timeout for large batches
+
+                print(
+                    f"[fullOCR.db] Batch processed: {result['total_characters']} characters in {result['processing_time_ms']:.0f}ms"
+                )
+
+                # Store OCR results in fullOCR.db
+                for ocr_result in result["results"]:
+                    frame_index = int(ocr_result["id"].replace("frame_", ""))
+
+                    for box_idx, char in enumerate(ocr_result["characters"]):
+                        bbox = char["bbox"]
+                        ocr_conn.execute(
+                            """
+                            INSERT INTO full_frame_ocr (
+                                frame_id, frame_index, box_index, text, confidence,
+                                bbox_left, bbox_top, bbox_right, bbox_bottom
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                            (
+                                frame_index,  # frame_id (same as frame_index for full frames)
+                                frame_index,
+                                box_idx,
+                                char["text"],
+                                1.0,  # Google Vision doesn't provide per-char confidence, use 1.0
+                                bbox["x"],
+                                bbox["y"],
+                                bbox["x"] + bbox["width"],
+                                bbox["y"] + bbox["height"],
+                            ),
+                        )
+
+                ocr_conn.commit()
+                total_detections += result["total_characters"]
+
+            except Exception as e:
+                print(f"[fullOCR.db] Warning: Batch {batch_start // batch_size + 1} failed: {e}")
+                # Continue with next batch instead of failing entire job
+
     finally:
-        conn.close()
+        video_conn.close()
+        ocr_conn.close()
 
-    print(f"[fullOCR.db] OCR processing complete: {ocr_count} detections")
+    print(
+        f"[fullOCR.db] OCR processing complete: {total_detections} detections from {total_frames} frames"
+    )
 
     return {
         "db_path": ocr_db_abs,
-        "ocr_count": ocr_count,
+        "ocr_count": total_detections,
+        "frames_processed": total_frames,
         "status": "completed",
     }
 
@@ -342,6 +566,7 @@ def upload_and_process_video_flow(
     video_id: str,
     filename: str,
     file_size: int,
+    virtual_path: str | None = None,
     tenant_id: str = DEFAULT_TENANT_ID,
     frame_rate: float = 0.1,
     uploaded_by_user_id: str | None = None,
@@ -366,6 +591,7 @@ def upload_and_process_video_flow(
         video_id: Pre-generated video UUID
         filename: Original filename
         file_size: File size in bytes
+        virtual_path: Virtual file path for display (e.g., "folder1/video") - stored in database
         tenant_id: Tenant UUID (defaults to demo tenant)
         frame_rate: Frame extraction rate in Hz (default 0.1 = every 10 seconds)
         uploaded_by_user_id: User UUID who uploaded
@@ -410,7 +636,7 @@ def upload_and_process_video_flow(
         create_supabase_video_entry(
             tenant_id=tenant_id,
             video_id=video_id,
-            filename=filename,
+            video_path=virtual_path or filename,
             video_storage_key=video_storage_key,
             file_size=file_size,
             uploaded_by_user_id=uploaded_by_user_id,
@@ -479,53 +705,19 @@ def upload_and_process_video_flow(
         print(f"📊 Frames: {frames_result['frame_count']}, OCR: {ocr_result['ocr_count']}")
         print(f"🔍 Indexed: {indexed_frames} frames")
 
-        # Send completion webhook
-        try:
-            webhook_url = os.getenv("WEB_APP_URL", "http://localhost:5173")
-            requests.post(
-                f"{webhook_url}/api/webhooks/prefect",
-                json={
-                    "videoId": video_id,
-                    "flowName": "upload-and-process-video",
-                    "status": "complete",
-                },
-                timeout=5,
-            )
-        except Exception as e:
-            print(f"⚠️  Failed to send completion webhook: {e}")
-
         return {
             "video_id": video_id,
-            "status": "completed",
-            "storage_key": video_storage_key,
+            "status": "active",
             "frame_count": frames_result["frame_count"],
             "ocr_count": ocr_result["ocr_count"],
             "indexed_frames": indexed_frames,
         }
 
     except Exception as e:
-        print(f"\n❌ Upload and processing failed for {video_id}: {e}")
-
+        print(f"\n❌ Upload and processing failed: {e}")
         # Update Supabase status to failed
         try:
             update_supabase_status(video_id, "failed", flow_run_id)
-        except Exception as supabase_error:
-            print(f"⚠️  Failed to update Supabase status: {supabase_error}")
-
-        # Send failure webhook
-        try:
-            webhook_url = os.getenv("WEB_APP_URL", "http://localhost:5173")
-            requests.post(
-                f"{webhook_url}/api/webhooks/prefect",
-                json={
-                    "videoId": video_id,
-                    "flowName": "upload-and-process-video",
-                    "status": "error",
-                    "error": str(e),
-                },
-                timeout=5,
-            )
-        except Exception as webhook_error:
-            print(f"⚠️  Failed to send failure webhook: {webhook_error}")
-
+        except Exception:
+            pass
         raise

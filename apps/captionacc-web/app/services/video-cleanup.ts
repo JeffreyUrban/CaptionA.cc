@@ -73,11 +73,11 @@ async function findDeletedVideos(): Promise<DeletedVideo[]> {
   const deletedVideos: DeletedVideo[] = []
 
   // Get all videos and check for deletion flag
-  const allVideos = getAllVideos()
+  const allVideos = await getAllVideos()
 
   for (const video of allVideos) {
-    const dbPath = getDbPath(video.videoId)
-    const videoDir = getVideoDir(video.videoId)
+    const dbPath = await getDbPath(video.videoId)
+    const videoDir = await getVideoDir(video.videoId)
 
     if (!dbPath || !videoDir) continue
 
@@ -194,11 +194,11 @@ async function findStaleProcessing(): Promise<
   }> = []
 
   // Get all videos and check for stale processing
-  const allVideos = getAllVideos()
+  const allVideos = await getAllVideos()
 
   for (const video of allVideos) {
-    const dbPath = getDbPath(video.videoId)
-    const videoDir = getVideoDir(video.videoId)
+    const dbPath = await getDbPath(video.videoId)
+    const videoDir = await getVideoDir(video.videoId)
 
     if (!dbPath || !videoDir) continue
 
@@ -277,7 +277,7 @@ async function recoverStaleProcessing(video: {
   videoId: string
 }): Promise<void> {
   const { displayPath, videoDir, videoFile, attempts, videoId } = video
-  const dbPath = resolve(videoDir, 'annotations.db')
+  const dbPath = resolve(videoDir, 'captions.db')
 
   // Check if exceeded max attempts
   if (attempts >= MAX_PROCESSING_ATTEMPTS) {
@@ -348,11 +348,11 @@ async function deleteOrphanedFrameFiles(
  */
 async function cleanupOrphanedCropFrames(): Promise<number> {
   let cleanedCount = 0
-  const allVideos = getAllVideos()
+  const allVideos = await getAllVideos()
 
   for (const video of allVideos) {
-    const videoDir = getVideoDir(video.videoId)
-    const dbPath = getDbPath(video.videoId)
+    const videoDir = await getVideoDir(video.videoId)
+    const dbPath = await getDbPath(video.videoId)
 
     if (!videoDir || !dbPath) continue
 
@@ -408,10 +408,10 @@ async function cleanupOrphanedCropFrames(): Promise<number> {
 async function checkDuplicateVideoHashes(): Promise<number> {
   const hashGroups = new Map<string, Array<{ videoId: string; displayPath: string }>>()
 
-  const allVideos = getAllVideos()
+  const allVideos = await getAllVideos()
 
   for (const video of allVideos) {
-    const dbPath = getDbPath(video.videoId)
+    const dbPath = await getDbPath(video.videoId)
     if (!dbPath || !existsSync(dbPath)) continue
 
     try {

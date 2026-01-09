@@ -9,15 +9,12 @@ Handles initial video processing after upload:
 This replaces apps/captionacc-web/app/services/video-processing.ts
 """
 
-import os
 import sqlite3
 import subprocess
 from pathlib import Path
 from typing import Any
 
-import requests
 from prefect import flow, task
-from prefect.artifacts import create_link_artifact, create_table_artifact
 
 
 @task(
@@ -37,7 +34,7 @@ def extract_full_frames(
 
     Args:
         video_path: Full path to video file
-        db_path: Path to annotations.db
+        db_path: Path to captions.db
         output_dir: Directory to write frames
         frame_rate: Frame extraction rate in Hz (default 0.1 = every 10 seconds)
 
@@ -120,7 +117,7 @@ def update_processing_status(db_path: str, status: str) -> None:
     Preserves existing database schema and status tracking.
 
     Args:
-        db_path: Path to annotations.db
+        db_path: Path to captions.db
         status: New status value (e.g., 'processing_complete')
     """
     print(f"Updating status to: {status}")
@@ -173,7 +170,7 @@ def process_video_initial_flow(
     Args:
         video_id: Video UUID
         video_path: Full path to video file
-        db_path: Path to annotations.db
+        db_path: Path to captions.db
         output_dir: Directory for frame output
         frame_rate: Frame extraction rate in Hz
 
@@ -224,76 +221,11 @@ def process_video_initial_flow(
     finally:
         conn.close()
 
-    # Send webhook notification at START of processing
-    try:
-        webhook_url = os.getenv("WEB_APP_URL", "http://localhost:5173")
-        webhook_endpoint = f"{webhook_url}/api/webhooks/prefect"
-        webhook_payload = {
-            "videoId": video_id,
-            "flowName": "process-video-initial",
-            "status": "started",
-        }
-        print(f"Sending start webhook to {webhook_endpoint}")
-        requests.post(webhook_endpoint, json=webhook_payload, timeout=5)
-    except Exception as e:
-        print(f"Warning: Failed to send start webhook: {e}")
+    # Extract frames
+    frames_result = extract_full_frames(video_path, db_path, output_dir, frame_rate)
 
-    # Extract frames and run OCR
-    frames_result = extract_full_frames(
-        video_path=video_path, db_path=db_path, output_dir=output_dir, frame_rate=frame_rate
-    )
-
-    # Update database status
-    update_processing_status(db_path=db_path, status="processing_complete")
-
-    # Create human-readable artifact for UI
-    create_table_artifact(
-        key=f"video-{video_id}-initial-processing",
-        table={
-            "Video ID": [video_id],
-            "Frames Extracted": [frames_result["frame_count"]],
-            "OCR Boxes": [frames_result["ocr_count"]],
-            "Status": ["Ready for Layout Annotation"],
-        },
-        description=f"Initial processing complete for video {video_id}",
-    )
-
-    # Link to database for easy access
-    create_link_artifact(
-        key=f"video-{video_id}-database",
-        link=f"file://{db_path}",
-        description=f"SQLite database for video {video_id}",
-    )
-
-    print(f"Initial processing complete for {video_id}")
-    print(f"Frames: {frames_result['frame_count']}, OCR boxes: {frames_result['ocr_count']}")
-
-    # Send webhook notification to web app
-    try:
-        webhook_url = os.getenv("WEB_APP_URL", "http://localhost:5173")
-        webhook_endpoint = f"{webhook_url}/api/webhooks/prefect"
-
-        webhook_payload = {
-            "videoId": video_id,  # UUID (stable identifier)
-            "flowName": "process-video-initial",
-            "status": "complete",
-        }
-
-        print(f"Sending webhook to {webhook_endpoint}")
-        response = requests.post(
-            webhook_endpoint,
-            json=webhook_payload,
-            timeout=5,
-        )
-
-        if response.ok:
-            print(f"Webhook sent successfully: {response.status_code}")
-        else:
-            print(f"Webhook failed: {response.status_code} - {response.text}")
-
-    except Exception as webhook_error:
-        # Don't fail the flow if webhook fails
-        print(f"Warning: Failed to send webhook notification: {webhook_error}")
+    # Update status to complete
+    update_processing_status(db_path, "processing_complete")
 
     return {
         "video_id": video_id,

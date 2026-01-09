@@ -802,7 +802,7 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
   console.log(`[getVideoStats] CALLED for videoId: ${videoId}`)
 
   // Resolve videoId (can be display_path or UUID) to database path
-  const dbPath = getDbPath(videoId)
+  const dbPath = await getDbPath(videoId)
   console.log(`[getVideoStats] videoId: ${videoId}, dbPath: ${dbPath}`)
 
   if (!dbPath) {

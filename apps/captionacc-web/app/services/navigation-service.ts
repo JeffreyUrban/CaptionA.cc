@@ -123,12 +123,12 @@ function transformAnnotation(row: AnnotationRow): Annotation {
  * @returns Navigation result with the target annotation or null
  * @throws Error if database or current annotation is not found
  */
-export function navigateAnnotation(
+export async function navigateAnnotation(
   videoId: string,
   currentId: number,
   direction: NavigationDirection
-): NavigationResult {
-  const result = getAnnotationDatabase(videoId)
+): Promise<NavigationResult> {
+  const result = await getAnnotationDatabase(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -293,8 +293,11 @@ export function navigateAnnotation(
  * @returns The next pending annotation, or null if none found
  * @throws Error if database is not found
  */
-export function getNextPendingAnnotation(videoId: string, afterId?: number): Annotation | null {
-  const result = getAnnotationDatabase(videoId)
+export async function getNextPendingAnnotation(
+  videoId: string,
+  afterId?: number
+): Promise<Annotation | null> {
+  const result = await getAnnotationDatabase(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -371,8 +374,8 @@ export function getNextPendingAnnotation(videoId: string, afterId?: number): Ann
  * @returns Progress statistics for the video
  * @throws Error if database is not found
  */
-export function getProgressStats(videoId: string): ProgressStats {
-  const result = getAnnotationDatabase(videoId)
+export async function getProgressStats(videoId: string): Promise<ProgressStats> {
+  const result = await getAnnotationDatabase(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -426,8 +429,11 @@ export function getProgressStats(videoId: string): ProgressStats {
  * @returns The updated annotation
  * @throws Error if database or annotation is not found
  */
-export function markAnnotationReviewed(videoId: string, annotationId: number): Annotation {
-  const result = getWritableDatabase(videoId)
+export async function markAnnotationReviewed(
+  videoId: string,
+  annotationId: number
+): Promise<Annotation> {
+  const result = await getWritableDatabase(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -465,8 +471,11 @@ export function markAnnotationReviewed(videoId: string, annotationId: number): A
  * @returns The annotation, or null if not found
  * @throws Error if database is not found
  */
-export function getAnnotationById(videoId: string, annotationId: number): Annotation | null {
-  const result = getAnnotationDatabase(videoId)
+export async function getAnnotationById(
+  videoId: string,
+  annotationId: number
+): Promise<Annotation | null> {
+  const result = await getAnnotationDatabase(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }

@@ -4,7 +4,7 @@
 DB_PATH="$1"
 
 if [ -z "$DB_PATH" ]; then
-  echo "Usage: $0 <path-to-annotations.db>"
+  echo "Usage: $0 <path-to-captions.db>"
   exit 1
 fi
 

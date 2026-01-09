@@ -27,6 +27,7 @@ members = [
 exclude = [
     "apps/captionacc-web",
     "services/ocr-service",  # Standalone FastAPI service, not a workspace package
+    "services/prefect-service",  # Standalone Docker service for Fly.io, not a workspace package
     "data-pipelines/docs",  # Documentation directory, not a Python package
     "**/__pycache__",  # Exclude all pycache directories
     "**/.pytest_cache",  # Exclude pytest cache

@@ -45,7 +45,7 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
   }
 
   try {
-    const result = navigateAnnotation(
+    const result = await navigateAnnotation(
       videoIdResult.value,
       currentIdResult.value,
       direction as NavigationDirection

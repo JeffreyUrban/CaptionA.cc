@@ -34,7 +34,7 @@ def write_frame_to_db(
     Example:
         >>> jpeg_bytes = Path("frame_0000000000.jpg").read_bytes()
         >>> write_frame_to_db(
-        ...     db_path=Path("annotations.db"),
+        ...     db_path=Path("captions.db"),
         ...     frame_index=0,
         ...     image_data=jpeg_bytes,
         ...     width=1920,
@@ -128,7 +128,7 @@ def write_frames_batch(
         ...     frames.append((frame_index, image_data, img.width, img.height))
         >>>
         >>> count = write_frames_batch(
-        ...     db_path=Path("annotations.db"),
+        ...     db_path=Path("captions.db"),
         ...     frames=frames,
         ...     table="full_frames",
         ...     progress_callback=lambda cur, tot: print(f"{cur}/{tot}")

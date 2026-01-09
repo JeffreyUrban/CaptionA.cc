@@ -14,7 +14,7 @@ def find_longest_confirmed_caption(db_path: Path) -> dict | None:
     """Find the confirmed caption with the longest text.
 
     Args:
-        db_path: Path to annotations.db
+        db_path: Path to captions.db
 
     Returns:
         Dictionary with caption info or None if no confirmed captions
@@ -49,7 +49,7 @@ def load_frames_from_db(db_path: Path, start_frame: int, end_frame: int) -> list
     """Load all cropped frames in a range from database.
 
     Args:
-        db_path: Path to annotations.db
+        db_path: Path to captions.db
         start_frame: Start frame index (inclusive)
         end_frame: End frame index (inclusive)
 
@@ -124,7 +124,7 @@ def generate_font_example_image(
 
     Args:
         video_dir: Video directory path
-        db_path: Path to annotations.db
+        db_path: Path to captions.db
         force: If True, regenerate even if font example already exists
 
     Returns:

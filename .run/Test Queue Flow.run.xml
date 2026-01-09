@@ -14,7 +14,7 @@
     <option name="ADD_CONTENT_ROOTS" value="true" />
     <option name="ADD_SOURCE_ROOTS" value="true" />
     <option name="SCRIPT_NAME" value="$PROJECT_DIR$/services/orchestrator/queue_flow.py" />
-    <option name="PARAMETERS" value="full-frames test-video-123 /tmp/test-video.mp4 /tmp/test-annotations.db /tmp/test-output" />
+    <option name="PARAMETERS" value="full-frames test-video-123 /tmp/test-video.mp4 /tmp/test-captions.db /tmp/test-output" />
     <option name="SHOW_COMMAND_LINE" value="false" />
     <option name="EMULATE_TERMINAL" value="true" />
     <option name="MODULE_MODE" value="false" />

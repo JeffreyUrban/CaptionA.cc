@@ -16,8 +16,8 @@ interface TextQueueAnnotation {
   created_at: string
 }
 
-function getDatabase(videoId: string): Database.Database | Response {
-  const dbPath = getDbPath(videoId)
+async function getDatabase(videoId: string): Promise<Database.Database | Response> {
+  const dbPath = await getDbPath(videoId)
   if (!dbPath) {
     return new Response('Video not found', { status: 404 })
   }
@@ -42,7 +42,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
   const videoId = decodeURIComponent(encodedVideoId)
 
   try {
-    const db = getDatabase(videoId)
+    const db = await getDatabase(videoId)
     if (db instanceof Response) return db
 
     // Find annotations that need text annotation:

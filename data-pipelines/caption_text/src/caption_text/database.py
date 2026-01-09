@@ -1,6 +1,6 @@
 """Database operations for caption_text pipeline.
 
-Interacts with annotations.db for caption text reading, comparison, and vetting.
+Interacts with captions.db for caption text reading, comparison, and vetting.
 """
 
 import sqlite3
@@ -9,26 +9,26 @@ from typing import Any
 
 
 def get_database_path(video_dir: Path) -> Path:
-    """Get annotations.db path from video directory.
+    """Get captions.db path from video directory.
 
     Args:
         video_dir: Path to video directory (e.g., local/data/show_name/video_id/)
 
     Returns:
-        Path to annotations.db file
+        Path to captions.db file
 
     Example:
         >>> get_database_path(Path("local/data/show_name/video_id"))
-        Path("local/data/show_name/video_id/annotations.db")
+        Path("local/data/show_name/video_id/captions.db")
     """
-    return video_dir / "annotations.db"
+    return video_dir / "captions.db"
 
 
 def get_layout_config(db_path: Path) -> dict[str, Any]:
     """Get video layout configuration.
 
     Args:
-        db_path: Path to annotations.db
+        db_path: Path to captions.db
 
     Returns:
         Dictionary with layout config (anchor_type, anchor_position, box_height, etc.)
@@ -60,7 +60,7 @@ def get_captions_needing_text(db_path: Path, limit: int | None = None) -> list[d
     """Get captions that need text annotation.
 
     Args:
-        db_path: Path to annotations.db
+        db_path: Path to captions.db
         limit: Optional limit on number of results
 
     Returns:
@@ -101,7 +101,7 @@ def update_caption_text(
     """Update caption text annotation.
 
     Args:
-        db_path: Path to annotations.db
+        db_path: Path to captions.db
         caption_id: Caption ID to update
         text: Caption text (empty string = "no caption")
         text_status: Optional text status ('valid_caption', 'ocr_error', etc.)
@@ -149,7 +149,7 @@ def save_vlm_inference_result(
     """Save VLM inference result as caption text.
 
     Args:
-        db_path: Path to annotations.db
+        db_path: Path to captions.db
         caption_id: Caption ID to update
         vlm_text: VLM-predicted text
         source: Source identifier for notes (e.g., 'vlm_finetuned', 'vlm_base')
@@ -172,7 +172,7 @@ def mark_text_as_validated(
     """Mark caption text as validated (e.g., OCR match).
 
     Args:
-        db_path: Path to annotations.db
+        db_path: Path to captions.db
         caption_id: Caption ID to update
         validation_source: Source of validation ('ocr_match', 'manual_review', etc.)
     """
@@ -199,7 +199,7 @@ def get_caption_by_frames(db_path: Path, start_frame: int, end_frame: int) -> di
     """Get caption by exact frame range.
 
     Args:
-        db_path: Path to annotations.db
+        db_path: Path to captions.db
         start_frame: Start frame index
         end_frame: End frame index
 
@@ -232,7 +232,7 @@ def get_captions_with_text(db_path: Path, min_id: int = 0, limit: int | None = N
     """Get captions that have text (for vetting/correction).
 
     Args:
-        db_path: Path to annotations.db
+        db_path: Path to captions.db
         min_id: Minimum caption ID (for pagination)
         limit: Optional limit on number of results
 

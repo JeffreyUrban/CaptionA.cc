@@ -74,7 +74,7 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   // Find all videos in this folder (videos whose display_path starts with folderPath)
-  const allVideos = getAllVideos()
+  const allVideos = await getAllVideos()
   const normalizedFolderPath = folderPath.replace(/\/$/, '') // Remove trailing slash
   const videosToDelete = allVideos.filter(video => {
     // Match exact folder or videos in subfolders
@@ -128,7 +128,7 @@ export async function action({ request }: ActionFunctionArgs) {
   for (const video of videosToDelete) {
     try {
       // Get database path
-      const dbPath = getDbPath(video.videoId)
+      const dbPath = await getDbPath(video.videoId)
 
       if (dbPath) {
         // Mark as deleted in database first

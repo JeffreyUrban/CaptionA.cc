@@ -369,7 +369,7 @@ prefect work-pool create video-processing-pool --type process
 uv run python queue_flow.py full-frames \
   --video-id UUID \
   --video-path /path/to/video.mp4 \
-  --db-path /path/to/annotations.db \
+  --db-path /path/to/captions.db \
   --output-dir /path/to/output \
   --frame-rate 0.1
 ```
@@ -379,7 +379,7 @@ uv run python queue_flow.py full-frames \
 uv run python queue_flow.py crop-frames \
   --video-id UUID \
   --video-path /path/to/video.mp4 \
-  --db-path /path/to/annotations.db \
+  --db-path /path/to/captions.db \
   --output-dir /path/to/output \
   --crop-bounds '{"left":100,"top":50,"right":1820,"bottom":980}' \
   --crop-bounds-version 1

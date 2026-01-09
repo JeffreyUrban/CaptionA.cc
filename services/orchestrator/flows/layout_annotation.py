@@ -13,15 +13,13 @@ Layout.db contains:
 """
 
 import hashlib
-import os
 from pathlib import Path
 from typing import Any
 
-import requests
 from prefect import flow, task
 
-from ..supabase_client import CroppedFramesVersionRepository
-from ..wasabi_client import WasabiClient, get_wasabi_client
+from supabase_client import CroppedFramesVersionRepository
+from wasabi_client import WasabiClient, get_wasabi_client
 
 # Default tenant for development
 DEFAULT_TENANT_ID = "00000000-0000-0000-0000-000000000001"
@@ -219,52 +217,18 @@ def upload_layout_db_flow(
             crop_regen_triggered = True
             print("✅ Cropped frames regeneration queued")
 
-        # Send webhook notification
-        try:
-            webhook_url = os.getenv("WEB_APP_URL", "http://localhost:5173")
-            requests.post(
-                f"{webhook_url}/api/webhooks/prefect",
-                json={
-                    "videoId": video_id,
-                    "flowName": "upload-layout-db",
-                    "status": "complete",
-                    "boundsChanged": bounds_changed,
-                    "cropRegenTriggered": crop_regen_triggered,
-                },
-                timeout=5,
-            )
-        except Exception as e:
-            print(f"⚠️  Failed to send webhook: {e}")
-
         print("\n✅ Layout.db upload complete!")
 
         return {
             "video_id": video_id,
             "storage_key": storage_key,
-            "status": "completed",
             "bounds_changed": bounds_changed,
             "crop_regen_triggered": crop_regen_triggered,
+            "status": "completed",
         }
 
     except Exception as e:
         print(f"\n❌ Layout.db upload failed: {e}")
-
-        # Send failure webhook
-        try:
-            webhook_url = os.getenv("WEB_APP_URL", "http://localhost:5173")
-            requests.post(
-                f"{webhook_url}/api/webhooks/prefect",
-                json={
-                    "videoId": video_id,
-                    "flowName": "upload-layout-db",
-                    "status": "error",
-                    "error": str(e),
-                },
-                timeout=5,
-            )
-        except Exception as webhook_error:
-            print(f"⚠️  Failed to send failure webhook: {webhook_error}")
-
         raise
 
 

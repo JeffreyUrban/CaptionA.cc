@@ -54,7 +54,7 @@ SELECT id, email FROM auth.users WHERE email = 'your@email.com';
 -- Copy the ID
 
 -- Grant yourself super_admin access
-INSERT INTO public.platform_admins (
+INSERT INTO captionacc_production.platform_admins (
   user_id,
   admin_level,
   notes

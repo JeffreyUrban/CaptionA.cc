@@ -178,8 +178,8 @@ async function markImageForRegeneration(
   ).run(annotationId)
 
   // Queue median frame OCR processing via Prefect (async)
-  const dbPath = getDbPath(videoId)
-  const videoDir = getVideoDir(videoId)
+  const dbPath = await getDbPath(videoId)
+  const videoDir = await getVideoDir(videoId)
 
   if (dbPath && videoDir) {
     try {
@@ -507,14 +507,14 @@ function createOrMergeGap(
  * @returns Array of annotations overlapping the frame range
  * @throws Error if database is not found
  */
-export function listAnnotations(
+export async function listAnnotations(
   videoId: string,
   startFrame: number,
   endFrame: number,
   workableOnly: boolean = false,
   limit?: number
-): Annotation[] {
-  const result = getOrCreateAnnotationDatabase(videoId)
+): Promise<Annotation[]> {
+  const result = await getOrCreateAnnotationDatabase(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -554,8 +554,11 @@ export function listAnnotations(
  * @returns The annotation, or null if not found
  * @throws Error if database is not found
  */
-export function getAnnotation(videoId: string, annotationId: number): Annotation | null {
-  const result = getAnnotationDatabase(videoId)
+export async function getAnnotation(
+  videoId: string,
+  annotationId: number
+): Promise<Annotation | null> {
+  const result = await getAnnotationDatabase(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -590,7 +593,7 @@ export async function createAnnotation(
   videoId: string,
   input: CreateAnnotationInput
 ): Promise<Annotation> {
-  const result = getOrCreateAnnotationDatabase(videoId)
+  const result = await getOrCreateAnnotationDatabase(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -634,8 +637,8 @@ export async function createAnnotation(
       ).run(annotationId)
 
       // Queue median frame OCR processing via Prefect (async)
-      const dbPath = getDbPath(videoId)
-      const videoDir = getVideoDir(videoId)
+      const dbPath = await getDbPath(videoId)
+      const videoDir = await getVideoDir(videoId)
 
       if (dbPath && videoDir) {
         try {
@@ -696,7 +699,7 @@ export async function updateAnnotationWithOverlapResolution(
   videoId: string,
   input: UpdateAnnotationInput
 ): Promise<OverlapResolutionResult> {
-  const result = getWritableDatabase(videoId)
+  const result = await getWritableDatabase(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -796,8 +799,8 @@ export async function updateAnnotationWithOverlapResolution(
  * @returns True if deleted, false if not found
  * @throws Error if database is not found
  */
-export function deleteAnnotation(videoId: string, annotationId: number): boolean {
-  const result = getWritableDatabase(videoId)
+export async function deleteAnnotation(videoId: string, annotationId: number): Promise<boolean> {
+  const result = await getWritableDatabase(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -823,8 +826,8 @@ export function deleteAnnotation(videoId: string, annotationId: number): boolean
  * @returns Number of annotations deleted
  * @throws Error if database is not found
  */
-export function clearAllAnnotations(videoId: string): number {
-  const result = getWritableDatabase(videoId)
+export async function clearAllAnnotations(videoId: string): Promise<number> {
+  const result = await getWritableDatabase(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -855,11 +858,11 @@ export function clearAllAnnotations(videoId: string): number {
  * @returns Frame range information, or null if not found
  * @throws Error if database is not found
  */
-export function getAnnotationFrames(
+export async function getAnnotationFrames(
   videoId: string,
   annotationId: number
-): AnnotationFrameRange | null {
-  const result = getAnnotationDatabase(videoId)
+): Promise<AnnotationFrameRange | null> {
+  const result = await getAnnotationDatabase(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -894,12 +897,12 @@ export function getAnnotationFrames(
  * @returns The updated annotation
  * @throws Error if database or annotation is not found
  */
-export function updateAnnotationText(
+export async function updateAnnotationText(
   videoId: string,
   annotationId: number,
   input: UpdateTextInput
-): Annotation {
-  const result = getWritableDatabase(videoId)
+): Promise<Annotation> {
+  const result = await getWritableDatabase(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -941,8 +944,8 @@ export function updateAnnotationText(
  * @returns The updated annotation
  * @throws Error if database or annotation is not found
  */
-export function markTextPending(videoId: string, annotationId: number): Annotation {
-  const result = getWritableDatabase(videoId)
+export async function markTextPending(videoId: string, annotationId: number): Promise<Annotation> {
+  const result = await getWritableDatabase(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -980,8 +983,11 @@ export function markTextPending(videoId: string, annotationId: number): Annotati
  * @returns The next text-pending annotation, or null if none found
  * @throws Error if database is not found
  */
-export function getNextTextPendingAnnotation(videoId: string, afterId?: number): Annotation | null {
-  const result = getAnnotationDatabase(videoId)
+export async function getNextTextPendingAnnotation(
+  videoId: string,
+  afterId?: number
+): Promise<Annotation | null> {
+  const result = await getAnnotationDatabase(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }

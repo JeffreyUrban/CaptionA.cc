@@ -9,18 +9,15 @@ Handles frame cropping after layout annotation:
 This replaces apps/captionacc-web/app/services/crop-frames-processing.ts
 """
 
-import os
 import sqlite3
 import subprocess
 from pathlib import Path
 from typing import Any
 
-import requests
 from prefect import flow, task
 from prefect.artifacts import create_table_artifact
 
 # Import VP9 encoding flow for deferred encoding
-from .vp9_encoding import encode_vp9_chunks_flow
 
 
 @task(
@@ -46,7 +43,7 @@ def extract_cropped_frames(
 
     Args:
         video_path: Full path to video file
-        db_path: Path to annotations.db
+        db_path: Path to captions.db
         output_dir: Directory to write cropped frames
         crop_bounds: Dict with keys: left, top, right, bottom
         crop_bounds_version: Version of crop bounds (from layout_config)
@@ -127,7 +124,7 @@ def update_crop_status(db_path: str, status: str) -> None:
     Update crop_frames_status table in database.
 
     Args:
-        db_path: Path to annotations.db
+        db_path: Path to captions.db
         status: New status value (e.g., 'complete')
     """
     print(f"Updating crop status to: {status}")
@@ -194,7 +191,7 @@ def crop_frames_flow(
     Args:
         video_id: Video UUID
         video_path: Full path to video file
-        db_path: Path to annotations.db
+        db_path: Path to captions.db
         output_dir: Directory for cropped frame output
         crop_bounds: Crop bounds from layout annotation (left, top, right, bottom)
         crop_bounds_version: Version from video_layout_config table
@@ -260,20 +257,6 @@ def crop_frames_flow(
     finally:
         conn.close()
 
-    # Send webhook notification at START of processing
-    try:
-        webhook_url = os.getenv("WEB_APP_URL", "http://localhost:5173")
-        webhook_endpoint = f"{webhook_url}/api/webhooks/prefect"
-        webhook_payload = {
-            "videoId": video_id,
-            "flowName": "crop-video-frames",
-            "status": "started",
-        }
-        print(f"Sending start webhook to {webhook_endpoint}")
-        requests.post(webhook_endpoint, json=webhook_payload, timeout=5)
-    except Exception as e:
-        print(f"Warning: Failed to send start webhook: {e}")
-
     # Extract cropped frames
     result = extract_cropped_frames(
         video_path=video_path,
@@ -302,49 +285,6 @@ def crop_frames_flow(
     )
 
     print(f"Crop frames complete for {video_id}: {result['frame_count']} frames")
-
-    # Send webhook notification to web app
-    try:
-        webhook_url = os.getenv("WEB_APP_URL", "http://localhost:5173")
-        webhook_endpoint = f"{webhook_url}/api/webhooks/prefect"
-
-        webhook_payload = {
-            "videoId": video_id,  # UUID (stable identifier)
-            "flowName": "crop-video-frames",
-            "status": "complete",
-        }
-
-        print(f"Sending webhook to {webhook_endpoint}")
-        response = requests.post(
-            webhook_endpoint,
-            json=webhook_payload,
-            timeout=5,
-        )
-
-        if response.ok:
-            print(f"Webhook sent successfully: {response.status_code}")
-        else:
-            print(f"Webhook failed: {response.status_code} - {response.text}")
-
-    except Exception as webhook_error:
-        # Don't fail the flow if webhook fails
-        print(f"Warning: Failed to send webhook notification: {webhook_error}")
-
-    # Trigger VP9 encoding and Wasabi upload (deferred - runs after user notification)
-    try:
-        print("Starting VP9 encoding for cropped frames (background job)")
-        encode_vp9_chunks_flow(
-            video_id=video_id,
-            db_path=db_path,
-            frame_type="cropped",
-            modulo_levels=[16, 4, 1],  # Hierarchical preview levels
-        )
-        print("VP9 encoding flow triggered successfully")
-    except Exception as encoding_error:
-        # Don't fail the crop_frames flow if VP9 encoding fails
-        print(
-            f"Warning: VP9 encoding failed (cropped frames still available in SQLite): {encoding_error}"
-        )
 
     return {
         "video_id": video_id,

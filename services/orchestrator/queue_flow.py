@@ -12,9 +12,18 @@ Usage:
 import asyncio
 import json
 import sys
+from pathlib import Path
 
 import typer
+
+# Load environment variables from monorepo root
+from dotenv import load_dotenv
 from prefect.deployments import run_deployment
+
+monorepo_root = Path(__file__).parent.parent.parent
+env_path = monorepo_root / ".env"
+if env_path.exists():
+    load_dotenv(env_path)
 
 app = typer.Typer()
 

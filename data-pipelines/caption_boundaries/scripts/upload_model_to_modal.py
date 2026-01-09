@@ -27,6 +27,38 @@ except ImportError:
     print("   Then authenticate with: modal token new")
     exit(1)
 
+# Create Modal app at module level for deployment
+app = modal.App("upload-checkpoint")
+
+# Get volume reference
+volume = modal.Volume.from_name("boundary-models", create_if_missing=True)
+
+
+@app.function(volumes={"/models": volume}, timeout=600)
+def upload_checkpoint_to_volume(remote_path: str, file_contents: bytes) -> dict:
+    """Upload checkpoint file to Modal volume.
+
+    This function runs on Modal with the volume mounted.
+    The file contents are sent via the function call.
+    """
+    from pathlib import Path
+
+    # Full path in mounted volume
+    dest_path = Path("/models") / remote_path.lstrip("/")
+
+    # Create parent directories
+    dest_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Write file
+    dest_path.write_bytes(file_contents)
+
+    # Verify
+    if dest_path.exists():
+        size = dest_path.stat().st_size
+        return {"success": True, "size": size, "path": remote_path}
+    else:
+        return {"success": False, "error": "File not found after upload"}
+
 
 def compute_file_hash(filepath: Path, chunk_size: int = 8192) -> str:
     """Compute SHA256 hash of file."""
@@ -108,62 +140,42 @@ def main():
             # Directory might not exist yet, that's fine
             pass
 
-        # Upload file
-        with modal.enable_output():
-            # Create a temporary app for the upload
-            app = modal.App("upload-model")
+        # Read file contents
+        print("   Reading file...")
+        with open(args.checkpoint, "rb") as f:
+            file_contents = f.read()
 
-            @app.function(
-                volumes={"/models": volume},
-                timeout=600,  # 10 minutes for large files
-            )
-            def upload_checkpoint(local_path: str, remote_path: str):
-                """Upload checkpoint file to volume."""
-                import shutil
-                from pathlib import Path
+        print(f"   File size: {len(file_contents) / (1024 * 1024):.1f} MB")
 
-                # Ensure directory exists
-                remote_file = Path(remote_path)
-                remote_file.parent.mkdir(parents=True, exist_ok=True)
+        # Upload using Modal function
+        print("   Uploading to Modal volume...")
 
-                # Copy file
-                shutil.copy2(local_path, remote_path)
+        with app.run():
+            result = upload_checkpoint_to_volume.remote(remote_path, file_contents)
 
-                # Verify upload
-                if remote_file.exists():
-                    size = remote_file.stat().st_size
-                    return {"success": True, "size": size, "path": remote_path}
-                else:
-                    return {"success": False, "error": "File not found after upload"}
+        if result["success"]:
+            uploaded_size_mb = result["size"] / (1024 * 1024)
+            print("\n✅ Upload successful!")
+            print(f"   Uploaded: {uploaded_size_mb:.1f} MB")
+            print(f"   Location: {result['path']}")
 
-            # Run upload
-            with app.run():
-                result = upload_checkpoint.remote(str(args.checkpoint.absolute()), remote_path)
+            # Verify size matches
+            if abs(uploaded_size_mb - file_size_mb) > 0.1:
+                print("\n⚠️  WARNING: Size mismatch!")
+                print(f"   Local: {file_size_mb:.1f} MB")
+                print(f"   Remote: {uploaded_size_mb:.1f} MB")
+            else:
+                print("   ✓ Size verified")
 
-                if result["success"]:
-                    uploaded_size_mb = result["size"] / (1024 * 1024)
-                    print("\n✅ Upload successful!")
-                    print(f"   Uploaded: {uploaded_size_mb:.1f} MB")
-                    print(f"   Location: {result['path']}")
-
-                    # Verify size matches
-                    if abs(uploaded_size_mb - file_size_mb) > 0.1:
-                        print("\n⚠️  WARNING: Size mismatch!")
-                        print(f"   Local: {file_size_mb:.1f} MB")
-                        print(f"   Remote: {uploaded_size_mb:.1f} MB")
-                    else:
-                        print("   ✓ Size verified")
-
-                    # Print usage instructions
-                    print("\n📝 To use this checkpoint in inference:")
-                    print(f"   Model version: {args.model_version}")
-                    print(f"   Checkpoint hash: {file_hash[:8]}")
-                    print("\n   The inference service will automatically load from:")
-                    print(f"   /models{remote_path}")
-
-                else:
-                    print(f"\n❌ Upload failed: {result.get('error', 'Unknown error')}")
-                    exit(1)
+            # Print usage instructions
+            print("\n📝 To use this checkpoint in inference:")
+            print(f"   Model version: {args.model_version}")
+            print(f"   Checkpoint hash: {file_hash[:8]}")
+            print("\n   The inference service will automatically load from:")
+            print(f"   /models{result['path']}")
+        else:
+            print(f"\n❌ Upload failed: {result.get('error', 'Unknown error')}")
+            exit(1)
 
     except Exception as e:
         print(f"\n❌ Upload failed: {e}")

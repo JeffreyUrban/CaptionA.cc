@@ -429,7 +429,7 @@ function applyStreamingUpdatesInBackground(
 
   // Fire and forget - don't await
   const runStreamingUpdate = async () => {
-    const dbResult = getWritableDatabase(videoId)
+    const dbResult = await getWritableDatabase(videoId)
     if (!dbResult.success) {
       console.error('[streamingUpdateBackground] Failed to open database')
       completeProcessing(videoId)
@@ -485,8 +485,11 @@ function applyStreamingUpdatesInBackground(
  * @returns Frame boxes result
  * @throws Error if database, config, or frame is not found
  */
-export function getFrameBoxes(videoId: string, frameIndex: number): FrameBoxesResult {
-  const result = getAnnotationDatabase(videoId)
+export async function getFrameBoxes(
+  videoId: string,
+  frameIndex: number
+): Promise<FrameBoxesResult> {
+  const result = await getAnnotationDatabase(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -612,12 +615,12 @@ export function getFrameBoxes(videoId: string, frameIndex: number): FrameBoxesRe
  * @returns Save result with annotation count and update status
  * @throws Error if database or frame is not found
  */
-export function saveBoxAnnotations(
+export async function saveBoxAnnotations(
   videoId: string,
   frameIndex: number,
   annotations: BoxAnnotationInput[]
-): SaveAnnotationsResult {
-  const result = getWritableDatabase(videoId)
+): Promise<SaveAnnotationsResult> {
+  const result = await getWritableDatabase(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -826,12 +829,12 @@ export function saveBoxAnnotations(
  * @returns Bulk annotation result with action, count, and affected box indices
  * @throws Error if database or layout config is not found
  */
-export function bulkAnnotateRectangle(
+export async function bulkAnnotateRectangle(
   videoId: string,
   frameIndex: number,
   input: BulkAnnotateRectangleInput
-): BulkAnnotateResult {
-  const result = getWritableDatabase(videoId)
+): Promise<BulkAnnotateResult> {
+  const result = await getWritableDatabase(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -1012,12 +1015,12 @@ function loadFrameOcrBoxes(
  * @returns Result with counts of affected boxes and frames
  * @throws Error if database or layout config is not found
  */
-export function bulkAnnotateRectangleAllFrames(
+export async function bulkAnnotateRectangleAllFrames(
   videoId: string,
   rectangle: PixelBounds,
   action: BulkAnnotateRectangleAllAction
-): BulkAnnotateRectangleAllResult {
-  const result = getWritableDatabase(videoId)
+): Promise<BulkAnnotateRectangleAllResult> {
+  const result = await getWritableDatabase(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -1092,11 +1095,11 @@ export function bulkAnnotateRectangleAllFrames(
  * @returns Bulk annotation result
  * @throws Error if database is not found
  */
-export function bulkAnnotateAll(
+export async function bulkAnnotateAll(
   videoId: string,
   action: BulkAnnotateAllAction
-): BulkAnnotateAllResult {
-  const result = getWritableDatabase(videoId)
+): Promise<BulkAnnotateAllResult> {
+  const result = await getWritableDatabase(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -1217,8 +1220,8 @@ export function bulkAnnotateAll(
  * @returns Calculate predictions result
  * @throws Error if database is not found
  */
-export function calculatePredictions(videoId: string): CalculatePredictionsResult {
-  const result = getWritableDatabase(videoId)
+export async function calculatePredictions(videoId: string): Promise<CalculatePredictionsResult> {
+  const result = await getWritableDatabase(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }

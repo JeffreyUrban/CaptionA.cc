@@ -87,7 +87,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
   }
 
   try {
-    const result = saveBoxAnnotations(videoId, frameIndexResult.value, annotations)
+    const result = await saveBoxAnnotations(videoId, frameIndexResult.value, annotations)
     return jsonResponse({
       success: result.success,
       annotatedCount: result.annotatedCount,

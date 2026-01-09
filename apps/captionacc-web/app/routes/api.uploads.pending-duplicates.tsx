@@ -16,11 +16,11 @@ interface PendingDuplicate {
 }
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  const allVideos = getAllVideos()
+  const allVideos = await getAllVideos()
   const pendingDuplicates: PendingDuplicate[] = []
 
   for (const video of allVideos) {
-    const dbPath = getDbPath(video.videoId)
+    const dbPath = await getDbPath(video.videoId)
     if (!dbPath) continue
 
     try {

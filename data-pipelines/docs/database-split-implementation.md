@@ -2,7 +2,7 @@
 
 ## Overview
 
-Migrate application code from monolithic `annotations.db` to split database architecture.
+Migrate application code from monolithic `captions.db` to split database architecture.
 
 ## Current State
 
@@ -21,7 +21,7 @@ local/data/{hash}/{video_id}/
   ├── layout.db             ✅ Created
   ├── captions.db           ✅ Created
   ├── state.db           ✅ Created
-  ├── annotations.db.old    ✅ Backup
+  ├── captions.db.old    ✅ Backup
   └── *.mp4                 (unchanged)
 ```
 
@@ -123,7 +123,7 @@ def check_databases_exist(video_dir: Path) -> dict[str, bool]:
 **Current Code Pattern:**
 ```python
 # OLD
-conn = sqlite3.connect(video_dir / "annotations.db")
+conn = sqlite3.connect(video_dir / "captions.db")
 cursor.execute("SELECT image_data FROM full_frames WHERE frame_index = ?")
 ```
 
@@ -495,7 +495,7 @@ find local/data -name 'annotations_backup_*.db' -delete
 **2. Application Breakage**
 - **Risk:** Application fails to load data from split databases
 - **Mitigation:** Comprehensive testing, staged rollout
-- **Rollback:** Temporary shim to read from annotations.db.old
+- **Rollback:** Temporary shim to read from captions.db.old
 
 **3. DVC Storage Costs**
 - **Risk:** Large upload to DVC storage
@@ -516,7 +516,7 @@ If critical issues arise:
 # 2. Restore original structure
 for backup in local/data/*/annotations_backup_*.db; do
     dir=$(dirname "$backup")
-    cp "$backup" "$dir/annotations.db"
+    cp "$backup" "$dir/captions.db"
 done
 
 # 3. Remove split databases
@@ -562,7 +562,7 @@ git revert <commit-hash>
 
 ## Questions & Decisions Needed
 
-1. **Backward Compatibility:** How long should we support reading from old `annotations.db` structure?
+1. **Backward Compatibility:** How long should we support reading from old `captions.db` structure?
    - Recommendation: 1 month, then deprecate
 
 2. **Error Handling:** What should happen if a database is missing?
@@ -595,7 +595,7 @@ Team,
 We've migrated our video databases to a split structure for better DVC efficiency.
 
 WHAT CHANGED:
-- Old: Single annotations.db per video
+- Old: Single captions.db per video
 - New: 6 separate databases (video.db, fullOCR.db, etc.)
 
 WHY:

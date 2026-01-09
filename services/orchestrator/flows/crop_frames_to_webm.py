@@ -14,18 +14,16 @@ The app always uses the latest "active" version for annotation workflows.
 """
 
 import hashlib
-import os
 import subprocess
 import tempfile
 from pathlib import Path
 from typing import Any
 
-import requests
 from prefect import flow, task
 from prefect.artifacts import create_table_artifact
 
-from ..supabase_client import CroppedFramesVersionRepository, VideoRepository
-from ..wasabi_client import WasabiClient, get_wasabi_client
+from supabase_client import CroppedFramesVersionRepository, VideoRepository
+from wasabi_client import WasabiClient, get_wasabi_client
 
 # Default tenant for development
 DEFAULT_TENANT_ID = "00000000-0000-0000-0000-000000000001"
@@ -652,85 +650,24 @@ def crop_frames_to_webm_flow(
             print(f"📊 Frames: {total_frames}, Chunks: {chunk_count}")
             print(f"📊 Size: {total_size_bytes / 1024 / 1024:.2f} MB")
 
-            # Send completion webhook
-            try:
-                webhook_url = os.getenv("WEB_APP_URL", "http://localhost:5173")
-                requests.post(
-                    f"{webhook_url}/api/webhooks/prefect",
-                    json={
-                        "videoId": video_id,
-                        "flowName": "crop-frames-to-webm",
-                        "status": "complete",
-                        "version": version,
-                    },
-                    timeout=5,
-                )
-            except Exception as e:
-                print(f"⚠️  Failed to send completion webhook: {e}")
-
-            # Trigger boundary inference (deferred, high priority)
-            try:
-                model_version = os.getenv("BOUNDARY_MODEL_VERSION")
-                if model_version:
-                    print(
-                        f"\n[Boundary Inference] Triggering inference with model {model_version[:16]}..."
-                    )
-                    from services.orchestrator.flows.boundary_inference import (
-                        boundary_inference_flow,
-                    )
-
-                    # Run boundary inference flow (will be queued by Prefect)
-                    boundary_inference_flow.apply_async(  # type: ignore[attr-defined]
-                        kwargs={
-                            "video_id": video_id,
-                            "tenant_id": tenant_id,
-                            "cropped_frames_version": version,
-                            "model_version": model_version,
-                            "priority": "high",
-                            "skip_if_exists": True,
-                        }
-                    )
-                    print("[Boundary Inference] ✓ Inference flow queued")
-                else:
-                    print("[Boundary Inference] Skipping - BOUNDARY_MODEL_VERSION not set")
-            except Exception as e:
-                print(f"⚠️  Failed to trigger boundary inference: {e}")
-                # Don't fail the main flow if boundary inference fails to queue
-
             return {
                 "video_id": video_id,
                 "version": version,
-                "status": "completed",
+                "version_id": version_id,
                 "total_frames": total_frames,
                 "chunk_count": chunk_count,
                 "total_size_bytes": total_size_bytes,
+                "status": "completed",
             }
 
         except Exception as e:
-            print(f"\n❌ Cropped frames generation failed for {video_id}: {e}")
-
-            # Update version status to failed if version was created
-            try:
-                if "version_id" in locals():
-                    versions_repo = CroppedFramesVersionRepository()
-                    versions_repo.update_version_status(version_id, "failed")  # type: ignore[possibly-undefined]
-            except Exception as supabase_error:
-                print(f"⚠️  Failed to update version status: {supabase_error}")
-
-            # Send failure webhook
-            try:
-                webhook_url = os.getenv("WEB_APP_URL", "http://localhost:5173")
-                requests.post(
-                    f"{webhook_url}/api/webhooks/prefect",
-                    json={
-                        "videoId": video_id,
-                        "flowName": "crop-frames-to-webm",
-                        "status": "error",
-                        "error": str(e),
-                    },
-                    timeout=5,
-                )
-            except Exception as webhook_error:
-                print(f"⚠️  Failed to send failure webhook: {webhook_error}")
-
+            print(f"\n❌ Cropped frames generation failed: {e}")
             raise
+
+        finally:
+            # Cleanup temporary files
+            if temp_path and temp_path.exists():
+                print(f"\n🧹 Cleaning up temporary files at {temp_path}")
+                import shutil
+
+                shutil.rmtree(temp_path, ignore_errors=True)

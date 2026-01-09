@@ -3,6 +3,8 @@
 Provides fast indexed lookups for completed inference runs and active job monitoring.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, TypedDict, cast

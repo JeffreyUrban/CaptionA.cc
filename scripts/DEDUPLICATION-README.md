@@ -58,7 +58,7 @@ When asked "Execute ACTUAL deletion?", type `yes` to proceed.
 
 For each duplicate pair, the script will DELETE the entire directory containing:
 - The duplicate video file (`.mp4`)
-- The duplicate database (`annotations.db`)
+- The duplicate database (`captions.db`)
 - Any associated processing files (`full_frames/`, `crop_frames/`, etc.)
 
 ## What Gets Kept
@@ -111,7 +111,7 @@ import sqlite3
 from collections import Counter
 
 display_paths = []
-for db_path in Path("local/data").rglob("annotations.db"):
+for db_path in Path("local/data").rglob("captions.db"):
     try:
         conn = sqlite3.connect(db_path)
         result = conn.execute("SELECT display_path FROM video_metadata WHERE id = 1").fetchone()

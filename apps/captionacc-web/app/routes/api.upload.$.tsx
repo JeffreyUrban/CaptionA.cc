@@ -114,8 +114,15 @@ async function handleCreateUpload(request: Request): Promise<Response> {
   // Create empty file
   createWriteStream(uploadPath).end()
 
-  // Create video directory (for storing the final video file)
-  const videoDir = resolve(process.cwd(), '..', '..', 'local', 'data', ...storagePath.split('/'))
+  // Create video directory (for storing the final video file during processing)
+  const videoDir = resolve(
+    process.cwd(),
+    '..',
+    '..',
+    'local',
+    'processing',
+    ...storagePath.split('/')
+  )
   mkdirSync(videoDir, { recursive: true })
 
   console.log(`[tus] Created upload: ${uploadId} (video ID: ${videoId})`)
@@ -208,7 +215,7 @@ async function handlePatchRequest(request: Request, uploadId: string): Promise<R
       '..',
       '..',
       'local',
-      'data',
+      'processing',
       ...storagePath.split('/'),
       metadata.metadata.filename
     )
@@ -218,6 +225,74 @@ async function handlePatchRequest(request: Request, uploadId: string): Promise<R
     unlinkSync(metadataPath)
 
     console.log(`[tus] Upload complete: ${finalVideoPath}`)
+
+    // Get authenticated user from Authorization header (localStorage auth)
+    const authHeader = request.headers.get('Authorization')
+    const token = authHeader?.replace('Bearer ', '')
+
+    let user = null
+    let tenantId: string | null = null
+
+    if (token) {
+      const { supabase } = await import('~/services/supabase-client')
+      const {
+        data: { user: authUser },
+      } = await supabase.auth.getUser(token)
+
+      user = authUser
+
+      if (user) {
+        // Get tenant_id from user_profiles table using service role (bypasses RLS)
+        const { createServerSupabaseClient } = await import('~/services/supabase-client')
+        const serviceSupabase = createServerSupabaseClient()
+
+        const { data: profile, error: profileError } = await serviceSupabase
+          .from('user_profiles')
+          .select('tenant_id')
+          .eq('id' as never, user.id as never)
+          .single()
+
+        if (profileError) {
+          console.error(`[Upload] Failed to fetch user profile:`, profileError)
+        }
+
+        if (profile && 'tenant_id' in profile) {
+          tenantId = profile.tenant_id as string | null
+        }
+        console.log(`[Upload] User: ${user.id}, Tenant: ${tenantId}`)
+      }
+    } else {
+      console.warn('[Upload] No Authorization header found!')
+    }
+
+    if (!user) {
+      console.warn('[Upload] No authenticated user found!')
+    }
+
+    // Create Supabase entry for the video (using service role to bypass RLS)
+    console.log('[Supabase] Creating video entry...')
+    const { createServerSupabaseClient } = await import('~/services/supabase-client')
+    const supabase = createServerSupabaseClient()
+
+    const { data: videoEntry, error: dbError } = await supabase
+      .from('videos')
+      .insert({
+        id: metadata.metadata.videoId,
+        video_path: metadata.metadata.videoPath, // Display path like "level1/video" for tree structure
+        size_bytes: metadata.uploadLength,
+        storage_key: `processing/${storagePath}/${metadata.metadata.filename}`, // Temporary local path
+        status: 'processing',
+        tenant_id: tenantId,
+        uploaded_by_user_id: user?.id ?? null,
+      } as never)
+      .select()
+      .single()
+
+    if (dbError) {
+      console.error('[Supabase] ❌ Failed to create video entry:', dbError)
+    } else if (videoEntry && 'id' in videoEntry) {
+      console.log(`[Supabase] ✅ Video entry created: ${videoEntry.id}`)
+    }
 
     // Queue video for Wasabi upload and processing via Prefect
     console.log('[Prefect] Queuing upload and processing workflow...')
@@ -231,6 +306,7 @@ async function handlePatchRequest(request: Request, uploadId: string): Promise<R
 
       const result = await queueUploadAndProcessing({
         videoPath: finalVideoPath,
+        virtualPath: metadata.metadata.videoPath,
         videoId: metadata.metadata.videoId!,
         filename: metadata.metadata.filename,
         fileSize: metadata.uploadLength,
@@ -243,7 +319,7 @@ async function handlePatchRequest(request: Request, uploadId: string): Promise<R
         '[Prefect] Error stack:',
         error instanceof Error ? error.stack : 'No stack trace'
       )
-      // Upload API doesn't manage database anymore - error will be handled by Prefect flow
+      // Prefect flow will update video status on failure
     }
   }
 

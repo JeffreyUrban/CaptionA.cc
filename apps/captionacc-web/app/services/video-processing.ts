@@ -86,7 +86,7 @@ function processNextInQueue(): void {
  * Mark a video as having an error during processing
  * Updates status to 'error' with message and details
  *
- * @param dbPath - Path to the video's annotations.db
+ * @param dbPath - Path to the video's captions.db
  * @param message - Human-readable error message
  * @param details - Additional error details (will be JSON stringified)
  */
@@ -114,7 +114,7 @@ function markVideoAsError(dbPath: string, message: string, details: object): voi
  * Mark a video as starting processing
  * Updates status to 'extracting_frames', increments attempts, sets start time
  *
- * @param dbPath - Path to the video's annotations.db
+ * @param dbPath - Path to the video's captions.db
  */
 function markVideoAsProcessing(dbPath: string): void {
   const db = new Database(dbPath)
@@ -137,7 +137,7 @@ function markVideoAsProcessing(dbPath: string): void {
  * Mark a video as having completed processing successfully
  * Updates status to 'processing_complete' and sets all progress to 1.0
  *
- * @param dbPath - Path to the video's annotations.db
+ * @param dbPath - Path to the video's captions.db
  */
 function markVideoAsComplete(dbPath: string): void {
   if (!existsSync(dbPath)) return
@@ -164,7 +164,7 @@ function markVideoAsComplete(dbPath: string): void {
  * Update heartbeat timestamp to detect stalled processing
  * Silently handles errors (video may have been deleted during processing)
  *
- * @param dbPath - Path to the video's annotations.db
+ * @param dbPath - Path to the video's captions.db
  */
 function updateVideoHeartbeat(dbPath: string): void {
   if (!existsSync(dbPath)) return
@@ -191,7 +191,7 @@ function updateVideoHeartbeat(dbPath: string): void {
  * Update OCR progress in the database
  * Silently handles errors (video may have been deleted during processing)
  *
- * @param dbPath - Path to the video's annotations.db
+ * @param dbPath - Path to the video's captions.db
  * @param progress - Progress ratio (0.0 to 1.0)
  */
 function updateVideoProgress(dbPath: string, progress: number): void {
@@ -218,7 +218,7 @@ function updateVideoProgress(dbPath: string, progress: number): void {
 /**
  * Store the process PID for potential cancellation
  *
- * @param dbPath - Path to the video's annotations.db
+ * @param dbPath - Path to the video's captions.db
  * @param pid - Process ID of the spawned pipeline
  */
 function storeProcessPid(dbPath: string, pid: number): void {
@@ -265,7 +265,7 @@ function parseProgressFromOutput(data: string): number | null {
  * 1. Extracts frames at 0.1Hz (10x sampling)
  * 2. Runs OCR on all frames
  * 3. Analyzes subtitle region layout
- * 4. Writes results to annotations.db
+ * 4. Writes results to captions.db
  */
 export async function triggerVideoProcessing(options: ProcessingOptions): Promise<void> {
   const { videoPath, videoFile, videoId } = options
@@ -274,8 +274,8 @@ export async function triggerVideoProcessing(options: ProcessingOptions): Promis
 
   // Resolve to actual storage paths (prefer videoId if available)
   const pathOrId = videoId ?? videoPath
-  const dbPath = getDbPath(pathOrId)
-  const videoDir = getVideoDir(pathOrId)
+  const dbPath = await getDbPath(pathOrId)
+  const videoDir = await getVideoDir(pathOrId)
 
   if (!dbPath || !videoDir) {
     throw new Error(`Video not found: ${videoPath} (videoId: ${videoId})`)
@@ -398,8 +398,8 @@ export async function triggerVideoProcessing(options: ProcessingOptions): Promis
 /**
  * Get processing status for a video
  */
-export function getProcessingStatus(videoPath: string) {
-  const dbPath = getDbPath(videoPath)
+export async function getProcessingStatus(videoPath: string) {
+  const dbPath = await getDbPath(videoPath)
 
   if (!dbPath) {
     return null
@@ -424,14 +424,14 @@ export function getProcessingStatus(videoPath: string) {
  * Recover stalled processing jobs on server startup
  * Detects jobs that were interrupted by server restart
  */
-export function recoverStalledProcessing() {
+export async function recoverStalledProcessing() {
   console.log('[VideoProcessing] Checking for stalled processing jobs...')
 
   // Get all videos and check for stalled processing
-  const allVideos = getAllVideos()
+  const allVideos = await getAllVideos()
 
   for (const video of allVideos) {
-    const dbPath = getDbPath(video.videoId)
+    const dbPath = await getDbPath(video.videoId)
     if (dbPath) {
       // Run migrations (idempotent - safe to run multiple times)
       try {
@@ -441,7 +441,7 @@ export function recoverStalledProcessing() {
       }
 
       // Check both full_frames and crop_frames processing
-      checkAndRecoverVideo(dbPath, video.displayPath, video.videoId)
+      await checkAndRecoverVideo(dbPath, video.displayPath, video.videoId)
       recoverStalledCropFrames(video.videoId, video.displayPath)
     }
   }
@@ -458,8 +458,11 @@ export function recoverStalledProcessing() {
  * @param videoId - The video UUID
  * @returns Full path to video file, or null if not found
  */
-function findVideoFile(videoId: string): string | null {
-  const videoDir = getVideoDir(videoId)
+async function findVideoFile(videoId: string): Promise<string | null> {
+  const { readdirSync } = await import('fs')
+  const { resolve } = await import('path')
+
+  const videoDir = await getVideoDir(videoId)
   if (!videoDir) return null
 
   const videoFiles = readdirSync(videoDir).filter(
@@ -518,10 +521,14 @@ function isProcessRunning(pid: number | null): boolean {
  * @param videoId - Video UUID
  * @param videoPath - Display path for logging
  */
-function requeuePendingVideo(db: Database.Database, videoId: string, videoPath: string): void {
+async function requeuePendingVideo(
+  db: Database.Database,
+  videoId: string,
+  videoPath: string
+): Promise<void> {
   console.log(`[VideoProcessing] Requeuing ${videoPath} (was queued when server restarted)`)
 
-  const videoFile = findVideoFile(videoId)
+  const videoFile = await findVideoFile(videoId)
   if (!videoFile) {
     console.error(`[VideoProcessing] Video file not found for ${videoPath}`)
 
@@ -555,13 +562,13 @@ function requeuePendingVideo(db: Database.Database, videoId: string, videoPath: 
  * @param errorMessage - The error message from processing_status
  * @param errorDetails - The error details from processing_status
  */
-function retryRecoverableError(
+async function retryRecoverableError(
   db: Database.Database,
   videoId: string,
   videoPath: string,
   errorMessage: string | null,
   errorDetails: string | null
-): void {
+): Promise<void> {
   if (!isRecoverableError(errorMessage, errorDetails)) {
     return // Not recoverable, leave as error
   }
@@ -583,7 +590,7 @@ function retryRecoverableError(
     }
   }
 
-  const videoFile = findVideoFile(videoId)
+  const videoFile = await findVideoFile(videoId)
   if (!videoFile) {
     console.error(`[VideoProcessing] Cannot retry ${videoPath}: video file not found`)
     return
@@ -618,12 +625,12 @@ function retryRecoverableError(
  * @param videoPath - Display path for logging
  * @param currentJobId - The PID string from processing_status
  */
-function recoverStalledJob(
+async function recoverStalledJob(
   db: Database.Database,
   videoId: string,
   videoPath: string,
   currentJobId: string | null
-): void {
+): Promise<void> {
   const pid = currentJobId ? parseInt(currentJobId) : null
 
   if (isProcessRunning(pid)) {
@@ -647,7 +654,7 @@ function recoverStalledJob(
   `
   ).run()
 
-  const videoFile = findVideoFile(videoId)
+  const videoFile = await findVideoFile(videoId)
   if (!videoFile) {
     console.error(`[VideoProcessing] Cannot retry ${videoPath}: video file not found`)
     return
@@ -671,7 +678,11 @@ function recoverStalledJob(
  * Check a single video for stalled processing and recover if needed
  * Dispatches to appropriate recovery strategy based on status
  */
-function checkAndRecoverVideo(dbPath: string, videoPath: string, videoId: string) {
+async function checkAndRecoverVideo(
+  dbPath: string,
+  videoPath: string,
+  videoId: string
+): Promise<void> {
   if (!existsSync(dbPath)) return
 
   let db: Database.Database
@@ -703,7 +714,7 @@ function checkAndRecoverVideo(dbPath: string, videoPath: string, videoId: string
 
     // Handle videos queued for processing (lost from in-memory queue)
     if (status.status === 'upload_complete') {
-      requeuePendingVideo(db, videoId, videoPath)
+      await requeuePendingVideo(db, videoId, videoPath)
       return
     }
 
@@ -718,7 +729,7 @@ function checkAndRecoverVideo(dbPath: string, videoPath: string, videoId: string
         .get() as { error_message: string; error_details: string } | undefined
 
       if (errorInfo) {
-        retryRecoverableError(
+        await retryRecoverableError(
           db,
           videoId,
           videoPath,
@@ -732,7 +743,7 @@ function checkAndRecoverVideo(dbPath: string, videoPath: string, videoId: string
     // Check for stalled active processing
     const activeStates = ['extracting_frames', 'analyzing_layout']
     if (activeStates.includes(status.status)) {
-      recoverStalledJob(db, videoId, videoPath, status.current_job_id)
+      await recoverStalledJob(db, videoId, videoPath, status.current_job_id)
     }
   } finally {
     db.close()

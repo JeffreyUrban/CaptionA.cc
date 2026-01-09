@@ -1,3 +1,14 @@
+// Self-hosted fonts (works in China, better performance)
+// Import common Inter weights (300-700 covers most use cases)
+import '@fontsource/inter/300.css'
+import '@fontsource/inter/400.css'
+import '@fontsource/inter/500.css'
+import '@fontsource/inter/600.css'
+import '@fontsource/inter/700.css'
+// Import Instrument Serif for display text
+import '@fontsource/instrument-serif/400.css'
+import '@fontsource/instrument-serif/400-italic.css'
+
 import '~/styles/tailwind.css'
 import {
   isRouteErrorResponse,
@@ -15,6 +26,37 @@ import { Providers } from '~/providers'
 
 export const links: LinksFunction = () => []
 
+/**
+ * Root loader
+ *
+ * Note: Auth is client-side only (localStorage) so no user data provided here.
+ * Use AuthProvider/useAuth hook to access authentication state in components.
+ */
+export async function loader() {
+  // Set security headers via headers export below
+  return {}
+}
+
+/**
+ * Security headers - prevent XSS attacks
+ */
+export function headers() {
+  // Content Security Policy
+  // TODO: Restrict localhost to specific ports in production (currently allows all for dev)
+  const csp = [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
+    "style-src 'self' 'unsafe-inline'",
+    "font-src 'self'",
+    "img-src 'self' data: https:",
+    "connect-src 'self' http://localhost:* https://*.supabase.co wss://*.supabase.co",
+  ].join('; ')
+
+  return {
+    'Content-Security-Policy': csp,
+  }
+}
+
 export default function App() {
   return (
     <html
@@ -28,12 +70,6 @@ export default function App() {
         <Meta />
         <Links />
         <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@100..900&display=swap"
-          rel="stylesheet"
-        />
         <title>CaptionA.cc - Caption Annotation Platform</title>
         <script src="/set-theme.js"></script>
         {/* Umami Analytics */}

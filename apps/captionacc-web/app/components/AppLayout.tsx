@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router'
 
 import { ThemeSwitcher } from '~/components/ThemeSwitcher'
@@ -8,7 +8,6 @@ import { useAuth } from '~/components/auth/AuthProvider'
 const navigation = [
   { name: 'Home', href: '/' },
   { name: 'Videos', href: '/videos' },
-  { name: 'Admin', href: '/admin' },
 ]
 
 function UserMenu() {
@@ -85,6 +84,39 @@ interface AppLayoutProps {
 
 export function AppLayout({ children, fullScreen = false }: AppLayoutProps) {
   const location = useLocation()
+  const { session } = useAuth()
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false)
+
+  // Fetch admin status client-side when user is authenticated
+  useEffect(() => {
+    async function checkAdminStatus() {
+      if (!session?.access_token) {
+        setIsPlatformAdmin(false)
+        return
+      }
+
+      try {
+        const response = await fetch('/api/auth/is-platform-admin', {
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        })
+        const data = (await response.json()) as { isPlatformAdmin: boolean }
+        setIsPlatformAdmin(data.isPlatformAdmin)
+      } catch (error) {
+        console.error('Failed to check admin status:', error)
+        setIsPlatformAdmin(false)
+      }
+    }
+
+    void checkAdminStatus()
+  }, [session?.access_token])
+
+  // Build navigation items dynamically
+  const navItems = [...navigation]
+  if (isPlatformAdmin) {
+    navItems.push({ name: 'Admin', href: '/admin' })
+  }
 
   return (
     <div
@@ -104,7 +136,7 @@ export function AppLayout({ children, fullScreen = false }: AppLayoutProps) {
               </Link>
 
               <div className="hidden md:flex md:gap-1">
-                {navigation.map(item => {
+                {navItems.map(item => {
                   const isActive = location.pathname === item.href
                   return (
                     <Link
@@ -133,7 +165,7 @@ export function AppLayout({ children, fullScreen = false }: AppLayoutProps) {
 
           {/* Mobile Navigation */}
           <div className="flex gap-1 pb-3 md:hidden">
-            {navigation.map(item => {
+            {navItems.map(item => {
               const isActive = location.pathname === item.href
               return (
                 <Link

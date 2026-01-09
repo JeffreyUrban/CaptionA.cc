@@ -27,7 +27,8 @@ export function LoginForm({ onSuccess, onSwitchToSignUp }: LoginFormProps) {
 
     try {
       await signIn(email, password)
-      onSuccess?.()
+      // Redirect to videos page after successful login
+      window.location.href = '/videos'
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed')
     } finally {

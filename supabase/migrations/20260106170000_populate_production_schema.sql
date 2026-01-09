@@ -35,7 +35,7 @@ CREATE TABLE captionacc_production.videos (
   size_bytes BIGINT,
   duration_seconds REAL,
   storage_key TEXT NOT NULL,
-  annotations_db_key TEXT,
+  captions_db_key TEXT,
   status TEXT DEFAULT 'uploading' CHECK (status IN ('uploading', 'processing', 'active', 'failed', 'archived', 'soft_deleted', 'purged')),
   locked_by_user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   locked_at TIMESTAMPTZ,

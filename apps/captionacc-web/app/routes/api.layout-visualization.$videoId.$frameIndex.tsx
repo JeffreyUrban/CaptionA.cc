@@ -45,8 +45,8 @@ interface OCRBox {
   userLabel: 'in' | 'out' | null
 }
 
-function getDatabase(videoId: string): Database.Database | Response {
-  const dbPath = getDbPath(videoId)
+async function getDatabase(videoId: string): Promise<Database.Database | Response> {
+  const dbPath = await getDbPath(videoId)
   if (!dbPath) {
     return new Response('Video not found', { status: 404 })
   }
@@ -293,7 +293,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
   }
 
   try {
-    const db = getDatabase(videoId)
+    const db = await getDatabase(videoId)
     if (db instanceof Response) return db
 
     // Get layout config

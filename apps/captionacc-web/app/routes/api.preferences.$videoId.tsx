@@ -12,8 +12,10 @@ interface VideoPreferences {
   text_anchor: TextAnchor
 }
 
-function getDatabase(videoId: string): { db: Database.Database; path: string } | Response {
-  const dbPath = getDbPath(videoId)
+async function getDatabase(
+  videoId: string
+): Promise<{ db: Database.Database; path: string } | Response> {
+  const dbPath = await getDbPath(videoId)
   if (!dbPath) {
     return new Response('Video not found', { status: 404 })
   }
@@ -39,7 +41,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
   const videoId = decodeURIComponent(encodedVideoId)
 
   try {
-    const result = getDatabase(videoId)
+    const result = await getDatabase(videoId)
     if (result instanceof Response) return result
     const { db, path: dbPath } = result
 
@@ -68,7 +70,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
         migrateDatabase(dbPath)
 
         // Reopen database and try again
-        const result2 = getDatabase(videoId)
+        const result2 = await getDatabase(videoId)
         if (result2 instanceof Response) return result2
         const { db: db2 } = result2
 
@@ -177,7 +179,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
       )
     }
 
-    const result = getDatabase(videoId)
+    const result = await getDatabase(videoId)
     if (result instanceof Response) return result
     const { db, path: dbPath } = result
 
@@ -220,7 +222,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
         migrateDatabase(dbPath)
 
         // Retry the update
-        const result2 = getDatabase(videoId)
+        const result2 = await getDatabase(videoId)
         if (result2 instanceof Response) return result2
         const { db: db2 } = result2
 

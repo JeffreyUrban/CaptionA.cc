@@ -72,7 +72,7 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   // Find all videos in this folder (display_path starts with folderPath/)
-  const allVideos = getAllVideos()
+  const allVideos = await getAllVideos()
   const videosToMove = allVideos.filter(
     v => v.displayPath.startsWith(`${folderPath}/`) || v.displayPath === folderPath
   )
@@ -130,7 +130,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
   // Update display_path for each video
   for (const video of videosToMove) {
-    const dbPath = resolve(dataDir, ...video.storagePath.split('/'), 'annotations.db')
+    const dbPath = resolve(dataDir, ...video.storagePath.split('/'), 'captions.db')
 
     if (!existsSync(dbPath)) {
       errors.push(`Database not found for ${video.displayPath}`)

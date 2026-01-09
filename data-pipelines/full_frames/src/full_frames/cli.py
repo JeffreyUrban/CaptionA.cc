@@ -77,9 +77,9 @@ def analyze(
     4. Analyze subtitle region characteristics
 
     Database Storage:
-    - OCR results are written directly to annotations.db (full_frame_ocr table)
-    - Database location: {output_dir}/../annotations.db
-    - Example: output_dir=local/data/show/ep/full_frames → db=local/data/show/ep/annotations.db
+    - OCR results are written directly to captions.db (full_frame_ocr table)
+    - Database location: {output_dir}/../captions.db
+    - Example: output_dir=local/data/show/ep/full_frames → db=local/data/show/ep/captions.db
 
     Frame Indexing:
     - Database OCR samples at 10Hz (every 0.1 seconds)

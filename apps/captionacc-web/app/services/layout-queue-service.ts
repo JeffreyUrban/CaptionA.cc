@@ -299,8 +299,11 @@ function checkProcessingStatus(db: Database.Database): ProcessingStatus {
  * @returns Layout queue result with frames and config
  * @throws Error if video is not ready or data is missing
  */
-export function getLayoutQueue(videoId: string, limit: number = 11): LayoutQueueResult {
-  const result = getAnnotationDatabase(videoId)
+export async function getLayoutQueue(
+  videoId: string,
+  limit: number = 11
+): Promise<LayoutQueueResult> {
+  const result = await getAnnotationDatabase(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -455,8 +458,11 @@ export function getLayoutQueue(videoId: string, limit: number = 11): LayoutQueue
  * @returns Mislabel review result with potential mislabels and statistics
  * @throws Error if database is not found
  */
-export function findPotentialMislabels(videoId: string, limit: number = 100): MislabelReviewResult {
-  const result = getAnnotationDatabase(videoId)
+export async function findPotentialMislabels(
+  videoId: string,
+  limit: number = 100
+): Promise<MislabelReviewResult> {
+  const result = await getAnnotationDatabase(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -574,14 +580,14 @@ export function findPotentialMislabels(videoId: string, limit: number = 100): Mi
  * @returns Statistics about frame annotation progress
  * @throws Error if database is not found
  */
-export function getFrameAnnotationStats(videoId: string): {
+export async function getFrameAnnotationStats(videoId: string): Promise<{
   totalFrames: number
   framesWithAnnotations: number
   totalBoxes: number
   annotatedBoxes: number
   completionPercentage: number
-} {
-  const result = getAnnotationDatabase(videoId)
+}> {
+  const result = await getAnnotationDatabase(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }

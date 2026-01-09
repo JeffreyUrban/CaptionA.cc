@@ -24,8 +24,8 @@ interface Annotation {
   created_at: string
 }
 
-function getDatabase(videoId: string): Database.Database | Response {
-  const dbPath = getDbPath(videoId)
+async function getDatabase(videoId: string): Promise<Database.Database | Response> {
+  const dbPath = await getDbPath(videoId)
   if (!dbPath) {
     return new Response('Video not found', { status: 404 })
   }
@@ -55,7 +55,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
   console.log('  Decoded videoId:', videoId, 'annotationId:', annotationId)
 
   try {
-    const db = getDatabase(videoId)
+    const db = await getDatabase(videoId)
     if (db instanceof Response) return db
 
     // Get annotation
@@ -182,7 +182,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
   const body = await request.json()
 
   try {
-    const db = getDatabase(videoId)
+    const db = await getDatabase(videoId)
     if (db instanceof Response) return db
 
     // Update text annotation fields

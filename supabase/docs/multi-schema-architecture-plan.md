@@ -377,15 +377,6 @@ prefect server database upgrade
    supabase db push
    ```
 
-3. **Migrate data from public to captionacc_production schema:**
-   ```sql
-   -- Run this manually or via script
-   -- Copy tables from public.* to captionacc_production.*
-   CREATE TABLE captionacc_production.tenants AS TABLE public.tenants;
-   CREATE TABLE captionacc_production.user_profiles AS TABLE public.user_profiles;
-   -- ... etc for all tables
-   ```
-
 4. **Deploy app with schema config:**
    ```bash
    # Set production schema
@@ -399,8 +390,8 @@ prefect server database upgrade
 
 6. **Clean up old public schema (optional):**
    ```sql
-   DROP TABLE public.tenants;
-   DROP TABLE public.videos;
+   DROP TABLE captionacc_production.tenants;
+   DROP TABLE captionacc_production.videos;
    -- etc.
    ```
 

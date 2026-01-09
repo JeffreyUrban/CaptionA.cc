@@ -69,7 +69,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
   const videoId = decodeURIComponent(encodedVideoId)
 
   // Get database path
-  const dbPath = getDbPath(videoId)
+  const dbPath = await getDbPath(videoId)
   if (!dbPath) {
     return new Response(JSON.stringify({ error: 'Video not found' }), {
       status: 404,

@@ -12,14 +12,12 @@ This replaces the synchronous OCR processing in apps/captionacc-web/app/routes/a
 
 import io
 import json
-import os
 import sqlite3
 import subprocess
 from pathlib import Path
 from typing import Any
 
 import numpy as np
-import requests
 from PIL import Image
 from prefect import flow, task
 
@@ -40,7 +38,7 @@ def generate_median_frame(
     Generate per-pixel median frame from caption's cropped frame range.
 
     Args:
-        db_path: Path to annotations.db
+        db_path: Path to captions.db
         caption_id: Caption ID to process
         output_path: Path to save median frame image
 
@@ -187,7 +185,7 @@ def update_caption_ocr_result(
     Update caption with OCR result and set status flags.
 
     Args:
-        db_path: Path to annotations.db
+        db_path: Path to captions.db
         caption_id: Caption ID to update
         ocr_text: OCR extracted text
     """
@@ -229,7 +227,7 @@ def update_caption_ocr_status(
     Update caption median_ocr_status field.
 
     Args:
-        db_path: Path to annotations.db
+        db_path: Path to captions.db
         caption_id: Caption ID to update
         status: New status value
         error_message: Optional error message for 'error' status
@@ -289,7 +287,7 @@ def caption_median_ocr_flow(
 
     Args:
         video_id: Video UUID
-        db_path: Path to annotations.db
+        db_path: Path to captions.db
         video_dir: Video directory path
         caption_ids: List of caption IDs to process
         language: OCR language preference
@@ -357,35 +355,6 @@ def caption_median_ocr_flow(
         print("Errors:")
         for error in errors:
             print(f"  - {error}")
-
-    # Send webhook notification to web app
-    try:
-        webhook_url = os.getenv("WEB_APP_URL", "http://localhost:5173")
-        webhook_endpoint = f"{webhook_url}/api/webhooks/prefect"
-
-        webhook_payload = {
-            "videoId": video_id,  # UUID (stable identifier)
-            "flowName": "caption-median-ocr",
-            "status": "complete" if failed_count == 0 else "error",
-            "error": "; ".join(errors) if errors else None,
-        }
-
-        print(f"Sending webhook to {webhook_endpoint}")
-        response = requests.post(
-            webhook_endpoint,
-            json=webhook_payload,
-            timeout=5,
-        )
-
-        if response.ok:
-            print(f"Webhook sent successfully: {response.status_code}")
-        else:
-            print(f"Webhook failed: {response.status_code} - {response.text}")
-
-    except Exception as webhook_error:
-        # Don't fail the flow if webhook fails
-        print(f"Warning: Failed to send webhook notification: {webhook_error}")
-
     return {
         "video_id": video_id,
         "status": "completed" if failed_count == 0 else "partial",

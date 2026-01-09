@@ -140,7 +140,7 @@ async function main() {
   console.log(`Searching for video databases in: ${dataDir}`)
 
   // Find all video databases
-  const videoDbs = await glob(`${dataDir}/**/annotations.db`)
+  const videoDbs = await glob(`${dataDir}/**/captions.db`)
   console.log(`Found ${videoDbs.length} video databases\n`)
 
   let processed = 0

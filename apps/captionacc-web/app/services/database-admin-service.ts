@@ -19,7 +19,7 @@ import Database from 'better-sqlite3'
 import { getSchemaPath } from '~/db/schema-loader'
 import { parseSchemaNames, type TableSchemaNames } from '~/utils/schema-parser'
 
-const LOCAL_DATA_DIR = process.env['LOCAL_DATA_DIR'] ?? '../../local/data'
+const LOCAL_DATA_DIR = process.env['LOCAL_DATA_DIR'] ?? '../../local/processing'
 
 // Get __dirname for path resolution
 const __filename = fileURLToPath(import.meta.url)
@@ -54,7 +54,7 @@ export interface DetailedStatus {
 }
 
 /**
- * Find all annotations.db files recursively
+ * Find all captions.db files recursively
  */
 function findAllDatabases(): string[] {
   const databases: string[] = []
@@ -70,7 +70,7 @@ function findAllDatabases(): string[] {
 
           if (stat.isDirectory()) {
             scanDir(fullPath)
-          } else if (entry === 'annotations.db' && stat.size > 0) {
+          } else if (entry === 'captions.db' && stat.size > 0) {
             databases.push(fullPath)
           }
         } catch {
@@ -88,11 +88,11 @@ function findAllDatabases(): string[] {
 
 /**
  * Extract video ID from database path
- * Path format: .../local/data/{hash}/{uuid}/annotations.db
+ * Path format: .../local/processing/{hash}/{uuid}/captions.db
  */
 function extractVideoId(dbPath: string): string {
   const parts = dbPath.split('/')
-  // Find the UUID part (second-to-last directory before annotations.db)
+  // Find the UUID part (second-to-last directory before captions.db)
   const uuidIndex = parts.length - 2
   return parts[uuidIndex] ?? 'unknown'
 }

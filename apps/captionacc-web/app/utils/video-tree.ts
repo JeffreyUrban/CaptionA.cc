@@ -1,8 +1,3 @@
-import { existsSync } from 'fs'
-import { resolve } from 'path'
-
-import Database from 'better-sqlite3'
-
 import { type VideoStats } from './video-stats'
 
 export interface VideoInfo {
@@ -129,6 +124,14 @@ export function buildVideoTree(videos: VideoInfo[]): TreeNode[] {
  * Gets stats for a single video
  */
 export async function getVideoStats(videoId: string): Promise<VideoStats> {
+  if (typeof window !== 'undefined') {
+    throw new Error('getVideoStats is server-side only')
+  }
+
+  const { existsSync } = await import('fs')
+  const { resolve } = await import('path')
+  const Database = (await import('better-sqlite3')).default
+
   const dbPath = resolve(
     process.cwd(),
     '..',
@@ -136,7 +139,7 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
     'local',
     'data',
     ...videoId.split('/'),
-    'annotations.db'
+    'captions.db'
   )
 
   if (!existsSync(dbPath)) {

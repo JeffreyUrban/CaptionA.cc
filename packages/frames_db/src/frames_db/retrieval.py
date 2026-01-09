@@ -26,7 +26,7 @@ def get_frame_from_db(
 
     Example:
         >>> frame = get_frame_from_db(
-        ...     db_path=Path("annotations.db"),
+        ...     db_path=Path("captions.db"),
         ...     frame_index=100,
         ...     table="full_frames"
         ... )
@@ -88,7 +88,7 @@ def get_frames_range(
 
     Example:
         >>> frames = get_frames_range(
-        ...     db_path=Path("annotations.db"),
+        ...     db_path=Path("captions.db"),
         ...     start_index=0,
         ...     end_index=1000,
         ...     table="cropped_frames"
@@ -151,7 +151,7 @@ def get_all_frame_indices(
 
     Example:
         >>> indices = get_all_frame_indices(
-        ...     db_path=Path("annotations.db"),
+        ...     db_path=Path("captions.db"),
         ...     table="full_frames"
         ... )
         >>> print(f"Found {len(indices)} frames")

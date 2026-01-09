@@ -61,7 +61,7 @@ export async function action() {
             'local',
             'data',
             ...metadata.metadata.storagePath.split('/'),
-            'annotations.db'
+            'captions.db'
           )
           if (existsSync(dbPath)) {
             // Mark as deleted in database first

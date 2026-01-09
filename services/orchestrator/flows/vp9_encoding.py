@@ -44,7 +44,7 @@ def encode_vp9_chunks_task(
     Encode frames to VP9 WebM chunks.
 
     Args:
-        db_path: Path to annotations.db
+        db_path: Path to captions.db
         video_id: Video UUID
         frame_type: "cropped" or "full"
         modulo_levels: List of modulo levels (defaults: cropped=[16,4,1], full=[1])
@@ -150,7 +150,7 @@ def upload_vp9_chunks_task(
     Upload VP9 chunks to Wasabi S3.
 
     Args:
-        db_path: Path to annotations.db
+        db_path: Path to captions.db
         video_id: Video UUID
         frame_type: "cropped" or "full"
         chunk_files: List of local chunk file paths
@@ -231,7 +231,7 @@ def encode_vp9_chunks_flow(
 
     Args:
         video_id: Video UUID
-        db_path: Path to annotations.db
+        db_path: Path to captions.db
         frame_type: "cropped" or "full"
         modulo_levels: List of modulo levels (optional, auto-selected if None)
 
