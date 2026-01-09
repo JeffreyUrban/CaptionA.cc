@@ -98,7 +98,7 @@ def upload_database_to_wasabi(
 def create_supabase_video_entry(
     tenant_id: str,
     video_id: str,
-    filename: str,
+    local_video_path: str,
     video_storage_key: str,
     file_size: int,
     uploaded_by_user_id: str | None = None,
@@ -111,16 +111,29 @@ def create_supabase_video_entry(
     video_record = {
         "id": video_id,
         "tenant_id": tenant_id,
-        "filename": filename,
+        "video_path": local_video_path,
         "storage_key": video_storage_key,
         "size_bytes": file_size,
         "status": "processing",
         "uploaded_by_user_id": uploaded_by_user_id,
     }
 
-    response = video_repo.client.table("videos").insert(video_record).execute()
+    try:
+        response = video_repo.client.schema(video_repo.client._preferred_schema).table("videos").insert(video_record).execute()
+        print(f"[Supabase] Video entry created: {video_id}")
+    except Exception as e:
+        if "duplicate key" in str(e) or "already exists" in str(e):
+            print(f"[Supabase] Video entry already exists, updating: {video_id}")
+            # Update existing entry
+            response = video_repo.client.schema(video_repo.client._preferred_schema).table("videos").update({
+                "video_path": local_video_path,
+                "storage_key": video_storage_key,
+                "size_bytes": file_size,
+                "status": "processing",
+            }).eq("id", video_id).execute()
+        else:
+            raise
 
-    print(f"[Supabase] Video entry created: {video_id}")
     return response.data[0] if response.data else {}  # type: ignore[return-value]
 
 @task(
@@ -173,7 +186,10 @@ def extract_full_frames_to_video_db(
     Path(output_db_abs).parent.mkdir(parents=True, exist_ok=True)
 
     pipeline_dir = Path(__file__).parent.parent.parent.parent / "data-pipelines" / "full_frames"
+    frames_dir = Path(output_db_abs).parent / "frames_temp"
+    frames_dir.mkdir(parents=True, exist_ok=True)
 
+    # Step 1: Extract frames to temporary directory using sample-frames CLI
     result = subprocess.run(
         [
             "uv",
@@ -181,10 +197,10 @@ def extract_full_frames_to_video_db(
             "python",
             "-m",
             "full_frames",
-            "extract",
+            "sample-frames",
             video_path_abs,
-            "--output-db",
-            output_db_abs,
+            "--output-dir",
+            str(frames_dir),
             "--frame-rate",
             str(frame_rate),
         ],
@@ -196,7 +212,56 @@ def extract_full_frames_to_video_db(
 
     if result.returncode != 0:
         print(f"STDERR: {result.stderr}")
-        raise RuntimeError(f"full_frames pipeline failed: {result.stderr}")
+        raise RuntimeError(f"full_frames sample-frames failed: {result.stderr}")
+
+    print("[video.db] Frame extraction to directory complete")
+
+    # Step 2: Write frames to video.db using frames_db package
+    from frames_db import write_frames_batch
+    from PIL import Image
+    import sqlite3
+
+    # Create video.db with the proper schema
+    conn = sqlite3.connect(output_db_abs)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS full_frames (
+            frame_index INTEGER PRIMARY KEY,
+            image_data BLOB NOT NULL,
+            width INTEGER NOT NULL,
+            height INTEGER NOT NULL,
+            file_size INTEGER NOT NULL
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS video_metadata (
+            video_path TEXT PRIMARY KEY,
+            duration_seconds REAL,
+            video_hash TEXT
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+    # Collect frame data
+    frame_files = sorted(frames_dir.glob("frame_*.jpg"))
+    frames = []
+    for frame_file in frame_files:
+        frame_index = int(frame_file.stem.split("_")[1])
+        image_data = frame_file.read_bytes()
+        img = Image.open(frame_file)
+        width, height = img.size
+        frames.append((frame_index, image_data, width, height))
+
+    # Write frames to video.db
+    write_frames_batch(
+        db_path=Path(output_db_abs),
+        frames=frames,
+        table="full_frames",
+    )
+
+    # Clean up temporary frames directory
+    import shutil
+    shutil.rmtree(frames_dir)
 
     print("[video.db] Frame extraction complete")
 
@@ -401,7 +466,7 @@ def upload_and_process_video_flow(
         create_supabase_video_entry(
             tenant_id=tenant_id,
             video_id=video_id,
-            filename=filename,
+            local_video_path=local_video_path,
             video_storage_key=video_storage_key,
             file_size=file_size,
             uploaded_by_user_id=uploaded_by_user_id,
