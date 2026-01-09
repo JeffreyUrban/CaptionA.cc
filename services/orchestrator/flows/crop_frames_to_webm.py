@@ -641,4 +641,24 @@ def crop_frames_to_webm_flow(
             print(f"📊 Version: v{version}")
             print(f"📊 Frames: {total_frames}, Chunks: {chunk_count}")
             print(f"📊 Size: {total_size_bytes / 1024 / 1024:.2f} MB")
+
+            return {
+                "video_id": video_id,
+                "version": version,
+                "version_id": version_id,
+                "total_frames": total_frames,
+                "chunk_count": chunk_count,
+                "total_size_bytes": total_size_bytes,
+                "status": "completed",
+            }
+
+        except Exception as e:
+            print(f"\n❌ Cropped frames generation failed: {e}")
             raise
+
+        finally:
+            # Cleanup temporary files
+            if temp_path and temp_path.exists():
+                print(f"\n🧹 Cleaning up temporary files at {temp_path}")
+                import shutil
+                shutil.rmtree(temp_path, ignore_errors=True)

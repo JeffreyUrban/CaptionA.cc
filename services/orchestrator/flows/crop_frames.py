@@ -254,8 +254,36 @@ def crop_frames_flow(
         )
         conn.commit()
     finally:
-        conn.close()            f"Warning: VP9 encoding failed (cropped frames still available in SQLite): {encoding_error}"
-        )
+        conn.close()
+
+    # Extract cropped frames
+    result = extract_cropped_frames(
+        video_path=video_path,
+        db_path=db_path,
+        output_dir=output_dir,
+        crop_bounds=crop_bounds,
+        crop_bounds_version=crop_bounds_version,
+        frame_rate=frame_rate,
+    )
+
+    # Update status in database
+    update_crop_status(db_path=db_path, status="complete")
+
+    # Create artifact for visibility
+    create_table_artifact(
+        key=f"video-{video_id}-crop-frames",
+        table={
+            "Video ID": [video_id],
+            "Cropped Frames": [result["frame_count"]],
+            "Crop Bounds": [
+                f"({crop_bounds['left']}, {crop_bounds['top']}, {crop_bounds['right']}, {crop_bounds['bottom']})"
+            ],
+            "Status": ["Ready for Boundary Annotation"],
+        },
+        description=f"Crop frames processing complete for {video_id}",
+    )
+
+    print(f"Crop frames complete for {video_id}: {result['frame_count']} frames")
 
     return {
         "video_id": video_id,

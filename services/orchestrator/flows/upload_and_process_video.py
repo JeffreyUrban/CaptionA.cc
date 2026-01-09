@@ -469,4 +469,20 @@ def upload_and_process_video_flow(
         print(f"\n✅ Upload and processing complete for {video_id}")
         print(f"📊 Frames: {frames_result['frame_count']}, OCR: {ocr_result['ocr_count']}")
         print(f"🔍 Indexed: {indexed_frames} frames")
+
+        return {
+            "video_id": video_id,
+            "status": "active",
+            "frame_count": frames_result["frame_count"],
+            "ocr_count": ocr_result["ocr_count"],
+            "indexed_frames": indexed_frames,
+        }
+
+    except Exception as e:
+        print(f"\n❌ Upload and processing failed: {e}")
+        # Update Supabase status to failed
+        try:
+            update_supabase_status(video_id, "failed", flow_run_id)
+        except Exception:
+            pass
         raise
