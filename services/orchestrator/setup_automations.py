@@ -13,6 +13,8 @@ import os
 import sys
 from pathlib import Path
 
+import httpx
+
 # Load environment variables
 from dotenv import load_dotenv
 
@@ -20,9 +22,6 @@ monorepo_root = Path(__file__).parent.parent.parent
 env_path = monorepo_root / ".env"
 if env_path.exists():
     load_dotenv(env_path)
-
-import httpx
-
 
 PREFECT_API_URL = os.getenv("PREFECT_API_URL", "https://prefect-service.fly.dev/api")
 WEB_APP_URL = os.getenv("WEB_APP_URL", "http://localhost:5173")
@@ -167,7 +166,7 @@ async def create_flow_state_automation(webhook_block_id: str):
         automation = response.json()
         automation_id = automation["id"]
         print(f"✓ Created automation: {automation_id}")
-        print(f"  Triggers on: Completed, Failed, Running")
+        print("  Triggers on: Completed, Failed, Running")
         print(f"  Calls webhook: {WEB_APP_URL}/api/webhooks/prefect")
         return automation_id
 
@@ -185,7 +184,7 @@ async def main():
         print()
 
         # Create flow state automation
-        automation_id = await create_flow_state_automation(webhook_block_id)
+        await create_flow_state_automation(webhook_block_id)
         print()
 
         print("✅ Automation setup complete!")
