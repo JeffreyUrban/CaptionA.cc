@@ -127,8 +127,10 @@ class VideoRepository:
         }
 
         response = (
-            self.client.schema(self.client._preferred_schema) # type: ignore[attr-defined]
-            .table("videos").insert(data).execute()
+            self.client.schema(self.client._preferred_schema)  # type: ignore[attr-defined]
+            .table("videos")
+            .insert(data)
+            .execute()
         )
         return response.data[0] if response.data else {}  # type: ignore[return-value]
 
