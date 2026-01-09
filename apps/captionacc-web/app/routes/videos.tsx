@@ -43,11 +43,19 @@ import {
 // Data Fetching (Client-side)
 // =============================================================================
 
+// Type for video row from production database (types file may be out of sync)
+interface VideoRow {
+  id: string
+  video_path: string | null
+  status: string | null
+  uploaded_at: string | null
+}
+
 async function fetchVideos(): Promise<TreeNode[]> {
   // Query videos table - RLS automatically filters by tenant/user
   const { data: videos, error: videosError } = await supabase
     .from('videos')
-    .select('id, filename, display_path, status, uploaded_at, is_demo')
+    .select('id, video_path, status, uploaded_at')
     .is('deleted_at', null)
     .order('uploaded_at', { ascending: false })
 
@@ -57,11 +65,12 @@ async function fetchVideos(): Promise<TreeNode[]> {
   }
 
   // Transform to VideoInfo format expected by tree builder
+  // Cast to VideoRow since generated types may be out of sync with production DB
   const videoList: VideoInfo[] =
-    videos?.map(v => ({
+    (videos as unknown as VideoRow[] | null)?.map(v => ({
       videoId: v.id,
-      displayPath: v.display_path || v.filename || v.id,
-      isDemo: v.is_demo || false,
+      displayPath: v.video_path || v.id,
+      isDemo: false,
     })) || []
 
   // Build tree structure from videos only (without stats - will be loaded client-side)
