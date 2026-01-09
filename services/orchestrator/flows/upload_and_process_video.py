@@ -29,6 +29,7 @@ from wasabi_client import get_wasabi_client
 # Default tenant for development (will be replaced with user's tenant in production)
 DEFAULT_TENANT_ID = "00000000-0000-0000-0000-000000000001"
 
+
 @task(
     name="upload-video-to-wasabi",
     tags=["wasabi", "upload"],
@@ -54,6 +55,7 @@ def upload_video_to_wasabi(
 
     print(f"[Wasabi] Video uploaded: {storage_key}")
     return storage_key
+
 
 @task(
     name="upload-database-to-wasabi",
@@ -89,6 +91,7 @@ def upload_database_to_wasabi(
     print(f"[Wasabi] Database uploaded: {storage_key}")
     return storage_key
 
+
 @task(
     name="create-supabase-video-entry",
     tags=["supabase", "database"],
@@ -118,22 +121,36 @@ def create_supabase_video_entry(
     }
 
     try:
-        response = video_repo.client.schema(video_repo.client._preferred_schema).table("videos").insert(video_record).execute()
+        response = (
+            video_repo.client.schema(video_repo.client._preferred_schema)
+            .table("videos")
+            .insert(video_record)
+            .execute()
+        )
         print(f"[Supabase] Video entry created: {video_id}")
     except Exception as e:
         if "duplicate key" in str(e) or "already exists" in str(e):
             print(f"[Supabase] Video entry already exists, updating: {video_id}")
             # Update existing entry
-            response = video_repo.client.schema(video_repo.client._preferred_schema).table("videos").update({
-                "video_path": video_path,
-                "storage_key": video_storage_key,
-                "size_bytes": file_size,
-                "status": "processing",
-            }).eq("id", video_id).execute()
+            response = (
+                video_repo.client.schema(video_repo.client._preferred_schema)
+                .table("videos")
+                .update(
+                    {
+                        "video_path": video_path,
+                        "storage_key": video_storage_key,
+                        "size_bytes": file_size,
+                        "status": "processing",
+                    }
+                )
+                .eq("id", video_id)
+                .execute()
+            )
         else:
             raise
 
     return response.data[0] if response.data else {}  # type: ignore[return-value]
+
 
 @task(
     name="update-supabase-status",
@@ -156,6 +173,7 @@ def update_supabase_status(
     )
 
     print(f"[Supabase] Status updated: {status}")
+
 
 @task(
     name="extract-full-frames-to-video-db",
@@ -194,6 +212,7 @@ def extract_full_frames_to_video_db(
 
     # Clean up existing frames directory for idempotency
     import shutil
+
     if frames_dir.exists():
         shutil.rmtree(frames_dir)
         print("[video.db] Deleted existing frames temp directory")
@@ -273,6 +292,7 @@ def extract_full_frames_to_video_db(
 
     # Clean up temporary frames directory
     import shutil
+
     shutil.rmtree(frames_dir)
 
     print("[video.db] Frame extraction complete")
@@ -291,6 +311,7 @@ def extract_full_frames_to_video_db(
         "frame_count": frame_count,
         "status": "completed",
     }
+
 
 @task(
     name="run-ocr-to-fullOCR-db",
@@ -344,7 +365,9 @@ def run_ocr_to_full_ocr_db(
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        ocr_conn.execute("CREATE INDEX IF NOT EXISTS idx_frame_index ON full_frame_ocr(frame_index)")
+        ocr_conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_frame_index ON full_frame_ocr(frame_index)"
+        )
         ocr_conn.commit()
     except Exception as e:
         ocr_conn.close()
@@ -383,7 +406,9 @@ def run_ocr_to_full_ocr_db(
         # Check capacity for this frame size
         capacity = ocr_client.get_capacity(width, height)
         max_batch_size = capacity["max_images"]
-        print(f"[fullOCR.db] Max batch size: {max_batch_size} (limited by {capacity['limiting_factor']})")
+        print(
+            f"[fullOCR.db] Max batch size: {max_batch_size} (limited by {capacity['limiting_factor']})"
+        )
 
         # Calculate optimal batch size to divide frames evenly
         if total_frames <= max_batch_size:
@@ -393,10 +418,13 @@ def run_ocr_to_full_ocr_db(
         else:
             # Divide frames evenly across multiple batches
             import math
+
             num_batches = math.ceil(total_frames / max_batch_size)
             batch_size = math.ceil(total_frames / num_batches)
 
-        print(f"[fullOCR.db] Processing {total_frames} frames in {num_batches} batches of ~{batch_size} frames each")
+        print(
+            f"[fullOCR.db] Processing {total_frames} frames in {num_batches} batches of ~{batch_size} frames each"
+        )
 
         # Process frames in batches
         total_detections = 0
@@ -405,22 +433,30 @@ def run_ocr_to_full_ocr_db(
             batch_end = min(batch_start + batch_size, total_frames)
             batch_frames = frames_data[batch_start:batch_end]
 
-            batch_num = batch_start//batch_size + 1
-            print(f"[fullOCR.db] Processing batch {batch_num}/{num_batches} ({batch_end - batch_start} frames)")
+            batch_num = batch_start // batch_size + 1
+            print(
+                f"[fullOCR.db] Processing batch {batch_num}/{num_batches} ({batch_end - batch_start} frames)"
+            )
 
             # Prepare images for OCR service
             images = []
             for frame_index, image_data, _, _ in batch_frames:
-                images.append({
-                    "id": f"frame_{frame_index}",
-                    "data": image_data,
-                })
+                images.append(
+                    {
+                        "id": f"frame_{frame_index}",
+                        "data": image_data,
+                    }
+                )
 
             # Submit to OCR service and wait for results (sequential processing)
             try:
-                result = ocr_client.process_batch(images, timeout=600)  # 10min timeout for large batches
+                result = ocr_client.process_batch(
+                    images, timeout=600
+                )  # 10min timeout for large batches
 
-                print(f"[fullOCR.db] Batch processed: {result['total_characters']} characters in {result['processing_time_ms']:.0f}ms")
+                print(
+                    f"[fullOCR.db] Batch processed: {result['total_characters']} characters in {result['processing_time_ms']:.0f}ms"
+                )
 
                 # Store OCR results in fullOCR.db
                 for ocr_result in result["results"]:
@@ -428,35 +464,40 @@ def run_ocr_to_full_ocr_db(
 
                     for box_idx, char in enumerate(ocr_result["characters"]):
                         bbox = char["bbox"]
-                        ocr_conn.execute("""
+                        ocr_conn.execute(
+                            """
                             INSERT INTO full_frame_ocr (
                                 frame_id, frame_index, box_index, text, confidence,
                                 bbox_left, bbox_top, bbox_right, bbox_bottom
                             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """, (
-                            frame_index,  # frame_id (same as frame_index for full frames)
-                            frame_index,
-                            box_idx,
-                            char["text"],
-                            1.0,  # Google Vision doesn't provide per-char confidence, use 1.0
-                            bbox["x"],
-                            bbox["y"],
-                            bbox["x"] + bbox["width"],
-                            bbox["y"] + bbox["height"],
-                        ))
+                        """,
+                            (
+                                frame_index,  # frame_id (same as frame_index for full frames)
+                                frame_index,
+                                box_idx,
+                                char["text"],
+                                1.0,  # Google Vision doesn't provide per-char confidence, use 1.0
+                                bbox["x"],
+                                bbox["y"],
+                                bbox["x"] + bbox["width"],
+                                bbox["y"] + bbox["height"],
+                            ),
+                        )
 
                 ocr_conn.commit()
                 total_detections += result["total_characters"]
 
             except Exception as e:
-                print(f"[fullOCR.db] Warning: Batch {batch_start//batch_size + 1} failed: {e}")
+                print(f"[fullOCR.db] Warning: Batch {batch_start // batch_size + 1} failed: {e}")
                 # Continue with next batch instead of failing entire job
 
     finally:
         video_conn.close()
         ocr_conn.close()
 
-    print(f"[fullOCR.db] OCR processing complete: {total_detections} detections from {total_frames} frames")
+    print(
+        f"[fullOCR.db] OCR processing complete: {total_detections} detections from {total_frames} frames"
+    )
 
     return {
         "db_path": ocr_db_abs,
@@ -464,6 +505,7 @@ def run_ocr_to_full_ocr_db(
         "frames_processed": total_frames,
         "status": "completed",
     }
+
 
 @task(
     name="index-video-ocr-content",
@@ -511,6 +553,7 @@ def index_video_ocr_content(video_id: str, full_ocr_db_path: str) -> int:
     except Exception as e:
         print(f"⚠️  Warning: Failed to index video content: {e}")
         return 0
+
 
 @flow(
     name="upload-and-process-video",

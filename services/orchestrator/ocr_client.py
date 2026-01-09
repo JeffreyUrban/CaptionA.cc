@@ -100,15 +100,11 @@ class OCRServiceClient:
 
             elapsed = time.time() - start_time
             if elapsed > timeout:
-                raise TimeoutError(
-                    f"OCR job {job_id} did not complete within {timeout}s"
-                )
+                raise TimeoutError(f"OCR job {job_id} did not complete within {timeout}s")
 
             time.sleep(poll_interval)
 
-    def process_batch(
-        self, images: list[dict[str, Any]], timeout: float = 300
-    ) -> dict[str, Any]:
+    def process_batch(self, images: list[dict[str, Any]], timeout: float = 300) -> dict[str, Any]:
         """
         Submit job and wait for results (convenience method).
 

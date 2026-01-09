@@ -104,6 +104,7 @@ def extract_full_frames(
         "output": result.stdout,
     }
 
+
 @task(
     name="update-processing-status",
     tags=["database"],
@@ -140,6 +141,7 @@ def update_processing_status(db_path: str, status: str) -> None:
         conn.close()
 
     print(f"Status updated successfully to: {status}")
+
 
 @flow(
     name="process-video-initial",

@@ -24,6 +24,7 @@ from wasabi_client import WasabiClient, get_wasabi_client
 # Default tenant for development
 DEFAULT_TENANT_ID = "00000000-0000-0000-0000-000000000001"
 
+
 @task(
     name="download-database-from-wasabi",
     tags=["wasabi", "download"],
@@ -72,6 +73,7 @@ def download_database_from_wasabi(
 
     return local_path, hash_hex
 
+
 @task(
     name="upload-layout-db-to-wasabi",
     tags=["wasabi", "upload"],
@@ -107,6 +109,7 @@ def upload_layout_db_to_wasabi(
     print(f"[Wasabi] layout.db uploaded: {storage_key}")
 
     return storage_key
+
 
 @task(
     name="detect-crop-bounds-change",
@@ -154,6 +157,7 @@ def detect_crop_bounds_change(
     bounds_changed = False  # Placeholder
 
     return bounds_changed, previous_bounds  # type: ignore[return-value]
+
 
 @flow(
     name="upload-layout-db",

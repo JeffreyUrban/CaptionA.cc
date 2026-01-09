@@ -36,11 +36,7 @@ async def create_webhook_block():
         # Search for existing webhook block
         response = await client.post(
             f"{PREFECT_API_URL}/block_documents/filter",
-            json={
-                "block_documents": {
-                    "name": {"any_": ["captionacc-web-notifications"]}
-                }
-            },
+            json={"block_documents": {"name": {"any_": ["captionacc-web-notifications"]}}},
         )
 
         if response.status_code == 200:
@@ -156,9 +152,7 @@ async def create_flow_state_automation(webhook_block_id: str):
             ],
         }
 
-        response = await client.post(
-            f"{PREFECT_API_URL}/automations/", json=automation_config
-        )
+        response = await client.post(f"{PREFECT_API_URL}/automations/", json=automation_config)
 
         if response.status_code not in [200, 201]:
             raise Exception(f"Failed to create automation: {response.text}")

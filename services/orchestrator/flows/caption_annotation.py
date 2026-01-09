@@ -25,6 +25,7 @@ from wasabi_client import WasabiClient, get_wasabi_client
 # Default tenant for development
 DEFAULT_TENANT_ID = "00000000-0000-0000-0000-000000000001"
 
+
 @task(
     name="download-captions-db-from-wasabi",
     tags=["wasabi", "download"],
@@ -71,6 +72,7 @@ def download_captions_db_from_wasabi(
 
     return local_path, hash_hex
 
+
 @task(
     name="upload-captions-db-to-wasabi",
     tags=["wasabi", "upload"],
@@ -106,6 +108,7 @@ def upload_captions_db_to_wasabi(
     print(f"[Wasabi] captions.db uploaded: {storage_key}")
 
     return storage_key
+
 
 @flow(
     name="upload-captions-db",

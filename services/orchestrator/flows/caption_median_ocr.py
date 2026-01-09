@@ -105,6 +105,7 @@ def generate_median_frame(
     finally:
         conn.close()
 
+
 @task(
     name="run-ocr-on-median-frame",
     retries=2,
@@ -169,6 +170,7 @@ def run_ocr_on_median_frame(
 
     return extracted_text
 
+
 @task(
     name="update-caption-ocr-result",
     tags=["database"],
@@ -208,6 +210,7 @@ def update_caption_ocr_result(
 
     finally:
         conn.close()
+
 
 @task(
     name="update-caption-ocr-status",
@@ -257,6 +260,7 @@ def update_caption_ocr_status(
 
     finally:
         conn.close()
+
 
 @flow(
     name="process-caption-median-ocr",

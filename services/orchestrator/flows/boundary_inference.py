@@ -70,6 +70,7 @@ def check_existing_run(
         print("  No existing run found - inference needed")
         return None
 
+
 @task(
     name="generate-frame-pairs",
     tags=["boundary-inference"],
@@ -147,6 +148,7 @@ def generate_frame_pairs(
 
     return pairs
 
+
 @task(
     name="invoke-modal-inference",
     retries=2,
@@ -208,6 +210,7 @@ def invoke_modal_inference(
     except Exception as e:
         print(f"✗ Modal inference failed: {e}")
         raise
+
 
 @flow(
     name="boundary-inference",
@@ -353,6 +356,7 @@ def boundary_inference_flow(
         "failed": result["results"]["failed"],
         "metrics": result["metrics"],
     }
+
 
 # Convenience function for on-demand inference
 def run_inference_for_video(

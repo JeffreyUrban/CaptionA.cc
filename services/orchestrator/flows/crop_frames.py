@@ -19,6 +19,7 @@ from prefect.artifacts import create_table_artifact
 
 # Import VP9 encoding flow for deferred encoding
 
+
 @task(
     name="extract-cropped-frames",
     retries=3,
@@ -112,6 +113,7 @@ def extract_cropped_frames(
         "frame_count": frame_count,
     }
 
+
 @task(
     name="update-crop-status",
     tags=["database"],
@@ -159,6 +161,7 @@ def update_crop_status(db_path: str, status: str) -> None:
         conn.close()
 
     print(f"Crop status updated to: {status}")
+
 
 @flow(
     name="crop-video-frames",

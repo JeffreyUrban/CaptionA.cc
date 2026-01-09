@@ -36,6 +36,7 @@ MODULO_LEVELS = [32, 16, 8, 4, 2, 1]  # Hierarchical sampling levels
 WEBM_CRF = 23  # Constant Rate Factor (0-63, lower = better quality)
 WEBM_BITRATE = "500k"  # Target bitrate
 
+
 @task(
     name="download-video-from-wasabi",
     tags=["wasabi", "download"],
@@ -57,6 +58,7 @@ def download_video_from_wasabi(
 
     print(f"[Wasabi] Video downloaded: {local_path}")
     return local_path
+
 
 @task(
     name="download-layout-db-from-wasabi",
@@ -93,6 +95,7 @@ def download_layout_db_from_wasabi(
     print(f"[Wasabi] SHA-256: {hash_hex}")
 
     return local_path, hash_hex
+
 
 @task(
     name="extract-cropped-frames",
@@ -165,6 +168,7 @@ def extract_cropped_frames(
     print(f"[Crop] Extracted {frame_count} frames to {output_dir}")
 
     return output_dir, frame_count
+
 
 @task(
     name="encode-frames-to-webm-chunks",
@@ -323,6 +327,7 @@ def encode_frames_to_webm_chunks(
 
     return output_dir, total_chunk_count, all_chunks
 
+
 @task(
     name="upload-chunks-to-wasabi",
     tags=["wasabi", "upload"],
@@ -387,6 +392,7 @@ def upload_chunks_to_wasabi(
 
     return len(chunks), total_size
 
+
 @task(
     name="create-version-record",
     tags=["supabase", "version"],
@@ -432,6 +438,7 @@ def create_version_record(
 
     return version_record  # type: ignore[return-value]
 
+
 @task(
     name="update-version-metadata",
     tags=["supabase", "version"],
@@ -457,6 +464,7 @@ def update_version_metadata(
 
     print(f"[Supabase] Version metadata updated: {chunk_count} chunks, {total_frames} frames")
 
+
 @task(
     name="activate-version",
     tags=["supabase", "version"],
@@ -470,6 +478,7 @@ def activate_version(version_id: str) -> None:
     versions_repo.activate_version(version_id)
 
     print("[Supabase] Version activated (previous version archived)")
+
 
 @flow(
     name="crop-frames-to-webm",
@@ -660,4 +669,5 @@ def crop_frames_to_webm_flow(
             if temp_path and temp_path.exists():
                 print(f"\n🧹 Cleaning up temporary files at {temp_path}")
                 import shutil
+
                 shutil.rmtree(temp_path, ignore_errors=True)

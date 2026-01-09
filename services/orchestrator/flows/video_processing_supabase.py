@@ -47,6 +47,7 @@ def update_supabase_status(
         # Don't fail the flow if Supabase update fails
         print(f"⚠ Warning: Failed to update Supabase status: {e}")
 
+
 @task(
     name="update-annotations-db-key",
     tags=["supabase", "storage"],
@@ -62,12 +63,11 @@ def update_captions_db_key(video_id: str, captions_db_key: str) -> None:
     """
     try:
         video_repo = VideoRepository()
-        video_repo.update_captions_db_key(
-            video_id=video_id, captions_db_key=captions_db_key
-        )
+        video_repo.update_captions_db_key(video_id=video_id, captions_db_key=captions_db_key)
         print(f"✓ Supabase: Updated annotations DB key for {video_id}")
     except Exception as e:
         print(f"⚠ Warning: Failed to update annotations DB key: {e}")
+
 
 @task(
     name="index-video-content",
@@ -119,6 +119,7 @@ def index_video_content(video_id: str, db_path: str) -> int:
     except Exception as e:
         print(f"⚠ Warning: Failed to index video content: {e}")
         return 0
+
 
 @task(
     name="extract-full-frames",
@@ -188,6 +189,7 @@ def extract_full_frames(
         "frame_count": frame_count,
         "ocr_count": ocr_count,
     }
+
 
 @flow(
     name="process-video-with-supabase",

@@ -126,7 +126,9 @@ class VideoRepository:
             "status": "uploading",
         }
 
-        response = self.client.schema(self.client._preferred_schema).table("videos").insert(data).execute()
+        response = (
+            self.client.schema(self.client._preferred_schema).table("videos").insert(data).execute()
+        )
         return response.data[0] if response.data else {}  # type: ignore[return-value]
 
     def update_video_status(
@@ -150,7 +152,13 @@ class VideoRepository:
         if prefect_flow_run_id:
             data["prefect_flow_run_id"] = prefect_flow_run_id
 
-        response = self.client.schema(self.client._preferred_schema).table("videos").update(data).eq("id", video_id).execute()
+        response = (
+            self.client.schema(self.client._preferred_schema)
+            .table("videos")
+            .update(data)
+            .eq("id", video_id)
+            .execute()
+        )
         return response.data[0] if response.data else {}  # type: ignore[return-value]
 
     def update_captions_db_key(self, video_id: str, captions_db_key: str) -> dict[str, Any]:
@@ -165,7 +173,8 @@ class VideoRepository:
             Updated video record
         """
         response = (
-            self.client.schema(self.client._preferred_schema).table("videos")
+            self.client.schema(self.client._preferred_schema)
+            .table("videos")
             .update({"captions_db_key": captions_db_key})
             .eq("id", video_id)
             .execute()
@@ -174,14 +183,26 @@ class VideoRepository:
 
     def get_video(self, video_id: str) -> dict[str, Any] | None:
         """Get video by ID"""
-        response = self.client.schema(self.client._preferred_schema).table("videos").select("*").eq("id", video_id).single().execute()
+        response = (
+            self.client.schema(self.client._preferred_schema)
+            .table("videos")
+            .select("*")
+            .eq("id", video_id)
+            .single()
+            .execute()
+        )
         return response.data if response.data else None  # type: ignore[return-value]
 
     def get_tenant_videos(
         self, tenant_id: str, include_deleted: bool = False
     ) -> list[dict[str, Any]]:
         """Get all videos for a tenant"""
-        query = self.client.schema(self.client._preferred_schema).table("videos").select("*").eq("tenant_id", tenant_id)
+        query = (
+            self.client.schema(self.client._preferred_schema)
+            .table("videos")
+            .select("*")
+            .eq("tenant_id", tenant_id)
+        )
 
         if not include_deleted:
             query = query.is_("deleted_at", "null")
@@ -192,7 +213,8 @@ class VideoRepository:
     def lock_video(self, video_id: str, user_id: str) -> dict[str, Any]:
         """Lock a video for editing by a specific user"""
         response = (
-            self.client.schema(self.client._preferred_schema).table("videos")
+            self.client.schema(self.client._preferred_schema)
+            .table("videos")
             .update(
                 {
                     "locked_by_user_id": user_id,
@@ -207,7 +229,8 @@ class VideoRepository:
     def unlock_video(self, video_id: str) -> dict[str, Any]:
         """Unlock a video"""
         response = (
-            self.client.schema(self.client._preferred_schema).table("videos")
+            self.client.schema(self.client._preferred_schema)
+            .table("videos")
             .update(
                 {
                     "locked_by_user_id": None,
@@ -222,7 +245,8 @@ class VideoRepository:
     def soft_delete_video(self, video_id: str) -> dict[str, Any]:
         """Soft delete a video"""
         response = (
-            self.client.schema(self.client._preferred_schema).table("videos")
+            self.client.schema(self.client._preferred_schema)
+            .table("videos")
             .update(
                 {
                     "status": "soft_deleted",
@@ -268,7 +292,12 @@ class SearchIndexRepository:
             "updated_at": datetime.utcnow().isoformat(),
         }
 
-        response = self.client.schema(self.client._preferred_schema).table("video_search_index").upsert(data).execute()
+        response = (
+            self.client.schema(self.client._preferred_schema)
+            .table("video_search_index")
+            .upsert(data)
+            .execute()
+        )
         return response.data[0] if response.data else {}  # type: ignore[return-value]
 
     def search_text(
@@ -288,7 +317,8 @@ class SearchIndexRepository:
         # Note: This uses the search_vector generated column
         # Full-text search query format: 'word1 & word2' or 'word1 | word2'
         response = (
-            self.client.schema(self.client._preferred_schema).table("video_search_index")
+            self.client.schema(self.client._preferred_schema)
+            .table("video_search_index")
             .select("*")
             .text_search("search_vector", query)
             .limit(limit)  # type: ignore[return-value]
@@ -313,9 +343,11 @@ class CroppedFramesVersionRepository:
         Returns:
             Next version number (1 for first version)
         """
-        response = self.client.schema(self.client._preferred_schema).rpc(
-            "get_next_cropped_frames_version", {"p_video_id": video_id}
-        ).execute()
+        response = (
+            self.client.schema(self.client._preferred_schema)
+            .rpc("get_next_cropped_frames_version", {"p_video_id": video_id})
+            .execute()
+        )
         return response.data if response.data else 1  # type: ignore[return-value]
 
     def create_version(
@@ -363,7 +395,12 @@ class CroppedFramesVersionRepository:
             "status": "processing",
         }
 
-        response = self.client.schema(self.client._preferred_schema).table("cropped_frames_versions").insert(data).execute()
+        response = (
+            self.client.schema(self.client._preferred_schema)
+            .table("cropped_frames_versions")
+            .insert(data)
+            .execute()
+        )
         return response.data[0] if response.data else {}  # type: ignore[return-value]
 
     def update_version_chunks(
@@ -392,7 +429,11 @@ class CroppedFramesVersionRepository:
         }
 
         response = (
-            self.client.schema(self.client._preferred_schema).table("cropped_frames_versions").update(data).eq("id", version_id).execute()
+            self.client.schema(self.client._preferred_schema)
+            .table("cropped_frames_versions")
+            .update(data)
+            .eq("id", version_id)
+            .execute()
         )
         return response.data[0] if response.data else {}  # type: ignore[return-value]
 
@@ -408,7 +449,8 @@ class CroppedFramesVersionRepository:
             Updated version record
         """
         response = (
-            self.client.schema(self.client._preferred_schema).table("cropped_frames_versions")
+            self.client.schema(self.client._preferred_schema)
+            .table("cropped_frames_versions")
             .update({"status": status})
             .eq("id", version_id)
             .execute()
@@ -422,7 +464,9 @@ class CroppedFramesVersionRepository:
         Args:
             version_id: Version UUID to activate
         """
-        self.client.schema(self.client._preferred_schema).rpc("activate_cropped_frames_version", {"p_version_id": version_id}).execute()
+        self.client.schema(self.client._preferred_schema).rpc(
+            "activate_cropped_frames_version", {"p_version_id": version_id}
+        ).execute()
 
     def get_active_version(self, video_id: str) -> dict[str, Any] | None:
         """
@@ -435,7 +479,8 @@ class CroppedFramesVersionRepository:
             Active version record or None
         """
         response = (
-            self.client.schema(self.client._preferred_schema).table("cropped_frames_versions")
+            self.client.schema(self.client._preferred_schema)
+            .table("cropped_frames_versions")
             .select("*")
             .eq("video_id", video_id)
             .eq("status", "active")
@@ -454,7 +499,8 @@ class CroppedFramesVersionRepository:
             Version record or None
         """
         response = (
-            self.client.schema(self.client._preferred_schema).table("cropped_frames_versions")
+            self.client.schema(self.client._preferred_schema)
+            .table("cropped_frames_versions")
             .select("*")
             .eq("id", version_id)
             .single()
@@ -473,7 +519,8 @@ class CroppedFramesVersionRepository:
             List of version records
         """
         response = (
-            self.client.schema(self.client._preferred_schema).table("cropped_frames_versions")
+            self.client.schema(self.client._preferred_schema)
+            .table("cropped_frames_versions")
             .select("*")
             .eq("video_id", video_id)
             .order("version", desc=True)
@@ -504,7 +551,12 @@ class TrainingCohortRepository:
             "status": "building",
         }
 
-        response = self.client.schema(self.client._preferred_schema).table("training_cohorts").insert(data).execute()
+        response = (
+            self.client.schema(self.client._preferred_schema)
+            .table("training_cohorts")
+            .insert(data)
+            .execute()
+        )
         return response.data[0] if response.data else {}  # type: ignore[return-value]
 
     def update_cohort_stats(
@@ -529,7 +581,13 @@ class TrainingCohortRepository:
         if git_commit:
             data["git_commit"] = git_commit
 
-        response = self.client.schema(self.client._preferred_schema).table("training_cohorts").update(data).eq("id", cohort_id).execute()
+        response = (
+            self.client.schema(self.client._preferred_schema)
+            .table("training_cohorts")
+            .update(data)
+            .eq("id", cohort_id)
+            .execute()
+        )
         return response.data[0] if response.data else {}  # type: ignore[return-value]
 
     def add_video_to_cohort(
@@ -549,5 +607,10 @@ class TrainingCohortRepository:
             "annotations_contributed": annotations_contributed,
         }
 
-        response = self.client.schema(self.client._preferred_schema).table("cohort_videos").insert(data).execute()
+        response = (
+            self.client.schema(self.client._preferred_schema)
+            .table("cohort_videos")
+            .insert(data)
+            .execute()
+        )
         return response.data[0] if response.data else {}  # type: ignore[return-value]
