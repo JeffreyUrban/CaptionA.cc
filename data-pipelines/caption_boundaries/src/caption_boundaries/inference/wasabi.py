@@ -193,6 +193,6 @@ class WasabiClient:
             chunk_dir = chunk_type
 
         if modulo is not None:
-            return f"{tenant_id}/{video_id}/{chunk_dir}/modulo_{modulo}/chunk_{chunk_index:04d}.webm"
+            return f"{tenant_id}/{video_id}/{chunk_dir}/modulo_{modulo}/chunk_{chunk_index:010d}.webm"
         else:
-            return f"{tenant_id}/{video_id}/{chunk_dir}/chunk_{chunk_index:04d}.webm"
+            return f"{tenant_id}/{video_id}/{chunk_dir}/chunk_{chunk_index:010d}.webm"

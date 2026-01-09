@@ -15,7 +15,45 @@ from rich.console import Console
 console = Console(stderr=True)
 
 
-def calculate_frame_offset(frame_index: int, modulo: int) -> int:
+def get_frames_in_chunk(chunk_start_frame: int, modulo: int, frames_per_chunk: int = 32) -> list[int]:
+    """Get the list of frame indices contained in a chunk.
+
+    Non-duplicating storage scheme - each chunk contains exactly frames_per_chunk frames
+    following the modulo pattern starting from chunk_start_frame.
+
+    Args:
+        chunk_start_frame: The first frame index in the chunk (from chunk filename)
+        modulo: The modulo level (16, 4, or 1)
+        frames_per_chunk: Number of frames per chunk (default 32)
+
+    Returns:
+        List of frame indices in this chunk
+    """
+    frames = []
+    i = chunk_start_frame
+
+    if modulo == 16:
+        # modulo_16: every 16th frame
+        while len(frames) < frames_per_chunk:
+            frames.append(i)
+            i += 16
+    elif modulo == 4:
+        # modulo_4: every 4th frame that's NOT divisible by 16
+        while len(frames) < frames_per_chunk:
+            if i % 16 != 0:
+                frames.append(i)
+            i += 4
+    else:  # modulo == 1
+        # modulo_1: every frame that's NOT divisible by 4
+        while len(frames) < frames_per_chunk:
+            if i % 4 != 0:
+                frames.append(i)
+            i += 1
+
+    return frames
+
+
+def calculate_frame_offset(frame_index: int, modulo: int, chunk_start_frame: int | None = None) -> int:
     """Calculate frame position within a VP9 chunk.
 
     Uses non-duplicating strategy:
@@ -26,31 +64,27 @@ def calculate_frame_offset(frame_index: int, modulo: int) -> int:
     Args:
         frame_index: Absolute frame index in video
         modulo: Modulo level (1, 4, or 16)
+        chunk_start_frame: First frame in the chunk (from filename). If None, auto-detect.
 
     Returns:
         Frame position within chunk (0-31)
     """
-    # Chunk size in frame indices
-    chunk_size = 32 * modulo
-    chunk_start = (frame_index // chunk_size) * chunk_size
+    if chunk_start_frame is not None:
+        # Use provided chunk start frame
+        frames = get_frames_in_chunk(chunk_start_frame, modulo)
+        if frame_index in frames:
+            return frames.index(frame_index)
+        raise ValueError(f"Frame {frame_index} not found in chunk starting at {chunk_start_frame}")
 
-    # Count frames in chunk before target frame
-    offset = 0
-    for i in range(chunk_start, frame_index + 1):
-        if modulo == 16 and i % 16 == 0:
-            if i == frame_index:
-                return offset
-            offset += 1
-        elif modulo == 4 and i % 4 == 0 and i % 16 != 0:
-            if i == frame_index:
-                return offset
-            offset += 1
-        elif modulo == 1 and i % 4 != 0:
-            if i == frame_index:
-                return offset
-            offset += 1
+    # Legacy: try to calculate chunk_start (only works for modulo_16)
+    if modulo == 16:
+        chunk_size = 32 * 16  # 512
+        chunk_start = (frame_index // chunk_size) * chunk_size
+        frames = get_frames_in_chunk(chunk_start, modulo)
+        if frame_index in frames:
+            return frames.index(frame_index)
 
-    raise ValueError(f"Frame {frame_index} not found in modulo {modulo} chunk")
+    raise ValueError(f"Cannot auto-detect chunk for frame {frame_index} modulo {modulo}. Provide chunk_start_frame.")
 
 
 def determine_modulo_for_frame(frame_index: int) -> int:
@@ -74,6 +108,7 @@ def extract_frame_from_chunk(
     signed_url: str,
     frame_index: int,
     modulo: int | None = None,
+    chunk_start_frame: int | None = None,
     fps: int = 10,
 ) -> np.ndarray:
     """Extract single frame from VP9/WebM chunk.
@@ -82,6 +117,7 @@ def extract_frame_from_chunk(
         signed_url: Wasabi signed URL for chunk
         frame_index: Absolute frame index to extract
         modulo: Modulo level (auto-detected if None)
+        chunk_start_frame: First frame in the chunk (from filename). Required for modulo_4 and modulo_1.
         fps: Frames per second (default 10)
 
     Returns:
@@ -106,7 +142,7 @@ def extract_frame_from_chunk(
 
     try:
         # Calculate frame position in chunk
-        frame_offset = calculate_frame_offset(frame_index, modulo)
+        frame_offset = calculate_frame_offset(frame_index, modulo, chunk_start_frame)
 
         # Extract frame using OpenCV
         cap = cv2.VideoCapture(temp_path)
@@ -133,6 +169,103 @@ def extract_frame_from_chunk(
             os.unlink(temp_path)
         except OSError:
             pass
+
+
+def extract_all_frames_from_chunk(
+    signed_url: str,
+    chunk_start_frame: int,
+    modulo: int,
+) -> dict[int, np.ndarray]:
+    """Extract ALL frames from a VP9/WebM chunk at once.
+
+    Downloads the chunk once and extracts all 32 frames.
+
+    Args:
+        signed_url: Wasabi signed URL for chunk
+        chunk_start_frame: First frame in the chunk (from filename)
+        modulo: Modulo level (16, 4, or 1)
+
+    Returns:
+        Dict mapping frame_index -> frame (RGB numpy array)
+
+    Raises:
+        ValueError: If chunk download or extraction fails
+    """
+    # Download chunk to temp file
+    try:
+        response = requests.get(signed_url, timeout=60)
+        response.raise_for_status()
+    except requests.RequestException as e:
+        raise ValueError(f"Failed to download chunk: {e}") from e
+
+    with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as f:
+        f.write(response.content)
+        temp_path = f.name
+
+    try:
+        # Get all frame indices in this chunk
+        frame_indices = get_frames_in_chunk(chunk_start_frame, modulo)
+
+        # Open video
+        cap = cv2.VideoCapture(temp_path)
+        if not cap.isOpened():
+            raise ValueError(f"Failed to open video file: {temp_path}")
+
+        frames = {}
+        for position, frame_idx in enumerate(frame_indices):
+            cap.set(cv2.CAP_PROP_POS_FRAMES, position)
+            ret, frame = cap.read()
+            if ret and frame is not None:
+                # Convert BGR to RGB
+                frames[frame_idx] = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+        cap.release()
+        return frames
+
+    finally:
+        try:
+            os.unlink(temp_path)
+        except OSError:
+            pass
+
+
+def download_and_extract_chunks_parallel(
+    chunk_infos: list[tuple[str, int, int]],  # (signed_url, chunk_start, modulo)
+    max_workers: int = 8,
+) -> dict[int, np.ndarray]:
+    """Download and extract frames from multiple chunks in parallel.
+
+    Args:
+        chunk_infos: List of (signed_url, chunk_start_frame, modulo) tuples
+        max_workers: Max parallel downloads
+
+    Returns:
+        Dict mapping frame_index -> frame (RGB numpy array)
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    all_frames: dict[int, np.ndarray] = {}
+
+    def process_chunk(info: tuple[str, int, int]) -> dict[int, np.ndarray]:
+        signed_url, chunk_start, modulo = info
+        return extract_all_frames_from_chunk(signed_url, chunk_start, modulo)
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(process_chunk, info): info for info in chunk_infos}
+
+        completed = 0
+        for future in as_completed(futures):
+            info = futures[future]
+            try:
+                chunk_frames = future.result()
+                all_frames.update(chunk_frames)
+                completed += 1
+                if completed % 50 == 0 or completed == len(chunk_infos):
+                    console.print(f"[cyan]  Processed {completed}/{len(chunk_infos)} chunks, {len(all_frames)} frames[/cyan]")
+            except Exception as e:
+                console.print(f"[red]  Failed chunk {info[1]} (modulo_{info[2]}): {e}[/red]")
+
+    return all_frames
 
 
 class ChunkCache:
