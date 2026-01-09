@@ -23,7 +23,7 @@ primary_region = "ewr"
 
   # Job Management
   JOB_RESULT_TTL_SECONDS = "3600"       # Keep results for 1 hour
-  MAX_CONCURRENT_JOBS = "5"             # Max parallel jobs
+  MAX_CONCURRENT_JOBS = "1"             # Max parallel jobs (512MB RAM / ~230MB per job = max 2, using 1 for safety)
 
   # Circuit Breaker
   CIRCUIT_BREAKER_THRESHOLD = "5"       # Failures before opening
@@ -40,7 +40,7 @@ primary_region = "ewr"
 [[vm]]
   cpu_kind = "shared"
   cpus = 1
-  memory_mb = 256
+  memory_mb = 512  # ImageMagick needs ~230MB for 41-frame batches at 1280x720
 
 # Health check
 [[http_service.checks]]
