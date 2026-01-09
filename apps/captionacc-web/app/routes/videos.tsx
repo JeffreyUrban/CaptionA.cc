@@ -8,10 +8,11 @@
  */
 
 import { MagnifyingGlassIcon, PlusIcon } from '@heroicons/react/20/solid'
-import { useState, useMemo } from 'react'
-import { useLoaderData, Link, useRevalidator, redirect } from 'react-router'
+import { useState, useMemo, useEffect } from 'react'
+import { Link, useRevalidator, useNavigate } from 'react-router'
 
 import { AppLayout } from '~/components/AppLayout'
+import { useAuth } from '~/components/auth/AuthProvider'
 import {
   CreateFolderModal,
   RenameFolderModal,
@@ -29,7 +30,7 @@ import { useTreeNavigation } from '~/hooks/useTreeNavigation'
 import { useVideoDragDrop } from '~/hooks/useVideoDragDrop'
 import { useVideoOperations } from '~/hooks/useVideoOperations'
 import { useVideoStats } from '~/hooks/useVideoStats'
-import { createServerSupabaseClient } from '~/services/supabase-client'
+import { supabase } from '~/services/supabase-client'
 import {
   buildVideoTree,
   calculateVideoCounts,
@@ -39,40 +40,37 @@ import {
 } from '~/utils/video-tree'
 
 // =============================================================================
-// Loader
+// Data Fetching (Client-side)
 // =============================================================================
 
-export async function loader() {
-  const supabase = createServerSupabaseClient()
+// Type for video row from production database (types file may be out of sync)
+interface VideoRow {
+  id: string
+  video_path: string | null
+  status: string | null
+  uploaded_at: string | null
+}
 
-  // Get authenticated user
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser()
-
-  if (!user || error) {
-    throw redirect('/auth/login')
-  }
-
+async function fetchVideos(): Promise<TreeNode[]> {
   // Query videos table - RLS automatically filters by tenant/user
   const { data: videos, error: videosError } = await supabase
     .from('videos')
-    .select('id, filename, display_path, status, uploaded_at, is_demo')
+    .select('id, video_path, status, uploaded_at')
     .is('deleted_at', null)
     .order('uploaded_at', { ascending: false })
 
   if (videosError) {
     console.error('Failed to fetch videos:', videosError)
-    return { tree: [] }
+    return []
   }
 
   // Transform to VideoInfo format expected by tree builder
+  // Cast to VideoRow since generated types may be out of sync with production DB
   const videoList: VideoInfo[] =
-    videos?.map(v => ({
+    (videos as unknown as VideoRow[] | null)?.map(v => ({
       videoId: v.id,
-      displayPath: v.display_path || v.filename || v.id,
-      isDemo: v.is_demo || false,
+      displayPath: v.video_path || v.id,
+      isDemo: false,
     })) || []
 
   // Build tree structure from videos only (without stats - will be loaded client-side)
@@ -86,9 +84,7 @@ export async function loader() {
   })
 
   // Sort tree: folders first, then videos
-  const sortedTree = sortTreeNodes(tree)
-
-  return { tree: sortedTree }
+  return sortTreeNodes(tree)
 }
 
 // =============================================================================
@@ -198,12 +194,34 @@ function SearchControls({
 // =============================================================================
 
 export default function VideosPage() {
-  const { tree } = useLoaderData<{ tree: TreeNode[] }>()
+  const { user, loading: authLoading } = useAuth()
+  const navigate = useNavigate()
   const revalidator = useRevalidator()
   const [searchQuery, setSearchQuery] = useState('')
+  const [tree, setTree] = useState<TreeNode[]>([])
+  const [loading, setLoading] = useState(true)
 
-  // Revalidation callback for all hooks
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!authLoading && !user) {
+      void navigate('/login')
+    }
+  }, [user, authLoading, navigate])
+
+  // Fetch videos client-side when authenticated
+  useEffect(() => {
+    if (user) {
+      setLoading(true)
+      void fetchVideos().then(data => {
+        setTree(data)
+        setLoading(false)
+      })
+    }
+  }, [user])
+
+  // Revalidation callback for all hooks - refetch videos
   const handleOperationComplete = () => {
+    void fetchVideos().then(setTree)
     void revalidator.revalidate()
   }
 
@@ -331,6 +349,24 @@ export default function VideosPage() {
   // ==========================================================================
   // Render
   // ==========================================================================
+
+  // Show loading while checking auth or fetching videos
+  if (authLoading || loading) {
+    return (
+      <AppLayout>
+        <div className="px-4 sm:px-6 lg:px-8 py-8">
+          <div className="flex items-center justify-center h-64">
+            <div className="text-olive-700 dark:text-olive-400">Loading...</div>
+          </div>
+        </div>
+      </AppLayout>
+    )
+  }
+
+  // Don't render if not authenticated (will redirect)
+  if (!user) {
+    return null
+  }
 
   return (
     <AppLayout>

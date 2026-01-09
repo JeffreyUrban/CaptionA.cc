@@ -54,7 +54,7 @@ export async function requireFeatureMiddleware(
   } = await supabase.auth.getUser()
 
   if (error || !user) {
-    throw redirect('/auth/login')
+    throw redirect('/login')
   }
 
   const hasAccess = await requireFeature(user.id, feature)
