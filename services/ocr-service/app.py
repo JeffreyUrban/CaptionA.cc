@@ -16,6 +16,7 @@ import asyncio
 import base64
 import json
 import os
+import sqlite3
 import tempfile
 import time
 from io import BytesIO
@@ -29,8 +30,9 @@ from config import config
 from fastapi import FastAPI, HTTPException
 from job_store import JobStatus, job_store
 from PIL import Image
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 from rate_limiter import usage_tracker
+from wasabi_client import get_wasabi_client
 
 try:
     from google.cloud import vision  # type: ignore
@@ -64,51 +66,113 @@ active_jobs_count = 0  # Track currently processing jobs
 queued_jobs_count = 0  # Track jobs waiting for semaphore
 concurrency_lock = asyncio.Lock()  # Protect the counters
 
-# Job data storage directory (temporary files for queued jobs)
+# Job data storage directory (temporary files for downloaded video.db)
 JOB_DATA_DIR = Path(tempfile.gettempdir()) / "ocr_job_data"
 JOB_DATA_DIR.mkdir(exist_ok=True)
 
+# Track download tasks for pre-fetching
+download_tasks: Dict[str, asyncio.Task] = {}  # job_id -> download task
+download_lock = asyncio.Lock()  # Protect download_tasks dict
 
-def write_job_data_to_disk(job_id: str, images: List[Dict]) -> str:
+# Initialize Wasabi client
+try:
+    wasabi_client = get_wasabi_client()
+    WASABI_AVAILABLE = True
+except Exception as e:
+    print(f"Warning: Wasabi client not available: {e}")
+    wasabi_client = None
+    WASABI_AVAILABLE = False
+
+
+async def download_and_extract_frames(
+    job_id: str, tenant_id: str, video_id: str, frame_indices: List[int]
+) -> str:
     """
-    Write job image data to disk to free memory while queued.
+    Download video.db from Wasabi and extract requested frames.
+
+    This function downloads the video.db file and extracts the specified frames,
+    saving them to a temporary file for processing.
 
     Args:
         job_id: Job identifier
-        images: List of image dicts with 'id' and 'data' keys
+        tenant_id: Tenant UUID
+        video_id: Video UUID
+        frame_indices: List of frame indices to extract
 
     Returns:
-        Path to the temporary file
+        Path to temporary file containing extracted frame data (JSON)
+
+    Raises:
+        Exception: If download or extraction fails
     """
-    job_file = JOB_DATA_DIR / f"{job_id}.json"
-    with open(job_file, "w") as f:
-        json.dump(images, f)
-    return str(job_file)
+    # Download video.db from Wasabi
+    storage_key = f"{tenant_id}/{video_id}/video.db"
+    video_db_path = JOB_DATA_DIR / f"{job_id}_video.db"
+
+    # Run download in executor to avoid blocking
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, lambda: wasabi_client.download_file(storage_key, video_db_path))
+
+    try:
+        # Extract frames from video.db
+        conn = sqlite3.connect(str(video_db_path))
+        cursor = conn.cursor()
+
+        # Build query for specific frame indices
+        placeholders = ",".join("?" * len(frame_indices))
+        cursor.execute(
+            f"""
+            SELECT frame_index, image_data
+            FROM full_frames
+            WHERE frame_index IN ({placeholders})
+            ORDER BY frame_index
+        """,
+            frame_indices,
+        )
+
+        # Collect frames as list of dicts
+        frames = []
+        for row in cursor:
+            frame_index, image_data = row
+            frames.append({"id": f"frame_{frame_index}", "data": base64.b64encode(image_data).decode("utf-8")})
+
+        conn.close()
+
+        # Write frames to JSON file
+        frames_file = JOB_DATA_DIR / f"{job_id}_frames.json"
+        with open(frames_file, "w") as f:
+            json.dump(frames, f)
+
+        return str(frames_file)
+
+    finally:
+        # Clean up video.db (we've extracted what we need)
+        video_db_path.unlink(missing_ok=True)
 
 
-def read_job_data_from_disk(job_file_path: str) -> List[Dict]:
+def read_frames_from_disk(frames_file_path: str) -> List[Dict]:
     """
-    Read job image data from disk.
+    Read frames data from disk.
 
     Args:
-        job_file_path: Path to the temporary file
+        frames_file_path: Path to the temporary frames JSON file
 
     Returns:
-        List of image dicts with 'id' and 'data' keys
+        List of frame dicts with 'id' and 'data' (base64) keys
     """
-    with open(job_file_path, "r") as f:
+    with open(frames_file_path, "r") as f:
         return json.load(f)
 
 
-def cleanup_job_data_file(job_file_path: str):
+def cleanup_job_data_file(frames_file_path: str):
     """
-    Delete temporary job data file.
+    Delete temporary frames file.
 
     Args:
-        job_file_path: Path to the temporary file
+        frames_file_path: Path to the temporary frames JSON file
     """
     try:
-        Path(job_file_path).unlink(missing_ok=True)
+        Path(frames_file_path).unlink(missing_ok=True)
     except Exception:
         pass  # Best effort cleanup
 
@@ -129,27 +193,12 @@ class CapacityResponse(BaseModel):
     estimated_file_size_mb: float
 
 
-class ImageInput(BaseModel):
-    """Input image with identifier."""
-
-    id: str = Field(..., description="Unique identifier for this image")
-    data: str = Field(..., description="Base64-encoded image data")
-
-    @field_validator("data")
-    @classmethod
-    def validate_base64(cls, v: str) -> str:
-        """Validate that data is valid base64."""
-        try:
-            base64.b64decode(v)
-            return v
-        except Exception:
-            raise ValueError("Invalid base64 data")
-
-
 class JobSubmitRequest(BaseModel):
-    """Request to submit OCR job."""
+    """Request to submit OCR job using Wasabi storage references."""
 
-    images: List[ImageInput] = Field(..., min_length=1)
+    tenant_id: str = Field(..., description="Tenant UUID")
+    video_id: str = Field(..., description="Video UUID")
+    frame_indices: List[int] = Field(..., min_length=1, description="List of frame indices to process")
 
 
 class JobSubmitResponse(BaseModel):
@@ -398,37 +447,46 @@ def distribute_characters_to_images(symbols: List[Dict], image_metadata: List[Di
     return results
 
 
-async def process_job_background(job_id: str, job_file_path: str, num_images: int):
+async def process_job_background_with_download(job_id: str, download_task: asyncio.Task, num_images: int):
     """
-    Background task to process OCR job with concurrency control.
+    Background task to process OCR job with concurrency control and pre-fetching.
 
-    Uses semaphore to limit concurrent processing and prevent memory exhaustion.
-    Jobs will queue if limit is reached.
+    This function waits for the download task to complete (which may be running
+    in parallel while another job is processing), then processes the OCR.
 
     Args:
         job_id: Job identifier
-        job_file_path: Path to temporary file containing job data
+        download_task: Async task downloading and extracting frames
         num_images: Number of images in the job
 
     Note: queued_jobs_count is already incremented in submit_job() to reserve the slot.
-    The job data file will be deleted after processing (success or failure).
+    The frames file will be deleted after processing (success or failure).
     """
     global active_jobs_count, queued_jobs_count
 
     try:
         # Acquire semaphore - will block if at max concurrency
+        # While waiting, the download task continues in parallel (pre-fetch)
         async with job_semaphore:
             # Update counters when starting processing
             async with concurrency_lock:
                 queued_jobs_count -= 1
                 active_jobs_count += 1
 
+            frames_file_path = None
             try:
                 # Update status to processing
                 job_store.update_status(job_id, JobStatus.PROCESSING, started_at=time.time())
 
-                # Read job data from disk (now that we have the semaphore)
-                images_data = read_job_data_from_disk(job_file_path)
+                # Wait for download to complete (may already be done thanks to pre-fetch)
+                frames_file_path = await download_task
+
+                # Clean up download task tracking
+                async with download_lock:
+                    download_tasks.pop(job_id, None)
+
+                # Read frames data from disk
+                images_data = read_frames_from_disk(frames_file_path)
 
                 # Decode base64 and convert to format for montage creation
                 image_list = [(img["id"], base64.b64decode(img["data"])) for img in images_data]
@@ -469,23 +527,32 @@ async def process_job_background(job_id: str, job_file_path: str, num_images: in
                 )
 
             except Exception as e:
-                # Job failed
+                # Job failed (includes download failures)
                 job_store.update_status(job_id, JobStatus.FAILED, completed_at=time.time(), error=str(e))
 
             finally:
-                # Clean up job data file (whether success or failure)
-                cleanup_job_data_file(job_file_path)
+                # Clean up frames file if it was created
+                if frames_file_path:
+                    cleanup_job_data_file(frames_file_path)
+
+                # Clean up download task tracking if still present
+                async with download_lock:
+                    download_tasks.pop(job_id, None)
 
                 # Decrement active count when done
                 async with concurrency_lock:
                     active_jobs_count -= 1
 
     except Exception as e:
-        # Handle semaphore acquisition errors
-        cleanup_job_data_file(job_file_path)
+        # Handle semaphore acquisition errors or unexpected failures
+        # Clean up download task tracking
+        async with download_lock:
+            download_tasks.pop(job_id, None)
         async with concurrency_lock:
             queued_jobs_count -= 1
-        job_store.update_status(job_id, JobStatus.FAILED, completed_at=time.time(), error=f"Failed to acquire processing slot: {str(e)}")
+        job_store.update_status(
+            job_id, JobStatus.FAILED, completed_at=time.time(), error=f"Failed to acquire processing slot: {str(e)}"
+        )
 
 
 # Background cleanup task
@@ -571,7 +638,10 @@ async def get_capacity(dimensions: ImageDimensions):
 @app.post("/ocr/jobs", response_model=JobSubmitResponse)
 async def submit_job(request: JobSubmitRequest):
     """
-    Submit OCR job for async processing.
+    Submit OCR job for async processing using Wasabi storage references.
+
+    Downloads video.db from Wasabi and extracts requested frames for processing.
+    Pre-fetches data for queued jobs to minimize latency.
 
     Returns job_id immediately. Poll GET /ocr/jobs/{id} for results.
     """
@@ -580,10 +650,12 @@ async def submit_job(request: JobSubmitRequest):
     if not GOOGLE_CLOUD_AVAILABLE:
         raise HTTPException(status_code=503, detail="Google Cloud Vision not available")
 
+    if not WASABI_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Wasabi storage not available")
+
     # Check concurrency limits BEFORE accepting job
-    # Allow 1 active + 1 queued to prevent memory exhaustion from too many pending jobs
-    # With 512MB RAM and request payloads, this keeps total memory usage safe
-    max_queue_depth = config.MAX_CONCURRENT_JOBS + 1  # Active + 1 waiting
+    # Allow 1 active + 1 queued for pre-fetching
+    max_queue_depth = config.MAX_CONCURRENT_JOBS + 1  # Active + 1 pre-fetching
     async with concurrency_lock:
         total_pending = active_jobs_count + queued_jobs_count
         if total_pending >= max_queue_depth:
@@ -615,9 +687,13 @@ async def submit_job(request: JobSubmitRequest):
                 status_code=503, detail="Service temporarily unavailable. Circuit breaker open due to repeated failures."
             )
 
-        # Generate job ID (with deduplication)
-        images_data = [{"id": img.id, "data": img.data} for img in request.images]
-        job_id = job_store.generate_job_id(images_data)
+        # Generate job ID (with deduplication based on video + frames)
+        # Create a synthetic "images" list for job_store compatibility
+        # Each frame gets an ID based on video_id and frame_index
+        synthetic_images = [
+            {"id": f"{request.video_id}_frame_{frame_idx}"} for frame_idx in sorted(request.frame_indices)
+        ]
+        job_id = job_store.generate_job_id(synthetic_images)
 
         # Check if this is a deduplicated job
         existing_job = job_store.get_job(job_id)
@@ -631,15 +707,20 @@ async def submit_job(request: JobSubmitRequest):
                 message="Job already completed (deduplicated). Retrieve results at GET /ocr/jobs/{id}",
             )
 
-        # Write job data to disk to free memory while queued
-        # This ensures only the actively processing job uses significant memory
-        job_file_path = write_job_data_to_disk(job_id, images_data)
-
         # Create new job
-        job_store.create_job(job_id, len(request.images))
+        job_store.create_job(job_id, len(request.frame_indices))
 
-        # Start background processing with file path
-        asyncio.create_task(process_job_background(job_id, job_file_path, len(request.images)))
+        # Start download immediately (pre-fetch for queue throughput)
+        download_task = asyncio.create_task(
+            download_and_extract_frames(job_id, request.tenant_id, request.video_id, request.frame_indices)
+        )
+
+        # Track download task
+        async with download_lock:
+            download_tasks[job_id] = download_task
+
+        # Start background processing (will wait for download to complete)
+        asyncio.create_task(process_job_background_with_download(job_id, download_task, len(request.frame_indices)))
 
         return JobSubmitResponse(
             job_id=job_id, status="pending", message="Job submitted. Poll GET /ocr/jobs/{id} for results."

@@ -321,11 +321,15 @@ def extract_full_frames_to_video_db(
     log_prints=True,
 )
 def run_ocr_to_full_ocr_db(
+    tenant_id: str,
+    video_id: str,
     video_db_path: str,
     output_ocr_db_path: str,
 ) -> dict[str, Any]:
     """
     Run OCR on full frames from video.db and store results in fullOCR.db.
+
+    The OCR service will download video.db directly from Wasabi.
 
     Creates fullOCR.db with:
     - full_frame_ocr table (OCR detections, text, confidence, bounding boxes)
@@ -373,17 +377,17 @@ def run_ocr_to_full_ocr_db(
         ocr_conn.close()
         raise RuntimeError(f"Failed to create fullOCR.db schema: {e}") from e
 
-    # Read frames from video.db
+    # Read frame metadata from video.db (just indices and dimensions)
     video_conn = sqlite3.connect(video_db_abs)
     try:
         cursor = video_conn.execute("""
-            SELECT frame_index, image_data, width, height
+            SELECT frame_index, width, height
             FROM full_frames
             ORDER BY frame_index
         """)
 
-        frames_data = cursor.fetchall()
-        total_frames = len(frames_data)
+        frame_metadata = cursor.fetchall()
+        total_frames = len(frame_metadata)
 
         if total_frames == 0:
             print("[fullOCR.db] No frames found in video.db")
@@ -396,9 +400,11 @@ def run_ocr_to_full_ocr_db(
 
         print(f"[fullOCR.db] Found {total_frames} frames to process")
 
-        # Get frame dimensions (all frames should be same size)
-        _, _, width, height = frames_data[0]
+        # Get frame dimensions and all frame indices
+        _, width, height = frame_metadata[0]
+        all_frame_indices = [frame_index for frame_index, _, _ in frame_metadata]
         print(f"[fullOCR.db] Frame dimensions: {width}×{height}")
+        print(f"[fullOCR.db] Note: OCR service will download video.db directly from Wasabi")
 
         # Get OCR service client
         ocr_client = get_ocr_client()
@@ -431,27 +437,21 @@ def run_ocr_to_full_ocr_db(
 
         for batch_start in range(0, total_frames, batch_size):
             batch_end = min(batch_start + batch_size, total_frames)
-            batch_frames = frames_data[batch_start:batch_end]
+            batch_frame_indices = all_frame_indices[batch_start:batch_end]
 
             batch_num = batch_start // batch_size + 1
             print(
                 f"[fullOCR.db] Processing batch {batch_num}/{num_batches} ({batch_end - batch_start} frames)"
             )
 
-            # Prepare images for OCR service
-            images = []
-            for frame_index, image_data, _, _ in batch_frames:
-                images.append(
-                    {
-                        "id": f"frame_{frame_index}",
-                        "data": image_data,
-                    }
-                )
-
-            # Submit to OCR service and wait for results (sequential processing)
+            # Submit to OCR service and wait for results
+            # OCR service will download video.db and extract these frames
             try:
                 result = ocr_client.process_batch(
-                    images, timeout=600
+                    tenant_id=tenant_id,
+                    video_id=video_id,
+                    frame_indices=batch_frame_indices,
+                    timeout=600,
                 )  # 10min timeout for large batches
 
                 print(
@@ -666,6 +666,8 @@ def upload_and_process_video_flow(
         # Step 6: Run OCR and create fullOCR.db
         print("\n🔍 Step 6/7: Running OCR and creating fullOCR.db...")
         ocr_result = run_ocr_to_full_ocr_db(
+            tenant_id=tenant_id,
+            video_id=video_id,
             video_db_path=str(video_db_path),
             output_ocr_db_path=str(full_ocr_db_path),
         )

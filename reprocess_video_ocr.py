@@ -65,20 +65,20 @@ def reprocess_video_ocr(video_id: str, tenant_id: str = "00000000-0000-0000-0000
         wasabi_client.download_file(video_db_key, str(video_db_path))
         print(f"✓ Downloaded to {video_db_path}")
 
-        # Step 2: Read frames from video.db
-        print("\n📊 Step 2/5: Reading frames from video.db...")
+        # Step 2: Read frame count and dimensions from video.db
+        print("\n📊 Step 2/5: Reading frame metadata from video.db...")
         video_conn = sqlite3.connect(str(video_db_path))
         try:
             cursor = video_conn.execute(
                 """
-                SELECT frame_index, image_data, width, height
+                SELECT frame_index, width, height
                 FROM full_frames
                 ORDER BY frame_index
             """
             )
 
-            frames_data = cursor.fetchall()
-            total_frames = len(frames_data)
+            frame_metadata = cursor.fetchall()
+            total_frames = len(frame_metadata)
 
             if total_frames == 0:
                 print("⚠️  No frames found in video.db")
@@ -86,8 +86,9 @@ def reprocess_video_ocr(video_id: str, tenant_id: str = "00000000-0000-0000-0000
 
             print(f"✓ Found {total_frames} frames to process")
 
-            # Get frame dimensions
-            _, _, width, height = frames_data[0]
+            # Get frame dimensions and all frame indices
+            _, width, height = frame_metadata[0]
+            all_frame_indices = [frame_index for frame_index, _, _ in frame_metadata]
             print(f"  Frame dimensions: {width}×{height}")
 
         finally:
@@ -95,6 +96,7 @@ def reprocess_video_ocr(video_id: str, tenant_id: str = "00000000-0000-0000-0000
 
         # Step 3: Check capacity and process with OCR
         print("\n🔍 Step 3/5: Processing frames with OCR service...")
+        print("  Note: OCR service will download video.db directly from Wasabi")
 
         # Check capacity
         capacity = ocr_client.get_capacity(width, height)
@@ -139,24 +141,17 @@ def reprocess_video_ocr(video_id: str, tenant_id: str = "00000000-0000-0000-0000
 
             for batch_start in range(0, total_frames, batch_size):
                 batch_end = min(batch_start + batch_size, total_frames)
-                batch_frames = frames_data[batch_start:batch_end]
+                batch_frame_indices = all_frame_indices[batch_start:batch_end]
 
                 batch_num = batch_start // batch_size + 1
                 print(f"\n  Batch {batch_num}/{num_batches} ({batch_end - batch_start} frames)...")
 
-                # Prepare images for OCR service
-                images = []
-                for frame_index, image_data, _, _ in batch_frames:
-                    images.append(
-                        {
-                            "id": f"frame_{frame_index}",
-                            "data": image_data,
-                        }
-                    )
-
                 # Submit to OCR service and wait for results
+                # OCR service will download video.db and extract these frames
                 try:
-                    result = ocr_client.process_batch(images, timeout=600)  # 10min timeout
+                    result = ocr_client.process_batch(
+                        tenant_id=tenant_id, video_id=video_id, frame_indices=batch_frame_indices, timeout=600
+                    )  # 10min timeout
 
                     print(
                         f"    ✓ {result['total_characters']} characters detected in {result['processing_time_ms']:.0f}ms"
