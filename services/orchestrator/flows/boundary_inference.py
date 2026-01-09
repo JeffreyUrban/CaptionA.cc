@@ -21,6 +21,7 @@ from prefect.artifacts import create_table_artifact
 from services.orchestrator.monitoring.rejection_logger import log_rejection
 from services.orchestrator.supabase_client import get_supabase_client
 
+
 @task(
     name="check-existing-boundary-run",
     tags=["boundary-inference", "deduplication"],

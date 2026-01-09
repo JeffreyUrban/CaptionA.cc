@@ -15,13 +15,12 @@ so this workflow only handles the captions database file.
 """
 
 import hashlib
-import os
 from pathlib import Path
 from typing import Any
 
 from prefect import flow, task
 
-from wasabi_client import get_wasabi_client
+from wasabi_client import WasabiClient, get_wasabi_client
 
 # Default tenant for development
 DEFAULT_TENANT_ID = "00000000-0000-0000-0000-000000000001"

@@ -10,17 +10,16 @@ This flow demonstrates:
 To migrate existing flows, add similar status updates at key points.
 """
 
-import os
 import sqlite3
 import subprocess
 from pathlib import Path
 from typing import Any
 
 from prefect import flow, task
-from prefect.artifacts import create_table_artifact
 
 # Import our Supabase client
 from ..supabase_client import SearchIndexRepository, VideoRepository
+
 
 @task(
     name="update-supabase-status",

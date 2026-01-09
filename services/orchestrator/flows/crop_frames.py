@@ -9,7 +9,6 @@ Handles frame cropping after layout annotation:
 This replaces apps/captionacc-web/app/services/crop-frames-processing.ts
 """
 
-import os
 import sqlite3
 import subprocess
 from pathlib import Path
@@ -19,7 +18,6 @@ from prefect import flow, task
 from prefect.artifacts import create_table_artifact
 
 # Import VP9 encoding flow for deferred encoding
-from .vp9_encoding import encode_vp9_chunks_flow
 
 @task(
     name="extract-cropped-frames",

@@ -16,7 +16,6 @@ Later workflows (user-initiated):
 - Caption annotation → captions.db
 """
 
-import os
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -188,7 +187,7 @@ def extract_full_frames_to_video_db(
     # Delete existing database to ensure idempotency
     if Path(output_db_abs).exists():
         Path(output_db_abs).unlink()
-        print(f"[video.db] Deleted existing database for clean extraction")
+        print("[video.db] Deleted existing database for clean extraction")
 
     pipeline_dir = Path(__file__).parent.parent.parent.parent / "data-pipelines" / "full_frames"
     frames_dir = Path(output_db_abs).parent / "frames_temp"
@@ -197,7 +196,7 @@ def extract_full_frames_to_video_db(
     import shutil
     if frames_dir.exists():
         shutil.rmtree(frames_dir)
-        print(f"[video.db] Deleted existing frames temp directory")
+        print("[video.db] Deleted existing frames temp directory")
 
     frames_dir.mkdir(parents=True, exist_ok=True)
 
@@ -229,9 +228,10 @@ def extract_full_frames_to_video_db(
     print("[video.db] Frame extraction to directory complete")
 
     # Step 2: Write frames to video.db using frames_db package
+    import sqlite3
+
     from frames_db import write_frames_batch
     from PIL import Image
-    import sqlite3
 
     # Create video.db with the proper schema
     conn = sqlite3.connect(output_db_abs)
@@ -324,7 +324,7 @@ def run_ocr_to_full_ocr_db(
     # Delete existing OCR database to ensure idempotency
     if Path(ocr_db_abs).exists():
         Path(ocr_db_abs).unlink()
-        print(f"[fullOCR.db] Deleted existing OCR database for clean processing")
+        print("[fullOCR.db] Deleted existing OCR database for clean processing")
 
     # Create fullOCR.db with schema
     ocr_conn = sqlite3.connect(ocr_db_abs)

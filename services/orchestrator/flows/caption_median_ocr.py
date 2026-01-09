@@ -12,7 +12,6 @@ This replaces the synchronous OCR processing in apps/captionacc-web/app/routes/a
 
 import io
 import json
-import os
 import sqlite3
 import subprocess
 from pathlib import Path
@@ -21,6 +20,7 @@ from typing import Any
 import numpy as np
 from PIL import Image
 from prefect import flow, task
+
 
 @task(
     name="generate-median-frame",

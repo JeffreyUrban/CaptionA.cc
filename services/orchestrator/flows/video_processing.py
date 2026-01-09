@@ -9,14 +9,13 @@ Handles initial video processing after upload:
 This replaces apps/captionacc-web/app/services/video-processing.ts
 """
 
-import os
 import sqlite3
 import subprocess
 from pathlib import Path
 from typing import Any
 
 from prefect import flow, task
-from prefect.artifacts import create_link_artifact, create_table_artifact
+
 
 @task(
     name="extract-full-frames",
@@ -219,6 +218,13 @@ def process_video_initial_flow(
         conn.commit()
     finally:
         conn.close()
+
+    # Extract frames
+    frames_result = extract_full_frames(video_path, db_path, output_dir, frame_rate)
+
+    # Update status to complete
+    update_processing_status(db_path, "processing_complete")
+
     return {
         "video_id": video_id,
         "status": "completed",
