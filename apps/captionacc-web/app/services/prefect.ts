@@ -236,17 +236,30 @@ async function queueFlow(
     throw new Error(`Unknown flow type: ${flowType}`)
   }
 
-  // Create flow run via Prefect REST API
+  // Step 1: Get deployment metadata to get flow_id and deployment_id
+  log(`[Prefect] Getting deployment metadata for ${deploymentName}`)
+  const deploymentUrl = `${PREFECT_API_URL}/deployments/name/${deploymentName}`
+  const deploymentResponse = await fetch(deploymentUrl)
+
+  if (!deploymentResponse.ok) {
+    const error = await deploymentResponse.text()
+    throw new Error(`Failed to get deployment: ${deploymentResponse.status} ${error}`)
+  }
+
+  const deployment = await deploymentResponse.json()
+
+  // Step 2: Create flow run
   log(`[Prefect] Creating flow run for ${deploymentName}`)
+  const flowRunUrl = `${PREFECT_API_URL}/flow_runs/`
 
-  const url = `${PREFECT_API_URL}/deployments/name/${deploymentName}/create_flow_run`
-
-  const response = await fetch(url, {
+  const response = await fetch(flowRunUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
+      deployment_id: deployment.id,
+      flow_id: deployment.flow_id,
       parameters,
       tags,
     }),
