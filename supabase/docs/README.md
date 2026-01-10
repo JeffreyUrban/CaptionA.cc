@@ -13,5 +13,5 @@
 CaptionA.cc uses four PostgreSQL schemas:
 - `captionacc_production` - Production data
 - `captionacc_staging` - Staging/test data
-- `captionacc_prefect` - Prefect workflows (optional)
+- `prefect` - Prefect workflows (optional)
 - `umami` - Analytics (optional)

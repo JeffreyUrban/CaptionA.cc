@@ -42,12 +42,3 @@ const db = await getWritableCaptionDb(videoId);
 // Checks database_metadata.schema_version
 // Applies pending migrations sequentially
 ```
-
-## Related Files
-
-**Schemas**:
-- `apps/captionacc-web/app/db/annotations-schema-v2.sql`
-
----
-
-Rename `captionacc_prefect` database to `prefect` database. 

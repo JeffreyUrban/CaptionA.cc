@@ -5,7 +5,7 @@ CaptionA.cc uses PostgreSQL schemas for environment isolation within a single Su
 
 ## Schema Organization
 
-**Four Schemas (using `captionacc_*` prefix):**
+**Four Schemas:**
 
 1. **`captionacc_production`** - Production environment
    - All application tables (tenants, videos, user_profiles, etc.)
@@ -18,7 +18,7 @@ CaptionA.cc uses PostgreSQL schemas for environment isolation within a single Su
    - Separate data from production
    - Full RLS policies active
 
-3. **`captionacc_prefect`** - Prefect workflow orchestration (optional)
+3. **`prefect`** - Prefect workflow orchestration (optional)
    - Prefect Server tables (flow_run, task_run, deployments, etc.)
    - Used by: Self-hosted Prefect server
    - Consolidates infrastructure
@@ -29,8 +29,8 @@ CaptionA.cc uses PostgreSQL schemas for environment isolation within a single Su
    - Separate from application data
 
 **Naming Convention:**
-- Prefix app schemas with `captionacc_` for clear project ownership
-- Service schemas (like `umami`) use their service name
+- Application schemas use `captionacc_` prefix for clear project ownership
+- Service schemas (like `prefect`, `umami`) use their service name directly
 - PostgreSQL-friendly (no quoting needed)
 - Easy to identify and manage
 
@@ -55,7 +55,7 @@ Using PostgreSQL schemas within a single database instead of separate databases 
 - Uses named schemas only (no `public` schema for app data)
 - Production: `captionacc_production`
 - Staging: `captionacc_staging`
-- Prefect: `captionacc_prefect` (optional)
+- Prefect: `prefect` (optional)
 - Analytics: `umami` (optional)
 
 ## PostgreSQL Schema Primer
@@ -66,13 +66,13 @@ In PostgreSQL, schemas are namespaces within a database:
 -- Create schemas
 CREATE SCHEMA captionacc_production;
 CREATE SCHEMA captionacc_staging;
-CREATE SCHEMA captionacc_prefect;
+CREATE SCHEMA prefect;
 CREATE SCHEMA umami;
 
 -- Tables exist in schemas
 captionacc_production.videos
 captionacc_staging.videos
-captionacc_prefect.flow_run
+prefect.flow_run
 umami.events
 
 -- Set search_path to default schema
@@ -84,10 +84,10 @@ SET search_path TO captionacc_production, public;
 ### 1. Schema Setup Migration
 
 Create new migration that:
-1. Creates `captionacc_production`, `captionacc_staging`, `captionacc_prefect`, and `umami` schemas
+1. Creates `captionacc_production`, `captionacc_staging`, `prefect`, and `umami` schemas
 2. Copies current tables from `public` to `captionacc_production` (on managed instance only)
 3. Replicates structure (not data) to `captionacc_staging`
-4. Prepares `captionacc_prefect` schema for Prefect Server (optional)
+4. Prepares `prefect` schema for Prefect Server (optional)
 5. Prepares `umami` schema for Umami analytics
 6. **Important**: `public` schema remains unused on managed Supabase
 
@@ -136,7 +136,7 @@ def get_supabase_client(schema: str = None) -> Client:
 3. Seed with test data
 
 **For Prefect (Optional):**
-1. Point Prefect Server to: `postgresql://...?schema=captionacc_prefect`
+1. Point Prefect Server to: `postgresql://...?schema=prefect`
 2. Run Prefect database migrations to create tables
 3. Alternative: Continue using Prefect Cloud (no changes needed)
 
@@ -154,36 +154,36 @@ def get_supabase_client(schema: str = None) -> Client:
 -- Create schemas with captionacc_ prefix
 CREATE SCHEMA IF NOT EXISTS captionacc_production;
 CREATE SCHEMA IF NOT EXISTS captionacc_staging;
-CREATE SCHEMA IF NOT EXISTS captionacc_prefect;
+CREATE SCHEMA IF NOT EXISTS prefect;
 CREATE SCHEMA IF NOT EXISTS umami;
 
 -- Grant usage on schemas
 GRANT USAGE ON SCHEMA captionacc_production TO postgres, anon, authenticated, service_role;
 GRANT USAGE ON SCHEMA captionacc_staging TO postgres, anon, authenticated, service_role;
-GRANT USAGE ON SCHEMA captionacc_prefect TO postgres, anon, authenticated, service_role;
+GRANT USAGE ON SCHEMA prefect TO postgres, anon, authenticated, service_role;
 GRANT USAGE ON SCHEMA umami TO postgres, anon, authenticated, service_role;
 
 -- Grant all privileges on tables (to be created)
 GRANT ALL ON ALL TABLES IN SCHEMA captionacc_production TO postgres, anon, authenticated, service_role;
 GRANT ALL ON ALL TABLES IN SCHEMA captionacc_staging TO postgres, anon, authenticated, service_role;
-GRANT ALL ON ALL TABLES IN SCHEMA captionacc_prefect TO postgres, anon, authenticated, service_role;
+GRANT ALL ON ALL TABLES IN SCHEMA prefect TO postgres, anon, authenticated, service_role;
 GRANT ALL ON ALL TABLES IN SCHEMA umami TO postgres, anon, authenticated, service_role;
 
 -- Grant all privileges on sequences
 GRANT ALL ON ALL SEQUENCES IN SCHEMA captionacc_production TO postgres, anon, authenticated, service_role;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA captionacc_staging TO postgres, anon, authenticated, service_role;
-GRANT ALL ON ALL SEQUENCES IN SCHEMA captionacc_prefect TO postgres, anon, authenticated, service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA prefect TO postgres, anon, authenticated, service_role;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA umami TO postgres, anon, authenticated, service_role;
 
 -- Set default privileges for future tables
 ALTER DEFAULT PRIVILEGES IN SCHEMA captionacc_production GRANT ALL ON TABLES TO postgres, anon, authenticated, service_role;
 ALTER DEFAULT PRIVILEGES IN SCHEMA captionacc_staging GRANT ALL ON TABLES TO postgres, anon, authenticated, service_role;
-ALTER DEFAULT PRIVILEGES IN SCHEMA captionacc_prefect GRANT ALL ON TABLES TO postgres, anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA prefect GRANT ALL ON TABLES TO postgres, anon, authenticated, service_role;
 ALTER DEFAULT PRIVILEGES IN SCHEMA umami GRANT ALL ON TABLES TO postgres, anon, authenticated, service_role;
 
 -- Note: Data migration from public to captionacc_production will be done separately
 -- Note: captionacc_staging will be populated with schema structure (no data)
--- Note: captionacc_prefect and umami will be populated by their respective applications
+-- Note: prefect and umami will be populated by their respective applications
 ```
 
 ### Code Changes: Python Client
@@ -324,15 +324,15 @@ For Prefect Server (self-hosted alternative to Prefect Cloud):
 
 ```bash
 # Prefect Server database connection
-# Point Prefect to captionacc_prefect schema
+# Point Prefect to prefect schema
 
 # In Prefect Server configuration:
-PREFECT_API_DATABASE_CONNECTION_URL=postgresql://postgres:password@db.your-project.supabase.co:5432/postgres?options=-c%20search_path%3Dcaptionacc_prefect
+PREFECT_API_DATABASE_CONNECTION_URL=postgresql://postgres:password@db.your-project.supabase.co:5432/postgres?options=-c%20search_path%3Dprefect
 
 # Or use environment variable with schema parameter
-DATABASE_URL=postgresql://...?schema=captionacc_prefect
+DATABASE_URL=postgresql://...?schema=prefect
 
-# Run Prefect migrations to create tables in captionacc_prefect schema
+# Run Prefect migrations to create tables in prefect schema
 prefect server database upgrade
 ```
 
@@ -349,7 +349,7 @@ prefect server database upgrade
    psql postgresql://postgres:postgres@localhost:54322/postgres -c "
      CREATE SCHEMA captionacc_production;
      CREATE SCHEMA captionacc_staging;
-     CREATE SCHEMA captionacc_prefect;
+     CREATE SCHEMA prefect;
      CREATE SCHEMA umami;
    "
    ```
@@ -410,8 +410,8 @@ prefect server database upgrade
 
 1. If using self-hosted Prefect Server:
    ```bash
-   # Configure Prefect to use captionacc_prefect schema
-   PREFECT_API_DATABASE_CONNECTION_URL=postgresql://...?options=-c%20search_path%3Dcaptionacc_prefect
+   # Configure Prefect to use prefect schema
+   PREFECT_API_DATABASE_CONNECTION_URL=postgresql://...?options=-c%20search_path%3Dprefect
 
    # Run Prefect migrations
    prefect server database upgrade
@@ -487,7 +487,7 @@ Rationale:
 - Standard PostgreSQL pattern for schema-based multi-tenancy
 
 ### Prefect Server Integration
-Prefect schema is optional - can use either self-hosted Prefect Server with `captionacc_prefect` schema or continue with Prefect Cloud.
+Prefect schema is optional - can use either self-hosted Prefect Server with `prefect` schema or continue with Prefect Cloud.
 
 Rationale:
 - Consolidates infrastructure when self-hosting
