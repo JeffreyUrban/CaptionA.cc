@@ -15,7 +15,6 @@ import { resolve } from 'path'
 
 import Database from 'better-sqlite3'
 
-import { recoverStalledCropFrames } from './crop-frames-processing'
 import {
   tryStartProcessing,
   finishProcessing,
@@ -440,9 +439,8 @@ export async function recoverStalledProcessing() {
         console.error(`[VideoProcessing] Failed to migrate ${video.displayPath}:`, error)
       }
 
-      // Check both full_frames and crop_frames processing
+      // Check full_frames processing
       await checkAndRecoverVideo(dbPath, video.displayPath, video.videoId)
-      recoverStalledCropFrames(video.videoId, video.displayPath)
     }
   }
 }
