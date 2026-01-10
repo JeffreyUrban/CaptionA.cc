@@ -404,7 +404,7 @@ def run_ocr_to_full_ocr_db(
         _, width, height = frame_metadata[0]
         all_frame_indices = [frame_index for frame_index, _, _ in frame_metadata]
         print(f"[fullOCR.db] Frame dimensions: {width}×{height}")
-        print(f"[fullOCR.db] Note: OCR service will download video.db directly from Wasabi")
+        print("[fullOCR.db] Note: OCR service will download video.db directly from Wasabi")
 
         # Get OCR service client
         ocr_client = get_ocr_client()

@@ -30,9 +30,9 @@ if env_file.exists():
 # Add orchestrator to path
 sys.path.insert(0, str(Path(__file__).parent / "services" / "orchestrator"))
 
-from ocr_client import get_ocr_client
-from supabase_client import SearchIndexRepository
-from wasabi_client import get_wasabi_client
+from ocr_client import get_ocr_client  # noqa: E402
+from supabase_client import SearchIndexRepository  # noqa: E402
+from wasabi_client import get_wasabi_client  # noqa: E402
 
 
 def reprocess_video_ocr(video_id: str, tenant_id: str = "00000000-0000-0000-0000-000000000001"):
@@ -154,7 +154,8 @@ def reprocess_video_ocr(video_id: str, tenant_id: str = "00000000-0000-0000-0000
                     )  # 10min timeout
 
                     print(
-                        f"    ✓ {result['total_characters']} characters detected in {result['processing_time_ms']:.0f}ms"
+                        f"    ✓ {result['total_characters']} characters detected in "
+                        f"{result['processing_time_ms']:.0f}ms"
                     )
 
                     # Store OCR results in fullOCR.db
@@ -241,7 +242,7 @@ def reprocess_video_ocr(video_id: str, tenant_id: str = "00000000-0000-0000-0000
             print(f"⚠️  Warning: Failed to update search index: {e}")
 
     print("\n" + "=" * 70)
-    print(f"✅ Reprocessing complete!")
+    print("✅ Reprocessing complete!")
     print(f"   Total frames: {total_frames}")
     print(f"   OCR detections: {total_detections}")
     print(f"   Frames indexed: {indexed_count}")

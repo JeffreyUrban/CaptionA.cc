@@ -110,8 +110,14 @@ async def download_and_extract_frames(
     video_db_path = JOB_DATA_DIR / f"{job_id}_video.db"
 
     # Run download in executor to avoid blocking
+    # Note: wasabi_client is guaranteed to be available because submit_job checks WASABI_AVAILABLE
+    if wasabi_client is None:
+        raise RuntimeError("Wasabi client not initialized")
+
+    # Create a closure to capture wasabi_client for type checking
+    client = wasabi_client
     loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, lambda: wasabi_client.download_file(storage_key, video_db_path))
+    await loop.run_in_executor(None, lambda: client.download_file(storage_key, video_db_path))
 
     try:
         # Extract frames from video.db
@@ -684,7 +690,8 @@ async def submit_job(request: JobSubmitRequest):
         cb_status = circuit_breaker.get_status()
         if cb_status["state"] == "open":
             raise HTTPException(
-                status_code=503, detail="Service temporarily unavailable. Circuit breaker open due to repeated failures."
+                status_code=503,
+                detail="Service temporarily unavailable. Circuit breaker open due to repeated failures.",
             )
 
         # Generate job ID (with deduplication based on video + frames)
