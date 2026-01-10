@@ -45,32 +45,13 @@ def temp_db(tmp_path: Path) -> Path:
             """
         )
 
-        # Create cropped_frames table
-        cursor.execute(
-            """
-            CREATE TABLE cropped_frames (
-                frame_index INTEGER PRIMARY KEY,
-                image_data BLOB NOT NULL,
-                width INTEGER NOT NULL,
-                height INTEGER NOT NULL,
-                file_size INTEGER NOT NULL,
-                crop_left INTEGER,
-                crop_top INTEGER,
-                crop_right INTEGER,
-                crop_bottom INTEGER,
-                crop_bounds_version INTEGER DEFAULT 1,
-                created_at TEXT NOT NULL DEFAULT (datetime('now'))
-            )
-            """
-        )
-
         # Create vp9_encoding_status table
         cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS vp9_encoding_status (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 video_id TEXT NOT NULL,
-                frame_type TEXT NOT NULL CHECK(frame_type IN ('cropped', 'full')),
+                frame_type TEXT NOT NULL CHECK(frame_type IN (full')),
                 status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN (
                     'pending', 'encoding', 'uploading', 'completed', 'failed'
                 )),
@@ -134,42 +115,6 @@ class TestStorage:
         assert frame.width == width
         assert frame.height == height
         assert frame.image_data == jpeg_bytes
-
-    @pytest.mark.unit
-    def test_write_cropped_frame_requires_version(self, temp_db: Path, sample_frame_data: tuple):
-        """Test that cropped_frames requires crop_bounds_version."""
-        jpeg_bytes, width, height = sample_frame_data
-
-        with pytest.raises(ValueError, match="crop_bounds_version is required"):
-            write_frame_to_db(
-                db_path=temp_db,
-                frame_index=0,
-                image_data=jpeg_bytes,
-                width=width,
-                height=height,
-                table="cropped_frames",
-                # Missing crop_bounds_version
-            )
-
-    @pytest.mark.unit
-    def test_write_cropped_frame_with_version(self, temp_db: Path, sample_frame_data: tuple):
-        """Test writing cropped frame with version."""
-        jpeg_bytes, width, height = sample_frame_data
-
-        write_frame_to_db(
-            db_path=temp_db,
-            frame_index=0,
-            image_data=jpeg_bytes,
-            width=width,
-            height=height,
-            table="cropped_frames",
-            crop_bounds_version=1,
-            crop_bounds=(0, 0, width, height),
-        )
-
-        # Verify frame was written
-        frame = get_frame_from_db(temp_db, 0, "cropped_frames")
-        assert frame is not None
 
     @pytest.mark.unit
     def test_write_frames_batch(self, temp_db: Path, sample_frame_data: tuple):
@@ -389,12 +334,10 @@ class TestPerformance:
         # Create simple test data
         jpeg_bytes = b"x" * 10000  # 10KB fake JPEG
 
-        frames = [(i, jpeg_bytes, 100, 100) for i in range(1000)]
+        frames = [(i, jpeg_bytes, 100, 100) for i in range(100)]
 
         start = time.time()
-        count = write_frames_batch(
-            temp_db, frames, "cropped_frames", crop_bounds_version=1, crop_bounds=(0, 0, 100, 100)
-        )
+        count = write_frames_batch(temp_db, frames, "full_frames")
         elapsed = time.time() - start
 
         assert count == 1000

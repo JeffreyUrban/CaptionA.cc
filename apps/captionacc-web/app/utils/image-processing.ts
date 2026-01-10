@@ -5,6 +5,8 @@
  * for optimal OCR text extraction.
  */
 
+// TODO: The database details in this file are out of date.
+
 import { existsSync, mkdirSync, unlinkSync } from 'fs'
 import { resolve } from 'path'
 

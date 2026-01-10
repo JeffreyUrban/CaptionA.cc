@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Create training dataset from confirmed caption boundary annotations.
 
+# TODO: The database details in this file are out of date.
+
 This script:
 1. Finds all videos with confirmed caption boundaries
 2. Extracts consecutive frame pairs from cropped_frames

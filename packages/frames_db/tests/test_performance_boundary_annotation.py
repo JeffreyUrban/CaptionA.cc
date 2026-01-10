@@ -38,7 +38,7 @@ def setup_test_data(tmp_path: Path):
         cursor = conn.cursor()
         cursor.execute(
             """
-            CREATE TABLE cropped_frames (
+            CREATE TABLE full_frames (
                 frame_index INTEGER PRIMARY KEY,
                 image_data BLOB NOT NULL,
                 width INTEGER NOT NULL,
@@ -66,7 +66,7 @@ def setup_test_data(tmp_path: Path):
     write_frames_batch(
         db_path=db_path,
         frames=frames,
-        table="cropped_frames",
+        table="full_frames",
         crop_bounds_version=1,
         crop_bounds=(0, 0, width, height),
     )
@@ -125,7 +125,7 @@ class TestBoundariesAnnotationPerformance:
         start = time.time()
         frames_loaded = []
         for idx in frame_indices:
-            frame = get_frame_from_db(db_path, idx, "cropped_frames")
+            frame = get_frame_from_db(db_path, idx, "full_frames")
             if frame:
                 frames_loaded.append(frame.image_data)
         elapsed = time.time() - start
@@ -145,7 +145,7 @@ class TestBoundariesAnnotationPerformance:
         end_idx = current_frame + 5
 
         start = time.time()
-        frames = get_frames_range(db_path, start_idx, end_idx, "cropped_frames")
+        frames = get_frames_range(db_path, start_idx, end_idx, "full_frames")
         elapsed = time.time() - start
 
         assert len(frames) == 11
@@ -163,7 +163,7 @@ class TestBoundariesAnnotationPerformance:
         start = time.time()
         for current_frame in positions:
             # Load 11 visible frames
-            frames = get_frames_range(db_path, current_frame - 5, current_frame + 5, "cropped_frames")
+            frames = get_frames_range(db_path, current_frame - 5, current_frame + 5, "full_frames")
             assert len(frames) == 11
         elapsed = time.time() - start
 
@@ -180,7 +180,7 @@ class TestBoundariesAnnotationPerformance:
         # Large window: -15 to +15 (30 frames total)
         current_frame = 500
         start = time.time()
-        frames = get_frames_range(db_path, current_frame - 15, current_frame + 15, "cropped_frames")
+        frames = get_frames_range(db_path, current_frame - 15, current_frame + 15, "full_frames")
         elapsed = time.time() - start
 
         assert len(frames) == 31  # Inclusive range
@@ -195,7 +195,7 @@ class TestBoundariesAnnotationPerformance:
         # Simulate rapid navigation (100 frame loads)
         start = time.time()
         for i in range(100):
-            frame = get_frame_from_db(db_path, i, "cropped_frames")
+            frame = get_frame_from_db(db_path, i, "full_frames")
             assert frame is not None
         elapsed = time.time() - start
 
@@ -209,7 +209,7 @@ class TestBoundariesAnnotationPerformance:
         db_path = setup_test_data["db_path"]
 
         # Load frames and measure memory
-        frames = get_frames_range(db_path, 0, 99, "cropped_frames")
+        frames = get_frames_range(db_path, 0, 99, "full_frames")
         frame_size = sum(len(f.image_data) for f in frames)
 
         # Clear references
@@ -231,7 +231,7 @@ class TestOptimizationStrategies:
         # Without pooling (current implementation)
         start = time.time()
         for i in range(50):
-            get_frame_from_db(db_path, i, "cropped_frames")
+            get_frame_from_db(db_path, i, "full_frames")
         elapsed_no_pool = time.time() - start
 
         # With connection reuse
@@ -240,7 +240,7 @@ class TestOptimizationStrategies:
             start = time.time()
             cursor = conn.cursor()
             for i in range(50):
-                cursor.execute("SELECT image_data FROM cropped_frames WHERE frame_index = ?", (i,))
+                cursor.execute("SELECT image_data FROM full_frames WHERE frame_index = ?", (i,))
                 cursor.fetchone()
             elapsed_with_pool = time.time() - start
         finally:

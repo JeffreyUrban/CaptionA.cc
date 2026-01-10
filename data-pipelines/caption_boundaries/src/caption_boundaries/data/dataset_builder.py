@@ -1,5 +1,7 @@
 """Build training datasets from annotated videos.
 
+# TODO: The database details in this file are out of date.
+
 Extracts frame pairs from confirmed caption boundaries and stores them in the
 central training database with comprehensive provenance tracking.
 """

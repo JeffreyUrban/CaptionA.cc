@@ -3,7 +3,6 @@
 Encode video frames into VP9 chunks for Wasabi storage testing.
 
 This script:
-1. Reads cropped frames from SQLite database
 2. Organizes frames by modulo level [16, 4, 1]
 3. Encodes frames into WebM VP9 chunks (32 frames per chunk)
 4. Uploads chunks to Wasabi
@@ -31,29 +30,6 @@ import boto3
 from dotenv import load_dotenv
 
 load_dotenv()
-
-
-def get_frames_from_db(db_path: Path) -> List[Tuple[int, bytes, int, int]]:
-    """Extract all cropped frames from database.
-
-    Returns:
-        List of (frame_index, image_data, width, height) tuples
-    """
-    print(f"📖 Reading frames from {db_path}")
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-
-    cursor.execute("""
-        SELECT frame_index, image_data, width, height
-        FROM cropped_frames
-        ORDER BY frame_index
-    """)
-
-    frames = cursor.fetchall()
-    conn.close()
-
-    print(f"   Found {len(frames)} frames")
-    return frames
 
 
 def organize_frames_by_modulo(

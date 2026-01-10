@@ -116,20 +116,6 @@ function createMissingDatabaseBadge(videoId: string): BadgeState {
 }
 
 /**
- * Query count of cropped frames from database
- */
-function queryTotalFrames(db: Database.Database): number {
-  try {
-    const frameCount = db.prepare(`SELECT COUNT(*) as count FROM cropped_frames`).get() as
-      | { count: number }
-      | undefined
-    return frameCount?.count ?? 0
-  } catch {
-    return 0
-  }
-}
-
-/**
  * Query basic caption stats from database
  */
 function queryBasicStats(db: Database.Database): {

@@ -85,47 +85,6 @@ export async function loader({ params }: LoaderFunctionArgs) {
     })
   }
 
-  // Get total frames from database (cropped_frames table)
-  const db = new Database(dbPath)
-  let totalFrames = 0
-  let cropWidth = 0
-  let cropHeight = 0
-
-  try {
-    // Count total number of frames in cropped_frames table
-    const result = db.prepare('SELECT COUNT(*) as count FROM cropped_frames').get() as {
-      count: number
-    }
-
-    totalFrames = result.count
-
-    if (totalFrames === 0) {
-      db.close()
-      return new Response(JSON.stringify({ error: 'No cropped frames found in database' }), {
-        status: 404,
-        headers: { 'Content-Type': 'application/json' },
-      })
-    }
-
-    // Get crop dimensions from first frame
-    const frameRow = db.prepare('SELECT image_data FROM cropped_frames LIMIT 1').get() as
-      | { image_data: Buffer }
-      | undefined
-
-    if (frameRow) {
-      const metadata = await sharp(frameRow.image_data).metadata()
-      cropWidth = metadata.width || 0
-      cropHeight = metadata.height || 0
-    }
-  } catch (error) {
-    console.error('Error querying cropped_frames:', error)
-    db.close()
-    return new Response(JSON.stringify({ error: 'Failed to query frame count from database' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    })
-  }
-
   // Fill any gaps in annotation coverage
   let gapsCreated = 0
 

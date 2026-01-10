@@ -1,7 +1,5 @@
 Things to deprecate:
 
-cropped_frames table 
-
 captions.db tables:
 `video_metadata`
 `video_layout_config`

@@ -162,19 +162,6 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
 
   const db = new Database(dbPath, { readonly: true })
 
-  // Count cropped frames from database (not filesystem)
-  // Frames are written to DB and filesystem is cleaned up after processing
-  let totalFrames = 0
-  try {
-    const frameCount = db.prepare(`SELECT COUNT(*) as count FROM cropped_frames`).get() as
-      | { count: number }
-      | undefined
-    totalFrames = frameCount?.count ?? 0
-  } catch {
-    // Table doesn't exist yet
-    totalFrames = 0
-  }
-
   try {
     const result = db
       .prepare(
