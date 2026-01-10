@@ -108,9 +108,15 @@ export function useVideoStats({ tree }: UseVideoStatsParams): UseVideoStatsRetur
   useEffect(() => {
     if (!isMounted || errorBadgesValidated) return
 
-    // Find videos with error badges in cache and refetch them to validate
+    // Get current videos in tree
+    const videoIdsInTree = new Set(collectAllVideoIds(tree))
+
+    // Find videos with error badges in cache that are STILL in the tree
     const videosWithErrors = Array.from(videoStatsMap.entries())
-      .filter(([, videoStats]) => videoStats.badges?.some(badge => badge.type === 'error'))
+      .filter(
+        ([videoId, videoStats]) =>
+          videoIdsInTree.has(videoId) && videoStats.badges?.some(badge => badge.type === 'error')
+      )
       .map(([videoId]) => videoId)
 
     if (videosWithErrors.length > 0) {
@@ -123,7 +129,7 @@ export function useVideoStats({ tree }: UseVideoStatsParams): UseVideoStatsRetur
     }
 
     setErrorBadgesValidated(true)
-  }, [isMounted, errorBadgesValidated, videoStatsMap, fetchStats])
+  }, [isMounted, errorBadgesValidated, videoStatsMap, fetchStats, tree])
 
   // Eagerly load stats for all videos in the tree
   useEffect(() => {

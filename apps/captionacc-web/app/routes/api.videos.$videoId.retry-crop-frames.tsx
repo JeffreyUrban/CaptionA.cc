@@ -175,6 +175,10 @@ export async function action({ params }: ActionFunctionArgs) {
       }
     )
   } catch (error) {
+    // Re-throw Response objects (from auth failures)
+    if (error instanceof Response) {
+      throw error
+    }
     console.error(`[RetryCropFrames] Error retrying ${videoId}:`, error)
     return new Response(
       JSON.stringify({
