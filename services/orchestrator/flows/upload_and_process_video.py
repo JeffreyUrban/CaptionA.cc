@@ -434,6 +434,8 @@ def run_ocr_to_full_ocr_db(
 
         # Process frames in batches
         total_detections = 0
+        failed_batches = 0
+        successful_batches = 0
 
         for batch_start in range(0, total_frames, batch_size):
             batch_end = min(batch_start + batch_size, total_frames)
@@ -486,9 +488,11 @@ def run_ocr_to_full_ocr_db(
 
                 ocr_conn.commit()
                 total_detections += result["total_characters"]
+                successful_batches += 1
 
             except Exception as e:
                 print(f"[fullOCR.db] Warning: Batch {batch_start // batch_size + 1} failed: {e}")
+                failed_batches += 1
                 # Continue with next batch instead of failing entire job
 
     finally:
@@ -498,12 +502,29 @@ def run_ocr_to_full_ocr_db(
     print(
         f"[fullOCR.db] OCR processing complete: {total_detections} detections from {total_frames} frames"
     )
+    print(
+        f"[fullOCR.db] Batches: {successful_batches} succeeded, {failed_batches} failed out of {num_batches}"
+    )
+
+    # Determine status based on results
+    if failed_batches == num_batches:
+        # All batches failed - this is a critical error
+        status = "failed"
+        print(f"[fullOCR.db] ERROR: All {num_batches} OCR batches failed!")
+    elif failed_batches > 0:
+        # Some batches failed - partial success
+        status = "partial"
+        print(f"[fullOCR.db] WARNING: {failed_batches}/{num_batches} batches failed")
+    else:
+        status = "completed"
 
     return {
         "db_path": ocr_db_abs,
         "ocr_count": total_detections,
         "frames_processed": total_frames,
-        "status": "completed",
+        "successful_batches": successful_batches,
+        "failed_batches": failed_batches,
+        "status": status,
     }
 
 
@@ -677,7 +698,7 @@ def upload_and_process_video_flow(
     video_id: str,
     filename: str,
     file_size: int,
-    virtual_path: str | None = None,
+    virtual_path: str,
     tenant_id: str = DEFAULT_TENANT_ID,
     frame_rate: float = 0.1,
     uploaded_by_user_id: str | None = None,
@@ -702,7 +723,7 @@ def upload_and_process_video_flow(
         video_id: Pre-generated video UUID
         filename: Original filename
         file_size: File size in bytes
-        virtual_path: Virtual file path for display (e.g., "folder1/video") - stored in database
+        virtual_path: Virtual file path for display (e.g., "folder1/video") - stored in database (required)
         tenant_id: Tenant UUID (defaults to demo tenant)
         frame_rate: Frame extraction rate in Hz (default 0.1 = every 10 seconds)
         uploaded_by_user_id: User UUID who uploaded
@@ -747,7 +768,7 @@ def upload_and_process_video_flow(
         create_supabase_video_entry(
             tenant_id=tenant_id,
             video_id=video_id,
-            video_path=virtual_path or filename,
+            video_path=virtual_path,
             video_storage_key=video_storage_key,
             file_size=file_size,
             uploaded_by_user_id=uploaded_by_user_id,
@@ -782,6 +803,14 @@ def upload_and_process_video_flow(
             video_db_path=str(video_db_path),
             output_ocr_db_path=str(full_ocr_db_path),
         )
+
+        # Check if OCR completely failed
+        if ocr_result.get("status") == "failed":
+            failed_batches = ocr_result.get("failed_batches", "unknown")
+            raise RuntimeError(
+                f"OCR processing failed: all {failed_batches} batches failed. "
+                "Check OCR service logs and Wasabi credentials."
+            )
 
         # Step 7: Upload fullOCR.db to Wasabi
         print("\n📤 Step 7/9: Uploading fullOCR.db to Wasabi...")
