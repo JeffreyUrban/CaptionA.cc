@@ -53,102 +53,29 @@ export interface TransactionOptions {
 // =============================================================================
 
 /**
- * Get a read-only database connection for a video.
- *
- * Returns an error Response if the video or database doesn't exist.
- * The caller is responsible for closing the database when done.
- *
- * @param videoId - Video identifier (UUID or display path)
- * @returns DatabaseResult with database instance or error response
- *
- * @example
- * const result = await getAnnotationDatabase(videoId)
- * if (!result.success) return result.response
- * const db = result.db
- * try {
- *   // ... use database
- * } finally {
- *   db.close()
- * }
+ * @deprecated Local databases are deprecated. Use Wasabi cloud storage instead.
+ * Video data is now stored in Wasabi and accessed via the orchestrator service.
+ * See services/orchestrator/flows/ for the new architecture.
  */
 export async function getAnnotationDatabase(videoId: string): Promise<DatabaseResult> {
-  const { existsSync } = await import('fs')
-  const Database = (await import('better-sqlite3')).default
-
-  const dbPath = await getDbPath(videoId)
-  if (!dbPath) {
-    return {
-      success: false,
-      response: notFoundResponse('Video not found'),
-    }
-  }
-
-  if (!existsSync(dbPath)) {
-    return {
-      success: false,
-      response: notFoundResponse(`Database not found for video: ${videoId}`),
-    }
-  }
-
-  try {
-    const db = new Database(dbPath, { readonly: true })
-    // Enable WAL mode for better concurrent access
-    // WAL allows reads to proceed while writes are happening
-    db.pragma('journal_mode = WAL')
-    return { success: true, db }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to open database'
-    return {
-      success: false,
-      response: errorResponse(message),
-    }
-  }
+  throw new Error(
+    `[DEPRECATED] getAnnotationDatabase() called for video ${videoId}. ` +
+      `Local databases are deprecated. Video data is now stored in Wasabi. ` +
+      `This code path needs to be migrated to use the cloud-based architecture.`
+  )
 }
 
 /**
- * Get a read-write database connection for a video.
- *
- * Unlike getAnnotationDatabase, this opens the database in read-write mode.
- * Returns an error Response if the video or database doesn't exist.
- *
- * @param videoId - Video identifier (UUID or display path)
- * @returns DatabaseResult with database instance or error response
+ * @deprecated Local databases are deprecated. Use Wasabi cloud storage instead.
+ * Video data is now stored in Wasabi and accessed via the orchestrator service.
+ * See services/orchestrator/flows/ for the new architecture.
  */
 export async function getWritableDatabase(videoId: string): Promise<DatabaseResult> {
-  const { existsSync } = await import('fs')
-  const Database = (await import('better-sqlite3')).default
-
-  const dbPath = await getDbPath(videoId)
-  if (!dbPath) {
-    return {
-      success: false,
-      response: notFoundResponse('Video not found'),
-    }
-  }
-
-  if (!existsSync(dbPath)) {
-    return {
-      success: false,
-      response: notFoundResponse(`Database not found for video: ${videoId}`),
-    }
-  }
-
-  try {
-    // Run migrations before opening for writing
-    migrateDatabase(dbPath)
-
-    const db = new Database(dbPath)
-    // Enable WAL mode for better concurrent access
-    // WAL allows reads to proceed while writes are happening
-    db.pragma('journal_mode = WAL')
-    return { success: true, db }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to open database'
-    return {
-      success: false,
-      response: errorResponse(message),
-    }
-  }
+  throw new Error(
+    `[DEPRECATED] getWritableDatabase() called for video ${videoId}. ` +
+      `Local databases are deprecated. Video data is now stored in Wasabi. ` +
+      `This code path needs to be migrated to use the cloud-based architecture.`
+  )
 }
 
 /**

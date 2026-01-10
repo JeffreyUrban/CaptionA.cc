@@ -828,14 +828,15 @@ function VideoActionsMenu({
   onMoveVideo,
   onDeleteVideo,
 }: VideoActionsMenuProps) {
-  const layoutDisabled =
-    !stats?.hasOcrData || stats?.processingStatus?.status !== 'processing_complete'
+  // Check if video is still processing based on badges
+  const isProcessing = stats?.badges?.some(b => b.label === 'Processing' || b.label === 'Uploading')
+  const layoutDisabled = !stats?.hasOcrData || isProcessing
   const boundariesDisabled = !stats?.layoutApproved
   const textDisabled = !stats?.layoutApproved || (stats?.totalAnnotations ?? 0) === 0
 
   const getStatusText = () => {
-    if (stats?.processingStatus?.status) {
-      return `(${stats.processingStatus.status.replace(/_/g, ' ')})`
+    if (isProcessing) {
+      return '(processing)'
     }
     if (!stats?.hasOcrData) {
       return '(no OCR data)'

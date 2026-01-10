@@ -2,7 +2,7 @@
 
 # Load environment variables
 set -a
-source /Users/jurban/PycharmProjects/CaptionA.cc-claude3/.env
+source /Users/jurban/PycharmProjects/CaptionA.cc/.env
 set +a
 
 # Set Prefect API URL and enable debug logging

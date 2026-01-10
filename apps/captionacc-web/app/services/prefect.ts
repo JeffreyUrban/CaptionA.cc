@@ -250,9 +250,9 @@ async function queueFlow(
 
   const deployment = await deploymentResponse.json()
 
-  // Step 2: Create flow run
+  // Step 2: Create flow run via deployment endpoint (inherits work pool)
   log(`[Prefect] Creating flow run for ${deploymentName}`)
-  const flowRunUrl = `${PREFECT_API_URL}/flow_runs/`
+  const flowRunUrl = `${PREFECT_API_URL}/deployments/${deployment.id}/create_flow_run`
 
   const response = await fetch(flowRunUrl, {
     method: 'POST',
@@ -260,8 +260,6 @@ async function queueFlow(
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      deployment_id: deployment.id,
-      flow_id: deployment.flow_id,
       parameters,
       tags,
     }),
