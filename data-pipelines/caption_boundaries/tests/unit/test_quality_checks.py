@@ -17,9 +17,7 @@ class TestCheckBoundaryCoherence:
 
     def test_single_boundary_is_coherent(self):
         """Single boundary should be considered coherent."""
-        boundaries = [
-            {"frame1_index": 0, "frame2_index": 1, "predicted_label": "different"}
-        ]
+        boundaries = [{"frame1_index": 0, "frame2_index": 1, "predicted_label": "different"}]
         result = check_boundary_coherence(boundaries)
         assert result["coherent"] is True
         assert result["issues"] == []

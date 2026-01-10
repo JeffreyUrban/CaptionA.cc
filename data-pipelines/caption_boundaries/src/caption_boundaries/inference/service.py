@@ -591,21 +591,21 @@ def main():
 
     print("\n[2/2] Results:")
     print(f"  Status: {result['status']}")
-    if result['status'] == 'success':
+    if result["status"] == "success":
         print(f"  Storage key: {result['results'].get('storage_key', 'N/A')}")
         print(f"  Total pairs: {result['results'].get('total_pairs', 'N/A')}")
         print(f"  Successful: {result['results'].get('successful', 'N/A')}")
         print(f"  Failed: {result['results'].get('failed', 'N/A')}")
 
-        metrics = result.get('metrics', {})
+        metrics = result.get("metrics", {})
         print("\n  Performance Metrics:")
-        if metrics.get('total_job_ms'):
+        if metrics.get("total_job_ms"):
             print(f"    Total job time: {metrics['total_job_ms'] / 1000:.2f} sec")
-        if metrics.get('pairs_per_second'):
+        if metrics.get("pairs_per_second"):
             print(f"    Throughput: {metrics['pairs_per_second']:.1f} pairs/sec")
-        if metrics.get('avg_inference_ms'):
+        if metrics.get("avg_inference_ms"):
             print(f"    Avg inference time: {metrics['avg_inference_ms']:.2f} ms/pair")
-        if metrics.get('peak_memory_mb'):
+        if metrics.get("peak_memory_mb"):
             print(f"    Peak GPU memory: {metrics['peak_memory_mb']:.1f} MB")
     else:
         print(f"  Error: {result}")
