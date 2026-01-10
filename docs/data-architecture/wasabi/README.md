@@ -74,7 +74,7 @@ if (video.tenant_id !== session.user.tenant_id) {
 - Automation adds complexity without proportional security benefit
 - Manual rotation takes ~10 minutes per quarter
 
-**See:** [CREDENTIAL_ROTATION.md](./CREDENTIAL_ROTATION.md)
+**See:** [CREDENTIAL_ROTATION.md](CREDENTIAL_ROTATION.md)
 
 ### 5. Tenant Quotas for Cost Control
 
@@ -122,8 +122,8 @@ source .env
 ## Documentation
 
 - **[IAM Policies](./wasabi-iam-policies/)** - Policy templates and setup instructions
-- **[Bucket Configuration](./BUCKET_CONFIGURATION.md)** - Logging, lifecycle, and bucket setup
-- **[Credential Rotation](./CREDENTIAL_ROTATION.md)** - Rotation process and schedule
+- **[Bucket Configuration](BUCKET_CONFIGURATION.md)** - Logging, lifecycle, and bucket setup
+- **[Credential Rotation](CREDENTIAL_ROTATION.md)** - Rotation process and schedule
 - **[Repository Security](../REPO_SECURITY_SANITIZATION.md)** - What to commit/not commit
 
 ## Common Operations
