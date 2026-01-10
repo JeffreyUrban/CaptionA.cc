@@ -100,10 +100,6 @@ CREATE TABLE videos (
 - **captions.db**: `{tenant_id}/{video_id}/captions.db`
 - **Chunks**: `{tenant_id}/{video_id}/cropped_frames/chunk_0000.webm`
 
-### Search Index
-
-OCR text from `fullOCR.db` is indexed in Supabase `video_search_index` table for cross-video full-text search.
-
 ## Environment Variables
 
 ```bash

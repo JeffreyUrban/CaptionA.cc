@@ -408,7 +408,7 @@ from supabase_client import get_supabase_client
 client = get_supabase_client(require_production=True)
 
 # Repository pattern
-from supabase_client import VideoRepository, SearchIndexRepository
+from supabase_client import VideoRepository
 
 video_repo = VideoRepository(client)
 video = video_repo.create_video(tenant_id, storage_key, size_bytes, ...)

@@ -32,7 +32,7 @@ DEFAULT_TENANT_ID = "00000000-0000-0000-0000-000000000001"
 # Each chunk contains 32 frames at a specific modulo spacing
 # This enables progressive loading from coarse (modulo 32) to fine (modulo 1)
 FRAMES_PER_CHUNK = 32  # Exactly 32 frames per chunk (matches frontend loading system)
-MODULO_LEVELS = [32, 16, 8, 4, 2, 1]  # Hierarchical sampling levels
+MODULO_LEVELS = [16, 4, 1]  # Hierarchical sampling levels
 WEBM_CRF = 23  # Constant Rate Factor (0-63, lower = better quality)
 WEBM_BITRATE = "500k"  # Target bitrate
 

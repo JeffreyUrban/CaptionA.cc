@@ -35,29 +35,22 @@ Wasabi S3 bucket structure:
 ├── layout.db                    # Layout annotations
 ├── captions.db                  # Caption boundaries and text
 ├── cropped_frames_v1/           # Versioned cropped framesets (hierarchical modulo-based)
-│   ├── modulo_32/               # Coarsest level - every 32nd frame (loads first)
-│   │   ├── chunk_0000.webm      # 32 frames: [0, 32, 64, ..., 992]
-│   │   ├── chunk_0001.webm      # 32 frames: [1024, 1056, ...]
-│   │   └── ...
 │   ├── modulo_16/               # Every 16th frame
 │   │   ├── chunk_0000.webm      # 32 frames at modulo 16 spacing
 │   │   └── ...
-│   ├── modulo_8/                # Every 8th frame
 │   ├── modulo_4/                # Every 4th frame
-│   ├── modulo_2/                # Every 2nd frame
 │   └── modulo_1/                # Finest level - every frame (loads last)
 │       ├── chunk_0000.webm      # 32 consecutive frames: [0-31]
 │       ├── chunk_0001.webm      # 32 consecutive frames: [32-63]
 │       └── ...
 ├── cropped_frames_v2/           # Newer version (when layout changes)
-│   ├── modulo_32/
 │   └── ...
 └── ...
 ```
 
 **Hierarchical Modulo-Based Chunking:**
 - Each chunk contains exactly **32 frames** at the specified modulo spacing
-- **Progressive loading**: Coarse to fine (modulo 32 → 16 → 8 → 4 → 2 → 1)
+- **Progressive loading**: Coarse to fine (modulo 16 → 4 → 1)
 - **Modulo 32**: Quick overview (every 32nd frame)
 - **Modulo 1**: Full detail (every frame)
 - Browser loads chunks progressively based on viewport position and zoom level
@@ -290,21 +283,6 @@ video_repo.update_video_status(
 video_repo.update_captions_db_key(
     video_id="a4f2b8c3-...",
     captions_db_key="tenant/video/fullOCR.db"
-)
-```
-
-### Search Indexing
-
-OCR text from `fullOCR.db` is indexed in the `video_search_index` table for cross-video full-text search.
-
-```python
-from supabase_client import SearchIndexRepository
-
-search_repo = SearchIndexRepository()
-search_repo.upsert_frame_text(
-    video_id="a4f2b8c3-...",
-    frame_index=100,
-    ocr_text="Detected text content"
 )
 ```
 

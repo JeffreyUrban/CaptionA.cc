@@ -23,7 +23,7 @@ from typing import Any
 from prefect import flow, task
 from prefect.artifacts import create_table_artifact
 
-from supabase_client import SearchIndexRepository, VideoRepository
+from supabase_client import VideoRepository
 from wasabi_client import get_wasabi_client
 
 # Default tenant for development (will be replaced with user's tenant in production)
@@ -505,54 +505,6 @@ def run_ocr_to_full_ocr_db(
         "frames_processed": total_frames,
         "status": "completed",
     }
-
-
-@task(
-    name="index-video-ocr-content",
-    tags=["supabase", "search"],
-    log_prints=True,
-)
-def index_video_ocr_content(video_id: str, full_ocr_db_path: str) -> int:
-    """
-    Index OCR content from fullOCR.db in Supabase for cross-video search.
-    """
-    try:
-        import sqlite3
-
-        search_repo = SearchIndexRepository()
-        conn = sqlite3.connect(full_ocr_db_path)
-
-        try:
-            cursor = conn.execute(
-                """
-                SELECT frame_index, GROUP_CONCAT(text, ' ') as ocr_text
-                FROM full_frame_ocr
-                WHERE text IS NOT NULL AND text != ''
-                GROUP BY frame_index
-                ORDER BY frame_index
-                """
-            )
-
-            indexed_count = 0
-            for row in cursor:
-                frame_index, ocr_text = row
-                if ocr_text:
-                    search_repo.upsert_frame_text(
-                        video_id=video_id,
-                        frame_index=frame_index,
-                        ocr_text=ocr_text,
-                    )
-                    indexed_count += 1
-
-            print(f"[Supabase] Indexed {indexed_count} frames for video {video_id}")
-            return indexed_count
-
-        finally:
-            conn.close()
-
-    except Exception as e:
-        print(f"⚠️  Warning: Failed to index video content: {e}")
-        return 0
 
 
 @flow(

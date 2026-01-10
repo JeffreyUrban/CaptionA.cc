@@ -79,22 +79,6 @@ CREATE TABLE captionacc_production.cohort_videos (
 
 CREATE INDEX idx_cohort_videos_tenant ON captionacc_production.cohort_videos(tenant_id);
 
--- Search index (denormalized for cross-video search)
-CREATE TABLE captionacc_production.video_search_index (
-  id BIGSERIAL PRIMARY KEY,
-  video_id UUID REFERENCES captionacc_production.videos(id) ON DELETE CASCADE,
-  frame_index INTEGER,
-  ocr_text TEXT,
-  caption_text TEXT,
-  search_vector TSVECTOR GENERATED ALWAYS AS (
-    to_tsvector('simple', COALESCE(ocr_text, '') || ' ' || COALESCE(caption_text, ''))
-  ) STORED,
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE INDEX idx_search_video ON captionacc_production.video_search_index(video_id);
-CREATE INDEX idx_search_text ON captionacc_production.video_search_index USING gin(search_vector);
-
 -- Cropped frames versions
 CREATE TABLE captionacc_production.cropped_frames_versions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -130,7 +114,6 @@ ALTER TABLE captionacc_production.user_profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE captionacc_production.videos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE captionacc_production.training_cohorts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE captionacc_production.cohort_videos ENABLE ROW LEVEL SECURITY;
-ALTER TABLE captionacc_production.video_search_index ENABLE ROW LEVEL SECURITY;
 ALTER TABLE captionacc_production.cropped_frames_versions ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies for Production Schema
@@ -174,16 +157,6 @@ CREATE POLICY "Authenticated users can view cohort videos"
   ON captionacc_production.cohort_videos FOR SELECT
   TO authenticated
   USING (true);
-
-CREATE POLICY "Users can search tenant videos"
-  ON captionacc_production.video_search_index FOR SELECT
-  USING (
-    video_id IN (
-      SELECT id FROM captionacc_production.videos WHERE tenant_id IN (
-        SELECT tenant_id FROM captionacc_production.user_profiles WHERE id = auth.uid()
-      )
-    )
-  );
 
 CREATE POLICY "Users can view tenant video cropped frames versions"
   ON captionacc_production.cropped_frames_versions FOR SELECT
@@ -273,14 +246,7 @@ CREATE TABLE captionacc_staging.user_profiles (LIKE captionacc_production.user_p
 CREATE TABLE captionacc_staging.videos (LIKE captionacc_production.videos INCLUDING ALL);
 CREATE TABLE captionacc_staging.training_cohorts (LIKE captionacc_production.training_cohorts INCLUDING ALL);
 CREATE TABLE captionacc_staging.cohort_videos (LIKE captionacc_production.cohort_videos INCLUDING ALL);
-CREATE TABLE captionacc_staging.video_search_index (LIKE captionacc_production.video_search_index INCLUDING ALL);
 CREATE TABLE captionacc_staging.cropped_frames_versions (LIKE captionacc_production.cropped_frames_versions INCLUDING ALL);
-
--- Note: LIKE INCLUDING ALL doesn't copy generated columns properly, need to recreate
-ALTER TABLE captionacc_staging.video_search_index
-  ADD COLUMN IF NOT EXISTS search_vector TSVECTOR GENERATED ALWAYS AS (
-    to_tsvector('simple', COALESCE(ocr_text, '') || ' ' || COALESCE(caption_text, ''))
-  ) STORED;
 
 -- Recreate functions in staging schema
 CREATE OR REPLACE FUNCTION captionacc_staging.get_next_cropped_frames_version(p_video_id UUID)

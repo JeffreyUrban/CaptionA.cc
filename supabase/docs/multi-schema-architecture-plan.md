@@ -437,7 +437,7 @@ prefect server database upgrade
 
 ### Sequences
 
-- Each schema has its own sequences (e.g., `captionacc_production.video_search_index_id_seq`)
+- Each schema has its own sequences
 - No conflicts between schemas
 
 ### Functions

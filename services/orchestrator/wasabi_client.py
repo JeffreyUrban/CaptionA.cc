@@ -368,7 +368,7 @@ class WasabiClient:
             chunk_type: Type of chunk (e.g., "cropped_frames")
             chunk_index: Chunk index (0-based)
             version: Optional version number for versioned chunks
-            modulo: Optional modulo level (1, 2, 4, 8, 16, 32) for hierarchical loading
+            modulo: Optional modulo level (1, 4, 16) for hierarchical loading
 
         Returns:
             Storage key (e.g., "tenant_id/video_id/cropped_frames_v1/modulo_32/chunk_0000.webm")
@@ -382,7 +382,7 @@ class WasabiClient:
                 version=1,
                 modulo=32
             )
-            # Returns: "00000000-.../cropped_frames_v1/modulo_32/chunk_0000.webm"
+            # Returns: "00000000-.../cropped_frames_v1/modulo_16/chunk_0000.webm"
         """
         if version is not None:
             chunk_dir = f"{chunk_type}_v{version}"

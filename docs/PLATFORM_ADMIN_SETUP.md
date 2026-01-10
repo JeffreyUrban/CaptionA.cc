@@ -14,7 +14,7 @@ This guide walks you through activating the platform admin system you just imple
 - User isolation: members only see their own videos
 - Owner access: owners see all videos in their tenant
 - Platform admin bypass: admins see everything across all tenants
-- Applied to: videos, user_profiles, tenants, video_search_index
+- Applied to: videos, user_profiles, tenants
 
 ✅ **Frontend Protection:**
 - `/admin` route requires platform admin

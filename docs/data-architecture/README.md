@@ -84,7 +84,7 @@ See: [SQLite Database Reference](./sqlite-databases.md)
 1. User uploads video via TUS resumable upload
 2. Backend creates video record in Supabase (status: 'uploading')
 3. Prefect flow: upload_and_process_video
-   a. Upload video to Wasabi as video.mp4
+   a. Upload video to Wasabi
    b. Extract full frames → video.db → upload to Wasabi
    c. Run OCR → fullOCR.db → upload to Wasabi
 4. Video status set to 'active'

@@ -18,7 +18,7 @@ from typing import Any
 from prefect import flow, task
 
 # Import our Supabase client
-from ..supabase_client import SearchIndexRepository, VideoRepository
+from ..supabase_client import VideoRepository
 
 
 @task(
@@ -67,58 +67,6 @@ def update_captions_db_key(video_id: str, captions_db_key: str) -> None:
         print(f"✓ Supabase: Updated annotations DB key for {video_id}")
     except Exception as e:
         print(f"⚠ Warning: Failed to update annotations DB key: {e}")
-
-
-@task(
-    name="index-video-content",
-    tags=["supabase", "search"],
-    log_prints=True,
-)
-def index_video_content(video_id: str, db_path: str) -> int:
-    """
-    Index OCR content in Supabase for cross-video search.
-
-    Args:
-        video_id: Video UUID
-        db_path: Path to captions.db with OCR results
-
-    Returns:
-        Number of frames indexed
-    """
-    try:
-        search_repo = SearchIndexRepository()
-        conn = sqlite3.connect(db_path)
-
-        try:
-            # Get OCR results from full_frame_ocr table
-            cursor = conn.execute(
-                """
-                SELECT f.frame_index, GROUP_CONCAT(o.text, ' ') as ocr_text
-                FROM full_frames f
-                LEFT JOIN full_frame_ocr o ON f.id = o.frame_id
-                GROUP BY f.frame_index
-                ORDER BY f.frame_index
-                """
-            )
-
-            indexed_count = 0
-            for row in cursor:
-                frame_index, ocr_text = row
-                if ocr_text:  # Only index frames with OCR text
-                    search_repo.upsert_frame_text(
-                        video_id=video_id, frame_index=frame_index, ocr_text=ocr_text
-                    )
-                    indexed_count += 1
-
-            print(f"✓ Supabase: Indexed {indexed_count} frames for video {video_id}")
-            return indexed_count
-
-        finally:
-            conn.close()
-
-    except Exception as e:
-        print(f"⚠ Warning: Failed to index video content: {e}")
-        return 0
 
 
 @task(

@@ -1,11 +1,5 @@
 Things to deprecate:
 
-unique filenames for video files. Name all video files as video.mp4
-
-video_search_index and related full-text search features
-
-modulo_8 and modulo_2 
-
 cropped_frames table 
 
 captions.db tables:

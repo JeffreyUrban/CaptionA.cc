@@ -266,41 +266,7 @@ CREATE POLICY "Platform admins manage all tenants"
   USING (is_platform_admin());
 
 -- ============================================================================
--- PART 7: Update RLS Policies - Search Index
--- ============================================================================
-
-DROP POLICY IF EXISTS "Users can search tenant videos" ON captionacc_production.video_search_index;
-
--- Members can search only their own videos
-CREATE POLICY "Members search own videos"
-  ON captionacc_production.video_search_index FOR SELECT
-  USING (
-    video_id IN (
-      SELECT id FROM captionacc_production.videos
-      WHERE uploaded_by_user_id = auth.uid()
-    )
-  );
-
--- Owners can search all videos in their tenant
-CREATE POLICY "Owners search tenant videos"
-  ON captionacc_production.video_search_index FOR SELECT
-  USING (
-    video_id IN (
-      SELECT id FROM captionacc_production.videos
-      WHERE tenant_id IN (
-        SELECT tenant_id FROM captionacc_production.user_profiles
-        WHERE id = auth.uid() AND role = 'owner'
-      )
-    )
-  );
-
--- Platform admins can search all videos
-CREATE POLICY "Platform admins search all videos"
-  ON captionacc_production.video_search_index FOR SELECT
-  USING (is_platform_admin());
-
--- ============================================================================
--- PART 8: Audit Logging (Optional - for future use)
+-- PART 7: Audit Logging (Optional - for future use)
 -- ============================================================================
 
 -- Table for tracking platform admin actions
