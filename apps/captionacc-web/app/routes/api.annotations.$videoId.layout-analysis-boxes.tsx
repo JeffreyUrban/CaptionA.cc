@@ -46,7 +46,7 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
   }
 
   try {
-    const boxes = getLayoutAnalysisBoxes(videoId, frameIndex)
+    const boxes = await getLayoutAnalysisBoxes(videoId, frameIndex)
     return jsonResponse({ boxes })
   } catch (error) {
     console.error('Error fetching layout analysis boxes:', error)
