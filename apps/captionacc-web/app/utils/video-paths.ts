@@ -53,7 +53,7 @@ export async function getVideoDir(pathOrId: string): Promise<string | null> {
 }
 
 /**
- * Get database path from display_path or videoId
+ * Get captions database path from display_path or videoId
  * DEPRECATED: Use Supabase queries instead
  * SERVER-SIDE ONLY
  */
@@ -69,6 +69,26 @@ export async function getCaptionsDbPath(pathOrId: string): Promise<string | null
   if (!videoDir) return null
 
   const dbPath = resolve(videoDir, 'captions.db')
+  return existsSync(dbPath) ? dbPath : null
+}
+
+/**
+ * Get layout database path from display_path or videoId
+ * DEPRECATED: Use Supabase queries instead
+ * SERVER-SIDE ONLY
+ */
+export async function getLayoutDbPath(pathOrId: string): Promise<string | null> {
+  if (typeof window !== 'undefined') {
+    throw new Error('getLayoutDbPath is server-side only')
+  }
+
+  const { existsSync } = await import('fs')
+  const { resolve } = await import('path')
+
+  const videoDir = await getVideoDir(pathOrId)
+  if (!videoDir) return null
+
+  const dbPath = resolve(videoDir, 'layout.db')
   return existsSync(dbPath) ? dbPath : null
 }
 

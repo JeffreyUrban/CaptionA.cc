@@ -270,6 +270,17 @@ def extract_full_frames_to_video_db(
             video_hash TEXT
         )
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS database_metadata (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            schema_version INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            migrated_at TEXT
+        )
+    """)
+    conn.execute("""
+        INSERT OR IGNORE INTO database_metadata (id, schema_version) VALUES (1, 1)
+    """)
     conn.commit()
     conn.close()
 
@@ -372,6 +383,17 @@ def run_ocr_to_full_ocr_db(
         ocr_conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_frame_index ON full_frame_ocr(frame_index)"
         )
+        ocr_conn.execute("""
+            CREATE TABLE IF NOT EXISTS database_metadata (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                schema_version INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                migrated_at TEXT
+            )
+        """)
+        ocr_conn.execute("""
+            INSERT OR IGNORE INTO database_metadata (id, schema_version) VALUES (1, 1)
+        """)
         ocr_conn.commit()
     except Exception as e:
         ocr_conn.close()

@@ -3,6 +3,10 @@
  *
  * Detects when box classification model version changes and triggers
  * crop bounds recalculation + boundary pending review if bounds changed.
+ *
+ * Uses split database architecture:
+ * - layoutDb: video_layout_config, box_classification_model
+ * - captionsDb: captions table
  */
 
 import Database from 'better-sqlite3'
@@ -23,11 +27,13 @@ interface ModelInfo {
 /**
  * Check if model version has changed since last analysis
  * Returns true if recalculation is needed
+ *
+ * @param layoutDb - Layout database connection (layout.db)
  */
-export function needsRecalculation(db: Database.Database): boolean {
+export function needsRecalculation(layoutDb: Database.Database): boolean {
   try {
     // Get current layout config
-    const layoutConfig = db
+    const layoutConfig = layoutDb
       .prepare('SELECT analysis_model_version FROM video_layout_config WHERE id = 1')
       .get() as { analysis_model_version: string | null } | undefined
 
@@ -37,7 +43,7 @@ export function needsRecalculation(db: Database.Database): boolean {
     }
 
     // Get current model version
-    const modelInfo = db
+    const modelInfo = layoutDb
       .prepare('SELECT model_version FROM box_classification_model WHERE id = 1')
       .get() as ModelInfo | undefined
 
@@ -65,12 +71,14 @@ export function needsRecalculation(db: Database.Database): boolean {
  * 3. If bounds changed: marks affected captions as boundary_pending
  * 4. Updates analysis_model_version to current version
  *
- * @param db - Database connection
+ * @param layoutDb - Layout database connection (layout.db)
+ * @param captionsDb - Captions database connection (captions.db) - optional, only needed if bounds change
  * @param recalculateFunction - Function to recalculate crop bounds, returns new bounds or null if no change
  * @returns True if recalculation was performed and bounds changed
  */
 export async function checkAndRecalculate(
-  db: Database.Database,
+  layoutDb: Database.Database,
+  captionsDb: Database.Database | null,
   recalculateFunction: () => Promise<{
     crop_left: number
     crop_top: number
@@ -83,8 +91,8 @@ export async function checkAndRecalculate(
   oldVersion: string | null
   newVersion: string
 }> {
-  if (!needsRecalculation(db)) {
-    const modelInfo = db
+  if (!needsRecalculation(layoutDb)) {
+    const modelInfo = layoutDb
       .prepare('SELECT model_version FROM box_classification_model WHERE id = 1')
       .get() as ModelInfo | undefined
     return {
@@ -96,7 +104,7 @@ export async function checkAndRecalculate(
   }
 
   // Get old config
-  const oldConfig = db
+  const oldConfig = layoutDb
     .prepare(
       'SELECT crop_left, crop_top, crop_right, crop_bottom, analysis_model_version FROM video_layout_config WHERE id = 1'
     )
@@ -109,7 +117,7 @@ export async function checkAndRecalculate(
   const oldVersion = oldConfig.analysis_model_version
 
   // Get current model version
-  const modelInfo = db
+  const modelInfo = layoutDb
     .prepare('SELECT model_version FROM box_classification_model WHERE id = 1')
     .get() as ModelInfo | undefined
 
@@ -124,7 +132,7 @@ export async function checkAndRecalculate(
 
   if (!newBounds) {
     // Recalculation returned no change, just update version
-    db.prepare(
+    layoutDb.prepare(
       `
       UPDATE video_layout_config
       SET analysis_model_version = ?
@@ -149,7 +157,7 @@ export async function checkAndRecalculate(
 
   if (!boundsChanged) {
     // Bounds didn't change, just update version
-    db.prepare(
+    layoutDb.prepare(
       `
       UPDATE video_layout_config
       SET analysis_model_version = ?
@@ -172,7 +180,7 @@ export async function checkAndRecalculate(
     `[ModelVersionCheck] Bounds changed: [${oldConfig.crop_left},${oldConfig.crop_top},${oldConfig.crop_right},${oldConfig.crop_bottom}] → [${newBounds.crop_left},${newBounds.crop_top},${newBounds.crop_right},${newBounds.crop_bottom}]`
   )
 
-  db.prepare(
+  layoutDb.prepare(
     `
     UPDATE video_layout_config
     SET
@@ -194,17 +202,21 @@ export async function checkAndRecalculate(
   )
 
   // Mark all captions as boundary_pending (need re-review due to model change)
-  const result = db
-    .prepare(
-      `
-    UPDATE captions
-    SET boundary_pending = 1
-    WHERE boundary_state != 'gap'
-  `
-    )
-    .run()
+  if (captionsDb) {
+    const result = captionsDb
+      .prepare(
+        `
+      UPDATE captions
+      SET boundary_pending = 1
+      WHERE boundary_state != 'gap'
+    `
+      )
+      .run()
 
-  console.log(`[ModelVersionCheck] Marked ${result.changes} captions as boundary_pending`)
+    console.log(`[ModelVersionCheck] Marked ${result.changes} captions as boundary_pending`)
+  } else {
+    console.warn('[ModelVersionCheck] No captions database provided, skipping boundary_pending update')
+  }
 
   return {
     recalculated: true,

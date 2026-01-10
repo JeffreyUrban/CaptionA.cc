@@ -24,7 +24,7 @@ import {
   type FractionalBounds,
   type CropBounds,
 } from '~/utils/coordinate-utils'
-import { getCaptionDb, getWritableCaptionDb } from '~/utils/database'
+import { getLayoutDb, getWritableLayoutDb } from '~/utils/database'
 import {
   shouldTriggerFullRetrain,
   getRetrainState,
@@ -429,7 +429,7 @@ function applyStreamingUpdatesInBackground(
 
   // Fire and forget - don't await
   const runStreamingUpdate = async () => {
-    const dbResult = await getWritableCaptionDb(videoId)
+    const dbResult = await getWritableLayoutDb(videoId)
     if (!dbResult.success) {
       console.error('[streamingUpdateBackground] Failed to open database')
       completeProcessing(videoId)
@@ -489,7 +489,7 @@ export async function getFrameBoxes(
   videoId: string,
   frameIndex: number
 ): Promise<FrameBoxesResult> {
-  const result = await getCaptionDb(videoId)
+  const result = await getLayoutDb(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -620,7 +620,7 @@ export async function saveBoxAnnotations(
   frameIndex: number,
   annotations: BoxAnnotationInput[]
 ): Promise<SaveAnnotationsResult> {
-  const result = await getWritableCaptionDb(videoId)
+  const result = await getWritableLayoutDb(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -834,7 +834,7 @@ export async function bulkAnnotateRectangle(
   frameIndex: number,
   input: BulkAnnotateRectangleInput
 ): Promise<BulkAnnotateResult> {
-  const result = await getWritableCaptionDb(videoId)
+  const result = await getWritableLayoutDb(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -1020,7 +1020,7 @@ export async function bulkAnnotateRectangleAllFrames(
   rectangle: PixelBounds,
   action: BulkAnnotateRectangleAllAction
 ): Promise<BulkAnnotateRectangleAllResult> {
-  const result = await getWritableCaptionDb(videoId)
+  const result = await getWritableLayoutDb(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -1099,7 +1099,7 @@ export async function bulkAnnotateAll(
   videoId: string,
   action: BulkAnnotateAllAction
 ): Promise<BulkAnnotateAllResult> {
-  const result = await getWritableCaptionDb(videoId)
+  const result = await getWritableLayoutDb(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -1221,7 +1221,7 @@ export async function bulkAnnotateAll(
  * @throws Error if database is not found
  */
 export async function calculatePredictions(videoId: string): Promise<CalculatePredictionsResult> {
-  const result = await getWritableCaptionDb(videoId)
+  const result = await getWritableLayoutDb(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }

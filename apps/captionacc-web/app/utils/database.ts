@@ -16,7 +16,7 @@ import Database from 'better-sqlite3'
 
 import { migrateDatabase } from '~/db/migrate'
 import { notFoundResponse, errorResponse } from '~/utils/api-responses'
-import { getCaptionsDbPath, getVideoDir } from '~/utils/video-paths'
+import { getCaptionsDbPath, getLayoutDbPath, getVideoDir } from '~/utils/video-paths'
 
 // =============================================================================
 // Type Definitions
@@ -216,6 +216,215 @@ export async function getOrCreateCaptionDb(
 }
 
 // =============================================================================
+// Layout Database Access Functions
+// =============================================================================
+
+/**
+ * Get a read-only layout database connection for a video.
+ *
+ * Returns an error Response if the video or database doesn't exist.
+ * The caller is responsible for closing the database when done.
+ *
+ * @param videoId - Video identifier (UUID or display path)
+ * @returns DatabaseResult with database instance or error response
+ */
+export async function getLayoutDb(videoId: string): Promise<DatabaseResult> {
+  const { existsSync } = await import('fs')
+  const Database = (await import('better-sqlite3')).default
+
+  const dbPath = await getLayoutDbPath(videoId)
+  if (!dbPath) {
+    return {
+      success: false,
+      response: notFoundResponse('Video not found'),
+    }
+  }
+
+  if (!existsSync(dbPath)) {
+    return {
+      success: false,
+      response: notFoundResponse(`Layout database not found for video: ${videoId}`),
+    }
+  }
+
+  try {
+    const db = new Database(dbPath, { readonly: true })
+    db.pragma('journal_mode = WAL')
+    return { success: true, db }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to open layout database'
+    return {
+      success: false,
+      response: errorResponse(message),
+    }
+  }
+}
+
+/**
+ * Get a read-write layout database connection for a video.
+ *
+ * @param videoId - Video identifier (UUID or display path)
+ * @returns DatabaseResult with database instance or error response
+ */
+export async function getWritableLayoutDb(videoId: string): Promise<DatabaseResult> {
+  const { existsSync } = await import('fs')
+  const Database = (await import('better-sqlite3')).default
+
+  const dbPath = await getLayoutDbPath(videoId)
+  if (!dbPath) {
+    return {
+      success: false,
+      response: notFoundResponse('Video not found'),
+    }
+  }
+
+  if (!existsSync(dbPath)) {
+    return {
+      success: false,
+      response: notFoundResponse(`Layout database not found for video: ${videoId}`),
+    }
+  }
+
+  try {
+    const db = new Database(dbPath)
+    db.pragma('journal_mode = WAL')
+    return { success: true, db }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to open layout database'
+    return {
+      success: false,
+      response: errorResponse(message),
+    }
+  }
+}
+
+/**
+ * Get or create a layout database for a video.
+ *
+ * Creates the database file and schema if it doesn't exist.
+ * Includes database_metadata table for schema versioning.
+ *
+ * @param videoId - Video identifier (UUID or display path)
+ * @returns DatabaseResult with database instance or error response
+ */
+export async function getOrCreateLayoutDb(
+  videoId: string
+): Promise<DatabaseResult & { created?: boolean }> {
+  const { existsSync } = await import('fs')
+  const Database = (await import('better-sqlite3')).default
+
+  const videoDir = await getVideoDir(videoId)
+  if (!videoDir) {
+    return {
+      success: false,
+      response: notFoundResponse('Video not found'),
+    }
+  }
+
+  const dbPath = await getLayoutDbPath(videoId)
+  const dbExists = dbPath !== null && existsSync(dbPath)
+  const actualDbPath = dbPath ?? `${videoDir}/layout.db`
+
+  try {
+    const db = new Database(actualDbPath)
+    db.pragma('journal_mode = WAL')
+
+    // Create schema if database was just created
+    if (!dbExists) {
+      // Create database_metadata table
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS database_metadata (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          schema_version INTEGER NOT NULL DEFAULT 1,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          migrated_at TEXT
+        )
+      `)
+      db.exec(`
+        INSERT OR IGNORE INTO database_metadata (id, schema_version) VALUES (1, 1)
+      `)
+
+      // Create video_layout_config table
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS video_layout_config (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          frame_width INTEGER NOT NULL,
+          frame_height INTEGER NOT NULL,
+          crop_left INTEGER NOT NULL DEFAULT 0,
+          crop_top INTEGER NOT NULL DEFAULT 0,
+          crop_right INTEGER NOT NULL DEFAULT 0,
+          crop_bottom INTEGER NOT NULL DEFAULT 0,
+          selection_left INTEGER,
+          selection_top INTEGER,
+          selection_right INTEGER,
+          selection_bottom INTEGER,
+          selection_mode TEXT NOT NULL DEFAULT 'disabled',
+          vertical_position REAL,
+          vertical_std REAL,
+          box_height REAL,
+          box_height_std REAL,
+          anchor_type TEXT,
+          anchor_position REAL,
+          top_edge_std REAL,
+          bottom_edge_std REAL,
+          horizontal_std_slope REAL,
+          horizontal_std_intercept REAL,
+          crop_bounds_version INTEGER NOT NULL DEFAULT 1,
+          analysis_model_version TEXT,
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+      `)
+
+      // Create full_frame_box_labels table
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS full_frame_box_labels (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          frame_index INTEGER NOT NULL,
+          box_index INTEGER NOT NULL,
+          label TEXT NOT NULL CHECK (label IN ('in', 'out')),
+          label_source TEXT NOT NULL DEFAULT 'user' CHECK (label_source IN ('user', 'model')),
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          UNIQUE(frame_index, box_index, label_source)
+        )
+      `)
+      db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_box_labels_frame ON full_frame_box_labels(frame_index)
+      `)
+
+      // Create box_classification_model table
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS box_classification_model (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          model_data BLOB,
+          model_version TEXT,
+          trained_at TEXT
+        )
+      `)
+
+      // Create video_preferences table
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS video_preferences (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          layout_approved INTEGER NOT NULL DEFAULT 0
+        )
+      `)
+    }
+
+    return {
+      success: true,
+      db,
+      created: !dbExists,
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to open layout database'
+    return {
+      success: false,
+      response: errorResponse(message),
+    }
+  }
+}
+
+// =============================================================================
 // Transaction Wrapper
 // =============================================================================
 
@@ -402,4 +611,4 @@ export function safeAll<T>(db: Database.Database, sql: string, ...params: unknow
 // =============================================================================
 
 // Re-export video-paths functions that are commonly used with database utils
-export { getCaptionsDbPath, getVideoDir } from '~/utils/video-paths'
+export { getCaptionsDbPath, getLayoutDbPath, getVideoDir } from '~/utils/video-paths'

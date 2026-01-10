@@ -25,15 +25,26 @@ Stores full-resolution video frames extracted at 0.1Hz (1 frame per 10 seconds).
 
 ### Tables
 
-#### `metadata` <- Added table
+#### `database_metadata`
+
+Schema versioning.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | INTEGER PK | Single row (id=1) |
+| `schema_version` | INTEGER NOT NULL | Current schema version |
+| `created_at` | TEXT NOT NULL | Database creation timestamp |
+| `migrated_at` | TEXT | Last migration timestamp |
+
+#### `video_metadata`
 
 | Column | Type | Description   |
 |--------|------|---------------|
-| `width` | INTEGER | Video width   |
-| `height` | INTEGER | Video height  |
+| `video_path` | TEXT PK | Video file path |
+| `duration_seconds` | REAL | Video duration |
+| `video_hash` | TEXT | Video file hash |
 
-
-#### `full_frames` <- Some columns removed
+#### `full_frames`
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -55,6 +66,17 @@ Stores full-resolution video frames extracted at 0.1Hz (1 frame per 10 seconds).
 Stores OCR detection results from EasyOCR or similar engines.
 
 ### Tables
+
+#### `database_metadata`
+
+Schema versioning.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | INTEGER PK | Single row (id=1) |
+| `schema_version` | INTEGER NOT NULL | Current schema version |
+| `created_at` | TEXT NOT NULL | Database creation timestamp |
+| `migrated_at` | TEXT | Last migration timestamp |
 
 #### `full_frame_ocr`
 
@@ -89,6 +111,17 @@ Stores OCR detection results from EasyOCR or similar engines.
 Stores layout annotations, crop bounds, and the trained classification model.
 
 ### Tables
+
+#### `database_metadata`
+
+Schema versioning.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | INTEGER PK | Single row (id=1) |
+| `schema_version` | INTEGER NOT NULL | Current schema version |
+| `created_at` | TEXT NOT NULL | Database creation timestamp |
+| `migrated_at` | TEXT | Last migration timestamp |
 
 #### `full_frame_box_labels`
 
@@ -139,6 +172,15 @@ Crop bounds and layout configuration.
 | `analysis_model_version` | TEXT | Analysis model version |
 | `ocr_visualization_image` | BLOB | PNG visualization |
 | `updated_at` | TEXT NOT NULL | Last update timestamp |
+
+#### `video_preferences`
+
+User preferences for video annotation workflow.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | INTEGER PK | Single row (id=1) |
+| `layout_approved` | INTEGER NOT NULL | 0=not approved, 1=approved |
 
 ---
 

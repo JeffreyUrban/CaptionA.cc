@@ -3,7 +3,14 @@
  *
  * Periodically checks all videos for model version mismatches and
  * triggers recalculation + review marking when needed.
+ *
+ * Uses split database architecture:
+ * - layout.db: video_layout_config, full_frame_box_labels, box_classification_model
+ * - captions.db: captions table
  */
+
+import { existsSync } from 'fs'
+import { resolve } from 'path'
 
 import Database from 'better-sqlite3'
 
@@ -23,10 +30,10 @@ interface RecalculationResult {
  * Calculate new crop bounds from 'in' boxes
  */
 function calculateBoundsFromBoxes(
-  db: Database.Database
+  layoutDb: Database.Database
 ): { crop_left: number; crop_top: number; crop_right: number; crop_bottom: number } | null {
   // Get predicted 'in' boxes
-  const inBoxes = db
+  const inBoxes = layoutDb
     .prepare(
       `
       SELECT box_left, box_top, box_right, box_bottom
@@ -38,7 +45,7 @@ function calculateBoundsFromBoxes(
 
   // Fallback to user-annotated 'in' boxes if no predictions
   if (inBoxes.length === 0) {
-    const userInBoxes = db
+    const userInBoxes = layoutDb
       .prepare(
         `
         SELECT box_left, box_top, box_right, box_bottom
@@ -69,14 +76,15 @@ function calculateBoundsFromBoxes(
 }
 
 /**
- * Update crop bounds and mark captions as pending review
+ * Update crop bounds in layout.db and mark captions as pending review in captions.db
  */
 function updateBoundsAndMarkPending(
-  db: Database.Database,
+  layoutDb: Database.Database,
+  captionsDb: Database.Database | null,
   newBounds: { crop_left: number; crop_top: number; crop_right: number; crop_bottom: number },
   currentVersion: string
 ): void {
-  db.prepare(
+  layoutDb.prepare(
     `
     UPDATE video_layout_config
     SET
@@ -97,17 +105,18 @@ function updateBoundsAndMarkPending(
     currentVersion
   )
 
-  db.prepare(
+  if (captionsDb) {
+    captionsDb.prepare(
+      `
+      UPDATE captions
+      SET boundary_pending = 1
+      WHERE boundary_state != 'gap'
     `
-    UPDATE captions
-    SET boundary_pending = 1
-    WHERE boundary_state != 'gap'
-  `
-  ).run()
+    ).run()
+  }
 }
 
 interface VideoModelInfo {
-  metadata: { video_id: string; display_path: string }
   analysisVersion: string | null
   currentVersion: string
   oldBounds: { crop_left: number; crop_top: number; crop_right: number; crop_bottom: number } | null
@@ -119,18 +128,10 @@ interface RecalculationDecision {
 }
 
 /**
- * Query video model version and layout info from database
+ * Query video model version and layout info from layout database
  */
-function getVideoModelInfo(db: Database.Database): VideoModelInfo | null {
-  const metadata = db
-    .prepare('SELECT video_id, display_path FROM video_metadata WHERE id = 1')
-    .get() as { video_id: string; display_path: string } | undefined
-
-  if (!metadata) {
-    return null
-  }
-
-  const layoutConfig = db
+function getVideoModelInfo(layoutDb: Database.Database): VideoModelInfo | null {
+  const layoutConfig = layoutDb
     .prepare(
       'SELECT analysis_model_version, crop_left, crop_top, crop_right, crop_bottom FROM video_layout_config WHERE id = 1'
     )
@@ -142,12 +143,11 @@ function getVideoModelInfo(db: Database.Database): VideoModelInfo | null {
     crop_bottom: number
   } | null
 
-  const modelInfo = db
+  const modelInfo = layoutDb
     .prepare('SELECT model_version FROM box_classification_model WHERE id = 1')
     .get() as { model_version: string } | undefined
 
   return {
-    metadata,
     analysisVersion: layoutConfig?.analysis_model_version ?? null,
     currentVersion: modelInfo?.model_version ?? 'unknown',
     oldBounds: layoutConfig
@@ -182,8 +182,8 @@ function shouldRecalculatePredictions(
 /**
  * Update model version without changing bounds
  */
-function updateModelVersionOnly(db: Database.Database, currentVersion: string): void {
-  db.prepare('UPDATE video_layout_config SET analysis_model_version = ? WHERE id = 1').run(
+function updateModelVersionOnly(layoutDb: Database.Database, currentVersion: string): void {
+  layoutDb.prepare('UPDATE video_layout_config SET analysis_model_version = ? WHERE id = 1').run(
     currentVersion
   )
 }
@@ -220,25 +220,41 @@ function buildResult(
 
 /**
  * Check a single video for model version mismatch
+ * Uses split databases: layout.db for layout tables, captions.db for captions table
  */
-function checkVideoModelVersion(dbPath: string): RecalculationResult | null {
-  try {
-    const db = new Database(dbPath)
+function checkVideoModelVersion(
+  videoId: string,
+  displayPath: string,
+  videoDir: string
+): RecalculationResult | null {
+  const layoutDbPath = resolve(videoDir, 'layout.db')
+  const captionsDbPath = resolve(videoDir, 'captions.db')
 
-    const videoInfo = getVideoModelInfo(db)
+  // Check if layout.db exists
+  if (!existsSync(layoutDbPath)) {
+    return null // No layout database yet
+  }
+
+  let layoutDb: Database.Database | null = null
+  let captionsDb: Database.Database | null = null
+
+  try {
+    layoutDb = new Database(layoutDbPath)
+
+    const videoInfo = getVideoModelInfo(layoutDb)
     if (!videoInfo) {
-      db.close()
+      layoutDb.close()
       return null
     }
 
-    const { metadata, analysisVersion, currentVersion, oldBounds } = videoInfo
+    const { analysisVersion, currentVersion, oldBounds } = videoInfo
     const decision = shouldRecalculatePredictions(analysisVersion, currentVersion)
 
     if (!decision.shouldRecalculate) {
-      db.close()
+      layoutDb.close()
       return buildResult(
-        metadata.video_id,
-        metadata.display_path,
+        videoId,
+        displayPath,
         false,
         false,
         analysisVersion,
@@ -247,10 +263,10 @@ function checkVideoModelVersion(dbPath: string): RecalculationResult | null {
     }
 
     if (!oldBounds) {
-      db.close()
+      layoutDb.close()
       return buildResult(
-        metadata.video_id,
-        metadata.display_path,
+        videoId,
+        displayPath,
         false,
         false,
         analysisVersion,
@@ -259,14 +275,14 @@ function checkVideoModelVersion(dbPath: string): RecalculationResult | null {
       )
     }
 
-    const newBounds = calculateBoundsFromBoxes(db)
+    const newBounds = calculateBoundsFromBoxes(layoutDb)
 
     if (!newBounds) {
-      updateModelVersionOnly(db, currentVersion)
-      db.close()
+      updateModelVersionOnly(layoutDb, currentVersion)
+      layoutDb.close()
       return buildResult(
-        metadata.video_id,
-        metadata.display_path,
+        videoId,
+        displayPath,
         true,
         false,
         analysisVersion,
@@ -277,11 +293,11 @@ function checkVideoModelVersion(dbPath: string): RecalculationResult | null {
     const boundsChanged = haveBoundsChanged(oldBounds, newBounds)
 
     if (!boundsChanged) {
-      updateModelVersionOnly(db, currentVersion)
-      db.close()
+      updateModelVersionOnly(layoutDb, currentVersion)
+      layoutDb.close()
       return buildResult(
-        metadata.video_id,
-        metadata.display_path,
+        videoId,
+        displayPath,
         true,
         false,
         analysisVersion,
@@ -289,21 +305,37 @@ function checkVideoModelVersion(dbPath: string): RecalculationResult | null {
       )
     }
 
-    updateBoundsAndMarkPending(db, newBounds, currentVersion)
-    db.close()
+    // Bounds changed - need to update both databases
+    // Open captions.db if it exists
+    if (existsSync(captionsDbPath)) {
+      captionsDb = new Database(captionsDbPath)
+    }
+
+    updateBoundsAndMarkPending(layoutDb, captionsDb, newBounds, currentVersion)
+
+    layoutDb.close()
+    if (captionsDb) {
+      captionsDb.close()
+    }
 
     return buildResult(
-      metadata.video_id,
-      metadata.display_path,
+      videoId,
+      displayPath,
       true,
       true,
       analysisVersion,
       currentVersion
     )
   } catch (error) {
+    if (layoutDb) {
+      try { layoutDb.close() } catch { /* ignore */ }
+    }
+    if (captionsDb) {
+      try { captionsDb.close() } catch { /* ignore */ }
+    }
     return buildResult(
-      'unknown',
-      dbPath,
+      videoId,
+      displayPath,
       false,
       false,
       null,
@@ -332,8 +364,8 @@ export async function runModelVersionCheck(): Promise<{
   )
 
   for (const video of videos) {
-    const dbPath = `${process.cwd()}/../../local/processing/${video.storagePath}/captions.db`
-    const result = checkVideoModelVersion(dbPath)
+    const videoDir = `${process.cwd()}/../../local/processing/${video.storagePath}`
+    const result = checkVideoModelVersion(video.videoId, video.displayPath, videoDir)
 
     if (result) {
       results.push(result)

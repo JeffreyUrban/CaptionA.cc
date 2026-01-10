@@ -7,7 +7,7 @@
 
 import type { TextAnchor } from '~/types/enums'
 import { predictBoxLabel } from '~/utils/box-prediction'
-import { getCaptionDb, getWritableCaptionDb } from '~/utils/database'
+import { getLayoutDb, getWritableLayoutDb } from '~/utils/database'
 
 // =============================================================================
 // Type Definitions
@@ -1465,7 +1465,7 @@ function transformLayoutConfig(row: VideoLayoutConfigRow): LayoutConfig {
  * @throws Error if database is not found
  */
 export async function getLayoutConfig(videoId: string): Promise<LayoutConfig | null> {
-  const result = await getCaptionDb(videoId)
+  const result = await getLayoutDb(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -1499,7 +1499,7 @@ export async function updateLayoutConfig(
   videoId: string,
   input: UpdateLayoutConfigInput
 ): Promise<UpdateLayoutConfigResult> {
-  const result = await getWritableCaptionDb(videoId)
+  const result = await getWritableLayoutDb(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -1575,7 +1575,7 @@ export async function updateLayoutConfig(
  * @throws Error if database or required data is not found
  */
 export async function resetCropBounds(videoId: string): Promise<ResetCropBoundsResult> {
-  const result = await getWritableCaptionDb(videoId)
+  const result = await getWritableLayoutDb(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -1670,7 +1670,7 @@ export async function resetCropBounds(videoId: string): Promise<ResetCropBoundsR
  * @throws Error if database is not found
  */
 export async function setLayoutApproved(videoId: string, approved: boolean): Promise<void> {
-  const result = await getWritableCaptionDb(videoId)
+  const result = await getWritableLayoutDb(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -1850,7 +1850,7 @@ export async function getLayoutAnalysisBoxes(
   videoId: string,
   frameIndex?: number
 ): Promise<LayoutAnalysisBox[]> {
-  const result = await getWritableCaptionDb(videoId)
+  const result = await getWritableLayoutDb(videoId)
   if (!result.success) throw new Error('Database not found')
   const db = result.db
 
