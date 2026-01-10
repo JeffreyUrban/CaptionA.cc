@@ -16,7 +16,7 @@ from datetime import datetime
 from pathlib import Path
 
 # Paths
-DATA_DIR = Path("local/data")
+DATA_DIR = Path("!__local/data/_has_been_deprecated__!")
 LOG_FILE = Path("scripts/deduplicate-videos.log")
 DECISIONS_FILE = Path("scripts/deduplication-decisions.json")
 

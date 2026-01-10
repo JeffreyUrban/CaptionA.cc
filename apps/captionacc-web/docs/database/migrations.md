@@ -24,7 +24,7 @@
 
 **What it does:**
 
-1. Scans all databases in `local/data`
+1. Scans all databases in `!__local/data/_has_been_deprecated__!`
 2. Compares actual tables vs expected (from `annotations-schema.sql`)
 3. Applies full schema to fill gaps (idempotent - uses `CREATE TABLE IF NOT EXISTS`)
 4. Sets/updates `database_metadata.schema_version` to current version

@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3'
 import { type LoaderFunctionArgs } from 'react-router'
 
-import { getDbPath } from '~/utils/video-paths'
+import { getCaptionsDbPath } from '~/utils/video-paths'
 
 export async function loader({ params }: LoaderFunctionArgs) {
   const { videoId: encodedVideoId, frameIndex } = params
@@ -19,7 +19,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
   }
 
   // Construct path to captions.db
-  const dbPath = await getDbPath(videoId)
+  const dbPath = await getCaptionsDbPath(videoId)
   if (!dbPath) {
     return new Response('Video not found', { status: 404 })
   }

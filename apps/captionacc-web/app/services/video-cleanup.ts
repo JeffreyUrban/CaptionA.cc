@@ -21,7 +21,7 @@ import Database from 'better-sqlite3'
 
 import { queueVideoProcessing } from './video-processing'
 
-import { getAllVideos, getDbPath, getVideoDir } from '~/utils/video-paths'
+import { getAllVideos, getCaptionsDbPath, getVideoDir } from '~/utils/video-paths'
 
 const CLEANUP_INTERVAL_MS = 60 * 60 * 1000 // 1 hour
 const MAX_PROCESSING_ATTEMPTS = 3 // Max retries before marking as error
@@ -76,7 +76,7 @@ async function findDeletedVideos(): Promise<DeletedVideo[]> {
   const allVideos = await getAllVideos()
 
   for (const video of allVideos) {
-    const dbPath = await getDbPath(video.videoId)
+    const dbPath = await getCaptionsDbPath(video.videoId)
     const videoDir = await getVideoDir(video.videoId)
 
     if (!dbPath || !videoDir) continue
@@ -197,7 +197,7 @@ async function findStaleProcessing(): Promise<
   const allVideos = await getAllVideos()
 
   for (const video of allVideos) {
-    const dbPath = await getDbPath(video.videoId)
+    const dbPath = await getCaptionsDbPath(video.videoId)
     const videoDir = await getVideoDir(video.videoId)
 
     if (!dbPath || !videoDir) continue
@@ -352,7 +352,7 @@ async function cleanupOrphanedCropFrames(): Promise<number> {
 
   for (const video of allVideos) {
     const videoDir = await getVideoDir(video.videoId)
-    const dbPath = await getDbPath(video.videoId)
+    const dbPath = await getCaptionsDbPath(video.videoId)
 
     if (!videoDir || !dbPath) continue
 
@@ -411,7 +411,7 @@ async function checkDuplicateVideoHashes(): Promise<number> {
   const allVideos = await getAllVideos()
 
   for (const video of allVideos) {
-    const dbPath = await getDbPath(video.videoId)
+    const dbPath = await getCaptionsDbPath(video.videoId)
     if (!dbPath || !existsSync(dbPath)) continue
 
     try {

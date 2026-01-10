@@ -222,7 +222,7 @@ def find_videos_with_models(data_dir: str) -> list[dict[str, str]]:
     box_classification_model table with trained model.
 
     Args:
-        data_dir: Path to data directory (e.g., local/data/)
+        data_dir: Path to data directory (e.g., !__local/data/_has_been_deprecated__!/)
 
     Returns:
         List of dicts with video_id, db_path, display_path

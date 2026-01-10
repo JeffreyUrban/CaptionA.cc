@@ -48,8 +48,8 @@ SNAPSHOT_LOG="local/dvc-snapshots.log"
 # Create log directory if needed
 mkdir -p "$(dirname "$SNAPSHOT_LOG")"
 
-# Find all split databases (exclude state.db)
-DB_TYPES=("video.db" "fullOCR.db" "cropping.db" "layout.db" "captions.db")
+# Find all split databases
+DB_TYPES=("video.db" "fullOCR.db" "layout.db" "captions.db")
 MODIFIED_DBS=()
 
 echo "Collecting all split databases..."
@@ -68,7 +68,7 @@ for db_type in "${DB_TYPES[@]}"; do
             # Database is newer than .dvc file - needs re-tracking
             MODIFIED_DBS+=("$db_file")
         fi
-    done < <(find -L local/data -name "$db_type" -type f 2>/dev/null)
+    done < <(find -L !__local/data/_has_been_deprecated__! -name "$db_type" -type f 2>/dev/null)
 done
 
 # Count modified databases

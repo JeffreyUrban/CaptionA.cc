@@ -4,10 +4,10 @@ import Database from 'better-sqlite3'
 import { type ActionFunctionArgs } from 'react-router'
 
 import { queueCropFramesProcessing } from '~/services/prefect'
-import { getDbPath, getVideoDir } from '~/utils/video-paths'
+import { getCaptionsDbPath, getVideoDir } from '~/utils/video-paths'
 
 async function getDatabase(videoId: string): Promise<Database.Database | Response> {
-  const dbPath = await getDbPath(videoId)
+  const dbPath = await getCaptionsDbPath(videoId)
   if (!dbPath) {
     return new Response('Video not found', { status: 404 })
   }
@@ -69,7 +69,7 @@ export async function action({ params }: ActionFunctionArgs) {
     }
 
     // Queue the crop_frames job via Prefect
-    const dbPath = await getDbPath(videoId)
+    const dbPath = await getCaptionsDbPath(videoId)
     const videoDir = await getVideoDir(videoId)
     if (!dbPath || !videoDir) {
       return new Response(

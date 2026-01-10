@@ -21,12 +21,6 @@ CaptionA.cc uses a hybrid storage architecture:
       └── ...
 ```
 
-### Files NOT in Wasabi
-
-- **state.db**: Local-only ephemeral state (UI preferences, processing status)
-- **cropping.db**: REPLACED by WebM chunks (legacy database, no longer used)
-- **captions.db**: DEPRECATED - replaced by split database architecture
-
 ## Split Database Architecture
 
 ### DVC-Tracked Databases (uploaded to Wasabi)
@@ -57,7 +51,7 @@ CaptionA.cc uses a hybrid storage architecture:
 
 ### Cropped Frame Chunks (WebM/VP9)
 
-Instead of storing cropped frames in a database (cropping.db), frames are stored as **WebM video chunks** using VP9 codec:
+Instead of storing cropped frames in a database, frames are stored as **WebM video chunks** using VP9 codec:
 
 - **Format**: WebM container with VP9 video codec
 - **Naming**: `chunk_0000.webm`, `chunk_0001.webm`, etc.
@@ -188,7 +182,7 @@ DEFAULT_TENANT_ID=00000000-0000-0000-0000-000000000001
 
 Old structure (deprecated):
 ```
-local/data/{hash}/{video_id}/
+!__local/data/_has_been_deprecated__!/{hash}/{video_id}/
   └── captions.db  # All data in one file
 ```
 
@@ -204,16 +198,15 @@ Wasabi: {tenant_id}/{video_id}/
       └── chunk_*.webm
 ```
 
-### From cropping.db
+### Cropped frames
 
-Old: Cropped frames stored as BLOBs in `cropping.db` (90-420 MB)
-New: Cropped frames stored as WebM chunks (~50-200 MB total, streamed on demand)
+Cropped frames stored as WebM chunks (~50-200 MB total, streamed on demand)
 
 ## Benefits of This Architecture
 
 1. **Storage Efficiency**:
    - VP9 chunks are 50-70% smaller than JPEG BLOBs
-   - Only download what you need (no need for full cropping.db)
+   - Only download what you need
 
 2. **Bandwidth Optimization**:
    - Stream chunks as needed during annotation

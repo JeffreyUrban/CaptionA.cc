@@ -266,7 +266,7 @@ if (newLabelCount % 10 === 0) {
   // Retrain after every 10 labels
   await queueVideoModelRetrain({
     videoId,
-    dbPath: getDbPath(videoId),
+    dbPath: getCaptionsDbPath(videoId),
     updatePredictions: true,
   })
 }

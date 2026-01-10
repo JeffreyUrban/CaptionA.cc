@@ -11,7 +11,7 @@ import { resolve } from 'path'
 import Database from 'better-sqlite3'
 import sharp from 'sharp'
 
-import { getDbPath, getVideoDir } from './video-paths'
+import { getCaptionsDbPath, getVideoDir } from './video-paths'
 
 // Image quality constant
 const COMBINED_IMAGE_QUALITY = 95
@@ -31,7 +31,7 @@ export async function generateCombinedImage(
   startFrame: number,
   endFrame: number
 ): Promise<string> {
-  const dbPath = await getDbPath(videoPath)
+  const dbPath = await getCaptionsDbPath(videoPath)
   if (!dbPath) {
     throw new Error(`Database not found for video: ${videoPath}`)
   }

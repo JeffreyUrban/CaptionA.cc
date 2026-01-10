@@ -79,7 +79,7 @@ def analyze(
     Database Storage:
     - OCR results are written directly to captions.db (full_frame_ocr table)
     - Database location: {output_dir}/../captions.db
-    - Example: output_dir=local/data/show/ep/full_frames → db=local/data/show/ep/captions.db
+    - Example: output_dir=!__local/data/_has_been_deprecated__!/show/ep/full_frames → db=!__local/data/_has_been_deprecated__!/show/ep/captions.db
 
     Frame Indexing:
     - Database OCR samples at 10Hz (every 0.1 seconds)

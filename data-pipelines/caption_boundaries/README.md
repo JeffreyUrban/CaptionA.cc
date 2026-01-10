@@ -23,7 +23,7 @@ uv sync
 ### 1. Create Training Dataset
 
 ```bash
-caption_boundaries create-dataset my_dataset local/data/*/01
+caption_boundaries create-dataset my_dataset !__local/data/_has_been_deprecated__!/*/01
 ```
 
 ### 2. Train Model

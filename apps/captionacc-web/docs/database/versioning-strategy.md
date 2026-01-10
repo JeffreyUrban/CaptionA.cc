@@ -121,7 +121,7 @@ INSERT INTO database_metadata (
 ### Delete Video
 
 ```
-rm -rf local/data/{hash}/{uuid}/
+rm -rf !__local/data/_has_been_deprecated__!/{hash}/{uuid}/
 ```
 
 No migration history cleanup needed - entire database deleted.

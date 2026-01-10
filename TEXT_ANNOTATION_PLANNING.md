@@ -6,7 +6,7 @@ Implement the Text Correction workflow as specified in `apps/captionacc-web/docs
 ## Architecture Understanding
 
 ### Current State
-- **Database**: Each video has SQLite DB at `local/data/[videoPath]/captions.db`
+- **Database**: Each video has SQLite DB at `!__local/data/_has_been_deprecated__!/[videoPath]/captions.db`
 - **Captions Table**: Shared table for boundary and text data
   - Boundary fields: `start_frame_index`, `end_frame_index`, `boundary_state`, `boundary_pending`
   - Text fields: `text`, `text_pending`, `text_status`, `text_notes`, `text_ocr_combined`, `text_updated_at`
@@ -17,7 +17,7 @@ Implement the Text Correction workflow as specified in `apps/captionacc-web/docs
   - When boundaries are updated → mark text as pending (text_pending=1)
 - **Combined Images**: One averaged image per annotation, generated from all frames in range
   - Used for manual inspection and OCR/VLM text extraction
-  - Stored at `local/data/[videoPath]/text_images/annotation_[id].jpg`
+  - Stored at `!__local/data/_has_been_deprecated__!/[videoPath]/text_images/annotation_[id].jpg`
 - **Routing**: Separate route `/annotate/text` for text annotation workflow
 
 ### User Clarifications
@@ -86,7 +86,7 @@ Implement the Text Correction workflow as specified in `apps/captionacc-web/docs
   2. Mean pixel values (simple average) - Faster, simpler
   3. Mode (most common pixel value) - Best for consistent text
   4. Max pixel value - Highlights brightest text
-- **Caching**: Save to `local/data/[videoPath]/text_images/annotation_[id].jpg`
+- **Caching**: Save to `!__local/data/_has_been_deprecated__!/[videoPath]/text_images/annotation_[id].jpg`
 - **Invalidation**: Delete cached image when boundary changes (start/end frame updated)
 
 **OCR Execution:**
@@ -322,7 +322,7 @@ Implement the Text Correction workflow as specified in `apps/captionacc-web/docs
 
 ### 6. Image Caching Strategy
 **Recommendation: File-based cache with invalidation**
-- Save to `local/data/[videoPath]/text_images/annotation_[id].jpg`
+- Save to `!__local/data/_has_been_deprecated__!/[videoPath]/text_images/annotation_[id].jpg`
 - Delete on boundary update (forces regeneration)
 - Check existence before generating
 - **Why**: Fast, simple, works with existing file-based structure

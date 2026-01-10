@@ -4,7 +4,7 @@
 
 set -e
 
-LOCAL_DATA_DIR="${LOCAL_DATA_DIR:-/Users/jurban/PycharmProjects/CaptionA.cc/local/data}"
+LOCAL_DATA_DIR="${LOCAL_DATA_DIR:-/Users/jurban/PycharmProjects/CaptionA.cc/!__local/data/_has_been_deprecated__!}"
 
 migrated=0
 failed=0

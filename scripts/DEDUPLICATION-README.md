@@ -88,11 +88,11 @@ The script keeps the copy with:
 
 **⚠️ WARNING**: Once deleted, the duplicate directories cannot be recovered unless you have a backup.
 
-Before running the script in actual mode, consider backing up your `local/data` directory:
+Before running the script in actual mode, consider backing up your `!__local/data/_has_been_deprecated__!` directory:
 
 ```bash
 # Optional: Create backup before deduplication
-tar -czf ~/captionacc-backup-$(date +%Y%m%d).tar.gz local/data
+tar -czf ~/captionacc-backup-$(date +%Y%m%d).tar.gz !__local/data/_has_been_deprecated__!
 ```
 
 ## Verification After Deduplication
@@ -101,7 +101,7 @@ After running the script, verify the results:
 
 ```bash
 # Count remaining videos
-find local/data -name "*.mp4" | wc -l
+find !__local/data/_has_been_deprecated__! -name "*.mp4" | wc -l
 # Should show: 374
 
 # Check for remaining duplicates
@@ -111,7 +111,7 @@ import sqlite3
 from collections import Counter
 
 display_paths = []
-for db_path in Path("local/data").rglob("captions.db"):
+for db_path in Path("!__local/data/_has_been_deprecated__!").rglob("captions.db"):
     try:
         conn = sqlite3.connect(db_path)
         result = conn.execute("SELECT display_path FROM video_metadata WHERE id = 1").fetchone()

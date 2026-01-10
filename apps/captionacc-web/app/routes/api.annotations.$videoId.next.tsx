@@ -3,7 +3,7 @@ import { existsSync } from 'fs'
 import Database from 'better-sqlite3'
 import { type LoaderFunctionArgs } from 'react-router'
 
-import { getDbPath } from '~/utils/video-paths'
+import { getCaptionsDbPath } from '~/utils/video-paths'
 
 interface Annotation {
   id: number
@@ -17,7 +17,7 @@ interface Annotation {
 }
 
 async function getDatabase(videoId: string): Promise<Database.Database | Response> {
-  const dbPath = await getDbPath(videoId)
+  const dbPath = await getCaptionsDbPath(videoId)
   if (!dbPath) {
     return new Response('Video not found', { status: 404 })
   }

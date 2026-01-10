@@ -113,13 +113,6 @@ Video data is stored across multiple SQLite databases based on update frequency 
 - Size: 0.1-2 MB per video
 - Update frequency: High during annotation sessions
 
-#### state.db (Local Only - Not Uploaded)
-**Tables:**
-- `processing_status` - Workflow state tracking
-- `video_preferences` - UI preferences
-- `duplicate_resolution` - Temporary conflict data
-- `database_metadata` - Schema version info
-
 **Characteristics:**
 - Local-only, never uploaded to Wasabi
 - Ephemeral, user-specific state
@@ -323,7 +316,7 @@ search_repo.upsert_frame_text(
 import { queueUploadAndProcessing } from '~/services/prefect'
 
 const result = await queueUploadAndProcessing({
-  videoPath: '/local/data/abc123.../video.mp4',
+  videoPath: '/!__local/data/_has_been_deprecated__!/abc123.../video.mp4',
   videoId: 'a4f2b8c3-1234-5678-90ab-cdef12345678',
   filename: 'my_video.mp4',
   fileSize: 52428800,  // bytes
@@ -341,7 +334,7 @@ console.log(`Queued: ${result.flowRunId}`)
 from queue_flow import queue_upload_and_process
 
 queue_upload_and_process(
-    video_path='/local/data/abc123.../video.mp4',
+    video_path='/!__local/data/_has_been_deprecated__!/abc123.../video.mp4',
     video_id='a4f2b8c3-1234-5678-90ab-cdef12345678',
     filename='my_video.mp4',
     file_size=52428800,

@@ -370,7 +370,7 @@ CREATE TABLE IF NOT EXISTS video_preferences (
 );
 
 -- Video metadata (one row per video)
--- Storage uses UUID-based hash-bucketed paths (local/data/{uuid[:2]}/{uuid}/)
+-- Storage uses UUID-based hash-bucketed paths (!__local/data/_has_been_deprecated__!/{uuid[:2]}/{uuid}/)
 -- User-facing paths (display_path) are abstraction for folder management
 CREATE TABLE IF NOT EXISTS video_metadata (
     id INTEGER PRIMARY KEY CHECK(id = 1),

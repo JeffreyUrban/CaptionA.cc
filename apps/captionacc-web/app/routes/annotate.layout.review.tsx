@@ -8,7 +8,7 @@
 import Database from 'better-sqlite3'
 import { useLoaderData, useNavigate, type LoaderFunctionArgs } from 'react-router'
 
-import { getDbPath } from '~/utils/video-paths'
+import { getCaptionsDbPath } from '~/utils/video-paths'
 
 interface OcrBox {
   frameIndex: number
@@ -34,7 +34,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     throw new Response('Missing videoId', { status: 400 })
   }
 
-  const dbPath = await getDbPath(videoId)
+  const dbPath = await getCaptionsDbPath(videoId)
   if (!dbPath) {
     throw new Response('Video not found', { status: 404 })
   }

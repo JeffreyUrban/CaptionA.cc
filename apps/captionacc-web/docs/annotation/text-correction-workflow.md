@@ -494,7 +494,7 @@ Response:
   frames: [
     {
       frame_index: 140,
-      image_url: "/local/data/video_001/crop_frames/frame_0140.png",
+      image_url: "/!__local/data/_has_been_deprecated__!/video_001/crop_frames/frame_0140.png",
       ocr_text: "Hello, how are you?"
     },
     ...

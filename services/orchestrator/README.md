@@ -120,7 +120,7 @@ const queueCmd = spawn(
     'full-frames',
     '--video-id', videoId,
     '--video-path', videoFile,
-    '--db-path', getDbPath(videoId),
+    '--db-path', getCaptionsDbPath(videoId),
     '--output-dir', resolve(getVideoDir(videoId), 'full_frames'),
   ],
   {
@@ -165,7 +165,7 @@ const queueCmd = spawn(
     'crop-frames',
     '--video-id', videoId,
     '--video-path', videoFile,
-    '--db-path', getDbPath(videoId),
+    '--db-path', getCaptionsDbPath(videoId),
     '--output-dir', resolve(getVideoDir(videoId), 'crop_frames'),
     '--crop-bounds', JSON.stringify(cropBounds),
     '--crop-bounds-version', layoutConfig.crop_bounds_version.toString(),

@@ -15,7 +15,7 @@ import {
 import { deleteCombinedImage } from '~/utils/image-processing'
 import type { AnnotationState, TextStatus } from '~/types/enums'
 import { queueCaptionMedianOcrProcessing } from './prefect'
-import { getDbPath, getVideoDir } from '~/utils/video-paths'
+import { getCaptionsDbPath, getVideoDir } from '~/utils/video-paths'
 
 // =============================================================================
 // Type Definitions
@@ -178,7 +178,7 @@ async function markImageForRegeneration(
   ).run(annotationId)
 
   // Queue median frame OCR processing via Prefect (async)
-  const dbPath = await getDbPath(videoId)
+  const dbPath = await getCaptionsDbPath(videoId)
   const videoDir = await getVideoDir(videoId)
 
   if (dbPath && videoDir) {
@@ -637,7 +637,7 @@ export async function createAnnotation(
       ).run(annotationId)
 
       // Queue median frame OCR processing via Prefect (async)
-      const dbPath = await getDbPath(videoId)
+      const dbPath = await getCaptionsDbPath(videoId)
       const videoDir = await getVideoDir(videoId)
 
       if (dbPath && videoDir) {

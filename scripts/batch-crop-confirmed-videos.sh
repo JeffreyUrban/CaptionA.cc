@@ -9,7 +9,7 @@
 
 set -euo pipefail
 
-DATA_DIR="${1:-/Users/jurban/PycharmProjects/CaptionA.cc/local/data}"
+DATA_DIR="${1:-/Users/jurban/PycharmProjects/CaptionA.cc/!__local/data/_has_been_deprecated__!}"
 MIN_CONFIRMED="${2:-50}"
 MAX_VIDEOS="${3:-5}"
 

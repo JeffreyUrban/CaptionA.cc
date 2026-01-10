@@ -12,14 +12,14 @@ def get_database_path(video_dir: Path) -> Path:
     """Get captions.db path from video directory.
 
     Args:
-        video_dir: Path to video directory (e.g., local/data/show_name/video_id/)
+        video_dir: Path to video directory (e.g., !__local/data/_has_been_deprecated__!/show_name/video_id/)
 
     Returns:
         Path to captions.db file
 
     Example:
-        >>> get_database_path(Path("local/data/show_name/video_id"))
-        Path("local/data/show_name/video_id/captions.db")
+        >>> get_database_path(Path("!__local/data/_has_been_deprecated__!/show_name/video_id"))
+        Path("!__local/data/_has_been_deprecated__!/show_name/video_id/captions.db")
     """
     return video_dir / "captions.db"
 

@@ -12,7 +12,7 @@ import { join } from 'path'
 
 import Database from 'better-sqlite3'
 
-const LOCAL_DATA_DIR = '../../local/data'
+const LOCAL_DATA_DIR = '../../!__local/data/_has_been_deprecated__!'
 
 interface TableSchema {
   name: string

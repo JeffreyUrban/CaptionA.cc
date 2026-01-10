@@ -17,7 +17,7 @@ import {
   registerQueueProcessor,
 } from './processing-coordinator'
 
-import { getDbPath, getVideoDir } from '~/utils/video-paths'
+import { getCaptionsDbPath, getVideoDir } from '~/utils/video-paths'
 
 interface CropFramesJob {
   videoId: string // UUID or display path
@@ -44,7 +44,7 @@ export async function queueCropFramesProcessing(job: CropFramesJob): Promise<voi
   console.log(`[CropFramesQueue] Queuing ${job.videoPath} (queue size: ${cropFramesQueue.length})`)
 
   // Immediately create status record so badge system shows "Queued" state
-  const dbPath = await getDbPath(job.videoId)
+  const dbPath = await getCaptionsDbPath(job.videoId)
   if (dbPath && existsSync(dbPath)) {
     try {
       const db = new Database(dbPath)
@@ -125,7 +125,7 @@ async function processCropFramesJob(job: CropFramesJob): Promise<void> {
   console.log(`[CropFrames] Starting crop_frames for ${videoPath}`)
 
   // Validate paths
-  const dbPath = await getDbPath(videoId)
+  const dbPath = await getCaptionsDbPath(videoId)
   if (!dbPath) {
     throw new Error(`Database not found for ${videoPath}`)
   }
@@ -637,7 +637,7 @@ function recoverStalledProcess(
  * Also auto-triggers processing if layout approved but crop_frames never started
  */
 export async function recoverStalledCropFrames(videoId: string, videoPath: string): Promise<void> {
-  const dbPath = await getDbPath(videoId)
+  const dbPath = await getCaptionsDbPath(videoId)
   if (!dbPath || !existsSync(dbPath)) {
     return
   }

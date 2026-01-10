@@ -6,7 +6,7 @@
  * - storage_path: Hash-bucketed UUID path like "a4/a4f2b8c3-..."
  * - videoId: UUID for the video
  *
- * NOTE: Legacy filesystem-based functions (resolveDisplayPath, getDbPath, etc.)
+ * NOTE: Legacy filesystem-based functions (resolveDisplayPath, getCaptionsDbPath, etc.)
  * are deprecated and only work server-side. getAllVideos() now uses Supabase.
  */
 
@@ -34,7 +34,7 @@ export async function resolveDisplayPath(displayPath: string): Promise<string | 
   const { resolve } = await import('path')
   const Database = (await import('better-sqlite3')).default
 
-  const dataDir = resolve(process.cwd(), '..', '..', 'local', 'data')
+  const dataDir = resolve(process.cwd(), '..', '..', 'local', 'processing')
 
   // Scan all video directories for matching display_path
   const scanDir = (dir: string): string | null => {
@@ -104,7 +104,7 @@ export async function getVideoDir(pathOrId: string): Promise<string | null> {
   const { existsSync } = await import('fs')
   const { resolve } = await import('path')
 
-  const dataDir = resolve(process.cwd(), '..', '..', 'local', 'data')
+  const dataDir = resolve(process.cwd(), '..', '..', 'local', 'processing')
 
   // Check if it's a UUID (contains hyphens in UUID format)
   const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(pathOrId)
@@ -130,9 +130,9 @@ export async function getVideoDir(pathOrId: string): Promise<string | null> {
  * DEPRECATED: Use Supabase queries instead
  * SERVER-SIDE ONLY
  */
-export async function getDbPath(pathOrId: string): Promise<string | null> {
+export async function getCaptionsDbPath(pathOrId: string): Promise<string | null> {
   if (typeof window !== 'undefined') {
-    throw new Error('getDbPath is server-side only')
+    throw new Error('getCaptionsDbPath is server-side only')
   }
 
   const { existsSync } = await import('fs')
@@ -157,7 +157,7 @@ export async function getVideoMetadata(pathOrId: string): Promise<VideoMetadata 
 
   const Database = (await import('better-sqlite3')).default
 
-  const dbPath = await getDbPath(pathOrId)
+  const dbPath = await getCaptionsDbPath(pathOrId)
   if (!dbPath) return null
 
   try {

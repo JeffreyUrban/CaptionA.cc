@@ -16,7 +16,7 @@ import Database from 'better-sqlite3'
 
 import { migrateDatabase } from '~/db/migrate'
 import { notFoundResponse, errorResponse } from '~/utils/api-responses'
-import { getDbPath, getVideoDir } from '~/utils/video-paths'
+import { getCaptionsDbPath, getVideoDir } from '~/utils/video-paths'
 
 // =============================================================================
 // Type Definitions
@@ -75,7 +75,7 @@ export async function getAnnotationDatabase(videoId: string): Promise<DatabaseRe
   const { existsSync } = await import('fs')
   const Database = (await import('better-sqlite3')).default
 
-  const dbPath = await getDbPath(videoId)
+  const dbPath = await getCaptionsDbPath(videoId)
   if (!dbPath) {
     return {
       success: false,
@@ -118,7 +118,7 @@ export async function getWritableDatabase(videoId: string): Promise<DatabaseResu
   const { existsSync } = await import('fs')
   const Database = (await import('better-sqlite3')).default
 
-  const dbPath = await getDbPath(videoId)
+  const dbPath = await getCaptionsDbPath(videoId)
   if (!dbPath) {
     return {
       success: false,
@@ -183,7 +183,7 @@ export async function getOrCreateAnnotationDatabase(
     }
   }
 
-  const dbPath = await getDbPath(videoId)
+  const dbPath = await getCaptionsDbPath(videoId)
   const dbExists = dbPath !== null && existsSync(dbPath)
 
   // If dbPath is null but videoDir exists, we need to construct the path
@@ -404,4 +404,4 @@ export function safeAll<T>(db: Database.Database, sql: string, ...params: unknow
 // =============================================================================
 
 // Re-export video-paths functions that are commonly used with database utils
-export { getDbPath, getVideoDir } from '~/utils/video-paths'
+export { getCaptionsDbPath, getVideoDir } from '~/utils/video-paths'

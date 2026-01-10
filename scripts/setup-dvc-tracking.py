@@ -3,8 +3,7 @@
 
 Run this after migrate-split-databases.py to track split databases with DVC.
 
-Tracks: video.db, fullOCR.db, cropping.db, layout.db, captions.db
-Skips: state.db (ephemeral workspace state, not version controlled)
+Tracks: video.db, fullOCR.db, layout.db, captions.db
 
 Usage:
     python scripts/setup-dvc-tracking.py --dry-run  # Preview DVC commands
@@ -49,8 +48,7 @@ def run_command(cmd: list[str], dry_run: bool = False) -> bool:
 def setup_dvc_for_video(video_dir: Path, dry_run: bool = False) -> dict:
     """Set up DVC tracking for a single video's databases.
 
-    Tracks: video.db, fullOCR.db, cropping.db, layout.db, captions.db
-    Skips: state.db (ephemeral, local only)
+    Tracks: video.db, fullOCR.db, layout.db, captions.db
 
     Returns:
         Dict with tracking stats
@@ -59,10 +57,8 @@ def setup_dvc_for_video(video_dir: Path, dry_run: bool = False) -> dict:
     databases_to_track = [
         "video.db",  # Immutable frames and metadata
         "fullOCR.db",  # OCR detection results
-        "cropping.db",  # Cropped frames and layout config
         "layout.db",  # Box annotations and classification model
         "captions.db",  # Caption boundaries and text
-        # state.db is NOT tracked (ephemeral workspace state)
     ]
 
     stats = {
@@ -91,7 +87,7 @@ def setup_dvc_for_video(video_dir: Path, dry_run: bool = False) -> dict:
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--data-dir", type=Path, default=Path("local/data"), help="Path to data directory (default: local/data)"
+        "--data-dir", type=Path, default=Path("!__local/data/_has_been_deprecated__!"), help="Path to data directory (default: !__local/data/_has_been_deprecated__!)"
     )
     parser.add_argument("--dry-run", action="store_true", help="Show what would be tracked without making changes")
     parser.add_argument("--limit", type=int, help="Only process first N videos (for testing)")
@@ -113,7 +109,6 @@ def main():
     total_size_by_db = {
         "video.db": 0,
         "fullOCR.db": 0,
-        "cropping.db": 0,
         "layout.db": 0,
         "captions.db": 0,
     }
@@ -141,13 +136,11 @@ def main():
         if size_mb > 0:
             print(f"  {db_name}: {size_mb:.1f} MB ({size_mb / 1024:.2f} GB)")
     print(f"\nTotal tracked: {total_size_mb:.1f} MB ({total_size_mb / 1024:.2f} GB)")
-    print("NOT tracked: state.db (ephemeral workspace state)")
 
     if not args.dry_run:
         print("\nNext steps:")
-        print("  1. Review .gitignore files (state.db should be excluded)")
-        print("  2. Stage .dvc files: git add 'local/data/**/*.dvc'")
-        print("  3. Stage .gitignore: git add 'local/data/**/.gitignore'")
+        print("  2. Stage .dvc files: git add '!__local/data/_has_been_deprecated__!/**/*.dvc'")
+        print("  3. Stage .gitignore: git add '!__local/data/_has_been_deprecated__!/**/.gitignore'")
         print("  4. Commit: git commit -m 'Set up DVC tracking for split databases'")
         print("  5. Push to DVC: dvc push")
         print("  6. Push to git: git push")

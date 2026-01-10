@@ -172,7 +172,7 @@ def analyze(
 
     Examples:
         # Analyze predictions from file
-        caption_boundaries analyze predictions.json --video-db local/data/61/61c3*/captions.db
+        caption_boundaries analyze predictions.json --video-db !__local/data/_has_been_deprecated__!/61/61c3*/captions.db
     """
     import json
 
@@ -228,17 +228,17 @@ def create_dataset(
     """Create training dataset from annotated videos.
 
     Extracts frame pairs from confirmed caption boundaries in the specified
-    video directories. Supports glob patterns like 'local/data/*/*/captions.db'.
+    video directories. Supports glob patterns like '!__local/data/_has_been_deprecated__!/*/*/captions.db'.
 
     Examples:
         # Single video
-        caption_boundaries create-dataset my_dataset local/data/61/61c3123f-*/
+        caption_boundaries create-dataset my_dataset !__local/data/_has_been_deprecated__!/61/61c3123f-*/
 
         # Multiple videos with glob
-        caption_boundaries create-dataset my_dataset 'local/data/*/*/'
+        caption_boundaries create-dataset my_dataset '!__local/data/_has_been_deprecated__!/*/*/'
 
         # Specific videos
-        caption_boundaries create-dataset my_dataset local/data/61/*/ local/data/95/*/
+        caption_boundaries create-dataset my_dataset !__local/data/_has_been_deprecated__!/61/*/ !__local/data/_has_been_deprecated__!/95/*/
     """
     from caption_boundaries.data.dataset_builder import create_training_dataset
 

@@ -15,7 +15,7 @@ import { join } from 'path'
 import Database from 'better-sqlite3'
 
 const SCHEMA_VERSION = 1
-const LOCAL_DATA_DIR = '../../local/data'
+const LOCAL_DATA_DIR = '../../!__local/data/_has_been_deprecated__!'
 
 interface ColumnInfo {
   name: string

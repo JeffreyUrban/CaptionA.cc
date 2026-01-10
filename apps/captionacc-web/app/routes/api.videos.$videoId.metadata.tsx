@@ -4,7 +4,7 @@ import Database from 'better-sqlite3'
 import { type LoaderFunctionArgs } from 'react-router'
 import sharp from 'sharp'
 
-import { getDbPath } from '~/utils/video-paths'
+import { getCaptionsDbPath } from '~/utils/video-paths'
 
 function fillAnnotationGaps(db: Database.Database, totalFrames: number): number {
   // Find all gaps in annotation coverage and create gap annotations for them
@@ -69,7 +69,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
   const videoId = decodeURIComponent(encodedVideoId)
 
   // Get database path
-  const dbPath = await getDbPath(videoId)
+  const dbPath = await getCaptionsDbPath(videoId)
   if (!dbPath) {
     return new Response(JSON.stringify({ error: 'Video not found' }), {
       status: 404,

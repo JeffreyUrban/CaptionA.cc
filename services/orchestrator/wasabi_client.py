@@ -83,7 +83,7 @@ class WasabiClient:
 
         Example:
             client.upload_file(
-                "/local/data/video.mp4",
+                "/!__local/data/_has_been_deprecated__!/video.mp4",
                 "tenant_id/video_id/video.mp4",
                 content_type="video/mp4"
             )
@@ -164,7 +164,7 @@ class WasabiClient:
         Example:
             client.download_file(
                 "tenant_id/video_id/video.db",
-                "/local/data/video.db"
+                "/!__local/data/_has_been_deprecated__!/video.db"
             )
         """
         local_path = Path(local_path)

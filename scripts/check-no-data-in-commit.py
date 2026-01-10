@@ -23,7 +23,7 @@ FORBIDDEN_PATTERNS = [
 
 # Directories that should be DVC-tracked only
 FORBIDDEN_DIRS = [
-    "local/data/",
+    "!__local/data/_has_been_deprecated__!/",
     "local/models/",
     "checkpoints/",
     "wandb/local-runs/",  # Local W&B files

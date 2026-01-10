@@ -17,14 +17,14 @@ def get_database_path(output_dir: Path) -> Path:
 
     Args:
         output_dir: Path to full_frames output directory
-                   (e.g., local/data/show_name/video_id/full_frames)
+                   (e.g., !__local/data/_has_been_deprecated__!/show_name/video_id/full_frames)
 
     Returns:
         Path to captions.db file
 
     Example:
-        >>> get_database_path(Path("local/data/show_name/video_id/full_frames"))
-        Path("local/data/show_name/video_id/captions.db")
+        >>> get_database_path(Path("!__local/data/_has_been_deprecated__!/show_name/video_id/full_frames"))
+        Path("!__local/data/_has_been_deprecated__!/show_name/video_id/captions.db")
     """
     # Go up one level from full_frames to video directory
     video_dir = output_dir.parent
@@ -117,8 +117,8 @@ def write_frames_to_database(
 
     Example:
         >>> write_frames_to_database(
-        ...     frames_dir=Path("local/data/show/video/full_frames"),
-        ...     db_path=Path("local/data/show/video/captions.db"),
+        ...     frames_dir=Path("!__local/data/_has_been_deprecated__!/show/video/full_frames"),
+        ...     db_path=Path("!__local/data/_has_been_deprecated__!/show/video/captions.db"),
         ...     delete_after_write=True
         ... )
         42

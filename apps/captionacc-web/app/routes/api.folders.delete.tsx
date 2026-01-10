@@ -12,7 +12,7 @@ import { resolve } from 'path'
 import Database from 'better-sqlite3'
 import type { ActionFunctionArgs } from 'react-router'
 
-import { getAllVideos, getDbPath } from '~/utils/video-paths'
+import { getAllVideos, getCaptionsDbPath } from '~/utils/video-paths'
 
 const dataDir = resolve(process.cwd(), '..', '..', 'local', 'data')
 const foldersMetaPath = resolve(dataDir, '.folders.json')
@@ -128,7 +128,7 @@ export async function action({ request }: ActionFunctionArgs) {
   for (const video of videosToDelete) {
     try {
       // Get database path
-      const dbPath = await getDbPath(video.videoId)
+      const dbPath = await getCaptionsDbPath(video.videoId)
 
       if (dbPath) {
         // Mark as deleted in database first

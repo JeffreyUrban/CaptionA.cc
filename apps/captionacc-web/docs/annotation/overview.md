@@ -202,7 +202,7 @@ interface Frame {
 
 ### Frame Storage
 
-Frames stored at: `/local/data/<video_id>/crop_frames/`
+Frames stored at: `/!__local/data/_has_been_deprecated__!/<video_id>/crop_frames/`
 
 ### Session State
 

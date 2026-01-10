@@ -34,7 +34,7 @@ def compare_vlm_with_ocr(
     """Compare VLM results with OCR text and auto-validate matches.
 
     Args:
-        video_dir: Path to video directory (e.g., local/data/video_id/)
+        video_dir: Path to video directory (e.g., !__local/data/_has_been_deprecated__!/video_id/)
         vlm_results: Dictionary mapping (start_frame, end_frame) -> vlm_text
         auto_validate: If True, mark matching captions as validated
         write_mismatches: If True, write mismatches to CSV file

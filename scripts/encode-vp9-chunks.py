@@ -507,7 +507,7 @@ def main():
 
     # Find database path
     video_id_prefix = video_id[:2]
-    db_path = Path(f"/Users/jurban/PycharmProjects/CaptionA.cc/local/data/{video_id_prefix}/{video_id}/cropping.db")
+    db_path = # TODO: Cropping database has been replaced with modulo chunks on Wasabi
 
     if not db_path.exists():
         print(f"❌ Database not found: {db_path}")

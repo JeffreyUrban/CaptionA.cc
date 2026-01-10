@@ -14,13 +14,11 @@ Migrate application code from monolithic `captions.db` to split database archite
 
 **Current Structure:**
 ```
-local/data/{hash}/{video_id}/
+!__local/data/_has_been_deprecated__!/{hash}/{video_id}/
   ├── video.db              ✅ Created
   ├── fullOCR.db            ✅ Created
-  ├── cropping.db           ✅ Created
   ├── layout.db             ✅ Created
   ├── captions.db           ✅ Created
-  ├── state.db           ✅ Created
   ├── captions.db.old    ✅ Backup
   └── *.mp4                 (unchanged)
 ```
@@ -78,10 +76,8 @@ def get_video_databases(video_dir: Path) -> dict[str, Path]:
     return {
         'video': video_dir / 'video.db',
         'fullOCR': video_dir / 'fullOCR.db',
-        'cropping': video_dir / 'cropping.db',
         'layout': video_dir / 'layout.db',
         'captions': video_dir / 'captions.db',
-        'metadata': video_dir / 'state.db',
     }
 
 def check_databases_exist(video_dir: Path) -> dict[str, bool]:
@@ -141,7 +137,6 @@ with VideoDatabase(video_dir) as conn:
 
 **Acceptance Criteria:**
 - [ ] Dataset loads frames from video.db
-- [ ] Dataset loads crops from cropping.db
 - [ ] Dataset loads OCR from fullOCR.db
 - [ ] Dataset loads labels from layout.db
 - [ ] All unit tests pass
@@ -215,20 +210,6 @@ with VideoDatabase(video_dir) as conn:
 
 **Estimated Effort:** 2-3 hours
 
-#### 3.3 Update Preferences/UI State
-**Location:** (Identify where preferences are used)
-
-**Changes:**
-- Move all preference reads/writes to `state.db`
-- Ensure state.db is NOT tracked by DVC
-
-**Acceptance Criteria:**
-- [ ] Preferences load from state.db
-- [ ] Preferences save to state.db
-- [ ] state.db in .gitignore
-
-**Estimated Effort:** 1-2 hours
-
 ---
 
 ### Phase 4: Processing Pipeline Updates (Priority: MEDIUM)
@@ -270,12 +251,9 @@ with VideoDatabase(video_dir) as conn:
 
 **Changes:**
 - Read frames from `video.db`
-- Read layout config from `cropping.db`
-- Write crops to `cropping.db`
 
 **Acceptance Criteria:**
 - [ ] Cropping reads from video.db
-- [ ] Cropping writes to cropping.db
 - [ ] Layout config updates work
 
 **Estimated Effort:** 2-3 hours
@@ -371,13 +349,12 @@ def verify_all_videos() -> dict:
 **File:** `scripts/setup-dvc-tracking.py`
 
 **Changes:**
-- Track all databases except state.db
+- Track all databases
 - Update .gitignore patterns
 - Handle existing .dvc files
 
 **Acceptance Criteria:**
-- [ ] Tracks video.db, fullOCR.db, cropping.db, layout.db, captions.db
-- [ ] Does NOT track state.db
+- [ ] Tracks video.db, fullOCR.db, layout.db, captions.db
 - [ ] Creates .dvc files in correct locations
 - [ ] Updates .gitignore
 
@@ -390,8 +367,8 @@ def verify_all_videos() -> dict:
 python scripts/setup-dvc-tracking.py
 
 # Stage .dvc files
-git add 'local/data/**/*.dvc'
-git add 'local/data/**/.gitignore'
+git add '!__local/data/_has_been_deprecated__!/**/*.dvc'
+git add '!__local/data/_has_been_deprecated__!/**/.gitignore'
 
 # Commit
 git commit -m "Set up DVC tracking for split databases"
@@ -438,7 +415,7 @@ git push
 #### 7.1 Verify and Remove Backups
 ```bash
 # After thorough testing, remove backup files
-find local/data -name 'annotations_backup_*.db' -delete
+find !__local/data/_has_been_deprecated__! -name 'annotations_backup_*.db' -delete
 ```
 
 **Acceptance Criteria:**
@@ -514,14 +491,14 @@ If critical issues arise:
 ```bash
 # 1. Stop using new databases
 # 2. Restore original structure
-for backup in local/data/*/annotations_backup_*.db; do
+for backup in !__local/data/_has_been_deprecated__!/*/annotations_backup_*.db; do
     dir=$(dirname "$backup")
     cp "$backup" "$dir/captions.db"
 done
 
 # 3. Remove split databases
-find local/data -name 'video.db' -delete
-find local/data -name 'fullOCR.db' -delete
+find !__local/data/_has_been_deprecated__! -name 'video.db' -delete
+find !__local/data/_has_been_deprecated__! -name 'fullOCR.db' -delete
 # ... etc
 
 # 4. Revert application code

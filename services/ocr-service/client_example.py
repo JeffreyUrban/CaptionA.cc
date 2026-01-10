@@ -134,8 +134,7 @@ def example_usage():
     print()
 
     # Example: Load cropped frames from database
-    video_dir = Path("local/data/95/95b2d9b2-2e2c-462c-9e2a-fb9a50c57398")
-    cropping_db = video_dir / "cropping.db"
+    video_dir = Path("!__local/data/_has_been_deprecated__!/95/95b2d9b2-2e2c-462c-9e2a-fb9a50c57398")
 
     # Get first frame to determine dimensions
     conn = sqlite3.connect(cropping_db)

@@ -7,7 +7,7 @@
 **Structure:**
 
 ```
-local/data/
+!__local/data/_has_been_deprecated__!/
   {hash_prefix}/          # First 2 chars of video UUID (bucketing)
     {video_uuid}/         # Full video UUID
       captions.db      # Video-specific database

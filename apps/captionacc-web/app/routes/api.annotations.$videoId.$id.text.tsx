@@ -6,7 +6,7 @@ import { type LoaderFunctionArgs, type ActionFunctionArgs } from 'react-router'
 import { getOrGenerateCombinedImage } from '../utils/image-processing'
 import { runOCROnCombinedImage } from '../utils/ocr-wrapper'
 
-import { getDbPath } from '~/utils/video-paths'
+import { getCaptionsDbPath } from '~/utils/video-paths'
 
 interface Annotation {
   id: number
@@ -25,7 +25,7 @@ interface Annotation {
 }
 
 async function getDatabase(videoId: string): Promise<Database.Database | Response> {
-  const dbPath = await getDbPath(videoId)
+  const dbPath = await getCaptionsDbPath(videoId)
   if (!dbPath) {
     return new Response('Video not found', { status: 404 })
   }

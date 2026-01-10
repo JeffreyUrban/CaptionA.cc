@@ -62,8 +62,7 @@ def test_capacity():
 def test_async_job_processing():
     """Test async job processing with real data."""
     # Load sample images from confirmed video
-    video_dir = Path("local/data/95/95b2d9b2-2e2c-462c-9e2a-fb9a50c57398")
-    cropping_db = video_dir / "cropping.db"
+    video_dir = Path("!__local/data/_has_been_deprecated__!/95/95b2d9b2-2e2c-462c-9e2a-fb9a50c57398")
 
     if not cropping_db.exists():
         print("⚠ Skipping async job test - sample data not available")

@@ -4,7 +4,7 @@ import Database from 'better-sqlite3'
 import { type LoaderFunctionArgs } from 'react-router'
 import sharp from 'sharp'
 
-import { getDbPath } from '~/utils/video-paths'
+import { getCaptionsDbPath } from '~/utils/video-paths'
 
 interface VideoLayoutConfig {
   id: number
@@ -46,7 +46,7 @@ interface OCRBox {
 }
 
 async function getDatabase(videoId: string): Promise<Database.Database | Response> {
-  const dbPath = await getDbPath(videoId)
+  const dbPath = await getCaptionsDbPath(videoId)
   if (!dbPath) {
     return new Response('Video not found', { status: 404 })
   }

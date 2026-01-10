@@ -11,7 +11,6 @@ Video databases are split into 6 separate SQLite files based on update frequency
 #### video.db (Immutable)
 **Tables:**
 - `full_frames` - Raw frame images extracted from video
-- `video_metadata` - Video information (path, duration, hash)
 
 **Update Pattern:** Set once at video ingestion, never modified
 **Size:** ~15-70 MB per video
@@ -25,11 +24,6 @@ Video databases are split into 6 separate SQLite files based on update frequency
 **Size:** ~0.5-5 MB per video
 **DVC Impact:** Re-versioned only when OCR updated (~1-5% of videos at a time)
 
-#### cropping.db (Rare)
-**Tables:**
-- `cropped_frames` - Cropped frame images based on detected caption region
-- `video_layout_config` - Crop bounds configuration
-
 **Update Pattern:** When crop algorithm or layout configuration changes
 **Size:** ~90-420 MB per video
 **DVC Impact:** Re-versioned when crops regenerated (affects all videos but infrequent)
@@ -38,6 +32,7 @@ Video databases are split into 6 separate SQLite files based on update frequency
 **Tables:**
 - `full_frame_box_labels` - User annotations marking OCR boxes as "in" or "out" of caption region
 - `box_classification_model` - Trained Naive Bayes model (111 Gaussian parameters)
+- `video_layout_config` - Crop bounds configuration
 
 **Update Pattern:** During active layout annotation work
 **Size:** ~0.05-20 MB per video (depends on annotation density and model)
@@ -53,17 +48,6 @@ Video databases are split into 6 separate SQLite files based on update frequency
 
 ### Local-Only Database (Not DVC-Tracked)
 
-#### state.db (Ephemeral)
-**Tables:**
-- `video_preferences` - User UI preferences
-- `processing_status` - Workflow state tracking
-- `duplicate_resolution` - Temporary conflict resolution
-- `database_metadata` - Database version info
-
-**Update Pattern:** Frequently, user-specific state
-**Size:** <100 KB
-**DVC Impact:** None (local only, in .gitignore)
-
 ## Schema Relationships
 
 ### Cross-Database References
@@ -74,10 +58,8 @@ Applications must ATTACH databases to query across them:
 -- Open primary database
 ATTACH DATABASE 'video.db' AS video;
 ATTACH DATABASE 'fullOCR.db' AS ocr;
-ATTACH DATABASE 'cropping.db' AS cropping;
 ATTACH DATABASE 'layout.db' AS layout;
 ATTACH DATABASE 'captions.db' AS captions;
-ATTACH DATABASE 'state.db' AS meta;
 
 -- Query across databases
 SELECT
@@ -107,7 +89,6 @@ WHERE o.confidence > 0.8;
 **Steps:**
 1. Load video.db (read-only) - get frames
 2. Load fullOCR.db (read-only) - get OCR detections
-3. Load cropping.db (read-only) - get cropped frames
 4. Load layout.db (read-write) - annotate boxes
 5. Save updates to layout.db only
 
@@ -156,9 +137,6 @@ conn.commit()
 1. Load video.db (read-only) - get full frames
 2. Update video_layout_config
 3. Regenerate cropped_frames
-4. Replace cropping.db entirely
-
-**DVC Impact:** Only cropping.db (~166 MB) is versioned (large but infrequent)
 
 ## Storage Efficiency Examples
 
@@ -166,11 +144,9 @@ conn.commit()
 
 **After Split:**
 - video.db: 15 MB (8%)
-- cropping.db: 166 MB (91%)
 - fullOCR.db: 756 KB (0.4%)
 - captions.db: 248 KB (0.1%)
 - layout.db: 68 KB (0.04%)
-- state.db: 20 KB (local)
 
 **Annotation Workflow Savings:**
 
@@ -206,20 +182,12 @@ class VideoDatabase:
             (str(self.video_dir / "fullOCR.db"),)
         )
         self.primary.execute(
-            "ATTACH DATABASE ? AS cropping",
-            (str(self.video_dir / "cropping.db"),)
-        )
-        self.primary.execute(
             "ATTACH DATABASE ? AS layout",
             (str(self.video_dir / "layout.db"),)
         )
         self.primary.execute(
             "ATTACH DATABASE ? AS captions",
             (str(self.video_dir / "captions.db"),)
-        )
-        self.primary.execute(
-            "ATTACH DATABASE ? AS meta",
-            (str(self.video_dir / "state.db"),)
         )
 
         return self.primary
@@ -229,7 +197,7 @@ class VideoDatabase:
 
 
 # Usage
-video_dir = Path("local/data/61/61c3123f-cb1f-4c0a-a6a9-b12650b17bd5")
+video_dir = Path("!__local/data/_has_been_deprecated__!/61/61c3123f-cb1f-4c0a-a6a9-b12650b17bd5")
 
 with VideoDatabase(video_dir) as conn:
     cursor = conn.cursor()
@@ -268,20 +236,18 @@ conn = sqlite3.connect('layout.db')  # Default is read-write
 
 ### Before (Old Structure)
 ```
-local/data/{hash}/{video_id}/
+!__local/data/_has_been_deprecated__!/{hash}/{video_id}/
   captions.db          # 100-500 MB monolithic database
   20220219.mp4           # Source video
 ```
 
 ### After (New Structure)
 ```
-local/data/{hash}/{video_id}/
+!__local/data/_has_been_deprecated__!/{hash}/{video_id}/
   video.db               # 15-70 MB (immutable)
   fullOCR.db             # 0.5-5 MB (occasional)
-  cropping.db            # 90-420 MB (rare)
   layout.db              # 0.05-20 MB (frequent)
   captions.db            # 0.1-2 MB (frequent)
-  state.db            # <0.1 MB (local only)
   captions.db.old     # Backup of original
   20220219.mp4          # Source video
 ```
@@ -312,13 +278,11 @@ python scripts/setup-dvc-tracking.py
 # This tracks:
 # - video.db
 # - fullOCR.db
-# - cropping.db
 # - layout.db
 # - captions.db
-# (but NOT state.db)
 
 # Commit .dvc files to git
-git add 'local/data/**/*.dvc'
+git add '!__local/data/_has_been_deprecated__!/**/*.dvc'
 git commit -m "Set up DVC tracking for split databases"
 
 # Push to DVC storage
@@ -335,10 +299,10 @@ git push
 # ... annotate in your application ...
 
 # 2. Track updated database
-dvc add local/data/{hash}/{video_id}/layout.db
+dvc add !__local/data/_has_been_deprecated__!/{hash}/{video_id}/layout.db
 
 # 3. Commit to git
-git add local/data/{hash}/{video_id}/layout.db.dvc
+git add !__local/data/_has_been_deprecated__!/{hash}/{video_id}/layout.db.dvc
 git commit -m "Annotated layout for video {video_id}"
 
 # 4. Push to DVC storage (only layout.db uploads, ~68 KB)
@@ -352,10 +316,10 @@ git push
 
 ```bash
 # Pull specific video's annotations
-dvc pull local/data/{hash}/{video_id}/layout.db
+dvc pull !__local/data/_has_been_deprecated__!/{hash}/{video_id}/layout.db
 
 # Pull all layout annotations
-dvc pull 'local/data/**/layout.db'
+dvc pull '!__local/data/_has_been_deprecated__!/**/layout.db'
 
 # Pull everything
 dvc pull
@@ -375,10 +339,8 @@ dvc pull
 
 - [ ] Update frame loading to use `video.db`
 - [ ] Update OCR access to use `fullOCR.db`
-- [ ] Update crop loading to use `cropping.db`
 - [ ] Update layout annotation to write to `layout.db`
 - [ ] Update caption editing to write to `captions.db`
-- [ ] Update preferences to use `state.db`
 
 ### Phase 3: Workflow Integration
 
@@ -392,7 +354,6 @@ dvc pull
 ### Phase 4: DVC Integration
 
 - [ ] Update DVC tracking scripts
-- [ ] Add .gitignore rules for state.db
 - [ ] Document DVC workflow for team
 - [ ] Test push/pull workflows
 - [ ] Verify deduplication works

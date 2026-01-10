@@ -4,10 +4,8 @@
 Splits captions.db into:
 - video.db: Immutable source frames and metadata
 - fullOCR.db: Frame-level OCR detection results (occasional re-runs)
-- cropping.db: Cropped frames + layout config (updated together)
 - layout.db: Box labels + classification model (updated together)
 - captions.db: Caption boundaries and text (separate workflow)
-- state.db: Ephemeral workspace state (local only, not DVC-tracked)
 
 Usage:
     python scripts/migrate-split-databases.py --dry-run  # Preview changes
@@ -29,22 +27,12 @@ DATABASE_TABLES = {
     "fullOCR.db": [
         "full_frame_ocr",
     ],
-    "cropping.db": [
-        "cropped_frames",
-        "video_layout_config",
-    ],
     "layout.db": [
         "full_frame_box_labels",
         "box_classification_model",
     ],
     "captions.db": [
         "captions",
-    ],
-    "state.db": [  # Local only, not DVC-tracked
-        "video_preferences",
-        "processing_status",
-        "duplicate_resolution",
-        "database_metadata",
     ],
 }
 
@@ -193,7 +181,7 @@ def split_database(video_dir: Path, dry_run: bool = False) -> dict:
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--data-dir", type=Path, default=Path("local/data"), help="Path to data directory (default: local/data)"
+        "--data-dir", type=Path, default=Path("!__local/data/_has_been_deprecated__!"), help="Path to data directory (default: !__local/data/_has_been_deprecated__!)"
     )
     parser.add_argument("--dry-run", action="store_true", help="Analyze databases without making changes")
     parser.add_argument("--limit", type=int, help="Only process first N videos (for testing)")
@@ -248,7 +236,7 @@ def main():
         print("\nNext steps:")
         print("  1. Verify migration: spot-check a few videos")
         print("  2. Set up DVC tracking: python scripts/setup-dvc-tracking.py")
-        print("  3. Delete backups once verified: find local/data -name 'annotations_backup_*.db' -delete")
+        print("  3. Delete backups once verified: find !__local/data/_has_been_deprecated__! -name 'annotations_backup_*.db' -delete")
 
     print("=" * 70)
 

@@ -19,7 +19,7 @@ def get_database_paths(data_dir: Path) -> list[Path]:
     """Find all video databases in data directory."""
     databases = []
 
-    # Pattern: local/data/*/*/captions.db
+    # Pattern: !__local/data/_has_been_deprecated__!/*/*/captions.db
     for parent_dir in sorted(data_dir.iterdir()):
         if not parent_dir.is_dir():
             continue

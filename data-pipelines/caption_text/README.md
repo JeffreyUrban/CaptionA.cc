@@ -48,14 +48,14 @@ Train a model on all confirmed text annotations from your video library:
 
 ```bash
 # Collect training data and train in one command
-caption_text train local/data \\
+caption_text train !__local/data/_has_been_deprecated__! \\
     --output models/caption_text \\
     --epochs 3 \\
     --batch-size 4 \\
     --learning-rate 2e-4
 
 # Or collect data first (for inspection)
-caption_text collect-data local/data \\
+caption_text collect-data !__local/data/_has_been_deprecated__! \\
     --output training_data \\
     --save-images  # Optional: save sample images for debugging
 ```
@@ -91,9 +91,9 @@ caption_text collect-data local/data \\
 Generate caption text for all captions needing annotation:
 
 ```bash
-caption_text infer local/data/video_id \\
+caption_text infer !__local/data/_has_been_deprecated__!/video_id \\
     --checkpoint models/qwen_finetuned.ckpt \\
-    --font-example local/data/video_id/font_example.jpg \\
+    --font-example !__local/data/_has_been_deprecated__!/video_id/font_example.jpg \\
     --output vlm_results.csv
 ```
 
@@ -112,7 +112,7 @@ caption_text infer local/data/video_id \\
 Compare VLM results with OCR and auto-validate exact matches:
 
 ```bash
-caption_text compare local/data/video_id \\
+caption_text compare !__local/data/_has_been_deprecated__!/video_id \\
     --vlm-csv vlm_results.csv \\
     --auto-validate
 ```
@@ -131,12 +131,12 @@ Vet caption text for transcription errors using LLM:
 
 ```bash
 # Using Anthropic Claude API
-caption_text vet local/data/video_id \\
+caption_text vet !__local/data/_has_been_deprecated__!/video_id \\
     --model claude-sonnet-4-5 \\
     --output vetting_results.jsonl
 
 # Using Ollama (local)
-caption_text vet local/data/video_id \\
+caption_text vet !__local/data/_has_been_deprecated__!/video_id \\
     --ollama \\
     --model qwen3:14b \\
     --output vetting_results.jsonl
@@ -183,21 +183,21 @@ caption_id,start_frame,end_frame,original_text,corrected_text
 
 ```bash
 # Step 0: Train model on all confirmed annotations (first-time only)
-caption_text train local/data \\
+caption_text train !__local/data/_has_been_deprecated__! \\
     --output models/caption_text \\
     --epochs 3 \\
     --batch-size 4
 
 # Step 1: Generate caption text with fine-tuned VLM
-caption_text infer local/data/video_id \\
+caption_text infer !__local/data/_has_been_deprecated__!/video_id \\
     -c models/caption_text/checkpoints/best.ckpt \\
-    -f local/data/video_id/font_example.jpg
+    -f !__local/data/_has_been_deprecated__!/video_id/font_example.jpg
 
 # Step 2: Compare with OCR and auto-validate matches
-caption_text compare local/data/video_id --auto-validate
+caption_text compare !__local/data/_has_been_deprecated__!/video_id --auto-validate
 
 # Step 3: Vet remaining captions for errors
-caption_text vet local/data/video_id --model claude-sonnet-4-5
+caption_text vet !__local/data/_has_been_deprecated__!/video_id --model claude-sonnet-4-5
 
 # Step 4: Extract errors for manual review
 caption_text extract-errors caption_vetting_results.jsonl -o errors.csv

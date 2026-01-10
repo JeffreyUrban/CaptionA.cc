@@ -45,7 +45,7 @@ def find_all_video_dirs(data_root: Path) -> list[Path]:
     Looks for directories containing captions.db files.
 
     Args:
-        data_root: Root data directory (e.g., local/data/)
+        data_root: Root data directory (e.g., !__local/data/_has_been_deprecated__!/)
 
     Returns:
         List of video directory paths
@@ -190,7 +190,7 @@ def collect_all_training_data(
     """Collect training data from all videos in data root.
 
     Args:
-        data_root: Root data directory (e.g., local/data/)
+        data_root: Root data directory (e.g., !__local/data/_has_been_deprecated__!/)
         output_dir: Optional directory to save training data manifest
         save_images: If True, save images to output_dir (for debugging)
         generate_font_examples: If True, auto-generate font example images

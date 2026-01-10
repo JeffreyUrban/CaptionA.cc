@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3'
 
-import { getDbPath } from './video-paths'
+import { getCaptionsDbPath } from './video-paths'
 
 export type BadgeState = {
   type: 'layout' | 'boundaries' | 'text' | 'fully-annotated' | 'error' | 'info' | 'warning'
@@ -802,7 +802,7 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
   console.log(`[getVideoStats] CALLED for videoId: ${videoId}`)
 
   // Resolve videoId (can be display_path or UUID) to database path
-  const dbPath = await getDbPath(videoId)
+  const dbPath = await getCaptionsDbPath(videoId)
   console.log(`[getVideoStats] videoId: ${videoId}, dbPath: ${dbPath}`)
 
   if (!dbPath) {

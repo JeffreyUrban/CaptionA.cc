@@ -2,7 +2,7 @@
 """Batch process all videos with full_frames pipeline.
 
 This script:
-1. Finds all videos in local/data/*/*/*.mp4
+1. Finds all videos in !__local/data/_has_been_deprecated__!/*/*/*.mp4
 2. Checks if full_frames table is populated
 3. Runs full_frames pipeline if needed
 4. Tracks progress and errors
@@ -92,7 +92,7 @@ def find_all_videos(data_dir: Path) -> list[Path]:
     """
     videos = []
 
-    # Pattern: local/data/*/*/*.mp4
+    # Pattern: !__local/data/_has_been_deprecated__!/*/*/*.mp4
     for parent_dir in sorted(data_dir.iterdir()):
         if not parent_dir.is_dir():
             continue
@@ -111,7 +111,7 @@ def find_all_videos(data_dir: Path) -> list[Path]:
 def main():
     parser = argparse.ArgumentParser(description="Batch process all videos with full_frames pipeline")
 
-    # Default to local/data relative to script location
+    # Default to !__local/data/_has_been_deprecated__! relative to script location
     script_dir = Path(__file__).parent.parent  # scripts/ -> project root
     default_data_dir = script_dir / "local" / "data"
 
