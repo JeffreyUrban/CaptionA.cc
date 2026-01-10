@@ -68,12 +68,12 @@ export async function action({ params }: ActionFunctionArgs) {
         )
       }
 
-      // Get crop bounds from video_layout_config
+      // Get crop bounds from video_layout_config (most recent row)
       const config = db
         .prepare(
           `
         SELECT crop_left, crop_top, crop_right, crop_bottom
-        FROM video_layout_config WHERE id = 1
+        FROM video_layout_config ORDER BY created_at DESC LIMIT 1
       `
         )
         .get() as

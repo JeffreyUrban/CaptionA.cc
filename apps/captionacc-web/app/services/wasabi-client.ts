@@ -171,33 +171,96 @@ export async function uploadDatabase(
   console.log(`[Wasabi] Uploaded ${storageKey}`)
 }
 
+/** Valid database names in the split architecture */
+export type DatabaseName = 'video.db' | 'fullOCR.db' | 'cropping.db' | 'layout.db' | 'captions.db'
+
+/** Databases needed for each workflow */
+export const WORKFLOW_DATABASES = {
+  /** Layout annotation: read video/OCR, write layout */
+  layout: {
+    readonly: ['video.db', 'fullOCR.db'] as DatabaseName[],
+    writable: ['layout.db'] as DatabaseName[],
+  },
+  /** Caption annotation: read video, write captions */
+  caption: {
+    readonly: ['video.db'] as DatabaseName[],
+    writable: ['captions.db'] as DatabaseName[],
+  },
+  /** View only: read all */
+  view: {
+    readonly: [
+      'video.db',
+      'fullOCR.db',
+      'cropping.db',
+      'layout.db',
+      'captions.db',
+    ] as DatabaseName[],
+    writable: [] as DatabaseName[],
+  },
+} as const
+
+export type WorkflowType = keyof typeof WORKFLOW_DATABASES
+
 /**
- * Get a database for annotation work.
- * Downloads from Wasabi if not cached locally.
+ * Download all databases needed for a workflow.
  *
+ * @param tenantId - Tenant UUID
  * @param videoId - Video UUID
- * @param dbName - Database filename (video.db, fullOCR.db, layout.db)
- * @returns Local path to the database, or null if not found in Wasabi
+ * @param workflow - Workflow type determining which databases to download
+ * @param forceRefresh - Force re-download even if cached
+ * @returns Map of database name to local path
  */
-export async function getAnnotationDatabase(
+export async function downloadWorkflowDatabases(
+  tenantId: string,
   videoId: string,
-  dbName: 'video.db' | 'fullOCR.db' | 'layout.db'
-): Promise<string | null> {
-  // For now, use the default tenant
-  // TODO: Get tenant from user session
-  const tenantId = '00000000-0000-0000-0000-000000000001'
+  workflow: WorkflowType,
+  forceRefresh = false
+): Promise<Map<DatabaseName, string>> {
+  const config = WORKFLOW_DATABASES[workflow]
+  const allDatabases = [...config.readonly, ...config.writable]
+  const paths = new Map<DatabaseName, string>()
 
-  const storageKey = buildStorageKey(tenantId, videoId, dbName)
+  console.log(`[Wasabi] Downloading databases for ${workflow} workflow: ${allDatabases.join(', ')}`)
 
-  // Check if exists in Wasabi
-  const exists = await fileExistsInWasabi(storageKey)
-  if (!exists) {
-    console.log(`[Wasabi] Database not found: ${storageKey}`)
-    return null
+  for (const dbName of allDatabases) {
+    const storageKey = buildStorageKey(tenantId, videoId, dbName)
+
+    // Check if exists in Wasabi
+    const exists = await fileExistsInWasabi(storageKey)
+    if (!exists) {
+      console.log(`[Wasabi] Database not found (may be optional): ${storageKey}`)
+      continue
+    }
+
+    // Download to cache (force refresh for writable databases)
+    const shouldForceRefresh = forceRefresh || config.writable.includes(dbName)
+    const localPath = await downloadDatabase(tenantId, videoId, dbName, shouldForceRefresh)
+    paths.set(dbName, localPath)
   }
 
-  // Download to cache
-  return downloadDatabase(tenantId, videoId, dbName)
+  return paths
+}
+
+/**
+ * Upload modified databases back to Wasabi after a workflow.
+ *
+ * @param tenantId - Tenant UUID
+ * @param videoId - Video UUID
+ * @param workflow - Workflow type determining which databases to upload
+ */
+export async function syncWorkflowDatabases(
+  tenantId: string,
+  videoId: string,
+  workflow: WorkflowType
+): Promise<void> {
+  const config = WORKFLOW_DATABASES[workflow]
+
+  for (const dbName of config.writable) {
+    const localPath = getCachePath(tenantId, videoId, dbName)
+    if (existsSync(localPath)) {
+      await uploadDatabase(tenantId, videoId, dbName)
+    }
+  }
 }
 
 /**

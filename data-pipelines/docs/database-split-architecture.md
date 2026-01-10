@@ -25,19 +25,11 @@ Video databases are split into 6 separate SQLite files based on update frequency
 **Size:** ~0.5-5 MB per video
 **DVC Impact:** Re-versioned only when OCR updated (~1-5% of videos at a time)
 
-#### cropping.db (Rare)
-**Tables:**
-- `cropped_frames` - Cropped frame images based on detected caption region
-- `video_layout_config` - Crop bounds configuration
-
-**Update Pattern:** When crop algorithm or layout configuration changes
-**Size:** ~90-420 MB per video
-**DVC Impact:** Re-versioned when crops regenerated (affects all videos but infrequent)
-
 #### layout.db (Frequent)
 **Tables:**
 - `full_frame_box_labels` - User annotations marking OCR boxes as "in" or "out" of caption region
 - `box_classification_model` - Trained Naive Bayes model (111 Gaussian parameters)
+- `video_layout_config` - Crop bounds configuration
 
 **Update Pattern:** During active layout annotation work
 **Size:** ~0.05-20 MB per video (depends on annotation density and model)

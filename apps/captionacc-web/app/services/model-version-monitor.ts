@@ -69,31 +69,57 @@ function calculateBoundsFromBoxes(
 }
 
 /**
- * Update crop bounds and mark captions as pending review
+ * Update crop bounds and mark captions as pending review (append-only for history)
  */
 function updateBoundsAndMarkPending(
   db: Database.Database,
   newBounds: { crop_left: number; crop_top: number; crop_right: number; crop_bottom: number },
   currentVersion: string
 ): void {
+  // Get current config
+  const current = db
+    .prepare('SELECT * FROM video_layout_config ORDER BY created_at DESC LIMIT 1')
+    .get() as Record<string, unknown> | undefined
+
+  if (!current) {
+    return // No config to update
+  }
+
+  // Insert new row with updated bounds (append-only for history)
   db.prepare(
-    `
-    UPDATE video_layout_config
-    SET
-      crop_left = ?,
-      crop_top = ?,
-      crop_right = ?,
-      crop_bottom = ?,
-      crop_bounds_version = crop_bounds_version + 1,
-      analysis_model_version = ?,
-      updated_at = datetime('now')
-    WHERE id = 1
-  `
+    `INSERT INTO video_layout_config (
+      frame_width, frame_height,
+      crop_left, crop_top, crop_right, crop_bottom,
+      selection_left, selection_top, selection_right, selection_bottom,
+      selection_mode,
+      vertical_position, vertical_std, box_height, box_height_std,
+      anchor_type, anchor_position, top_edge_std, bottom_edge_std,
+      horizontal_std_slope, horizontal_std_intercept,
+      crop_bounds_version, analysis_model_version
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
+    current['frame_width'],
+    current['frame_height'],
     newBounds.crop_left,
     newBounds.crop_top,
     newBounds.crop_right,
     newBounds.crop_bottom,
+    current['selection_left'],
+    current['selection_top'],
+    current['selection_right'],
+    current['selection_bottom'],
+    current['selection_mode'],
+    current['vertical_position'],
+    current['vertical_std'],
+    current['box_height'],
+    current['box_height_std'],
+    current['anchor_type'],
+    current['anchor_position'],
+    current['top_edge_std'],
+    current['bottom_edge_std'],
+    current['horizontal_std_slope'],
+    current['horizontal_std_intercept'],
+    (current['crop_bounds_version'] as number) + 1,
     currentVersion
   )
 
@@ -132,7 +158,7 @@ function getVideoModelInfo(db: Database.Database): VideoModelInfo | null {
 
   const layoutConfig = db
     .prepare(
-      'SELECT analysis_model_version, crop_left, crop_top, crop_right, crop_bottom FROM video_layout_config WHERE id = 1'
+      'SELECT analysis_model_version, crop_left, crop_top, crop_right, crop_bottom FROM video_layout_config ORDER BY created_at DESC LIMIT 1'
     )
     .get() as {
     analysis_model_version: string | null
@@ -180,10 +206,53 @@ function shouldRecalculatePredictions(
 }
 
 /**
- * Update model version without changing bounds
+ * Update model version by appending a new config row (append-only for history)
  */
 function updateModelVersionOnly(db: Database.Database, currentVersion: string): void {
-  db.prepare('UPDATE video_layout_config SET analysis_model_version = ? WHERE id = 1').run(
+  // Get current config
+  const current = db
+    .prepare('SELECT * FROM video_layout_config ORDER BY created_at DESC LIMIT 1')
+    .get() as Record<string, unknown> | undefined
+
+  if (!current) {
+    return // No config to update
+  }
+
+  // Insert new row with updated model version
+  db.prepare(
+    `INSERT INTO video_layout_config (
+      frame_width, frame_height,
+      crop_left, crop_top, crop_right, crop_bottom,
+      selection_left, selection_top, selection_right, selection_bottom,
+      selection_mode,
+      vertical_position, vertical_std, box_height, box_height_std,
+      anchor_type, anchor_position, top_edge_std, bottom_edge_std,
+      horizontal_std_slope, horizontal_std_intercept,
+      crop_bounds_version, analysis_model_version
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    current['frame_width'],
+    current['frame_height'],
+    current['crop_left'],
+    current['crop_top'],
+    current['crop_right'],
+    current['crop_bottom'],
+    current['selection_left'],
+    current['selection_top'],
+    current['selection_right'],
+    current['selection_bottom'],
+    current['selection_mode'],
+    current['vertical_position'],
+    current['vertical_std'],
+    current['box_height'],
+    current['box_height_std'],
+    current['anchor_type'],
+    current['anchor_position'],
+    current['top_edge_std'],
+    current['bottom_edge_std'],
+    current['horizontal_std_slope'],
+    current['horizontal_std_intercept'],
+    current['crop_bounds_version'],
     currentVersion
   )
 }

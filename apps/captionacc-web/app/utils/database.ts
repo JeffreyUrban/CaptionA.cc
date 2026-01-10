@@ -383,7 +383,7 @@ export async function withDatabaseNoTransaction<T extends Response>(
  * @returns Query result or null on error
  *
  * @example
- * const config = safeGet<VideoLayoutConfig>(db, 'SELECT * FROM video_layout_config WHERE id = 1')
+ * const config = safeGet<VideoLayoutConfig>(db, 'SELECT * FROM video_layout_config ORDER BY created_at DESC LIMIT 1')
  * if (!config) {
  *   // Handle missing config
  * }

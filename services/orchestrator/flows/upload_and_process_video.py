@@ -508,6 +508,117 @@ def run_ocr_to_full_ocr_db(
 
 
 @task(
+    name="create-layout-db",
+    tags=["video-processing", "database"],
+    log_prints=True,
+)
+def create_layout_db(output_path: str) -> dict[str, Any]:
+    """
+    Create layout.db with schema for layout annotation.
+
+    Creates empty tables:
+    - video_layout_config (populated when user saves layout)
+    - full_frame_box_labels (populated during annotation)
+    - box_classification_model (populated after training)
+
+    Args:
+        output_path: Path where layout.db will be created
+    """
+    import sqlite3
+
+    print(f"[layout.db] Creating layout database at {output_path}")
+
+    layout_db_path = Path(output_path).resolve()
+    layout_db_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Delete existing to ensure idempotency
+    if layout_db_path.exists():
+        layout_db_path.unlink()
+        print("[layout.db] Deleted existing layout database for clean creation")
+
+    conn = sqlite3.connect(str(layout_db_path))
+    try:
+        # Create video_layout_config table (append-only for history)
+        # Each save appends a new row; read the most recent row to get current config
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS video_layout_config (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                frame_width INTEGER NOT NULL,
+                frame_height INTEGER NOT NULL,
+                crop_left INTEGER NOT NULL,
+                crop_top INTEGER NOT NULL,
+                crop_right INTEGER NOT NULL,
+                crop_bottom INTEGER NOT NULL,
+                selection_left INTEGER,
+                selection_top INTEGER,
+                selection_right INTEGER,
+                selection_bottom INTEGER,
+                selection_mode TEXT DEFAULT 'disabled',
+                vertical_position REAL,
+                vertical_std REAL,
+                box_height REAL,
+                box_height_std REAL,
+                anchor_type TEXT,
+                anchor_position REAL,
+                top_edge_std REAL,
+                bottom_edge_std REAL,
+                horizontal_std_slope REAL,
+                horizontal_std_intercept REAL,
+                crop_bounds_version INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_layout_config_created ON video_layout_config(created_at DESC)"
+        )
+        print("[layout.db] Created video_layout_config table (append-only)")
+        # No initial row - inserted when user saves layout configuration
+
+        # Create full_frame_box_labels table (user annotations)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS full_frame_box_labels (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                frame_index INTEGER NOT NULL,
+                box_index INTEGER NOT NULL,
+                label TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(frame_index, box_index)
+            )
+        """)
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_box_labels_frame ON full_frame_box_labels(frame_index)"
+        )
+
+        # Create box_classification_model table (trained model parameters)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS box_classification_model (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                model_type TEXT NOT NULL DEFAULT 'naive_bayes',
+                model_data BLOB,
+                training_samples INTEGER DEFAULT 0,
+                accuracy REAL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        conn.commit()
+        print("[layout.db] Schema created successfully (all tables empty)")
+
+    except Exception as e:
+        conn.close()
+        raise RuntimeError(f"Failed to create layout.db schema: {e}") from e
+    finally:
+        conn.close()
+
+    return {
+        "db_path": str(layout_db_path),
+        "status": "created",
+    }
+
+
+@task(
     name="index-video-ocr-content",
     tags=["supabase", "search"],
     log_prints=True,
@@ -673,7 +784,7 @@ def upload_and_process_video_flow(
         )
 
         # Step 7: Upload fullOCR.db to Wasabi
-        print("\n📤 Step 7/7: Uploading fullOCR.db to Wasabi...")
+        print("\n📤 Step 7/9: Uploading fullOCR.db to Wasabi...")
         upload_database_to_wasabi(
             local_db_path=str(full_ocr_db_path),
             tenant_id=tenant_id,
@@ -681,8 +792,22 @@ def upload_and_process_video_flow(
             db_name="fullOCR.db",
         )
 
-        # Step 8: Index OCR content for search
-        print("\n🔍 Step 8/7: Indexing OCR content for search...")
+        # Step 8: Create empty layout.db
+        print("\n📝 Step 8/9: Creating empty layout.db...")
+        layout_db_path = video_dir / "layout.db"
+        create_layout_db(output_path=str(layout_db_path))
+
+        # Step 9: Upload layout.db to Wasabi
+        print("\n📤 Step 9/9: Uploading layout.db to Wasabi...")
+        upload_database_to_wasabi(
+            local_db_path=str(layout_db_path),
+            tenant_id=tenant_id,
+            video_id=video_id,
+            db_name="layout.db",
+        )
+
+        # Step 10: Index OCR content for search
+        print("\n🔍 Step 10/9: Indexing OCR content for search...")
         indexed_frames = index_video_ocr_content(video_id, str(full_ocr_db_path))
 
         # Update status to active

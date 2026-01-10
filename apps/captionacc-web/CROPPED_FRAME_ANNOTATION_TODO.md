@@ -34,8 +34,10 @@ This automatically includes:
 If you want to show annotations from other frames that spatially overlap the current cropped area:
 
 ```typescript
-// Get current crop bounds from video_layout_config
-const layoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get()
+// Get current crop bounds from video_layout_config (most recent row)
+const layoutConfig = db
+  .prepare('SELECT * FROM video_layout_config ORDER BY created_at DESC LIMIT 1')
+  .get()
 
 // Get all annotations that overlap the cropped region
 const overlappingAnnotations = db

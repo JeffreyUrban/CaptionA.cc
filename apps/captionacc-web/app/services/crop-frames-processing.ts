@@ -269,7 +269,7 @@ function getLayoutConfig(db: Database.Database): LayoutConfig | null {
     .prepare(
       `
       SELECT crop_left, crop_top, crop_right, crop_bottom
-      FROM video_layout_config WHERE id = 1
+      FROM video_layout_config ORDER BY created_at DESC LIMIT 1
     `
     )
     .get() as LayoutConfig | undefined
@@ -708,7 +708,7 @@ function getCropBoundsVersion(dbPath: string): number {
     const layoutConfig = db
       .prepare(
         `
-      SELECT crop_bounds_version FROM video_layout_config WHERE id = 1
+      SELECT crop_bounds_version FROM video_layout_config ORDER BY created_at DESC LIMIT 1
     `
       )
       .get() as { crop_bounds_version?: number } | undefined

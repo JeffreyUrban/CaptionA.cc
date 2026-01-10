@@ -296,10 +296,10 @@ export async function loader({ params }: LoaderFunctionArgs) {
     const db = await getDatabase(videoId)
     if (db instanceof Response) return db
 
-    // Get layout config
-    const layoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as
-      | VideoLayoutConfig
-      | undefined
+    // Get layout config (most recent row)
+    const layoutConfig = db
+      .prepare('SELECT * FROM video_layout_config ORDER BY created_at DESC LIMIT 1')
+      .get() as VideoLayoutConfig | undefined
 
     if (!layoutConfig) {
       db.close()

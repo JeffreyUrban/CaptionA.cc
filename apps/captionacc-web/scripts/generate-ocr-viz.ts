@@ -43,7 +43,7 @@ async function processVideo(
     // Check if already has visualization
     const existing = db
       .prepare(
-        'SELECT ocr_visualization_image IS NOT NULL as has_viz FROM video_layout_config WHERE id = 1'
+        'SELECT ocr_visualization_image IS NOT NULL as has_viz FROM video_layout_config ORDER BY created_at DESC LIMIT 1'
       )
       .get() as { has_viz: number } | undefined
     if (existing?.has_viz) {
@@ -66,9 +66,9 @@ async function processVideo(
     }
 
     // Get crop bounds and layout params
-    const layoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as
-      | LayoutConfig
-      | undefined
+    const layoutConfig = db
+      .prepare('SELECT * FROM video_layout_config ORDER BY created_at DESC LIMIT 1')
+      .get() as LayoutConfig | undefined
     if (!layoutConfig) {
       return { skipped: true, reason: 'no_config' }
     }
@@ -118,15 +118,48 @@ async function processVideo(
       layoutParams
     )
 
-    // Save to database
+    // Save to database (append-only pattern)
+    const current = db
+      .prepare('SELECT * FROM video_layout_config ORDER BY created_at DESC LIMIT 1')
+      .get() as Record<string, unknown>
+
     db.prepare(
-      `
-      UPDATE video_layout_config
-      SET ocr_visualization_image = ?,
-          updated_at = datetime('now')
-      WHERE id = 1
-    `
-    ).run(vizData)
+      `INSERT INTO video_layout_config (
+        frame_width, frame_height,
+        crop_left, crop_top, crop_right, crop_bottom,
+        selection_left, selection_top, selection_right, selection_bottom,
+        selection_mode,
+        vertical_position, vertical_std, box_height, box_height_std,
+        anchor_type, anchor_position, top_edge_std, bottom_edge_std,
+        horizontal_std_slope, horizontal_std_intercept,
+        crop_bounds_version, analysis_model_version, ocr_visualization_image
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      current['frame_width'],
+      current['frame_height'],
+      current['crop_left'],
+      current['crop_top'],
+      current['crop_right'],
+      current['crop_bottom'],
+      current['selection_left'],
+      current['selection_top'],
+      current['selection_right'],
+      current['selection_bottom'],
+      current['selection_mode'],
+      current['vertical_position'],
+      current['vertical_std'],
+      current['box_height'],
+      current['box_height_std'],
+      current['anchor_type'],
+      current['anchor_position'],
+      current['top_edge_std'],
+      current['bottom_edge_std'],
+      current['horizontal_std_slope'],
+      current['horizontal_std_intercept'],
+      current['crop_bounds_version'],
+      current['analysis_model_version'],
+      vizData
+    )
 
     return { processed: true, boxCount: boxes.length }
   } finally {
