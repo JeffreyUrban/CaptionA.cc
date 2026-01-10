@@ -38,6 +38,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
         Authorization: `Bearer ${accessToken}`,
       },
     },
+    db: {
+      schema: 'captionacc_production',
+    },
   })
 
   // Get current user from the access token
@@ -53,8 +56,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   console.log('[is-platform-admin] Checking admin status for user:', user.id)
 
-  // Check if user is platform admin
-  const isAdmin = await isPlatformAdmin(user.id)
+  // Check if user is platform admin (pass authenticated client for RLS)
+  const isAdmin = await isPlatformAdmin(user.id, supabase)
 
   console.log('[is-platform-admin] Result:', isAdmin)
 
