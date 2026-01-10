@@ -16,6 +16,70 @@ from rich.console import Console
 
 console = Console(stderr=True)
 
+# Embedded schema (avoids file dependency for Modal compatibility)
+BOUNDARIES_SCHEMA = """
+-- SQLite schema for boundaries inference database
+-- Each DB file contains results from ONE inference run (immutable)
+-- Filename format: v{frames_version}_model-{model_hash[:8]}_run-{uuid}.db
+
+-- Run metadata (self-describing file)
+CREATE TABLE IF NOT EXISTS run_metadata (
+  cropped_frames_version INTEGER,
+  model_version TEXT NOT NULL,              -- Full checkpoint hash or identifier
+  model_checkpoint_path TEXT,               -- Path to model checkpoint used
+  run_id TEXT PRIMARY KEY,                  -- UUID for this inference run
+  started_at TEXT NOT NULL,                 -- ISO 8601 timestamp
+  completed_at TEXT NOT NULL,               -- ISO 8601 timestamp
+  total_pairs INTEGER NOT NULL,             -- Number of frame pairs (typically ~25k)
+  processing_time_seconds REAL              -- Total processing time
+);
+
+-- Frame pair inference results
+-- Combined forward + backward in same row (25k rows instead of 50k)
+CREATE TABLE IF NOT EXISTS pair_results (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+  -- Frame pair (ordered: frame1_index < frame2_index)
+  frame1_index INTEGER NOT NULL,
+  frame2_index INTEGER NOT NULL,
+
+  -- Forward direction: frame1 → frame2
+  forward_predicted_label TEXT NOT NULL CHECK (
+    forward_predicted_label IN ('same', 'different', 'empty_empty', 'empty_valid', 'valid_empty')
+  ),
+  forward_confidence REAL NOT NULL CHECK (
+    forward_confidence >= 0.0 AND forward_confidence <= 1.0
+  ),
+  forward_prob_same REAL NOT NULL CHECK (forward_prob_same >= 0.0 AND forward_prob_same <= 1.0),
+  forward_prob_different REAL NOT NULL CHECK (forward_prob_different >= 0.0 AND forward_prob_different <= 1.0),
+  forward_prob_empty_empty REAL NOT NULL CHECK (forward_prob_empty_empty >= 0.0 AND forward_prob_empty_empty <= 1.0),
+  forward_prob_empty_valid REAL NOT NULL CHECK (forward_prob_empty_valid >= 0.0 AND forward_prob_empty_valid <= 1.0),
+  forward_prob_valid_empty REAL NOT NULL CHECK (forward_prob_valid_empty >= 0.0 AND forward_prob_valid_empty <= 1.0),
+
+  -- Backward direction: frame2 → frame1
+  backward_predicted_label TEXT NOT NULL CHECK (
+    backward_predicted_label IN ('same', 'different', 'empty_empty', 'empty_valid', 'valid_empty')
+  ),
+  backward_confidence REAL NOT NULL CHECK (
+    backward_confidence >= 0.0 AND backward_confidence <= 1.0
+  ),
+  backward_prob_same REAL NOT NULL CHECK (backward_prob_same >= 0.0 AND backward_prob_same <= 1.0),
+  backward_prob_different REAL NOT NULL CHECK (backward_prob_different >= 0.0 AND backward_prob_different <= 1.0),
+  backward_prob_empty_empty REAL NOT NULL CHECK (backward_prob_empty_empty >= 0.0 AND backward_prob_empty_empty <= 1.0),
+  backward_prob_empty_valid REAL NOT NULL CHECK (backward_prob_empty_valid >= 0.0 AND backward_prob_empty_valid <= 1.0),
+  backward_prob_valid_empty REAL NOT NULL CHECK (backward_prob_valid_empty >= 0.0 AND backward_prob_valid_empty <= 1.0),
+
+  -- Processing metadata
+  processing_time_ms REAL,                   -- Combined time for both directions
+
+  -- Unique constraint (no duplicates)
+  UNIQUE(frame1_index, frame2_index)
+);
+
+-- Index for efficient frame pair lookups
+CREATE INDEX IF NOT EXISTS idx_pair_frames ON pair_results(frame1_index, frame2_index);
+"""
+
 
 @dataclass
 class PairResult:
@@ -70,7 +134,7 @@ class PairResult:
 
 def create_boundaries_db(
     db_path: Path,
-    cropped_frames_version: int,
+    cropped_frames_version: int | None,
     model_version: str,
     run_id: str,
     started_at: datetime,
@@ -82,7 +146,7 @@ def create_boundaries_db(
 
     Args:
         db_path: Path for new database file
-        cropped_frames_version: Frame version number
+        cropped_frames_version: Frame version number (None for unversioned)
         model_version: Model checkpoint hash/identifier
         run_id: Inference run UUID
         started_at: Run start time
@@ -100,21 +164,13 @@ def create_boundaries_db(
     if db_path.exists():
         db_path.unlink()
 
-    # Read schema
-    schema_path = Path(__file__).parent.parent / "database" / "boundaries_schema.sql"
-    if not schema_path.exists():
-        raise FileNotFoundError(f"Schema file not found: {schema_path}")
-
-    with open(schema_path) as f:
-        schema_sql = f.read()
-
-    # Create database and apply schema
+    # Create database and apply schema (using embedded schema for Modal compatibility)
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 
     try:
-        # Execute schema
-        cursor.executescript(schema_sql)
+        # Execute schema (embedded for Modal compatibility)
+        cursor.executescript(BOUNDARIES_SCHEMA)
 
         # Insert run metadata
         processing_time = (completed_at - started_at).total_seconds()
@@ -278,14 +334,14 @@ def read_boundaries_db(db_path: Path) -> tuple[dict[str, Any], list[PairResult]]
 
 
 def get_db_filename(
-    cropped_frames_version: int,
+    cropped_frames_version: int | None,
     model_version: str,
     run_id: str,
 ) -> str:
     """Generate filename for boundaries database.
 
     Args:
-        cropped_frames_version: Frame version number
+        cropped_frames_version: Frame version number (None for unversioned)
         model_version: Model checkpoint hash/identifier
         run_id: Inference run UUID
 
@@ -294,8 +350,9 @@ def get_db_filename(
     """
     model_hash = model_version[:8] if len(model_version) > 8 else model_version
     run_uuid = run_id[:8] if len(run_id) > 8 else run_id
+    version_str = str(cropped_frames_version) if cropped_frames_version is not None else "0"
 
-    return f"v{cropped_frames_version}_model-{model_hash}_run-{run_uuid}.db"
+    return f"v{version_str}_model-{model_hash}_run-{run_uuid}.db"
 
 
 def compute_model_version_hash(checkpoint_path: Path) -> str:

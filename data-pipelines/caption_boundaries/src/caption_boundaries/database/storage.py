@@ -22,8 +22,12 @@ from sqlalchemy.orm import Session, sessionmaker
 from caption_boundaries.database.schema import Base
 
 
-def get_git_root() -> Path:
-    """Get the git repository root directory."""
+def get_git_root() -> Path | None:
+    """Get the git repository root directory.
+
+    Returns:
+        Path to git root, or None if not in a git repository or git is unavailable.
+    """
     try:
         result = subprocess.run(
             ["git", "rev-parse", "--show-toplevel"],
@@ -32,12 +36,35 @@ def get_git_root() -> Path:
             check=True,
         )
         return Path(result.stdout.strip())
-    except subprocess.CalledProcessError as e:
-        raise RuntimeError("Not in a git repository") from e
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        # Not in a git repository or git not installed
+        return None
 
 
-# Default database directory (relative to git root)
-DEFAULT_DATASET_DIR = get_git_root() / "local" / "models" / "caption_boundaries" / "datasets"
+def get_default_dataset_dir() -> Path:
+    """Get the default dataset directory.
+
+    Returns:
+        Path to dataset directory (relative to git root if available, else /tmp).
+    """
+    git_root = get_git_root()
+    if git_root:
+        return git_root / "local" / "models" / "caption_boundaries" / "datasets"
+    else:
+        # Fallback for environments without git (e.g., Modal containers)
+        return Path("/tmp") / "caption_boundaries" / "datasets"
+
+
+# Default database directory (lazy initialization avoided for Modal compatibility)
+DEFAULT_DATASET_DIR: Path | None = None
+
+
+def _get_dataset_dir() -> Path:
+    """Get dataset directory, initializing if needed."""
+    global DEFAULT_DATASET_DIR
+    if DEFAULT_DATASET_DIR is None:
+        DEFAULT_DATASET_DIR = get_default_dataset_dir()
+    return DEFAULT_DATASET_DIR
 
 
 def get_dataset_db_path(dataset_name: str) -> Path:
@@ -53,7 +80,7 @@ def get_dataset_db_path(dataset_name: str) -> Path:
         >>> get_dataset_db_path("production_v1")
         Path("local/models/caption_boundaries/datasets/production_v1.db")
     """
-    return DEFAULT_DATASET_DIR / f"{dataset_name}.db"
+    return _get_dataset_dir() / f"{dataset_name}.db"
 
 
 def get_db_url(db_path: Path) -> str:

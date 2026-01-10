@@ -86,8 +86,12 @@ if modal:
             "boto3",
             "pillow",
             "supabase",
+            "sqlalchemy",
+            "scikit-learn",
         )
         .apt_install("libgl1-mesa-glx", "libglib2.0-0")
+        # Add local caption_boundaries package to the image
+        .add_local_python_source("caption_boundaries")
     )
 
     # Model checkpoint volume (persistent across containers)
@@ -104,7 +108,7 @@ if modal:
     gpu="A10G",  # ~$1.10/hr
     volumes={"/models": model_volume},
     timeout=3600,  # 1 hour
-    container_idle_timeout=300,  # 5 min warm period
+    scaledown_window=300,  # 5 min warm period
 )
 def test_inference():
     """Test function to verify Modal setup and measure cold start.
@@ -170,9 +174,8 @@ def test_inference():
     gpu=MODAL_CONFIG.gpu_type,
     volumes={"/models": model_volume},
     timeout=MODAL_CONFIG.timeout_seconds,  # Hard timeout (see config.py)
-    container_idle_timeout=MODAL_CONFIG.container_idle_timeout_seconds,  # Idle shutdown (see config.py)
-    concurrency_limit=MODAL_CONFIG.concurrency_limit,  # Max parallel containers (see config.py)
-    allow_concurrent_inputs=MODAL_CONFIG.allow_concurrent_inputs,  # Queue limit (see config.py)
+    scaledown_window=MODAL_CONFIG.container_idle_timeout_seconds,  # Idle shutdown (see config.py)
+    max_containers=MODAL_CONFIG.concurrency_limit,  # Max parallel containers (see config.py)
     secrets=[
         modal.Secret.from_name("wasabi-credentials"),
         modal.Secret.from_name("supabase-credentials"),
@@ -181,7 +184,7 @@ def test_inference():
 def run_boundary_inference_batch(
     video_id: str,
     tenant_id: str,
-    cropped_frames_version: int,
+    cropped_frames_version: int | None,
     model_version: str,
     run_id: str,
     frame_pairs: list[tuple[int, int]],
@@ -191,7 +194,7 @@ def run_boundary_inference_batch(
     Args:
         video_id: Video UUID
         tenant_id: Tenant UUID
-        cropped_frames_version: Frame version number
+        cropped_frames_version: Frame version number (None for unversioned paths)
         model_version: Model checkpoint hash
         run_id: Inference run UUID
         frame_pairs: List of (frame1_index, frame2_index) tuples
@@ -219,19 +222,17 @@ def run_boundary_inference_batch(
         total_frame_pairs=len(frame_pairs),
     )
 
-    # Real implementation
-    # Import WasabiClient from services
-    # TODO: Move to shared package to avoid import path issues in Modal
-    import sys
     import tempfile
-    from collections import defaultdict
 
     from caption_boundaries.inference.batch_predictor import BatchBoundaryPredictor
     from caption_boundaries.inference.boundaries_db import PairResult, create_boundaries_db
-    from caption_boundaries.inference.frame_extractor import extract_frame_from_chunk
+    from caption_boundaries.inference.frame_extractor import (
+        download_and_extract_chunks_parallel,
+        get_frames_in_chunk,
+    )
 
-    sys.path.insert(0, "/root")  # Assume services code is available
-    from services.orchestrator.wasabi_client import WasabiClient
+    # Use local WasabiClient copy - services.orchestrator is not available in Modal containers
+    from caption_boundaries.inference.wasabi import WasabiClient
 
     print(f"\n{'=' * 60}")
     print(f"Starting Inference Job: {run_id}")
@@ -253,7 +254,8 @@ def run_boundary_inference_batch(
         # Step 1: Download layout.db
         print("[1/8] Downloading layout.db from Wasabi...")
         download_start = time.time()
-        layout_storage_key = f"videos/{tenant_id}/{video_id}/layout.db"
+        # Layout.db is stored alongside the video data (no extra "videos/" prefix)
+        layout_storage_key = f"{tenant_id}/{video_id}/layout.db"
         layout_db_path = tmp_path / "layout.db"
         wasabi.download_file(layout_storage_key, layout_db_path)
         print(f"  Downloaded in {time.time() - download_start:.2f}s\n")
@@ -261,7 +263,11 @@ def run_boundary_inference_batch(
         # Step 2: Load model
         print("[2/8] Loading model checkpoint...")
         model_load_start = time.time()
-        checkpoint_path = Path(f"/models/{model_version}.pt")
+        # Checkpoints are stored in /models/checkpoints/ subdirectory
+        checkpoint_path = Path(f"/models/checkpoints/{model_version}.pt")
+        if not checkpoint_path.exists():
+            # Fallback to root /models/ for backwards compatibility
+            checkpoint_path = Path(f"/models/{model_version}.pt")
         if not checkpoint_path.exists():
             raise FileNotFoundError(f"Model checkpoint not found: {checkpoint_path}")
 
@@ -273,118 +279,130 @@ def run_boundary_inference_batch(
         metrics.model_load_duration_ms = (time.time() - model_load_start) * 1000
         print(f"  Loaded in {metrics.model_load_duration_ms:.0f}ms\n")
 
-        # Step 3: Determine needed chunks and generate signed URLs
-        print("[3/8] Generating signed URLs for VP9 chunks...")
-        url_start = time.time()
+        # Step 3: List and download all chunks from all modulo levels
+        # We process all sequential frame pairs, so we need all frames
+        print("[3/8] Listing chunks from Wasabi...")
+        discover_start = time.time()
 
-        # Group frame indices by chunk
-        needed_chunks: dict[tuple[int, int], set[int]] = defaultdict(set)
-        for frame1_idx, frame2_idx in frame_pairs:
-            for frame_idx in [frame1_idx, frame2_idx]:
-                # Determine modulo level
-                if frame_idx % 16 == 0:
-                    modulo = 16
-                elif frame_idx % 4 == 0:
-                    modulo = 4
-                else:
-                    modulo = 1
+        import re
 
-                # Calculate chunk index
-                chunk_size = 32 * modulo
-                chunk_index = (frame_idx // chunk_size) * modulo
-                needed_chunks[(chunk_index, modulo)].add(frame_idx)
+        from PIL import Image as PILImage
 
-        # Generate signed URLs using WasabiClient
-        signed_urls = {}
-        for chunk_idx, modulo in needed_chunks.keys():
-            storage_key = wasabi.build_chunk_storage_key(
+        # chunk_info: dict mapping (chunk_start, modulo) -> (storage_key, list of frame indices)
+        chunk_info: dict[tuple[int, int], tuple[str, list[int]]] = {}
+
+        # List chunks for all three modulo levels
+        for modulo in [16, 4, 1]:
+            # Build prefix for this modulo directory
+            sample_key = wasabi.build_chunk_storage_key(
                 tenant_id=tenant_id,
                 video_id=video_id,
                 chunk_type="cropped_frames",
-                chunk_index=chunk_idx,
+                chunk_index=0,
                 version=cropped_frames_version,
                 modulo=modulo,
             )
-            signed_urls[chunk_idx] = wasabi.generate_presigned_url(storage_key, expiration=3600)
+            dir_prefix = "/".join(sample_key.split("/")[:-1]) + "/"
 
-        print(f"  Generated {len(signed_urls)} signed URLs in {time.time() - url_start:.2f}s\n")
+            # List all chunks in this directory
+            response = wasabi.s3_client.list_objects_v2(
+                Bucket=wasabi.bucket_name,
+                Prefix=dir_prefix,
+            )
 
-        # Step 4: Extract frames
-        print("[4/8] Extracting frames from VP9 chunks...")
-        extract_start = time.time()
-
-        # Extract unique frame indices
-        unique_frames = set()
-        for frame1_idx, frame2_idx in frame_pairs:
-            unique_frames.add(frame1_idx)
-            unique_frames.add(frame2_idx)
-
-        extracted_frames = {}
-        for frame_idx in sorted(unique_frames):
-            # Determine chunk
-            if frame_idx % 16 == 0:
-                modulo = 16
-            elif frame_idx % 4 == 0:
-                modulo = 4
-            else:
-                modulo = 1
-
-            chunk_size = 32 * modulo
-            chunk_index = (frame_idx // chunk_size) * modulo
-
-            if chunk_index not in signed_urls:
-                print(f"  [WARNING] Missing signed URL for chunk {chunk_index}, skipping frame {frame_idx}")
-                metrics.failed_inferences += 1
+            if "Contents" not in response:
+                print(f"  [WARNING] No chunks found for modulo_{modulo}")
                 continue
 
-            try:
-                frame = extract_frame_from_chunk(
-                    signed_url=signed_urls[chunk_index],
-                    frame_index=frame_idx,
-                    modulo=modulo,
-                )
-                # Convert to PIL
-                from PIL import Image as PILImage
+            # Parse chunk filenames
+            for obj in response["Contents"]:
+                key = obj["Key"]
+                match = re.search(r"chunk_(\d+)\.webm$", key)
+                if match:
+                    chunk_start = int(match.group(1))
+                    frames_in_chunk = get_frames_in_chunk(chunk_start, modulo)
+                    chunk_info[(chunk_start, modulo)] = (key, frames_in_chunk)
 
-                extracted_frames[frame_idx] = PILImage.fromarray(frame)
-            except Exception as e:
-                print(f"  [ERROR] Failed to extract frame {frame_idx}: {e}")
-                metrics.failed_inferences += 1
+        print(f"  Found {len(chunk_info)} total chunks across all modulo levels")
+        print(f"  Listing took {time.time() - discover_start:.2f}s\n")
 
-        print(f"  Extracted {len(extracted_frames)} frames in {time.time() - extract_start:.2f}s\n")
+        # Step 4: Download all chunks and extract all frames (parallel)
+        print("[4/8] Downloading chunks and extracting frames (parallel)...")
+        extract_start = time.time()
 
-        # Step 5: Run bidirectional inference
-        # Process both directions together for efficiency and completeness
-        print("[5/8] Running bidirectional batch inference...")
+        # Build list of (signed_url, chunk_start, modulo) for parallel download
+        chunk_download_list = []
+        for (chunk_start, modulo), (storage_key, _) in chunk_info.items():
+            signed_url = wasabi.generate_presigned_url(storage_key, expiration=3600)
+            chunk_download_list.append((signed_url, chunk_start, modulo))
+
+        print(f"  Downloading {len(chunk_download_list)} chunks in parallel...")
+
+        # Download and extract all frames in parallel
+        raw_frames = download_and_extract_chunks_parallel(chunk_download_list, max_workers=16)
+
+        # Convert numpy arrays to PIL Images
+        all_frames: dict[int, PILImage.Image] = {}
+        for frame_idx, frame_array in raw_frames.items():
+            all_frames[frame_idx] = PILImage.fromarray(frame_array)
+
+        print(f"  Extracted {len(all_frames)} total frames in {time.time() - extract_start:.2f}s\n")
+
+        # Step 5: Run GPU inference
+        print("[5/8] Running GPU inference...")
         inference_start = time.time()
 
-        # Prepare bidirectional batches: for each pair, process both directions together
-        # This ensures we complete database rows atomically and makes better use of GPU batching
-        bidirectional_pairs = []
+        # Split frame_pairs into batches for processing
+        batch_size = MODAL_CONFIG.inference_batch_size
+        num_batches = (len(frame_pairs) + batch_size - 1) // batch_size
+
+        print(f"  Processing {len(frame_pairs)} pairs in {num_batches} batches (batch_size={batch_size})")
+
+        # Results accumulators
+        forward_predictions = []
+        backward_predictions = []
         valid_indices = []
 
-        for i, (frame1_idx, frame2_idx) in enumerate(frame_pairs):
-            if frame1_idx in extracted_frames and frame2_idx in extracted_frames:
-                f1 = extracted_frames[frame1_idx]
-                f2 = extracted_frames[frame2_idx]
-                # Add both directions: (f1, f2) for forward, (f2, f1) for backward
-                bidirectional_pairs.append((f1, f2))
-                bidirectional_pairs.append((f2, f1))
-                valid_indices.append(i)
-            else:
-                metrics.failed_inferences += 1
+        for batch_idx in range(num_batches):
+            batch_start = batch_idx * batch_size
+            batch_end = min(batch_start + batch_size, len(frame_pairs))
+            batch = frame_pairs[batch_start:batch_end]
 
-        # Run batch prediction on all directions at once
-        # Batch size configured in config.py for GPU memory optimization
-        all_predictions = predictor.predict_batch(bidirectional_pairs, batch_size=MODAL_CONFIG.inference_batch_size)
+            # Prepare bidirectional pairs for GPU
+            bidirectional_pairs = []
+            batch_valid_indices = []
 
-        # Split predictions back into forward/backward pairs
-        forward_predictions = [all_predictions[i * 2] for i in range(len(valid_indices))]
-        backward_predictions = [all_predictions[i * 2 + 1] for i in range(len(valid_indices))]
+            for local_idx, (frame1_idx, frame2_idx) in enumerate(batch):
+                if frame1_idx in all_frames and frame2_idx in all_frames:
+                    f1 = all_frames[frame1_idx]
+                    f2 = all_frames[frame2_idx]
+                    bidirectional_pairs.append((f1, f2))  # Forward
+                    bidirectional_pairs.append((f2, f1))  # Backward
+                    batch_valid_indices.append(batch_start + local_idx)
+                else:
+                    metrics.failed_inferences += 1
+
+            # Run GPU inference on this batch
+            if bidirectional_pairs:
+                batch_predictions = predictor.predict_batch(bidirectional_pairs, batch_size=batch_size)
+
+                # Split into forward/backward
+                for i in range(len(batch_valid_indices)):
+                    forward_predictions.append(batch_predictions[i * 2])
+                    backward_predictions.append(batch_predictions[i * 2 + 1])
+                valid_indices.extend(batch_valid_indices)
+
+            # Progress update
+            if (batch_idx + 1) % 10 == 0 or batch_idx + 1 == num_batches:
+                elapsed = time.time() - inference_start
+                pairs_done = len(valid_indices)
+                rate = pairs_done / elapsed if elapsed > 0 else 0
+                print(f"  Batch {batch_idx + 1}/{num_batches}: {pairs_done} pairs @ {rate:.1f} pairs/sec")
 
         inference_end = time.time()
         inference_time = inference_end - inference_start
-        print(f"  Completed {len(forward_predictions)} pairs (bidirectional) in {inference_time:.2f}s\n")
+        print(f"  Completed {len(valid_indices)} pairs in {inference_time:.2f}s")
+        print(f"  Throughput: {len(valid_indices) / inference_time:.1f} pairs/sec\n")
 
         # Step 6: Create boundaries database
         print("[6/8] Creating boundaries database...")
@@ -520,9 +538,12 @@ def run_boundary_inference_batch(
     print(f"Total pairs: {metrics.total_frame_pairs}")
     print(f"Successful: {metrics.successful_inferences}")
     print(f"Failed: {metrics.failed_inferences}")
-    print(f"Throughput: {metrics.pairs_per_second:.2f} pairs/sec")
-    print(f"Avg time per pair: {metrics.avg_inference_time_ms:.2f} ms")
-    print(f"Total job time: {metrics.total_job_duration_ms / 1000:.2f} sec")
+    if metrics.pairs_per_second is not None:
+        print(f"Throughput: {metrics.pairs_per_second:.2f} pairs/sec")
+    if metrics.avg_inference_time_ms is not None:
+        print(f"Avg time per pair: {metrics.avg_inference_time_ms:.2f} ms")
+    if metrics.total_job_duration_ms is not None:
+        print(f"Total job time: {metrics.total_job_duration_ms / 1000:.2f} sec")
     if metrics.peak_memory_mb:
         print(f"Peak GPU memory: {metrics.peak_memory_mb:.1f} MB")
     print(f"{'=' * 60}\n")
@@ -536,69 +557,60 @@ def run_boundary_inference_batch(
 
 @app.local_entrypoint()
 def main():
-    """Test Modal deployment locally."""
-    print("🚀 Testing Modal inference service...")
+    """Test Modal deployment with real video data."""
+    import uuid
 
-    # Test 1: Cold start
-    print("\n[Test 1] Cold Start Test")
-    result1 = test_inference.remote()
+    print("🚀 Testing Modal inference with real video data...")
 
-    print("\n✅ Test Results:")
-    print(f"  Status: {result1['status']}")
-    print(f"  Device: {result1['device']}")
-    print(f"  GPU: {result1.get('gpu_name', 'N/A')}")
-    print(f"  Memory: {result1.get('gpu_memory_gb', 'N/A')} GB")
-    print("\n  Metrics:")
-    print(f"    Cold start: {result1['metrics']['is_cold_start']}")
-    print(f"    Init time: {result1['metrics']['initialization_ms']:.1f} ms")
+    # Test video parameters
+    VIDEO_ID = "50c16764-aa60-44bc-8a65-2a31e179897b"
+    TENANT_ID = "dev/users/default_user/videos"
+    MODEL_VERSION = "mrn0fkfd_a4b1a61c"
+    RUN_ID = str(uuid.uuid4())
 
-    # Test 2: Warm start (within 5 min idle timeout)
-    print("\n[Test 2] Warm Start Test (same container)")
-    import time
+    # Test with 50 frame pairs (every 20th frame from 0-1000)
+    frame_pairs = [(i, i + 1) for i in range(0, 1000, 20)]
 
-    time.sleep(1)  # Brief pause
-    result2 = test_inference.remote()
+    print("\nTest Configuration:")
+    print(f"  Video ID: {VIDEO_ID}")
+    print(f"  Tenant ID: {TENANT_ID}")
+    print(f"  Model Version: {MODEL_VERSION}")
+    print(f"  Run ID: {RUN_ID}")
+    print(f"  Frame pairs: {len(frame_pairs)}")
 
-    print("\n✅ Test Results:")
-    print("  Metrics:")
-    print(f"    Cold start: {result2['metrics']['is_cold_start']}")
-    print(f"    Container uptime: {result2['metrics']['container_uptime_s']:.1f} sec")
-    print(f"    Init time: {result2['metrics']['initialization_ms']:.1f} ms")
-
-    # Test 3: Batch inference with metrics
-    print("\n[Test 3] Batch Inference Test")
-    test_pairs = [(i, i + 1) for i in range(100)]  # 100 frame pairs
-
-    result3 = run_boundary_inference_batch.remote(
-        video_id="test-video",
-        tenant_id="test-tenant",
-        cropped_frames_version=1,
-        model_version="test-model",
-        run_id="test-run",
-        frame_pairs=test_pairs,
+    # Run inference
+    print("\n[1/2] Running boundary inference...")
+    result = run_boundary_inference_batch.remote(
+        video_id=VIDEO_ID,
+        tenant_id=TENANT_ID,
+        cropped_frames_version=None,  # No version suffix in test data
+        model_version=MODEL_VERSION,
+        run_id=RUN_ID,
+        frame_pairs=frame_pairs,
     )
 
-    print("\n✅ Batch Inference Results:")
-    print(f"  Processed: {len(result3['results'])} pairs")
-    print("  Metrics:")
-    for key, value in result3["metrics"].items():
-        if value is not None:
-            if isinstance(value, float):
-                print(f"    {key}: {value:.2f}")
-            else:
-                print(f"    {key}: {value}")
+    print("\n[2/2] Results:")
+    print(f"  Status: {result['status']}")
+    if result["status"] == "success":
+        print(f"  Storage key: {result['results'].get('storage_key', 'N/A')}")
+        print(f"  Total pairs: {result['results'].get('total_pairs', 'N/A')}")
+        print(f"  Successful: {result['results'].get('successful', 'N/A')}")
+        print(f"  Failed: {result['results'].get('failed', 'N/A')}")
 
-    if result1["gpu_available"]:
-        print("\n🎉 GPU inference ready!")
+        metrics = result.get("metrics", {})
+        print("\n  Performance Metrics:")
+        if metrics.get("total_job_ms"):
+            print(f"    Total job time: {metrics['total_job_ms'] / 1000:.2f} sec")
+        if metrics.get("pairs_per_second"):
+            print(f"    Throughput: {metrics['pairs_per_second']:.1f} pairs/sec")
+        if metrics.get("avg_inference_ms"):
+            print(f"    Avg inference time: {metrics['avg_inference_ms']:.2f} ms/pair")
+        if metrics.get("peak_memory_mb"):
+            print(f"    Peak GPU memory: {metrics['peak_memory_mb']:.1f} MB")
     else:
-        print("\n⚠️  No GPU detected (running on CPU)")
+        print(f"  Error: {result}")
 
-    print("\n💡 Usage Pattern Insights:")
-    print(f"  - Cold start overhead: {result1['metrics']['initialization_ms']:.0f} ms")
-    print("  - Warm start benefit: Container reuse within 5 min idle period")
-    print(f"  - Current throughput: {result3['metrics']['pairs_per_second']:.1f} pairs/sec (placeholder)")
-    estimated_min = 25000 / result3["metrics"]["pairs_per_second"] / 60
-    print(f"  - Estimated time for 25k pairs: {estimated_min:.1f} min (placeholder)")
+    print("\n🎉 Test complete!")
 
 
 if __name__ == "__main__":

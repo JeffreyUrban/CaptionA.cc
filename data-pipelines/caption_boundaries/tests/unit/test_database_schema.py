@@ -136,15 +136,6 @@ def test_training_sample_creation(test_db):
 
 
 @pytest.mark.unit
-@pytest.mark.skip(reason="FontEmbedding model removed from schema")
-def test_font_embedding_creation(test_db):
-    """Test creating font embeddings with video relationship."""
-    # NOTE: This test is skipped because FontEmbedding was removed from the database schema.
-    # Font embeddings are no longer used in the training pipeline.
-    pass
-
-
-@pytest.mark.unit
 def test_ocr_visualization_creation(test_db):
     """Test creating OCR visualizations."""
     # Create video first
@@ -276,12 +267,3 @@ def test_unique_constraints(test_db):
 
     with pytest.raises(IntegrityError):  # Unique constraint violation
         test_db.commit()
-
-
-@pytest.mark.unit
-@pytest.mark.skip(reason="FontEmbedding model removed from schema")
-def test_cascade_delete(test_db):
-    """Test cascade delete removes related records."""
-    # NOTE: This test is skipped because FontEmbedding was removed from the database schema.
-    # The test would need to be updated to use current schema models.
-    pass
