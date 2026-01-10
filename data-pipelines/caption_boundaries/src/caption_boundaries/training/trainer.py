@@ -134,8 +134,6 @@ class BalancedBatchSampler(Sampler):
         dataset: CaptionBoundaryDataset to sample from
         max_samples_per_class: Absolute cap on samples per class (recommended)
                               Example: 10000 = max 10K samples per class per epoch
-        majority_ratio: Ratio-based cap (legacy, for backward compatibility)
-                       Example: 3.0 = max 3× minority class size per class
 
     Note: If both specified, max_samples_per_class takes precedence.
 
@@ -152,15 +150,9 @@ class BalancedBatchSampler(Sampler):
         - Epoch time: grows with dataset size
     """
 
-    def __init__(
-        self,
-        dataset: CaptionBoundaryDataset,
-        max_samples_per_class: int | None = None,
-        majority_ratio: float | None = None,
-    ):
+    def __init__(self, dataset: CaptionBoundaryDataset, max_samples_per_class: int | None = None):
         self.dataset = dataset
         self.max_samples_per_class_param = max_samples_per_class
-        self.majority_ratio = majority_ratio
 
         # Group indices by label (access samples directly, don't call __getitem__)
         self.label_to_indices = defaultdict(list)
@@ -175,13 +167,8 @@ class BalancedBatchSampler(Sampler):
             # Cap-based mode (recommended)
             self.max_samples_per_class = max_samples_per_class
             self.sampling_mode = "cap"
-        elif majority_ratio is not None:
-            # Ratio-based mode (legacy)
-            self.min_class_size = min(self.class_sizes.values())
-            self.max_samples_per_class = int(self.min_class_size * majority_ratio)
-            self.sampling_mode = "ratio"
         else:
-            raise ValueError("Must specify either max_samples_per_class or majority_ratio")
+            raise ValueError("Must specify max_samples_per_class")
 
         # Calculate epoch size
         self.epoch_size = sum(
@@ -230,29 +217,15 @@ class CaptionBoundaryTrainer:
         save_every_n_epochs: Save checkpoint every N epochs
         balanced_sampling: Whether to use balanced sampling
         max_samples_per_class: Absolute cap on samples per class (recommended for scaling)
-        sampling_ratio: Ratio-based cap (legacy, for backward compatibility)
     """
 
-    def __init__(
-        self,
-        dataset_db_path: Path,
-        experiment_name: str,
-        architecture_name: str = "triple_backbone_resnet50",
-        model_config: dict[str, Any] | None = None,
-        transform_strategy: ResizeStrategy = ResizeStrategy.MIRROR_TILE,
-        ocr_viz_variant: str = "boundaries",
-        epochs: int = 50,
-        batch_size: int = 32,
-        lr_features: float = 1e-3,
-        lr_classifier: float = 1e-2,
-        device: str | None = None,
-        wandb_project: str = "caption-boundary-detection",
-        checkpoint_dir: Path = Path("checkpoints"),
-        save_every_n_epochs: int = 5,
-        balanced_sampling: bool = True,
-        max_samples_per_class: int | None = None,
-        sampling_ratio: float | None = 3.0,
-    ):
+    def __init__(self, dataset_db_path: Path, experiment_name: str, architecture_name: str = "triple_backbone_resnet50",
+                 model_config: dict[str, Any] | None = None,
+                 transform_strategy: ResizeStrategy = ResizeStrategy.MIRROR_TILE, ocr_viz_variant: str = "boundaries",
+                 epochs: int = 50, batch_size: int = 32, lr_features: float = 1e-3, lr_classifier: float = 1e-2,
+                 device: str | None = None, wandb_project: str = "caption-boundary-detection",
+                 checkpoint_dir: Path = Path("checkpoints"), save_every_n_epochs: int = 5,
+                 balanced_sampling: bool = True, max_samples_per_class: int | None = None):
         self.dataset_db_path = dataset_db_path
         self.experiment_name = experiment_name
         self.architecture_name = architecture_name
@@ -271,7 +244,6 @@ class CaptionBoundaryTrainer:
         # Balanced sampling configuration
         self.balanced_sampling = balanced_sampling
         self.max_samples_per_class = max_samples_per_class
-        self.sampling_ratio = sampling_ratio
 
         # Early stopping configuration
         self.early_stopping_patience = 5
@@ -324,11 +296,7 @@ class CaptionBoundaryTrainer:
 
         # Create train loader with optional balanced sampling
         if self.balanced_sampling:
-            train_sampler = BalancedBatchSampler(
-                self.train_dataset,
-                max_samples_per_class=self.max_samples_per_class,
-                majority_ratio=self.sampling_ratio,
-            )
+            train_sampler = BalancedBatchSampler(self.train_dataset, max_samples_per_class=self.max_samples_per_class)
 
             self.train_loader = DataLoader(
                 self.train_dataset,
@@ -344,8 +312,6 @@ class CaptionBoundaryTrainer:
                 console.print(
                     f"[cyan]Balanced sampling enabled (cap={self.max_samples_per_class:,} samples/class):[/cyan]"
                 )
-            else:
-                console.print(f"[cyan]Balanced sampling enabled (ratio={self.sampling_ratio}):[/cyan]")
             console.print(f"  Total train samples: {len(self.train_dataset)}")
             console.print(f"  Samples per epoch: {len(train_sampler)}")
             speedup = len(self.train_dataset) / len(train_sampler)
@@ -494,7 +460,6 @@ class CaptionBoundaryTrainer:
                 "epochs": self.epochs,
                 "batch_size": self.batch_size,
                 "balanced_sampling": self.balanced_sampling,
-                "sampling_ratio": self.sampling_ratio,
                 "lr_features": self.lr_features,
                 "lr_classifier": self.lr_classifier,
                 "optimizer": "AdamW",
@@ -919,7 +884,6 @@ class CaptionBoundaryTrainer:
                     "epochs": self.epochs,
                     "batch_size": self.batch_size,
                     "balanced_sampling": self.balanced_sampling,
-                    "sampling_ratio": self.sampling_ratio,
                     "lr_features": self.lr_features,
                     "lr_classifier": self.lr_classifier,
                     "optimizer": "AdamW",

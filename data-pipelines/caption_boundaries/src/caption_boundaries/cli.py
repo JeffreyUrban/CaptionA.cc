@@ -129,24 +129,13 @@ def train(
 
     try:
         # Initialize trainer
-        trainer = CaptionBoundaryTrainer(
-            dataset_db_path=dataset_db_path,
-            experiment_name=experiment_name,
-            architecture_name=architecture,
-            model_config={"pretrained": pretrained},
-            transform_strategy=strategy,
-            ocr_viz_variant=ocr_viz_variant,
-            epochs=epochs,
-            batch_size=batch_size,
-            lr_features=lr_features,
-            lr_classifier=lr_classifier,
-            device=device,
-            wandb_project=wandb_project,
-            checkpoint_dir=checkpoint_dir,
-            balanced_sampling=balanced_sampling,
-            max_samples_per_class=max_samples_per_class,
-            sampling_ratio=sampling_ratio,
-        )
+        trainer = CaptionBoundaryTrainer(dataset_db_path=dataset_db_path, experiment_name=experiment_name,
+                                         architecture_name=architecture, model_config={"pretrained": pretrained},
+                                         transform_strategy=strategy, ocr_viz_variant=ocr_viz_variant, epochs=epochs,
+                                         batch_size=batch_size, lr_features=lr_features, lr_classifier=lr_classifier,
+                                         device=device, wandb_project=wandb_project, checkpoint_dir=checkpoint_dir,
+                                         balanced_sampling=balanced_sampling,
+                                         max_samples_per_class=max_samples_per_class)
 
         # Run training
         trainer.train()
@@ -157,11 +146,6 @@ def train(
 
         traceback.print_exc()
         raise typer.Exit(code=1) from e
-
-
-# Removed: Local inference command deprecated
-# Frame storage migrated from SQLite BLOBs to Wasabi VP9 chunks
-# Use Modal serverless inference instead (see inference/service.py)
 
 
 @app.command()

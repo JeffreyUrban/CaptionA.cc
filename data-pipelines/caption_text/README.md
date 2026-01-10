@@ -31,8 +31,8 @@ uv pip install -e data-pipelines/caption_text
 
 Before running the pipeline, ensure you have:
 
-1. **Cropped frames** in `captions.db` (`cropped_frames` table)
-2. **Layout configuration** in `captions.db` (`video_layout_config` table)
+1. **Cropped frames** as WebM chunks in Wasabi (`cropped_frames_v{version}/` directory)
+2. **Layout configuration** in `layout.db` (`video_layout_config` table)
 3. **Caption boundaries** in `captions.db` (`captions` table)
 4. **Font example image** (reference image showing caption font style)
 

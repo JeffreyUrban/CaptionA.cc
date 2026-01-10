@@ -511,23 +511,6 @@ export async function loader() {
 }
 ```
 
-### Legacy File-Based Discovery
-
-**File:** `/apps/captionacc-web/app/utils/video-paths.ts`
-
-The `getAllVideos()` function should be marked as deprecated:
-
-```typescript
-/**
- * @deprecated Use Supabase API (/api/videos/list) instead
- * This function bypasses RLS and shows all videos
- * Kept for migration/debugging only
- */
-export function getAllVideos(): VideoMetadata[] {
-  // ... existing code ...
-}
-```
-
 ## Demo Videos
 
 ### Design: Shared Read-Only Content

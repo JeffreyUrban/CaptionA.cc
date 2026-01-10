@@ -43,7 +43,6 @@ export interface VideoStats {
   cropFramesStatus?: CropFramesStatus // Crop frames processing status
   textReviewStatus?: TextReviewStatus // Text review status
   boundaryPendingReview: number // Boundaries pending review
-  textPendingReview: number // Text annotations pending review (deprecated, use textReviewStatus)
   databaseId?: string // Unique ID that changes when database is recreated (for cache invalidation)
   badges: BadgeState[] // Calculated badge states for display
 }
@@ -94,7 +93,6 @@ function createEmptyStats(badges: BadgeState[] = []): VideoStats {
     hasOcrData: false,
     layoutApproved: false,
     boundaryPendingReview: 0,
-    textPendingReview: 0,
     badges,
   }
 }
@@ -158,33 +156,6 @@ function queryBoundaryPending(
     const errorStack = error instanceof Error ? error.stack : undefined
     console.error(`[getVideoStats] Error querying boundary_pending for ${videoId}:`, error)
     stageErrors.boundaries = { message: errorMessage, stack: errorStack }
-    return 0
-  }
-}
-
-/**
- * Query text pending count, recording errors to stageErrors
- * Note: This is deprecated in favor of queryTextReviewStatus, but kept for backward compatibility
- */
-function queryTextPending(
-  db: Database.Database,
-  videoId: string,
-  stageErrors: StageErrors
-): number {
-  try {
-    // Query the text_review_status table instead of counting individual flags
-    const statusRow = db.prepare(`SELECT status FROM text_review_status WHERE id = 1`).get() as
-      | { status: string }
-      | undefined
-
-    // If status is 'pending', return 1 to indicate there's text to review
-    // If 'complete' or no row, return 0
-    return statusRow?.status === 'pending' ? 1 : 0
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error)
-    const errorStack = error instanceof Error ? error.stack : undefined
-    console.error(`[getVideoStats] Error querying text_review_status for ${videoId}:`, error)
-    stageErrors.text = { message: errorMessage, stack: errorStack }
     return 0
   }
 }
@@ -769,17 +740,6 @@ function calculateTextBadge(
     }
   }
 
-  // Priority 2: Review (has text pending review)
-  if (stats.textPendingReview > 0) {
-    return {
-      type: 'text',
-      label: 'Text: Review',
-      color: 'yellow',
-      clickable: true,
-      url: `/annotate/text?videoId=${encodeURIComponent(videoId)}`,
-    }
-  }
-
   // Hide if none pending review (all text complete)
   return null
 }
@@ -811,7 +771,6 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
     const stageErrors: StageErrors = {}
     const basicResult = queryBasicStats(db)
     const boundaryPendingReview = queryBoundaryPending(db, videoId, stageErrors)
-    const textPendingReview = queryTextPending(db, videoId, stageErrors)
     const coveredFrames = queryCoveredFrames(db)
     const progress = totalFrames > 0 ? (coveredFrames / totalFrames) * 100 : 0
     const hasOcrData = queryHasOcrData(db)
@@ -824,7 +783,7 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
     // Build stats object (used twice: once for return, once for badge calculation)
     const statsWithoutBadges: Omit<VideoStats, 'badges'> = {
       totalAnnotations: basicResult.total,
-      pendingReview: boundaryPendingReview + textPendingReview,
+      pendingReview: boundaryPendingReview,
       confirmedAnnotations: basicResult.confirmed,
       predictedAnnotations: basicResult.predicted,
       gapAnnotations: basicResult.gaps,
@@ -837,7 +796,6 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
       cropFramesStatus,
       textReviewStatus,
       boundaryPendingReview,
-      textPendingReview,
       databaseId,
     }
 

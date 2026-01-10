@@ -247,7 +247,6 @@ This ensures the largest exponent is always 0, preventing overflow.
 
 **Implementation details**:
 - Database schema migration: Added 68 new columns (17 new features × 2 params × 2 classes)
-- Backward compatibility: Schema auto-migrates when model loads
 - Temporal metadata: Backfill script populates duration and timestamps for existing videos
 - Frame sampling: Currently fixed 10Hz indexing (native framerate support deferred)
 

@@ -5,7 +5,6 @@ Example of how to integrate Supabase status updates with Prefect flows.
 This flow demonstrates:
 1. Updating video status in Supabase
 2. Storing metadata in multi-tenant catalog
-3. Maintaining backward compatibility with SQLite database
 
 To migrate existing flows, add similar status updates at key points.
 """
@@ -84,7 +83,7 @@ def extract_full_frames(
 
     Args:
         video_path: Full path to video file
-        db_path: Path to captions.db
+        db_path: Path to video.db
         output_dir: Directory to write frames
         frame_rate: Frame extraction rate in Hz (default 0.1 = every 10 seconds)
 
@@ -158,12 +157,11 @@ def process_video_with_supabase_flow(
     This flow demonstrates how to:
     1. Update Supabase status throughout processing
     2. Index content for cross-video search
-    3. Maintain backward compatibility with SQLite
 
     Args:
         video_id: Video UUID (matches Supabase videos.id)
         video_path: Full path to video file
-        db_path: Path to captions.db
+        db_path: Path to video.db
         output_dir: Directory for frame output
         frame_rate: Frame extraction rate in Hz
 

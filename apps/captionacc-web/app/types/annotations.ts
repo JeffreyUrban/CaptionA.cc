@@ -184,26 +184,6 @@ export interface BoxData {
 }
 
 // =============================================================================
-// Legacy Types (Deprecated)
-// =============================================================================
-
-/**
- * Frame OCR data from legacy frames_ocr table.
- *
- * @deprecated Use full_frame_ocr table and OcrBoxRecord instead.
- * This type is kept for backward compatibility with older code paths.
- */
-export interface FrameOCR {
-  frame_index: number
-  /** Combined text from all OCR boxes */
-  ocr_text: string
-  /** JSON string: [[text, conf, [x, y, w, h]], ...] (PythonOCRAnnotation[]) */
-  ocr_annotations: string
-  /** Average confidence across all boxes */
-  ocr_confidence: number
-}
-
-// =============================================================================
 // Utility Types
 // =============================================================================
 

@@ -32,7 +32,7 @@ def create_test_frame(width: int = 480, height: int = 48) -> bytes:
 def setup_test_data(tmp_path: Path):
     """Setup test data with 1000 frames in both filesystem and database."""
     # Create database with schema
-    db_path = tmp_path / "captions.db"
+    db_path = tmp_path / "video.db"
     conn = sqlite3.connect(db_path)
     try:
         cursor = conn.cursor()

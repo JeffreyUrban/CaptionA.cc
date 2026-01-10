@@ -19,71 +19,6 @@ export interface VideoMetadata {
 }
 
 /**
- * Resolve display_path to storage_path by querying databases
- * DEPRECATED: Use Supabase queries instead
- * SERVER-SIDE ONLY
- *
- * Strategy: Scan all video databases to find one with matching display_path
- */
-export async function resolveDisplayPath(displayPath: string): Promise<string | null> {
-  if (typeof window !== 'undefined') {
-    throw new Error('resolveDisplayPath is server-side only')
-  }
-
-  const { existsSync, readdirSync } = await import('fs')
-  const { resolve } = await import('path')
-  const Database = (await import('better-sqlite3')).default
-
-  const dataDir = resolve(process.cwd(), '..', '..', 'local', 'processing')
-
-  // Scan all video directories for matching display_path
-  const scanDir = (dir: string): string | null => {
-    if (!existsSync(dir)) return null
-
-    const entries = readdirSync(dir, { withFileTypes: true })
-
-    for (const entry of entries) {
-      if (entry.isDirectory()) {
-        const fullPath = resolve(dir, entry.name)
-
-        // Check if this is a video directory (has captions.db)
-        const dbPath = resolve(fullPath, 'captions.db')
-        if (existsSync(dbPath)) {
-          try {
-            const db = new Database(dbPath, { readonly: true })
-            try {
-              const result = db
-                .prepare(
-                  `
-                SELECT storage_path FROM video_metadata WHERE id = 1 AND display_path = ?
-              `
-                )
-                .get(displayPath) as { storage_path: string } | undefined
-
-              if (result) {
-                return result.storage_path
-              }
-            } finally {
-              db.close()
-            }
-          } catch {
-            // Ignore DB errors, continue scanning
-          }
-        } else {
-          // Not a video directory, recurse
-          const found = scanDir(fullPath)
-          if (found) return found
-        }
-      }
-    }
-
-    return null
-  }
-
-  return scanDir(dataDir)
-}
-
-/**
  * Resolve videoId to storage_path
  * Uses hash-bucketing: first 2 chars of UUID
  */
@@ -106,18 +41,10 @@ export async function getVideoDir(pathOrId: string): Promise<string | null> {
 
   const dataDir = resolve(process.cwd(), '..', '..', 'local', 'processing')
 
-  // Check if it's a UUID (contains hyphens in UUID format)
-  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(pathOrId)
-
   let storagePath: string | null
 
-  if (isUUID) {
-    // It's a videoId - resolve directly
-    storagePath = resolveVideoId(pathOrId)
-  } else {
-    // It's a display_path - resolve via database query
-    storagePath = await resolveDisplayPath(pathOrId)
-  }
+  // It's a videoId - resolve directly
+  storagePath = resolveVideoId(pathOrId)
 
   if (!storagePath) return null
 
@@ -143,60 +70,6 @@ export async function getCaptionsDbPath(pathOrId: string): Promise<string | null
 
   const dbPath = resolve(videoDir, 'captions.db')
   return existsSync(dbPath) ? dbPath : null
-}
-
-/**
- * Get video metadata from database
- * DEPRECATED: Use Supabase queries instead
- * SERVER-SIDE ONLY
- */
-export async function getVideoMetadata(pathOrId: string): Promise<VideoMetadata | null> {
-  if (typeof window !== 'undefined') {
-    throw new Error('getVideoMetadata is server-side only')
-  }
-
-  const Database = (await import('better-sqlite3')).default
-
-  const dbPath = await getCaptionsDbPath(pathOrId)
-  if (!dbPath) return null
-
-  try {
-    const db = new Database(dbPath, { readonly: true })
-    try {
-      const result = db
-        .prepare(
-          `
-        SELECT video_id, video_hash, storage_path, display_path, original_filename
-        FROM video_metadata
-        WHERE id = 1
-      `
-        )
-        .get() as
-        | {
-            video_id: string
-            video_hash: string
-            storage_path: string
-            display_path: string
-            original_filename: string
-          }
-        | undefined
-
-      if (!result) return null
-
-      return {
-        videoId: result.video_id,
-        videoHash: result.video_hash,
-        storagePath: result.storage_path,
-        displayPath: result.display_path,
-        originalFilename: result.original_filename,
-      }
-    } finally {
-      db.close()
-    }
-  } catch (error) {
-    console.error(`[VideoResolution] Error reading metadata for ${pathOrId}:`, error)
-    return null
-  }
 }
 
 /**

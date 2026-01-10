@@ -558,12 +558,7 @@ Browser creates object URLs and displays images
    - Fetch from Wasabi: `fetch(signed_url)` instead of `atob(image_data)`
    - Rest of logic unchanged (caching, modulo groups, LRU, etc.)
 
-3. **Remove old batch endpoint** (DELETE or DEPRECATE)
-   - File: `apps/captionacc-web/app/routes/api.frames.$videoId.batch.tsx`
-   - No longer needed (was querying SQLite BLOBs)
-   - Keep temporarily for backward compatibility, then remove
-
-4. **Update single frame endpoint** (MODIFY)
+3. **Update single frame endpoint** (MODIFY)
    - File: `apps/captionacc-web/app/routes/api.frames.$videoId.$frameIndex[.jpg].tsx`
    - Query database for frame's `storage_location`
    - Generate signed URL
