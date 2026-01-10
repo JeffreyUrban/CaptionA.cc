@@ -84,9 +84,7 @@ except Exception as e:
     WASABI_AVAILABLE = False
 
 
-async def download_and_extract_frames(
-    job_id: str, tenant_id: str, video_id: str, frame_indices: List[int]
-) -> str:
+async def download_and_extract_frames(job_id: str, tenant_id: str, video_id: str, frame_indices: List[int]) -> str:
     """
     Download video.db from Wasabi and extract requested frames.
 
