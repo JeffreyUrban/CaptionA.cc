@@ -47,20 +47,55 @@ interface QueueFlowResult {
 }
 
 /**
+ * Deployment name suffix - allows multiple worktrees to use different deployments
+ *
+ * Priority order:
+ * 1. PREFECT_DEPLOY_NAME env var (for shell scripts)
+ * 2. VITE_PREFECT_DEPLOY_NAME env var (for Vite-loaded .env)
+ * 3. Auto-detect from directory path (e.g., CaptionA.cc-claude1 → "claude1")
+ * 4. Default to "production"
+ */
+function getDeployName(): string {
+  // Explicit env var takes priority (shell environment)
+  if (process.env['PREFECT_DEPLOY_NAME']) {
+    return process.env['PREFECT_DEPLOY_NAME']
+  }
+
+  // Check Vite-loaded env var (from .env file via envDir)
+  if (process.env['VITE_PREFECT_DEPLOY_NAME']) {
+    return process.env['VITE_PREFECT_DEPLOY_NAME']
+  }
+
+  // Auto-detect from directory path (e.g., /path/to/CaptionA.cc-claude1/...)
+  const cwd = process.cwd()
+  const match = cwd.match(/CaptionA\.cc-(\w+)/)
+  if (match) {
+    console.log(`[Prefect] Auto-detected deploy name from cwd: ${match[1]} (cwd: ${cwd})`)
+    return <string>match[1]
+  }
+
+  // Default to production
+  console.log(`[Prefect] Using default deploy name: production (cwd: ${cwd})`)
+  return 'production'
+}
+
+const DEPLOY_NAME = getDeployName()
+
+/**
  * Deployment name mapping for flow types
  */
 const DEPLOYMENT_NAMES: Record<string, string> = {
-  'full-frames': 'process-video-initial/production',
-  'crop-frames': 'crop-video-frames/production',
-  'caption-median-ocr': 'process-caption-median-ocr/production',
-  'update-base-model': 'update-base-model-globally/production',
-  'retrain-video-model': 'retrain-video-model/production',
-  'upload-and-process': 'upload-and-process-video/production',
-  'crop-frames-to-webm': 'crop-frames-to-webm/production',
-  'download-for-layout-annotation': 'download-for-layout-annotation/production',
-  'upload-layout-db': 'upload-layout-db/production',
-  'download-for-caption-annotation': 'download-for-caption-annotation/production',
-  'upload-captions-db': 'upload-captions-db/production',
+  'full-frames': `process-video-initial/${DEPLOY_NAME}`,
+  'crop-frames': `crop-video-frames/${DEPLOY_NAME}`,
+  'caption-median-ocr': `process-caption-median-ocr/${DEPLOY_NAME}`,
+  'update-base-model': `update-base-model-globally/${DEPLOY_NAME}`,
+  'retrain-video-model': `retrain-video-model/${DEPLOY_NAME}`,
+  'upload-and-process': `upload-and-process-video/${DEPLOY_NAME}`,
+  'crop-frames-to-webm': `crop-frames-to-webm/${DEPLOY_NAME}`,
+  'download-for-layout-annotation': `download-for-layout-annotation/${DEPLOY_NAME}`,
+  'upload-layout-db': `upload-layout-db/${DEPLOY_NAME}`,
+  'download-for-caption-annotation': `download-for-caption-annotation/${DEPLOY_NAME}`,
+  'upload-captions-db': `upload-captions-db/${DEPLOY_NAME}`,
 }
 
 /**
@@ -250,9 +285,9 @@ async function queueFlow(
 
   const deployment = await deploymentResponse.json()
 
-  // Step 2: Create flow run
+  // Step 2: Create flow run via deployment endpoint (inherits work pool)
   log(`[Prefect] Creating flow run for ${deploymentName}`)
-  const flowRunUrl = `${PREFECT_API_URL}/flow_runs/`
+  const flowRunUrl = `${PREFECT_API_URL}/deployments/${deployment.id}/create_flow_run`
 
   const response = await fetch(flowRunUrl, {
     method: 'POST',
@@ -260,8 +295,6 @@ async function queueFlow(
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      deployment_id: deployment.id,
-      flow_id: deployment.flow_id,
       parameters,
       tags,
     }),

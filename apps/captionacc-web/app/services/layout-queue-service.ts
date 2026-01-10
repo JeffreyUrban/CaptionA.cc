@@ -296,35 +296,52 @@ function checkProcessingStatus(db: Database.Database): ProcessingStatus {
  *
  * @param videoId - Video identifier
  * @param limit - Maximum number of frames to return (default: 11)
- * @returns Layout queue result with frames and config
- * @throws Error if video is not ready or data is missing
+ * @returns Layout queue result with frames and config, or null if not configured
+ * @throws Error if databases are not found
  */
 export async function getLayoutQueue(
   videoId: string,
   limit: number = 11
-): Promise<LayoutQueueResult> {
-  const result = await getAnnotationDatabase(videoId)
-  if (!result.success) {
-    throw new Error('Database not found')
+): Promise<LayoutQueueResult | null> {
+  // Get layout config from layout.db
+  const layoutResult = await getAnnotationDatabase(videoId, { dbName: 'layout.db' })
+  if (!layoutResult.success) {
+    throw new Error('layout.db not found')
   }
 
-  const db = result.db
+  let layoutConfig: VideoLayoutConfigRow | undefined
+  try {
+    // Get the most recent config (append-only table)
+    layoutConfig = layoutResult.db
+      .prepare('SELECT * FROM video_layout_config ORDER BY created_at DESC LIMIT 1')
+      .get() as VideoLayoutConfigRow | undefined
+  } finally {
+    layoutResult.db.close()
+  }
+
+  // If no layout config, return null (not configured yet)
+  if (!layoutConfig) {
+    return null
+  }
+
+  // Get OCR data from fullOCR.db
+  const ocrResult = await getAnnotationDatabase(videoId, { dbName: 'fullOCR.db' })
+  if (!ocrResult.success) {
+    throw new Error('fullOCR.db not found')
+  }
+
+  // Get box labels from layout.db
+  const layoutDbResult = await getAnnotationDatabase(videoId, { dbName: 'layout.db' })
+  if (!layoutDbResult.success) {
+    throw new Error('layout.db not found')
+  }
+
+  const ocrDb = ocrResult.db
+  const layoutDb = layoutDbResult.db
 
   try {
-    // Check processing status
-    checkProcessingStatus(db)
-
-    // Get layout config
-    const layoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as
-      | VideoLayoutConfigRow
-      | undefined
-
-    if (!layoutConfig) {
-      throw new Error('Layout config not found. Run full_frames analysis first.')
-    }
-
     // Load frames from full_frame_ocr table
-    const frameRows = db
+    const frameRows = ocrDb
       .prepare('SELECT DISTINCT frame_index FROM full_frame_ocr ORDER BY frame_index')
       .all() as Array<{ frame_index: number }>
 
@@ -332,13 +349,27 @@ export async function getLayoutQueue(
       throw new Error('No OCR data found in database. Run full_frames analysis first.')
     }
 
+    // Pre-load all box labels from layout.db for efficiency
+    const allLabels = layoutDb
+      .prepare('SELECT frame_index, box_index FROM full_frame_box_labels WHERE label_source = ?')
+      .all('user') as Array<{ frame_index: number; box_index: number }>
+
+    // Build a map of frame -> Set of labeled box indices
+    const labelsByFrame = new Map<number, Set<number>>()
+    for (const { frame_index, box_index } of allLabels) {
+      if (!labelsByFrame.has(frame_index)) {
+        labelsByFrame.set(frame_index, new Set())
+      }
+      labelsByFrame.get(frame_index)!.add(box_index)
+    }
+
     // Calculate caption box count for each frame
     const frameInfos: FrameQueueItem[] = frameRows.map(({ frame_index: frameIndex }) => {
-      // Get all OCR boxes for this frame with cached predictions
-      const ocrBoxes = db
+      // Get all OCR boxes for this frame
+      const ocrBoxes = ocrDb
         .prepare(
           `
-          SELECT box_index, text, confidence, x, y, width, height, predicted_confidence
+          SELECT box_index, text, confidence, bbox_left, bbox_top, bbox_right, bbox_bottom
           FROM full_frame_ocr
           WHERE frame_index = ?
           ORDER BY box_index
@@ -348,88 +379,56 @@ export async function getLayoutQueue(
         box_index: number
         text: string
         confidence: number
-        x: number
-        y: number
-        width: number
-        height: number
-        predicted_confidence: number | null
+        bbox_left: number
+        bbox_top: number
+        bbox_right: number
+        bbox_bottom: number
       }>
 
-      // Convert to annotation format for estimateCaptionBoxCount
-      const annotationsArray: PythonOCRAnnotation[] = ocrBoxes.map(box => [
-        box.text,
-        box.confidence,
-        [box.x, box.y, box.width, box.height],
-      ])
-
       const totalBoxCount = ocrBoxes.length
-      const captionBoxCount = estimateCaptionBoxCount(
-        annotationsArray,
-        layoutConfig.frame_width,
-        layoutConfig.frame_height,
-        {
-          left: layoutConfig.crop_left,
-          top: layoutConfig.crop_top,
-          right: layoutConfig.crop_right,
-          bottom: layoutConfig.crop_bottom,
-        }
-      )
 
-      // Get annotated box indices for this frame
-      const annotatedBoxIndices = new Set(
-        (
-          db
-            .prepare(
-              `
-            SELECT box_index
-            FROM full_frame_box_labels
-            WHERE frame_index = ? AND label_source = 'user'
-          `
-            )
-            .all(frameIndex) as Array<{ box_index: number }>
-        ).map(row => row.box_index)
-      )
+      // Count boxes inside crop bounds (likely caption boxes)
+      let captionBoxCount = 0
+      for (const box of ocrBoxes) {
+        const insideCrop =
+          box.bbox_left >= layoutConfig.crop_left &&
+          box.bbox_top >= layoutConfig.crop_top &&
+          box.bbox_right <= layoutConfig.crop_right &&
+          box.bbox_bottom <= layoutConfig.crop_bottom
+        if (insideCrop) captionBoxCount++
+      }
 
-      // Get minimum predicted confidence among unannotated boxes
-      const unannotatedPredictions: number[] = ocrBoxes
-        .filter(box => !annotatedBoxIndices.has(box.box_index))
-        .map(box => box.predicted_confidence ?? 0.5)
+      // Get labeled box indices for this frame
+      const labeledBoxIndices = labelsByFrame.get(frameIndex) ?? new Set<number>()
 
-      // All boxes annotated = push to end of queue (high confidence)
-      const minConfidence =
-        unannotatedPredictions.length > 0 ? Math.min(...unannotatedPredictions) : 1.0
+      // Count unlabeled boxes - default confidence 0.5 since predictions not cached yet
+      const unlabeledCount = ocrBoxes.filter(box => !labeledBoxIndices.has(box.box_index)).length
 
-      const hasAnnotations = annotatedBoxIndices.size > 0
-      const hasUnannotatedBoxes = unannotatedPredictions.length > 0
+      // All boxes labeled = push to end of queue (high confidence)
+      const minConfidence = unlabeledCount > 0 ? 0.5 : 1.0
+
+      const hasLabels = labeledBoxIndices.size > 0
+      const hasUnlabeledBoxes = unlabeledCount > 0
 
       return {
         frameIndex,
         totalBoxCount,
         captionBoxCount,
         minConfidence,
-        hasAnnotations,
-        hasUnannotatedBoxes,
+        hasAnnotations: hasLabels,
+        hasUnannotatedBoxes: hasUnlabeledBoxes,
         imageUrl: `/api/full-frames/${encodeURIComponent(videoId)}/${frameIndex}.jpg`,
       }
     })
 
-    // Filter out frames with no unannotated boxes, then sort by minimum confidence
-    const framesWithUnannotatedBoxes = frameInfos.filter(f => f.hasUnannotatedBoxes)
-    const topFrames = framesWithUnannotatedBoxes
+    // Filter out frames with no unlabeled boxes, then sort by minimum confidence
+    const framesWithUnlabeledBoxes = frameInfos.filter(f => f.hasUnannotatedBoxes)
+    const topFrames = framesWithUnlabeledBoxes
       .sort((a, b) => a.minConfidence - b.minConfidence)
       .slice(0, limit)
 
-    // Check if layout has been approved
-    let layoutApproved = false
-    try {
-      const prefs = db
-        .prepare('SELECT layout_approved FROM video_preferences WHERE id = 1')
-        .get() as { layout_approved: number } | undefined
-      layoutApproved = (prefs?.layout_approved ?? 0) === 1
-    } catch {
-      // Table or column doesn't exist
-      layoutApproved = false
-    }
+    // layoutApproved: for now, always false until we add this to Supabase
+    const layoutApproved = false
 
     return {
       frames: topFrames,
@@ -437,7 +436,8 @@ export async function getLayoutQueue(
       layoutApproved,
     }
   } finally {
-    db.close()
+    ocrDb.close()
+    layoutDb.close()
   }
 }
 
