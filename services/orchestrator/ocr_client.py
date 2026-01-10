@@ -4,7 +4,6 @@ OCR Service Client for CaptionA.cc Orchestrator
 Client for the OCR batch processing service deployed at captionacc-ocr.fly.dev
 """
 
-import base64
 import os
 import time
 from typing import Any
@@ -28,23 +27,21 @@ class OCRServiceClient:
         response.raise_for_status()
         return response.json()
 
-    def submit_job(self, images: list[dict[str, Any]]) -> str:
+    def submit_job(self, tenant_id: str, video_id: str, frame_indices: list[int]) -> str:
         """
-        Submit OCR job for async processing.
+        Submit OCR job for async processing using Wasabi storage references.
+
+        The OCR service will download video.db from Wasabi and extract the specified frames.
 
         Args:
-            images: List of dicts with 'id' and 'data' (bytes)
+            tenant_id: Tenant UUID
+            video_id: Video UUID
+            frame_indices: List of frame indices to process
 
         Returns:
             job_id to poll for results
         """
-        # Convert bytes to base64 for JSON serialization
-        payload = {
-            "images": [
-                {"id": img["id"], "data": base64.b64encode(img["data"]).decode("utf-8")}
-                for img in images
-            ]
-        }
+        payload = {"tenant_id": tenant_id, "video_id": video_id, "frame_indices": frame_indices}
 
         response = httpx.post(
             f"{self.base_url}/ocr/jobs",
@@ -104,18 +101,22 @@ class OCRServiceClient:
 
             time.sleep(poll_interval)
 
-    def process_batch(self, images: list[dict[str, Any]], timeout: float = 300) -> dict[str, Any]:
+    def process_batch(
+        self, tenant_id: str, video_id: str, frame_indices: list[int], timeout: float = 300
+    ) -> dict[str, Any]:
         """
         Submit job and wait for results (convenience method).
 
         Args:
-            images: List of dicts with 'id' and 'data' (bytes)
+            tenant_id: Tenant UUID
+            video_id: Video UUID
+            frame_indices: List of frame indices to process
             timeout: Max seconds to wait (default: 300s)
 
         Returns:
             OCR results dict with 'results', 'total_characters', etc.
         """
-        job_id = self.submit_job(images)
+        job_id = self.submit_job(tenant_id, video_id, frame_indices)
         return self.wait_for_job(job_id, timeout=timeout)
 
     def get_health(self) -> dict[str, Any]:
