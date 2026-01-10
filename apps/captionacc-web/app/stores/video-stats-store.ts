@@ -28,11 +28,13 @@ export interface VideoStatsStore {
   // State
   stats: Record<string, VideoStats>
   lastFetch: Record<string, number> // Timestamp of last fetch per video
+  deletedVideos: Record<string, true> // Videos that have been deleted (skip fetching)
 
   // Actions
   setStats: (videoId: string, stats: VideoStats) => void
   removeStats: (videoId: string) => void
   clearAll: () => void
+  clearDeletedVideos: () => void
 
   // Fetch from API
   fetchStats: (videoId: string, force?: boolean) => Promise<VideoStats | null>
@@ -82,6 +84,7 @@ export const useVideoStatsStore = create<VideoStatsStore>()(
       // Initial state
       stats: {},
       lastFetch: {},
+      deletedVideos: {},
       onNewVideo: null,
 
       // Set stats for a video
@@ -112,18 +115,30 @@ export const useVideoStatsStore = create<VideoStatsStore>()(
           return {
             stats: remainingStats,
             lastFetch: remainingFetch,
+            deletedVideos: { ...state.deletedVideos, [videoId]: true },
           }
         })
       },
 
       // Clear all stats
       clearAll: () => {
-        set({ stats: {}, lastFetch: {} })
+        set({ stats: {}, lastFetch: {}, deletedVideos: {} })
+      },
+
+      // Clear the deleted videos tracking (call when tree is fully updated)
+      clearDeletedVideos: () => {
+        set({ deletedVideos: {} })
       },
 
       // Fetch stats from API
       fetchStats: async (videoId, force = false) => {
         const state = get()
+
+        // Skip if video was recently deleted
+        if (state.deletedVideos[videoId]) {
+          return null
+        }
+
         const lastFetchTime = state.lastFetch[videoId] ?? 0
         const now = Date.now()
 

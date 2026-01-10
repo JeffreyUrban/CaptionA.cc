@@ -82,6 +82,10 @@ export async function action({ request }: ActionFunctionArgs) {
 
     return jsonResponse({ success: true, oldPath, newPath })
   } catch (error) {
+    // Re-throw Response objects (from auth failures)
+    if (error instanceof Response) {
+      throw error
+    }
     console.error('Error renaming video:', error)
     return errorResponse(error instanceof Error ? error.message : 'Unknown error', 500)
   }

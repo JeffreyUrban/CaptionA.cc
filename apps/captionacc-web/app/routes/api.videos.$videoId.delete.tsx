@@ -12,22 +12,21 @@ import { requireAuth, requireVideoOwnership } from '~/utils/api-auth'
  */
 async function cancelPrefectFlows(videoUuid: string): Promise<void> {
   return new Promise(resolve => {
-    console.log(`[VideoDelete] Looking for Prefect flows to cancel for: ${videoUuid}`)
-
     // Use Python to query and cancel flows via Prefect API
     const script = `
 import asyncio
 from prefect import get_client
+from prefect.client.schemas.filters import FlowRunFilter, FlowRunFilterState, FlowRunFilterStateType
 
 async def cancel_flows():
     async with get_client() as client:
-        # Get running/pending flows with video_id parameter matching
-        flows = await client.read_flow_runs(
-            flow_run_filter={
-                "state": {"type": {"any_": ["PENDING", "RUNNING", "SCHEDULED"]}},
-            },
-            limit=100
+        # Get running/pending flows
+        flow_filter = FlowRunFilter(
+            state=FlowRunFilterState(
+                type=FlowRunFilterStateType(any_=["PENDING", "RUNNING", "SCHEDULED"])
+            )
         )
+        flows = await client.read_flow_runs(flow_run_filter=flow_filter, limit=100)
 
         cancelled = 0
         for flow in flows:
@@ -35,12 +34,12 @@ async def cancel_flows():
             if flow.parameters and flow.parameters.get("video_id") == "${videoUuid}":
                 try:
                     await client.set_flow_run_state(flow.id, state_type="CANCELLED")
-                    print(f"Cancelled flow run {flow.id}")
                     cancelled += 1
-                except Exception as e:
-                    print(f"Failed to cancel {flow.id}: {e}")
+                except Exception:
+                    pass  # Silently ignore cancellation failures
 
-        print(f"Cancelled {cancelled} flow(s)")
+        if cancelled > 0:
+            print(f"Cancelled {cancelled} flow(s)")
 
 asyncio.run(cancel_flows())
 `
@@ -55,16 +54,16 @@ asyncio.run(cancel_flows())
       output += data.toString()
     })
 
-    proc.stderr?.on('data', data => {
-      output += data.toString()
+    // Capture stderr but don't log it - Prefect errors are non-critical here
+    proc.stderr?.on('data', () => {
+      // Silently ignore stderr - Prefect connection issues are non-critical
     })
 
     proc.on('close', code => {
-      if (code === 0) {
-        console.log(`[VideoDelete] Prefect flow cancellation complete: ${output.trim()}`)
-      } else {
-        console.log(`[VideoDelete] Prefect cancellation failed (code ${code}): ${output}`)
+      if (code === 0 && output.trim()) {
+        console.log(`[VideoDelete] ${output.trim()}`)
       }
+      // Don't log failures - Prefect cancellation is best-effort
       resolve()
     })
 
@@ -80,8 +79,6 @@ asyncio.run(cancel_flows())
  * Background cleanup function - cancels Prefect flows for video
  */
 async function cleanupVideo(videoId: string) {
-  console.log(`[VideoDelete] Starting cleanup for: ${videoId}`)
-
   // Cancel any running Prefect flows for this video
   await cancelPrefectFlows(videoId)
 
@@ -149,6 +146,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
     // Return success immediately
     return jsonResponse({ success: true, videoId })
   } catch (error) {
+    // Re-throw Response objects (from auth failures)
+    if (error instanceof Response) {
+      throw error
+    }
     console.error('Error deleting video:', error)
     return errorResponse(error instanceof Error ? error.message : 'Unknown error', 500)
   }
