@@ -8,7 +8,7 @@
 import type Database from 'better-sqlite3'
 
 import type { BoxLabel, TextAnchor } from '~/types/enums'
-import { getAnnotationDatabase } from '~/utils/database'
+import { getCaptionDb } from '~/utils/database'
 
 // =============================================================================
 // Type Definitions
@@ -303,7 +303,7 @@ export async function getLayoutQueue(
   videoId: string,
   limit: number = 11
 ): Promise<LayoutQueueResult> {
-  const result = await getAnnotationDatabase(videoId)
+  const result = await getCaptionDb(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -462,7 +462,7 @@ export async function findPotentialMislabels(
   videoId: string,
   limit: number = 100
 ): Promise<MislabelReviewResult> {
-  const result = await getAnnotationDatabase(videoId)
+  const result = await getCaptionDb(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -587,7 +587,7 @@ export async function getFrameAnnotationStats(videoId: string): Promise<{
   annotatedBoxes: number
   completionPercentage: number
 }> {
-  const result = await getAnnotationDatabase(videoId)
+  const result = await getCaptionDb(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }

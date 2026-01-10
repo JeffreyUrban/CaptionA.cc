@@ -2,6 +2,8 @@
 
 Deep learning pipeline for detecting caption boundary transitions by comparing consecutive cropped caption frames.
 
+# TODO: The database details in this doc are out of date. 
+
 ## Features
 
 - **OCR Box Visualization**: Multiple visualization strategies (boundaries, centers, 3D encoding)
@@ -22,9 +24,7 @@ uv sync
 
 ### 1. Create Training Dataset
 
-```bash
-caption_boundaries create-dataset my_dataset !__local/data/_has_been_deprecated__!/*/01
-```
+TODO
 
 ### 2. Train Model
 

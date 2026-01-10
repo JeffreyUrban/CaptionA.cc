@@ -3,6 +3,8 @@
 Interacts with captions.db for caption text reading, comparison, and vetting.
 """
 
+# TODO: The database details in this file are out of date.
+
 import sqlite3
 from pathlib import Path
 from typing import Any

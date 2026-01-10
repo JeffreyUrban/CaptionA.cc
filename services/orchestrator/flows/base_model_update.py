@@ -1,6 +1,8 @@
 """
 Base Model Update Flow
 
+# TODO: The database details in this file are out of date.
+
 Handles updating the global Bayesian base model and retraining all affected videos.
 
 The base model represents default priors for box classification (caption vs noise).

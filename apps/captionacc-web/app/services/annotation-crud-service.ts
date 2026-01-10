@@ -7,11 +7,7 @@
 
 import type Database from 'better-sqlite3'
 
-import {
-  getAnnotationDatabase,
-  getWritableDatabase,
-  getOrCreateAnnotationDatabase,
-} from '~/utils/database'
+import { getCaptionDb, getWritableCaptionDb, getOrCreateCaptionDb } from '~/utils/database'
 import { deleteCombinedImage } from '~/utils/image-processing'
 import type { AnnotationState, TextStatus } from '~/types/enums'
 import { queueCaptionMedianOcrProcessing } from './prefect'
@@ -514,7 +510,7 @@ export async function listAnnotations(
   workableOnly: boolean = false,
   limit?: number
 ): Promise<Annotation[]> {
-  const result = await getOrCreateAnnotationDatabase(videoId)
+  const result = await getOrCreateCaptionDb(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -558,7 +554,7 @@ export async function getAnnotation(
   videoId: string,
   annotationId: number
 ): Promise<Annotation | null> {
-  const result = await getAnnotationDatabase(videoId)
+  const result = await getCaptionDb(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -593,7 +589,7 @@ export async function createAnnotation(
   videoId: string,
   input: CreateAnnotationInput
 ): Promise<Annotation> {
-  const result = await getOrCreateAnnotationDatabase(videoId)
+  const result = await getOrCreateCaptionDb(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -699,7 +695,7 @@ export async function updateAnnotationWithOverlapResolution(
   videoId: string,
   input: UpdateAnnotationInput
 ): Promise<OverlapResolutionResult> {
-  const result = await getWritableDatabase(videoId)
+  const result = await getWritableCaptionDb(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -800,7 +796,7 @@ export async function updateAnnotationWithOverlapResolution(
  * @throws Error if database is not found
  */
 export async function deleteAnnotation(videoId: string, annotationId: number): Promise<boolean> {
-  const result = await getWritableDatabase(videoId)
+  const result = await getWritableCaptionDb(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -827,7 +823,7 @@ export async function deleteAnnotation(videoId: string, annotationId: number): P
  * @throws Error if database is not found
  */
 export async function clearAllAnnotations(videoId: string): Promise<number> {
-  const result = await getWritableDatabase(videoId)
+  const result = await getWritableCaptionDb(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -862,7 +858,7 @@ export async function getAnnotationFrames(
   videoId: string,
   annotationId: number
 ): Promise<AnnotationFrameRange | null> {
-  const result = await getAnnotationDatabase(videoId)
+  const result = await getCaptionDb(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -902,7 +898,7 @@ export async function updateAnnotationText(
   annotationId: number,
   input: UpdateTextInput
 ): Promise<Annotation> {
-  const result = await getWritableDatabase(videoId)
+  const result = await getWritableCaptionDb(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -945,7 +941,7 @@ export async function updateAnnotationText(
  * @throws Error if database or annotation is not found
  */
 export async function markTextPending(videoId: string, annotationId: number): Promise<Annotation> {
-  const result = await getWritableDatabase(videoId)
+  const result = await getWritableCaptionDb(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -987,7 +983,7 @@ export async function getNextTextPendingAnnotation(
   videoId: string,
   afterId?: number
 ): Promise<Annotation | null> {
-  const result = await getAnnotationDatabase(videoId)
+  const result = await getCaptionDb(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }

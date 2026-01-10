@@ -4,6 +4,8 @@
  * Helper functions for creating future migrations
  */
 
+// TODO: The database details in this file are out of date.
+
 import Database from 'better-sqlite3'
 
 /**

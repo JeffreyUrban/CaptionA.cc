@@ -4,6 +4,8 @@
  * Centralized logic for determining which schema file to use when creating new databases.
  */
 
+// TODO: The database details in this file are out of date.
+
 import { existsSync, readFileSync } from 'fs'
 import { resolve } from 'path'
 

@@ -328,4 +328,4 @@ For comprehensive monitoring with email/phone alerts, set up Better Stack:
 - [Better Stack Setup Guide](./BETTERSTACK_SETUP.md) ⭐ **Start here for notifications**
 - [Key Rotation Process](./KEY_ROTATION.md)
 - [Fly.io Deployment](../README.md#deployment)
-- [Wasabi Storage](../services/orchestrator/WASABI_ARCHITECTURE.md)
+- [Wasabi Storage](data-architecture/archive-revise-or-remove/WASABI_ARCHITECTURE.md)

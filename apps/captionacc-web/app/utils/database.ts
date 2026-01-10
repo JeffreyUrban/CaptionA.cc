@@ -34,7 +34,7 @@ export type DatabaseResult =
  * Options for database access functions.
  */
 export interface DatabaseOptions {
-  /** Open in read-only mode (default: false for getAnnotationDatabase, ignored for getOrCreate) */
+  /** Open in read-only mode (default: false for getCaptionDb, ignored for getOrCreate) */
   readonly?: boolean
 }
 
@@ -62,7 +62,7 @@ export interface TransactionOptions {
  * @returns DatabaseResult with database instance or error response
  *
  * @example
- * const result = await getAnnotationDatabase(videoId)
+ * const result = await getCaptionDb(videoId)
  * if (!result.success) return result.response
  * const db = result.db
  * try {
@@ -71,7 +71,7 @@ export interface TransactionOptions {
  *   db.close()
  * }
  */
-export async function getAnnotationDatabase(videoId: string): Promise<DatabaseResult> {
+export async function getCaptionDb(videoId: string): Promise<DatabaseResult> {
   const { existsSync } = await import('fs')
   const Database = (await import('better-sqlite3')).default
 
@@ -108,13 +108,13 @@ export async function getAnnotationDatabase(videoId: string): Promise<DatabaseRe
 /**
  * Get a read-write database connection for a video.
  *
- * Unlike getAnnotationDatabase, this opens the database in read-write mode.
+ * Unlike getCaptionDb, this opens the database in read-write mode.
  * Returns an error Response if the video or database doesn't exist.
  *
  * @param videoId - Video identifier (UUID or display path)
  * @returns DatabaseResult with database instance or error response
  */
-export async function getWritableDatabase(videoId: string): Promise<DatabaseResult> {
+export async function getWritableCaptionDb(videoId: string): Promise<DatabaseResult> {
   const { existsSync } = await import('fs')
   const Database = (await import('better-sqlite3')).default
 
@@ -164,11 +164,11 @@ export async function getWritableDatabase(videoId: string): Promise<DatabaseResu
  * @returns DatabaseResult with database instance or error response
  *
  * @example
- * const result = await getOrCreateAnnotationDatabase(videoId)
+ * const result = await getOrCreateCaptionDb(videoId)
  * if (!result.success) return result.response
  * const { db, created } = result
  */
-export async function getOrCreateAnnotationDatabase(
+export async function getOrCreateCaptionDb(
   videoId: string
 ): Promise<DatabaseResult & { created?: boolean }> {
   const { existsSync } = await import('fs')
@@ -257,11 +257,11 @@ export async function withDatabase<T extends Response>(
   // Get database connection
   let result: DatabaseResult & { created?: boolean }
   if (createIfMissing) {
-    result = await getOrCreateAnnotationDatabase(videoId)
+    result = await getOrCreateCaptionDb(videoId)
   } else if (readonly) {
-    result = await getAnnotationDatabase(videoId)
+    result = await getCaptionDb(videoId)
   } else {
-    result = await getWritableDatabase(videoId)
+    result = await getWritableCaptionDb(videoId)
   }
 
   if (!result.success) {
@@ -331,9 +331,7 @@ export async function withDatabaseNoTransaction<T extends Response>(
 ): Promise<T | Response> {
   const { readonly = false } = options
 
-  const result = readonly
-    ? await getAnnotationDatabase(videoId)
-    : await getWritableDatabase(videoId)
+  const result = readonly ? await getCaptionDb(videoId) : await getWritableCaptionDb(videoId)
 
   if (!result.success) {
     return result.response

@@ -1,5 +1,7 @@
 """Training data collection from confirmed text annotations across all videos."""
 
+# TODO: The database details in this file are out of date.
+
 import json
 import sqlite3
 from dataclasses import dataclass

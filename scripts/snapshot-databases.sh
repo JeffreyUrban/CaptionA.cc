@@ -9,6 +9,8 @@
 #
 # Safety: Only runs in main worktree, not branch worktrees
 
+# TODO: The database details in this file are out of date.
+
 set -e
 
 # Colors for output

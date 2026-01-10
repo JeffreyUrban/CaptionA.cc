@@ -5,7 +5,7 @@
  * This is a low-complexity service focused on annotation navigation operations.
  */
 
-import { getAnnotationDatabase, getWritableDatabase } from '~/utils/database'
+import { getCaptionDb, getWritableCaptionDb } from '~/utils/database'
 
 // =============================================================================
 // Type Definitions
@@ -128,7 +128,7 @@ export async function navigateAnnotation(
   currentId: number,
   direction: NavigationDirection
 ): Promise<NavigationResult> {
-  const result = await getAnnotationDatabase(videoId)
+  const result = await getCaptionDb(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -297,7 +297,7 @@ export async function getNextPendingAnnotation(
   videoId: string,
   afterId?: number
 ): Promise<Annotation | null> {
-  const result = await getAnnotationDatabase(videoId)
+  const result = await getCaptionDb(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -375,7 +375,7 @@ export async function getNextPendingAnnotation(
  * @throws Error if database is not found
  */
 export async function getProgressStats(videoId: string): Promise<ProgressStats> {
-  const result = await getAnnotationDatabase(videoId)
+  const result = await getCaptionDb(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -433,7 +433,7 @@ export async function markAnnotationReviewed(
   videoId: string,
   annotationId: number
 ): Promise<Annotation> {
-  const result = await getWritableDatabase(videoId)
+  const result = await getWritableCaptionDb(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -475,7 +475,7 @@ export async function getAnnotationById(
   videoId: string,
   annotationId: number
 ): Promise<Annotation | null> {
-  const result = await getAnnotationDatabase(videoId)
+  const result = await getCaptionDb(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }

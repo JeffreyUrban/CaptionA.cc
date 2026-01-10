@@ -1,5 +1,7 @@
 # Google Cloud Vision OCR Montage Testing
 
+# TODO: The database details in this file are out of date. 
+
 This directory contains scripts for testing Google Cloud Vision Document Text Detection API with different caption crop packing densities.
 
 ## Prerequisites

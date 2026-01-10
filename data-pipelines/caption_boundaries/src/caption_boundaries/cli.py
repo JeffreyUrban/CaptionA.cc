@@ -1,5 +1,7 @@
 """Command-line interface for caption boundaries detection pipeline."""
 
+# TODO: The database details in this file are out of date.
+
 import subprocess
 from pathlib import Path
 from typing import Literal, cast
@@ -169,10 +171,6 @@ def analyze(
     ocr_confidence_min: float = typer.Option(0.7, "--ocr-min", help="Minimum OCR confidence"),
 ):
     """Run quality checks on existing boundary predictions.
-
-    Examples:
-        # Analyze predictions from file
-        caption_boundaries analyze predictions.json --video-db !__local/data/_has_been_deprecated__!/61/61c3*/captions.db
     """
     import json
 
@@ -226,19 +224,6 @@ def create_dataset(
     description: str = typer.Option(None, "--description", "-d", help="Dataset description"),
 ):
     """Create training dataset from annotated videos.
-
-    Extracts frame pairs from confirmed caption boundaries in the specified
-    video directories. Supports glob patterns like '!__local/data/_has_been_deprecated__!/*/*/captions.db'.
-
-    Examples:
-        # Single video
-        caption_boundaries create-dataset my_dataset !__local/data/_has_been_deprecated__!/61/61c3123f-*/
-
-        # Multiple videos with glob
-        caption_boundaries create-dataset my_dataset '!__local/data/_has_been_deprecated__!/*/*/'
-
-        # Specific videos
-        caption_boundaries create-dataset my_dataset !__local/data/_has_been_deprecated__!/61/*/ !__local/data/_has_been_deprecated__!/95/*/
     """
     from caption_boundaries.data.dataset_builder import create_training_dataset
 

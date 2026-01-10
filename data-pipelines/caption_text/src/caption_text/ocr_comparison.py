@@ -4,6 +4,8 @@ Compares VLM-generated caption text with OCR text. When they match exactly,
 the caption is auto-validated as correct.
 """
 
+# TODO: The database details in this file are out of date.
+
 from pathlib import Path
 from typing import Any
 

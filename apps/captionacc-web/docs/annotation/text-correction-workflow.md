@@ -1,6 +1,8 @@
 # Text Annotation Workflow - Design Document
 
-**Status:** Planning Phase - See [/TEXT_ANNOTATION_PLANNING.md](../../../../TEXT_ANNOTATION_PLANNING.md) for current implementation plan
+# TODO: The database details in this doc are out of date.
+
+**Status:** Planning Phase - See [/TEXT_ANNOTATION_PLANNING.md](../../../../docs/data-architecture/archive-revise-or-remove/TEXT_ANNOTATION_PLANNING.md) for current implementation plan
 **Parent:** [overview.md](./overview.md)
 **Purpose:** Determine and correct caption text for annotated sequences
 

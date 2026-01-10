@@ -1,5 +1,7 @@
 # Caption Annotation UI - Design Overview
 
+# TODO: The database details in this doc are out of date.
+
 **Status:** Design Document (Planning Phase)
 **Created:** 2025-12-22
 **Purpose:** Document design decisions for web-based caption annotation interface

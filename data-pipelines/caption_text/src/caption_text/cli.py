@@ -1,5 +1,7 @@
 """Command-line interface for caption_text pipeline."""
 
+# TODO: The database details in this file are out of date.
+
 from pathlib import Path
 
 import typer

@@ -46,7 +46,7 @@
 - Missing `video_metadata` table = orphaned database
 - `SELECT COUNT(*) FROM video_metadata` should return 1
 
-**Strategy:** Repair incomplete databases rather than delete (partial recovery better than total loss). See [migrations.md](./migrations.md) for repair tool.
+**Strategy:** Repair incomplete databases rather than delete (partial recovery better than total loss). See [migrations.md](database/migrations.md) for repair tool.
 
 ## Database Administration
 
@@ -65,7 +65,7 @@
 - `GET /api/admin/databases/list` - Detailed list with filters
 - `GET /api/admin/databases/:videoId/schema` - Schema inspection
 
-**See:** [admin-roadmap.md](./admin-roadmap.md) for Phase 2+ features (background jobs, caching)
+**See:** [admin-roadmap.md](database/admin-roadmap.md) for Phase 2+ features (background jobs, caching)
 
 ## File Locations
 

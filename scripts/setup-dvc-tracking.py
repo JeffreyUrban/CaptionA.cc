@@ -10,6 +10,8 @@ Usage:
     python scripts/setup-dvc-tracking.py             # Execute DVC tracking
 """
 
+# TODO: The database details in this file are out of date.
+
 import argparse
 import subprocess
 from pathlib import Path

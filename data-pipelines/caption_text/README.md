@@ -2,6 +2,8 @@
 
 VLM-based caption text extraction and correction pipeline for CaptionA.cc.
 
+# TODO: The database details in this doc are out of date. 
+
 ## Overview
 
 This pipeline provides automated caption text extraction using a fine-tuned Qwen2.5-VL vision-language model, with OCR comparison for auto-validation and LLM-based error correction.

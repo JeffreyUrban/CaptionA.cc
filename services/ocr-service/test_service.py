@@ -5,6 +5,8 @@ Test script for OCR Batch Processing Service
 Validates the service is working correctly with sample data.
 """
 
+# TODO: The database details in this file are out of date.
+
 import base64
 import sqlite3
 import time

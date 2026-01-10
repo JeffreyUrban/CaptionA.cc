@@ -1,11 +1,5 @@
 Things to deprecate:
 
-`state.db`. Replaced with tables in supabase. 
-
-`local/data/` directory (this was a previous implementation spanning all data).
-
-Support for uploading video formats besides .mp4 
-
 unique filenames for video files. Name all video files as video.mp4
 
 video_search_index and related full-text search features

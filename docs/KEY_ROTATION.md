@@ -449,5 +449,5 @@ Use this checklist when rotating credentials:
 ## Related Documentation
 
 - [Health Checks & Monitoring](./HEALTH_CHECKS.md)
-- [Wasabi Storage Architecture](../services/orchestrator/WASABI_ARCHITECTURE.md)
+- [Wasabi Storage Architecture](data-architecture/archive-revise-or-remove/WASABI_ARCHITECTURE.md)
 - [Fly.io Deployment](../README.md#deployment)
