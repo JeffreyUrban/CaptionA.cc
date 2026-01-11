@@ -1,13 +1,14 @@
 # Architecture Decisions
 
 **Date:** 2026-01-11
+**Updated:** CR-SQLite sync model for client-facing databases
 **Context:** Migration from React Router SSR to SPA + FastAPI backend
 
 ## Services
 
 | Service | Function | Infra | Cost |
 |---------|----------|-------|------|
-| **api** | Sync: CRUD, layout analysis, presigned URLs | Fly.io (auto-stop) | Pay for usage |
+| **api** | Sync: database locks, CR-SQLite WebSocket, presigned URLs | Fly.io (auto-stop) | Pay for usage |
 | **prefect** | Job orchestration | Fly.io (auto-stop) | Pay for usage |
 | **modal-gpu** | Async: full_frames + OCR, crop + inference | Modal | Per-video, scales to 0 |
 
@@ -20,16 +21,24 @@ All services scale to zero when idle.
    Client ──presigned URL──▶ Wasabi
 
 2. FULL FRAMES + OCR (async, Modal)
-   modal-gpu: Wasabi (video) → full_frames (GPU FFmpeg) → thumbnails → OCR (Google Vision) → SQLite → Wasabi
+   modal-gpu: Wasabi (video) → full_frames → thumbnails → OCR → ocr-server.db → Wasabi
+                                                                → layout.db (boxes) → Wasabi
 
-3. USER SESSION (sync, Fly.io)
-   api: Wasabi (SQLite) ↔ LRU cache ↔ layout analysis
-        Wasabi (images) → presigned URLs → Client
-        Layout view: boxes JSON → client-side Canvas
+3. USER SESSION - LAYOUT (sync, Fly.io + CR-SQLite)
+   Client ◄──presigned URL── Wasabi (layout.db.gz, if no active session)
+   Client ◄──── WebSocket ────▶ api (working copy on disk)
+   api: box annotations ↔ ML predictions ↔ crop bounds
+        Periodically uploads to Wasabi (idle/checkpoint)
 
 4. CROP + INFERENCE (async, Modal, blocks user)
-   modal-gpu: Wasabi (video) + bounds → crop_frames (GPU FFmpeg) → inference → results → Wasabi
-   api: process results → captions.db → unblock user
+   modal-gpu: Wasabi (video) + bounds → crop_frames → inference → results → Wasabi
+   api: process results → captions.db → sync to client
+
+5. USER SESSION - CAPTIONS (sync, Fly.io + CR-SQLite)
+   Client ◄──presigned URL── Wasabi (captions.db.gz, if no active session)
+   Client ◄──── WebSocket ────▶ api (working copy on disk)
+   api: boundary edits, text edits
+        Periodically uploads to Wasabi
 ```
 
 ## Key Decisions
@@ -47,20 +56,56 @@ All services scale to zero when idle.
 - Client cannot forge paths - signature would be invalid
 - Upload URLs via Supabase Edge Functions (keeps Wasabi creds isolated from API)
 
-### API Style
-- REST for resources: captions, layout, preferences, stats
-- Everything scoped under `/videos/{videoId}`
-- Query params for filtering instead of separate endpoints
-- ~9 consolidated endpoints instead of 54
-- Client-facing only (no internal service endpoints)
-- Server-side operations (layout analysis, crop+inference) triggered by state changes, not client requests
+### CR-SQLite Sync (replaces REST + Supabase Realtime)
 
-### Realtime Updates (Event-Driven)
-- All realtime via Supabase Realtime (no SSE from FastAPI)
+Client-facing databases (`layout.db`, `captions.db`) sync via CR-SQLite:
+
+| Database | Sync Direction | Purpose |
+|----------|----------------|---------|
+| `layout.db` | Bidirectional | Client: annotations. Server: predictions, bounds |
+| `captions.db` | Client→Server | During caption workflow |
+
+**Why CR-SQLite:**
+- Instant local edits (no round-trip latency)
+- Automatic conflict resolution (CRDT-based, LWW)
+- Offline resilience for brief disconnections
+- Efficient sync (only changed rows, not full database)
+
+**Storage layers:**
+```
+Browser (wa-sqlite)     → instant edits
+Server (local disk)     → durable working copy, fsync before ack
+Wasabi S3 (.db.gz)      → cold storage, periodic upload, gzip compressed
+```
+
+**Lock model:**
+- User-level locking (not session-level)
+- Same user can switch tabs transparently (automatic handoff)
+- `video_database_state` table in Supabase tracks locks and versions
+- Lock types: `client` (user editing), `server` (ML processing)
+
+**Wasabi upload triggers:**
+- Idle timeout (no activity for ~5 min)
+- Periodic checkpoint (~15 min, timer resets on any upload)
+- Server shutdown (SIGTERM handler)
+- Workflow exit (user leaves video)
+
+**NOT triggers:** Individual syncs, WebSocket disconnect, session handoff.
+
+See: [Sync Protocol Reference](../data-architecture/sync-protocol.md)
+
+### API Style
+- **Sync endpoints** for database state, locks, WebSocket connection
+- **REST** for read-only data: stats, preferences, presigned URLs
+- Everything scoped under `/videos/{videoId}`
+- ~10 consolidated endpoints
+- Client-facing only (no internal service endpoints)
+- Server-side operations (layout analysis, crop+inference) triggered by state changes
+
+### Realtime Updates
+- **Database sync**: WebSocket for CR-SQLite changes (replaces Supabase Realtime for layout/captions)
+- **Job status**: Supabase Realtime for `videos` table changes (processing status)
 - Jobs write status directly to Supabase (no internal API endpoints)
-- SPA subscribes to `videos` table changes
-- Server-side jobs triggered by state changes (e.g., layout approval triggers crop+inference)
-- Simplifies api service (no connection management, no job orchestration endpoints)
 
 ### Prefect Hosting
 - Self-hosted on Fly.io (auto-stop)
@@ -69,36 +114,35 @@ All services scale to zero when idle.
 - Self-hosted: ~$3/mo, unlimited deployments
 
 ### Storage
-- **Videos**: Wasabi (presigned URLs for upload)
-- **Full frames**: Wasabi, presigned URLs to client for detailed view (~500KB each)
-- **Thumbnails**: Wasabi, presigned URLs to client for frame strip (~10KB each, ~100px wide)
-- **SQLite DBs**: Wasabi, LRU cached on api instance
-- **Inference runs**: Archived in Wasabi (`/{tenant}/{video}/inference_runs/`)
-- **captions.db**: Only distilled values from latest inference run
 
-### Layout State Sync
-- **Initial load**: Client fetches full state via `GET /layout` (version + boxes + bounds + frameConfidences)
-- **Updates**: Server pushes diffs to `layout_state` table via Supabase Realtime
-- **Diff format**: `{ version, diff: { boxLabels, frameConfidences } }` (sparse, only changed values)
-- **Large changes**: Server sends `{ version, diff: "reset" }` instead of enumerating changes
-- **Client logic**: If `diff === "reset"` or version gap detected, fetch full state
-- **No acks**: Client self-heals by detecting version gaps
-- **Threshold**: Server decides when to send "reset" (e.g., >100 box changes)
+**Wasabi S3:**
+- **Videos**: Original uploads, presigned URLs
+- **Full frames**: `full_frames/*.jpg`, presigned URLs to client (~500KB each)
+- **Thumbnails**: Alongside full frames (~10KB each, ~100px wide)
+- **Client databases**: `layout.db.gz`, `captions.db.gz` (gzip compressed, ~60-70% reduction)
+- **Server databases**: `ocr-server.db`, `layout-server.db` (uncompressed)
+- **Cropped frame chunks**: VP9 WebM files
+- **S3 versioning**: Enabled for corruption recovery
 
-### Layout View
-- Client renders boxes via Canvas (10k boxes)
-- No server-side image rendering
-- Bounds (crop, selection) computed server-side, not client-submitted
+**Server local disk:**
+- **Working copies**: `/var/data/captionacc/working/{tenant}/{video}/*.db`
+- **SQLite WAL mode**: Crash safety, concurrent reads
+- **Durability**: fsync/commit before sending ack to client
+
+**Compression:**
+- Client-facing databases gzip compressed for Wasabi storage
+- Browser decompresses using native `DecompressionStream`
+- Reduces upload/download time and storage cost
 
 ### Frame Images (Layout Page)
 - **Thumbnails generated during OCR job**: Ready when user arrives at layout page
 - **Presigned URLs fetched on-demand**: Client requests URLs for frames it needs
 - **Short-lived URLs**: ~15 min expiry, fetched close to use for security
 - **Workflow**:
-  1. Client gets `frameConfidences` from layout state
-  2. Client selects ~10 frames with lowest minConfidence
+  1. Client gets box data from layout.db (via CR-SQLite sync)
+  2. Client identifies frames needing review
   3. Client requests presigned URLs for those frames
-  4. As confidences update, client requests URLs for new frames rotating into view
+  4. As work progresses, client requests URLs for new frames
 
 ### Frame Chunks (Caption Editing)
 - **VP9 WebM chunks**: 32 cropped frames per chunk, generated during crop+inference
@@ -117,8 +161,16 @@ All services scale to zero when idle.
 - User blocked from video during crop + inference step
 
 ### Scaling
-- **Phase 1**: Single api instance (~512MB), SQLite LRU cache
-- **Phase 2**: Sticky sessions, multiple instances
-- **Phase 3**: Consistent hashing by user_id
+- **Phase 1**: Single api instance (~512MB), working copies on local disk
+- **Phase 2**: Sticky sessions by video_id, multiple instances
+- **Phase 3**: Consistent hashing for video_id → instance mapping
 - Large files stay off-instance (Wasabi), enabling small footprint
 
+---
+
+## Related Documentation
+
+- [API Endpoints](./api-endpoints.md) - Endpoint specifications
+- [Sync Protocol Reference](../data-architecture/sync-protocol.md) - CR-SQLite WebSocket protocol
+- [SQLite Database Reference](../data-architecture/sqlite-databases.md) - Database schemas
+- [Supabase Schema Reference](../data-architecture/supabase-schema.md) - PostgreSQL tables

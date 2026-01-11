@@ -3,6 +3,8 @@
 **Date:** 2026-01-10
 **Context:** Migration from React Router SSR to SPA + FastAPI backend
 
+> **Note (2026-01-11):** This audit was conducted before the decision to use CR-SQLite sync for `layout.db` and `captions.db`. Many of the annotation/layout routes listed below are now superseded by the CR-SQLite WebSocket sync protocol. See [api-endpoints.md](../api-endpoints.md) for the current endpoint design.
+
 ## Summary
 
 | Category | Routes | Target |
