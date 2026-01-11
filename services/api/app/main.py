@@ -1,11 +1,19 @@
 """CaptionA.cc API Service."""
 
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+logger = logging.getLogger(__name__)
 from app.routers import (
     actions,
     admin,
@@ -26,7 +34,23 @@ async def lifespan(app: FastAPI):
     """Application lifespan handler for startup/shutdown."""
     # Startup
     settings = get_settings()
-    print(f"Starting API service in {settings.environment} mode")
+    logger.info(f"Starting API service in {settings.environment} mode")
+
+    # Check for failed uploads from previous shutdown
+    from app.services.supabase_client import DatabaseStateRepository
+
+    repo = DatabaseStateRepository()
+    unsaved = await repo.get_all_with_unsaved_changes()
+    if unsaved:
+        logger.error(
+            f"Found {len(unsaved)} databases with unsaved changes from previous session. "
+            "Previous shutdown may have failed to upload to Wasabi."
+        )
+        for state in unsaved:
+            logger.error(
+                f"  - {state.get('video_id')}/{state.get('database_name')}: "
+                f"server_version={state.get('server_version')} wasabi_version={state.get('wasabi_version')}"
+            )
 
     # Start background Wasabi upload worker
     upload_worker = get_upload_worker()
@@ -35,7 +59,7 @@ async def lifespan(app: FastAPI):
     yield
 
     # Shutdown - upload all pending changes before exit
-    print("Shutting down API service")
+    logger.info("Shutting down API service")
     await upload_worker.stop()
 
 
