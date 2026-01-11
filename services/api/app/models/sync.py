@@ -69,6 +69,29 @@ class DownloadUrlResponse(BaseModel):
     version: int
 
 
+class S3CredentialsInfo(BaseModel):
+    """Temporary AWS credentials for S3 access."""
+
+    access_key_id: str
+    secret_access_key: str
+    session_token: str
+
+
+class S3CredentialsResponse(BaseModel):
+    """Response for GET /s3-credentials.
+
+    Provides temporary credentials for direct Wasabi S3 access
+    scoped to the tenant's client/ paths (read-only).
+    """
+
+    credentials: S3CredentialsInfo
+    expiration: datetime
+    bucket: str
+    region: str
+    endpoint: str
+    prefix: str  # e.g. "{tenant_id}/videos/*/client/"
+
+
 # =============================================================================
 # WebSocket Message Models
 # =============================================================================

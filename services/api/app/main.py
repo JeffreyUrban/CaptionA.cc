@@ -19,6 +19,7 @@ from app.routers import (
     admin,
     boxes,
     captions,
+    credentials,
     layout,
     preferences,
     stats,
@@ -97,6 +98,9 @@ def create_app() -> FastAPI:
     # CR-SQLite sync routers
     app.include_router(sync.router, prefix="/videos", tags=["sync"])
     app.include_router(websocket_sync.router, prefix="/videos", tags=["sync"])
+
+    # S3 credentials (root-level endpoint)
+    app.include_router(credentials.router, tags=["credentials"])
 
     @app.get("/health")
     async def health_check():
