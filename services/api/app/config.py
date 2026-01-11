@@ -23,8 +23,8 @@ class Settings(BaseSettings):
     api_port: int = 8000
 
     # Supabase Auth
-    supabase_url: str
-    supabase_jwt_secret: str
+    supabase_url: str = ""
+    supabase_jwt_secret: str = "test-secret-for-development-only"
 
     # Wasabi S3
     wasabi_access_key_id: str = ""
