@@ -50,38 +50,42 @@ class CaptionRepository:
 
     def list_captions(
         self,
-        start_frame: int,
-        end_frame: int,
+        start_frame: int | None = None,
+        end_frame: int | None = None,
         workable_only: bool = False,
         limit: int | None = None,
     ) -> list[Caption]:
         """
-        List captions overlapping a frame range.
+        List captions, optionally filtered by frame range.
 
         Args:
-            start_frame: Start of frame range
-            end_frame: End of frame range
+            start_frame: Start of frame range (optional, None = no filter)
+            end_frame: End of frame range (optional, None = no filter)
             workable_only: If True, only return gaps or pending captions
             limit: Maximum number of captions to return
         """
+        conditions = []
+        params: list = []
+
+        # Add frame range filter if both provided
+        if start_frame is not None and end_frame is not None:
+            conditions.append("end_frame_index >= ? AND start_frame_index <= ?")
+            params.extend([start_frame, end_frame])
+
+        # Add workable filter
         if workable_only:
-            query = """
-                SELECT * FROM captions
-                WHERE end_frame_index >= ? AND start_frame_index <= ?
-                AND (boundary_state = 'gap' OR boundary_pending = 1)
-                ORDER BY start_frame_index
-            """
+            conditions.append("(boundary_state = 'gap' OR boundary_pending = 1)")
+
+        # Build query
+        if conditions:
+            query = f"SELECT * FROM captions WHERE {' AND '.join(conditions)} ORDER BY start_frame_index"
         else:
-            query = """
-                SELECT * FROM captions
-                WHERE end_frame_index >= ? AND start_frame_index <= ?
-                ORDER BY start_frame_index
-            """
+            query = "SELECT * FROM captions ORDER BY start_frame_index"
 
         if limit:
             query += f" LIMIT {limit}"
 
-        cursor = self.conn.execute(query, (start_frame, end_frame))
+        cursor = self.conn.execute(query, params)
         rows = cursor.fetchall()
         return [Caption.from_row(_row_to_caption_row(row)) for row in rows]
 
@@ -224,6 +228,54 @@ class CaptionRepository:
         )
         self.conn.commit()
         return self.get_caption(caption_id)
+
+    def update_caption_simple(self, caption_id: int, data: dict) -> bool:
+        """
+        Update caption fields directly without overlap resolution.
+
+        Used by batch operations where client handles overlap logic.
+
+        Args:
+            caption_id: ID of caption to update
+            data: Dict of field names (camelCase) to values
+        """
+        if not data:
+            return True
+
+        # Map camelCase to snake_case
+        field_map = {
+            "startFrameIndex": "start_frame_index",
+            "endFrameIndex": "end_frame_index",
+            "boundaryState": "boundary_state",
+            "text": "text",
+            "textStatus": "text_status",
+            "textNotes": "text_notes",
+        }
+
+        # Build SET clause
+        set_parts = []
+        params = []
+        for camel_key, value in data.items():
+            snake_key = field_map.get(camel_key)
+            if snake_key:
+                # Handle enum values
+                if hasattr(value, "value"):
+                    value = value.value
+                set_parts.append(f"{snake_key} = ?")
+                params.append(value)
+
+        if not set_parts:
+            return True
+
+        # Add updated timestamp
+        set_parts.append("boundary_updated_at = datetime('now')")
+
+        params.append(caption_id)
+        query = f"UPDATE captions SET {', '.join(set_parts)} WHERE id = ?"
+
+        cursor = self.conn.execute(query, params)
+        self.conn.commit()
+        return cursor.rowcount > 0
 
     def delete_caption(self, caption_id: int) -> bool:
         """Delete a caption."""

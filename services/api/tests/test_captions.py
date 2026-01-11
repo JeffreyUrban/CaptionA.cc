@@ -360,6 +360,365 @@ class TestDeleteCaption:
         assert response.status_code == 404
 
 
+class TestBatchCaptions:
+    """Tests for POST /videos/{video_id}/captions/batch."""
+
+    @pytest.mark.asyncio
+    async def test_batch_create(
+        self, client_empty_db: AsyncClient, test_video_id: str, auth_headers: dict
+    ):
+        """Should create captions in batch."""
+        response = await client_empty_db.post(
+            f"/videos/{test_video_id}/captions/batch",
+            json={
+                "operations": [
+                    {
+                        "op": "create",
+                        "data": {
+                            "startFrameIndex": 0,
+                            "endFrameIndex": 100,
+                            "text": "Caption 1",
+                        },
+                    },
+                    {
+                        "op": "create",
+                        "data": {
+                            "startFrameIndex": 100,
+                            "endFrameIndex": 200,
+                            "text": "Caption 2",
+                        },
+                    },
+                ]
+            },
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert len(data["results"]) == 2
+        assert data["results"][0]["op"] == "create"
+        assert data["results"][1]["op"] == "create"
+        # IDs should be assigned
+        assert data["results"][0]["id"] is not None
+        assert data["results"][1]["id"] is not None
+
+    @pytest.mark.asyncio
+    async def test_batch_update(
+        self, client: AsyncClient, test_video_id: str, auth_headers: dict
+    ):
+        """Should update captions in batch."""
+        response = await client.post(
+            f"/videos/{test_video_id}/captions/batch",
+            json={
+                "operations": [
+                    {
+                        "op": "update",
+                        "id": 1,
+                        "data": {"text": "Updated caption 1"},
+                    },
+                ]
+            },
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert len(data["results"]) == 1
+        assert data["results"][0]["op"] == "update"
+        assert data["results"][0]["id"] == 1
+
+    @pytest.mark.asyncio
+    async def test_batch_delete(
+        self, client: AsyncClient, test_video_id: str, auth_headers: dict
+    ):
+        """Should delete captions in batch."""
+        response = await client.post(
+            f"/videos/{test_video_id}/captions/batch",
+            json={
+                "operations": [
+                    {"op": "delete", "id": 4},
+                ]
+            },
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert len(data["results"]) == 1
+        assert data["results"][0]["op"] == "delete"
+
+    @pytest.mark.asyncio
+    async def test_batch_mixed_operations(
+        self, client: AsyncClient, test_video_id: str, auth_headers: dict
+    ):
+        """Should handle mixed create/update/delete operations."""
+        response = await client.post(
+            f"/videos/{test_video_id}/captions/batch",
+            json={
+                "operations": [
+                    {
+                        "op": "create",
+                        "data": {
+                            "startFrameIndex": 500,
+                            "endFrameIndex": 600,
+                            "text": "New caption",
+                        },
+                    },
+                    {
+                        "op": "update",
+                        "id": 1,
+                        "data": {"text": "Modified"},
+                    },
+                    {"op": "delete", "id": 4},
+                ]
+            },
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert len(data["results"]) == 3
+        assert data["results"][0]["op"] == "create"
+        assert data["results"][1]["op"] == "update"
+        assert data["results"][2]["op"] == "delete"
+
+    @pytest.mark.asyncio
+    async def test_batch_empty_operations(
+        self, client: AsyncClient, test_video_id: str, auth_headers: dict
+    ):
+        """Should return success for empty operations list."""
+        response = await client.post(
+            f"/videos/{test_video_id}/captions/batch",
+            json={"operations": []},
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["results"] == []
+
+    @pytest.mark.asyncio
+    async def test_batch_create_missing_data(
+        self, client: AsyncClient, test_video_id: str, auth_headers: dict
+    ):
+        """Should fail when create operation missing data."""
+        response = await client.post(
+            f"/videos/{test_video_id}/captions/batch",
+            json={
+                "operations": [
+                    {"op": "create"},
+                ]
+            },
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is False
+        assert data["error"]["index"] == 0
+        assert data["error"]["op"] == "create"
+        assert "data" in data["error"]["message"].lower()
+
+    @pytest.mark.asyncio
+    async def test_batch_create_invalid_frame_indices(
+        self, client_empty_db: AsyncClient, test_video_id: str, auth_headers: dict
+    ):
+        """Should fail when startFrameIndex >= endFrameIndex."""
+        response = await client_empty_db.post(
+            f"/videos/{test_video_id}/captions/batch",
+            json={
+                "operations": [
+                    {
+                        "op": "create",
+                        "data": {
+                            "startFrameIndex": 100,
+                            "endFrameIndex": 50,  # Invalid: end < start
+                        },
+                    },
+                ]
+            },
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is False
+        assert data["error"]["index"] == 0
+        assert "greater than" in data["error"]["message"].lower()
+
+    @pytest.mark.asyncio
+    async def test_batch_create_negative_frame_index(
+        self, client_empty_db: AsyncClient, test_video_id: str, auth_headers: dict
+    ):
+        """Should fail when frame index is negative."""
+        response = await client_empty_db.post(
+            f"/videos/{test_video_id}/captions/batch",
+            json={
+                "operations": [
+                    {
+                        "op": "create",
+                        "data": {
+                            "startFrameIndex": -10,
+                            "endFrameIndex": 50,
+                        },
+                    },
+                ]
+            },
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is False
+        assert "non-negative" in data["error"]["message"].lower()
+
+    @pytest.mark.asyncio
+    async def test_batch_update_missing_id(
+        self, client: AsyncClient, test_video_id: str, auth_headers: dict
+    ):
+        """Should fail when update operation missing id."""
+        response = await client.post(
+            f"/videos/{test_video_id}/captions/batch",
+            json={
+                "operations": [
+                    {
+                        "op": "update",
+                        "data": {"text": "New text"},
+                    },
+                ]
+            },
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is False
+        assert data["error"]["index"] == 0
+        assert "'id'" in data["error"]["message"]
+
+    @pytest.mark.asyncio
+    async def test_batch_update_missing_data(
+        self, client: AsyncClient, test_video_id: str, auth_headers: dict
+    ):
+        """Should fail when update operation missing data."""
+        response = await client.post(
+            f"/videos/{test_video_id}/captions/batch",
+            json={
+                "operations": [
+                    {"op": "update", "id": 1},
+                ]
+            },
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is False
+        assert data["error"]["index"] == 0
+        assert "'data'" in data["error"]["message"]
+
+    @pytest.mark.asyncio
+    async def test_batch_update_not_found(
+        self, client: AsyncClient, test_video_id: str, auth_headers: dict
+    ):
+        """Should fail when updating non-existent caption."""
+        response = await client.post(
+            f"/videos/{test_video_id}/captions/batch",
+            json={
+                "operations": [
+                    {
+                        "op": "update",
+                        "id": 999,
+                        "data": {"text": "New text"},
+                    },
+                ]
+            },
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is False
+        assert data["error"]["index"] == 0
+        assert "not found" in data["error"]["message"].lower()
+
+    @pytest.mark.asyncio
+    async def test_batch_delete_missing_id(
+        self, client: AsyncClient, test_video_id: str, auth_headers: dict
+    ):
+        """Should fail when delete operation missing id."""
+        response = await client.post(
+            f"/videos/{test_video_id}/captions/batch",
+            json={
+                "operations": [
+                    {"op": "delete"},
+                ]
+            },
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is False
+        assert data["error"]["index"] == 0
+        assert "'id'" in data["error"]["message"]
+
+    @pytest.mark.asyncio
+    async def test_batch_delete_not_found(
+        self, client: AsyncClient, test_video_id: str, auth_headers: dict
+    ):
+        """Should fail when deleting non-existent caption."""
+        response = await client.post(
+            f"/videos/{test_video_id}/captions/batch",
+            json={
+                "operations": [
+                    {"op": "delete", "id": 999},
+                ]
+            },
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is False
+        assert data["error"]["index"] == 0
+        assert "not found" in data["error"]["message"].lower()
+
+    @pytest.mark.asyncio
+    async def test_batch_fails_at_second_operation(
+        self, client: AsyncClient, test_video_id: str, auth_headers: dict
+    ):
+        """Should report correct index when later operation fails."""
+        response = await client.post(
+            f"/videos/{test_video_id}/captions/batch",
+            json={
+                "operations": [
+                    {
+                        "op": "update",
+                        "id": 1,
+                        "data": {"text": "Valid update"},
+                    },
+                    {
+                        "op": "delete",
+                        "id": 999,  # Non-existent
+                    },
+                ]
+            },
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is False
+        assert data["error"]["index"] == 1  # Second operation
+        assert data["error"]["op"] == "delete"
+
+
 class TestCaptionResponseFormat:
     """Tests for caption response format consistency."""
 

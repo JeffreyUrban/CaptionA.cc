@@ -141,10 +141,80 @@ class CaptionTextUpdate(BaseModel):
 
 
 class CaptionBatchUpdate(BaseModel):
-    """Request body for batch operations."""
+    """Request body for batch operations (legacy)."""
 
     updates: list[CaptionUpdate] = Field(default_factory=list)
     deletes: list[int] = Field(default_factory=list)
+
+
+# =============================================================================
+# Batch Operation Models
+# =============================================================================
+
+
+class BatchOperationType(str, Enum):
+    """Type of batch operation."""
+
+    CREATE = "create"
+    UPDATE = "update"
+    DELETE = "delete"
+
+
+class BatchCreateData(BaseModel):
+    """Data for creating a caption in a batch."""
+
+    startFrameIndex: int
+    endFrameIndex: int
+    boundaryState: BoundaryState = BoundaryState.PREDICTED
+    text: str | None = None
+
+
+class BatchUpdateData(BaseModel):
+    """Data for updating a caption in a batch."""
+
+    startFrameIndex: int | None = None
+    endFrameIndex: int | None = None
+    boundaryState: BoundaryState | None = None
+    text: str | None = None
+    textStatus: TextStatus | None = None
+    textNotes: str | None = None
+
+
+class BatchOperation(BaseModel):
+    """A single operation in a batch request."""
+
+    op: BatchOperationType
+    id: int | None = None  # Required for update/delete
+    data: BatchCreateData | BatchUpdateData | None = None  # Required for create/update
+
+
+class BatchRequest(BaseModel):
+    """Request body for batch caption operations."""
+
+    operations: list[BatchOperation]
+
+
+class BatchResultItem(BaseModel):
+    """Result of a single batch operation."""
+
+    op: BatchOperationType
+    id: int
+
+
+class BatchError(BaseModel):
+    """Error details for a failed batch operation."""
+
+    index: int
+    op: BatchOperationType
+    message: str
+
+
+class BatchResponse(BaseModel):
+    """Response for batch operations."""
+
+    success: bool
+    results: list[BatchResultItem] | None = None
+    error: BatchError | None = None
 
 
 # =============================================================================

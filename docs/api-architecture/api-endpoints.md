@@ -18,33 +18,75 @@ Tenant isolation enforced via `tenant_id` claim in JWT.
 
 ### 1. Captions
 
-```
-GET /videos/{videoId}/captions
-```
-List captions with optional filters.
+Client loads all captions (~2000 per video) and handles overlap resolution locally.
+Server is a validated persistence layer - applies changes atomically, doesn't compute overlaps.
 
-| Query Param | Type | Description |
-|-------------|------|-------------|
-| `start` | int | Start frame index |
-| `end` | int | End frame index |
-| `filter` | string | `needs-text`, `pending`, `confirmed` |
-| `navigate` | string | `prev` or `next` (requires `from`) |
-| `from` | int | Annotation ID for navigation |
+#### GET /videos/{videoId}/captions
 
-```
-POST /videos/{videoId}/captions
-```
-Create caption. Body: `{ start_frame_index, end_frame_index, boundary_state }`
+Get all captions for a video.
 
+Response:
+```json
+{
+  "captions": [
+    {
+      "id": 1,
+      "startFrameIndex": 0,
+      "endFrameIndex": 100,
+      "text": "Hello world",
+      "boundaryState": "confirmed"
+    }
+  ]
+}
 ```
-PUT /videos/{videoId}/captions/{id}
-```
-Update caption with overlap resolution. Body: `{ start_frame_index, end_frame_index, boundary_state, text? }`
 
+#### POST /videos/{videoId}/captions/batch
+
+Apply batch of caption operations atomically. Client computes overlap resolution and sends all changes in one request.
+
+Request:
+```json
+{
+  "operations": [
+    { "op": "create", "data": { "startFrameIndex": 100, "endFrameIndex": 200, "text": "New caption" } },
+    { "op": "update", "id": 47, "data": { "endFrameIndex": 99 } },
+    { "op": "delete", "id": 45 }
+  ]
+}
 ```
-DELETE /videos/{videoId}/captions/{id}
+
+Response (success):
+```json
+{
+  "success": true,
+  "results": [
+    { "op": "create", "id": 123 },
+    { "op": "update", "id": 47 },
+    { "op": "delete", "id": 45 }
+  ]
+}
 ```
-Delete caption.
+
+Response (validation failure - whole batch rejected):
+```json
+{
+  "success": false,
+  "error": {
+    "index": 2,
+    "op": "delete",
+    "message": "Caption 45 not found"
+  }
+}
+```
+
+**Server validation:**
+- Caption exists (for update/delete)
+- Frame indices non-negative
+- `startFrameIndex < endFrameIndex`
+
+**Server does NOT:**
+- Compute overlaps (client responsibility)
+- Return affected captions (client already knows)
 
 ---
 
@@ -284,8 +326,8 @@ List databases with status and version info.
 
 | # | Endpoint | Methods | Purpose |
 |---|----------|---------|---------|
-| 1 | `/videos/{id}/captions` | GET, POST | List/create captions |
-| 2 | `/videos/{id}/captions/{id}` | PUT, DELETE | Update/delete caption |
+| 1 | `/videos/{id}/captions` | GET | Get all captions |
+| 2 | `/videos/{id}/captions/batch` | POST | Batch create/update/delete captions |
 | 3 | `/videos/{id}/layout` | GET, PUT, POST | Layout config + box annotations |
 | 4 | `/videos/{id}/preferences` | GET, PUT | Video preferences |
 | 5 | `/videos/{id}/stats` | GET | Progress and stats |
