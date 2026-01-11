@@ -211,71 +211,75 @@ PUT body:
 
 ---
 
-## Presigned URL Endpoints
+## Direct Wasabi Access
 
-### 8. Image URLs
+### 8. S3 Credentials (STS)
 
 ```
-GET /videos/{videoId}/image-urls?frames=0,10,20&size=thumb
+GET /s3-credentials
 ```
 
-Get presigned URLs for frame images (layout page).
-
-| Query Param | Type | Description |
-|-------------|------|-------------|
-| `frames` | string | Comma-separated frame indices |
-| `size` | string | `thumb` (default) or `full` |
+Get temporary AWS credentials for direct Wasabi S3 access. Credentials are scoped to the tenant's `client/` paths only (read-only).
 
 Response:
 ```json
 {
-  "urls": {
-    "0": "https://wasabi.../frame_0_thumb.jpg?signature=...",
-    "10": "https://wasabi.../frame_10_thumb.jpg?signature=..."
+  "credentials": {
+    "accessKeyId": "ASIA...",
+    "secretAccessKey": "...",
+    "sessionToken": "..."
   },
-  "expiresIn": 900
+  "expiration": "2026-01-11T23:00:00Z",
+  "bucket": "caption-acc-prod",
+  "region": "us-east-1",
+  "endpoint": "https://s3.us-east-1.wasabisys.com",
+  "prefix": "{tenant_id}/videos/*/client/"
 }
 ```
 
+**Client usage:**
+```typescript
+import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
+
+const s3 = new S3Client({
+  region: creds.region,
+  endpoint: creds.endpoint,
+  credentials: {
+    accessKeyId: creds.credentials.accessKeyId,
+    secretAccessKey: creds.credentials.secretAccessKey,
+    sessionToken: creds.credentials.sessionToken,
+  },
+});
+
+// Direct access to any media file - no API round-trip
+const chunk = await s3.send(new GetObjectCommand({
+  Bucket: creds.bucket,
+  Key: `${tenantId}/videos/${videoId}/client/cropped_frames_v1/modulo_4/chunk_0042.webm`,
+}));
+```
+
+**Access scope:**
+- ✅ `client/video.mp4` - Original video
+- ✅ `client/full_frames/*.jpg` - Frame images
+- ✅ `client/cropped_frames_v*/*.webm` - Video chunks
+- ❌ `sync/*.db.gz` - Use presigned URLs via sync API
+- ❌ `server/*` - Server-only, never accessible
+
+**When to use:**
+- High-volume media access (chunks, frames)
+- Caption editor streaming
+- Layout page thumbnails
+
+**When NOT to use:**
+- Database downloads (use sync API for versioning)
+- One-off large file downloads (use presigned URL)
+
 ---
 
-### 9. Frame Chunks
+### 9. Upload URL (Edge Function)
 
 ```
-GET /videos/{videoId}/frame-chunks?modulo=4&indices=0,4,8,12
-```
-
-Get presigned URLs for VP9 WebM video chunks (caption editing).
-
-| Query Param | Type | Description |
-|-------------|------|-------------|
-| `modulo` | int | Sampling level: `16`, `4`, or `1` |
-| `indices` | string | Comma-separated frame indices |
-
-Response:
-```json
-{
-  "chunks": [
-    {
-      "chunkIndex": 0,
-      "signedUrl": "https://wasabi.../chunk_0_mod4.webm?signature=...",
-      "frameIndices": [0, 4, 8, 12]
-    }
-  ]
-}
-```
-
-**Hierarchical loading:**
-- `modulo=16`: Coarsest, every 16th frame, large range
-- `modulo=4`: Medium, every 4th frame (excluding mod-16)
-- `modulo=1`: Finest, all remaining frames
-
----
-
-### 10. Upload URL
-
-```
-POST /functions/v1/presigned-upload
+POST /functions/v1/captionacc-presigned-upload
 ```
 
 Get presigned URL for direct Wasabi upload (Supabase Edge Function).
@@ -294,9 +298,73 @@ Response:
 {
   "uploadUrl": "https://wasabi.../...",
   "videoId": "uuid",
+  "storageKey": "{tenant_id}/videos/{video_id}/client/video.mp4",
   "expiresAt": "2026-01-11T11:00:00Z"
 }
 ```
+
+---
+
+## Legacy Presigned URL Endpoints
+
+These endpoints remain for backwards compatibility but STS credentials (above) are preferred for high-volume access.
+
+### 10. Image URLs
+
+```
+GET /videos/{videoId}/image-urls?frames=0,10,20&size=thumb
+```
+
+Get presigned URLs for frame images (layout page). Consider using STS credentials instead for better performance.
+
+| Query Param | Type | Description |
+|-------------|------|-------------|
+| `frames` | string | Comma-separated frame indices |
+| `size` | string | `thumb` (default) or `full` |
+
+Response:
+```json
+{
+  "urls": {
+    "0": "https://wasabi.../client/full_frames/frame_0_thumb.jpg?signature=...",
+    "10": "https://wasabi.../client/full_frames/frame_10_thumb.jpg?signature=..."
+  },
+  "expiresIn": 900
+}
+```
+
+---
+
+### 11. Frame Chunks
+
+```
+GET /videos/{videoId}/frame-chunks?modulo=4&indices=0,4,8,12
+```
+
+Get presigned URLs for VP9 WebM video chunks. Consider using STS credentials instead for better performance.
+
+| Query Param | Type | Description |
+|-------------|------|-------------|
+| `modulo` | int | Sampling level: `16`, `4`, or `1` |
+| `indices` | string | Comma-separated frame indices |
+
+Response:
+```json
+{
+  "chunks": [
+    {
+      "chunkIndex": 0,
+      "signedUrl": "https://wasabi.../client/cropped_frames_v1/modulo_4/chunk_0000.webm?signature=...",
+      "frameIndices": [0, 4, 8, 12]
+    }
+  ]
+}
+```
+
+**Hierarchical loading:**
+- `modulo=16`: Coarsest, every 16th frame, large range
+- `modulo=4`: Medium, every 4th frame (excluding mod-16)
+- `modulo=1`: Finest, all remaining frames
 
 ---
 
@@ -363,9 +431,11 @@ Response:
 | 4 | `/videos/{id}/sync/{db}` | WebSocket | CR-SQLite real-time sync |
 | 5 | `/videos/{id}/stats` | GET | Video stats and progress |
 | 6 | `/videos/{id}/preferences` | GET, PUT | Video preferences |
-| 7 | `/videos/{id}/image-urls` | GET | Full frame presigned URLs |
-| 8 | `/videos/{id}/frame-chunks` | GET | VP9 chunk presigned URLs |
-| 9 | `/admin/databases` | GET | Database status list |
-| 10 | `/admin/databases/{id}/{db}/sync` | POST | Force Wasabi sync |
+| 7 | `/s3-credentials` | GET | STS credentials for direct Wasabi access |
+| 8 | `/videos/{id}/image-urls` | GET | Frame image presigned URLs (legacy) |
+| 9 | `/videos/{id}/frame-chunks` | GET | VP9 chunk presigned URLs (legacy) |
+| 10 | `/admin/databases` | GET | Database status list |
+| 11 | `/admin/databases/{id}/{db}/sync` | POST | Force Wasabi sync |
+| 12 | `/admin/locks/cleanup` | POST | Release stale locks |
 
-Plus Edge Function: `POST /functions/v1/presigned-upload`
+Plus Edge Function: `POST /functions/v1/captionacc-presigned-upload`

@@ -4,64 +4,74 @@ CaptionA.cc uses a split database architecture where each video has multiple SQL
 
 ## Architecture Overview
 
+Paths are organized by **access level** for security:
+
 ```
-{tenant_id}/{video_id}/
+{tenant_id}/videos/{video_id}/
 │
-├── Client-Facing (gzip compressed, synced via CR-SQLite)
-│   ├── layout.db.gz        # Boxes, user annotations, bounds
-│   └── captions.db.gz      # Caption boundaries and text
+├── client/                    # Tenant-accessible via STS credentials
+│   ├── video.mp4              # Original video
+│   ├── full_frames/           # Frame images (0.1Hz)
+│   │   ├── frame_000000.jpg
+│   │   └── ...
+│   └── cropped_frames_v*/     # VP9 WebM chunks
 │
-├── Server-Only (internal, never sent to client)
-│   ├── ocr-server.db       # Full OCR results, model predictions
-│   └── layout-server.db    # ML model blob, analysis parameters
+├── sync/                      # Accessed via presigned URLs (sync API)
+│   ├── layout.db.gz           # CR-SQLite synced (gzip compressed)
+│   └── captions.db.gz         # CR-SQLite synced (gzip compressed)
 │
-└── Static Assets (read-only, accessed via presigned URLs)
-    └── full_frames/        # Individual .jpg files
-        ├── frame_000000.jpg
-        └── ...
+└── server/                    # Server-only (never client-accessible)
+    ├── ocr-server.db          # Full OCR results, model predictions
+    └── layout-server.db       # ML model blob, analysis parameters
 ```
+
+**Security:** Path structure enforces access boundaries. STS credentials grant read access to `client/*` only. Databases in `sync/` require individual presigned URLs. Files in `server/` are never accessible to clients.
 
 ## Client Access Pattern
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                        Client Database Access                            │
+│                        Client Data Access                                │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                          │
 │   Browser                         Wasabi S3                    API       │
 │   ───────                         ─────────                    ───       │
 │                                                                          │
-│   1. Request presigned URL ─────────────────────────────────► │         │
-│                                                                │         │
-│   2. ◄─────────────────────────────────────────────────────── URL       │
+│   MEDIA (STS Credentials - one-time per session):                       │
+│   1. Request STS credentials ───────────────────────────────► │         │
+│   2. ◄─────────────────────────────────────── temp credentials          │
+│   3. Direct S3 access ──────────► client/full_frames/*.jpg              │
+│      (client signs requests)      client/cropped_frames_v*/*.webm       │
 │                                                                          │
-│   3. Download .db.gz file ──────────► layout.db.gz (compressed)         │
-│      (direct from Wasabi)              (no server load)                 │
+│   DATABASES (Presigned URLs per download):                              │
+│   4. Request presigned URL ─────────────────────────────────► │         │
+│   5. ◄─────────────────────────────────────────────────────── URL       │
+│   6. Download .db.gz file ──────────► sync/layout.db.gz                 │
+│      (direct from Wasabi)                                               │
 │                                                                          │
-│   4. Decompress (gzip) and load into wa-sqlite + CR-SQLite              │
+│   7. Decompress (gzip) and load into wa-sqlite + CR-SQLite              │
 │      Make local edits (instant)                                         │
 │                                                                          │
-│   5. Sync changes via WebSocket ────────────────────────────► │         │
-│      (only changed rows)                                       │         │
-│                                                                │         │
-│   6. ◄─────────────────────────────────────────────────────── ack       │
+│   8. Sync changes via WebSocket ────────────────────────────► │         │
+│   9. ◄─────────────────────────────────────────────────────── ack       │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 
-Key: Server only involved for presigned URLs and sync.
-     Reads go directly to Wasabi - no server load.
-     Files stored gzip compressed (~60-70% size reduction).
+Key: STS credentials for high-volume media (client/* path).
+     Presigned URLs for versioned database downloads (sync/* path).
+     Server-only files (server/*) never accessible to client.
 ```
 
 ## Database Summary
 
-| Database | Visibility | Sync | Size (raw) | Size (gzip) | Purpose |
-|----------|------------|------|------------|-------------|---------|
-| `layout.db.gz` | Client | CR-SQLite (bidirectional) | 0.5-5 MB | 0.2-2 MB | Boxes, annotations, bounds |
-| `captions.db.gz` | Client | CR-SQLite (client→server) | 0.1-2 MB | 0.04-0.8 MB | Caption boundaries, text |
-| `ocr-server.db` | Server-only | None | 0.5-5 MB | N/A | Full OCR results |
-| `layout-server.db` | Server-only | None | 0.1-20 MB | N/A | ML model, analysis params |
-| `full_frames/*.jpg` | Client (read-only) | None | 15-70 MB | N/A | Video frames at 0.1Hz |
+| Database | Path | Access | Sync | Size | Purpose |
+|----------|------|--------|------|------|---------|
+| `layout.db.gz` | `sync/` | Presigned URL | CR-SQLite (bidirectional) | 0.2-2 MB | Boxes, annotations, bounds |
+| `captions.db.gz` | `sync/` | Presigned URL | CR-SQLite (client→server) | 0.04-0.8 MB | Caption boundaries, text |
+| `ocr-server.db` | `server/` | None | None | 0.5-5 MB | Full OCR results |
+| `layout-server.db` | `server/` | None | None | 0.1-20 MB | ML model, analysis params |
+| `full_frames/*.jpg` | `client/` | STS credentials | None | 15-70 MB | Video frames at 0.1Hz |
+| `cropped_frames_v*/*.webm` | `client/` | STS credentials | None | 50-500 MB | VP9 video chunks |
 
 ---
 
@@ -301,22 +311,40 @@ Layout analysis parameters computed by ML pipeline.
 
 # Static Assets
 
-## full_frames/ (Replaces video.db)
+## client/full_frames/
 
-Individual JPEG frames extracted at 0.1Hz (1 frame per 10 seconds). Stored as separate files for direct access via presigned URLs.
+Individual JPEG frames extracted at 0.1Hz (1 frame per 10 seconds). Stored as separate files for direct access via STS credentials.
 
 **Structure:**
 ```
-full_frames/
+client/full_frames/
 ├── frame_000000.jpg
 ├── frame_000001.jpg
 ├── frame_000002.jpg
 └── ...
 ```
 
-**Access:** Client requests presigned URLs via `GET /videos/{id}/image-urls?frames=0,1,2`
+**Access:** Client uses STS credentials from `GET /s3-credentials` to access directly via S3 SDK. Legacy presigned URLs available via `GET /videos/{id}/image-urls`.
 
 **Metadata:** Video duration, frame count, and hash stored in Supabase `videos` table.
+
+## client/cropped_frames_v{version}/
+
+VP9-encoded WebM video chunks for caption editing, organized by sampling level.
+
+**Structure:**
+```
+client/cropped_frames_v1/
+├── modulo_16/           # Every 16th frame (coarsest)
+│   ├── chunk_0000000000.webm
+│   └── ...
+├── modulo_4/            # Every 4th frame
+└── modulo_1/            # Every frame (finest)
+```
+
+**Access:** Client uses STS credentials from `GET /s3-credentials` to stream directly via S3 SDK. Legacy presigned URLs available via `GET /videos/{id}/frame-chunks`.
+
+**Hierarchical loading:** Client loads coarse chunks first (modulo_16), then progressively finer detail as needed.
 
 ---
 
@@ -359,9 +387,9 @@ VALUES (...);
 Client                                    Server
 ──────                                    ──────
 
-1. GET presigned URL for layout.db / captions.db
+1. GET presigned URL for sync/layout.db.gz or sync/captions.db.gz
 2. Download directly from Wasabi (no server load)
-3. Load wa-sqlite + CR-SQLite extension
+3. Decompress and load wa-sqlite + CR-SQLite extension
    last_sync_version = db_version
 
 4. User makes edit (instant, local)
@@ -373,7 +401,7 @@ Client                                    Server
                                           ───────────────────►
                                                               Validate
                                                               Apply changes
-                                                              Upload to Wasabi
+                                                              Upload to sync/
                                           ◄───────────────────
    { type: "ack", version: 43 }
 
