@@ -12,6 +12,8 @@ dependencies = [
     "httpx>=0.28.0",
     "python-jose[cryptography]>=3.3.0",
     "boto3>=1.35.0",
+    "apsw>=3.48.0",           # SQLite wrapper with extension loading for CR-SQLite
+    "supabase>=2.0.0",        # Supabase client for video_database_state
 ]
 
 [project.optional-dependencies]

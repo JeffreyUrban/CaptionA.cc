@@ -37,9 +37,19 @@ class Settings(BaseSettings):
     prefect_api_url: str = ""
     prefect_api_key: str = ""
 
-    # SQLite Cache
+    # SQLite Cache (legacy - used by database_manager.py)
     sqlite_cache_dir: str = "/tmp/captionacc-sqlite-cache"
     sqlite_cache_max_size_mb: int = 500  # Max cache size in MB
+
+    # CR-SQLite Sync
+    crsqlite_extension_path: str = ""  # Path to crsqlite.so/.dylib
+    working_copy_dir: str = "/var/data/captionacc/working"
+    wasabi_upload_idle_minutes: int = 5
+    wasabi_upload_checkpoint_minutes: int = 15
+
+    # Supabase (service role for video_database_state)
+    supabase_service_role_key: str = ""
+    supabase_schema: str = "captionacc_production"
 
 
 @lru_cache

@@ -6,7 +6,19 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
-from app.routers import actions, admin, boxes, captions, layout, preferences, stats, videos
+from app.routers import (
+    actions,
+    admin,
+    boxes,
+    captions,
+    layout,
+    preferences,
+    stats,
+    sync,
+    videos,
+    websocket_sync,
+)
+from app.services.background_tasks import get_upload_worker
 
 
 @asynccontextmanager
@@ -15,9 +27,16 @@ async def lifespan(app: FastAPI):
     # Startup
     settings = get_settings()
     print(f"Starting API service in {settings.environment} mode")
+
+    # Start background Wasabi upload worker
+    upload_worker = get_upload_worker()
+    await upload_worker.start()
+
     yield
-    # Shutdown
+
+    # Shutdown - upload all pending changes before exit
     print("Shutting down API service")
+    await upload_worker.stop()
 
 
 def create_app() -> FastAPI:
@@ -50,6 +69,10 @@ def create_app() -> FastAPI:
     app.include_router(stats.router, prefix="/videos", tags=["stats"])
     app.include_router(actions.router, prefix="/videos", tags=["actions"])
     app.include_router(admin.router, prefix="/admin", tags=["admin"])
+
+    # CR-SQLite sync routers
+    app.include_router(sync.router, prefix="/videos", tags=["sync"])
+    app.include_router(websocket_sync.router, prefix="/videos", tags=["sync"])
 
     @app.get("/health")
     async def health_check():
