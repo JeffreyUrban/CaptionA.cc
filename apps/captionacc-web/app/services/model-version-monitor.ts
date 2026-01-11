@@ -84,8 +84,9 @@ function updateBoundsAndMarkPending(
   newBounds: { crop_left: number; crop_top: number; crop_right: number; crop_bottom: number },
   currentVersion: string
 ): void {
-  layoutDb.prepare(
-    `
+  layoutDb
+    .prepare(
+      `
     UPDATE video_layout_config
     SET
       crop_left = ?,
@@ -97,22 +98,25 @@ function updateBoundsAndMarkPending(
       updated_at = datetime('now')
     WHERE id = 1
   `
-  ).run(
-    newBounds.crop_left,
-    newBounds.crop_top,
-    newBounds.crop_right,
-    newBounds.crop_bottom,
-    currentVersion
-  )
+    )
+    .run(
+      newBounds.crop_left,
+      newBounds.crop_top,
+      newBounds.crop_right,
+      newBounds.crop_bottom,
+      currentVersion
+    )
 
   if (captionsDb) {
-    captionsDb.prepare(
-      `
+    captionsDb
+      .prepare(
+        `
       UPDATE captions
       SET boundary_pending = 1
       WHERE boundary_state != 'gap'
     `
-    ).run()
+      )
+      .run()
   }
 }
 
@@ -183,9 +187,9 @@ function shouldRecalculatePredictions(
  * Update model version without changing bounds
  */
 function updateModelVersionOnly(layoutDb: Database.Database, currentVersion: string): void {
-  layoutDb.prepare('UPDATE video_layout_config SET analysis_model_version = ? WHERE id = 1').run(
-    currentVersion
-  )
+  layoutDb
+    .prepare('UPDATE video_layout_config SET analysis_model_version = ? WHERE id = 1')
+    .run(currentVersion)
 }
 
 /**
@@ -252,14 +256,7 @@ function checkVideoModelVersion(
 
     if (!decision.shouldRecalculate) {
       layoutDb.close()
-      return buildResult(
-        videoId,
-        displayPath,
-        false,
-        false,
-        analysisVersion,
-        currentVersion
-      )
+      return buildResult(videoId, displayPath, false, false, analysisVersion, currentVersion)
     }
 
     if (!oldBounds) {
@@ -280,14 +277,7 @@ function checkVideoModelVersion(
     if (!newBounds) {
       updateModelVersionOnly(layoutDb, currentVersion)
       layoutDb.close()
-      return buildResult(
-        videoId,
-        displayPath,
-        true,
-        false,
-        analysisVersion,
-        currentVersion
-      )
+      return buildResult(videoId, displayPath, true, false, analysisVersion, currentVersion)
     }
 
     const boundsChanged = haveBoundsChanged(oldBounds, newBounds)
@@ -295,14 +285,7 @@ function checkVideoModelVersion(
     if (!boundsChanged) {
       updateModelVersionOnly(layoutDb, currentVersion)
       layoutDb.close()
-      return buildResult(
-        videoId,
-        displayPath,
-        true,
-        false,
-        analysisVersion,
-        currentVersion
-      )
+      return buildResult(videoId, displayPath, true, false, analysisVersion, currentVersion)
     }
 
     // Bounds changed - need to update both databases
@@ -318,20 +301,21 @@ function checkVideoModelVersion(
       captionsDb.close()
     }
 
-    return buildResult(
-      videoId,
-      displayPath,
-      true,
-      true,
-      analysisVersion,
-      currentVersion
-    )
+    return buildResult(videoId, displayPath, true, true, analysisVersion, currentVersion)
   } catch (error) {
     if (layoutDb) {
-      try { layoutDb.close() } catch { /* ignore */ }
+      try {
+        layoutDb.close()
+      } catch {
+        /* ignore */
+      }
     }
     if (captionsDb) {
-      try { captionsDb.close() } catch { /* ignore */ }
+      try {
+        captionsDb.close()
+      } catch {
+        /* ignore */
+      }
     }
     return buildResult(
       videoId,

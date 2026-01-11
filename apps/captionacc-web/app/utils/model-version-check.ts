@@ -132,13 +132,15 @@ export async function checkAndRecalculate(
 
   if (!newBounds) {
     // Recalculation returned no change, just update version
-    layoutDb.prepare(
-      `
+    layoutDb
+      .prepare(
+        `
       UPDATE video_layout_config
       SET analysis_model_version = ?
       WHERE id = 1
     `
-    ).run(newVersion)
+      )
+      .run(newVersion)
 
     return {
       recalculated: true,
@@ -157,13 +159,15 @@ export async function checkAndRecalculate(
 
   if (!boundsChanged) {
     // Bounds didn't change, just update version
-    layoutDb.prepare(
-      `
+    layoutDb
+      .prepare(
+        `
       UPDATE video_layout_config
       SET analysis_model_version = ?
       WHERE id = 1
     `
-    ).run(newVersion)
+      )
+      .run(newVersion)
 
     console.log('[ModelVersionCheck] Recalculated but bounds unchanged')
 
@@ -180,8 +184,9 @@ export async function checkAndRecalculate(
     `[ModelVersionCheck] Bounds changed: [${oldConfig.crop_left},${oldConfig.crop_top},${oldConfig.crop_right},${oldConfig.crop_bottom}] → [${newBounds.crop_left},${newBounds.crop_top},${newBounds.crop_right},${newBounds.crop_bottom}]`
   )
 
-  layoutDb.prepare(
-    `
+  layoutDb
+    .prepare(
+      `
     UPDATE video_layout_config
     SET
       crop_left = ?,
@@ -193,13 +198,14 @@ export async function checkAndRecalculate(
       updated_at = datetime('now')
     WHERE id = 1
   `
-  ).run(
-    newBounds.crop_left,
-    newBounds.crop_top,
-    newBounds.crop_right,
-    newBounds.crop_bottom,
-    newVersion
-  )
+    )
+    .run(
+      newBounds.crop_left,
+      newBounds.crop_top,
+      newBounds.crop_right,
+      newBounds.crop_bottom,
+      newVersion
+    )
 
   // Mark all captions as boundary_pending (need re-review due to model change)
   if (captionsDb) {
@@ -215,7 +221,9 @@ export async function checkAndRecalculate(
 
     console.log(`[ModelVersionCheck] Marked ${result.changes} captions as boundary_pending`)
   } else {
-    console.warn('[ModelVersionCheck] No captions database provided, skipping boundary_pending update')
+    console.warn(
+      '[ModelVersionCheck] No captions database provided, skipping boundary_pending update'
+    )
   }
 
   return {
