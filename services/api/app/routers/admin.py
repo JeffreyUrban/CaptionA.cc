@@ -15,10 +15,13 @@ from app.models.admin import (
     DatabaseRepairRequest,
     DatabaseRepairResponse,
     DatabaseStatus,
+    ForceSyncResponse,
     SecurityAuditResponse,
     SecurityAuditView,
     SecurityMetrics,
+    StaleLocksCleanedResponse,
 )
+from app.models.sync import DatabaseName
 
 router = APIRouter()
 
@@ -188,6 +191,115 @@ async def repair_databases(body: DatabaseRepairRequest, admin: Admin):
         repaired=0,
         failed=0,
         errors=["Database repair not yet implemented - this is a placeholder"],
+    )
+
+
+@router.post("/databases/{video_id}/{db}/sync", response_model=ForceSyncResponse)
+async def force_sync_database(
+    video_id: str,
+    db: DatabaseName,
+    admin: Admin,
+):
+    """
+    Force upload working copy to Wasabi immediately.
+
+    Useful for debugging or ensuring data is persisted before maintenance.
+    """
+    from app.services.crsqlite_manager import get_crsqlite_manager
+    from app.services.supabase_client import DatabaseStateRepository
+
+    repo = DatabaseStateRepository()
+    cr_manager = get_crsqlite_manager()
+    db_name = db.value
+
+    # Get current state
+    state = await repo.get_state(video_id, db_name)
+    if not state:
+        return ForceSyncResponse(
+            success=False,
+            videoId=video_id,
+            database=db_name,
+            serverVersion=0,
+            wasabiVersion=0,
+            message="Database state not found",
+        )
+
+    server_version = state.get("server_version", 0)
+    wasabi_version = state.get("wasabi_version", 0)
+    tenant_id = state.get("tenant_id")
+
+    # Check if already synced
+    if server_version <= wasabi_version:
+        return ForceSyncResponse(
+            success=True,
+            videoId=video_id,
+            database=db_name,
+            serverVersion=server_version,
+            wasabiVersion=wasabi_version,
+            message="Already synced - no upload needed",
+        )
+
+    # Check for working copy
+    if not tenant_id or not cr_manager.has_working_copy(tenant_id, video_id, db_name):
+        return ForceSyncResponse(
+            success=False,
+            videoId=video_id,
+            database=db_name,
+            serverVersion=server_version,
+            wasabiVersion=wasabi_version,
+            message="No working copy exists on server",
+        )
+
+    # Force upload
+    try:
+        await cr_manager.upload_to_wasabi(tenant_id, video_id, db_name)
+        await repo.update_wasabi_version(video_id, db_name, server_version)
+        return ForceSyncResponse(
+            success=True,
+            videoId=video_id,
+            database=db_name,
+            serverVersion=server_version,
+            wasabiVersion=server_version,
+            message="Successfully uploaded to Wasabi",
+        )
+    except Exception as e:
+        return ForceSyncResponse(
+            success=False,
+            videoId=video_id,
+            database=db_name,
+            serverVersion=server_version,
+            wasabiVersion=wasabi_version,
+            message=f"Upload failed: {e}",
+        )
+
+
+@router.post("/locks/cleanup", response_model=StaleLocksCleanedResponse)
+async def cleanup_stale_locks(
+    admin: Admin,
+    stale_minutes: int = Query(30, description="Minutes of inactivity before lock is stale"),
+):
+    """
+    Manually release stale locks.
+
+    Locks are automatically cleaned up by the background worker, but this
+    endpoint allows immediate cleanup for debugging or maintenance.
+    """
+    from app.services.supabase_client import DatabaseStateRepository
+
+    repo = DatabaseStateRepository()
+    released = await repo.release_stale_locks(stale_minutes)
+
+    return StaleLocksCleanedResponse(
+        released=len(released),
+        locks=[
+            {
+                "videoId": s.get("video_id"),
+                "database": s.get("database_name"),
+                "lockHolder": s.get("lock_holder_user_id"),
+                "lastActivity": s.get("last_activity_at"),
+            }
+            for s in released
+        ],
     )
 
 

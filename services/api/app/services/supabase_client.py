@@ -346,3 +346,61 @@ class DatabaseStateRepository:
             for state in all_states
             if state.get("server_version", 0) > state.get("wasabi_version", 0)
         ]
+
+    async def get_stale_locks(self, stale_minutes: int) -> list[StateDict]:
+        """Get locks that have been held too long without activity.
+
+        Args:
+            stale_minutes: Minutes of inactivity before lock is considered stale
+
+        Returns:
+            List of state dicts with stale locks
+        """
+        response = (
+            self._table()
+            .select("*")
+            .not_.is_("lock_holder_user_id", "null")
+            .execute()
+        )
+
+        all_locked = self._extract_list(response)
+        if not all_locked:
+            return []
+
+        now = datetime.now(timezone.utc)
+        stale = []
+
+        for state in all_locked:
+            last_activity = state.get("last_activity_at")
+            if not last_activity:
+                continue
+
+            last_activity_dt = datetime.fromisoformat(
+                str(last_activity).replace("Z", "+00:00")
+            )
+            idle_seconds = (now - last_activity_dt).total_seconds()
+            if idle_seconds >= stale_minutes * 60:
+                stale.append(state)
+
+        return stale
+
+    async def release_stale_locks(self, stale_minutes: int) -> list[StateDict]:
+        """Release all stale locks and return them.
+
+        Args:
+            stale_minutes: Minutes of inactivity before lock is considered stale
+
+        Returns:
+            List of state dicts for released locks
+        """
+        stale = await self.get_stale_locks(stale_minutes)
+
+        released = []
+        for state in stale:
+            video_id = state.get("video_id")
+            db_name = state.get("database_name")
+            if video_id and db_name:
+                await self.release_lock(video_id, db_name)
+                released.append(state)
+
+        return released

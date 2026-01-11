@@ -49,6 +49,7 @@ class Settings(BaseSettings):
     working_copy_dir: str = "/var/data/captionacc/working"
     wasabi_upload_idle_minutes: int = 5
     wasabi_upload_checkpoint_minutes: int = 15
+    lock_expiry_minutes: int = 30  # Auto-release stale locks after this
 
     # Supabase (service role for video_database_state)
     supabase_service_role_key: str = ""

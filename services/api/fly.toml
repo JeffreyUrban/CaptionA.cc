@@ -14,6 +14,7 @@ primary_region = "ewr"
   WORKING_COPY_DIR = "/data/working"
   WASABI_UPLOAD_IDLE_MINUTES = "5"
   WASABI_UPLOAD_CHECKPOINT_MINUTES = "15"
+  LOCK_EXPIRY_MINUTES = "30"
 
 [http_service]
   internal_port = 8000

@@ -103,3 +103,21 @@ class SecurityAuditResponse(BaseModel):
     events: list[SecurityEvent] | None = None
     metrics: SecurityMetrics | None = None
     timeWindowHours: int
+
+
+class ForceSyncResponse(BaseModel):
+    """Response for force sync endpoint."""
+
+    success: bool
+    videoId: str
+    database: str
+    serverVersion: int
+    wasabiVersion: int
+    message: str
+
+
+class StaleLocksCleanedResponse(BaseModel):
+    """Response for stale lock cleanup."""
+
+    released: int
+    locks: list[dict]

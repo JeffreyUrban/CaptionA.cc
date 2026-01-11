@@ -69,10 +69,29 @@ class WasabiUploadWorker:
             except asyncio.CancelledError:
                 break
 
+    async def _cleanup_stale_locks(self, repo: DatabaseStateRepository) -> None:
+        """Release locks that have been held too long without activity."""
+        try:
+            released = await repo.release_stale_locks(
+                stale_minutes=self._settings.lock_expiry_minutes
+            )
+            if released:
+                logger.info(f"Released {len(released)} stale locks")
+                for state in released:
+                    logger.info(
+                        f"  Released stale lock: {state.get('video_id')}/{state.get('database_name')} "
+                        f"(held by {state.get('lock_holder_user_id')})"
+                    )
+        except Exception as e:
+            logger.error(f"Failed to cleanup stale locks: {e}")
+
     async def _check_and_upload(self) -> None:
-        """Check for databases needing upload and upload them."""
+        """Check for databases needing upload and clean up stale locks."""
         repo = DatabaseStateRepository()
         cr_manager = get_crsqlite_manager()
+
+        # Clean up stale locks first
+        await self._cleanup_stale_locks(repo)
 
         pending = await repo.get_pending_uploads(
             idle_minutes=self._settings.wasabi_upload_idle_minutes,
