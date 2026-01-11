@@ -23,7 +23,7 @@
 
 These read/write to local `captions.db` files per video and serve images from disk.
 
-### Annotations (17 routes)
+### Annotations (17 routes) -> Rename to Captions
 | Route | Method | Operation |
 |-------|--------|-----------|
 | `api.annotations.$videoId` | GET | List annotations in frame range |

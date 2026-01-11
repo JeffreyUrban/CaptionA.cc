@@ -16,12 +16,12 @@ Tenant isolation enforced via `tenant_id` claim in JWT.
 
 ## Video Endpoints
 
-### 1. Annotations
+### 1. Captions
 
 ```
-GET /videos/{videoId}/annotations
+GET /videos/{videoId}/captions
 ```
-List annotations with optional filters.
+List captions with optional filters.
 
 | Query Param | Type | Description |
 |-------------|------|-------------|
@@ -32,19 +32,19 @@ List annotations with optional filters.
 | `from` | int | Annotation ID for navigation |
 
 ```
-POST /videos/{videoId}/annotations
+POST /videos/{videoId}/captions
 ```
-Create annotation. Body: `{ start_frame_index, end_frame_index, boundary_state }`
+Create caption. Body: `{ start_frame_index, end_frame_index, boundary_state }`
 
 ```
-PUT /videos/{videoId}/annotations/{id}
+PUT /videos/{videoId}/captions/{id}
 ```
-Update annotation with overlap resolution. Body: `{ start_frame_index, end_frame_index, boundary_state, text? }`
+Update caption with overlap resolution. Body: `{ start_frame_index, end_frame_index, boundary_state, text? }`
 
 ```
-DELETE /videos/{videoId}/annotations/{id}
+DELETE /videos/{videoId}/captions/{id}
 ```
-Delete annotation.
+Delete caption.
 
 ---
 
@@ -270,8 +270,8 @@ Get security audit logs.
 
 | # | Endpoint | Methods | Purpose |
 |---|----------|---------|---------|
-| 1 | `/videos/{id}/annotations` | GET, POST | List/create annotations |
-| 2 | `/videos/{id}/annotations/{id}` | PUT, DELETE | Update/delete annotation |
+| 1 | `/videos/{id}/captions` | GET, POST | List/create captions |
+| 2 | `/videos/{id}/captions/{id}` | PUT, DELETE | Update/delete caption |
 | 3 | `/videos/{id}/boxes` | GET, PUT | Frame box annotations |
 | 4 | `/videos/{id}/layout` | GET, PUT | Layout config |
 | 5 | `/videos/{id}/preferences` | GET, PUT | Video preferences |

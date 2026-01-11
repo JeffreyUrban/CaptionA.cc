@@ -359,9 +359,68 @@ class LayoutDatabaseManager(DatabaseManager):
         await asyncio.to_thread(_create)
 
 
+class OcrDatabaseManager(DatabaseManager):
+    """Manages fullOCR.db SQLite databases stored in Wasabi S3 (read-only)."""
+
+    def _s3_key(self, tenant_id: str, video_id: str, db_name: str = "fullOCR.db") -> str:
+        """Generate S3 key for an OCR database file."""
+        return f"{tenant_id}/videos/{video_id}/{db_name}"
+
+    def _cache_path(self, tenant_id: str, video_id: str, db_name: str = "fullOCR.db") -> Path:
+        """Generate local cache path for an OCR database file."""
+        key = f"{tenant_id}/{video_id}/{db_name}"
+        hashed = hashlib.md5(key.encode()).hexdigest()[:16]
+        return self._cache_dir / f"{hashed}_{db_name}"
+
+    async def _create_new_database(self, cache_path: Path) -> None:
+        """Create a new OCR database with schema.
+
+        Note: OCR databases are typically created by the processing pipeline,
+        but we provide schema creation for testing purposes.
+        """
+
+        def _create():
+            conn = sqlite3.connect(str(cache_path))
+            try:
+                conn.executescript(
+                    """
+                    -- Database metadata for schema versioning
+                    CREATE TABLE IF NOT EXISTS database_metadata (
+                        id INTEGER PRIMARY KEY CHECK (id = 1),
+                        schema_version INTEGER NOT NULL DEFAULT 1,
+                        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                        migrated_at TEXT
+                    );
+                    INSERT OR IGNORE INTO database_metadata (id, schema_version) VALUES (1, 1);
+
+                    -- OCR detection results
+                    CREATE TABLE IF NOT EXISTS full_frame_ocr (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        frame_id INTEGER NOT NULL,
+                        frame_index INTEGER NOT NULL,
+                        box_index INTEGER NOT NULL,
+                        text TEXT,
+                        confidence REAL,
+                        bbox_left INTEGER,
+                        bbox_top INTEGER,
+                        bbox_right INTEGER,
+                        bbox_bottom INTEGER,
+                        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_frame_index ON full_frame_ocr(frame_index);
+                    """
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
+        await asyncio.to_thread(_create)
+
+
 # Singleton instances
 _database_manager: DatabaseManager | None = None
 _layout_database_manager: LayoutDatabaseManager | None = None
+_ocr_database_manager: OcrDatabaseManager | None = None
 
 
 def get_database_manager() -> DatabaseManager:
@@ -378,3 +437,11 @@ def get_layout_database_manager() -> LayoutDatabaseManager:
     if _layout_database_manager is None:
         _layout_database_manager = LayoutDatabaseManager()
     return _layout_database_manager
+
+
+def get_ocr_database_manager() -> OcrDatabaseManager:
+    """Get the singleton OcrDatabaseManager instance for fullOCR.db."""
+    global _ocr_database_manager
+    if _ocr_database_manager is None:
+        _ocr_database_manager = OcrDatabaseManager()
+    return _ocr_database_manager

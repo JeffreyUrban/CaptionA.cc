@@ -43,8 +43,8 @@ All services scale to zero when idle.
 - Direct Supabase queries from SPA for video list, user profile (RLS enforced)
 
 ### API Style
-- Hybrid REST/RPC (not GraphQL)
-- REST for resources: annotations, preferences, boxes, stats
+- Hybrid REST/RPC
+- REST for resources: captions, preferences, boxes, stats
 - `/actions/*` namespace for operations: bulk-annotate, analyze-layout, trigger-crop
 - Everything scoped under `/videos/{videoId}`
 - Query params for filtering instead of separate endpoints

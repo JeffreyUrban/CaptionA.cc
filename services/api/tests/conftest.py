@@ -358,6 +358,173 @@ def mock_seeded_layout_database_manager(seeded_layout_db: Path):
     return MockLayoutDatabaseManager(seeded_layout_db)
 
 
+# =============================================================================
+# OCR Database Fixtures
+# =============================================================================
+
+
+@pytest.fixture
+def ocr_db(temp_db_dir: Path) -> Generator[Path, None, None]:
+    """Create a test fullOCR.db with schema."""
+    db_path = temp_db_dir / "fullOCR.db"
+    conn = sqlite3.connect(str(db_path))
+    conn.executescript(
+        """
+        -- Database metadata for schema versioning
+        CREATE TABLE IF NOT EXISTS database_metadata (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            schema_version INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            migrated_at TEXT
+        );
+        INSERT OR IGNORE INTO database_metadata (id, schema_version) VALUES (1, 1);
+
+        -- OCR detection results
+        CREATE TABLE IF NOT EXISTS full_frame_ocr (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            frame_id INTEGER NOT NULL,
+            frame_index INTEGER NOT NULL,
+            box_index INTEGER NOT NULL,
+            text TEXT,
+            confidence REAL,
+            bbox_left INTEGER,
+            bbox_top INTEGER,
+            bbox_right INTEGER,
+            bbox_bottom INTEGER,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_frame_index ON full_frame_ocr(frame_index);
+        """
+    )
+    conn.commit()
+    conn.close()
+    yield db_path
+
+
+@pytest.fixture
+def seeded_ocr_db(ocr_db: Path) -> Path:
+    """Create a fullOCR.db with test data."""
+    conn = sqlite3.connect(str(ocr_db))
+    conn.executescript(
+        """
+        INSERT INTO full_frame_ocr (frame_id, frame_index, box_index, text, confidence, bbox_left, bbox_top, bbox_right, bbox_bottom)
+        VALUES
+            (0, 0, 0, 'Hello', 0.95, 100, 200, 200, 250),
+            (0, 0, 1, 'World', 0.92, 210, 200, 300, 250),
+            (1, 1, 0, 'Test', 0.88, 100, 200, 180, 250),
+            (1, 1, 1, 'Caption', 0.91, 190, 200, 320, 250),
+            (2, 2, 0, 'Another', 0.89, 100, 200, 220, 250),
+            (2, 2, 1, 'Hello', 0.94, 230, 200, 330, 250),
+            (5, 5, 0, 'Frame five', 0.93, 100, 200, 250, 250);
+        """
+    )
+    conn.commit()
+    conn.close()
+    return ocr_db
+
+
+@pytest.fixture
+def ocr_db_connection(ocr_db: Path) -> sqlite3.Connection:
+    """Create a database connection for testing."""
+    conn = sqlite3.connect(str(ocr_db))
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+@pytest.fixture
+def seeded_ocr_db_connection(seeded_ocr_db: Path) -> sqlite3.Connection:
+    """Create a database connection with seeded data."""
+    conn = sqlite3.connect(str(seeded_ocr_db))
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+@pytest.fixture
+def mock_ocr_database_manager(ocr_db: Path):
+    """Mock OcrDatabaseManager that uses the test database."""
+    from contextlib import asynccontextmanager
+
+    class MockOcrDatabaseManager:
+        def __init__(self, db_path: Path):
+            self.db_path = db_path
+
+        @asynccontextmanager
+        async def get_database(self, tenant_id: str, video_id: str, writable: bool = False):
+            conn = sqlite3.connect(str(self.db_path))
+            conn.row_factory = sqlite3.Row
+            try:
+                yield conn
+            finally:
+                conn.close()
+
+    return MockOcrDatabaseManager(ocr_db)
+
+
+@pytest.fixture
+def mock_seeded_ocr_database_manager(seeded_ocr_db: Path):
+    """Mock OcrDatabaseManager that uses the seeded test database."""
+    from contextlib import asynccontextmanager
+
+    class MockOcrDatabaseManager:
+        def __init__(self, db_path: Path):
+            self.db_path = db_path
+
+        @asynccontextmanager
+        async def get_database(self, tenant_id: str, video_id: str, writable: bool = False):
+            conn = sqlite3.connect(str(self.db_path))
+            conn.row_factory = sqlite3.Row
+            try:
+                yield conn
+            finally:
+                conn.close()
+
+    return MockOcrDatabaseManager(seeded_ocr_db)
+
+
+@pytest.fixture
+async def ocr_client(
+    app: FastAPI,
+    auth_context: AuthContext,
+    mock_seeded_ocr_database_manager,
+) -> AsyncGenerator[AsyncClient, None]:
+    """Create an async test client for OCR endpoints with mocked dependencies."""
+    from app.dependencies import get_auth_context
+
+    app.dependency_overrides[get_auth_context] = lambda: auth_context
+
+    with patch(
+        "app.routers.ocr.get_ocr_database_manager",
+        return_value=mock_seeded_ocr_database_manager,
+    ):
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            yield ac
+
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+async def ocr_client_empty_db(
+    app: FastAPI,
+    auth_context: AuthContext,
+    mock_ocr_database_manager,
+) -> AsyncGenerator[AsyncClient, None]:
+    """Create an async test client for OCR with empty database."""
+    from app.dependencies import get_auth_context
+
+    app.dependency_overrides[get_auth_context] = lambda: auth_context
+
+    with patch(
+        "app.routers.ocr.get_ocr_database_manager",
+        return_value=mock_ocr_database_manager,
+    ):
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            yield ac
+
+    app.dependency_overrides.clear()
+
+
 @pytest.fixture
 async def layout_client(
     app: FastAPI,
