@@ -34,13 +34,18 @@ All services scale to zero when idle.
 
 ## Key Decisions
 
-### Authentication
-- SPA authenticates directly with Supabase, receives JWT
-- JWT contains `tenant_id` claim
-- FastAPI validates JWT signature, extracts `tenant_id`
-- All Wasabi paths scoped to `/{tenant_id}/*`
-- Presigned upload URLs via Supabase Edge Functions (keeps Wasabi creds isolated)
-- Direct Supabase queries from SPA for video list, user profile (RLS enforced)
+### Authentication & Tenant Isolation
+- **JWT flow**: SPA authenticates with Supabase → receives JWT (1hr default, auto-refresh)
+- **JWT validation**: FastAPI validates signature (HS256) with Supabase secret, audience = "authenticated"
+- **Required claims**: `sub` (user_id), `tenant_id` - missing either returns 401
+- **Direct Supabase queries**: SPA queries video list, user profile directly (RLS enforced)
+
+**Wasabi tenant isolation:**
+- All S3 paths scoped: `{tenant_id}/videos/{video_id}/...`
+- `tenant_id` extracted from validated JWT, never from request params
+- Presigned URLs (15 min expiry) generated server-side with Wasabi credentials
+- Client cannot forge paths - signature would be invalid
+- Upload URLs via Supabase Edge Functions (keeps Wasabi creds isolated from API)
 
 ### API Style
 - REST for resources: captions, layout, preferences, stats
