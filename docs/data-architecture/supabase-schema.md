@@ -122,6 +122,50 @@ Frame extraction versioning for cache invalidation.
 | `archived_at` | TIMESTAMPTZ | When version was archived |
 | `created_by_user_id` | UUID FK | Creator |
 
+#### `video_database_state`
+
+Tracks versioning, working copies, and locks for per-video SQLite databases (layout.db, captions.db). Used by CR-SQLite sync system.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `video_id` | UUID PK FK | References `videos` |
+| `database_name` | TEXT PK | 'layout' or 'captions' |
+| `tenant_id` | UUID FK NOT NULL | References `tenants` (for RLS) |
+| **Versioning** | | |
+| `server_version` | BIGINT NOT NULL | Increments on every change (authoritative) |
+| `wasabi_version` | BIGINT NOT NULL | Version currently in Wasabi (cold storage) |
+| `wasabi_synced_at` | TIMESTAMPTZ | When Wasabi was last updated |
+| **Working Copy** | | |
+| `working_copy_path` | TEXT | Local filesystem path on server |
+| **Lock (user-level)** | | |
+| `lock_holder_user_id` | UUID FK | User who owns the lock |
+| `lock_type` | TEXT | 'client' or 'server' |
+| `locked_at` | TIMESTAMPTZ | When lock was acquired |
+| `last_activity_at` | TIMESTAMPTZ | Last change (for idle timeout) |
+| **Active Connection** | | |
+| `active_connection_id` | TEXT | WebSocket connection ID (for routing only) |
+
+**Primary Key:** `(video_id, database_name)`
+
+**Key concepts:**
+- `server_version > wasabi_version` means Wasabi is stale (server has unsaved changes)
+- Lock is **user-level**, not session-level. Same user can transparently switch tabs.
+- `active_connection_id` identifies which WebSocket to notify on session transfer.
+
+**Indexes:**
+
+```sql
+-- Find databases needing Wasabi upload (idle with unsaved changes)
+CREATE INDEX idx_vds_pending_upload ON video_database_state(last_activity_at)
+    WHERE server_version > wasabi_version;
+
+-- Find databases locked by a user
+CREATE INDEX idx_vds_lock_holder ON video_database_state(lock_holder_user_id)
+    WHERE lock_holder_user_id IS NOT NULL;
+```
+
+See: [Sync Protocol Reference](./sync-protocol.md) for usage details.
+
 ---
 
 ### Access Control Tables
