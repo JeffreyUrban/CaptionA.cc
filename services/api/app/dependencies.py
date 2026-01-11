@@ -52,12 +52,8 @@ async def get_auth_context(
         user_id: str | None = payload.get("sub")
         tenant_id: str | None = payload.get("tenant_id")
 
-        if user_id is None:
+        if user_id is None or tenant_id is None:
             raise credentials_exception
-
-        if tenant_id is None:
-            # Fall back to user_id if tenant_id not set (single-user tenant)
-            tenant_id = user_id
 
         return AuthContext(
             user_id=user_id,
