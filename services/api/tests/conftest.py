@@ -481,20 +481,86 @@ def mock_seeded_ocr_database_manager(seeded_ocr_db: Path):
     return MockOcrDatabaseManager(seeded_ocr_db)
 
 
+# =============================================================================
+# Boxes Endpoint Client Fixtures (requires both OCR and layout databases)
+# =============================================================================
+
+
 @pytest.fixture
-async def ocr_client(
+def seeded_boxes_layout_db(layout_db: Path) -> Path:
+    """Create a layout.db with labels matching OCR box indices."""
+    conn = sqlite3.connect(str(layout_db))
+    conn.executescript(
+        """
+        INSERT INTO video_layout_config (
+            id, frame_width, frame_height, crop_left, crop_top, crop_right, crop_bottom,
+            selection_mode, crop_bounds_version
+        ) VALUES (1, 1920, 1080, 10, 20, 30, 40, 'manual', 1);
+
+        -- Labels that match seeded OCR data (frame 0 boxes 0,1; frame 1 boxes 0,1)
+        INSERT INTO full_frame_box_labels (frame_index, box_index, label, label_source)
+        VALUES
+            (0, 0, 'in', 'user'),
+            (0, 1, 'out', 'user'),
+            (1, 0, 'in', 'model'),
+            (1, 1, 'out', 'model');
+
+        INSERT INTO video_preferences (id, layout_approved) VALUES (1, 0);
+        """
+    )
+    conn.commit()
+    conn.close()
+    return layout_db
+
+
+@pytest.fixture
+def mock_seeded_boxes_layout_manager(seeded_boxes_layout_db: Path):
+    """Mock LayoutDatabaseManager for boxes endpoint tests."""
+    from contextlib import asynccontextmanager
+
+    class MockLayoutDatabaseManager:
+        def __init__(self, db_path: Path):
+            self.db_path = db_path
+
+        @asynccontextmanager
+        async def get_database(self, tenant_id: str, video_id: str, writable: bool = False):
+            conn = sqlite3.connect(str(self.db_path))
+            conn.row_factory = sqlite3.Row
+            try:
+                yield conn
+            finally:
+                conn.close()
+
+        @asynccontextmanager
+        async def get_or_create_database(self, tenant_id: str, video_id: str, writable: bool = False):
+            conn = sqlite3.connect(str(self.db_path))
+            conn.row_factory = sqlite3.Row
+            try:
+                yield conn
+            finally:
+                conn.close()
+
+    return MockLayoutDatabaseManager(seeded_boxes_layout_db)
+
+
+@pytest.fixture
+async def boxes_client(
     app: FastAPI,
     auth_context: AuthContext,
     mock_seeded_ocr_database_manager,
+    mock_seeded_boxes_layout_manager,
 ) -> AsyncGenerator[AsyncClient, None]:
-    """Create an async test client for OCR endpoints with mocked dependencies."""
+    """Create an async test client for boxes endpoint (requires both OCR and layout)."""
     from app.dependencies import get_auth_context
 
     app.dependency_overrides[get_auth_context] = lambda: auth_context
 
     with patch(
-        "app.routers.ocr.get_ocr_database_manager",
+        "app.routers.boxes.get_ocr_database_manager",
         return_value=mock_seeded_ocr_database_manager,
+    ), patch(
+        "app.routers.boxes.get_layout_database_manager",
+        return_value=mock_seeded_boxes_layout_manager,
     ):
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
@@ -504,19 +570,31 @@ async def ocr_client(
 
 
 @pytest.fixture
-async def ocr_client_empty_db(
+async def boxes_client_no_labels(
     app: FastAPI,
     auth_context: AuthContext,
-    mock_ocr_database_manager,
+    mock_seeded_ocr_database_manager,
 ) -> AsyncGenerator[AsyncClient, None]:
-    """Create an async test client for OCR with empty database."""
+    """Create an async test client for boxes endpoint with no labels."""
+    from contextlib import asynccontextmanager
+
     from app.dependencies import get_auth_context
 
     app.dependency_overrides[get_auth_context] = lambda: auth_context
 
+    # Use empty layout manager that raises FileNotFoundError
+    class NoLayoutManager:
+        @asynccontextmanager
+        async def get_database(self, tenant_id: str, video_id: str, writable: bool = False):
+            raise FileNotFoundError("No layout database")
+            yield  # noqa: B901 - required for async context manager
+
     with patch(
-        "app.routers.ocr.get_ocr_database_manager",
-        return_value=mock_ocr_database_manager,
+        "app.routers.boxes.get_ocr_database_manager",
+        return_value=mock_seeded_ocr_database_manager,
+    ), patch(
+        "app.routers.boxes.get_layout_database_manager",
+        return_value=NoLayoutManager(),
     ):
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
@@ -563,6 +641,64 @@ async def layout_client_empty_db(
     with patch(
         "app.routers.layout.get_layout_database_manager",
         return_value=mock_layout_database_manager,
+    ):
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            yield ac
+
+    app.dependency_overrides.clear()
+
+
+# =============================================================================
+# Preferences Endpoint Client Fixtures
+# =============================================================================
+
+
+@pytest.fixture
+async def preferences_client(
+    app: FastAPI,
+    auth_context: AuthContext,
+    mock_seeded_layout_database_manager,
+) -> AsyncGenerator[AsyncClient, None]:
+    """Create an async test client for preferences endpoint."""
+    from app.dependencies import get_auth_context
+
+    app.dependency_overrides[get_auth_context] = lambda: auth_context
+
+    with patch(
+        "app.routers.preferences.get_layout_database_manager",
+        return_value=mock_seeded_layout_database_manager,
+    ):
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            yield ac
+
+    app.dependency_overrides.clear()
+
+
+# =============================================================================
+# Stats Endpoint Client Fixtures
+# =============================================================================
+
+
+@pytest.fixture
+async def stats_client(
+    app: FastAPI,
+    auth_context: AuthContext,
+    mock_seeded_ocr_database_manager,
+    mock_seeded_database_manager,
+) -> AsyncGenerator[AsyncClient, None]:
+    """Create an async test client for stats endpoint."""
+    from app.dependencies import get_auth_context
+
+    app.dependency_overrides[get_auth_context] = lambda: auth_context
+
+    with patch(
+        "app.routers.stats.get_ocr_database_manager",
+        return_value=mock_seeded_ocr_database_manager,
+    ), patch(
+        "app.routers.stats.get_database_manager",
+        return_value=mock_seeded_database_manager,
     ):
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:

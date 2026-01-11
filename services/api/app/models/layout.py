@@ -251,12 +251,137 @@ class VideoPreferencesUpdate(BaseModel):
 
 
 # =============================================================================
+# Consolidated Layout Models
+# =============================================================================
+
+
+class CropBounds(BaseModel):
+    """Crop bounds rectangle."""
+
+    left: int
+    top: int
+    right: int
+    bottom: int
+
+
+class SelectionBounds(BaseModel):
+    """Selection region bounds."""
+
+    left: int
+    top: int
+    right: int
+    bottom: int
+
+
+class LayoutParams(BaseModel):
+    """Layout analysis parameters from ML model."""
+
+    verticalPosition: float | None = None
+    verticalStd: float | None = None
+    boxHeight: float | None = None
+    boxHeightStd: float | None = None
+    anchorType: str | None = None
+    anchorPosition: float | None = None
+    topEdgeStd: float | None = None
+    bottomEdgeStd: float | None = None
+    horizontalStdSlope: float | None = None
+    horizontalStdIntercept: float | None = None
+    analysisModelVersion: str | None = None
+
+
+class ConsolidatedLayout(BaseModel):
+    """Consolidated layout data for the /layout endpoint."""
+
+    frameWidth: int
+    frameHeight: int
+    cropBounds: CropBounds
+    selectionBounds: SelectionBounds | None = None
+    selectionMode: SelectionMode
+    layoutParams: LayoutParams | None = None
+    cropBoundsVersion: int
+    updatedAt: str
+
+    @classmethod
+    def from_config(cls, config: VideoLayoutConfig) -> "ConsolidatedLayout":
+        """Create from VideoLayoutConfig."""
+        selection_bounds = None
+        if all(
+            v is not None
+            for v in [
+                config.selectionLeft,
+                config.selectionTop,
+                config.selectionRight,
+                config.selectionBottom,
+            ]
+        ):
+            selection_bounds = SelectionBounds(
+                left=config.selectionLeft,  # type: ignore
+                top=config.selectionTop,  # type: ignore
+                right=config.selectionRight,  # type: ignore
+                bottom=config.selectionBottom,  # type: ignore
+            )
+
+        layout_params = None
+        if config.verticalPosition is not None or config.analysisModelVersion is not None:
+            layout_params = LayoutParams(
+                verticalPosition=config.verticalPosition,
+                verticalStd=config.verticalStd,
+                boxHeight=config.boxHeight,
+                boxHeightStd=config.boxHeightStd,
+                anchorType=config.anchorType,
+                anchorPosition=config.anchorPosition,
+                topEdgeStd=config.topEdgeStd,
+                bottomEdgeStd=config.bottomEdgeStd,
+                horizontalStdSlope=config.horizontalStdSlope,
+                horizontalStdIntercept=config.horizontalStdIntercept,
+                analysisModelVersion=config.analysisModelVersion,
+            )
+
+        return cls(
+            frameWidth=config.frameWidth,
+            frameHeight=config.frameHeight,
+            cropBounds=CropBounds(
+                left=config.cropLeft,
+                top=config.cropTop,
+                right=config.cropRight,
+                bottom=config.cropBottom,
+            ),
+            selectionBounds=selection_bounds,
+            selectionMode=config.selectionMode,
+            layoutParams=layout_params,
+            cropBoundsVersion=config.cropBoundsVersion,
+            updatedAt=config.updatedAt,
+        )
+
+
+class LayoutUpdate(BaseModel):
+    """Request body for updating layout (consolidated)."""
+
+    cropBounds: CropBounds | None = None
+    selectionBounds: SelectionBounds | None = None
+    selectionMode: SelectionMode | None = None
+    layoutParams: LayoutParams | None = None
+
+
+# =============================================================================
 # Response Models
 # =============================================================================
 
 
+class LayoutResponse(BaseModel):
+    """Response for consolidated GET /layout endpoint."""
+
+    layout: ConsolidatedLayout
+
+
+class LayoutUpdateResponse(BaseModel):
+    """Response for PUT /layout endpoint."""
+
+    layout: ConsolidatedLayout
+
+
 class VideoLayoutConfigResponse(BaseModel):
-    """Response for video layout config operations."""
+    """Response for video layout config operations (legacy)."""
 
     config: VideoLayoutConfig
 
