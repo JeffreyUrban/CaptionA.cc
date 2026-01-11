@@ -13,7 +13,17 @@ WORKDIR /app
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    unzip \
     && rm -rf /var/lib/apt/lists/*
+
+# Download CR-SQLite extension from GitHub (Wasabi mirror available as private backup)
+# Source: https://github.com/superfly/cr-sqlite/releases
+ARG CRSQLITE_RELEASE_TAG=prebuild-test.main-438663b8
+RUN mkdir -p extensions/linux-x86_64 && \
+    curl -fL -o /tmp/crsqlite.zip \
+      "https://github.com/superfly/cr-sqlite/releases/download/${CRSQLITE_RELEASE_TAG}/crsqlite-linux-x86_64.zip" && \
+    unzip /tmp/crsqlite.zip -d extensions/linux-x86_64/ && \
+    rm /tmp/crsqlite.zip
 
 # Install uv for fast dependency management
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv

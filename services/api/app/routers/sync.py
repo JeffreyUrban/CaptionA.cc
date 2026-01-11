@@ -35,8 +35,8 @@ def _get_s3_client():
     return boto3.client(
         "s3",
         endpoint_url=settings.wasabi_endpoint_url,
-        aws_access_key_id=settings.wasabi_access_key_id,
-        aws_secret_access_key=settings.wasabi_secret_access_key,
+        aws_access_key_id=settings.effective_wasabi_access_key,
+        aws_secret_access_key=settings.effective_wasabi_secret_key,
         region_name=settings.wasabi_region,
         config=Config(signature_version="s3v4"),
     )

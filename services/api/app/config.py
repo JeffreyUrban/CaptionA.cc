@@ -9,9 +9,10 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(".env", "../../.env"),  # Check local and project root
         env_file_encoding="utf-8",
         case_sensitive=False,
+        extra="ignore",  # Ignore extra env vars from root .env
     )
 
     # Environment
@@ -26,9 +27,11 @@ class Settings(BaseSettings):
     supabase_url: str = ""
     supabase_jwt_secret: str = "test-secret-for-development-only"
 
-    # Wasabi S3
+    # Wasabi S3 (supports both naming conventions)
     wasabi_access_key_id: str = ""
+    wasabi_access_key_readwrite: str = ""  # Alias from root .env
     wasabi_secret_access_key: str = ""
+    wasabi_secret_key_readwrite: str = ""  # Alias from root .env
     wasabi_bucket: str = ""
     wasabi_region: str = "us-east-1"
     wasabi_endpoint_url: str = "https://s3.wasabisys.com"
@@ -50,6 +53,16 @@ class Settings(BaseSettings):
     # Supabase (service role for video_database_state)
     supabase_service_role_key: str = ""
     supabase_schema: str = "captionacc_production"
+
+    @property
+    def effective_wasabi_access_key(self) -> str:
+        """Get Wasabi access key (supports both naming conventions)."""
+        return self.wasabi_access_key_id or self.wasabi_access_key_readwrite
+
+    @property
+    def effective_wasabi_secret_key(self) -> str:
+        """Get Wasabi secret key (supports both naming conventions)."""
+        return self.wasabi_secret_access_key or self.wasabi_secret_key_readwrite
 
 
 @lru_cache

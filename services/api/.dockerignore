@@ -2,7 +2,6 @@
 __pycache__/
 *.py[cod]
 *$py.class
-*.so
 .Python
 .venv/
 venv/
@@ -10,11 +9,15 @@ venv/
 *.egg-info/
 *.egg
 
+# Extensions downloaded during build
+extensions/
+
 # Testing
 .pytest_cache/
 .coverage
 htmlcov/
 .tox/
+tests/
 
 # IDE
 .idea/

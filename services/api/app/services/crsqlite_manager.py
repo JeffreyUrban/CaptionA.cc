@@ -43,8 +43,8 @@ class CRSqliteManager:
         self._s3 = boto3.client(
             "s3",
             endpoint_url=self._settings.wasabi_endpoint_url,
-            aws_access_key_id=self._settings.wasabi_access_key_id,
-            aws_secret_access_key=self._settings.wasabi_secret_access_key,
+            aws_access_key_id=self._settings.effective_wasabi_access_key,
+            aws_secret_access_key=self._settings.effective_wasabi_secret_key,
             region_name=self._settings.wasabi_region,
             config=Config(signature_version="s3v4"),
         )
