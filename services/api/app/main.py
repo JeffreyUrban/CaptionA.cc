@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
-from app.routers import actions, admin, annotations, videos
+from app.routers import actions, admin, captions, videos
 
 
 @asynccontextmanager
@@ -43,7 +43,7 @@ def create_app() -> FastAPI:
 
     # Include routers
     app.include_router(videos.router, prefix="/videos", tags=["videos"])
-    app.include_router(annotations.router, prefix="/videos", tags=["annotations"])
+    app.include_router(captions.router, prefix="/videos", tags=["captions"])
     app.include_router(actions.router, prefix="/videos", tags=["actions"])
     app.include_router(admin.router, prefix="/admin", tags=["admin"])
 

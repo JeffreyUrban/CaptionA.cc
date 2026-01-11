@@ -1,6 +1,5 @@
 """Repository layer for data access."""
 
-from app.repositories.annotations import AnnotationRepository
-from app.repositories.videos import VideoRepository
+from app.repositories.captions import CaptionRepository
 
-__all__ = ["AnnotationRepository", "VideoRepository"]
+__all__ = ["CaptionRepository"]

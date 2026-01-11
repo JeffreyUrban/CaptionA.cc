@@ -1,28 +1,6 @@
-"""Response models for API endpoints."""
+"""Response models for API endpoints (excluding annotations)."""
 
 from pydantic import BaseModel
-
-
-class Annotation(BaseModel):
-    """Single annotation data."""
-
-    id: str
-    frame_start: int
-    frame_end: int
-    text: str
-    speaker: str | None = None
-
-
-class AnnotationResponse(BaseModel):
-    """Response for single annotation operations."""
-
-    annotation: Annotation
-
-
-class AnnotationListResponse(BaseModel):
-    """Response for listing annotations."""
-
-    annotations: list[Annotation]
 
 
 class LayoutConfig(BaseModel):

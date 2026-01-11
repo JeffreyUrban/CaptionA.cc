@@ -1,41 +1,72 @@
 """API models for requests and responses."""
 
+from app.models.captions import (
+    BoundaryState,
+    Caption,
+    CaptionBatchUpdate,
+    CaptionCreate,
+    CaptionListResponse,
+    CaptionResponse,
+    CaptionRow,
+    CaptionTextUpdate,
+    CaptionUpdate,
+    DeleteResponse,
+    MedianOcrStatus,
+    OverlapResolutionResponse,
+    TextStatus,
+)
 from app.models.requests import (
-    AnnotationBatchUpdate,
-    AnnotationCreate,
-    AnnotationUpdate,
     CropFramesRequest,
     ExportRequest,
     FullFramesRequest,
     InferenceRequest,
 )
 from app.models.responses import (
-    AnnotationListResponse,
-    AnnotationResponse,
+    AnalysisBox,
+    ImageUrl,
     ImageUrlsResponse,
     JobResponse,
+    LayoutConfig,
     LayoutResponse,
+    Preferences,
     PreferencesResponse,
     StatsResponse,
+    UsageStats,
     UsageStatsResponse,
+    VideoStats,
 )
 
 __all__ = [
-    # Requests
-    "AnnotationBatchUpdate",
-    "AnnotationCreate",
-    "AnnotationUpdate",
+    # Caption models
+    "BoundaryState",
+    "Caption",
+    "CaptionBatchUpdate",
+    "CaptionCreate",
+    "CaptionListResponse",
+    "CaptionResponse",
+    "CaptionRow",
+    "CaptionTextUpdate",
+    "CaptionUpdate",
+    "DeleteResponse",
+    "MedianOcrStatus",
+    "OverlapResolutionResponse",
+    "TextStatus",
+    # Action requests
     "CropFramesRequest",
     "ExportRequest",
     "FullFramesRequest",
     "InferenceRequest",
-    # Responses
-    "AnnotationListResponse",
-    "AnnotationResponse",
+    # Other responses
+    "AnalysisBox",
+    "ImageUrl",
     "ImageUrlsResponse",
     "JobResponse",
+    "LayoutConfig",
     "LayoutResponse",
+    "Preferences",
     "PreferencesResponse",
     "StatsResponse",
+    "UsageStats",
     "UsageStatsResponse",
+    "VideoStats",
 ]

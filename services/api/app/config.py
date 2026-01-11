@@ -27,11 +27,11 @@ class Settings(BaseSettings):
     supabase_jwt_secret: str
 
     # Wasabi S3
-    wasabi_access_key: str
-    wasabi_secret_key: str
-    wasabi_bucket: str
+    wasabi_access_key_id: str = ""
+    wasabi_secret_access_key: str = ""
+    wasabi_bucket: str = ""
     wasabi_region: str = "us-east-1"
-    wasabi_endpoint: str = "https://s3.wasabisys.com"
+    wasabi_endpoint_url: str = "https://s3.wasabisys.com"
 
     # Prefect
     prefect_api_url: str = ""
@@ -39,7 +39,7 @@ class Settings(BaseSettings):
 
     # SQLite Cache
     sqlite_cache_dir: str = "/tmp/captionacc-sqlite-cache"
-    sqlite_cache_max_size: int = 10  # Max number of DBs to keep in LRU cache
+    sqlite_cache_max_size_mb: int = 500  # Max cache size in MB
 
 
 @lru_cache
