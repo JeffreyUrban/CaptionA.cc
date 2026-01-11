@@ -266,13 +266,115 @@ class DatabaseManager:
         self._cache_dir.mkdir(parents=True, exist_ok=True)
 
 
-# Singleton instance
+class LayoutDatabaseManager(DatabaseManager):
+    """Manages layout.db SQLite databases stored in Wasabi S3."""
+
+    def _s3_key(self, tenant_id: str, video_id: str, db_name: str = "layout.db") -> str:
+        """Generate S3 key for a layout database file."""
+        return f"{tenant_id}/videos/{video_id}/{db_name}"
+
+    def _cache_path(self, tenant_id: str, video_id: str, db_name: str = "layout.db") -> Path:
+        """Generate local cache path for a layout database file."""
+        key = f"{tenant_id}/{video_id}/{db_name}"
+        hashed = hashlib.md5(key.encode()).hexdigest()[:16]
+        return self._cache_dir / f"{hashed}_{db_name}"
+
+    async def _create_new_database(self, cache_path: Path) -> None:
+        """Create a new layout database with schema."""
+
+        def _create():
+            conn = sqlite3.connect(str(cache_path))
+            try:
+                conn.executescript(
+                    """
+                    -- Database metadata for schema versioning
+                    CREATE TABLE IF NOT EXISTS database_metadata (
+                        id INTEGER PRIMARY KEY CHECK (id = 1),
+                        schema_version INTEGER NOT NULL DEFAULT 1,
+                        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                        migrated_at TEXT
+                    );
+                    INSERT OR IGNORE INTO database_metadata (id, schema_version) VALUES (1, 1);
+
+                    -- Video layout configuration
+                    CREATE TABLE IF NOT EXISTS video_layout_config (
+                        id INTEGER PRIMARY KEY CHECK (id = 1),
+                        frame_width INTEGER NOT NULL,
+                        frame_height INTEGER NOT NULL,
+                        crop_left INTEGER NOT NULL DEFAULT 0,
+                        crop_top INTEGER NOT NULL DEFAULT 0,
+                        crop_right INTEGER NOT NULL DEFAULT 0,
+                        crop_bottom INTEGER NOT NULL DEFAULT 0,
+                        selection_left INTEGER,
+                        selection_top INTEGER,
+                        selection_right INTEGER,
+                        selection_bottom INTEGER,
+                        selection_mode TEXT NOT NULL DEFAULT 'disabled',
+                        vertical_position REAL,
+                        vertical_std REAL,
+                        box_height REAL,
+                        box_height_std REAL,
+                        anchor_type TEXT,
+                        anchor_position REAL,
+                        top_edge_std REAL,
+                        bottom_edge_std REAL,
+                        horizontal_std_slope REAL,
+                        horizontal_std_intercept REAL,
+                        crop_bounds_version INTEGER NOT NULL DEFAULT 1,
+                        analysis_model_version TEXT,
+                        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+                    );
+
+                    -- Box classification labels
+                    CREATE TABLE IF NOT EXISTS full_frame_box_labels (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        frame_index INTEGER NOT NULL,
+                        box_index INTEGER NOT NULL,
+                        label TEXT NOT NULL CHECK (label IN ('in', 'out')),
+                        label_source TEXT NOT NULL DEFAULT 'user' CHECK (label_source IN ('user', 'model')),
+                        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                        UNIQUE(frame_index, box_index, label_source)
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_box_labels_frame ON full_frame_box_labels(frame_index);
+
+                    -- Box classification model storage
+                    CREATE TABLE IF NOT EXISTS box_classification_model (
+                        id INTEGER PRIMARY KEY CHECK (id = 1),
+                        model_data BLOB,
+                        model_version TEXT,
+                        trained_at TEXT
+                    );
+
+                    -- Video preferences
+                    CREATE TABLE IF NOT EXISTS video_preferences (
+                        id INTEGER PRIMARY KEY CHECK (id = 1),
+                        layout_approved INTEGER NOT NULL DEFAULT 0
+                    );
+                    """
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
+        await asyncio.to_thread(_create)
+
+
+# Singleton instances
 _database_manager: DatabaseManager | None = None
+_layout_database_manager: LayoutDatabaseManager | None = None
 
 
 def get_database_manager() -> DatabaseManager:
-    """Get the singleton DatabaseManager instance."""
+    """Get the singleton DatabaseManager instance for captions.db."""
     global _database_manager
     if _database_manager is None:
         _database_manager = DatabaseManager()
     return _database_manager
+
+
+def get_layout_database_manager() -> LayoutDatabaseManager:
+    """Get the singleton LayoutDatabaseManager instance for layout.db."""
+    global _layout_database_manager
+    if _layout_database_manager is None:
+        _layout_database_manager = LayoutDatabaseManager()
+    return _layout_database_manager
