@@ -4,6 +4,92 @@ This directory contains IAM policy templates for securing Wasabi S3 storage acce
 
 ## Policy Files
 
+### STS Client Credentials (Browser Direct Access)
+
+These policies enable browsers to access Wasabi S3 directly using temporary STS credentials, without API round-trips for each media request.
+
+#### CaptionAcc-ClientReadRole-TrustPolicy.json
+**Purpose:** Trust policy for the `captionacc-client-read` IAM role
+
+**Allows:** Only the `captionacc-sts-assumer` user can assume this role
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::WASABI_ACCOUNT_ID:user/captionacc-sts-assumer"
+      },
+      "Action": "sts:AssumeRole"
+    }
+  ]
+}
+```
+
+#### CaptionAcc-ClientReadRole-PermissionsPolicy.json
+**Purpose:** Permissions policy attached to the `captionacc-client-read` role
+
+**Grants:** Read access to all tenants' `client/` paths (further scoped by session policy)
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowClientPathRead",
+      "Effect": "Allow",
+      "Action": ["s3:GetObject"],
+      "Resource": "arn:aws:s3:::caption-acc-prod/*/client/*"
+    }
+  ]
+}
+```
+
+#### CaptionAcc-STSAssumer-Policy.json
+**Purpose:** Policy for the `captionacc-sts-assumer` IAM user
+
+**Grants:** Permission to assume the client-read role
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowAssumeClientReadRole",
+      "Effect": "Allow",
+      "Action": "sts:AssumeRole",
+      "Resource": "arn:aws:iam::WASABI_ACCOUNT_ID:role/captionacc-client-read"
+    }
+  ]
+}
+```
+
+#### CaptionAcc-STSSessionPolicy.json
+**Purpose:** Session policy passed at AssumeRole time (template)
+
+**Scopes:** Credentials to a specific tenant's `client/` path only
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["s3:GetObject"],
+      "Resource": "arn:aws:s3:::caption-acc-prod/{tenant_id}/client/*"
+    }
+  ]
+}
+```
+
+**Note:** `{tenant_id}` is replaced at runtime by the Edge Function based on the authenticated user's tenant.
+
+---
+
+### Server-Side Policies
+
 ### CaptionAcc-ReadOnlyPolicy.json
 **Purpose:** Read-only access for web application
 
@@ -59,7 +145,124 @@ All policies restrict access to `caption-acc-prod` only:
 
 ---
 
-## Applying Policies
+## Setting Up STS Client Credentials
+
+This section covers setting up the IAM resources for browser-based direct S3 access via STS temporary credentials.
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         STS Credentials Flow                                 │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│   Browser              Edge Function              Wasabi STS                 │
+│   ───────              ─────────────              ──────────                 │
+│                                                                              │
+│   1. GET /s3-credentials ──────►                                            │
+│      (with JWT)                                                              │
+│                                                                              │
+│                        2. Extract tenant_id                                  │
+│                           from JWT                                           │
+│                                                                              │
+│                        3. AssumeRole ─────────────────────►                  │
+│                           + session policy                                   │
+│                           (scoped to tenant)                                 │
+│                                                                              │
+│                        4. ◄───────────────────────────────── temp creds      │
+│                                                                              │
+│   5. ◄────────────────── return credentials                                 │
+│                                                                              │
+│   6. Direct S3 access ─────────────────────────────────────► Wasabi S3      │
+│      (signed with temp creds)                  {tenant}/client/*            │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Step 1: Create the IAM User
+
+**In Wasabi Console → IAM → Users → Create User:**
+
+| Setting | Value |
+|---------|-------|
+| User name | `captionacc-sts-assumer` |
+| Programmatic access | ✅ Yes |
+| Console access | ❌ No |
+
+Do not attach any policies yet.
+
+### Step 2: Create the IAM Role
+
+**In Wasabi Console → IAM → Roles → Create Role:**
+
+| Setting | Value |
+|---------|-------|
+| Role name | `captionacc-client-read` |
+| Trust policy | Copy from `CaptionAcc-ClientReadRole-TrustPolicy.json` |
+
+### Step 3: Attach Permissions Policy to Role
+
+**In Wasabi Console → IAM → Roles → `captionacc-client-read` → Permissions:**
+
+1. Create inline policy or attach managed policy
+2. Copy JSON from `CaptionAcc-ClientReadRole-PermissionsPolicy.json`
+3. Name it `CaptionAccClientReadPermissions`
+
+### Step 4: Attach Policy to User
+
+**In Wasabi Console → IAM → Users → `captionacc-sts-assumer` → Permissions:**
+
+1. Create inline policy
+2. Copy JSON from `CaptionAcc-STSAssumer-Policy.json`
+3. Name it `CaptionAccAssumeRole`
+
+### Step 5: Generate Access Keys
+
+**In Wasabi Console → IAM → Users → `captionacc-sts-assumer` → Security Credentials:**
+
+1. Create Access Key
+2. Save both Access Key ID and Secret Access Key securely
+3. These become `WASABI_STS_ACCESS_KEY` and `WASABI_STS_SECRET_KEY`
+
+### Step 6: Configure Edge Function Secrets
+
+```bash
+cd supabase
+
+# STS credentials
+supabase secrets set WASABI_STS_ACCESS_KEY=<access_key_from_step_5>
+supabase secrets set WASABI_STS_SECRET_KEY=<secret_key_from_step_5>
+supabase secrets set WASABI_STS_ROLE_ARN=arn:aws:iam::WASABI_ACCOUNT_ID:role/captionacc-client-read
+supabase secrets set WASABI_STS_DURATION_SECONDS=3600
+```
+
+### Step 7: Deploy Edge Function
+
+```bash
+supabase functions deploy captionacc-s3-credentials
+```
+
+### Step 8: Test
+
+```bash
+# Get a valid JWT token from your app, then:
+curl -H "Authorization: Bearer <jwt>" \
+  https://<project>.supabase.co/functions/v1/captionacc-s3-credentials
+
+# Expected response:
+# {
+#   "credentials": { "accessKeyId": "...", "secretAccessKey": "...", "sessionToken": "..." },
+#   "expiration": "2026-01-11T23:00:00Z",
+#   "bucket": "caption-acc-prod",
+#   "region": "us-east-1",
+#   "endpoint": "https://s3.us-east-1.wasabisys.com",
+#   "prefix": "{tenant_id}/client/*"
+# }
+```
+
+---
+
+## Applying Server-Side Policies
 
 ### 1. Create IAM Users
 
@@ -225,10 +428,21 @@ Update the DENY statement accordingly.
 
 ## Related Documentation
 
-- **Security Overview:** `/docs/wasabi/README.md`
-- **Credential Rotation:** `/docs/wasabi/CREDENTIAL_ROTATION.md`
-- **Repository Sanitization:** `/docs/REPO_SECURITY_SANITIZATION.md`
+- **Data Architecture:** `../../README.md`
+- **Wasabi Storage Reference:** `../../wasabi-storage.md`
+- **Edge Functions README:** `../../../../supabase/functions/README.md`
 - **Test Scripts:** `/scripts/test-wasabi-access.sh`, `/scripts/test-both-credentials.sh`
+
+### Policy Files in This Directory
+
+| File | Purpose |
+|------|---------|
+| `CaptionAcc-ClientReadRole-TrustPolicy.json` | Trust policy for STS role |
+| `CaptionAcc-ClientReadRole-PermissionsPolicy.json` | Permissions for STS role |
+| `CaptionAcc-STSAssumer-Policy.json` | Policy for STS assumer user |
+| `CaptionAcc-STSSessionPolicy.json` | Session policy template (runtime) |
+| `CaptionAcc-ReadOnlyPolicy.json` | Server-side read-only policy |
+| `CaptionAcc-RestrictedPolicy.json` | Server-side read-write policy |
 
 ---
 
