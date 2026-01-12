@@ -11,7 +11,7 @@ from app.models.captions import (
     CaptionTextUpdate,
     CaptionUpdate,
     DeleteResponse,
-    MedianOcrStatus,
+    CaptionOcrStatus,
     OverlapResolutionResponse,
     TextStatus,
 )
@@ -48,7 +48,7 @@ __all__ = [
     "CaptionTextUpdate",
     "CaptionUpdate",
     "DeleteResponse",
-    "MedianOcrStatus",
+    "CaptionOcrStatus",
     "OverlapResolutionResponse",
     "TextStatus",
     # Action requests

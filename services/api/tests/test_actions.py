@@ -210,7 +210,7 @@ class TestTriggerProcessing:
         """Should return 501 Not Implemented."""
         response = await actions_client.post(
             f"/videos/{test_video_id}/actions/trigger-processing",
-            json={"type": "crop-and-infer"},
+            json={"type": "crop-and-infer-boundaries"},
         )
         assert response.status_code == 501
 

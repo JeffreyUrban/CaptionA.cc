@@ -26,12 +26,12 @@ def _row_to_caption_row(row: sqlite3.Row) -> CaptionRow:
         text_pending=row["text_pending"],
         text_status=row["text_status"],
         text_notes=row["text_notes"],
-        text_ocr_combined=row["text_ocr_combined"],
+        caption_ocr=row["caption_ocr"],
         text_updated_at=row["text_updated_at"],
         image_needs_regen=row["image_needs_regen"],
-        median_ocr_status=row["median_ocr_status"],
-        median_ocr_error=row["median_ocr_error"],
-        median_ocr_processed_at=row["median_ocr_processed_at"],
+        caption_ocr_status=row["caption_ocr_status"],
+        caption_ocr_error=row["caption_ocr_error"],
+        caption_ocr_processed_at=row["caption_ocr_processed_at"],
         created_at=row["created_at"],
     )
 

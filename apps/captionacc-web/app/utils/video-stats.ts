@@ -332,11 +332,11 @@ function queryDatabaseId(db: Database.Database): string | undefined {
 /**
  * Query if any captions have median OCR processing in progress
  */
-function queryMedianOcrProcessing(db: Database.Database): boolean {
+function queryCaptionOcrProcessing(db: Database.Database): boolean {
   try {
     const result = db
       .prepare(
-        `SELECT COUNT(*) as count FROM captions WHERE median_ocr_status IN ('queued', 'processing')`
+        `SELECT COUNT(*) as count FROM captions WHERE caption_ocr_status IN ('queued', 'processing')`
       )
       .get() as { count: number } | undefined
     return (result?.count ?? 0) > 0
@@ -730,7 +730,7 @@ function calculateTextBadge(
   }
 
   // Priority 1: Processing OCR (median frame OCR in progress)
-  const hasProcessingOcr = queryMedianOcrProcessing(db)
+  const hasProcessingOcr = queryCaptionOcrProcessing(db)
   if (hasProcessingOcr) {
     return {
       type: 'text',

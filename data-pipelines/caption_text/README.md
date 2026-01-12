@@ -102,7 +102,7 @@ caption_text infer !__local/data/_has_been_deprecated__!/video_id \\
 **Options:**
 - `--checkpoint, -c`: Path to fine-tuned model checkpoint (required)
 - `--font-example, -f`: Path to font example image (required)
-- `--output, -o`: Output CSV file (default: `vlm_inference_results.csv`)
+- `--output, -o`: Output CSV file (default: `vlm_boundaries_results.csv`)
 - `--limit, -n`: Maximum number of captions to process
 
 **Output:**
@@ -120,7 +120,7 @@ caption_text compare !__local/data/_has_been_deprecated__!/video_id \\
 ```
 
 **Options:**
-- `--vlm-csv`: Path to VLM results CSV (default: `vlm_inference_results.csv`)
+- `--vlm-csv`: Path to VLM results CSV (default: `vlm_boundaries_results.csv`)
 - `--auto-validate/--no-auto-validate`: Auto-validate exact matches (default: true)
 
 **Output:**
@@ -218,7 +218,7 @@ text TEXT,                 -- NULL = not annotated, '' = no caption
 text_pending INTEGER,      -- 0 or 1
 text_status TEXT,          -- 'valid_caption', 'ocr_error', etc.
 text_notes TEXT,           -- Annotation notes
-text_ocr_combined TEXT,    -- Cached OCR result
+caption_ocr TEXT,    -- Cached OCR result
 text_updated_at TEXT       -- Timestamp of last text update
 ```
 

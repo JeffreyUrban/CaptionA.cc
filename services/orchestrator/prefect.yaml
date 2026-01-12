@@ -82,12 +82,12 @@ deployments:
       - crop-frames
 
   - name: production
-    entrypoint: flows/caption_median_ocr.py:caption_median_ocr_flow
+    entrypoint: flows/caption_caption_ocr.py:caption_caption_ocr_flow
     work_pool:
       name: captionacc-workers
     tags:
       - user-initiated
-      - median-ocr
+      - caption_ocr
 
   - name: production
     entrypoint: flows/base_model_update.py:base_model_update_flow

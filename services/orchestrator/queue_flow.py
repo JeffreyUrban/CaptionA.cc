@@ -123,8 +123,8 @@ def queue_crop_frames(
     sys.exit(exit_code)
 
 
-@app.command("caption-median-ocr")
-def queue_caption_median_ocr(
+@app.command("caption_ocr")
+def queue_caption_caption_ocr(
     video_id: str,
     db_path: str,
     video_dir: str,
@@ -140,7 +140,7 @@ def queue_caption_median_ocr(
 
             # Prefect type stubs incorrectly type run_deployment as returning FlowRun directly
             flow_run = await run_deployment(  # type: ignore[misc]
-                name="process-caption-median-ocr/production",
+                name="process-caption_ocr/production",
                 parameters={
                     "video_id": video_id,
                     "db_path": db_path,

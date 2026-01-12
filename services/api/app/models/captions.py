@@ -23,7 +23,7 @@ class TextStatus(str, Enum):
     OTHER_ISSUE = "other_issue"
 
 
-class MedianOcrStatus(str, Enum):
+class CaptionOcrStatus(str, Enum):
     """Median OCR processing status."""
 
     QUEUED = "queued"
@@ -50,12 +50,12 @@ class CaptionRow(BaseModel):
     text_pending: int  # 0 or 1
     text_status: str | None = None
     text_notes: str | None = None
-    text_ocr_combined: str | None = None
+    caption_ocr: str | None = None
     text_updated_at: str
     image_needs_regen: int  # 0 or 1
-    median_ocr_status: str = "queued"
-    median_ocr_error: str | None = None
-    median_ocr_processed_at: str | None = None
+    caption_ocr_status: str = "queued"
+    caption_ocr_error: str | None = None
+    caption_ocr_processed_at: str | None = None
     created_at: str
 
 
@@ -77,12 +77,12 @@ class Caption(BaseModel):
     textPending: bool
     textStatus: str | None = None
     textNotes: str | None = None
-    textOcrCombined: str | None = None
+    captionOcr: str | None = None
     textUpdatedAt: str
     imageNeedsRegen: bool
-    medianOcrStatus: str
-    medianOcrError: str | None = None
-    medianOcrProcessedAt: str | None = None
+    captionOcrStatus: str
+    captionOcrError: str | None = None
+    captionOcrProcessedAt: str | None = None
     createdAt: str
 
     @classmethod
@@ -99,12 +99,12 @@ class Caption(BaseModel):
             textPending=row.text_pending == 1,
             textStatus=row.text_status,
             textNotes=row.text_notes,
-            textOcrCombined=row.text_ocr_combined,
+            captionOcr=row.caption_ocr,
             textUpdatedAt=row.text_updated_at,
             imageNeedsRegen=row.image_needs_regen == 1,
-            medianOcrStatus=row.median_ocr_status,
-            medianOcrError=row.median_ocr_error,
-            medianOcrProcessedAt=row.median_ocr_processed_at,
+            captionOcrStatus=row.caption_ocr_status,
+            captionOcrError=row.caption_ocr_error,
+            captionOcrProcessedAt=row.caption_ocr_processed_at,
             createdAt=row.created_at,
         )
 

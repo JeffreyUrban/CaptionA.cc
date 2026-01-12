@@ -21,7 +21,7 @@ All services scale to zero when idle.
    Client ──presigned URL──▶ Wasabi
 
 2. FULL FRAMES + OCR (async, Modal)
-   modal-gpu: Wasabi (video) → full_frames → thumbnails → OCR → ocr-server.db → Wasabi
+   modal-gpu: Wasabi (video) → full_frames → thumbnails → OCR → raw-ocr.db → Wasabi
                                                                 → layout.db (boxes) → Wasabi
 
 3. USER SESSION - LAYOUT (sync, Fly.io + CR-SQLite)
@@ -121,7 +121,7 @@ See: [Sync Protocol Reference](../data-architecture/sync-protocol.md)
 - **Full frames**: `full_frames/*.jpg` (direct access via STS credentials, ~500KB each)
 - **Thumbnails**: Alongside full frames (~10KB each, ~100px wide)
 - **Client databases**: `layout.db.gz`, `captions.db.gz` (direct access via STS credentials, gzip compressed)
-- **Server databases**: `ocr-server.db.gz`, `layout-server.db.gz` (gzip compressed, server-only)
+- **Server databases**: `raw-ocr.db.gz`, `layout-server.db.gz` (gzip compressed, server-only)
 - **Cropped frame chunks**: VP9 WebM files (direct access via STS credentials)
 - **S3 versioning**: Enabled for corruption recovery
 

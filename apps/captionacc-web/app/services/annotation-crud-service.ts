@@ -10,7 +10,7 @@ import type Database from 'better-sqlite3'
 import { getCaptionDb, getWritableCaptionDb, getOrCreateCaptionDb } from '~/utils/database'
 import { deleteCombinedImage } from '~/utils/image-processing'
 import type { AnnotationState, TextStatus } from '~/types/enums'
-import { queueCaptionMedianOcrProcessing } from './prefect'
+import { queueCaptionOcrProcessing } from './prefect'
 import { getCaptionsDbPath, getVideoDir } from '~/utils/video-paths'
 
 // =============================================================================
@@ -31,12 +31,12 @@ interface AnnotationRow {
   text_pending: number
   text_status: string | null
   text_notes: string | null
-  text_ocr_combined: string | null
+  caption_ocr: string | null
   text_updated_at: string
   image_needs_regen: number
-  median_ocr_status: string
-  median_ocr_error: string | null
-  median_ocr_processed_at: string | null
+  caption_ocr_status: string
+  caption_ocr_error: string | null
+  caption_ocr_processed_at: string | null
   created_at: string
 }
 
@@ -54,12 +54,12 @@ export interface Annotation {
   textPending: boolean
   textStatus: string | null
   textNotes: string | null
-  textOcrCombined: string | null
+  captionOcr: string | null
   textUpdatedAt: string
   imageNeedsRegen: boolean
-  medianOcrStatus: string
-  medianOcrError: string | null
-  medianOcrProcessedAt: string | null
+  captionOcrStatus: string
+  captionOcrError: string | null
+  captionOcrProcessedAt: string | null
   createdAt: string
 }
 
@@ -139,12 +139,12 @@ function transformAnnotation(row: AnnotationRow): Annotation {
     textPending: row.text_pending === 1,
     textStatus: row.text_status,
     textNotes: row.text_notes,
-    textOcrCombined: row.text_ocr_combined,
+    captionOcr: row.caption_ocr,
     textUpdatedAt: row.text_updated_at,
     imageNeedsRegen: row.image_needs_regen === 1,
-    medianOcrStatus: row.median_ocr_status,
-    medianOcrError: row.median_ocr_error,
-    medianOcrProcessedAt: row.median_ocr_processed_at,
+    captionOcrStatus: row.caption_ocr_status,
+    captionOcrError: row.caption_ocr_error,
+    captionOcrProcessedAt: row.caption_ocr_processed_at,
     createdAt: row.created_at,
   }
 }
@@ -166,9 +166,9 @@ async function markImageForRegeneration(
     `
     UPDATE captions
     SET image_needs_regen = 1,
-        text_ocr_combined = NULL,
+        caption_ocr = NULL,
         text_pending = 1,
-        median_ocr_status = 'queued'
+        caption_ocr_status = 'queued'
     WHERE id = ?
   `
   ).run(annotationId)
@@ -179,7 +179,7 @@ async function markImageForRegeneration(
 
   if (dbPath && videoDir) {
     try {
-      await queueCaptionMedianOcrProcessing({
+      await queueCaptionOcrProcessing({
         videoId,
         dbPath,
         videoDir,
@@ -195,8 +195,8 @@ async function markImageForRegeneration(
       db.prepare(
         `
         UPDATE captions
-        SET median_ocr_status = 'error',
-            median_ocr_error = ?
+        SET caption_ocr_status = 'error',
+            caption_ocr_error = ?
         WHERE id = ?
       `
       ).run(error instanceof Error ? error.message : String(error), annotationId)
@@ -623,11 +623,11 @@ export async function createAnnotation(
     // Queue median OCR processing for non-gap, non-pending annotations via Prefect
     // image_needs_regen flag is already set in INSERT above
     if (!isGap && !isPending) {
-      // Update median_ocr_status to queued
+      // Update caption_ocr_status to queued
       db.prepare(
         `
         UPDATE captions
-        SET median_ocr_status = 'queued'
+        SET caption_ocr_status = 'queued'
         WHERE id = ?
       `
       ).run(annotationId)
@@ -638,7 +638,7 @@ export async function createAnnotation(
 
       if (dbPath && videoDir) {
         try {
-          await queueCaptionMedianOcrProcessing({
+          await queueCaptionOcrProcessing({
             videoId,
             dbPath,
             videoDir,
@@ -654,8 +654,8 @@ export async function createAnnotation(
           db.prepare(
             `
             UPDATE captions
-            SET median_ocr_status = 'error',
-                median_ocr_error = ?
+            SET caption_ocr_status = 'error',
+                caption_ocr_error = ?
             WHERE id = ?
           `
           ).run(error instanceof Error ? error.message : String(error), annotationId)

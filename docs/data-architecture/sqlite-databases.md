@@ -20,7 +20,7 @@ Paths are organized by **access level** at the top for simple IAM policies:
 │
 └── server/                        # Server-only (never client-accessible)
     └── videos/{video_id}/
-        ├── ocr-server.db.gz       # Full OCR results, model predictions (gzip)
+        ├── raw-ocr.db.gz       # Full OCR results, model predictions (gzip)
         └── layout-server.db.gz    # ML model blob, analysis parameters (gzip)
 ```
 
@@ -69,7 +69,7 @@ Key: STS credentials for all client/* content (media and databases).
 |----------|------|--------|------|------|---------|
 | `layout.db.gz` | `client/` | STS credentials | CR-SQLite (bidirectional) | 0.2-2 MB | Boxes, annotations, bounds |
 | `captions.db.gz` | `client/` | STS credentials | CR-SQLite (client→server) | 0.04-0.8 MB | Caption boundaries, text |
-| `ocr-server.db.gz` | `server/` | None | None | 0.5-5 MB | Full OCR results |
+| `raw-ocr.db.gz` | `server/` | None | None | 0.5-5 MB | Full OCR results |
 | `layout-server.db.gz` | `server/` | None | None | 0.1-20 MB | ML model, analysis params |
 | `full_frames/*.jpg` | `client/` | STS credentials | None | 15-70 MB | Video frames at 0.1Hz |
 | `cropped_frames_v*/*.webm` | `client/` | STS credentials | None | 50-500 MB | VP9 video chunks |
@@ -198,13 +198,13 @@ Primary caption storage.
 | `text_pending` | INTEGER NOT NULL | Client/Server | Needs review flag |
 | `text_status` | TEXT | **Client** | 'valid_caption', 'ocr_error', 'partial_caption', etc. |
 | `text_notes` | TEXT | **Client** | Annotator notes |
-| `text_ocr_combined` | TEXT | **Server** | Cached OCR result |
+| `caption_ocr` | TEXT | **Server** | Cached OCR result |
 | `text_updated_at` | TEXT | Auto | Last text update |
 | **Processing** | | | |
 | `image_needs_regen` | INTEGER NOT NULL | Server | Regeneration flag |
-| `median_ocr_status` | TEXT NOT NULL | Server | 'queued', 'processing', 'completed', 'error' |
-| `median_ocr_error` | TEXT | Server | Error message if failed |
-| `median_ocr_processed_at` | TEXT | Server | Processing timestamp |
+| `caption_ocr_status` | TEXT NOT NULL | Server | 'queued', 'processing', 'completed', 'error' |
+| `caption_ocr_error` | TEXT | Server | Error message if failed |
+| `caption_ocr_processed_at` | TEXT | Server | Processing timestamp |
 | `created_at` | TEXT NOT NULL | Auto | Record creation timestamp |
 
 ### Indexes
@@ -226,7 +226,7 @@ SELECT crsql_as_crr('captions');
 
 These databases contain proprietary ML data and full processing results. Clients never access these directly.
 
-## ocr-server.db
+## raw-ocr.db
 
 Full OCR detection results from Google Vision API. Contains all metadata needed for server-side processing.
 

@@ -233,7 +233,7 @@ async function loadAnnotation(
     if (!response.ok) throw new Error('Failed to load annotation')
     const data = await response.json()
     setCurrentAnnotation(data)
-    setText(data.annotation.text ?? data.annotation.text_ocr_combined ?? '')
+    setText(data.annotation.text ?? data.annotation.caption_ocr ?? '')
     setTextStatus(data.annotation.text_status ?? 'valid_caption')
     setTextNotes(data.annotation.text_notes ?? '')
     setLoading(false)

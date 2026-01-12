@@ -25,7 +25,7 @@ interface AnnotationRow {
   text_pending: number
   text_status: string | null
   text_notes: string | null
-  text_ocr_combined: string | null
+  caption_ocr: string | null
   text_updated_at: string
   created_at: string
 }
@@ -44,7 +44,7 @@ export interface Annotation {
   textPending: boolean
   textStatus: string | null
   textNotes: string | null
-  textOcrCombined: string | null
+  captionOcr: string | null
   textUpdatedAt: string
   createdAt: string
 }
@@ -100,7 +100,7 @@ function transformAnnotation(row: AnnotationRow): Annotation {
     textPending: row.text_pending === 1,
     textStatus: row.text_status,
     textNotes: row.text_notes,
-    textOcrCombined: row.text_ocr_combined,
+    captionOcr: row.caption_ocr,
     textUpdatedAt: row.text_updated_at,
     createdAt: row.created_at,
   }

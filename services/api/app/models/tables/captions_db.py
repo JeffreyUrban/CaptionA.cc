@@ -40,10 +40,10 @@ class Caption(SQLModel, table=True):
     text_pending: bool = Field(default=True)
     text_status: Optional[str] = None
     text_notes: Optional[str] = None
-    text_ocr_combined: Optional[str] = None
+    caption_ocr: Optional[str] = None
     text_updated_at: datetime = Field(default_factory=utc_now)
     image_needs_regen: bool = Field(default=False)
-    median_ocr_status: str = Field(default="queued")
-    median_ocr_error: Optional[str] = None
-    median_ocr_processed_at: Optional[datetime] = None
+    caption_ocr_status: str = Field(default="queued")
+    caption_ocr_error: Optional[str] = None
+    caption_ocr_processed_at: Optional[datetime] = None
     created_at: datetime = Field(default_factory=utc_now)

@@ -32,7 +32,7 @@ caption-acc-prod/
     │
     └── server/                          # Server-only (never client-accessible)
         └── videos/{video_id}/
-            ├── ocr-server.db.gz         # Full OCR results (gzip)
+            ├── raw-ocr.db.gz         # Full OCR results (gzip)
             └── layout-server.db.gz      # ML model, analysis params (gzip)
 ```
 

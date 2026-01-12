@@ -15,16 +15,16 @@ When a boundary annotation is saved:
 db.prepare(
   `
   UPDATE captions
-  SET median_ocr_status = 'queued',    // Immediate optimistic update
+  SET caption_ocr_status = 'queued',    // Immediate optimistic update
       image_needs_regen = 1,
-      text_ocr_combined = NULL,
+      caption_ocr = NULL,
       text_pending = 1
   WHERE id = ?
 `
 ).run(annotationId)
 
 // Queue Prefect flow (async, doesn't block response)
-await queueCaptionMedianOcrProcessing({
+await queueCaptionOcrProcessing({
   videoId,
   dbPath,
   videoDir,
@@ -39,9 +39,9 @@ await queueCaptionMedianOcrProcessing({
 The Prefect flow runs asynchronously:
 
 ```python
-# services/orchestrator/flows/caption_median_ocr.py
-@flow(name="process-caption-median-ocr")
-def caption_median_ocr_flow(...):
+# services/orchestrator/flows/caption_caption_ocr.py
+@flow(name="process-caption_ocr")
+def caption_caption_ocr_flow(...):
     # 1. Generate median frame
     # 2. Run OCR
     # 3. Update database with results
@@ -55,7 +55,7 @@ When the flow completes, it sends a webhook to the web app:
 ```python
 webhook_payload = {
     "videoId": video_id,
-    "flowName": "caption-median-ocr",
+    "flowName": "caption_ocr",
     "status": "complete" | "error",
     "error": "..." if errors
 }

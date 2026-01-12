@@ -223,12 +223,12 @@ class DatabaseManager:
                         text_pending INTEGER NOT NULL DEFAULT 1,
                         text_status TEXT,
                         text_notes TEXT,
-                        text_ocr_combined TEXT,
+                        caption_ocr TEXT,
                         text_updated_at TEXT NOT NULL DEFAULT (datetime('now')),
                         image_needs_regen INTEGER NOT NULL DEFAULT 0,
-                        median_ocr_status TEXT NOT NULL DEFAULT 'queued',
-                        median_ocr_error TEXT,
-                        median_ocr_processed_at TEXT,
+                        caption_ocr_status TEXT NOT NULL DEFAULT 'queued',
+                        caption_ocr_error TEXT,
+                        caption_ocr_processed_at TEXT,
                         created_at TEXT NOT NULL DEFAULT (datetime('now'))
                     );
 

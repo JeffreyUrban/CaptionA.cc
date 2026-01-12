@@ -747,12 +747,12 @@ class TestCaptionResponseFormat:
             "textPending",
             "textStatus",
             "textNotes",
-            "textOcrCombined",
+            "captionOcr",
             "textUpdatedAt",
             "imageNeedsRegen",
-            "medianOcrStatus",
-            "medianOcrError",
-            "medianOcrProcessedAt",
+            "captionOcrStatus",
+            "captionOcrError",
+            "captionOcrProcessedAt",
             "createdAt",
         }
         assert set(caption.keys()) == expected_keys

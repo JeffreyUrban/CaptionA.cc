@@ -51,7 +51,7 @@ Wasabi paths are organized with **access level at the top** for simple IAM polic
 │
 └── server/                        # Server-only (never client-accessible)
     └── videos/{video_id}/
-        ├── ocr-server.db.gz       # Full OCR results (gzip)
+        ├── raw-ocr.db.gz       # Full OCR results (gzip)
         └── layout-server.db.gz    # ML model, analysis params (gzip)
 ```
 
@@ -69,7 +69,7 @@ Databases are split by **visibility**:
 |----------|----------|--------|------|---------|
 | `layout.db` | `client/` | STS credentials | CR-SQLite (bidirectional) | Boxes, annotations, bounds |
 | `captions.db` | `client/` | STS credentials | CR-SQLite (client→server) | Caption boundaries, text |
-| `ocr-server.db.gz` | `server/` | None | None | Full OCR results |
+| `raw-ocr.db.gz` | `server/` | None | None | Full OCR results |
 | `layout-server.db.gz` | `server/` | None | None | ML model, analysis params |
 
 **Key principle:** Client-facing databases live in `client/` alongside media. Client uses STS credentials for download; version info comes from the lock API response.
@@ -100,7 +100,7 @@ Wasabi provides **cost-effective object storage** with free egress bandwidth. It
 - **Full-resolution frames**: `client/videos/{id}/full_frames/*.jpg` (0.1Hz)
 - **Cropped frame chunks**: `client/videos/{id}/cropped_frames_v*/modulo_*/*.webm`
 - **Client databases**: `client/videos/{id}/layout.db.gz`, `captions.db.gz` (gzip compressed)
-- **Server databases**: `server/videos/{id}/ocr-server.db.gz`, `layout-server.db.gz`
+- **Server databases**: `server/videos/{id}/raw-ocr.db.gz`, `layout-server.db.gz`
 
 Bucket: `caption-acc-prod` (us-east-1)
 
@@ -121,7 +121,7 @@ Each video has SQLite databases stored in Wasabi, split by visibility:
 
 | Database | Content |
 |----------|---------|
-| `ocr-server.db.gz` | Full OCR results from Google Vision API |
+| `raw-ocr.db.gz` | Full OCR results from Google Vision API |
 | `layout-server.db.gz` | Trained ML model, analysis parameters |
 
 See: [SQLite Database Reference](./sqlite-databases.md)
@@ -136,7 +136,7 @@ See: [SQLite Database Reference](./sqlite-databases.md)
 3. Backend creates video record in Supabase (status: 'uploading')
 4. Prefect flow: upload_and_process_video
    a. Extract full frames → client/videos/{id}/full_frames/*.jpg
-   b. Run OCR → server/videos/{id}/ocr-server.db.gz
+   b. Run OCR → server/videos/{id}/raw-ocr.db.gz
    c. Initialize client/videos/{id}/layout.db.gz with box data from OCR
 5. Video status set to 'active'
 ```
@@ -261,7 +261,7 @@ caption-acc-prod/
     │
     └── server/                              # Server-only (never client-accessible)
         └── videos/{video_id}/
-            ├── ocr-server.db.gz             # Full OCR results (gzip)
+            ├── raw-ocr.db.gz             # Full OCR results (gzip)
             └── layout-server.db.gz          # ML model, analysis params (gzip)
 ```
 
@@ -272,7 +272,7 @@ Server-side temporary files during processing:
 ```
 local/processing/
 └── {first_2_chars_of_uuid}/{full_uuid}/
-    ├── ocr-server.db
+    ├── raw-ocr.db
     ├── layout-server.db
     ├── layout.db
     └── captions.db

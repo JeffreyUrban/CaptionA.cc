@@ -19,7 +19,7 @@ interface Annotation {
   text_pending: number
   text_status: string | null
   text_notes: string | null
-  text_ocr_combined: string | null
+  caption_ocr: string | null
   text_updated_at: string
   created_at: string
 }
@@ -72,9 +72,9 @@ export async function loader({ params }: LoaderFunctionArgs) {
     }
 
     // Check if combined OCR is already cached in database
-    let combinedOCRText = annotation.text_ocr_combined
+    let combinedOCRText = annotation.caption_ocr
     console.log(
-      '  Current text_ocr_combined:',
+      '  Current caption_ocr:',
       combinedOCRText ? `"${combinedOCRText.substring(0, 50)}..."` : 'null'
     )
 
@@ -133,7 +133,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
       db.prepare(
         `
         UPDATE captions
-        SET text_ocr_combined = ?
+        SET caption_ocr = ?
         WHERE id = ?
       `
       ).run(combinedOCRText, annotationId)
@@ -150,7 +150,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
       JSON.stringify({
         annotation: {
           ...annotation,
-          text_ocr_combined: combinedOCRText,
+          caption_ocr: combinedOCRText,
         },
         combinedImageUrl: `/api/images/${encodeURIComponent(videoId)}/text_images/annotation_${annotationId}.jpg`,
       }),

@@ -58,7 +58,7 @@ class CalculatePredictionsResponse(BaseModel):
 class ProcessingType(str, Enum):
     """Type of processing to trigger."""
 
-    CROP_AND_INFER = "crop-and-infer"
+    CROP_AND_INFER_BOUNDARIES = "crop-and-infer-boundaries"
 
 
 class TriggerProcessingRequest(BaseModel):

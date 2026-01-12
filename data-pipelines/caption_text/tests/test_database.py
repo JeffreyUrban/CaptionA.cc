@@ -35,7 +35,7 @@ def mock_db():
                 text_pending INTEGER NOT NULL DEFAULT 0,
                 text_status TEXT,
                 text_notes TEXT,
-                text_ocr_combined TEXT,
+                caption_ocr TEXT,
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
             )
         """)

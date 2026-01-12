@@ -142,12 +142,12 @@ function toSnakeCase(annotation: Annotation) {
     text_pending: annotation.textPending ? 1 : 0,
     text_status: annotation.textStatus,
     text_notes: annotation.textNotes,
-    text_ocr_combined: annotation.textOcrCombined,
+    caption_ocr: annotation.captionOcr,
     text_updated_at: annotation.textUpdatedAt,
     image_needs_regen: annotation.imageNeedsRegen ? 1 : 0,
-    median_ocr_status: annotation.medianOcrStatus,
-    median_ocr_error: annotation.medianOcrError,
-    median_ocr_processed_at: annotation.medianOcrProcessedAt,
+    caption_ocr_status: annotation.captionOcrStatus,
+    caption_ocr_error: annotation.captionOcrError,
+    caption_ocr_processed_at: annotation.captionOcrProcessedAt,
     created_at: annotation.createdAt,
   }
 }

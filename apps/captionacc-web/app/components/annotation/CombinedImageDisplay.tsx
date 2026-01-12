@@ -2,7 +2,7 @@ interface Annotation {
   id: number
   start_frame_index: number
   end_frame_index: number
-  text_ocr_combined: string | null
+  caption_ocr: string | null
 }
 
 interface CombinedImageDisplayProps {
@@ -19,16 +19,16 @@ export function CombinedImageDisplay({
   onTextSelect,
 }: CombinedImageDisplayProps) {
   const handleClick = () => {
-    if (annotation.text_ocr_combined) {
-      onTextSelect(annotation.text_ocr_combined)
+    if (annotation.caption_ocr) {
+      onTextSelect(annotation.caption_ocr)
     }
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault()
-      if (annotation.text_ocr_combined) {
-        onTextSelect(annotation.text_ocr_combined)
+      if (annotation.caption_ocr) {
+        onTextSelect(annotation.caption_ocr)
       }
     }
   }
@@ -58,7 +58,7 @@ export function CombinedImageDisplay({
             onKeyDown={handleKeyDown}
             title="Click to copy to Caption Text"
           >
-            {annotation.text_ocr_combined ?? '(No OCR text available)'}
+            {annotation.caption_ocr ?? '(No OCR text available)'}
           </div>
         </div>
 

@@ -30,7 +30,7 @@ export interface Annotation {
   text_pending: number
   text_status: string | null
   text_notes: string | null
-  text_ocr_combined: string | null
+  caption_ocr: string | null
   text_updated_at: string
   created_at: string
 }

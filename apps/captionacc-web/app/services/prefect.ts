@@ -52,7 +52,7 @@ interface QueueFlowResult {
 const DEPLOYMENT_NAMES: Record<string, string> = {
   'full-frames': 'process-video-initial/production',
   'crop-frames': 'crop-video-frames/production',
-  'caption-median-ocr': 'process-caption-median-ocr/production',
+  caption_ocr: 'process-caption_ocr/production',
   'update-base-model': 'update-base-model-globally/production',
   'retrain-video-model': 'retrain-video-model/production',
   'upload-and-process': 'upload-and-process-video/production',
@@ -72,7 +72,7 @@ async function queueFlow(
   flowType:
     | 'full-frames'
     | 'crop-frames'
-    | 'caption-median-ocr'
+    | 'caption_ocr'
     | 'update-base-model'
     | 'retrain-video-model'
     | 'upload-and-process'
@@ -87,9 +87,9 @@ async function queueFlow(
   let parameters: Record<string, unknown> = {}
   let tags: string[] = []
 
-  if (flowType === 'caption-median-ocr') {
+  if (flowType === 'caption_ocr') {
     if (!options.videoDir || !options.captionIds || options.captionIds.length === 0) {
-      throw new Error('videoDir and captionIds required for caption-median-ocr flow')
+      throw new Error('videoDir and captionIds required for caption_ocr flow')
     }
     parameters = {
       video_id: options.videoId!,
@@ -345,7 +345,7 @@ export async function queueCropFramesProcessing(options: {
  *
  * Replaces: synchronous OCR in api.annotations.$videoId.$id.text.tsx
  */
-export async function queueCaptionMedianOcrProcessing(options: {
+export async function queueCaptionOcrProcessing(options: {
   videoId: string
   dbPath: string
   videoDir: string
@@ -356,7 +356,7 @@ export async function queueCaptionMedianOcrProcessing(options: {
     `[Prefect] Queuing caption median OCR for ${options.videoId}, captions: ${options.captionIds.join(', ')}`
   )
 
-  const result = await queueFlow('caption-median-ocr', {
+  const result = await queueFlow('caption_ocr', {
     ...options,
     language: options.language ?? 'zh-Hans',
   })
