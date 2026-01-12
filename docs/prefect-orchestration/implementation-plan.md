@@ -230,8 +230,8 @@ def captionacc_crop_and_infer_caption_frame_extents(
     tenant_id: str,
     crop_region: dict
 ):
-    # 1. Acquire server lock
-    acquire_server_lock(video_id, lock_type="processing")
+    # 1. Acquire server lock on layout database
+    acquire_server_lock(video_id, database_name="layout")
 
     try:
         # 2. Call Modal crop_and_infer
@@ -430,11 +430,13 @@ async def handle_video_insert_webhook(request: Request):
     tenant_tier = "premium"  # Placeholder
 
     # Calculate priority (age boosting enabled by default)
+    # Default: +1 point per 60 minutes, capped at 20 points
     priority = calculate_flow_priority(
         tenant_tier=tenant_tier,
         request_time=datetime.now(),  # Video just uploaded
-        video_size_bytes=record.get("file_size_bytes"),
-        enable_age_boosting=True  # Default
+        enable_age_boosting=True,  # Default
+        age_boost_per_minutes=60,  # +1 point per hour
+        age_boost_cap=20  # Max +20 points
     )
 
     # Trigger Prefect flow with priority
