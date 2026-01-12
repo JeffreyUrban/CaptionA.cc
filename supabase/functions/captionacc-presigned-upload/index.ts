@@ -166,8 +166,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
     // Generate video ID
     const videoId = crypto.randomUUID();
 
-    // Storage key pattern: {tenant_id}/videos/{video_id}/video.mp4
-    const storageKey = `${tenantId}/videos/${videoId}/video.mp4`;
+    // Storage key pattern: {tenant_id}/client/videos/{video_id}/video.mp4
+    const storageKey = `${tenantId}/client/videos/${videoId}/video.mp4`;
 
     // Create video record
     const { error: insertError } = await supabaseAdmin.from("videos").insert({

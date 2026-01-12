@@ -48,8 +48,8 @@ class DatabaseManager:
         return self._locks[key]
 
     def _s3_key(self, tenant_id: str, video_id: str, db_name: str = "captions.db") -> str:
-        """Generate S3 key for a database file."""
-        return f"{tenant_id}/videos/{video_id}/{db_name}"
+        """Generate S3 key for a database file in client/ path."""
+        return f"{tenant_id}/client/videos/{video_id}/{db_name}"
 
     def _cache_path(self, tenant_id: str, video_id: str, db_name: str = "captions.db") -> Path:
         """Generate local cache path for a database file."""
@@ -270,8 +270,8 @@ class LayoutDatabaseManager(DatabaseManager):
     """Manages layout.db SQLite databases stored in Wasabi S3."""
 
     def _s3_key(self, tenant_id: str, video_id: str, db_name: str = "layout.db") -> str:
-        """Generate S3 key for a layout database file."""
-        return f"{tenant_id}/videos/{video_id}/{db_name}"
+        """Generate S3 key for a layout database file in client/ path."""
+        return f"{tenant_id}/client/videos/{video_id}/{db_name}"
 
     def _cache_path(self, tenant_id: str, video_id: str, db_name: str = "layout.db") -> Path:
         """Generate local cache path for a layout database file."""
@@ -363,8 +363,8 @@ class OcrDatabaseManager(DatabaseManager):
     """Manages fullOCR.db SQLite databases stored in Wasabi S3 (read-only)."""
 
     def _s3_key(self, tenant_id: str, video_id: str, db_name: str = "fullOCR.db") -> str:
-        """Generate S3 key for an OCR database file."""
-        return f"{tenant_id}/videos/{video_id}/{db_name}"
+        """Generate S3 key for an OCR database file in server/ path."""
+        return f"{tenant_id}/server/videos/{video_id}/{db_name}"
 
     def _cache_path(self, tenant_id: str, video_id: str, db_name: str = "fullOCR.db") -> Path:
         """Generate local cache path for an OCR database file."""

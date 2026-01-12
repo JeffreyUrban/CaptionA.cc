@@ -186,7 +186,7 @@ async def get_download_url(video_id: str, db: DatabaseName, auth: Auth):
     version = state.get("wasabi_version", 0) if state else 0
 
     s3_client = _get_s3_client()
-    s3_key = f"{auth.tenant_id}/videos/{video_id}/{db.value}.db.gz"
+    s3_key = f"{auth.tenant_id}/client/videos/{video_id}/{db.value}.db.gz"
 
     def _generate_url():
         return s3_client.generate_presigned_url(

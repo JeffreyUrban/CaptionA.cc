@@ -25,41 +25,39 @@ CaptionA.cc uses a hybrid storage architecture optimized for different workloads
 │  │   catalog    │◄──►│  • video.mp4                    │◄──►│ • OCR        │  │
 │  │ • User       │    │  • full_frames/*.jpg            │    │ • Inference  │  │
 │  │   profiles   │    │  • cropped_frames_v*/*.webm     │    │              │  │
-│  │ • Sync state │    │                                 │    │ server/:     │  │
-│  │ • Search     │    │  sync/ (presigned URLs):        │    │ • ocr-server │  │
-│  │   index      │    │  • layout.db.gz (CR-SQLite)     │    │   .db        │  │
-│  │              │    │  • captions.db.gz (CR-SQLite)   │    │ • layout-    │  │
-│  └──────────────┘    └─────────────────────────────────┘    │   server.db  │  │
-│                                                              └──────────────┘  │
-│  Metadata & Locks      File Storage (Free Egress)          Internal Processing │
-│  Multi-tenant RLS      Path-based access control            Proprietary ML     │
+│  │ • Sync state │    │  • layout.db.gz (CR-SQLite)     │    │ server/:     │  │
+│  │ • Search     │    │  • captions.db.gz (CR-SQLite)   │    │ • ocr-server │  │
+│  │   index      │    │                                 │    │   .db        │  │
+│  └──────────────┘    └─────────────────────────────────┘    │ • layout-    │  │
+│                                                              │   server.db  │  │
+│  Metadata & Locks      File Storage (Free Egress)           └──────────────┘  │
+│  Multi-tenant RLS      Path-based access control            Internal Processing│
 └───────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Storage Path Organization
 
-Wasabi paths are organized by **access level** for security:
+Wasabi paths are organized with **access level at the top** for simple IAM policies:
 
 ```
-{tenant_id}/videos/{video_id}/
-├── client/                    # Tenant-accessible via STS credentials
-│   ├── video.mp4              # Original video
-│   ├── full_frames/           # Frame images (layout page)
-│   └── cropped_frames_v*/     # WebM chunks (caption editor)
+{tenant_id}/
+├── client/                        # Tenant-accessible via STS credentials
+│   └── videos/{video_id}/
+│       ├── video.mp4              # Original video
+│       ├── layout.db.gz           # CR-SQLite synced
+│       ├── captions.db.gz         # CR-SQLite synced
+│       ├── full_frames/           # Frame images (layout page)
+│       └── cropped_frames_v*/     # WebM chunks (caption editor)
 │
-├── sync/                      # Accessed via presigned URLs only
-│   ├── layout.db.gz           # CR-SQLite synced
-│   └── captions.db.gz         # CR-SQLite synced
-│
-└── server/                    # Server-only (never client-accessible)
-    ├── ocr-server.db          # Full OCR results
-    └── layout-server.db       # ML model, analysis params
+└── server/                        # Server-only (never client-accessible)
+    └── videos/{video_id}/
+        ├── ocr-server.db          # Full OCR results
+        └── layout-server.db       # ML model, analysis params
 ```
 
-**Security principle:** Path structure enforces access boundaries:
-- `client/*` - Tenant gets STS credentials for read-only access to all their videos
-- `sync/*` - Individual presigned URLs (15 min expiry) for database downloads
-- `server/*` - Never included in any client credentials
+**Security principle:** Access level (`client/` vs `server/`) at the top enables simple IAM policies:
+- `{tenant_id}/client/*` - Tenant gets STS credentials for read-only access
+- `{tenant_id}/server/*` - Never included in any client credentials
 
 See: [Wasabi Storage Reference](./wasabi-storage.md)
 
@@ -69,12 +67,12 @@ Databases are split by **visibility**:
 
 | Database | Location | Access | Sync | Purpose |
 |----------|----------|--------|------|---------|
-| `layout.db` | `sync/` | Presigned URL | CR-SQLite (bidirectional) | Boxes, annotations, bounds |
-| `captions.db` | `sync/` | Presigned URL | CR-SQLite (client→server) | Caption boundaries, text |
+| `layout.db` | `client/` | STS or Presigned URL | CR-SQLite (bidirectional) | Boxes, annotations, bounds |
+| `captions.db` | `client/` | STS or Presigned URL | CR-SQLite (client→server) | Caption boundaries, text |
 | `ocr-server.db` | `server/` | None | None | Full OCR results |
 | `layout-server.db` | `server/` | None | None | ML model, analysis params |
 
-**Key principle:** Client downloads databases via presigned URLs through the sync API. Media assets (frames, chunks) accessed via STS credentials for high-volume, low-latency access.
+**Key principle:** Client-facing databases live in `client/` alongside media. While technically accessible via STS credentials, clients should use presigned URLs via the sync API for proper version tracking.
 
 See: [SQLite Database Reference](./sqlite-databases.md)
 
@@ -98,11 +96,11 @@ See: [Supabase Schema Reference](./supabase-schema.md)
 
 Wasabi provides **cost-effective object storage** with free egress bandwidth. It stores:
 
-- **Original videos**: `client/video.mp4`
-- **Full-resolution frames**: `client/full_frames/*.jpg` (0.1Hz)
-- **Cropped frame chunks**: `client/cropped_frames_v*/modulo_*/*.webm`
-- **Sync databases**: `sync/layout.db.gz`, `sync/captions.db.gz` (gzip compressed)
-- **Server databases**: `server/ocr-server.db`, `server/layout-server.db`
+- **Original videos**: `client/videos/{id}/video.mp4`
+- **Full-resolution frames**: `client/videos/{id}/full_frames/*.jpg` (0.1Hz)
+- **Cropped frame chunks**: `client/videos/{id}/cropped_frames_v*/modulo_*/*.webm`
+- **Client databases**: `client/videos/{id}/layout.db.gz`, `captions.db.gz` (gzip compressed)
+- **Server databases**: `server/videos/{id}/ocr-server.db`, `layout-server.db`
 
 Bucket: `caption-acc-prod` (us-east-1)
 
@@ -134,19 +132,19 @@ See: [SQLite Database Reference](./sqlite-databases.md)
 
 ```
 1. Client calls Edge Function for presigned upload URL
-2. Client uploads video directly to Wasabi (client/video.mp4)
+2. Client uploads video directly to Wasabi (client/videos/{id}/video.mp4)
 3. Backend creates video record in Supabase (status: 'uploading')
 4. Prefect flow: upload_and_process_video
-   a. Extract full frames → client/full_frames/*.jpg
-   b. Run OCR → server/ocr-server.db
-   c. Initialize sync/layout.db.gz with box data from OCR
+   a. Extract full frames → client/videos/{id}/full_frames/*.jpg
+   b. Run OCR → server/videos/{id}/ocr-server.db
+   c. Initialize client/videos/{id}/layout.db.gz with box data from OCR
 5. Video status set to 'active'
 ```
 
 ### Layout Annotation Flow (CR-SQLite Sync)
 
 ```
-1. Client requests presigned URL for sync/layout.db.gz
+1. Client requests presigned URL for client/videos/{id}/layout.db.gz
 2. Client downloads directly from Wasabi (no server load)
 3. Client loads into wa-sqlite + CR-SQLite extension
 4. User annotates boxes (in/out/clear) - instant local edits
@@ -159,10 +157,10 @@ See: [SQLite Database Reference](./sqlite-databases.md)
 
 ```
 1. Prefect flow: crop_frames_to_webm
-2. Download client/video.mp4 + server/layout-server.db from Wasabi
+2. Download client/videos/{id}/video.mp4 + server/videos/{id}/layout-server.db from Wasabi
 3. Extract cropped frames at 10Hz using layout bounds
 4. Encode as VP9/WebM chunks (hierarchical modulo levels)
-5. Upload chunks to Wasabi: client/cropped_frames_v{version}/modulo_{M}/chunk_NNNN.webm
+5. Upload chunks to Wasabi: client/videos/{id}/cropped_frames_v{version}/modulo_{M}/chunk_NNNN.webm
 6. Create cropped_frames_versions record in Supabase
 7. Activate new version (archives previous)
 ```
@@ -171,7 +169,7 @@ See: [SQLite Database Reference](./sqlite-databases.md)
 
 ```
 1. Client gets STS credentials for tenant (one-time per session)
-2. Client requests presigned URL for sync/captions.db.gz
+2. Client requests presigned URL for client/videos/{id}/captions.db.gz
 3. Client downloads captions.db directly from Wasabi
 4. Client loads into wa-sqlite + CR-SQLite extension
 5. Browser streams cropped frame chunks directly from Wasabi using STS credentials
@@ -185,14 +183,14 @@ See: [SQLite Database Reference](./sqlite-databases.md)
 |------------|---------------|-----|
 | Frame chunks (`.webm`) | STS credentials | High volume, performance critical |
 | Frame images (`.jpg`) | STS credentials | High volume, layout thumbnails |
-| Sync databases (`.db.gz`) | Presigned URL | Versioned, needs sync API |
-| Original video | Presigned URL | Large file, infrequent |
+| Client databases (`.db.gz`) | Presigned URL via API | Version tracking via sync API |
+| Original video | STS credentials | Part of client/ path |
 | Server databases | None | Proprietary, server-only |
 
-### STS Credentials
+### STS Credentials (Edge Function)
 
 ```
-GET /s3-credentials
+GET /functions/v1/captionacc-s3-credentials
 Authorization: Bearer <jwt>
 
 Response:
@@ -206,7 +204,7 @@ Response:
   "bucket": "caption-acc-prod",
   "region": "us-east-1",
   "endpoint": "https://s3.us-east-1.wasabisys.com",
-  "prefix": "{tenant_id}/videos/*/client/"
+  "prefix": "{tenant_id}/client/*"
 }
 ```
 
@@ -239,30 +237,29 @@ See: [Sync Protocol Reference](./sync-protocol.md)
 
 ```
 caption-acc-prod/
-└── {tenant_id}/videos/{video_id}/
-    │
-    ├── client/                          # STS credentials (tenant read-only)
-    │   ├── video.mp4                    # Original video
-    │   │
-    │   ├── full_frames/                 # Full-resolution frames (0.1Hz)
-    │   │   ├── frame_000000.jpg
-    │   │   ├── frame_000001.jpg
-    │   │   └── ...
-    │   │
-    │   └── cropped_frames_v{version}/   # Versioned cropped frames
-    │       ├── modulo_16/               # Every 16th frame (coarsest)
-    │       │   ├── chunk_0000000000.webm
+└── {tenant_id}/
+    ├── client/                              # STS credentials (tenant read-only)
+    │   └── videos/{video_id}/
+    │       ├── video.mp4                    # Original video
+    │       ├── layout.db.gz                 # CR-SQLite synced
+    │       ├── captions.db.gz               # CR-SQLite synced
+    │       │
+    │       ├── full_frames/                 # Full-resolution frames (0.1Hz)
+    │       │   ├── frame_000000.jpg
+    │       │   ├── frame_000001.jpg
     │       │   └── ...
-    │       ├── modulo_4/                # Every 4th frame (medium)
-    │       └── modulo_1/                # Every frame (finest)
+    │       │
+    │       └── cropped_frames_v{version}/   # Versioned cropped frames
+    │           ├── modulo_16/               # Every 16th frame (coarsest)
+    │           │   ├── chunk_0000000000.webm
+    │           │   └── ...
+    │           ├── modulo_4/                # Every 4th frame (medium)
+    │           └── modulo_1/                # Every frame (finest)
     │
-    ├── sync/                            # Presigned URLs (15 min expiry)
-    │   ├── layout.db.gz                 # Boxes, annotations, bounds (CR-SQLite)
-    │   └── captions.db.gz               # Captions (CR-SQLite)
-    │
-    └── server/                          # Server-only (never client-accessible)
-        ├── ocr-server.db                # Full OCR results
-        └── layout-server.db             # ML model, analysis params
+    └── server/                              # Server-only (never client-accessible)
+        └── videos/{video_id}/
+            ├── ocr-server.db                # Full OCR results
+            └── layout-server.db             # ML model, analysis params
 ```
 
 ### Local Processing Path Pattern

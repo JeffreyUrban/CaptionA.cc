@@ -55,12 +55,6 @@ class Settings(BaseSettings):
     supabase_service_role_key: str = ""
     supabase_schema: str = "captionacc_production"
 
-    # Wasabi STS (for client S3 credentials)
-    wasabi_sts_access_key: str = ""
-    wasabi_sts_secret_key: str = ""
-    wasabi_sts_role_arn: str = ""  # e.g. arn:aws:iam::{account}:role/captionacc-client-read
-    wasabi_sts_duration_seconds: int = 3600  # 1 hour default, max 12 hours
-
     @property
     def effective_wasabi_access_key(self) -> str:
         """Get Wasabi access key (supports both naming conventions)."""

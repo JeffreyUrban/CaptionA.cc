@@ -213,13 +213,13 @@ PUT body:
 
 ## Direct Wasabi Access
 
-### 8. S3 Credentials (STS)
+### 8. S3 Credentials (STS) - Edge Function
 
 ```
-GET /s3-credentials
+GET /functions/v1/captionacc-s3-credentials
 ```
 
-Get temporary AWS credentials for direct Wasabi S3 access. Credentials are scoped to the tenant's `client/` paths only (read-only).
+Get temporary AWS credentials for direct Wasabi S3 access (Supabase Edge Function). Credentials are scoped to the tenant's `client/` paths only (read-only).
 
 Response:
 ```json
@@ -233,7 +233,7 @@ Response:
   "bucket": "caption-acc-prod",
   "region": "us-east-1",
   "endpoint": "https://s3.us-east-1.wasabisys.com",
-  "prefix": "{tenant_id}/videos/*/client/"
+  "prefix": "{tenant_id}/client/*"
 }
 ```
 
@@ -254,15 +254,16 @@ const s3 = new S3Client({
 // Direct access to any media file - no API round-trip
 const chunk = await s3.send(new GetObjectCommand({
   Bucket: creds.bucket,
-  Key: `${tenantId}/videos/${videoId}/client/cropped_frames_v1/modulo_4/chunk_0042.webm`,
+  Key: `${tenantId}/client/videos/${videoId}/cropped_frames_v1/modulo_4/chunk_0042.webm`,
 }));
 ```
 
-**Access scope:**
-- ✅ `client/video.mp4` - Original video
-- ✅ `client/full_frames/*.jpg` - Frame images
-- ✅ `client/cropped_frames_v*/*.webm` - Video chunks
-- ❌ `sync/*.db.gz` - Use presigned URLs via sync API
+**Access scope:** (`{tenant_id}/client/*`)
+- ✅ `client/videos/{id}/video.mp4` - Original video
+- ✅ `client/videos/{id}/full_frames/*.jpg` - Frame images
+- ✅ `client/videos/{id}/cropped_frames_v*/*.webm` - Video chunks
+- ✅ `client/videos/{id}/layout.db.gz` - Layout database (use presigned URLs for versioning)
+- ✅ `client/videos/{id}/captions.db.gz` - Captions database (use presigned URLs for versioning)
 - ❌ `server/*` - Server-only, never accessible
 
 **When to use:**
@@ -298,7 +299,7 @@ Response:
 {
   "uploadUrl": "https://wasabi.../...",
   "videoId": "uuid",
-  "storageKey": "{tenant_id}/videos/{video_id}/client/video.mp4",
+  "storageKey": "{tenant_id}/client/videos/{video_id}/video.mp4",
   "expiresAt": "2026-01-11T11:00:00Z"
 }
 ```
@@ -431,11 +432,12 @@ Response:
 | 4 | `/videos/{id}/sync/{db}` | WebSocket | CR-SQLite real-time sync |
 | 5 | `/videos/{id}/stats` | GET | Video stats and progress |
 | 6 | `/videos/{id}/preferences` | GET, PUT | Video preferences |
-| 7 | `/s3-credentials` | GET | STS credentials for direct Wasabi access |
-| 8 | `/videos/{id}/image-urls` | GET | Frame image presigned URLs (legacy) |
-| 9 | `/videos/{id}/frame-chunks` | GET | VP9 chunk presigned URLs (legacy) |
-| 10 | `/admin/databases` | GET | Database status list |
-| 11 | `/admin/databases/{id}/{db}/sync` | POST | Force Wasabi sync |
-| 12 | `/admin/locks/cleanup` | POST | Release stale locks |
+| 7 | `/videos/{id}/image-urls` | GET | Frame image presigned URLs (legacy) |
+| 8 | `/videos/{id}/frame-chunks` | GET | VP9 chunk presigned URLs (legacy) |
+| 9 | `/admin/databases` | GET | Database status list |
+| 10 | `/admin/databases/{id}/{db}/sync` | POST | Force Wasabi sync |
+| 11 | `/admin/locks/cleanup` | POST | Release stale locks |
 
-Plus Edge Function: `POST /functions/v1/captionacc-presigned-upload`
+Plus Edge Functions:
+- `POST /functions/v1/captionacc-presigned-upload` - Upload URL generation
+- `GET /functions/v1/captionacc-s3-credentials` - STS credentials for direct Wasabi access

@@ -55,8 +55,8 @@ class CRSqliteManager:
         return self._working_dir / tenant_id / video_id / f"{db_name}.db"
 
     def _s3_key(self, tenant_id: str, video_id: str, db_name: str) -> str:
-        """Get S3 key for gzip-compressed database."""
-        return f"{tenant_id}/videos/{video_id}/{db_name}.db.gz"
+        """Get S3 key for gzip-compressed database in client/ path."""
+        return f"{tenant_id}/client/videos/{video_id}/{db_name}.db.gz"
 
     def _get_lock(self, tenant_id: str, video_id: str, db_name: str) -> asyncio.Lock:
         """Get or create lock for a database."""
