@@ -61,10 +61,20 @@ class ProcessingType(str, Enum):
     CROP_AND_INFER_CAPTION_FRAME_EXTENTS = "crop-and-infer-caption-frame-extents"
 
 
+class CropRegionDict(BaseModel):
+    """Crop region coordinates for processing."""
+
+    crop_left: float
+    crop_top: float
+    crop_right: float
+    crop_bottom: float
+
+
 class TriggerProcessingRequest(BaseModel):
     """Request body for trigger processing endpoint."""
 
     type: ProcessingType
+    crop_region: CropRegionDict
 
 
 class TriggerProcessingResponse(BaseModel):

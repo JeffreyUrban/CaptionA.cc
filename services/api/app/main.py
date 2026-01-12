@@ -23,9 +23,11 @@ from app.routers import (
     preferences,
     stats,
     sync,
+    webhooks,
     websocket_sync,
 )
 from app.services.background_tasks import get_upload_worker
+from app.prefect_runner import get_worker_manager
 
 
 @asynccontextmanager
@@ -55,10 +57,19 @@ async def lifespan(app: FastAPI):
     upload_worker = get_upload_worker()
     await upload_worker.start()
 
+    # Start Prefect worker to execute flows
+    worker_manager = get_worker_manager()
+    try:
+        await worker_manager.start()
+    except Exception as e:
+        logger.error(f"Failed to start Prefect worker: {e}")
+        # Continue startup even if Prefect worker fails
+
     yield
 
-    # Shutdown - upload all pending changes before exit
+    # Shutdown - stop worker and upload all pending changes before exit
     logger.info("Shutting down API service")
+    await worker_manager.stop()
     await upload_worker.stop()
 
 
@@ -95,6 +106,9 @@ def create_app() -> FastAPI:
     # CR-SQLite sync routers
     app.include_router(sync.router, prefix="/videos", tags=["sync"])
     app.include_router(websocket_sync.router, prefix="/videos", tags=["sync"])
+
+    # Webhook routers
+    app.include_router(webhooks.router, tags=["webhooks"])
 
     @app.get("/health")
     async def health_check():

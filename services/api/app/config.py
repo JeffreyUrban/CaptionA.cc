@@ -40,6 +40,9 @@ class Settings(BaseSettings):
     prefect_api_url: str = ""
     prefect_api_key: str = ""
 
+    # Webhook Authentication
+    webhook_secret: str = ""  # Secret for authenticating Supabase webhooks
+
     # SQLite Cache (legacy - used by database_manager.py)
     sqlite_cache_dir: str = "/tmp/captionacc-sqlite-cache"
     sqlite_cache_max_size_mb: int = 500  # Max cache size in MB

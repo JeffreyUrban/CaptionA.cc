@@ -9,6 +9,7 @@ from app.routers import (
     preferences,
     stats,
     sync,
+    webhooks,
     websocket_sync,
 )
 
@@ -21,5 +22,6 @@ __all__ = [
     "preferences",
     "stats",
     "sync",
+    "webhooks",
     "websocket_sync",
 ]
