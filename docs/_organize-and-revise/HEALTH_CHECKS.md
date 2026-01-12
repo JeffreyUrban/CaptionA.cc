@@ -117,7 +117,7 @@ gh workflow run health-check-and-keepalive.yml
 ```
 
 **Notifications**:
-- **Recommended**: Use Better Stack for alerts (see [Better Stack Setup](./BETTERSTACK_SETUP.md))
+- **Recommended**: Use Better Stack for alerts (see [Better Stack Setup](BETTERSTACK_SETUP.md))
 - Provides email, phone, and Slack notifications
 - Better incident management than GitHub email notifications
 - Free tier is sufficient for this use case
@@ -295,7 +295,7 @@ For comprehensive monitoring with email/phone alerts, set up Better Stack:
 3. **Monitor GitHub Actions workflow** (heartbeat, daily verification)
 4. **Configure notifications** (email, phone, Slack)
 
-**Full setup guide**: [Better Stack Setup](./BETTERSTACK_SETUP.md)
+**Full setup guide**: [Better Stack Setup](BETTERSTACK_SETUP.md)
 
 **Why Better Stack?**
 - ✅ Purpose-built for uptime monitoring
@@ -311,7 +311,7 @@ For comprehensive monitoring with email/phone alerts, set up Better Stack:
 2. ✅ Fly.io health checks configured
 3. ✅ GitHub Actions workflow created
 4. ✅ Documentation complete
-5. 🔲 **Set up Better Stack monitoring** (see [guide](./BETTERSTACK_SETUP.md))
+5. 🔲 **Set up Better Stack monitoring** (see [guide](BETTERSTACK_SETUP.md))
 
 ### Future Enhancements
 - 📊 **Add metrics collection** (response times, error rates)
@@ -325,7 +325,7 @@ For comprehensive monitoring with email/phone alerts, set up Better Stack:
 
 ## Related Documentation
 
-- [Better Stack Setup Guide](./BETTERSTACK_SETUP.md) ⭐ **Start here for notifications**
-- [Key Rotation Process](./KEY_ROTATION.md)
-- [Fly.io Deployment](../README.md#deployment)
+- [Better Stack Setup Guide](BETTERSTACK_SETUP.md) ⭐ **Start here for notifications**
+- [Key Rotation Process](KEY_ROTATION.md)
+- [Fly.io Deployment](../../README.md#deployment)
 - [Wasabi Storage](data-architecture/archive-revise-or-remove/WASABI_ARCHITECTURE.md)

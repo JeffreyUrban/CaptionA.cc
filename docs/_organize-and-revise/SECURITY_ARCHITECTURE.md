@@ -543,9 +543,9 @@ const accessKey = data.secret
 - [Supabase Row Level Security](https://supabase.com/docs/guides/auth/row-level-security)
 - [Fly.io Secrets Management](https://fly.io/docs/reference/secrets/)
 - [OWASP Top 10](https://owasp.org/www-project-top-ten/)
-- [Wasabi IAM Policies](data-architecture/wasabi/wasabi-iam-policies/README.md)
-- [Multi-Schema Setup](../supabase/docs/MULTI_SCHEMA_SETUP.md)
-- [Access Control System](./USER_ACCESS_CONTROL.md)
+- [Wasabi IAM Policies](../data-architecture/wasabi/wasabi-iam-policies/README.md)
+- [Multi-Schema Setup](supabase/MULTI_SCHEMA_SETUP.md)
+- [Access Control System](USER_ACCESS_CONTROL.md)
 
 ---
 

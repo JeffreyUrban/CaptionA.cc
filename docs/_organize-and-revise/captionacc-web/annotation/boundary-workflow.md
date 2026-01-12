@@ -3,7 +3,7 @@
 # TODO: The database details in this doc are out of date.
 
 **Status:** Design Document (Planning Phase)
-**Parent:** [overview.md](./overview.md)
+**Parent:** [overview.md](overview.md)
 **Purpose:** Visual identification of caption sequence boundaries
 
 ## Workflow Purpose

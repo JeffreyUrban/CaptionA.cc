@@ -404,8 +404,8 @@ gh run list --workflow=health-check-and-keepalive.yml --limit 5
 
 ## Related Documentation
 
-- [Health Checks & Monitoring](./HEALTH_CHECKS.md)
-- [Key Rotation Process](./KEY_ROTATION.md)
+- [Health Checks & Monitoring](HEALTH_CHECKS.md)
+- [Key Rotation Process](KEY_ROTATION.md)
 - [Better Stack Official Docs](https://betterstack.com/docs/uptime/)
 
 ## Summary

@@ -233,8 +233,8 @@ GET  /api/annotations/history                  - Get session history
 
 ## Next Steps
 
-1. Document boundary workflow in detail → [boundary-workflow.md](./boundary-workflow.md)
-2. Document text correction workflow in detail → [text-correction-workflow.md](./text-correction-workflow.md)
+1. Document boundary workflow in detail → [boundary-workflow.md](boundary-workflow.md)
+2. Document text correction workflow in detail → [text-correction-workflow.md](text-correction-workflow.md)
 3. Implement boundary workflow first
 4. Test with real data
 5. Implement text correction workflow
