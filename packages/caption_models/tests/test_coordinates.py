@@ -3,7 +3,7 @@
 import pytest
 from caption_models.coordinates import (
     BoundingBox,
-    CropBounds,
+    CropRegion,
     box_overlap_with_crop,
     cropped_to_original,
     is_box_inside_crop,
@@ -126,19 +126,19 @@ class TestBoundingBox:
         assert fraction == pytest.approx(0.0)
 
 
-class TestCropBounds:
-    """Tests for CropBounds dataclass."""
+class TestCropRegion:
+    """Tests for CropRegion dataclass."""
 
     def test_properties(self):
         """Test width and height properties."""
-        crop = CropBounds(left=100, top=200, right=900, bottom=800)
+        crop = CropRegion(left=100, top=200, right=900, bottom=800)
 
         assert crop.width == 800
         assert crop.height == 600
 
     def test_to_bounding_box(self):
         """Test conversion to bounding box."""
-        crop = CropBounds(left=100, top=200, right=900, bottom=800)
+        crop = CropRegion(left=100, top=200, right=900, bottom=800)
         box = crop.to_bounding_box()
 
         assert isinstance(box, BoundingBox)
@@ -149,14 +149,14 @@ class TestCropBounds:
 
     def test_to_fractional(self):
         """Test conversion to fractional coordinates."""
-        crop = CropBounds(left=0, top=540, right=1920, bottom=1080)
+        crop = CropRegion(left=0, top=540, right=1920, bottom=1080)
         frac = crop.to_fractional(frame_width=1920, frame_height=1080)
 
         assert frac == pytest.approx((0.0, 0.5, 1.0, 1.0))
 
     def test_from_fractional(self):
         """Test creation from fractional coordinates."""
-        crop = CropBounds.from_fractional(left=0.0, top=0.5, right=1.0, bottom=1.0, frame_width=1920, frame_height=1080)
+        crop = CropRegion.from_fractional(left=0.0, top=0.5, right=1.0, bottom=1.0, frame_width=1920, frame_height=1080)
 
         assert crop.left == 0
         assert crop.top == 540
@@ -172,7 +172,7 @@ class TestOriginalToCropped:
         # Original: Box in bottom half (1920x1080 frame)
         box = BoundingBox(left=768, top=756, right=1152, bottom=972)
         # Crop: Bottom half (top=540)
-        crop = CropBounds(left=0, top=540, right=1920, bottom=1080)
+        crop = CropRegion(left=0, top=540, right=1920, bottom=1080)
 
         cropped = original_to_cropped(box, crop)
 
@@ -186,10 +186,10 @@ class TestOriginalToCropped:
 
     def test_box_partially_outside_crop(self):
         """Test conversion when box extends outside crop region."""
-        # Original: Box extends above crop boundary
+        # Original: Box extends above crop region
         box = BoundingBox(left=768, top=324, right=1152, bottom=756)
         # Crop: Bottom half (top=540)
-        crop = CropBounds(left=0, top=540, right=1920, bottom=1080)
+        crop = CropRegion(left=0, top=540, right=1920, bottom=1080)
 
         cropped = original_to_cropped(box, crop)
 
@@ -205,7 +205,7 @@ class TestOriginalToCropped:
         # Original: Box in top half
         box = BoundingBox(left=768, top=216, right=1152, bottom=432)
         # Crop: Bottom half (top=540)
-        crop = CropBounds(left=0, top=540, right=1920, bottom=1080)
+        crop = CropRegion(left=0, top=540, right=1920, bottom=1080)
 
         cropped = original_to_cropped(box, crop)
 
@@ -214,7 +214,7 @@ class TestOriginalToCropped:
     def test_full_frame_crop(self):
         """Test conversion with full frame crop (identity minus offset)."""
         box = BoundingBox(left=384, top=648, right=1152, bottom=756)
-        crop = CropBounds(left=0, top=0, right=1920, bottom=1080)
+        crop = CropRegion(left=0, top=0, right=1920, bottom=1080)
 
         cropped = original_to_cropped(box, crop)
 
@@ -230,7 +230,7 @@ class TestOriginalToCropped:
         # Original: Box at (960, 756) to (1344, 972)
         box = BoundingBox(left=960, top=756, right=1344, bottom=972)
         # Crop: Region (384, 540) to (1536, 1080) - width 1152, height 540
-        crop = CropBounds(left=384, top=540, right=1536, bottom=1080)
+        crop = CropRegion(left=384, top=540, right=1536, bottom=1080)
 
         cropped = original_to_cropped(box, crop)
 
@@ -253,7 +253,7 @@ class TestCroppedToOriginal:
         # Cropped: Box at (768, 216) to (1152, 432)
         box = BoundingBox(left=768, top=216, right=1152, bottom=432)
         # Crop: Bottom half (top=540)
-        crop = CropBounds(left=0, top=540, right=1920, bottom=1080)
+        crop = CropRegion(left=0, top=540, right=1920, bottom=1080)
 
         original = cropped_to_original(box, crop)
 
@@ -269,7 +269,7 @@ class TestCroppedToOriginal:
     def test_full_frame_crop(self):
         """Test conversion with full frame crop (identity)."""
         box = BoundingBox(left=384, top=648, right=1152, bottom=756)
-        crop = CropBounds(left=0, top=0, right=1920, bottom=1080)
+        crop = CropRegion(left=0, top=0, right=1920, bottom=1080)
 
         original = cropped_to_original(box, crop)
 
@@ -284,7 +284,7 @@ class TestCroppedToOriginal:
         # Cropped: Box at (576, 216) to (960, 432)
         box = BoundingBox(left=576, top=216, right=960, bottom=432)
         # Crop: Region (384, 540) to (1536, 1080)
-        crop = CropBounds(left=384, top=540, right=1536, bottom=1080)
+        crop = CropRegion(left=384, top=540, right=1536, bottom=1080)
 
         original = cropped_to_original(box, crop)
 
@@ -301,7 +301,7 @@ class TestCroppedToOriginal:
         """Test that converting original→cropped→original preserves coordinates."""
         # Original box fully inside crop
         original_box = BoundingBox(left=768, top=756, right=1152, bottom=972)
-        crop = CropBounds(left=0, top=540, right=1920, bottom=1080)
+        crop = CropRegion(left=0, top=540, right=1920, bottom=1080)
 
         # Convert to cropped and back
         cropped = original_to_cropped(original_box, crop)
@@ -321,14 +321,14 @@ class TestIsBoxInsideCrop:
     def test_box_inside(self):
         """Test returns True when box is inside crop."""
         box = BoundingBox(left=576, top=648, right=1344, bottom=972)
-        crop = CropBounds(left=0, top=540, right=1920, bottom=1080)
+        crop = CropRegion(left=0, top=540, right=1920, bottom=1080)
 
         assert is_box_inside_crop(box, crop) is True
 
     def test_box_outside(self):
         """Test returns False when box extends outside crop."""
         box = BoundingBox(left=576, top=324, right=1344, bottom=972)
-        crop = CropBounds(left=0, top=540, right=1920, bottom=1080)
+        crop = CropRegion(left=0, top=540, right=1920, bottom=1080)
 
         assert is_box_inside_crop(box, crop) is False
 
@@ -339,7 +339,7 @@ class TestBoxOverlapWithCrop:
     def test_full_overlap(self):
         """Test 100% overlap when box is inside crop."""
         box = BoundingBox(left=576, top=648, right=1344, bottom=972)
-        crop = CropBounds(left=0, top=540, right=1920, bottom=1080)
+        crop = CropRegion(left=0, top=540, right=1920, bottom=1080)
 
         overlap = box_overlap_with_crop(box, crop)
 
@@ -352,7 +352,7 @@ class TestBoxOverlapWithCrop:
         # Overlap: (0, 540) to (768, 864) - area 248832
         # Fraction: 248832 / 331776 = 0.75
         box = BoundingBox(left=0, top=432, right=768, bottom=864)
-        crop = CropBounds(left=0, top=540, right=1920, bottom=1080)
+        crop = CropRegion(left=0, top=540, right=1920, bottom=1080)
 
         overlap = box_overlap_with_crop(box, crop)
 
@@ -361,7 +361,7 @@ class TestBoxOverlapWithCrop:
     def test_no_overlap(self):
         """Test 0% overlap when box is outside crop."""
         box = BoundingBox(left=576, top=216, right=1344, bottom=432)
-        crop = CropBounds(left=0, top=540, right=1920, bottom=1080)
+        crop = CropRegion(left=0, top=540, right=1920, bottom=1080)
 
         overlap = box_overlap_with_crop(box, crop)
 
@@ -374,7 +374,7 @@ class TestRealWorldScenarios:
     def test_caption_region_bottom_third(self):
         """Test typical caption region in bottom third of 1920x1080 frame."""
         # Typical Chinese subtitle region (bottom ~1/3)
-        crop = CropBounds(left=0, top=723, right=1920, bottom=1080)  # ~67% from top
+        crop = CropRegion(left=0, top=723, right=1920, bottom=1080)  # ~67% from top
 
         # Character box in caption region (小 character, ~40px tall)
         char_box = BoundingBox(left=960, top=918, right=998, bottom=972)
@@ -400,7 +400,7 @@ class TestRealWorldScenarios:
     def test_noise_box_outside_crop(self):
         """Test OCR noise box outside caption region."""
         # Typical caption region (bottom 1/3)
-        crop = CropBounds(left=0, top=723, right=1920, bottom=1080)
+        crop = CropRegion(left=0, top=723, right=1920, bottom=1080)
 
         # Noise box in top of frame (channel logo, ~50px square at top-right)
         noise_box = BoundingBox(left=1632, top=54, right=1824, bottom=130)
@@ -413,9 +413,9 @@ class TestRealWorldScenarios:
         cropped = original_to_cropped(noise_box, crop)
         assert cropped is None
 
-    def test_box_straddling_crop_boundary(self):
-        """Test box that straddles crop boundary."""
-        crop = CropBounds(left=0, top=723, right=1920, bottom=1080)
+    def test_box_straddling_crop_region(self):
+        """Test box that straddles crop region."""
+        crop = CropRegion(left=0, top=723, right=1920, bottom=1080)
 
         # Box that extends slightly above crop region
         box = BoundingBox(left=768, top=702, right=1152, bottom=810)
@@ -432,7 +432,7 @@ class TestRealWorldScenarios:
         assert overlap < 1.0
         assert overlap == pytest.approx(0.805555, rel=1e-5)
 
-        # Conversion should clamp to crop bounds
+        # Conversion should clamp to crop region
         cropped = original_to_cropped(box, crop)
         assert cropped is not None
         assert cropped.top == 0  # Clamped to crop top
@@ -441,7 +441,7 @@ class TestRealWorldScenarios:
     def test_pixel_perfect_OCR_box(self):
         """Test actual OCR box from LiveText (realistic dimensions)."""
         # 1920x1080 frame, bottom third caption region
-        crop = CropBounds(left=0, top=723, right=1920, bottom=1080)
+        crop = CropRegion(left=0, top=723, right=1920, bottom=1080)
 
         # Actual character box from OCR (典 character)
         # Original OCR gives fractional: [0.7673, 0.8607, 0.0311, 0.0492]

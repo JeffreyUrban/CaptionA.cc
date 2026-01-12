@@ -46,7 +46,7 @@ interface VideoLayoutConfigRow {
   bottom_edge_std: number | null
   horizontal_std_slope: number | null
   horizontal_std_intercept: number | null
-  crop_bounds_version: number
+  crop_region_version: number
 }
 
 /**
@@ -92,7 +92,7 @@ export interface LayoutConfig {
   bottomEdgeStd: number | null
   horizontalStdSlope: number | null
   horizontalStdIntercept: number | null
-  cropBoundsVersion: number
+  cropRegionVersion: number
 }
 
 /**
@@ -187,26 +187,26 @@ function transformLayoutConfig(row: VideoLayoutConfigRow): LayoutConfig {
     bottomEdgeStd: row.bottom_edge_std,
     horizontalStdSlope: row.horizontal_std_slope,
     horizontalStdIntercept: row.horizontal_std_intercept,
-    cropBoundsVersion: row.crop_bounds_version,
+    cropRegionVersion: row.crop_region_version,
   }
 }
 
 /**
- * Estimate caption box count using crop bounds heuristic.
+ * Estimate caption box count using crop region heuristic.
  *
  * Boxes inside the crop region are likely captions.
  *
  * @param ocrAnnotations - OCR annotations in Python format
  * @param frameWidth - Frame width in pixels
  * @param frameHeight - Frame height in pixels
- * @param cropBounds - Crop region bounds
+ * @param cropRegion - Crop region
  * @returns Estimated number of caption boxes
  */
 export function estimateCaptionBoxCount(
   ocrAnnotations: PythonOCRAnnotation[],
   frameWidth: number,
   frameHeight: number,
-  cropBounds: { left: number; top: number; right: number; bottom: number }
+  cropRegion: { left: number; top: number; right: number; bottom: number }
 ): number {
   if (!ocrAnnotations || ocrAnnotations.length === 0) {
     return 0
@@ -227,12 +227,12 @@ export function estimateCaptionBoxCount(
     const boxTop = boxBottom - Math.floor(height * frameHeight)
     const boxRight = boxLeft + Math.floor(width * frameWidth)
 
-    // Check if box is inside crop bounds
+    // Check if box is inside crop region
     const insideCrop =
-      boxLeft >= cropBounds.left &&
-      boxTop >= cropBounds.top &&
-      boxRight <= cropBounds.right &&
-      boxBottom <= cropBounds.bottom
+      boxLeft >= cropRegion.left &&
+      boxTop >= cropRegion.top &&
+      boxRight <= cropRegion.right &&
+      boxBottom <= cropRegion.bottom
 
     if (insideCrop) {
       count++

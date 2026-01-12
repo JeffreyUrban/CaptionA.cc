@@ -52,7 +52,7 @@ def determine_anchor_type(boxes, region_bounds):
     left_edges = [box[0] for box in boxes]
     right_edges = [box[2] for box in boxes]
 
-    # Get bounds
+    # Get bounds of region
     min_left = min(left_edges)
     max_right = max(right_edges)
     region_width = max_right - min_left

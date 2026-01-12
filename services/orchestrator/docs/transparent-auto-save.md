@@ -113,7 +113,7 @@ SELECT * FROM videos WHERE tenant_id = ? AND user_has_access(user_id, id)
 - Version numbers and timestamps
 - Storage keys (pointers to Wasabi for large files)
 - Status flags and state machines
-- Small structured data (e.g., crop bounds JSONB - typically <1 KB)
+- Small structured data (e.g., crop region JSONB - typically <1 KB)
 - Thumbnails and preview images (<100 KB each)
 - Cross-video search index (OCR text for full-text search)
 - Permissions and access control

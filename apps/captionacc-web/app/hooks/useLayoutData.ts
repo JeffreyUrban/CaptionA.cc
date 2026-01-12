@@ -14,7 +14,7 @@ import {
   type ViewMode,
   type LayoutQueueResponse,
   type BoxStats,
-  type CropBoundsEdit,
+  type CropRegionEdit,
   type SelectionRectEdit,
   type LayoutParamsEdit,
   type EditStateUpdaters,
@@ -25,7 +25,7 @@ import {
   fetchFrameBoxes,
   saveBoxAnnotations,
   recalculatePredictions,
-  resetCropBounds,
+  resetCropRegion,
   clearAllAnnotations,
   prefetchFrameBoxes,
 } from '~/utils/layout-api'
@@ -51,17 +51,17 @@ interface UseLayoutDataReturn {
   hasUnsyncedAnnotations: boolean
   annotationsSinceRecalc: number
   isRecalculating: boolean
-  boundsMismatch: boolean
+  cropRegionMismatch: boolean
   analysisThumbnailUrl: string | null
   setAnalysisThumbnailUrl: (url: string | null) => void
-  cropBoundsEdit: CropBoundsEdit | null
-  setCropBoundsEdit: (value: CropBoundsEdit | null) => void
+  cropRegionEdit: CropRegionEdit | null
+  setCropRegionEdit: (value: CropRegionEdit | null) => void
   boxStats: BoxStats | null
   pulseStartTime: number
   frameBoxesCache: React.RefObject<Map<number, FrameBoxesData>>
   loadQueue: (showLoading?: boolean, skipEditStateUpdate?: boolean) => Promise<void>
   loadAnalysisBoxes: () => Promise<void>
-  recalculateCropBounds: () => Promise<void>
+  recalculateCropRegion: () => Promise<void>
   handleThumbnailClick: (frameIndex: number | 'analysis') => void
   handleBoxClick: (boxIndex: number, label: 'in' | 'out') => Promise<void>
   setCurrentFrameBoxes: React.Dispatch<React.SetStateAction<FrameBoxesData | null>>
@@ -72,7 +72,7 @@ interface UseLayoutDataReturn {
 }
 
 function updateEditStateFromConfig(layoutConfig: LayoutConfig, updaters: EditStateUpdaters): void {
-  updaters.setCropBoundsEdit({
+  updaters.setCropRegionEdit({
     left: layoutConfig.cropLeft,
     top: layoutConfig.cropTop,
     right: layoutConfig.cropRight,
@@ -139,8 +139,8 @@ export function useLayoutData({ videoId, showAlert }: UseLayoutDataParams): UseL
   const [isRecalculating, setIsRecalculating] = useState(false)
   const [analysisThumbnailUrl, setAnalysisThumbnailUrl] = useState<string | null>(null)
   const [pulseStartTime, setPulseStartTime] = useState(Date.now())
-  const [cropBoundsEdit, setCropBoundsEdit] = useState<CropBoundsEdit | null>(null)
-  const [approvedCropBounds, setApprovedCropBounds] = useState<CropBoundsEdit | null>(null)
+  const [cropRegionEdit, setCropRegionEdit] = useState<CropRegionEdit | null>(null)
+  const [approvedCropRegion, setApprovedCropRegion] = useState<CropRegionEdit | null>(null)
   const [, setSelectionRectEdit] = useState<SelectionRectEdit | null>(null)
   const [, setLayoutParamsEdit] = useState<LayoutParamsEdit | null>(null)
 
@@ -159,32 +159,32 @@ export function useLayoutData({ videoId, showAlert }: UseLayoutDataParams): UseL
   }, [analysisBoxes])
 
   const editUpdaters: EditStateUpdaters = useMemo(
-    () => ({ setCropBoundsEdit, setSelectionRectEdit, setLayoutParamsEdit }),
+    () => ({ setCropRegionEdit, setSelectionRectEdit, setLayoutParamsEdit }),
     []
   )
 
-  // Save crop bounds when layout is approved
+  // Save crop region when layout is approved
   useEffect(() => {
-    if (layoutApproved && layoutConfig && !approvedCropBounds) {
-      setApprovedCropBounds({
+    if (layoutApproved && layoutConfig && !approvedCropRegion) {
+      setApprovedCropRegion({
         left: layoutConfig.cropLeft,
         top: layoutConfig.cropTop,
         right: layoutConfig.cropRight,
         bottom: layoutConfig.cropBottom,
       })
     }
-  }, [layoutApproved, layoutConfig, approvedCropBounds])
+  }, [layoutApproved, layoutConfig, approvedCropRegion])
 
-  // Calculate if bounds have changed since approval
-  const boundsMismatch = useMemo(() => {
-    if (!layoutApproved || !approvedCropBounds || !layoutConfig) return false
+  // Calculate if crop region has changed since approval
+  const cropRegionMismatch = useMemo(() => {
+    if (!layoutApproved || !approvedCropRegion || !layoutConfig) return false
     return (
-      approvedCropBounds.left !== layoutConfig.cropLeft ||
-      approvedCropBounds.top !== layoutConfig.cropTop ||
-      approvedCropBounds.right !== layoutConfig.cropRight ||
-      approvedCropBounds.bottom !== layoutConfig.cropBottom
+      approvedCropRegion.left !== layoutConfig.cropLeft ||
+      approvedCropRegion.top !== layoutConfig.cropTop ||
+      approvedCropRegion.right !== layoutConfig.cropRight ||
+      approvedCropRegion.bottom !== layoutConfig.cropBottom
     )
-  }, [layoutApproved, approvedCropBounds, layoutConfig])
+  }, [layoutApproved, approvedCropRegion, layoutConfig])
 
   useEffect(() => {
     if (frames.length > 0 && selectedFrameIndex === null) {
@@ -234,16 +234,16 @@ export function useLayoutData({ videoId, showAlert }: UseLayoutDataParams): UseL
     }
   }, [videoId])
 
-  const recalculateCropBounds = useCallback(async () => {
+  const recalculateCropRegion = useCallback(async () => {
     if (!videoId) return
     setIsRecalculating(true)
     try {
       await recalculatePredictions(videoId)
-      const result = await resetCropBounds(videoId)
+      const result = await resetCropRegion(videoId)
       if (!result.success) {
         showAlert?.(
           'Recalculation Failed',
-          result.message ?? 'Failed to recalculate crop bounds',
+          result.message ?? 'Failed to recalculate crop region',
           'error'
         )
         setError(result.message ?? null)
@@ -254,7 +254,7 @@ export function useLayoutData({ videoId, showAlert }: UseLayoutDataParams): UseL
       await loadAnalysisBoxes()
       setAnnotationsSinceRecalc(0)
     } catch (recalcError) {
-      console.error('Error recalculating crop bounds:', recalcError)
+      console.error('Error recalculating crop region:', recalcError)
     } finally {
       setIsRecalculating(false)
     }
@@ -360,14 +360,14 @@ export function useLayoutData({ videoId, showAlert }: UseLayoutDataParams): UseL
         if (isNewAnnotation) {
           const newCount = annotationsSinceRecalc + 1
           setAnnotationsSinceRecalc(newCount)
-          if (newCount >= RECALC_THRESHOLD) void recalculateCropBounds()
+          if (newCount >= RECALC_THRESHOLD) void recalculateCropRegion()
         }
       } catch (err) {
         console.error('Failed to save box annotation:', err)
         setSelectedFrameIndex(prev => prev)
       }
     },
-    [videoId, currentFrameBoxes, annotationsSinceRecalc, recalculateCropBounds]
+    [videoId, currentFrameBoxes, annotationsSinceRecalc, recalculateCropRegion]
   )
 
   const handleClearAll = useCallback(async () => {
@@ -377,7 +377,7 @@ export function useLayoutData({ videoId, showAlert }: UseLayoutDataParams): UseL
       const result = await clearAllAnnotations(videoId)
       console.log(`[Clear All] Deleted ${result.deletedCount} annotations`)
       await recalculatePredictions(videoId)
-      await resetCropBounds(videoId)
+      await resetCropRegion(videoId)
       await loadQueue(false, true)
       await loadAnalysisBoxes()
       frameBoxesCache.current.clear()
@@ -418,17 +418,17 @@ export function useLayoutData({ videoId, showAlert }: UseLayoutDataParams): UseL
     hasUnsyncedAnnotations,
     annotationsSinceRecalc,
     isRecalculating,
-    boundsMismatch,
+    cropRegionMismatch,
     analysisThumbnailUrl,
     setAnalysisThumbnailUrl,
-    cropBoundsEdit,
-    setCropBoundsEdit,
+    cropRegionEdit,
+    setCropRegionEdit,
     boxStats,
     pulseStartTime,
     frameBoxesCache,
     loadQueue,
     loadAnalysisBoxes,
-    recalculateCropBounds,
+    recalculateCropRegion,
     handleThumbnailClick,
     handleBoxClick,
     setCurrentFrameBoxes,

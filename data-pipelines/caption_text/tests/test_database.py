@@ -29,8 +29,8 @@ def mock_db():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 start_frame_index INTEGER NOT NULL,
                 end_frame_index INTEGER NOT NULL,
-                boundary_state TEXT NOT NULL DEFAULT 'predicted',
-                boundary_pending INTEGER NOT NULL DEFAULT 0,
+                caption_frame_extents_state TEXT NOT NULL DEFAULT 'predicted',
+                caption_frame_extents_pending INTEGER NOT NULL DEFAULT 0,
                 text TEXT,
                 text_pending INTEGER NOT NULL DEFAULT 0,
                 text_status TEXT,
@@ -53,7 +53,7 @@ def mock_db():
                 box_height INTEGER,
                 anchor_type TEXT,
                 anchor_position INTEGER,
-                crop_bounds_version INTEGER NOT NULL DEFAULT 1,
+                crop_region_version INTEGER NOT NULL DEFAULT 1,
                 updated_at TEXT NOT NULL DEFAULT (datetime('now'))
             )
         """)

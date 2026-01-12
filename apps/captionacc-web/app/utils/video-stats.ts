@@ -3,7 +3,14 @@ import Database from 'better-sqlite3'
 import { getCaptionsDbPath } from './video-paths'
 
 export type BadgeState = {
-  type: 'layout' | 'boundaries' | 'text' | 'fully-annotated' | 'error' | 'info' | 'warning'
+  type:
+    | 'layout'
+    | 'caption-frame-extents'
+    | 'text'
+    | 'fully-annotated'
+    | 'error'
+    | 'info'
+    | 'warning'
   label: string
   color: 'blue' | 'indigo' | 'purple' | 'yellow' | 'green' | 'teal' | 'red' | 'gray'
   clickable: boolean
@@ -38,11 +45,11 @@ export interface VideoStats {
   totalFrames: number
   coveredFrames: number
   hasOcrData: boolean // Whether video has full_frame_ocr data (enables layout annotation)
-  layoutApproved: boolean // Whether layout annotation has been approved (gate for boundary annotation)
+  layoutApproved: boolean // Whether layout annotation has been approved (gate for caption frame extents annotation)
   processingStatus?: ProcessingStatus // Upload/processing status (null if not uploaded via web)
   cropFramesStatus?: CropFramesStatus // Crop frames processing status
   textReviewStatus?: TextReviewStatus // Text review status
-  boundaryPendingReview: number // Boundaries pending review
+  captionFrameExtentsPendingReview: number // Caption frame extents pending review
   databaseId?: string // Unique ID that changes when database is recreated (for cache invalidation)
   badges: BadgeState[] // Calculated badge states for display
 }
@@ -73,7 +80,7 @@ export interface ProcessingStatus {
  * Stage-specific error information
  */
 interface StageErrors {
-  boundaries?: { message: string; stack?: string }
+  captionFrameExtents?: { message: string; stack?: string }
   text?: { message: string; stack?: string }
 }
 
@@ -92,7 +99,7 @@ function createEmptyStats(badges: BadgeState[] = []): VideoStats {
     coveredFrames: 0,
     hasOcrData: false,
     layoutApproved: false,
-    boundaryPendingReview: 0,
+    captionFrameExtentsPendingReview: 0,
     badges,
   }
 }
@@ -127,9 +134,9 @@ function queryBasicStats(db: Database.Database): {
       `
       SELECT
         COUNT(*) as total,
-        SUM(CASE WHEN boundary_state = 'confirmed' OR boundary_state = 'issue' THEN 1 ELSE 0 END) as confirmed,
-        SUM(CASE WHEN boundary_state = 'predicted' THEN 1 ELSE 0 END) as predicted,
-        SUM(CASE WHEN boundary_state = 'gap' THEN 1 ELSE 0 END) as gaps
+        SUM(CASE WHEN caption_frame_extents_state = 'confirmed' OR caption_frame_extents_state = 'issue' THEN 1 ELSE 0 END) as confirmed,
+        SUM(CASE WHEN caption_frame_extents_state = 'predicted' THEN 1 ELSE 0 END) as predicted,
+        SUM(CASE WHEN caption_frame_extents_state = 'gap' THEN 1 ELSE 0 END) as gaps
       FROM captions
     `
     )
@@ -137,9 +144,9 @@ function queryBasicStats(db: Database.Database): {
 }
 
 /**
- * Query boundary pending count, recording errors to stageErrors
+ * Query caption frame extents pending count, recording errors to stageErrors
  */
-function queryBoundaryPending(
+function queryCaptionFrameExtentsPending(
   db: Database.Database,
   videoId: string,
   stageErrors: StageErrors
@@ -147,15 +154,18 @@ function queryBoundaryPending(
   try {
     const result = db
       .prepare(
-        `SELECT SUM(CASE WHEN boundary_pending = 1 THEN 1 ELSE 0 END) as boundary_pending FROM captions`
+        `SELECT SUM(CASE WHEN caption_frame_extents_pending = 1 THEN 1 ELSE 0 END) as caption_frame_extents_pending FROM captions`
       )
-      .get() as { boundary_pending: number }
-    return result.boundary_pending || 0
+      .get() as { caption_frame_extents_pending: number }
+    return result.caption_frame_extents_pending || 0
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error)
     const errorStack = error instanceof Error ? error.stack : undefined
-    console.error(`[getVideoStats] Error querying boundary_pending for ${videoId}:`, error)
-    stageErrors.boundaries = { message: errorMessage, stack: errorStack }
+    console.error(
+      `[getVideoStats] Error querying caption_frame_extents_pending for ${videoId}:`,
+      error
+    )
+    stageErrors.captionFrameExtents = { message: errorMessage, stack: errorStack }
     return 0
   }
 }
@@ -167,7 +177,7 @@ function queryCoveredFrames(db: Database.Database): number {
   try {
     const result = db
       .prepare(
-        `SELECT SUM(end_frame_index - start_frame_index + 1) as covered_frames FROM captions WHERE boundary_state != 'gap' AND boundary_state != 'issue' AND boundary_pending = 0`
+        `SELECT SUM(end_frame_index - start_frame_index + 1) as covered_frames FROM captions WHERE caption_frame_extents_state != 'gap' AND caption_frame_extents_state != 'issue' AND caption_frame_extents_pending = 0`
       )
       .get() as { covered_frames: number | null }
     return result.covered_frames ?? 0
@@ -361,9 +371,13 @@ function calculateBadges(
   const layoutBadge = calculateLayoutBadge(stats, videoId, db)
   if (layoutBadge) badges.push(layoutBadge)
 
-  // Boundaries Track
-  const boundariesBadge = calculateBoundariesBadge(stats, videoId, stageErrors.boundaries)
-  if (boundariesBadge) badges.push(boundariesBadge)
+  // Caption Frame Extents Track
+  const captionFrameExtentsBadge = calculateCaptionFrameExtentsBadge(
+    stats,
+    videoId,
+    stageErrors.captionFrameExtents
+  )
+  if (captionFrameExtentsBadge) badges.push(captionFrameExtentsBadge)
 
   // Text Track
   const textBadge = calculateTextBadge(stats, videoId, db, stageErrors.text)
@@ -554,7 +568,7 @@ function calculateLayoutBadge(
 /**
  * Create an error badge for boundaries stage
  */
-function createBoundariesErrorBadge(
+function createCaptionFrameExtentsErrorBadge(
   videoId: string,
   message: string,
   issue: string,
@@ -562,7 +576,7 @@ function createBoundariesErrorBadge(
 ): BadgeState {
   return {
     type: 'error',
-    label: 'Boundaries: Error',
+    label: 'Caption Frame Extents: Error',
     color: 'red',
     clickable: true,
     errorDetails: {
@@ -581,14 +595,17 @@ function createBoundariesErrorBadge(
 /**
  * Create a boundaries action badge (annotate or review)
  */
-function createBoundariesActionBadge(videoId: string, action: 'annotate' | 'review'): BadgeState {
+function createCaptionFrameExtentsActionBadge(
+  videoId: string,
+  action: 'annotate' | 'review'
+): BadgeState {
   const isReview = action === 'review'
   return {
     type: 'boundaries',
-    label: isReview ? 'Boundaries: Review' : 'Boundaries: Annotate',
+    label: isReview ? 'Caption Frame Extents: Review' : 'Caption Frame Extents: Annotate',
     color: isReview ? 'yellow' : 'green',
     clickable: true,
-    url: `/annotate/boundaries?videoId=${encodeURIComponent(videoId)}`,
+    url: `/annotate/boundariescaption-frame-extents?videoId=${encodeURIComponent(videoId)}`,
   }
 }
 
@@ -605,7 +622,7 @@ function handleCropFramesProcessingState(
 
   // Processing error (failed or interrupted)
   if (cfs.status === 'error') {
-    return createBoundariesErrorBadge(
+    return createCaptionFrameExtentsErrorBadge(
       videoId,
       cfs.errorMessage ?? 'Crop frames processing failed',
       'crop_frames_failed'
@@ -614,19 +631,27 @@ function handleCropFramesProcessingState(
 
   // Queued for processing
   if (cfs.status === 'queued') {
-    return { type: 'boundaries', label: 'Boundaries: Queued', color: 'blue', clickable: false }
+    return {
+      type: 'boundaries',
+      label: 'Caption Frame Extents: Queued',
+      color: 'blue',
+      clickable: false,
+    }
   }
 
   // Currently processing
   if (cfs.status === 'processing') {
-    const label = stats.totalFrames === 0 ? 'Boundaries: Framing' : 'Boundaries: Running OCR'
+    const label =
+      stats.totalFrames === 0
+        ? 'Caption Frame Extents: Framing'
+        : 'Caption Frame Extents: Running OCR'
     const color = stats.totalFrames === 0 ? 'indigo' : 'purple'
     return { type: 'boundaries', label, color, clickable: false }
   }
 
   // Processing completed but no cropped frames created (processing failed)
   if (cfs.status === 'complete' && stats.totalFrames === 0) {
-    return createBoundariesErrorBadge(
+    return createCaptionFrameExtentsErrorBadge(
       videoId,
       'Crop frames processing completed but no frames were created',
       'no_frames_created'
@@ -636,29 +661,29 @@ function handleCropFramesProcessingState(
   // Ready to annotate (crop frames complete with frames, but no captions yet)
   if (cfs.status === 'complete' && stats.totalFrames > 0 && stats.totalAnnotations === 0) {
     console.log(
-      `[calculateBoundariesBadge] ${videoId}: Showing Boundaries: Annotate (frames=${stats.totalFrames}, annotations=${stats.totalAnnotations})`
+      `[calculateCaptionFrameExtentsBadge] ${videoId}: Showing Caption Frame Extents: Annotate (frames=${stats.totalFrames}, annotations=${stats.totalAnnotations})`
     )
-    return createBoundariesActionBadge(videoId, 'annotate')
+    return createCaptionFrameExtentsActionBadge(videoId, 'annotate')
   }
 
   // Debug: Log why we're not showing the annotate badge
   if (cfs.status === 'complete') {
     console.log(
-      `[calculateBoundariesBadge] ${videoId}: crop_frames complete but not showing badge - frames=${stats.totalFrames}, annotations=${stats.totalAnnotations}, cfs=${JSON.stringify(cfs)}`
+      `[calculateCaptionFrameExtentsBadge] ${videoId}: crop_frames complete but not showing badge - frames=${stats.totalFrames}, annotations=${stats.totalAnnotations}, cfs=${JSON.stringify(cfs)}`
     )
   }
 
   return null
 }
 
-function calculateBoundariesBadge(
+function calculateCaptionFrameExtentsBadge(
   stats: Omit<VideoStats, 'badges'>,
   videoId: string,
   error?: { message: string; stack?: string }
 ): BadgeState | null {
   // Priority 0: Error (show if this stage has a data error)
   if (error) {
-    return createBoundariesErrorBadge(videoId, error.message, 'sqlite_error', {
+    return createCaptionFrameExtentsErrorBadge(videoId, error.message, 'sqlite_error', {
       stack: error.stack,
       errorType: 'SqliteError',
     })
@@ -678,7 +703,7 @@ function calculateBoundariesBadge(
   if (!stats.cropFramesStatus) {
     return {
       type: 'boundaries',
-      label: 'Boundaries: Initializing',
+      label: 'Caption Frame Extents: Initializing',
       color: 'blue',
       clickable: false,
     }
@@ -686,15 +711,15 @@ function calculateBoundariesBadge(
 
   // Priority 6: Incomplete (progress < 100% means there are unannotated frames)
   if (stats.progress < 100) {
-    return createBoundariesActionBadge(videoId, 'annotate')
+    return createCaptionFrameExtentsActionBadge(videoId, 'annotate')
   }
 
   // Priority 7: Review (progress is 100%, but has pending review)
-  if (stats.boundaryPendingReview > 0) {
-    return createBoundariesActionBadge(videoId, 'review')
+  if (stats.captionFrameExtentsPendingReview > 0) {
+    return createCaptionFrameExtentsActionBadge(videoId, 'review')
   }
 
-  // Boundaries complete (progress = 100%, all confirmed, no pending)
+  // Caption frame extents complete (progress = 100%, all confirmed, no pending)
   return null
 }
 
@@ -770,7 +795,11 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
     const totalFrames = queryTotalFrames(db)
     const stageErrors: StageErrors = {}
     const basicResult = queryBasicStats(db)
-    const boundaryPendingReview = queryBoundaryPending(db, videoId, stageErrors)
+    const captionFrameExtentsPendingReview = queryCaptionFrameExtentsPending(
+      db,
+      videoId,
+      stageErrors
+    )
     const coveredFrames = queryCoveredFrames(db)
     const progress = totalFrames > 0 ? (coveredFrames / totalFrames) * 100 : 0
     const hasOcrData = queryHasOcrData(db)
@@ -783,7 +812,7 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
     // Build stats object (used twice: once for return, once for badge calculation)
     const statsWithoutBadges: Omit<VideoStats, 'badges'> = {
       totalAnnotations: basicResult.total,
-      pendingReview: boundaryPendingReview,
+      pendingReview: captionFrameExtentsPendingReview,
       confirmedAnnotations: basicResult.confirmed,
       predictedAnnotations: basicResult.predicted,
       gapAnnotations: basicResult.gaps,
@@ -795,7 +824,7 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
       processingStatus,
       cropFramesStatus,
       textReviewStatus,
-      boundaryPendingReview,
+      captionFrameExtentsPendingReview,
       databaseId,
     }
 

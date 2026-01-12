@@ -246,8 +246,8 @@ export default function Home() {
                 Automated Extraction
               </h3>
               <p className="mt-4 text-sm/7 text-olive-700 dark:text-olive-400">
-                Our system identifies caption boundaries and extracts text with professional-grade
-                accuracy
+                Our system identifies caption frame extents and extracts text with
+                professional-grade accuracy
               </p>
             </div>
             <div>

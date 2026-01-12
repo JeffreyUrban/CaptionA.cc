@@ -21,8 +21,8 @@ import {
   pixelToCroppedDisplay,
   boundsIntersect,
   type PixelBounds,
-  type FractionalBounds,
-  type CropBounds,
+  type FractionalCropRegionBounds,
+  type CropRegion,
 } from '~/utils/coordinate-utils'
 import { getLayoutDb, getWritableLayoutDb } from '~/utils/database'
 import {
@@ -76,7 +76,7 @@ export interface BoxData {
   /** Original pixel coordinates in full frame space */
   originalBounds: PixelBounds
   /** Display bounds as fractional coordinates (0-1) in cropped space */
-  displayBounds: FractionalBounds
+  displayBounds: FractionalCropRegionBounds
   predictedLabel: 'in' | 'out'
   predictedConfidence: number
   userLabel: 'in' | 'out' | null
@@ -95,7 +95,7 @@ export interface BoxData {
 export interface FrameBoxesResult {
   frameIndex: number
   imageUrl: string
-  cropBounds: CropBounds
+  cropRegion: CropRegion
   frameWidth: number
   frameHeight: number
   boxes: BoxData[]
@@ -543,7 +543,7 @@ export async function getFrameBoxes(
       ocrToPixelBounds(box, layoutConfig.frame_width, layoutConfig.frame_height)
     )
 
-    const cropBounds: CropBounds = {
+    const cropRegion: CropRegion = {
       left: layoutConfig.crop_left,
       top: layoutConfig.crop_top,
       right: layoutConfig.crop_right,
@@ -572,7 +572,7 @@ export async function getFrameBoxes(
       const userLabel = userAnnotationMap.get(boxIndex) ?? null
 
       // Calculate display bounds (fractional in cropped space)
-      const displayBounds = pixelToCroppedDisplay(originalBounds, cropBounds)
+      const displayBounds = pixelToCroppedDisplay(originalBounds, cropRegion)
 
       // Determine color code
       const colorCode = getBoxColorCode(prediction.label, prediction.confidence, userLabel)
@@ -592,7 +592,7 @@ export async function getFrameBoxes(
     return {
       frameIndex,
       imageUrl: `/api/full-frames/${encodeURIComponent(videoId)}/${frameIndex}.jpg`,
-      cropBounds,
+      cropRegion,
       frameWidth: layoutConfig.frame_width,
       frameHeight: layoutConfig.frame_height,
       boxes,

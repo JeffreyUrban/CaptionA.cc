@@ -3,11 +3,11 @@ Caption Annotation Workflow - Upload/Download captions.db
 
 Handles caption annotation database synchronization with Wasabi:
 1. Download captions.db from Wasabi (if exists - to continue annotations)
-2. User annotates caption boundaries and text using cropped frames
+2. User annotates caption frame extents and text using cropped frames
 3. Upload updated captions.db after user annotations
 
 Captions.db contains:
-- captions: Caption boundaries (start/end frame) and text content
+- captions: Caption frame extents (start/end frame) and text content
 - User annotations marking text regions in video
 
 WebM chunks are streamed on-demand by browser using signed URLs,

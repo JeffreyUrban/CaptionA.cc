@@ -149,7 +149,7 @@ queueCmd.on('close', code => {
 ```typescript
 // When user approves layout, queue crop frames flow
 
-const cropBounds = {
+const cropRegion = {
   left: layoutConfig.crop_left,
   top: layoutConfig.crop_top,
   right: layoutConfig.crop_right,
@@ -167,8 +167,8 @@ const queueCmd = spawn(
     '--video-path', videoFile,
     '--db-path', getCaptionsDbPath(videoId),
     '--output-dir', resolve(getVideoDir(videoId), 'crop_frames'),
-    '--crop-bounds', JSON.stringify(cropBounds),
-    '--crop-bounds-version', layoutConfig.crop_bounds_version.toString(),
+    '--crop-region', JSON.stringify(cropRegion),
+    '--crop-region-version', layoutConfig.crop_region_version.toString(),
   ],
   {
     cwd: resolve(process.cwd(), '..', '..'),
@@ -311,9 +311,9 @@ When ready for ML training/inference:
 from prefect import flow, task
 from prefect.assets import materialize
 
-@materialize("models://boundary-detection-{version}")
+@materialize("models://caption-frame-extents-detection-{version}")
 @task
-def train_boundary_model(training_data_path: str, version: str):
+def train_caption_frame_extents_model(training_data_path: str, version: str):
     # Your ML training code
     pass
 
@@ -381,8 +381,8 @@ uv run python queue_flow.py crop-frames \
   --video-path /path/to/video.mp4 \
   --db-path /path/to/captions.db \
   --output-dir /path/to/output \
-  --crop-bounds '{"left":100,"top":50,"right":1820,"bottom":980}' \
-  --crop-bounds-version 1
+  --crop-region '{"left":100,"top":50,"right":1820,"bottom":980}' \
+  --crop-region-version 1
 ```
 
 ## Production Deployment

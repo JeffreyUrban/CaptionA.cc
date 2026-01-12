@@ -10,7 +10,7 @@ resolution-markers = [
 
 [manifest]
 members = [
-    "caption-boundaries",
+    "caption-frame-extents",
     "caption-models",
     "caption-text",
     "captionacc-api",
@@ -364,8 +364,8 @@ wheels = [
 ]
 
 [[package]]
-name = "caption-boundaries"
-source = { editable = "data-pipelines/caption_boundaries" }
+name = "caption-frame-extents"
+source = { editable = "data-pipelines/caption_frame_extents" }
 dependencies = [
     { name = "caption-models" },
     { name = "frames-db" },
@@ -539,7 +539,7 @@ name = "captionacc-workspace"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
-    { name = "caption-boundaries" },
+    { name = "caption-frame-extents" },
     { name = "caption-text" },
     { name = "crop-frames" },
     { name = "full-frames" },
@@ -561,7 +561,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "caption-boundaries", editable = "data-pipelines/caption_boundaries" },
+    { name = "caption-frame-extents", editable = "data-pipelines/caption_frame_extents" },
     { name = "caption-text", editable = "data-pipelines/caption_text" },
     { name = "crop-frames", editable = "data-pipelines/crop_frames" },
     { name = "full-frames", editable = "data-pipelines/full_frames" },

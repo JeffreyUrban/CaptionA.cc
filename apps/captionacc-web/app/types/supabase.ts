@@ -88,7 +88,7 @@ export type Database = {
           chunk_count: number | null
           created_at: string | null
           created_by_user_id: string | null
-          crop_bounds: Json | null
+          crop_region: Json | null
           frame_rate: number | null
           id: string
           layout_db_hash: string | null
@@ -108,7 +108,7 @@ export type Database = {
           chunk_count?: number | null
           created_at?: string | null
           created_by_user_id?: string | null
-          crop_bounds?: Json | null
+          crop_region?: Json | null
           frame_rate?: number | null
           id?: string
           layout_db_hash?: string | null
@@ -128,7 +128,7 @@ export type Database = {
           chunk_count?: number | null
           created_at?: string | null
           created_by_user_id?: string | null
-          crop_bounds?: Json | null
+          crop_region?: Json | null
           frame_rate?: number | null
           id?: string
           layout_db_hash?: string | null

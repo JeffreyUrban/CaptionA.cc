@@ -15,7 +15,7 @@ interface LayoutMainCanvasProps {
   viewMode: ViewMode
   layoutConfig: LayoutConfig | null
   layoutApproved: boolean
-  boundsMismatch: boolean
+  cropRegionMismatch: boolean
   currentFrameBoxes: FrameBoxesData | null
   analysisBoxes: BoxData[] | null
   loadingFrame: boolean
@@ -35,7 +35,7 @@ interface LayoutMainCanvasProps {
 function AnalysisViewContent({
   layoutConfig,
   layoutApproved,
-  boundsMismatch,
+  cropRegionMismatch,
   analysisBoxes,
   annotationsSinceRecalc,
   selectionPadding,
@@ -60,7 +60,7 @@ function AnalysisViewContent({
       <div
         className="relative"
         style={{
-          outline: boundsMismatch
+          outline: cropRegionMismatch
             ? '3px solid #ec4899' // pink-500
             : layoutApproved
               ? '3px solid #10b981' // green-500
@@ -164,7 +164,7 @@ export function LayoutMainCanvas({
   viewMode,
   layoutConfig,
   layoutApproved,
-  boundsMismatch,
+  cropRegionMismatch,
   currentFrameBoxes,
   analysisBoxes,
   loadingFrame,
@@ -183,7 +183,7 @@ export function LayoutMainCanvas({
         <AnalysisViewContent
           layoutConfig={layoutConfig}
           layoutApproved={layoutApproved}
-          boundsMismatch={boundsMismatch}
+          cropRegionMismatch={cropRegionMismatch}
           analysisBoxes={analysisBoxes}
           annotationsSinceRecalc={annotationsSinceRecalc}
           selectionPadding={selectionPadding}

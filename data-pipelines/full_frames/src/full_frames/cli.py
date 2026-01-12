@@ -206,7 +206,7 @@ def analyze(
         console.print("  Layout analysis will be performed by ML model in web app...")
 
         # Write minimal layout config with just frame dimensions
-        # Full layout (crop bounds, anchor, etc.) calculated by web app using ML model
+        # Full layout (crop region, anchor, etc.) calculated by web app using ML model
         import sqlite3
 
         conn = sqlite3.connect(db_path)
@@ -216,7 +216,7 @@ def analyze(
                 INSERT OR REPLACE INTO video_layout_config (
                     id, frame_width, frame_height,
                     crop_left, crop_top, crop_right, crop_bottom,
-                    crop_bounds_version
+                    crop_region_version
                 ) VALUES (1, ?, ?, 0, 0, ?, ?, 1)
             """,
                 (width, height, width, height),

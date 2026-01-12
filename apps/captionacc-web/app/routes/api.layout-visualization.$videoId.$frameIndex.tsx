@@ -28,7 +28,7 @@ interface VideoLayoutConfig {
   bottom_edge_std: number | null
   horizontal_std_slope: number | null
   horizontal_std_intercept: number | null
-  crop_bounds_version: number
+  crop_region_version: number
 }
 
 interface OCRBox {
@@ -256,7 +256,7 @@ function generateLayoutVisualizationSVG(
     `)
   }
 
-  // Draw crop bounds
+  // Draw crop region
   elements.push(`
     <rect
       x="${layoutConfig.crop_left}"

@@ -3,7 +3,7 @@
  *
  * GET /api/annotations/:videoId/navigate?direction=prev|next&currentId=123
  *
- * Navigates to the previous or next annotation based on boundary_updated_at,
+ * Navigates to the previous or next annotation based on caption_frame_extents_updated_at,
  * allowing users to review annotations in the order they were last modified.
  */
 

@@ -1,7 +1,0 @@
-{
-  "wandb_run_id": "mrn0fkfd",
-  "experiment_dir": "/Users/jurban/local/models/caption_boundaries/experiments/exp_channel_fusion_lora_spatial",
-  "checkpoint_path": "models/caption_boundaries/fusion_lora_spatial_mrn0fkfd.pt",
-  "tracked_at": "2026-01-04T13:48:52-05:00",
-  "git_commit": "a4f8ae1b66a728a52ab725eae422c39a38e28c9a"
-}

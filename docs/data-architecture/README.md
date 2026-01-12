@@ -67,7 +67,7 @@ Databases are split by **visibility**:
 
 | Database | Location | Access | Sync | Purpose |
 |----------|----------|--------|------|---------|
-| `layout.db` | `client/` | STS credentials | CR-SQLite (bidirectional) | Boxes, annotations, bounds |
+| `layout.db` | `client/` | STS credentials | CR-SQLite (bidirectional) | Boxes, annotations, crop region |
 | `captions.db` | `client/` | STS credentials | CR-SQLite (client→server) | Caption boundaries, text |
 | `raw-ocr.db.gz` | `server/` | None | None | Full OCR results |
 | `layout-server.db.gz` | `server/` | None | None | ML model, analysis params |
@@ -114,7 +114,7 @@ Each video has SQLite databases stored in Wasabi, split by visibility:
 
 | Database | Sync Direction | Content |
 |----------|----------------|---------|
-| `layout.db` | Bidirectional | Box positions, user annotations, server predictions, bounds |
+| `layout.db` | Bidirectional | Box positions, user annotations, server predictions, crop region |
 | `captions.db` | Client → Server | Caption boundaries, text, status |
 
 **Server-Only (internal):**
@@ -158,7 +158,7 @@ See: [SQLite Database Reference](./sqlite-databases.md)
 ```
 1. Prefect flow: crop_frames_to_webm
 2. Download client/videos/{id}/video.mp4 + server/videos/{id}/layout-server.db.gz from Wasabi
-3. Extract cropped frames at 10Hz using layout bounds
+3. Extract cropped frames at 10Hz using layout crop region
 4. Encode as VP9/WebM chunks (hierarchical modulo levels)
 5. Upload chunks to Wasabi: client/videos/{id}/cropped_frames_v{version}/modulo_{M}/chunk_NNNN.webm
 6. Create cropped_frames_versions record in Supabase
@@ -173,7 +173,7 @@ See: [SQLite Database Reference](./sqlite-databases.md)
 3. If needsDownload: Client downloads captions.db.gz from Wasabi using STS credentials
 4. Client loads into wa-sqlite + CR-SQLite extension
 5. Browser streams cropped frame chunks directly from Wasabi using STS credentials
-6. User edits caption boundaries and text - instant local edits
+6. User edits caption frame extents and text - instant local edits
 7. Client syncs changes via WebSocket → Server validates → uploads to Wasabi
 ```
 

@@ -28,7 +28,7 @@ class LayoutDatabaseMetadata(SQLModel, table=True):
 
 
 class VideoLayoutConfig(SQLModel, table=True):
-    """Video layout configuration including crop bounds and analysis results."""
+    """Video layout configuration including crop region and analysis results."""
 
     __tablename__ = "video_layout_config"
 
@@ -54,7 +54,7 @@ class VideoLayoutConfig(SQLModel, table=True):
     bottom_edge_std: Optional[float] = None
     horizontal_std_slope: Optional[float] = None
     horizontal_std_intercept: Optional[float] = None
-    crop_bounds_version: int = Field(default=1)
+    crop_region_version: int = Field(default=1)
     analysis_model_version: Optional[str] = None
     updated_at: datetime = Field(default_factory=utc_now)
 

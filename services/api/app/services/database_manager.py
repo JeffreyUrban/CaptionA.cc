@@ -215,10 +215,10 @@ class DatabaseManager:
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         start_frame_index INTEGER NOT NULL,
                         end_frame_index INTEGER NOT NULL,
-                        boundary_state TEXT NOT NULL DEFAULT 'predicted'
-                            CHECK (boundary_state IN ('predicted', 'confirmed', 'gap')),
-                        boundary_pending INTEGER NOT NULL DEFAULT 1,
-                        boundary_updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                        caption_frame_extents_state TEXT NOT NULL DEFAULT 'predicted'
+                            CHECK (caption_frame_extents_state IN ('predicted', 'confirmed', 'gap')),
+                        caption_frame_extents_pending INTEGER NOT NULL DEFAULT 1,
+                        caption_frame_extents_updated_at TEXT NOT NULL DEFAULT (datetime('now')),
                         text TEXT,
                         text_pending INTEGER NOT NULL DEFAULT 1,
                         text_status TEXT,
@@ -238,7 +238,7 @@ class DatabaseManager:
 
                     -- Index for workable items (gaps or pending)
                     CREATE INDEX IF NOT EXISTS idx_captions_workable
-                        ON captions(boundary_state, boundary_pending);
+                        ON captions(caption_frame_extents_state, caption_frame_extents_pending);
                     """
                 )
                 conn.commit()
@@ -320,7 +320,7 @@ class LayoutDatabaseManager(DatabaseManager):
                         bottom_edge_std REAL,
                         horizontal_std_slope REAL,
                         horizontal_std_intercept REAL,
-                        crop_bounds_version INTEGER NOT NULL DEFAULT 1,
+                        crop_region_version INTEGER NOT NULL DEFAULT 1,
                         analysis_model_version TEXT,
                         updated_at TEXT NOT NULL DEFAULT (datetime('now'))
                     );

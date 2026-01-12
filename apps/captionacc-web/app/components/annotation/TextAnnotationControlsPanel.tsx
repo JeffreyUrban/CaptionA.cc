@@ -50,7 +50,7 @@ interface TextAnnotationControlsPanelProps {
   onShowHelp: () => void
 
   // Mode switching
-  onSwitchToBoundaries: () => void
+  onSwitchToCaptionFrameExtents: () => void
 }
 
 /**
@@ -88,12 +88,12 @@ export function TextAnnotationControlsPanel({
   hasPrevious,
   hasNext,
   onShowHelp,
-  onSwitchToBoundaries,
+  onSwitchToCaptionFrameExtents,
 }: TextAnnotationControlsPanelProps) {
   return (
     <div className="flex h-full w-1/3 flex-col gap-4 overflow-y-auto rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
       {/* Mode toggle */}
-      <ModeToggle onSwitchToBoundaries={onSwitchToBoundaries} />
+      <ModeToggle onSwitchToCaptionFrameExtents={onSwitchToCaptionFrameExtents} />
 
       {/* Video info */}
       <VideoInfoPanel
@@ -157,17 +157,17 @@ export function TextAnnotationControlsPanel({
 // --- Sub-components ---
 
 interface ModeToggleProps {
-  onSwitchToBoundaries: () => void
+  onSwitchToCaptionFrameExtents: () => void
 }
 
-function ModeToggle({ onSwitchToBoundaries }: ModeToggleProps) {
+function ModeToggle({ onSwitchToCaptionFrameExtents }: ModeToggleProps) {
   return (
     <div className="flex gap-2 rounded-md border border-gray-200 bg-gray-50 p-1 dark:border-gray-700 dark:bg-gray-950">
       <button
-        onClick={onSwitchToBoundaries}
+        onClick={onSwitchToCaptionFrameExtents}
         className="flex-1 rounded py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
       >
-        Boundaries
+        Caption Frame Extents
       </button>
       <button className="flex-1 rounded py-2 text-sm font-semibold bg-teal-600 text-white">
         Text Correction

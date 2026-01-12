@@ -9,7 +9,7 @@ Combined images for annotations are regenerated asynchronously to avoid blocking
 ### Dirty Flag Pattern
 
 - Annotations have an `image_needs_regen` flag in the database
-- When boundaries change, the flag is set to `1` and old image is deleted
+- When caption frame extents change, the flag is set to `1` and old image is deleted
 - Background processes regenerate images and clear the flag
 
 ### Processing Strategies
@@ -21,7 +21,7 @@ Combined images for annotations are regenerated asynchronously to avoid blocking
 - Runs automatically during natural workflow pauses (3 second idle time)
 - Processes small batches (3 images) to avoid blocking
 - Resets timer on any annotation save or navigation
-- Integrated into `annotate.boundaries.tsx` via `useImageRegeneration` hook
+- Integrated into `annotate.caption-frame-extents.tsx` via `useImageRegeneration` hook
 
 **Advantages:**
 

@@ -28,8 +28,8 @@ class TestGetCaptions:
         assert "id" in caption
         assert "startFrameIndex" in caption
         assert "endFrameIndex" in caption
-        assert "boundaryState" in caption
-        assert "boundaryPending" in caption
+        assert "captionFrameExtentsState" in caption
+        assert "captionFrameExtentsPending" in caption
         assert "text" in caption
 
     @pytest.mark.asyncio
@@ -63,7 +63,7 @@ class TestGetCaptions:
         # Caption 2 is pending, Caption 3 is a gap
         assert len(data["captions"]) == 2
         for caption in data["captions"]:
-            assert caption["boundaryState"] == "gap" or caption["boundaryPending"] is True
+            assert caption["captionFrameExtentsState"] == "gap" or caption["captionFrameExtentsPending"] is True
 
     @pytest.mark.asyncio
     async def test_get_captions_with_limit(
@@ -144,7 +144,7 @@ class TestCreateCaption:
             json={
                 "startFrameIndex": 0,
                 "endFrameIndex": 50,
-                "boundaryState": "predicted",
+                "captionFrameExtentsState": "predicted",
                 "text": "New caption",
             },
             headers=auth_headers,
@@ -156,7 +156,7 @@ class TestCreateCaption:
         assert data["caption"]["startFrameIndex"] == 0
         assert data["caption"]["endFrameIndex"] == 50
         assert data["caption"]["text"] == "New caption"
-        assert data["caption"]["boundaryState"] == "predicted"
+        assert data["caption"]["captionFrameExtentsState"] == "predicted"
 
     @pytest.mark.asyncio
     async def test_create_caption_minimal(
@@ -176,7 +176,7 @@ class TestCreateCaption:
         data = response.json()
         assert data["caption"]["startFrameIndex"] == 100
         assert data["caption"]["endFrameIndex"] == 200
-        assert data["caption"]["boundaryState"] == "predicted"  # default
+        assert data["caption"]["captionFrameExtentsState"] == "predicted"  # default
 
     @pytest.mark.asyncio
     async def test_create_gap_caption(
@@ -188,30 +188,30 @@ class TestCreateCaption:
             json={
                 "startFrameIndex": 0,
                 "endFrameIndex": 50,
-                "boundaryState": "gap",
+                "captionFrameExtentsState": "gap",
             },
             headers=auth_headers,
         )
 
         assert response.status_code == 201
         data = response.json()
-        assert data["caption"]["boundaryState"] == "gap"
+        assert data["caption"]["captionFrameExtentsState"] == "gap"
 
 
 class TestUpdateCaption:
     """Tests for PUT /videos/{video_id}/captions/{caption_id}."""
 
     @pytest.mark.asyncio
-    async def test_update_caption_boundaries(
+    async def test_update_caption_frame_extents(
         self, client: AsyncClient, test_video_id: str, auth_headers: dict
     ):
-        """Should update caption boundaries."""
+        """Should update caption frame extents."""
         response = await client.put(
             f"/videos/{test_video_id}/captions/1",
             json={
                 "startFrameIndex": 10,
                 "endFrameIndex": 90,
-                "boundaryState": "confirmed",
+                "captionFrameExtentsState": "confirmed",
             },
             headers=auth_headers,
         )
@@ -221,7 +221,7 @@ class TestUpdateCaption:
         assert "caption" in data
         assert data["caption"]["startFrameIndex"] == 10
         assert data["caption"]["endFrameIndex"] == 90
-        assert data["caption"]["boundaryState"] == "confirmed"
+        assert data["caption"]["captionFrameExtentsState"] == "confirmed"
         # Should have created gap for uncovered range [0, 9]
         assert "createdGaps" in data
 
@@ -235,7 +235,7 @@ class TestUpdateCaption:
             json={
                 "startFrameIndex": 0,
                 "endFrameIndex": 50,
-                "boundaryState": "confirmed",
+                "captionFrameExtentsState": "confirmed",
             },
             headers=auth_headers,
         )
@@ -253,7 +253,7 @@ class TestUpdateCaption:
             json={
                 "startFrameIndex": 0,
                 "endFrameIndex": 150,  # Overlaps with caption 2 (101-200)
-                "boundaryState": "confirmed",
+                "captionFrameExtentsState": "confirmed",
             },
             headers=auth_headers,
         )
@@ -740,9 +740,9 @@ class TestCaptionResponseFormat:
             "id",
             "startFrameIndex",
             "endFrameIndex",
-            "boundaryState",
-            "boundaryPending",
-            "boundaryUpdatedAt",
+            "captionFrameExtentsState",
+            "captionFrameExtentsPending",
+            "captionFrameExtentsUpdatedAt",
             "text",
             "textPending",
             "textStatus",
@@ -758,10 +758,10 @@ class TestCaptionResponseFormat:
         assert set(caption.keys()) == expected_keys
 
     @pytest.mark.asyncio
-    async def test_boundary_state_enum_values(
+    async def test_caption_frame_extents_state_enum_values(
         self, client: AsyncClient, test_video_id: str, auth_headers: dict
     ):
-        """Should return valid boundary state enum values."""
+        """Should return valid caption frame extents state enum values."""
         response = await client.get(
             f"/videos/{test_video_id}/captions",
             params={"start": 0, "end": 500},
@@ -773,4 +773,4 @@ class TestCaptionResponseFormat:
 
         valid_states = {"predicted", "confirmed", "gap"}
         for caption in captions:
-            assert caption["boundaryState"] in valid_states
+            assert caption["captionFrameExtentsState"] in valid_states

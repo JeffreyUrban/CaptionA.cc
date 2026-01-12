@@ -7,14 +7,14 @@ import { ErrorBanner } from '~/components/annotation/ErrorBanner'
 import { TextAnnotationContentPanel } from '~/components/annotation/TextAnnotationContentPanel'
 import { TextAnnotationControlsPanel } from '~/components/annotation/TextAnnotationControlsPanel'
 import { TextAnnotationHelpModal } from '~/components/annotation/TextAnnotationHelpModal'
-import { useBoundaryFrameLoader } from '~/hooks/useBoundaryFrameLoader'
+import { useCaptionFrameExtentsFrameLoader } from '~/hooks/useCaptionFrameExtentsFrameLoader'
 import { useTextAnnotationData } from '~/hooks/useTextAnnotationData'
 import { useTextAnnotationFrameNav } from '~/hooks/useTextAnnotationFrameNav'
 import { useTextAnnotationKeyboard } from '~/hooks/useTextAnnotationKeyboard'
 import { useTextAnnotationPreferences } from '~/hooks/useTextAnnotationPreferences'
 import { useVideoMetadata } from '~/hooks/useVideoMetadata'
 import { useVideoTouched } from '~/hooks/useVideoTouched'
-import type { Frame } from '~/types/boundaries'
+import type { Frame } from '~/caption-frame-extents'
 
 // Loader function to expose environment variables
 export async function loader() {
@@ -96,7 +96,7 @@ export default function AnnotateText() {
   currentFrameIndexRef.current = currentFrameIndex
 
   // Load frames from Wasabi
-  useBoundaryFrameLoader({
+  useCaptionFrameExtentsFrameLoader({
     videoId,
     currentFrameIndexRef,
     jumpRequestedRef,
@@ -134,9 +134,11 @@ export default function AnnotateText() {
     navigateFrame,
   })
 
-  // Switch to boundaries mode
-  const switchToBoundaries = () => {
-    void navigate(`/annotate/boundaries?videoId=${encodeURIComponent(videoId)}`)
+  // Switch to caption frame extents mode
+  const switchToCaptionFrameExtents = () => {
+    void navigate(
+      `/annotate/boundariescaption-frame-extents?videoId=${encodeURIComponent(videoId)}`
+    )
   }
 
   // Handle jump to annotation
@@ -213,7 +215,7 @@ export default function AnnotateText() {
             hasPrevious={queueIndex > 0}
             hasNext={queueIndex < queue.length - 1}
             onShowHelp={() => setShowHelpModal(true)}
-            onSwitchToBoundaries={switchToBoundaries}
+            onSwitchToCaptionFrameExtents={switchToCaptionFrameExtents}
           />
         </div>
       </div>

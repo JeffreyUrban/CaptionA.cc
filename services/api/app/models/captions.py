@@ -5,8 +5,8 @@ from enum import Enum
 from pydantic import BaseModel, Field
 
 
-class BoundaryState(str, Enum):
-    """Caption boundary state."""
+class CaptionFrameExtentsState(str, Enum):
+    """caption frame extents state."""
 
     PREDICTED = "predicted"
     CONFIRMED = "confirmed"
@@ -43,9 +43,9 @@ class CaptionRow(BaseModel):
     id: int
     start_frame_index: int
     end_frame_index: int
-    boundary_state: BoundaryState
-    boundary_pending: int  # 0 or 1
-    boundary_updated_at: str
+    caption_frame_extents_state: CaptionFrameExtentsState
+    caption_frame_extents_pending: int  # 0 or 1
+    caption_frame_extents_updated_at: str
     text: str | None = None
     text_pending: int  # 0 or 1
     text_status: str | None = None
@@ -70,9 +70,9 @@ class Caption(BaseModel):
     id: int
     startFrameIndex: int
     endFrameIndex: int
-    boundaryState: BoundaryState
-    boundaryPending: bool
-    boundaryUpdatedAt: str
+    captionFrameExtentsState: CaptionFrameExtentsState
+    captionFrameExtentsPending: bool
+    captionFrameExtentsUpdatedAt: str
     text: str | None = None
     textPending: bool
     textStatus: str | None = None
@@ -92,9 +92,9 @@ class Caption(BaseModel):
             id=row.id,
             startFrameIndex=row.start_frame_index,
             endFrameIndex=row.end_frame_index,
-            boundaryState=row.boundary_state,
-            boundaryPending=row.boundary_pending == 1,
-            boundaryUpdatedAt=row.boundary_updated_at,
+            captionFrameExtentsState=row.caption_frame_extents_state,
+            captionFrameExtentsPending=row.caption_frame_extents_pending == 1,
+            captionFrameExtentsUpdatedAt=row.caption_frame_extents_updated_at,
             text=row.text,
             textPending=row.text_pending == 1,
             textStatus=row.text_status,
@@ -119,17 +119,17 @@ class CaptionCreate(BaseModel):
 
     startFrameIndex: int
     endFrameIndex: int
-    boundaryState: BoundaryState = BoundaryState.PREDICTED
-    boundaryPending: bool = False
+    captionFrameExtentsState: CaptionFrameExtentsState = CaptionFrameExtentsState.PREDICTED
+    captionFrameExtentsPending: bool = False
     text: str | None = None
 
 
 class CaptionUpdate(BaseModel):
-    """Request body for updating caption boundaries (with overlap resolution)."""
+    """Request body for updating caption frame extents (with overlap resolution)."""
 
     startFrameIndex: int
     endFrameIndex: int
-    boundaryState: BoundaryState = BoundaryState.CONFIRMED
+    captionFrameExtentsState: CaptionFrameExtentsState = CaptionFrameExtentsState.CONFIRMED
 
 
 class CaptionTextUpdate(BaseModel):
@@ -165,7 +165,7 @@ class BatchCreateData(BaseModel):
 
     startFrameIndex: int
     endFrameIndex: int
-    boundaryState: BoundaryState = BoundaryState.PREDICTED
+    captionFrameExtentsState: CaptionFrameExtentsState = CaptionFrameExtentsState.PREDICTED
     text: str | None = None
 
 
@@ -174,7 +174,7 @@ class BatchUpdateData(BaseModel):
 
     startFrameIndex: int | None = None
     endFrameIndex: int | None = None
-    boundaryState: BoundaryState | None = None
+    captionFrameExtentsState: CaptionFrameExtentsState | None = None
     text: str | None = None
     textStatus: TextStatus | None = None
     textNotes: str | None = None

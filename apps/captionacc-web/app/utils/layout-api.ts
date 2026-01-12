@@ -91,13 +91,13 @@ export async function recalculatePredictions(videoId: string): Promise<void> {
 }
 
 /**
- * Reset crop bounds based on current annotations
+ * Reset crop region based on current annotations
  */
-export async function resetCropBounds(
+export async function resetCropRegion(
   videoId: string
 ): Promise<{ success: boolean; message?: string }> {
   const response = await fetch(
-    `/api/annotations/${encodeURIComponent(videoId)}/reset-crop-bounds`,
+    `/api/annotations/${encodeURIComponent(videoId)}/reset-crop-region`,
     { method: 'POST' }
   )
 
@@ -106,11 +106,11 @@ export async function resetCropBounds(
   if (!response.ok) {
     return {
       success: false,
-      message: result.message ?? result.error ?? 'Failed to recalculate crop bounds',
+      message: result.message ?? result.error ?? 'Failed to recalculate crop region',
     }
   }
 
-  console.log('[Layout] Crop bounds recalculated:', result)
+  console.log('[Layout] Crop region recalculated:', result)
   return { success: true }
 }
 

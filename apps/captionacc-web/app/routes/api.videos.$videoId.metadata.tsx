@@ -30,7 +30,7 @@ function fillAnnotationGaps(db: Database.Database, totalFrames: number): number 
       // Create gap annotation for frames [expectedFrame, annotation.start_frame_index - 1]
       db.prepare(
         `
-        INSERT INTO captions (start_frame_index, end_frame_index, boundary_state, boundary_pending)
+        INSERT INTO captions (start_frame_index, end_frame_index, caption_frame_extents_state, caption_frame_extents_pending)
         VALUES (?, ?, 'gap', 0)
       `
       ).run(expectedFrame, annotation.start_frame_index - 1)
@@ -45,7 +45,7 @@ function fillAnnotationGaps(db: Database.Database, totalFrames: number): number 
   if (expectedFrame < totalFrames) {
     db.prepare(
       `
-      INSERT INTO captions (start_frame_index, end_frame_index, boundary_state, boundary_pending)
+      INSERT INTO captions (start_frame_index, end_frame_index, caption_frame_extents_state, caption_frame_extents_pending)
       VALUES (?, ?, 'gap', 0)
     `
     ).run(expectedFrame, totalFrames - 1)

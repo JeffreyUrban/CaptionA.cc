@@ -61,7 +61,7 @@ export async function action({ params }: ActionFunctionArgs) {
       .prepare(
         `
       SELECT * FROM captions
-      WHERE boundary_state = 'gap'
+      WHERE caption_frame_extents_state = 'gap'
       AND (
         end_frame_index = ? - 1
         OR start_frame_index = ? + 1
@@ -106,7 +106,7 @@ export async function action({ params }: ActionFunctionArgs) {
     const result = db
       .prepare(
         `
-      INSERT INTO captions (start_frame_index, end_frame_index, boundary_state, boundary_pending)
+      INSERT INTO captions (start_frame_index, end_frame_index, caption_frame_extents_state, caption_frame_extents_pending)
       VALUES (?, ?, 'gap', 0)
     `
       )

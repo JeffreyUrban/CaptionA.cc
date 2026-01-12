@@ -1,7 +1,7 @@
 """
 Caption Median OCR Processing Flow
 
-Handles median frame generation and OCR after boundary annotation changes:
+Handles median frame generation and OCR after caption frame extents annotation changes:
 1. Generate per-pixel median frame from caption frame range
 2. Run OCR on median frame
 3. Update captions table with OCR text
@@ -283,7 +283,7 @@ def caption_caption_ocr_flow(
     2. Runs OCR on median frame
     3. Updates caption with OCR text and sets text_pending flag
 
-    Priority: High (user is actively annotating boundaries)
+    Priority: High (user is actively annotating caption frame extents)
 
     Args:
         video_id: Video UUID

@@ -38,7 +38,7 @@ crop_frames extract-frames <video_path> <output_dir> --crop "left,top,right,bott
 **Required Arguments:**
 - `video_path`: Path to video file
 - `output_dir`: Output directory for frames
-- `--crop`, `-c`: Crop bounds as 'left,top,right,bottom' in pixels (e.g., "100,200,700,250")
+- `--crop`, `-c`: Crop region as 'left,top,right,bottom' in pixels (e.g., "100,200,700,250")
 
 **Optional Arguments:**
 - `--rate`, `-r`: Frame sampling rate in Hz (default: 10.0)

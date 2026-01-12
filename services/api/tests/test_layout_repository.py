@@ -71,10 +71,10 @@ class TestVideoLayoutConfig:
         # Should keep existing crop values
         assert config.cropLeft == 10
 
-    def test_update_layout_config_crop_bounds(self, seeded_repo: LayoutRepository):
-        """Should update crop bounds and increment version."""
+    def test_update_layout_config_crop_region(self, seeded_repo: LayoutRepository):
+        """Should update crop region and increment version."""
         original = seeded_repo.get_layout_config()
-        original_version = original.cropBoundsVersion
+        original_version = original.cropRegionVersion
 
         config = seeded_repo.update_layout_config(
             VideoLayoutConfigUpdate(cropLeft=50, cropTop=60)
@@ -82,7 +82,7 @@ class TestVideoLayoutConfig:
         assert config.cropLeft == 50
         assert config.cropTop == 60
         assert config.cropRight == 30  # Unchanged
-        assert config.cropBoundsVersion == original_version + 1
+        assert config.cropRegionVersion == original_version + 1
 
     def test_update_layout_config_selection(self, seeded_repo: LayoutRepository):
         """Should update selection region."""

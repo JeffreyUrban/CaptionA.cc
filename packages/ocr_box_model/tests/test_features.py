@@ -4,7 +4,7 @@
 # NOTE: This entire test file is skipped - ocr_box_model.features module has been removed
 
 import pytest
-from caption_models import BoundingBox, CropBounds
+from caption_models import BoundingBox, CropRegion
 
 pytestmark = pytest.mark.skip(reason="ocr_box_model.features module removed - tests need updating")
 
@@ -32,15 +32,15 @@ def typical_layout_params() -> LayoutParams:
 
 
 @pytest.fixture
-def crop_bounds_bottom_third() -> CropBounds:
-    """Crop bounds for bottom third of 1920x1080 frame."""
-    return CropBounds(left=0, top=723, right=1920, bottom=1080)
+def crop_region_bottom_third() -> CropRegion:
+    """Crop region for bottom third of 1920x1080 frame."""
+    return CropRegion(left=0, top=723, right=1920, bottom=1080)
 
 
 class TestExtractBoxFeatures:
     """Tests for extract_box_features function."""
 
-    def test_caption_box_features(self, typical_layout_params, crop_bounds_bottom_third):
+    def test_caption_box_features(self, typical_layout_params, crop_region_bottom_third):
         """Test feature extraction for typical caption box."""
         # Character box in caption region
         box = BoundingBox(left=960, top=918, right=1014, bottom=972)
@@ -49,7 +49,7 @@ class TestExtractBoxFeatures:
             box=box,
             frame_width=1920,
             frame_height=1080,
-            crop_bounds=crop_bounds_bottom_third,
+            crop_region=crop_region_bottom_third,
             layout_params=typical_layout_params,
         )
 
@@ -68,15 +68,15 @@ class TestExtractBoxFeatures:
         assert features["vertical_distance_from_mode"] == 0  # Perfect alignment
         assert features["height_difference_from_mode"] == 0  # Perfect height match
 
-        # Should be inside crop bounds
-        assert features["inside_crop_bounds"] is True
+        # Should be inside crop region
+        assert features["inside_crop_region"] is True
         assert features["overlap_with_crop"] == pytest.approx(1.0)
 
         # No selection rect
         assert features["inside_selection_rect"] is True
         assert features["overlap_with_selection"] == pytest.approx(1.0)
 
-    def test_noise_box_features(self, typical_layout_params, crop_bounds_bottom_third):
+    def test_noise_box_features(self, typical_layout_params, crop_region_bottom_third):
         """Test feature extraction for noise box (channel logo)."""
         # Logo box in top corner
         box = BoundingBox(left=1632, top=54, right=1824, bottom=130)
@@ -85,12 +85,12 @@ class TestExtractBoxFeatures:
             box=box,
             frame_width=1920,
             frame_height=1080,
-            crop_bounds=crop_bounds_bottom_third,
+            crop_region=crop_region_bottom_third,
             layout_params=typical_layout_params,
         )
 
-        # Should be outside crop bounds
-        assert features["inside_crop_bounds"] is False
+        # Should be outside crop region
+        assert features["inside_crop_region"] is False
         assert features["overlap_with_crop"] == pytest.approx(0.0)
 
         # Large vertical distance from caption region
@@ -100,7 +100,7 @@ class TestExtractBoxFeatures:
         assert features["box_height"] == 76
         assert features["height_difference_from_mode"] == 22
 
-    def test_left_aligned_anchor_consistency(self, crop_bounds_bottom_third):
+    def test_left_aligned_anchor_consistency(self, crop_region_bottom_third):
         """Test anchor consistency for left-aligned text."""
         layout_params = LayoutParams(
             vertical_position=945,
@@ -117,7 +117,7 @@ class TestExtractBoxFeatures:
             box=box1,
             frame_width=1920,
             frame_height=1080,
-            crop_bounds=crop_bounds_bottom_third,
+            crop_region=crop_region_bottom_third,
             layout_params=layout_params,
         )
 
@@ -131,7 +131,7 @@ class TestExtractBoxFeatures:
             box=box2,
             frame_width=1920,
             frame_height=1080,
-            crop_bounds=crop_bounds_bottom_third,
+            crop_region=crop_region_bottom_third,
             layout_params=layout_params,
         )
 
@@ -139,7 +139,7 @@ class TestExtractBoxFeatures:
         assert features2["horizontal_distance_from_anchor"] == 100
         assert features2["anchor_consistency"] < features1["anchor_consistency"]
 
-    def test_selection_rectangle_constraint(self, typical_layout_params, crop_bounds_bottom_third):
+    def test_selection_rectangle_constraint(self, typical_layout_params, crop_region_bottom_third):
         """Test features with selection rectangle constraint."""
         # Selection rectangle in bottom center
         selection_rect = BoundingBox(left=800, top=900, right=1120, bottom=1000)
@@ -150,7 +150,7 @@ class TestExtractBoxFeatures:
             box=box_inside,
             frame_width=1920,
             frame_height=1080,
-            crop_bounds=crop_bounds_bottom_third,
+            crop_region=crop_region_bottom_third,
             layout_params=typical_layout_params,
             selection_rect=selection_rect,
         )
@@ -164,7 +164,7 @@ class TestExtractBoxFeatures:
             box=box_outside,
             frame_width=1920,
             frame_height=1080,
-            crop_bounds=crop_bounds_bottom_third,
+            crop_region=crop_region_bottom_third,
             layout_params=typical_layout_params,
             selection_rect=selection_rect,
         )
@@ -172,7 +172,7 @@ class TestExtractBoxFeatures:
         assert features_outside["inside_selection_rect"] is False
         assert features_outside["overlap_with_selection"] == pytest.approx(0.0)
 
-    def test_vertical_alignment_score(self, typical_layout_params, crop_bounds_bottom_third):
+    def test_vertical_alignment_score(self, typical_layout_params, crop_region_bottom_third):
         """Test vertical alignment score (z-score)."""
         # Box exactly at mode vertical position
         box_aligned = BoundingBox(left=960, top=918, right=1014, bottom=972)
@@ -180,7 +180,7 @@ class TestExtractBoxFeatures:
             box=box_aligned,
             frame_width=1920,
             frame_height=1080,
-            crop_bounds=crop_bounds_bottom_third,
+            crop_region=crop_region_bottom_third,
             layout_params=typical_layout_params,
         )
 
@@ -192,14 +192,14 @@ class TestExtractBoxFeatures:
             box=box_offset,
             frame_width=1920,
             frame_height=1080,
-            crop_bounds=crop_bounds_bottom_third,
+            crop_region=crop_region_bottom_third,
             layout_params=typical_layout_params,
         )
 
         # vertical_std = 12.0, distance = 12, score = 12/12 = 1.0
         assert features_offset["vertical_alignment_score"] == pytest.approx(1.0)
 
-    def test_aspect_ratio(self, typical_layout_params, crop_bounds_bottom_third):
+    def test_aspect_ratio(self, typical_layout_params, crop_region_bottom_third):
         """Test aspect ratio calculation."""
         # Square box
         box_square = BoundingBox(left=960, top=918, right=1014, bottom=972)
@@ -207,7 +207,7 @@ class TestExtractBoxFeatures:
             box=box_square,
             frame_width=1920,
             frame_height=1080,
-            crop_bounds=crop_bounds_bottom_third,
+            crop_region=crop_region_bottom_third,
             layout_params=typical_layout_params,
         )
 
@@ -219,7 +219,7 @@ class TestExtractBoxFeatures:
             box=box_wide,
             frame_width=1920,
             frame_height=1080,
-            crop_bounds=crop_bounds_bottom_third,
+            crop_region=crop_region_bottom_third,
             layout_params=typical_layout_params,
         )
 
@@ -229,7 +229,7 @@ class TestExtractBoxFeatures:
 class TestExtractFeaturesBatch:
     """Tests for extract_features_batch function."""
 
-    def test_batch_extraction(self, typical_layout_params, crop_bounds_bottom_third):
+    def test_batch_extraction(self, typical_layout_params, crop_region_bottom_third):
         """Test extracting features for multiple boxes."""
         boxes = [
             BoundingBox(left=960, top=918, right=1014, bottom=972),  # Caption
@@ -241,31 +241,31 @@ class TestExtractFeaturesBatch:
             boxes=boxes,
             frame_width=1920,
             frame_height=1080,
-            crop_bounds=crop_bounds_bottom_third,
+            crop_region=crop_region_bottom_third,
             layout_params=typical_layout_params,
         )
 
         assert len(features_list) == 3
 
         # First two should be inside crop
-        assert features_list[0]["inside_crop_bounds"] is True
-        assert features_list[1]["inside_crop_bounds"] is True
+        assert features_list[0]["inside_crop_region"] is True
+        assert features_list[1]["inside_crop_region"] is True
 
         # Third should be outside
-        assert features_list[2]["inside_crop_bounds"] is False
+        assert features_list[2]["inside_crop_region"] is False
 
 
 class TestFeaturesToArray:
     """Tests for features_to_array and features_batch_to_array."""
 
-    def test_features_to_array(self, typical_layout_params, crop_bounds_bottom_third):
+    def test_features_to_array(self, typical_layout_params, crop_region_bottom_third):
         """Test converting features to numerical array."""
         box = BoundingBox(left=960, top=918, right=1014, bottom=972)
         features = extract_box_features(
             box=box,
             frame_width=1920,
             frame_height=1080,
-            crop_bounds=crop_bounds_bottom_third,
+            crop_region=crop_region_bottom_third,
             layout_params=typical_layout_params,
         )
 
@@ -283,7 +283,7 @@ class TestFeaturesToArray:
         assert array[2] == 54.0  # box_width
         assert array[3] == 54.0  # box_height
 
-    def test_features_batch_to_array(self, typical_layout_params, crop_bounds_bottom_third):
+    def test_features_batch_to_array(self, typical_layout_params, crop_region_bottom_third):
         """Test converting batch of features to arrays."""
         boxes = [
             BoundingBox(left=960, top=918, right=1014, bottom=972),
@@ -294,7 +294,7 @@ class TestFeaturesToArray:
             boxes=boxes,
             frame_width=1920,
             frame_height=1080,
-            crop_bounds=crop_bounds_bottom_third,
+            crop_region=crop_region_bottom_third,
             layout_params=typical_layout_params,
         )
 

@@ -264,7 +264,7 @@ export async function getOrGenerateCombinedImage(
 
 /**
  * Delete cached combined image for an annotation.
- * Called when annotation boundaries change.
+ * Called when annotation caption frame extents change.
  *
  * @param videoPath - Relative path to video
  * @param annotationId - Annotation ID

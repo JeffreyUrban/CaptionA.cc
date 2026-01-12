@@ -57,7 +57,7 @@ class VideoLayoutConfigRow(BaseModel):
     bottom_edge_std: float | None = None
     horizontal_std_slope: float | None = None
     horizontal_std_intercept: float | None = None
-    crop_bounds_version: int
+    crop_region_version: int
     analysis_model_version: str | None = None
     updated_at: str
 
@@ -118,7 +118,7 @@ class VideoLayoutConfig(BaseModel):
     bottomEdgeStd: float | None = None
     horizontalStdSlope: float | None = None
     horizontalStdIntercept: float | None = None
-    cropBoundsVersion: int
+    cropRegionVersion: int
     analysisModelVersion: str | None = None
     updatedAt: str
 
@@ -147,7 +147,7 @@ class VideoLayoutConfig(BaseModel):
             bottomEdgeStd=row.bottom_edge_std,
             horizontalStdSlope=row.horizontal_std_slope,
             horizontalStdIntercept=row.horizontal_std_intercept,
-            cropBoundsVersion=row.crop_bounds_version,
+            cropRegionVersion=row.crop_region_version,
             analysisModelVersion=row.analysis_model_version,
             updatedAt=row.updated_at,
         )
@@ -255,8 +255,8 @@ class VideoPreferencesUpdate(BaseModel):
 # =============================================================================
 
 
-class CropBounds(BaseModel):
-    """Crop bounds rectangle."""
+class CropRegion(BaseModel):
+    """Crop region rectangle."""
 
     left: int
     top: int
@@ -264,7 +264,7 @@ class CropBounds(BaseModel):
     bottom: int
 
 
-class SelectionBounds(BaseModel):
+class SelectionRegion(BaseModel):
     """Selection region bounds."""
 
     left: int
@@ -294,17 +294,17 @@ class ConsolidatedLayout(BaseModel):
 
     frameWidth: int
     frameHeight: int
-    cropBounds: CropBounds
-    selectionBounds: SelectionBounds | None = None
+    cropRegion: CropRegion
+    selectionRegion: SelectionRegion | None = None
     selectionMode: SelectionMode
     layoutParams: LayoutParams | None = None
-    cropBoundsVersion: int
+    cropRegionVersion: int
     updatedAt: str
 
     @classmethod
     def from_config(cls, config: VideoLayoutConfig) -> "ConsolidatedLayout":
         """Create from VideoLayoutConfig."""
-        selection_bounds = None
+        selection_region = None
         if all(
             v is not None
             for v in [
@@ -314,7 +314,7 @@ class ConsolidatedLayout(BaseModel):
                 config.selectionBottom,
             ]
         ):
-            selection_bounds = SelectionBounds(
+            selection_region = SelectionRegion(
                 left=config.selectionLeft,  # type: ignore
                 top=config.selectionTop,  # type: ignore
                 right=config.selectionRight,  # type: ignore
@@ -340,16 +340,16 @@ class ConsolidatedLayout(BaseModel):
         return cls(
             frameWidth=config.frameWidth,
             frameHeight=config.frameHeight,
-            cropBounds=CropBounds(
+            cropRegion=CropRegion(
                 left=config.cropLeft,
                 top=config.cropTop,
                 right=config.cropRight,
                 bottom=config.cropBottom,
             ),
-            selectionBounds=selection_bounds,
+            selectionRegion=selection_region,
             selectionMode=config.selectionMode,
             layoutParams=layout_params,
-            cropBoundsVersion=config.cropBoundsVersion,
+            cropRegionVersion=config.cropRegionVersion,
             updatedAt=config.updatedAt,
         )
 
@@ -357,8 +357,8 @@ class ConsolidatedLayout(BaseModel):
 class LayoutUpdate(BaseModel):
     """Request body for updating layout (consolidated)."""
 
-    cropBounds: CropBounds | None = None
-    selectionBounds: SelectionBounds | None = None
+    cropRegion: CropRegion | None = None
+    selectionRegion: SelectionRegion | None = None
     selectionMode: SelectionMode | None = None
     layoutParams: LayoutParams | None = None
 

@@ -626,7 +626,7 @@ In practice, conflicts are rare because:
 |-------|----------------|----------------|
 | `boxes` | `label`, `label_updated_at` | `predicted_label`, `predicted_confidence` |
 | `layout_config` | — | all columns |
-| `captions` | `text`, `text_status`, `text_notes`, `boundary_state` (confirmed) | `boundary_state` (predicted), `caption_ocr` |
+| `captions` | `text`, `text_status`, `text_notes`, `caption_frame_extents_state` (confirmed) | `caption_frame_extents_state` (predicted), `caption_ocr` |
 
 ---
 

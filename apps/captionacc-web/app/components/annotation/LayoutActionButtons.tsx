@@ -5,7 +5,7 @@ interface LayoutConfig {
   cropBottom: number
 }
 
-interface CropBoundsEdit {
+interface CropRegionEdit {
   left: number
   top: number
   right: number
@@ -15,7 +15,7 @@ interface CropBoundsEdit {
 interface LayoutActionButtonsProps {
   layoutApproved: boolean
   layoutConfig: LayoutConfig | null
-  cropBoundsEdit: CropBoundsEdit | null
+  cropRegionEdit: CropRegionEdit | null
   isRecalculating: boolean
   onApprove: () => void
   onClearAll: () => void
@@ -24,21 +24,21 @@ interface LayoutActionButtonsProps {
 export function LayoutActionButtons({
   layoutApproved,
   layoutConfig,
-  cropBoundsEdit,
+  cropRegionEdit,
   isRecalculating,
   onApprove,
   onClearAll,
 }: LayoutActionButtonsProps) {
-  const boundsUnchanged =
+  const crop_regionUnchanged =
     layoutApproved &&
     layoutConfig &&
-    cropBoundsEdit &&
-    layoutConfig.cropLeft === cropBoundsEdit.left &&
-    layoutConfig.cropTop === cropBoundsEdit.top &&
-    layoutConfig.cropRight === cropBoundsEdit.right &&
-    layoutConfig.cropBottom === cropBoundsEdit.bottom
+    cropRegionEdit &&
+    layoutConfig.cropLeft === cropRegionEdit.left &&
+    layoutConfig.cropTop === cropRegionEdit.top &&
+    layoutConfig.cropRight === cropRegionEdit.right &&
+    layoutConfig.cropBottom === cropRegionEdit.bottom
 
-  const approveDisabled = !!boundsUnchanged || isRecalculating
+  const approveDisabled = !!crop_regionUnchanged || isRecalculating
 
   return (
     <>

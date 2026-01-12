@@ -9,9 +9,9 @@ interface Annotation {
   id: number
   start_frame_index: number
   end_frame_index: number
-  boundary_state: 'predicted' | 'confirmed' | 'gap'
-  boundary_pending: number
-  boundary_updated_at: string
+  caption_frame_extents_state: 'predicted' | 'confirmed' | 'gap'
+  caption_frame_extents_pending: number
+  caption_frame_extents_updated_at: string
   text: string | null
   created_at: string
 }
@@ -51,8 +51,8 @@ export async function loader({ params }: LoaderFunctionArgs) {
       .prepare(
         `
       SELECT * FROM captions
-      WHERE boundary_pending = 1 OR boundary_state = 'gap'
-      ORDER BY boundary_pending DESC, start_frame_index ASC
+      WHERE caption_frame_extents_pending = 1 OR caption_frame_extents_state = 'gap'
+      ORDER BY caption_frame_extents_pending DESC, start_frame_index ASC
       LIMIT 1
     `
       )

@@ -15,17 +15,17 @@ import type { PixelBounds } from '~/utils/coordinate-utils'
 /**
  * Annotation record from the captions table (database schema).
  *
- * Represents a single caption annotation with boundary and text information.
- * The boundary workflow determines start/end frames, while the text workflow
+ * Represents a single caption annotation with caption frame extents and text information.
+ * The caption frame extents workflow determines start/end frames, while the text workflow
  * handles the actual caption text.
  */
 export interface Annotation {
   id: number
   start_frame_index: number
   end_frame_index: number
-  boundary_state: 'predicted' | 'confirmed' | 'gap'
-  boundary_pending: number
-  boundary_updated_at: string
+  caption_frame_extents_state: 'predicted' | 'confirmed' | 'gap'
+  caption_frame_extents_pending: number
+  caption_frame_extents_updated_at: string
   text: string | null
   text_pending: number
   text_status: string | null
@@ -38,7 +38,7 @@ export interface Annotation {
 /**
  * Video layout configuration from the video_layout_config table.
  *
- * Contains frame dimensions, crop bounds, selection bounds, and layout
+ * Contains frame dimensions, crop region, selection region, and layout
  * parameters used for OCR box classification. This is the comprehensive
  * version with all fields from the database schema.
  */
@@ -65,16 +65,16 @@ export interface VideoLayoutConfig {
   bottom_edge_std: number | null
   horizontal_std_slope: number | null
   horizontal_std_intercept: number | null
-  crop_bounds_version: number
+  crop_region_version: number
   analysis_model_version: string | null
   updated_at: string
 }
 
 /**
- * Partial VideoLayoutConfig containing only the fields needed for crop bounds.
+ * Partial VideoLayoutConfig containing only the fields needed for crop region.
  * Used when only crop-related information is needed.
  */
-export interface CropBoundsConfig {
+export interface CropRegionConfig {
   crop_left: number
   crop_top: number
   crop_right: number
@@ -214,8 +214,8 @@ export interface SaveBoxAnnotationsRequest {
  * Request body for updating layout configuration.
  */
 export interface UpdateLayoutConfigRequest {
-  cropBounds?: { left: number; top: number; right: number; bottom: number }
-  selectionBounds?: { left: number; top: number; right: number; bottom: number }
+  cropRegion?: { left: number; top: number; right: number; bottom: number }
+  selectionRegion?: { left: number; top: number; right: number; bottom: number }
   selectionMode?: 'hard' | 'soft' | 'disabled'
   layoutParams?: {
     verticalPosition: number

@@ -33,7 +33,7 @@ Before running the pipeline, ensure you have:
 
 1. **Cropped frames** as WebM chunks in Wasabi (`cropped_frames_v{version}/` directory)
 2. **Layout configuration** in `layout.db` (`video_layout_config` table)
-3. **Caption boundaries** in `captions.db` (`captions` table)
+3. **Caption frame extents** in `captions.db` (`captions` table)
 4. **Font example image** (reference image showing caption font style)
 
 ### Model Checkpoint
@@ -63,7 +63,7 @@ caption_text collect-data !__local/data/_has_been_deprecated__! \\
 ```
 
 **Training collects data from all videos with:**
-- Confirmed caption boundaries (`boundary_state = 'confirmed'`)
+- Confirmed caption frame extents (`caption_frame_extents_state = 'confirmed'`)
 - Non-empty text annotations (`text IS NOT NULL AND text != ''`)
 - Cropped frames in database
 - OCR annotations
@@ -102,7 +102,7 @@ caption_text infer !__local/data/_has_been_deprecated__!/video_id \\
 **Options:**
 - `--checkpoint, -c`: Path to fine-tuned model checkpoint (required)
 - `--font-example, -f`: Path to font example image (required)
-- `--output, -o`: Output CSV file (default: `vlm_boundaries_results.csv`)
+- `--output, -o`: Output CSV file (default: `vlm_captions_results.csv`)
 - `--limit, -n`: Maximum number of captions to process
 
 **Output:**
@@ -120,7 +120,7 @@ caption_text compare !__local/data/_has_been_deprecated__!/video_id \\
 ```
 
 **Options:**
-- `--vlm-csv`: Path to VLM results CSV (default: `vlm_boundaries_results.csv`)
+- `--vlm-csv`: Path to VLM results CSV (default: `vlm_captions_results.csv`)
 - `--auto-validate/--no-auto-validate`: Auto-validate exact matches (default: true)
 
 **Output:**

@@ -2,7 +2,7 @@
  * Model version checking and recalculation utilities
  *
  * Detects when box classification model version changes and triggers
- * crop bounds recalculation + boundary pending review if bounds changed.
+ * crop region recalculation + crop region pending review if crop region changed.
  *
  * Uses split database architecture:
  * - layoutDb: video_layout_config, box_classification_model
@@ -17,7 +17,7 @@ interface LayoutConfig {
   crop_right: number
   crop_bottom: number
   analysis_model_version: string | null
-  crop_bounds_version: number
+  crop_region_version: number
 }
 
 interface ModelInfo {
@@ -67,14 +67,14 @@ export function needsRecalculation(layoutDb: Database.Database): boolean {
  *
  * This function:
  * 1. Checks if model version has changed
- * 2. If changed: recalculates crop bounds using current model
- * 3. If bounds changed: marks affected captions as boundary_pending
+ * 2. If changed: recalculates crop region using current model
+ * 3. If crop region changed: marks affected captions as caption_frame_extents_pending
  * 4. Updates analysis_model_version to current version
  *
  * @param layoutDb - Layout database connection (layout.db)
- * @param captionsDb - Captions database connection (captions.db) - optional, only needed if bounds change
- * @param recalculateFunction - Function to recalculate crop bounds, returns new bounds or null if no change
- * @returns True if recalculation was performed and bounds changed
+ * @param captionsDb - Captions database connection (captions.db) - optional, only needed if crop region change
+ * @param recalculateFunction - Function to recalculate crop region, returns new crop region or null if no change
+ * @returns True if recalculation was performed and crop region changed
  */
 export async function checkAndRecalculate(
   layoutDb: Database.Database,
@@ -87,7 +87,7 @@ export async function checkAndRecalculate(
   } | null>
 ): Promise<{
   recalculated: boolean
-  boundsChanged: boolean
+  cropRegionChanged: boolean
   oldVersion: string | null
   newVersion: string
 }> {
@@ -97,7 +97,7 @@ export async function checkAndRecalculate(
       .get() as ModelInfo | undefined
     return {
       recalculated: false,
-      boundsChanged: false,
+      cropRegionChanged: false,
       oldVersion: modelInfo?.model_version ?? null,
       newVersion: modelInfo?.model_version ?? 'unknown',
     }
@@ -124,13 +124,13 @@ export async function checkAndRecalculate(
   const newVersion = modelInfo?.model_version ?? 'unknown'
 
   console.log(
-    `[ModelVersionCheck] Model version changed: ${oldVersion ?? 'null'} → ${newVersion}. Recalculating crop bounds...`
+    `[ModelVersionCheck] Model version changed: ${oldVersion ?? 'null'} → ${newVersion}. Recalculating crop region...`
   )
 
-  // Recalculate crop bounds
-  const newBounds = await recalculateFunction()
+  // Recalculate crop region
+  const newCropRegion = await recalculateFunction()
 
-  if (!newBounds) {
+  if (!newCropRegion) {
     // Recalculation returned no change, just update version
     layoutDb
       .prepare(
@@ -144,21 +144,21 @@ export async function checkAndRecalculate(
 
     return {
       recalculated: true,
-      boundsChanged: false,
+      cropRegionChanged: false,
       oldVersion,
       newVersion,
     }
   }
 
-  // Check if bounds actually changed
-  const boundsChanged =
-    newBounds.crop_left !== oldConfig.crop_left ||
-    newBounds.crop_top !== oldConfig.crop_top ||
-    newBounds.crop_right !== oldConfig.crop_right ||
-    newBounds.crop_bottom !== oldConfig.crop_bottom
+  // Check if crop region actually changed
+  const cropRegionChanged =
+    newCropRegion.crop_left !== oldConfig.crop_left ||
+    newCropRegion.crop_top !== oldConfig.crop_top ||
+    newCropRegion.crop_right !== oldConfig.crop_right ||
+    newCropRegion.crop_bottom !== oldConfig.crop_bottom
 
-  if (!boundsChanged) {
-    // Bounds didn't change, just update version
+  if (!cropRegionChanged) {
+    // Crop region didn't change, just update version
     layoutDb
       .prepare(
         `
@@ -169,19 +169,19 @@ export async function checkAndRecalculate(
       )
       .run(newVersion)
 
-    console.log('[ModelVersionCheck] Recalculated but bounds unchanged')
+    console.log('[ModelVersionCheck] Recalculated but crop region unchanged')
 
     return {
       recalculated: true,
-      boundsChanged: false,
+      cropRegionChanged: false,
       oldVersion,
       newVersion,
     }
   }
 
-  // Bounds changed - update layout config and mark captions as pending review
+  // Crop region changed - update layout config and mark captions as pending review
   console.log(
-    `[ModelVersionCheck] Bounds changed: [${oldConfig.crop_left},${oldConfig.crop_top},${oldConfig.crop_right},${oldConfig.crop_bottom}] → [${newBounds.crop_left},${newBounds.crop_top},${newBounds.crop_right},${newBounds.crop_bottom}]`
+    `[ModelVersionCheck] Crop region changed: [${oldConfig.crop_left},${oldConfig.crop_top},${oldConfig.crop_right},${oldConfig.crop_bottom}] → [${newCropRegion.crop_left},${newCropRegion.crop_top},${newCropRegion.crop_right},${newCropRegion.crop_bottom}]`
   )
 
   layoutDb
@@ -193,42 +193,44 @@ export async function checkAndRecalculate(
       crop_top = ?,
       crop_right = ?,
       crop_bottom = ?,
-      crop_bounds_version = crop_bounds_version + 1,
+      crop_region_version = crop_region_version + 1,
       analysis_model_version = ?,
       updated_at = datetime('now')
     WHERE id = 1
   `
     )
     .run(
-      newBounds.crop_left,
-      newBounds.crop_top,
-      newBounds.crop_right,
-      newBounds.crop_bottom,
+      newCropRegion.crop_left,
+      newCropRegion.crop_top,
+      newCropRegion.crop_right,
+      newCropRegion.crop_bottom,
       newVersion
     )
 
-  // Mark all captions as boundary_pending (need re-review due to model change)
+  // Mark all captions as caption_frame_extents_pending (need re-review due to model change)
   if (captionsDb) {
     const result = captionsDb
       .prepare(
         `
       UPDATE captions
-      SET boundary_pending = 1
-      WHERE boundary_state != 'gap'
+      SET caption_frame_extents_pending = 1
+      WHERE caption_frame_extents_state != 'gap'
     `
       )
       .run()
 
-    console.log(`[ModelVersionCheck] Marked ${result.changes} captions as boundary_pending`)
+    console.log(
+      `[ModelVersionCheck] Marked ${result.changes} captions as caption_frame_extents_pending`
+    )
   } else {
     console.warn(
-      '[ModelVersionCheck] No captions database provided, skipping boundary_pending update'
+      '[ModelVersionCheck] No captions database provided, skipping caption_frame_extents_pending update'
     )
   }
 
   return {
     recalculated: true,
-    boundsChanged: true,
+    cropRegionChanged: true,
     oldVersion,
     newVersion,
   }

@@ -11,7 +11,7 @@ dependencies = [
     "tqdm>=4.67.1",
     "pillow>=11.0.0",
     "crop_frames",
-    "caption_boundaries",
+    "caption_frame_extents",
     "caption_text",
     "full_frames",
     "orchestrator",
@@ -47,7 +47,7 @@ override-dependencies = [
 
 [tool.uv.sources]
 crop_frames = { workspace = true }
-caption-boundaries = { workspace = true }
+caption-frame-extents = { workspace = true }
 caption-text = { workspace = true }
 full-frames = { workspace = true }
 orchestrator = { workspace = true }
@@ -95,7 +95,7 @@ dev = [
 [tool.pytest.ini_options]
 # Test collection configuration for workspace
 testpaths = [
-    "data-pipelines/caption_boundaries/tests",
+    "data-pipelines/caption_frame_extents/tests",
     "data-pipelines/caption_text/tests",
     "packages/frames_db/tests",
     "packages/video_utils/tests",

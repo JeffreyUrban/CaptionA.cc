@@ -291,7 +291,7 @@ class CroppedFramesVersionRepository:
         tenant_id: str,
         version: int,
         storage_prefix: str,
-        crop_bounds: dict[str, int],
+        crop_region: dict[str, int],
         frame_rate: float = 10.0,
         layout_db_storage_key: str | None = None,
         layout_db_hash: str | None = None,
@@ -306,7 +306,7 @@ class CroppedFramesVersionRepository:
             tenant_id: Tenant UUID
             version: Version number
             storage_prefix: Wasabi storage prefix for chunks
-            crop_bounds: Crop bounds dict {left, top, right, bottom}
+            crop_region: Crop region dict {left, top, right, bottom}
             frame_rate: Frame extraction rate in Hz
             layout_db_storage_key: Wasabi key for layout.db
             layout_db_hash: SHA-256 hash of layout.db
@@ -321,7 +321,7 @@ class CroppedFramesVersionRepository:
             "tenant_id": tenant_id,
             "version": version,
             "storage_prefix": storage_prefix,
-            "crop_bounds": crop_bounds,
+            "crop_region": crop_region,
             "frame_rate": frame_rate,
             "layout_db_storage_key": layout_db_storage_key,
             "layout_db_hash": layout_db_hash,

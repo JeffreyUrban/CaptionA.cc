@@ -35,10 +35,10 @@ import { startModelVersionMonitor } from '~/services/model-version-monitor'
 //     "total": 376,
 //     "upToDate": 340,
 //     "recalculated": 36,
-//     "boundsChanged": 8,
+//     "cropRegionChanged": 8,
 //     "errors": 0,
 //     "changedVideos": [...],
-//     "message": "Checked 376 videos: 340 up-to-date, 8 bounds changed"
+//     "message": "Checked 376 videos: 340 up-to-date, 8 crop region changed"
 //   }
 //
 // ============================================================================
@@ -61,15 +61,15 @@ import { startModelVersionMonitor } from '~/services/model-version-monitor'
 //
 // 1. Background monitor runs periodically (Option 1 or 3)
 //    - Checks all videos for model version mismatches
-//    - Recalculates bounds if model changed
-//    - Marks captions as boundary_pending if bounds changed
+//    - Recalculates crop region if model changed
+//    - Marks captions as caption_frame_extents_pending if crop region changed
 //
 // 2. User loads Layout Analysis page
 //    - Detects if this specific video is stale (log only, don't block)
-//    - Shows current bounds (may be slightly stale until background runs)
+//    - Shows current crop region (may be slightly stale until background runs)
 //
 // 3. User sees "Pending Review" badge
-//    - Reviews updated boundaries
+//    - Reviews updated caption frame extents
 //    - Approves or adjusts as needed
 //
 // ============================================================================

@@ -20,16 +20,16 @@ interface RecalculationResult {
   videoId: string
   displayPath: string
   recalculated: boolean
-  boundsChanged: boolean
+  cropRegionChanged: boolean
   oldVersion: string | null
   newVersion: string
   error?: string
 }
 
 /**
- * Calculate new crop bounds from 'in' boxes
+ * Calculate new crop region from 'in' boxes
  */
-function calculateBoundsFromBoxes(
+function updateCropRegionFromBoxes(
   layoutDb: Database.Database
 ): { crop_left: number; crop_top: number; crop_right: number; crop_bottom: number } | null {
   // Get predicted 'in' boxes
@@ -76,12 +76,12 @@ function calculateBoundsFromBoxes(
 }
 
 /**
- * Update crop bounds in layout.db and mark captions as pending review in captions.db
+ * Update crop region in layout.db and mark captions as pending review in captions.db
  */
-function updateBoundsAndMarkPending(
+function updateCropRegionAndMarkPending(
   layoutDb: Database.Database,
   captionsDb: Database.Database | null,
-  newBounds: { crop_left: number; crop_top: number; crop_right: number; crop_bottom: number },
+  newCropRegion: { crop_left: number; crop_top: number; crop_right: number; crop_bottom: number },
   currentVersion: string
 ): void {
   layoutDb
@@ -93,17 +93,17 @@ function updateBoundsAndMarkPending(
       crop_top = ?,
       crop_right = ?,
       crop_bottom = ?,
-      crop_bounds_version = crop_bounds_version + 1,
+      crop_region_version = crop_region_version + 1,
       analysis_model_version = ?,
       updated_at = datetime('now')
     WHERE id = 1
   `
     )
     .run(
-      newBounds.crop_left,
-      newBounds.crop_top,
-      newBounds.crop_right,
-      newBounds.crop_bottom,
+      newCropRegion.crop_left,
+      newCropRegion.crop_top,
+      newCropRegion.crop_right,
+      newCropRegion.crop_bottom,
       currentVersion
     )
 
@@ -112,8 +112,8 @@ function updateBoundsAndMarkPending(
       .prepare(
         `
       UPDATE captions
-      SET boundary_pending = 1
-      WHERE boundary_state != 'gap'
+      SET caption_frame_extents_pending = 1
+      WHERE caption_frame_extents_state != 'gap'
     `
       )
       .run()
@@ -123,7 +123,12 @@ function updateBoundsAndMarkPending(
 interface VideoModelInfo {
   analysisVersion: string | null
   currentVersion: string
-  oldBounds: { crop_left: number; crop_top: number; crop_right: number; crop_bottom: number } | null
+  oldCropRegion: {
+    crop_left: number
+    crop_top: number
+    crop_right: number
+    crop_bottom: number
+  } | null
 }
 
 interface RecalculationDecision {
@@ -154,7 +159,7 @@ function getVideoModelInfo(layoutDb: Database.Database): VideoModelInfo | null {
   return {
     analysisVersion: layoutConfig?.analysis_model_version ?? null,
     currentVersion: modelInfo?.model_version ?? 'unknown',
-    oldBounds: layoutConfig
+    oldCropRegion: layoutConfig
       ? {
           crop_left: layoutConfig.crop_left,
           crop_top: layoutConfig.crop_top,
@@ -184,7 +189,7 @@ function shouldRecalculatePredictions(
 }
 
 /**
- * Update model version without changing bounds
+ * Update model version without changing crop region
  */
 function updateModelVersionOnly(layoutDb: Database.Database, currentVersion: string): void {
   layoutDb
@@ -193,17 +198,17 @@ function updateModelVersionOnly(layoutDb: Database.Database, currentVersion: str
 }
 
 /**
- * Check if bounds have changed
+ * Check if region has changed
  */
-function haveBoundsChanged(
-  oldBounds: { crop_left: number; crop_top: number; crop_right: number; crop_bottom: number },
-  newBounds: { crop_left: number; crop_top: number; crop_right: number; crop_bottom: number }
+function hasCropRegionChanged(
+  oldCropRegion: { crop_left: number; crop_top: number; crop_right: number; crop_bottom: number },
+  newCropRegion: { crop_left: number; crop_top: number; crop_right: number; crop_bottom: number }
 ): boolean {
   return (
-    newBounds.crop_left !== oldBounds.crop_left ||
-    newBounds.crop_top !== oldBounds.crop_top ||
-    newBounds.crop_right !== oldBounds.crop_right ||
-    newBounds.crop_bottom !== oldBounds.crop_bottom
+    newCropRegion.crop_left !== oldCropRegion.crop_left ||
+    newCropRegion.crop_top !== oldCropRegion.crop_top ||
+    newCropRegion.crop_right !== oldCropRegion.crop_right ||
+    newCropRegion.crop_bottom !== oldCropRegion.crop_bottom
   )
 }
 
@@ -214,12 +219,12 @@ function buildResult(
   videoId: string,
   displayPath: string,
   recalculated: boolean,
-  boundsChanged: boolean,
+  cropRegionChanged: boolean,
   oldVersion: string | null,
   newVersion: string,
   error?: string
 ): RecalculationResult {
-  return { videoId, displayPath, recalculated, boundsChanged, oldVersion, newVersion, error }
+  return { videoId, displayPath, recalculated, cropRegionChanged, oldVersion, newVersion, error }
 }
 
 /**
@@ -251,7 +256,7 @@ function checkVideoModelVersion(
       return null
     }
 
-    const { analysisVersion, currentVersion, oldBounds } = videoInfo
+    const { analysisVersion, currentVersion, oldCropRegion } = videoInfo
     const decision = shouldRecalculatePredictions(analysisVersion, currentVersion)
 
     if (!decision.shouldRecalculate) {
@@ -259,7 +264,7 @@ function checkVideoModelVersion(
       return buildResult(videoId, displayPath, false, false, analysisVersion, currentVersion)
     }
 
-    if (!oldBounds) {
+    if (!oldCropRegion) {
       layoutDb.close()
       return buildResult(
         videoId,
@@ -272,17 +277,17 @@ function checkVideoModelVersion(
       )
     }
 
-    const newBounds = calculateBoundsFromBoxes(layoutDb)
+    const newCropRegion = updateCropRegionFromBoxes(layoutDb)
 
-    if (!newBounds) {
+    if (!newCropRegion) {
       updateModelVersionOnly(layoutDb, currentVersion)
       layoutDb.close()
       return buildResult(videoId, displayPath, true, false, analysisVersion, currentVersion)
     }
 
-    const boundsChanged = haveBoundsChanged(oldBounds, newBounds)
+    const cropRegionChanged = hasCropRegionChanged(oldCropRegion, newCropRegion)
 
-    if (!boundsChanged) {
+    if (!cropRegionChanged) {
       updateModelVersionOnly(layoutDb, currentVersion)
       layoutDb.close()
       return buildResult(videoId, displayPath, true, false, analysisVersion, currentVersion)
@@ -294,7 +299,7 @@ function checkVideoModelVersion(
       captionsDb = new Database(captionsDbPath)
     }
 
-    updateBoundsAndMarkPending(layoutDb, captionsDb, newBounds, currentVersion)
+    updateCropRegionAndMarkPending(layoutDb, captionsDb, newCropRegion, currentVersion)
 
     layoutDb.close()
     if (captionsDb) {
@@ -336,7 +341,7 @@ export async function runModelVersionCheck(): Promise<{
   total: number
   upToDate: number
   recalculated: number
-  boundsChanged: number
+  cropRegionChanged: number
   errors: number
   changedVideos: Array<{ displayPath: string; oldVersion: string | null; newVersion: string }>
 }> {
@@ -354,7 +359,7 @@ export async function runModelVersionCheck(): Promise<{
     if (result) {
       results.push(result)
 
-      if (result.boundsChanged) {
+      if (result.cropRegionChanged) {
         const action = result.oldVersion === null ? 'Initial calculation' : 'Recalculated'
         console.log(
           `[ModelVersionMonitor] ${result.displayPath}: ${action} (${result.oldVersion ?? 'null'} → ${result.newVersion})`
@@ -367,10 +372,10 @@ export async function runModelVersionCheck(): Promise<{
     total: results.length,
     upToDate: results.filter(r => !r.recalculated).length,
     recalculated: results.filter(r => r.recalculated).length,
-    boundsChanged: results.filter(r => r.boundsChanged).length,
+    cropRegionChanged: results.filter(r => r.cropRegionChanged).length,
     errors: results.filter(r => r.error).length,
     changedVideos: results
-      .filter(r => r.boundsChanged)
+      .filter(r => r.cropRegionChanged)
       .map(r => ({
         displayPath: r.displayPath,
         oldVersion: r.oldVersion,
@@ -380,7 +385,7 @@ export async function runModelVersionCheck(): Promise<{
 
   console.log(
     `[ModelVersionMonitor] Complete: ${stats.upToDate} up-to-date, ` +
-      `${stats.recalculated} recalculated, ${stats.boundsChanged} bounds changed, ` +
+      `${stats.recalculated} recalculated, ${stats.cropRegionChanged} crop region changed, ` +
       `${stats.errors} errors`
   )
 

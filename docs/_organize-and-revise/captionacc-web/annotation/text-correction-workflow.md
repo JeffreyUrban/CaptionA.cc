@@ -33,7 +33,7 @@ Review OCR-extracted text from all frames in a caption sequence, identify charac
 ┌────────────────────────────────────────────────────────────────┐
 │  Nav: [Home] [Annotate]                    [Theme] [Settings]  │
 ├────────────────────────────────────────────────────────────────┤
-│  Mode: ○ Boundaries    ● Text Correction                       │
+│  Mode: ○ Caption Frame Extents    ● Text Correction                       │
 ├────────────────────────────────────────────────────────────────┤
 │                                                                 │
 │  ┌──────────────────────────────────┬───────────────────────┐  │

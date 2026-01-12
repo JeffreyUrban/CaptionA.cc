@@ -65,14 +65,14 @@ Key: STS credentials for all client/* content (media and databases).
 
 ## Database Summary
 
-| Database | Path | Access | Sync | Size | Purpose |
-|----------|------|--------|------|------|---------|
-| `layout.db.gz` | `client/` | STS credentials | CR-SQLite (bidirectional) | 0.2-2 MB | Boxes, annotations, bounds |
-| `captions.db.gz` | `client/` | STS credentials | CR-SQLite (client→server) | 0.04-0.8 MB | Caption boundaries, text |
-| `raw-ocr.db.gz` | `server/` | None | None | 0.5-5 MB | Full OCR results |
-| `layout-server.db.gz` | `server/` | None | None | 0.1-20 MB | ML model, analysis params |
-| `full_frames/*.jpg` | `client/` | STS credentials | None | 15-70 MB | Video frames at 0.1Hz |
-| `cropped_frames_v*/*.webm` | `client/` | STS credentials | None | 50-500 MB | VP9 video chunks |
+| Database | Path | Access | Sync | Size | Purpose                         |
+|----------|------|--------|------|------|---------------------------------|
+| `layout.db.gz` | `client/` | STS credentials | CR-SQLite (bidirectional) | 0.2-2 MB | Boxes, annotations, crop region |
+| `captions.db.gz` | `client/` | STS credentials | CR-SQLite (client→server) | 0.04-0.8 MB | Caption boundaries, text        |
+| `raw-ocr.db.gz` | `server/` | None | None | 0.5-5 MB | Full OCR results                |
+| `layout-server.db.gz` | `server/` | None | None | 0.1-20 MB | ML model, analysis params       |
+| `full_frames/*.jpg` | `client/` | STS credentials | None | 15-70 MB | Video frames at 0.1Hz           |
+| `cropped_frames_v*/*.webm` | `client/` | STS credentials | None | 50-500 MB | VP9 video chunks                |
 
 ---
 
@@ -82,12 +82,12 @@ These databases are downloaded directly by the client from Wasabi and synced usi
 
 ## layout.db
 
-Client-facing layout data: box positions, user annotations, server-pushed predictions, and crop bounds.
+Client-facing layout data: box positions, user annotations, server-pushed predictions, and crop region.
 
 **Sync:** Bidirectional via CR-SQLite
 - **Fixed (from OCR):** Box positions, text
 - **Client writes:** Box annotations (in/out/clear)
-- **Server writes:** Box predictions, confidence, crop bounds, anchor, vertical center
+- **Server writes:** Box predictions, confidence, crop region, anchor, vertical center
 
 ### Tables
 
@@ -122,17 +122,17 @@ OCR box data with user annotations and server predictions.
 
 #### `layout_config`
 
-Crop bounds and anchor configuration. Single row, server-populated.
+Crop region and anchor configuration. Single row, server-populated.
 
 | Column | Type | Source | Description |
 |--------|------|--------|-------------|
 | `id` | INTEGER PK | — | Single row (id=1) |
 | `frame_width` | INTEGER | Fixed | Video frame width |
 | `frame_height` | INTEGER | Fixed | Video frame height |
-| `crop_left` | REAL | **Server** | Left crop boundary (0-1) |
-| `crop_top` | REAL | Server | Top crop boundary (0-1) |
-| `crop_right` | REAL | Server | Right crop boundary (0-1) |
-| `crop_bottom` | REAL | Server | Bottom crop boundary (0-1) |
+| `crop_left` | REAL | **Server** | Left crop region (0-1) |
+| `crop_top` | REAL | Server | Top crop region (0-1) |
+| `crop_right` | REAL | Server | Right crop region (0-1) |
+| `crop_bottom` | REAL | Server | Bottom crop region (0-1) |
 | `anchor_type` | TEXT | Server | 'left', 'center', 'right' |
 | `anchor_position` | REAL | Server | Anchor position (0-1) |
 | `vertical_center` | REAL | Server | Vertical center (0-1) |
@@ -162,8 +162,8 @@ Caption boundaries, text, and annotation metadata.
 
 **Sync:** Client → Server via CR-SQLite (during client workflow)
 - **Fixed:** Schema, OCR-derived data, images
-- **Client writes:** Boundaries (confirmed), text, text notes, pending status (disable)
-- **Server writes (outside workflow):** Boundaries (predicted/gap/issue), pending status, OCR text
+- **Client writes:** Caption frame extents (confirmed), text, text notes, pending status (disable)
+- **Server writes (outside workflow):** Caption frame extents (predicted/gap/issue), pending status, OCR text
 
 **Workflow Lock:** Client is read-only during server processing. Server is read-only during client editing.
 
@@ -187,12 +187,12 @@ Primary caption storage.
 | Column | Type | Source | Description |
 |--------|------|--------|-------------|
 | `id` | INTEGER PK | — | Auto-increment ID |
-| **Boundaries** | | | |
+| **Caption Frame Extents** | | | |
 | `start_frame_index` | INTEGER NOT NULL | Client/Server | Caption start frame |
 | `end_frame_index` | INTEGER NOT NULL | Client/Server | Caption end frame |
-| `boundary_state` | TEXT NOT NULL | Client/Server | 'predicted', 'confirmed', 'gap', 'issue' |
-| `boundary_pending` | INTEGER NOT NULL | Client/Server | Needs review flag (1=pending) |
-| `boundary_updated_at` | TEXT NOT NULL | Auto | Last boundary update |
+| `caption_frame_extents_state` | TEXT NOT NULL | Client/Server | 'predicted', 'confirmed', 'gap', 'issue' |
+| `caption_frame_extents_pending` | INTEGER NOT NULL | Client/Server | Needs review flag (1=pending) |
+| `caption_frame_extents_updated_at` | TEXT NOT NULL | Auto | Last caption frame extents update |
 | **Text Content** | | | |
 | `text` | TEXT | Client/Server | Caption text |
 | `text_pending` | INTEGER NOT NULL | Client/Server | Needs review flag |
@@ -211,7 +211,7 @@ Primary caption storage.
 
 ```sql
 CREATE INDEX idx_captions_frame_range ON captions(start_frame_index, end_frame_index);
-CREATE INDEX idx_captions_boundary_pending ON captions(boundary_pending) WHERE boundary_pending = 1;
+CREATE INDEX idx_captions_caption_frame_extents_pending ON captions(caption_frame_extents_pending) WHERE caption_frame_extents_pending = 1;
 CREATE INDEX idx_captions_text_pending ON captions(text_pending) WHERE text_pending = 1;
 ```
 
@@ -419,7 +419,7 @@ Client                                    Server
 
 # Specialized Databases
 
-## Boundaries Inference Database
+## Caption Frame Extents Inference Database
 
 Per-run, immutable database storing ML inference results. Internal to data pipeline.
 

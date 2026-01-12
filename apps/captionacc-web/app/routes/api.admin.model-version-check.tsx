@@ -29,7 +29,7 @@ export async function action({ request }: ActionFunctionArgs) {
       JSON.stringify({
         success: true,
         ...results,
-        message: `Checked ${results.total} videos: ${results.upToDate} up-to-date, ${results.boundsChanged} bounds changed`,
+        message: `Checked ${results.total} videos: ${results.upToDate} up-to-date, ${results.cropRegionChanged} crop region changed`,
       }),
       {
         headers: { 'Content-Type': 'application/json' },

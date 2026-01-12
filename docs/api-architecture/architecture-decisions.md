@@ -27,11 +27,11 @@ All services scale to zero when idle.
 3. USER SESSION - LAYOUT (sync, Fly.io + CR-SQLite)
    Client ◄───STS credentials───▶ Wasabi (layout.db.gz, if needsDownload)
    Client ◄──── WebSocket ────▶ api (working copy on disk)
-   api: box annotations ↔ ML predictions ↔ crop bounds
+   api: box annotations ↔ ML predictions ↔ crop region
         Periodically uploads to Wasabi (idle/checkpoint)
 
 4. CROP + INFERENCE (async, Modal, blocks user)
-   modal-gpu: Wasabi (video) + bounds → crop_frames → inference → results → Wasabi
+   modal-gpu: Wasabi (video) + crop_region → crop_frames → inference → results → Wasabi
    api: process results → captions.db → sync to client
 
 5. USER SESSION - CAPTIONS (sync, Fly.io + CR-SQLite)
@@ -62,7 +62,7 @@ Client-facing databases (`layout.db`, `captions.db`) sync via CR-SQLite:
 
 | Database | Sync Direction | Purpose |
 |----------|----------------|---------|
-| `layout.db` | Bidirectional | Client: annotations. Server: predictions, bounds |
+| `layout.db` | Bidirectional | Client: annotations. Server: predictions, crop region |
 | `captions.db` | Client→Server | During caption workflow |
 
 **Why CR-SQLite:**

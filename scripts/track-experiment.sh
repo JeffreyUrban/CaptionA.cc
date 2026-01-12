@@ -74,7 +74,7 @@ echo -e "${GREEN}✓${NC} Checkpoint validated"
 echo ""
 
 # Copy to models directory
-MODEL_PATH="models/caption_boundaries/${MODEL_NAME}_${WANDB_RUN_ID}.pt"
+MODEL_PATH="models/caption_frame_extents/${MODEL_NAME}_${WANDB_RUN_ID}.pt"
 echo "Copying to versioned location: ${MODEL_PATH}"
 cp "${BEST_CHECKPOINT}" "${MODEL_PATH}"
 echo -e "${GREEN}✓${NC} Model copied"

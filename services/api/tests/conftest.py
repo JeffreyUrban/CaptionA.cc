@@ -68,10 +68,10 @@ def captions_db(temp_db_dir: Path) -> Generator[Path, None, None]:
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             start_frame_index INTEGER NOT NULL,
             end_frame_index INTEGER NOT NULL,
-            boundary_state TEXT NOT NULL DEFAULT 'predicted'
-                CHECK (boundary_state IN ('predicted', 'confirmed', 'gap')),
-            boundary_pending INTEGER NOT NULL DEFAULT 1,
-            boundary_updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+            caption_frame_extents_state TEXT NOT NULL DEFAULT 'predicted'
+                CHECK (caption_frame_extents_state IN ('predicted', 'confirmed', 'gap')),
+            caption_frame_extents_pending INTEGER NOT NULL DEFAULT 1,
+            caption_frame_extents_updated_at TEXT NOT NULL DEFAULT (datetime('now')),
             text TEXT,
             text_pending INTEGER NOT NULL DEFAULT 1,
             text_status TEXT,
@@ -101,7 +101,7 @@ def seeded_captions_db(captions_db: Path) -> Path:
     conn = sqlite3.connect(str(captions_db))
     conn.executescript(
         """
-        INSERT INTO captions (id, start_frame_index, end_frame_index, boundary_state, boundary_pending, text)
+        INSERT INTO captions (id, start_frame_index, end_frame_index, caption_frame_extents_state, caption_frame_extents_pending, text)
         VALUES
             (1, 0, 100, 'confirmed', 0, 'First caption'),
             (2, 101, 200, 'predicted', 1, NULL),
@@ -219,7 +219,7 @@ def layout_db(temp_db_dir: Path) -> Generator[Path, None, None]:
             bottom_edge_std REAL,
             horizontal_std_slope REAL,
             horizontal_std_intercept REAL,
-            crop_bounds_version INTEGER NOT NULL DEFAULT 1,
+            crop_region_version INTEGER NOT NULL DEFAULT 1,
             analysis_model_version TEXT,
             updated_at TEXT NOT NULL DEFAULT (datetime('now'))
         );
@@ -264,7 +264,7 @@ def seeded_layout_db(layout_db: Path) -> Path:
         """
         INSERT INTO video_layout_config (
             id, frame_width, frame_height, crop_left, crop_top, crop_right, crop_bottom,
-            selection_mode, crop_bounds_version
+            selection_mode, crop_region_version
         ) VALUES (1, 1920, 1080, 10, 20, 30, 40, 'manual', 1);
 
         INSERT INTO full_frame_box_labels (frame_index, box_index, label, label_source)
@@ -494,7 +494,7 @@ def seeded_boxes_layout_db(layout_db: Path) -> Path:
         """
         INSERT INTO video_layout_config (
             id, frame_width, frame_height, crop_left, crop_top, crop_right, crop_bottom,
-            selection_mode, crop_bounds_version
+            selection_mode, crop_region_version
         ) VALUES (1, 1920, 1080, 10, 20, 30, 40, 'manual', 1);
 
         -- Labels that match seeded OCR data (frame 0 boxes 0,1; frame 1 boxes 0,1)

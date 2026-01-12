@@ -60,7 +60,7 @@ def setup_dvc_for_video(video_dir: Path, dry_run: bool = False) -> dict:
         "video.db",  # Immutable frames and metadata
         "fullOCR.db",  # OCR detection results
         "layout.db",  # Box annotations and classification model
-        "captions.db",  # Caption boundaries and text
+        "captions.db",  # Caption frame extents and text
     ]
 
     stats = {

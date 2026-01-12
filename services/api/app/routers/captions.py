@@ -1,4 +1,4 @@
-"""Caption CRUD endpoints for caption boundary management."""
+"""Caption CRUD endpoints for caption frame extents management."""
 
 from fastapi import APIRouter, HTTPException, Query, status
 
@@ -141,7 +141,7 @@ async def batch_captions(
                         caption_create = CaptionCreate(
                             startFrameIndex=create_data.startFrameIndex,
                             endFrameIndex=create_data.endFrameIndex,
-                            boundaryState=create_data.boundaryState,
+                            captionFrameExtentsState=create_data.captionFrameExtentsState,
                             text=create_data.text,
                         )
                         caption = repo.create_caption(caption_create)
@@ -314,7 +314,7 @@ async def update_caption(
     video_id: str, caption_id: int, body: CaptionUpdate, auth: Auth
 ):
     """
-    Update caption boundaries with automatic overlap resolution.
+    Update caption frame extents with automatic overlap resolution.
 
     This endpoint handles the complex overlap resolution logic:
     - Captions completely contained in the new range are deleted
@@ -350,7 +350,7 @@ async def update_caption_text(
     """
     Update caption text content.
 
-    Use this endpoint to set the caption text after boundary editing.
+    Use this endpoint to set the caption text after caption frame extents editing.
     Also accepts optional textStatus and textNotes fields.
     """
     db_manager = get_database_manager()

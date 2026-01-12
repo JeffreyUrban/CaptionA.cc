@@ -12,8 +12,8 @@ from app.models.tables.layout_db import (
     VideoPreferences,
 )
 from app.models.tables.ocr_db import FullFrameOcr
-from app.models.tables.boundaries_db import (
-    BoundariesRunMetadata,
+from app.models.tables.caption_frame_extents_db import (
+    CaptionFrameExtentsRunMetadata,
     PairResult,
 )
 
@@ -30,6 +30,6 @@ __all__ = [
     # fullOCR.db
     "FullFrameOcr",
     # boundaries inference db
-    "BoundariesRunMetadata",
+    "CaptionFrameExtentsRunMetadata",
     "PairResult",
 ]

@@ -1,4 +1,4 @@
-import type { Frame } from '~/types/boundaries'
+import type { Frame } from '~/caption-frame-extents'
 
 interface FrameViewerProps {
   currentFrameIndex: number

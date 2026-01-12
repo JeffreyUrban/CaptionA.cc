@@ -106,7 +106,7 @@ export function useReviewLabelsCanvas({
 
     if (viewMode === 'frame' && currentFrameBoxes) {
       drawBoxes(ctx, currentFrameBoxes, canvasSize.width, hoveredBoxIndex)
-      drawCropBounds(ctx, currentFrameBoxes, canvasSize.width, canvasSize.height)
+      drawCropRegion(ctx, currentFrameBoxes, canvasSize.width, canvasSize.height)
     }
 
     if (isSelecting && selectionStart && selectionCurrent && selectionLabel) {
@@ -300,16 +300,16 @@ function drawBoxLabel(
   ctx.textAlign = 'left'
 }
 
-function drawCropBounds(
+function drawCropRegion(
   ctx: CanvasRenderingContext2D,
   frameBoxes: FrameBoxesData,
   canvasWidth: number,
   canvasHeight: number
 ): void {
-  const cropLeft = (frameBoxes.cropBounds.left / frameBoxes.frameWidth) * canvasWidth
-  const cropTop = (frameBoxes.cropBounds.top / frameBoxes.frameHeight) * canvasHeight
-  const cropRight = (frameBoxes.cropBounds.right / frameBoxes.frameWidth) * canvasWidth
-  const cropBottom = (frameBoxes.cropBounds.bottom / frameBoxes.frameHeight) * canvasHeight
+  const cropLeft = (frameBoxes.cropRegion.left / frameBoxes.frameWidth) * canvasWidth
+  const cropTop = (frameBoxes.cropRegion.top / frameBoxes.frameHeight) * canvasHeight
+  const cropRight = (frameBoxes.cropRegion.right / frameBoxes.frameWidth) * canvasWidth
+  const cropBottom = (frameBoxes.cropRegion.bottom / frameBoxes.frameHeight) * canvasHeight
 
   ctx.strokeStyle = '#facc15'
   ctx.lineWidth = 2

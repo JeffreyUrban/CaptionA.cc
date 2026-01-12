@@ -23,7 +23,7 @@ async def get_layout(video_id: str, auth: Auth):
     """
     Get layout configuration.
 
-    Returns crop bounds, selection bounds, and layout analysis parameters.
+    Returns crop region, selection region, and layout analysis parameters.
     """
     db_manager = get_layout_database_manager()
 
@@ -50,8 +50,8 @@ async def update_layout(video_id: str, body: LayoutUpdate, auth: Auth):
     Update layout configuration.
 
     Supports partial updates. Updates can include:
-    - cropBounds: Crop region for the video
-    - selectionBounds: Selection region within the crop
+    - cropRegion: Crop region for the video
+    - selectionRegion: Selection region within the video
     - selectionMode: disabled, manual, or auto
     - layoutParams: ML analysis parameters
     """
@@ -69,20 +69,20 @@ async def update_layout(video_id: str, body: LayoutUpdate, auth: Auth):
                     detail="Layout not initialized",
                 )
 
-            # Build update for crop/selection bounds
+            # Build update for crop/selection region
             config_update = VideoLayoutConfigUpdate()
 
-            if body.cropBounds is not None:
-                config_update.cropLeft = body.cropBounds.left
-                config_update.cropTop = body.cropBounds.top
-                config_update.cropRight = body.cropBounds.right
-                config_update.cropBottom = body.cropBounds.bottom
+            if body.cropRegion is not None:
+                config_update.cropLeft = body.cropRegion.left
+                config_update.cropTop = body.cropRegion.top
+                config_update.cropRight = body.cropRegion.right
+                config_update.cropBottom = body.cropRegion.bottom
 
-            if body.selectionBounds is not None:
-                config_update.selectionLeft = body.selectionBounds.left
-                config_update.selectionTop = body.selectionBounds.top
-                config_update.selectionRight = body.selectionBounds.right
-                config_update.selectionBottom = body.selectionBounds.bottom
+            if body.selectionRegion is not None:
+                config_update.selectionLeft = body.selectionRegion.left
+                config_update.selectionTop = body.selectionRegion.top
+                config_update.selectionRight = body.selectionRegion.right
+                config_update.selectionBottom = body.selectionRegion.bottom
 
             if body.selectionMode is not None:
                 config_update.selectionMode = body.selectionMode

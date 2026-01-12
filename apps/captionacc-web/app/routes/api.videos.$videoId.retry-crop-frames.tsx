@@ -68,7 +68,7 @@ export async function action({ params }: ActionFunctionArgs) {
         )
       }
 
-      // Get crop bounds from video_layout_config
+      // Get crop region from video_layout_config
       const config = db
         .prepare(
           `
@@ -152,7 +152,7 @@ export async function action({ params }: ActionFunctionArgs) {
       videoPath: videoFilePath,
       dbPath,
       outputDir: resolve(videoDir, 'crop_frames'),
-      cropBounds: {
+      cropRegion: {
         left: layoutConfig.crop_left,
         top: layoutConfig.crop_top,
         right: layoutConfig.crop_right,

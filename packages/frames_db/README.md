@@ -12,7 +12,7 @@ This package provides utilities for storing and retrieving video frames. Frames 
 - **Retrieval**: Read frames by index or range
 - **Conversions**: Convert frames to PIL Image, OpenCV array, or temporary files
 - **Performance**: Batched writes with transactions for efficiency
-- **Invalidation**: Support for crop_bounds_version tracking
+- **Invalidation**: Support for crop_region_version tracking
 
 ## Usage
 

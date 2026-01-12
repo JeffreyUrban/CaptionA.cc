@@ -98,7 +98,7 @@ import { queueCropFramesProcessing } from '~/services/crop-frames-processing'
 queueCropFramesProcessing({
   videoId,
   videoPath,
-  cropBounds: {
+  cropRegion: {
     left: layoutConfig.crop_left,
     top: layoutConfig.crop_top,
     right: layoutConfig.crop_right,
@@ -116,13 +116,13 @@ const result = await queueCropFramesProcessing({
   videoPath: getVideoFile(videoId),
   dbPath: getCaptionsDbPath(videoId),
   outputDir: resolve(getVideoDir(videoId), 'crop_frames'),
-  cropBounds: {
+  cropRegion: {
     left: layoutConfig.crop_left,
     top: layoutConfig.crop_top,
     right: layoutConfig.crop_right,
     bottom: layoutConfig.crop_bottom,
   },
-  cropBoundsVersion: layoutConfig.crop_bounds_version,
+  cropRegionVersion: layoutConfig.crop_region_version,
 })
 
 console.log(`[Prefect] Queued crop frames: ${result.flowRunId}`)

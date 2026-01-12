@@ -107,7 +107,7 @@ def download_layout_db_from_wasabi(
 def extract_cropped_frames(
     video_path: str,
     output_dir: str,
-    crop_bounds: dict[str, int],
+    crop_region: dict[str, int],
     frame_rate: float = 10.0,
 ) -> tuple[str, int]:
     """
@@ -116,22 +116,22 @@ def extract_cropped_frames(
     Args:
         video_path: Path to video file
         output_dir: Directory to write frames
-        crop_bounds: Dict with keys: left, top, right, bottom
+        crop_region: Dict with keys: left, top, right, bottom
         frame_rate: Frame extraction rate in Hz (default 10.0)
 
     Returns:
         Tuple of (output_dir, frame_count)
     """
     print(f"[Crop] Extracting frames from {video_path}")
-    print(f"[Crop] Bounds: {crop_bounds}")
+    print(f"[Crop] Region: {crop_region}")
     print(f"[Crop] Rate: {frame_rate}Hz")
 
     # Ensure output directory exists
     Path(output_dir).mkdir(parents=True, exist_ok=True)
 
-    # Format crop bounds as string
+    # Format crop region as string
     crop_str = (
-        f"{crop_bounds['left']},{crop_bounds['top']},{crop_bounds['right']},{crop_bounds['bottom']}"
+        f"{crop_region['left']},{crop_region['top']},{crop_region['right']},{crop_region['bottom']}"
     )
 
     # Get absolute path to crop_frames pipeline
@@ -402,7 +402,7 @@ def create_version_record(
     video_id: str,
     tenant_id: str,
     version: int,
-    crop_bounds: dict[str, int],
+    crop_region: dict[str, int],
     frame_rate: float,
     layout_db_storage_key: str,
     layout_db_hash: str,
@@ -426,7 +426,7 @@ def create_version_record(
         tenant_id=tenant_id,
         version=version,
         storage_prefix=storage_prefix,
-        crop_bounds=crop_bounds,
+        crop_region=crop_region,
         frame_rate=frame_rate,
         layout_db_storage_key=layout_db_storage_key,
         layout_db_hash=layout_db_hash,
@@ -490,7 +490,7 @@ def crop_frames_to_webm_flow(
     video_id: str,
     tenant_id: str = DEFAULT_TENANT_ID,
     filename: str | None = None,
-    crop_bounds: dict[str, int] | None = None,
+    crop_region: dict[str, int] | None = None,
     frame_rate: float = 10.0,
     created_by_user_id: str | None = None,
 ) -> dict[str, Any]:
@@ -512,7 +512,7 @@ def crop_frames_to_webm_flow(
         video_id: Video UUID
         tenant_id: Tenant UUID (defaults to demo tenant)
         filename: Video filename (required if not in Supabase)
-        crop_bounds: Crop bounds dict {left, top, right, bottom} (if not provided, reads from layout.db)
+        crop_region: Crop region dict {left, top, right, bottom} (if not provided, reads from layout.db)
         frame_rate: Frame extraction rate in Hz (default 10.0)
         created_by_user_id: User UUID who initiated
 
@@ -563,9 +563,9 @@ def crop_frames_to_webm_flow(
 
             layout_db_storage_key = WasabiClient.build_storage_key(tenant_id, video_id, "layout.db")
 
-            # TODO: Read crop_bounds from layout.db if not provided
-            if not crop_bounds:
-                raise ValueError("crop_bounds parameter is required (TODO: read from layout.db)")
+            # TODO: Read crop_region from layout.db if not provided
+            if not crop_region:
+                raise ValueError("crop_region parameter is required (TODO: read from layout.db)")
 
             # Step 3: Get next version number
             print("\n📋 Step 3/8: Getting next version number...")
@@ -579,7 +579,7 @@ def crop_frames_to_webm_flow(
                 video_id=video_id,
                 tenant_id=tenant_id,
                 version=version,
-                crop_bounds=crop_bounds,
+                crop_region=crop_region,
                 frame_rate=frame_rate,
                 layout_db_storage_key=layout_db_storage_key,
                 layout_db_hash=layout_db_hash,
@@ -595,7 +595,7 @@ def crop_frames_to_webm_flow(
             frames_dir, total_frames = extract_cropped_frames(
                 video_path=video_path,
                 output_dir=frames_dir,
-                crop_bounds=crop_bounds,
+                crop_region=crop_region,
                 frame_rate=frame_rate,
             )
 

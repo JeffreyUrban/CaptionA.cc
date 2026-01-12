@@ -50,12 +50,12 @@ async def get_stats(video_id: str, auth: Auth):
 
             # Calculate covered frames (non-gap captions)
             for caption in captions:
-                if caption.boundaryState.value != "gap":
+                if caption.captionFrameExtentsState.value != "gap":
                     covered_frames += caption.endFrameIndex - caption.startFrameIndex + 1
 
                 # Count captions needing text
                 if caption.textPending or (
-                    caption.text is None and caption.boundaryState.value != "gap"
+                    caption.text is None and caption.captionFrameExtentsState.value != "gap"
                 ):
                     needs_text_count += 1
 

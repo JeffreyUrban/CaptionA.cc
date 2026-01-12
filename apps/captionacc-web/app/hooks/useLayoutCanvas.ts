@@ -40,12 +40,12 @@ interface UseLayoutCanvasParams {
   annotationsSinceRecalc: number
   pulseStartTime: number
   frameBoxesCache: React.RefObject<Map<number, FrameBoxesData>>
-  showCropBoundsInFrame: boolean
+  showCropRegionInFrame: boolean
   setCurrentFrameBoxes: React.Dispatch<React.SetStateAction<FrameBoxesData | null>>
   setHasUnsyncedAnnotations: (value: boolean) => void
   setAnnotationsSinceRecalc: (count: number) => void
   handleBoxClick: (boxIndex: number, label: 'in' | 'out') => Promise<void>
-  recalculateCropBounds: () => Promise<void>
+  recalculateCropRegion: () => Promise<void>
   loadAnalysisBoxes: () => Promise<void>
 }
 
@@ -75,12 +75,12 @@ export function useLayoutCanvas(params: UseLayoutCanvasParams): UseLayoutCanvasR
     annotationsSinceRecalc,
     pulseStartTime,
     frameBoxesCache,
-    showCropBoundsInFrame,
+    showCropRegionInFrame,
     setCurrentFrameBoxes,
     setHasUnsyncedAnnotations,
     setAnnotationsSinceRecalc,
     handleBoxClick,
-    recalculateCropBounds,
+    recalculateCropRegion,
     loadAnalysisBoxes,
   } = params
 
@@ -152,8 +152,8 @@ export function useLayoutCanvas(params: UseLayoutCanvasParams): UseLayoutCanvasR
         })
       })
 
-      // Draw crop bounds overlay if enabled
-      if (showCropBoundsInFrame && layoutConfig) {
+      // Draw crop region overlay if enabled
+      if (showCropRegionInFrame && layoutConfig) {
         ctx.strokeStyle = '#ef4444' // red-500
         ctx.lineWidth = 2
         ctx.setLineDash([15, 5])
@@ -193,7 +193,7 @@ export function useLayoutCanvas(params: UseLayoutCanvasParams): UseLayoutCanvasR
     selectionLabel,
     boxHighlightMode,
     pulseStartTime,
-    showCropBoundsInFrame,
+    showCropRegionInFrame,
   ])
 
   useEffect(() => {
@@ -231,7 +231,7 @@ export function useLayoutCanvas(params: UseLayoutCanvasParams): UseLayoutCanvasR
         if (result.newlyAnnotatedBoxes && result.newlyAnnotatedBoxes > 0) {
           const newCount = annotationsSinceRecalc + result.newlyAnnotatedBoxes
           setAnnotationsSinceRecalc(newCount)
-          if (newCount >= RECALC_THRESHOLD) await recalculateCropBounds()
+          if (newCount >= RECALC_THRESHOLD) await recalculateCropRegion()
         }
       } catch (err) {
         console.error('Failed to bulk annotate:', err)
@@ -244,7 +244,7 @@ export function useLayoutCanvas(params: UseLayoutCanvasParams): UseLayoutCanvasR
       loadAnalysisBoxes,
       annotationsSinceRecalc,
       setAnnotationsSinceRecalc,
-      recalculateCropBounds,
+      recalculateCropRegion,
       setHasUnsyncedAnnotations,
       frameBoxesCache,
     ]
@@ -278,7 +278,7 @@ export function useLayoutCanvas(params: UseLayoutCanvasParams): UseLayoutCanvasR
         if (newlyAnnotatedCount > 0) {
           const newCount = annotationsSinceRecalc + newlyAnnotatedCount
           setAnnotationsSinceRecalc(newCount)
-          if (newCount >= RECALC_THRESHOLD) await recalculateCropBounds()
+          if (newCount >= RECALC_THRESHOLD) await recalculateCropRegion()
         }
       } catch (err) {
         console.error('Failed to save annotations:', err)
@@ -290,7 +290,7 @@ export function useLayoutCanvas(params: UseLayoutCanvasParams): UseLayoutCanvasR
       videoId,
       selectedFrameIndex,
       annotationsSinceRecalc,
-      recalculateCropBounds,
+      recalculateCropRegion,
       setCurrentFrameBoxes,
       setHasUnsyncedAnnotations,
       setAnnotationsSinceRecalc,

@@ -121,7 +121,7 @@ export function drawFrameBox(ctx: CanvasRenderingContext2D, params: BoxRenderPar
 }
 
 /**
- * Draw layout parameter overlays (crop bounds, selection rect, guidelines)
+ * Draw layout parameter overlays (crop region, selection rect, guidelines)
  */
 export function drawLayoutOverlays(
   ctx: CanvasRenderingContext2D,
@@ -130,7 +130,7 @@ export function drawLayoutOverlays(
   canvasWidth: number,
   canvasHeight: number
 ): void {
-  // Crop bounds (red, dashed)
+  // Crop region (red, dashed)
   ctx.strokeStyle = '#ef4444'
   ctx.lineWidth = 2
   ctx.setLineDash([15, 5])
@@ -375,7 +375,7 @@ export function generateAnalysisThumbnail(
       ctx.fillRect(boxX, boxY, boxWidth, boxHeight)
     })
 
-    // Draw crop bounds overlay (red, dashed) - scaled for thumbnail
+    // Draw crop region overlay (red, dashed) - scaled for thumbnail
     ctx.strokeStyle = '#ef4444'
     ctx.lineWidth = 1
     ctx.setLineDash([8, 3])

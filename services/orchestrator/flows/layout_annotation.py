@@ -5,7 +5,7 @@ Handles layout annotation database synchronization with Wasabi:
 1. Download video.db and fullOCR.db from Wasabi (for annotation UI)
 2. Download existing layout.db if it exists (to continue annotations)
 3. Upload updated layout.db after user annotations
-4. Detect crop bounds changes and trigger cropped frames regeneration if needed
+4. Detect crop region changes and trigger cropped frames regeneration if needed
 
 Layout.db contains:
 - full_frame_box_labels: User annotations marking caption regions
@@ -112,18 +112,18 @@ def upload_layout_db_to_wasabi(
 
 
 @task(
-    name="detect-crop-bounds-change",
+    name="detect-crop-region-change",
     tags=["detection"],
     log_prints=True,
 )
-def detect_crop_bounds_change(
+def detect_crop_region_change(
     video_id: str,
     layout_db_path: str,
 ) -> tuple[bool, dict[str, int] | None]:
     """
-    Detect if crop bounds have changed in layout.db.
+    Detect if crop region have changed in layout.db.
 
-    Compares the current crop bounds with the bounds used in the active
+    Compares the current crop region with the crop region used in the active
     cropped frames version (if it exists).
 
     Args:
@@ -131,16 +131,16 @@ def detect_crop_bounds_change(
         layout_db_path: Path to layout.db
 
     Returns:
-        Tuple of (bounds_changed, new_crop_bounds)
+        Tuple of (crop_region_changed, new_crop_region)
     """
-    print("[Detection] Checking for crop bounds changes")
+    print("[Detection] Checking for crop region changes")
 
-    # Get crop bounds from layout.db
-    # This requires reading the full_frame_box_labels table and computing bounds
+    # Get crop region from layout.db
+    # This requires reading the full_frame_box_labels table and computing crop region
     # For now, we'll return a placeholder
-    # TODO: Implement actual crop bounds extraction from layout.db
+    # TODO: Implement actual crop region extraction from layout.db
 
-    print("[Detection] TODO: Extract crop bounds from layout.db")
+    print("[Detection] TODO: Extract crop region from layout.db")
 
     # Get active cropped frames version
     versions_repo = CroppedFramesVersionRepository()
@@ -150,13 +150,13 @@ def detect_crop_bounds_change(
         print("[Detection] No active cropped frames version exists")
         return True, None  # Treat as changed if no version exists
 
-    previous_bounds = active_version.get("crop_bounds")
-    print(f"[Detection] Previous crop bounds: {previous_bounds}")
+    previous_crop_region = active_version.get("crop_region")
+    print(f"[Detection] Previous crop region: {previous_crop_region}")
 
-    # TODO: Compare bounds
-    bounds_changed = False  # Placeholder
+    # TODO: Compare crop region
+    crop_region_changed = False  # Placeholder
 
-    return bounds_changed, previous_bounds  # type: ignore[return-value]
+    return crop_region_changed, previous_crop_region  # type: ignore[return-value]
 
 
 @flow(
@@ -174,14 +174,14 @@ def upload_layout_db_flow(
 
     This flow:
     1. Uploads layout.db to Wasabi
-    2. Detects if crop bounds changed
-    3. Optionally triggers cropped frames regeneration if bounds changed
+    2. Detects if crop region changed
+    3. Optionally triggers cropped frames regeneration if crop region changed
 
     Args:
         video_id: Video UUID
         layout_db_path: Local path to annotated layout.db
         tenant_id: Tenant UUID (defaults to demo tenant)
-        trigger_crop_regen: Whether to auto-trigger crop regeneration on bounds change
+        trigger_crop_regen: Whether to auto-trigger crop regeneration on crop region change
 
     Returns:
         Dict with upload status and whether crop regeneration was triggered
@@ -197,17 +197,17 @@ def upload_layout_db_flow(
             local_path=layout_db_path,
         )
 
-        # Step 2: Detect crop bounds changes
-        print("\n🔍 Step 2/2: Detecting crop bounds changes...")
-        bounds_changed, previous_bounds = detect_crop_bounds_change(
+        # Step 2: Detect crop region changes
+        print("\n🔍 Step 2/2: Detecting crop region changes...")
+        crop_region_changed, previous_crop_region = detect_crop_region_change(
             video_id=video_id,
             layout_db_path=layout_db_path,
         )
 
         crop_regen_triggered = False
 
-        if bounds_changed and trigger_crop_regen:
-            print("\n⚠️  Crop bounds have changed!")
+        if crop_region_changed and trigger_crop_regen:
+            print("\n⚠️  Crop region have changed!")
             print("🎬 Triggering cropped frames regeneration...")
 
             # TODO: Queue crop-frames-to-webm flow
@@ -222,7 +222,7 @@ def upload_layout_db_flow(
         return {
             "video_id": video_id,
             "storage_key": storage_key,
-            "bounds_changed": bounds_changed,
+            "crop_region_changed": crop_region_changed,
             "crop_regen_triggered": crop_regen_triggered,
             "status": "completed",
         }

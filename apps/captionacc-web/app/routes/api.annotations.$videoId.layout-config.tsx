@@ -1,7 +1,7 @@
 /**
  * Layout configuration API endpoint.
  *
- * PUT: Update layout configuration (crop bounds, selection bounds, selection mode, layout params)
+ * PUT: Update layout configuration (crop region, selection crop region, selection mode, layout params)
  */
 
 import { type ActionFunctionArgs } from 'react-router'
@@ -21,15 +21,15 @@ import {
  * PUT - Update layout configuration.
  *
  * Request body:
- * - cropBounds?: { left, top, right, bottom } - Crop bounds in pixels
- * - selectionBounds?: { left, top, right, bottom } - Selection bounds in pixels
+ * - cropRegion?: { left, top, right, bottom } - Crop region in pixels
+ * - selectionRegion?: { left, top, right, bottom } - Selection region in pixels
  * - selectionMode?: 'hard' | 'soft' | 'disabled' - Selection mode
  * - layoutParams?: { verticalPosition, verticalStd, boxHeight, boxHeightStd, anchorType, anchorPosition }
  *
  * Response:
  * - success: boolean
- * - boundsChanged: boolean - Whether crop bounds actually changed
- * - framesInvalidated: number - Number of frames invalidated (if bounds changed)
+ * - cropRegionChanged: boolean - Whether crop region actually changed
+ * - framesInvalidated: number - Number of frames invalidated (if crop region changed)
  * - layoutParamsChanged: boolean - Whether layout parameters changed
  */
 export async function action({ params, request }: ActionFunctionArgs) {

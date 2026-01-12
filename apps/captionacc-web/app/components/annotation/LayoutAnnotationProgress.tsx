@@ -25,7 +25,7 @@ export function LayoutAnnotationProgress({
           </div>
         </div>
         <div className="mt-2 text-xs text-amber-700 dark:text-amber-400">
-          Currently {boxStats.totalBoxes} boxes are all marked as noise. The crop bounds calculation
+          Currently {boxStats.totalBoxes} boxes are all marked as noise. The crop region calculation
           needs at least some caption boxes to work effectively.
         </div>
         <div className="mt-2 text-xs font-medium text-amber-800 dark:text-amber-300">
@@ -38,7 +38,7 @@ export function LayoutAnnotationProgress({
   return (
     <div className="rounded-md border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-950">
       <div className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-        Crop Bounds Auto-Update
+        Crop Region Auto-Update
       </div>
       {annotationsSinceRecalc >= recalcThreshold ? (
         <>
@@ -49,7 +49,7 @@ export function LayoutAnnotationProgress({
             <div className="h-2 rounded-full bg-blue-500 animate-pulse" style={{ width: '100%' }} />
           </div>
           <div className="mt-1 text-xs text-gray-500 dark:text-gray-500">
-            Recalculating crop bounds and predictions
+            Recalculating crop region and predictions
           </div>
         </>
       ) : (
@@ -67,7 +67,7 @@ export function LayoutAnnotationProgress({
             />
           </div>
           <div className="mt-1 text-xs text-gray-500 dark:text-gray-500">
-            Crop bounds will recalculate automatically after{' '}
+            Crop region will recalculate automatically after{' '}
             {recalcThreshold - annotationsSinceRecalc} more annotations
           </div>
         </>

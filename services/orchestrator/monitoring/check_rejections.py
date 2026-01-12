@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check for unacknowledged boundary inference rejections.
+"""Check for unacknowledged caption frame extents inference rejections.
 
 Usage:
     python services/orchestrator/monitoring/check_rejections.py
@@ -44,7 +44,7 @@ def format_timestamp(ts_str: str) -> str:
 
 def main():
     console.print("\n[cyan]═══════════════════════════════════════════════════════[/cyan]")
-    console.print("[cyan]   Boundary Inference Rejections Monitor[/cyan]")
+    console.print("[cyan]   Caption Frame Extents Inference Rejections Monitor[/cyan]")
     console.print("[cyan]═══════════════════════════════════════════════════════[/cyan]\n")
 
     # Get summary statistics

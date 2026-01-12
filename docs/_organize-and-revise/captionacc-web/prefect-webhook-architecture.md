@@ -8,7 +8,7 @@ Instead of client-side polling, we use **optimistic updates** + **Prefect webhoo
 
 ### 1. Optimistic Updates (Immediate UI Response)
 
-When a boundary annotation is saved:
+When a caption frame extents annotation is saved:
 
 ```typescript
 // annotation-crud-service.ts: markImageForRegeneration()
@@ -219,7 +219,7 @@ python serve_flows.py
 Then test the real-time updates:
 
 1. **Open videos page** - Check browser console for `[SSE] Connected`
-2. **Save a boundary annotation** - Status should show "queued" immediately
+2. **Save a caption frame extents annotation** - Status should show "queued" immediately
 3. **Watch Prefect logs** - Flow should start within seconds
 4. **Wait for completion** (5-15s depending on caption length)
 5. **Watch browser console** - Should see:

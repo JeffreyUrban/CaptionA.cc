@@ -108,7 +108,7 @@ CREATE TABLE captionacc_production.cropped_frames_versions (
   storage_prefix TEXT NOT NULL,
   layout_db_storage_key TEXT,
   layout_db_hash TEXT,
-  crop_bounds JSONB,
+  crop_region JSONB,
   frame_rate REAL DEFAULT 10.0,
   chunk_count INTEGER,
   total_frames INTEGER,
@@ -161,7 +161,7 @@ CREATE TABLE captionacc_production.daily_uploads (
 );
 
 -- Boundary inference runs
-CREATE TABLE captionacc_production.boundary_inference_runs (
+CREATE TABLE captionacc_production.caption_frame_extents_inference_runs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   run_id TEXT UNIQUE NOT NULL,
   video_id UUID NOT NULL REFERENCES captionacc_production.videos(id) ON DELETE CASCADE,
@@ -180,7 +180,7 @@ CREATE TABLE captionacc_production.boundary_inference_runs (
 );
 
 -- Boundary inference jobs
-CREATE TABLE captionacc_production.boundary_inference_jobs (
+CREATE TABLE captionacc_production.caption_frame_extents_inference_jobs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   video_id UUID NOT NULL REFERENCES captionacc_production.videos(id) ON DELETE CASCADE,
   tenant_id UUID NOT NULL,
@@ -191,12 +191,12 @@ CREATE TABLE captionacc_production.boundary_inference_jobs (
   started_at TIMESTAMPTZ,
   completed_at TIMESTAMPTZ,
   error_message TEXT,
-  inference_run_id UUID REFERENCES captionacc_production.boundary_inference_runs(id) ON DELETE SET NULL,
+  inference_run_id UUID REFERENCES captionacc_production.caption_frame_extents_inference_runs(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Boundary inference rejections
-CREATE TABLE captionacc_production.boundary_inference_rejections (
+CREATE TABLE captionacc_production.caption_frame_extents_inference_rejections (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   video_id UUID NOT NULL REFERENCES captionacc_production.videos(id) ON DELETE CASCADE,
   tenant_id UUID NOT NULL,
@@ -291,12 +291,12 @@ CREATE INDEX idx_invite_codes_created_by ON captionacc_production.invite_codes(c
 CREATE INDEX idx_usage_tenant_date ON captionacc_production.usage_metrics(tenant_id, recorded_at DESC);
 CREATE INDEX idx_usage_type_date ON captionacc_production.usage_metrics(metric_type, recorded_at DESC);
 CREATE INDEX idx_daily_uploads_date ON captionacc_production.daily_uploads(upload_date DESC);
-CREATE INDEX idx_inference_runs_video ON captionacc_production.boundary_inference_runs(video_id);
-CREATE INDEX idx_inference_runs_tenant ON captionacc_production.boundary_inference_runs(tenant_id);
-CREATE INDEX idx_inference_jobs_video ON captionacc_production.boundary_inference_jobs(video_id);
-CREATE INDEX idx_inference_jobs_status ON captionacc_production.boundary_inference_jobs(status);
-CREATE INDEX idx_inference_rejections_video ON captionacc_production.boundary_inference_rejections(video_id);
-CREATE INDEX idx_inference_rejections_type ON captionacc_production.boundary_inference_rejections(rejection_type);
+CREATE INDEX idx_inference_runs_video ON captionacc_production.caption_frame_extents_inference_runs(video_id);
+CREATE INDEX idx_inference_runs_tenant ON captionacc_production.caption_frame_extents_inference_runs(tenant_id);
+CREATE INDEX idx_inference_jobs_video ON captionacc_production.caption_frame_extents_inference_jobs(video_id);
+CREATE INDEX idx_inference_jobs_status ON captionacc_production.caption_frame_extents_inference_jobs(status);
+CREATE INDEX idx_inference_rejections_video ON captionacc_production.caption_frame_extents_inference_rejections(video_id);
+CREATE INDEX idx_inference_rejections_type ON captionacc_production.caption_frame_extents_inference_rejections(rejection_type);
 CREATE INDEX idx_security_audit_event_type ON captionacc_production.security_audit_log(event_type, created_at DESC);
 CREATE INDEX idx_security_audit_severity ON captionacc_production.security_audit_log(severity, created_at DESC);
 CREATE INDEX idx_security_audit_user ON captionacc_production.security_audit_log(user_id, created_at DESC);
@@ -317,9 +317,9 @@ ALTER TABLE captionacc_production.cropped_frames_versions ENABLE ROW LEVEL SECUR
 ALTER TABLE captionacc_production.invite_codes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE captionacc_production.usage_metrics ENABLE ROW LEVEL SECURITY;
 ALTER TABLE captionacc_production.daily_uploads ENABLE ROW LEVEL SECURITY;
-ALTER TABLE captionacc_production.boundary_inference_runs ENABLE ROW LEVEL SECURITY;
-ALTER TABLE captionacc_production.boundary_inference_jobs ENABLE ROW LEVEL SECURITY;
-ALTER TABLE captionacc_production.boundary_inference_rejections ENABLE ROW LEVEL SECURITY;
+ALTER TABLE captionacc_production.caption_frame_extents_inference_runs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE captionacc_production.caption_frame_extents_inference_jobs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE captionacc_production.caption_frame_extents_inference_rejections ENABLE ROW LEVEL SECURITY;
 ALTER TABLE captionacc_production.security_audit_log ENABLE ROW LEVEL SECURITY;
 
 -- ============================================================================
@@ -486,21 +486,21 @@ CREATE POLICY "Platform admins view uploads"
 
 -- Boundary inference runs
 CREATE POLICY "Users view tenant inference runs"
-  ON captionacc_production.boundary_inference_runs FOR SELECT
+  ON captionacc_production.caption_frame_extents_inference_runs FOR SELECT
   USING (tenant_id = captionacc_production.current_user_tenant_id());
 
 -- Boundary inference jobs
 CREATE POLICY "Users view tenant inference jobs"
-  ON captionacc_production.boundary_inference_jobs FOR SELECT
+  ON captionacc_production.caption_frame_extents_inference_jobs FOR SELECT
   USING (tenant_id = captionacc_production.current_user_tenant_id());
 
 -- Boundary inference rejections
 CREATE POLICY "Users view tenant rejections"
-  ON captionacc_production.boundary_inference_rejections FOR SELECT
+  ON captionacc_production.caption_frame_extents_inference_rejections FOR SELECT
   USING (tenant_id = captionacc_production.current_user_tenant_id());
 
 CREATE POLICY "Users update tenant rejections"
-  ON captionacc_production.boundary_inference_rejections FOR UPDATE
+  ON captionacc_production.caption_frame_extents_inference_rejections FOR UPDATE
   USING (tenant_id = captionacc_production.current_user_tenant_id());
 
 -- Security audit log

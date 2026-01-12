@@ -147,7 +147,7 @@ def train_base_model(
        - Query all databases for user labels (full_frame_box_labels where label_source='user')
     2. Extract features for each labeled box
        - Load OCR boxes from full_frame_ocr
-       - Load video_layout_config for anchor/bounds
+       - Load video_layout_config for anchor/crop region
        - Calculate features (vertical_alignment, height_similarity, etc.)
     3. Train Gaussian Naive Bayes
        - Calculate class priors (P(in), P(out))

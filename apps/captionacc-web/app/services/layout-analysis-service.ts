@@ -1,7 +1,7 @@
 /**
  * Layout analysis service for video annotation setup.
  *
- * Provides functionality for analyzing OCR data to determine optimal crop bounds,
+ * Provides functionality for analyzing OCR data to determine optimal crop region,
  * layout parameters, and anchor types for caption detection.
  */
 
@@ -55,7 +55,7 @@ interface VideoLayoutConfigRow {
   bottom_edge_std: number | null
   horizontal_std_slope: number | null
   horizontal_std_intercept: number | null
-  crop_bounds_version: number
+  crop_region_version: number
   analysis_model_version: string | null
   updated_at: string
 }
@@ -85,7 +85,7 @@ export interface LayoutConfig {
   bottomEdgeStd: number | null
   horizontalStdSlope: number | null
   horizontalStdIntercept: number | null
-  cropBoundsVersion: number
+  cropRegionVersion: number
   analysisModelVersion: string | null
 }
 
@@ -104,9 +104,9 @@ export interface LayoutParams {
 }
 
 /**
- * Crop bounds in pixels.
+ * Crop region in pixels.
  */
-export interface CropBounds {
+export interface CropRegion {
   left: number
   top: number
   right: number
@@ -114,9 +114,9 @@ export interface CropBounds {
 }
 
 /**
- * Selection bounds in pixels.
+ * Selection region in pixels.
  */
-export interface SelectionBounds {
+export interface SelectionRegion {
   left: number
   top: number
   right: number
@@ -139,8 +139,8 @@ export interface AnalysisStats {
  * Input for updating layout configuration.
  */
 export interface UpdateLayoutConfigInput {
-  cropBounds?: CropBounds
-  selectionBounds?: SelectionBounds
+  cropRegion?: CropRegion
+  selectionRegion?: SelectionRegion
   selectionMode?: 'hard' | 'soft' | 'disabled'
   layoutParams?: {
     verticalPosition: number
@@ -157,16 +157,16 @@ export interface UpdateLayoutConfigInput {
  */
 export interface UpdateLayoutConfigResult {
   success: boolean
-  boundsChanged: boolean
+  cropRegionChanged: boolean
   framesInvalidated: number
   layoutParamsChanged: boolean
 }
 
 /**
- * Result of resetting crop bounds.
+ * Result of resetting crop region.
  */
-export interface ResetCropBoundsResult {
-  newCropBounds: CropBounds
+export interface ResetCropRegionResult {
+  newCropRegion: CropRegion
   analysisData: AnalysisStats
 }
 
@@ -214,7 +214,7 @@ interface AnchorInfo {
  * OCR analysis result.
  */
 interface OCRAnalysisResult {
-  cropBounds: CropBounds
+  cropRegion: CropRegion
   layoutParams: LayoutParams
   stats: AnalysisStats
 }
@@ -340,7 +340,7 @@ function collectBoxStatistics(
       // Skip very small boxes (likely noise)
       if (boxHeight < 10 || boxWidth < 10) continue
 
-      // Track bounds
+      // Track region
       stats.minTop = Math.min(stats.minTop, boxTop)
       stats.maxBottom = Math.max(stats.maxBottom, boxBottom)
       stats.minLeft = Math.min(stats.minLeft, boxLeft)
@@ -481,9 +481,9 @@ function determineAnchorType(
 }
 
 /**
- * Calculate final crop bounds with adaptive padding.
+ * Calculate final crop region with adaptive padding.
  */
-function calculateCropBoundsFromAnalysis(
+function calculateCropRegionFromAnalysis(
   anchorInfo: AnchorInfo,
   verticalAnalysis: DensityAnalysisResult,
   stats: BoxStats,
@@ -491,7 +491,7 @@ function calculateCropBoundsFromAnalysis(
   frameHeight: number,
   boxWidth: number,
   boxHeight: number
-): CropBounds {
+): CropRegion {
   const PADDING_FRACTION = 0.1
   const SHARPNESS_FACTOR = 2.0
 
@@ -509,7 +509,7 @@ function calculateCropBoundsFromAnalysis(
   let cropTop = Math.max(0, verticalAnalysis.positiveEdgePos - topPadding)
   let cropBottom = Math.min(frameHeight, verticalAnalysis.negativeEdgePos + bottomPadding)
 
-  // Horizontal bounds
+  // Horizontal crop region
   const leftAnchorPaddingMultiplier =
     1 + SHARPNESS_FACTOR * (1 - Math.min(1, anchorInfo.leftEdgeSharpness))
   const rightAnchorPaddingMultiplier =
@@ -552,7 +552,7 @@ function calculateCropBoundsFromAnalysis(
 }
 
 /**
- * Analyze OCR boxes to determine optimal crop bounds and layout parameters.
+ * Analyze OCR boxes to determine optimal crop region and layout parameters.
  */
 function analyzeOCRBoxes(
   frames: FrameOCR[],
@@ -622,8 +622,8 @@ function analyzeOCRBoxes(
     frameHeight - 1
   )
 
-  // Calculate crop bounds
-  const cropBounds = calculateCropBoundsFromAnalysis(
+  // Calculate crop region
+  const cropRegion = calculateCropRegionFromAnalysis(
     anchorInfo,
     verticalAnalysis,
     stats,
@@ -639,7 +639,7 @@ function analyzeOCRBoxes(
   ).length
 
   return {
-    cropBounds,
+    cropRegion,
     layoutParams: {
       verticalPosition,
       verticalStd,
@@ -666,47 +666,47 @@ function analyzeOCRBoxes(
 // =============================================================================
 
 /**
- * Result of detecting crop bounds changes.
+ * Result of detecting crop region changes.
  */
-interface CropBoundsChangeResult {
+interface CropRegionChangeResult {
   changed: boolean
   requiresVersionIncrement: boolean
 }
 
 /**
- * Detect if crop bounds have changed from current config.
+ * Detect if crop region have changed from current config.
  *
  * @param currentConfig - Current layout configuration from database
- * @param newCropBounds - New crop bounds to compare against
- * @returns Object indicating if bounds changed and if version increment is needed
+ * @param newCropRegion - New crop region to compare against
+ * @returns Object indicating if crop region changed and if version increment is needed
  */
-function detectCropBoundsChanges(
+function detectCropRegionChanges(
   currentConfig: VideoLayoutConfigRow,
-  newCropBounds: CropBounds | undefined
-): CropBoundsChangeResult {
-  if (!newCropBounds) {
+  newCropRegion: CropRegion | undefined
+): CropRegionChangeResult {
+  if (!newCropRegion) {
     return { changed: false, requiresVersionIncrement: false }
   }
 
   const changed =
-    newCropBounds.left !== currentConfig.crop_left ||
-    newCropBounds.top !== currentConfig.crop_top ||
-    newCropBounds.right !== currentConfig.crop_right ||
-    newCropBounds.bottom !== currentConfig.crop_bottom
+    newCropRegion.left !== currentConfig.crop_left ||
+    newCropRegion.top !== currentConfig.crop_top ||
+    newCropRegion.right !== currentConfig.crop_right ||
+    newCropRegion.bottom !== currentConfig.crop_bottom
 
   return { changed, requiresVersionIncrement: changed }
 }
 
 /**
- * Invalidate frames when crop bounds change by resetting their crop_bounds_version.
+ * Invalidate frames when crop region change by resetting their crop_region_version.
  *
  * @param db - Database connection
- * @param cropBounds - New crop bounds to apply
+ * @param cropRegion - New crop region to apply
  * @returns Number of frames invalidated
  */
 async function invalidateFramesForCropChange(
   db: import('better-sqlite3').Database,
-  cropBounds: CropBounds
+  cropRegion: CropRegion
 ): Promise<number> {
   // Get layout config for frame dimensions
   const layoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as
@@ -760,17 +760,17 @@ async function invalidateFramesForCropChange(
 
   const ocrVisualizationImage = await generateOCRVisualization(
     analysisBoxes,
-    cropBounds,
+    cropRegion,
     layoutConfig.frame_width,
     layoutConfig.frame_height,
     layoutParams
   )
 
-  // Increment crop_bounds_version and update crop bounds with OCR visualization
+  // Increment crop_region_version and update crop region with OCR visualization
   db.prepare(
     `
     UPDATE video_layout_config
-    SET crop_bounds_version = crop_bounds_version + 1,
+    SET crop_region_version = crop_region_version + 1,
         crop_left = ?,
         crop_top = ?,
         crop_right = ?,
@@ -779,14 +779,14 @@ async function invalidateFramesForCropChange(
         updated_at = datetime('now')
     WHERE id = 1
   `
-  ).run(cropBounds.left, cropBounds.top, cropBounds.right, cropBounds.bottom, ocrVisualizationImage)
+  ).run(cropRegion.left, cropRegion.top, cropRegion.right, cropRegion.bottom, ocrVisualizationImage)
 
-  // Invalidate all frames (set crop_bounds_version to 0)
+  // Invalidate all frames (set crop_region_version to 0)
   const invalidateResult = db
     .prepare(
       `
     UPDATE frames_ocr
-    SET crop_bounds_version = 0
+    SET crop_region_version = 0
   `
     )
     .run()
@@ -850,25 +850,25 @@ function updateLayoutParameters(
 }
 
 /**
- * Update selection bounds and mode in the database.
+ * Update selection region and mode in the database.
  *
  * @param db - Database connection
- * @param selectionBounds - Optional new selection bounds
+ * @param selectionRegion - Optional new selection region
  * @param selectionMode - Optional new selection mode
  */
 function updateSelectionConfig(
   db: import('better-sqlite3').Database,
-  selectionBounds: SelectionBounds | undefined,
+  selectionRegion: SelectionRegion | undefined,
   selectionMode: 'hard' | 'soft' | 'disabled' | undefined
 ): void {
-  if (selectionBounds === undefined && selectionMode === undefined) {
+  if (selectionRegion === undefined && selectionMode === undefined) {
     return
   }
 
   const updates: string[] = []
   const values: (number | string)[] = []
 
-  if (selectionBounds !== undefined) {
+  if (selectionRegion !== undefined) {
     updates.push(
       'selection_left = ?',
       'selection_top = ?',
@@ -876,10 +876,10 @@ function updateSelectionConfig(
       'selection_bottom = ?'
     )
     values.push(
-      selectionBounds.left,
-      selectionBounds.top,
-      selectionBounds.right,
-      selectionBounds.bottom
+      selectionRegion.left,
+      selectionRegion.top,
+      selectionRegion.right,
+      selectionRegion.bottom
     )
   }
 
@@ -1113,7 +1113,7 @@ function saveAnalysisResults(
         crop_top = ?,
         crop_right = ?,
         crop_bottom = ?,
-        crop_bounds_version = crop_bounds_version + 1,
+        crop_region_version = crop_region_version + 1,
         analysis_model_version = ?,
         vertical_position = ?,
         vertical_std = ?,
@@ -1128,10 +1128,10 @@ function saveAnalysisResults(
     WHERE id = 1
   `
   ).run(
-    analysis.cropBounds.left,
-    analysis.cropBounds.top,
-    analysis.cropBounds.right,
-    analysis.cropBounds.bottom,
+    analysis.cropRegion.left,
+    analysis.cropRegion.top,
+    analysis.cropRegion.right,
+    analysis.cropRegion.bottom,
     modelVersion,
     analysis.layoutParams.verticalPosition,
     analysis.layoutParams.verticalStd,
@@ -1150,13 +1150,13 @@ function saveAnalysisResults(
 // =============================================================================
 
 /**
- * Generate OCR visualization image for boundary detection model.
+ * Generate OCR visualization image for caption frame extents detection model.
  *
  * Creates a PNG image showing OCR boxes cropped to the caption bounds using additive
  * darkening. Boxes from all frames are overlaid, with overlapping areas appearing darker.
  *
  * @param analysisBoxes - All OCR boxes from the video
- * @param cropBounds - Crop bounds to apply
+ * @param cropRegion - Crop region to apply
  * @param frameWidth - Original frame width
  * @param frameHeight - Original frame height
  * @param layoutParams - Optional layout parameters for annotations (anchor type, position, etc.)
@@ -1194,7 +1194,7 @@ function countBoxEdges(
  */
 function countBoxOverlaps(
   analysisBoxes: Pick<LayoutAnalysisBox, 'predictedLabel' | 'originalBounds'>[],
-  cropBounds: CropBounds,
+  cropRegion: CropRegion,
   croppedWidth: number,
   croppedHeight: number
 ): {
@@ -1209,10 +1209,10 @@ function countBoxOverlaps(
   for (const box of analysisBoxes) {
     if (box.predictedLabel !== 'in') continue
 
-    const x1 = box.originalBounds.left - cropBounds.left
-    const y1 = box.originalBounds.top - cropBounds.top
-    const x2 = box.originalBounds.right - cropBounds.left
-    const y2 = box.originalBounds.bottom - cropBounds.top
+    const x1 = box.originalBounds.left - cropRegion.left
+    const y1 = box.originalBounds.top - cropRegion.top
+    const x2 = box.originalBounds.right - cropRegion.left
+    const y2 = box.originalBounds.bottom - cropRegion.top
 
     // Skip boxes outside crop region
     if (x2 < 0 || x1 >= croppedWidth || y2 < 0 || y1 >= croppedHeight) continue
@@ -1334,12 +1334,12 @@ function drawLayoutAnnotations(
     anchorPosition: number
     verticalPosition: number
   },
-  cropBounds: CropBounds,
+  cropRegion: CropRegion,
   croppedWidth: number,
   croppedHeight: number
 ): void {
   // Draw vertical anchor line
-  const anchorX = layoutParams.anchorPosition - cropBounds.left
+  const anchorX = layoutParams.anchorPosition - cropRegion.left
   if (anchorX >= 0 && anchorX <= croppedWidth) {
     const anchorColors = {
       left: 'rgb(0, 0, 255)',
@@ -1355,7 +1355,7 @@ function drawLayoutAnnotations(
   }
 
   // Draw horizontal vertical position line
-  const verticalY = layoutParams.verticalPosition - cropBounds.top
+  const verticalY = layoutParams.verticalPosition - cropRegion.top
   if (verticalY >= 0 && verticalY <= croppedHeight) {
     ctx.strokeStyle = 'rgb(255, 255, 0)'
     ctx.lineWidth = 2
@@ -1368,7 +1368,7 @@ function drawLayoutAnnotations(
 
 export async function generateOCRVisualization(
   analysisBoxes: Pick<LayoutAnalysisBox, 'predictedLabel' | 'originalBounds'>[],
-  cropBounds: CropBounds,
+  cropRegion: CropRegion,
   frameWidth: number,
   frameHeight: number,
   layoutParams?: {
@@ -1382,8 +1382,8 @@ export async function generateOCRVisualization(
   const canvasModule = await import('canvas')
   const { createCanvas } = canvasModule
 
-  const croppedWidth = cropBounds.right - cropBounds.left
-  const croppedHeight = cropBounds.bottom - cropBounds.top
+  const croppedWidth = cropRegion.right - cropRegion.left
+  const croppedHeight = cropRegion.bottom - cropRegion.top
 
   const canvas = createCanvas(croppedWidth, croppedHeight)
   const ctx = canvas.getContext('2d')
@@ -1394,7 +1394,7 @@ export async function generateOCRVisualization(
   // Count box overlaps
   const { edgeCount, fillCount, maxEdgeCount, maxFillCount } = countBoxOverlaps(
     analysisBoxes,
-    cropBounds,
+    cropRegion,
     croppedWidth,
     croppedHeight
   )
@@ -1412,7 +1412,7 @@ export async function generateOCRVisualization(
 
   // Draw annotations
   if (layoutParams) {
-    drawLayoutAnnotations(ctx, layoutParams, cropBounds, croppedWidth, croppedHeight)
+    drawLayoutAnnotations(ctx, layoutParams, cropRegion, croppedWidth, croppedHeight)
   }
 
   return canvas.toBuffer('image/png')
@@ -1448,7 +1448,7 @@ function transformLayoutConfig(row: VideoLayoutConfigRow): LayoutConfig {
     bottomEdgeStd: row.bottom_edge_std,
     horizontalStdSlope: row.horizontal_std_slope,
     horizontalStdIntercept: row.horizontal_std_intercept,
-    cropBoundsVersion: row.crop_bounds_version,
+    cropRegionVersion: row.crop_region_version,
     analysisModelVersion: row.analysis_model_version,
   }
 }
@@ -1486,8 +1486,8 @@ export async function getLayoutConfig(videoId: string): Promise<LayoutConfig | n
 /**
  * Update the layout configuration.
  *
- * Handles crop bounds changes with versioning, frame invalidation, and layout parameter updates.
- * When crop bounds change, increments the version and invalidates all frames.
+ * Handles crop region changes with versioning, frame invalidation, and layout parameter updates.
+ * When crop region change, increments the version and invalidates all frames.
  * When layout parameters change, clears the trained model and triggers prediction recalculation.
  *
  * @param videoId - Video identifier
@@ -1515,26 +1515,26 @@ export async function updateLayoutConfig(
       throw new Error('Layout config not found')
     }
 
-    const { cropBounds, selectionBounds, selectionMode, layoutParams } = input
-    const boundsChange = detectCropBoundsChanges(currentConfig, cropBounds)
+    const { cropRegion, selectionRegion, selectionMode, layoutParams } = input
+    const boundsChange = detectCropRegionChanges(currentConfig, cropRegion)
     let framesInvalidated = 0
 
     db.prepare('BEGIN TRANSACTION').run()
 
     try {
-      // Handle crop bounds changes
-      if (boundsChange.changed && cropBounds) {
-        framesInvalidated = await invalidateFramesForCropChange(db, cropBounds)
-        console.log(`Crop bounds changed: invalidated ${framesInvalidated} frames`)
-      } else if (cropBounds) {
-        // Update crop bounds without invalidation (no actual change)
+      // Handle crop region changes
+      if (boundsChange.changed && cropRegion) {
+        framesInvalidated = await invalidateFramesForCropChange(db, cropRegion)
+        console.log(`Crop region changed: invalidated ${framesInvalidated} frames`)
+      } else if (cropRegion) {
+        // Update crop region without invalidation (no actual change)
         db.prepare(
           `UPDATE video_layout_config SET crop_left = ?, crop_top = ?, crop_right = ?, crop_bottom = ?, updated_at = datetime('now') WHERE id = 1`
-        ).run(cropBounds.left, cropBounds.top, cropBounds.right, cropBounds.bottom)
+        ).run(cropRegion.left, cropRegion.top, cropRegion.right, cropRegion.bottom)
       }
 
       // Update selection config
-      updateSelectionConfig(db, selectionBounds, selectionMode)
+      updateSelectionConfig(db, selectionRegion, selectionMode)
 
       // Update layout parameters
       if (layoutParams) {
@@ -1554,7 +1554,7 @@ export async function updateLayoutConfig(
 
     return {
       success: true,
-      boundsChanged: boundsChange.changed,
+      cropRegionChanged: boundsChange.changed,
       framesInvalidated,
       layoutParamsChanged: !!layoutParams,
     }
@@ -1564,17 +1564,17 @@ export async function updateLayoutConfig(
 }
 
 /**
- * Reset crop bounds by re-analyzing OCR data.
+ * Reset crop region by re-analyzing OCR data.
  *
  * Uses caption boxes (predicted + user overrides) to determine optimal
- * crop bounds and layout parameters. Falls back to all boxes if no
+ * crop region and layout parameters. Falls back to all boxes if no
  * caption boxes are available.
  *
  * @param videoId - Video identifier
  * @returns Reset result with new bounds and analysis data
  * @throws Error if database or required data is not found
  */
-export async function resetCropBounds(videoId: string): Promise<ResetCropBoundsResult> {
+export async function resetCropRegion(videoId: string): Promise<ResetCropRegionResult> {
   const result = await getWritableLayoutDb(videoId)
   if (!result.success) {
     throw new Error('Database not found')
@@ -1644,7 +1644,7 @@ export async function resetCropBounds(videoId: string): Promise<ResetCropBoundsR
 
     const ocrVisualizationImage = await generateOCRVisualization(
       analysisBoxes,
-      analysis.cropBounds,
+      analysis.cropRegion,
       layoutConfig.frame_width,
       layoutConfig.frame_height,
       layoutParams
@@ -1654,7 +1654,7 @@ export async function resetCropBounds(videoId: string): Promise<ResetCropBoundsR
     saveAnalysisResults(db, analysis, modelInfo?.model_version ?? null, ocrVisualizationImage)
 
     return {
-      newCropBounds: analysis.cropBounds,
+      newCropRegion: analysis.cropRegion,
       analysisData: analysis.stats,
     }
   } finally {

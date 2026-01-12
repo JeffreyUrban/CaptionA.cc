@@ -1,7 +1,7 @@
 import { CaptionTextForm } from '~/components/annotation/CaptionTextForm'
 import { CombinedImageDisplay } from '~/components/annotation/CombinedImageDisplay'
 import { FrameViewer } from '~/components/annotation/FrameViewer'
-import type { Frame } from '~/types/boundaries'
+import type { Frame } from '~/caption-frame-extents'
 import type { AnnotationData, TextStyle } from '~/types/text-annotation'
 
 interface TextAnnotationContentPanelProps {

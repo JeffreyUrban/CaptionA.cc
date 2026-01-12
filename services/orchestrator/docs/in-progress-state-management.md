@@ -363,10 +363,10 @@ def upload_layout_db_flow(
         draft_type='layout'
     )
 
-    # Detect crop bounds changes and trigger regeneration
-    bounds_changed, new_bounds = detect_crop_bounds_change(video_id, layout_db_path)
+    # Detect crop region changes and trigger regeneration
+    crop_region_changed, new_crop_region = detect_crop_region_change(video_id, layout_db_path)
 
-    if bounds_changed and trigger_crop_regen:
+    if crop_region_changed and trigger_crop_regen:
         # Queue crop frames regeneration
         from .crop_frames_to_webm import crop_frames_to_webm_flow
         crop_frames_to_webm_flow.apply_async(
@@ -377,7 +377,7 @@ def upload_layout_db_flow(
         "video_id": video_id,
         "storage_key": storage_key,
         "status": "published",
-        "bounds_changed": bounds_changed
+        "crop_region_changed": crop_region_changed
     }
 ```
 

@@ -369,7 +369,7 @@ export async function getOrCreateLayoutDb(
           bottom_edge_std REAL,
           horizontal_std_slope REAL,
           horizontal_std_intercept REAL,
-          crop_bounds_version INTEGER NOT NULL DEFAULT 1,
+          crop_region_version INTEGER NOT NULL DEFAULT 1,
           analysis_model_version TEXT,
           updated_at TEXT NOT NULL DEFAULT (datetime('now'))
         )

@@ -34,7 +34,7 @@ This automatically includes:
 If you want to show annotations from other frames that spatially overlap the current cropped area:
 
 ```typescript
-// Get current crop bounds from video_layout_config
+// Get current crop region from video_layout_config
 const layoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get()
 
 // Get all annotations that overlap the cropped region
@@ -76,21 +76,21 @@ When user annotates a box in cropped frame view:
 
 ```typescript
 // Box coordinates from cropped_frame_ocr are in fractional [0-1] relative to CROPPED region
-const cropBounds = {
+const cropRegion = {
   left: layoutConfig.crop_left,
   top: layoutConfig.crop_top,
   right: layoutConfig.crop_right,
   bottom: layoutConfig.crop_bottom,
 }
 
-const cropWidth = cropBounds.right - cropBounds.left
-const cropHeight = cropBounds.bottom - cropBounds.top
+const cropWidth = cropRegion.right - cropRegion.left
+const cropHeight = cropRegion.bottom - cropRegion.top
 
 // Convert fractional coordinates in cropped space to full-frame absolute pixels
-const boxLeftFullFrame = cropBounds.left + Math.floor(box.x * cropWidth)
-const boxTopFullFrame = cropBounds.top + Math.floor(box.y * cropHeight)
-const boxRightFullFrame = cropBounds.left + Math.floor((box.x + box.width) * cropWidth)
-const boxBottomFullFrame = cropBounds.top + Math.floor((box.y + box.height) * cropHeight)
+const boxLeftFullFrame = cropRegion.left + Math.floor(box.x * cropWidth)
+const boxTopFullFrame = cropRegion.top + Math.floor(box.y * cropHeight)
+const boxRightFullFrame = cropRegion.left + Math.floor((box.x + box.width) * cropWidth)
+const boxBottomFullFrame = cropRegion.top + Math.floor((box.y + box.height) * cropHeight)
 ```
 
 ### Insert Pattern
@@ -108,7 +108,7 @@ const upsert = db.prepare(`
     box_bottom,
     label,
     label_source,
-    crop_bounds_version,
+    crop_region_version,
     labeled_at
   ) VALUES ('cropped_frame', ?, ?, ?, ?, ?, ?, ?, ?, 'user', ?, datetime('now'))
   ON CONFLICT(annotation_source, frame_index, box_index)
@@ -126,7 +126,7 @@ upsert.run(
   boxRightFullFrame,
   boxBottomFullFrame,
   label,
-  layoutConfig.crop_bounds_version
+  layoutConfig.crop_region_version
 )
 ```
 
@@ -213,19 +213,19 @@ async function clearAllAnnotationsForFrame(
 
 ### Preservation on Re-crop
 
-When crop bounds change (`crop_bounds_version` increments):
+When crop region change (`crop_region_version` increments):
 
-- Existing cropped frame annotations are **preserved** with their old `crop_bounds_version`
+- Existing cropped frame annotations are **preserved** with their old `crop_region_version`
 - They remain in full-frame coordinates, so they still contribute to training
 - **They still display** when viewing the same frame_index (frame indices don't change)
-- They may not align with new OCR boxes (OCR regenerated with new crop bounds)
+- They may not align with new OCR boxes (OCR regenerated with new crop region)
 - User can use "clear all" button to remove all annotations for the frame
 
 ### Annotations After Re-cropping
 
-When crop bounds change (e.g., `crop_bounds_version` increments from 1→2):
+When crop region change (e.g., `crop_region_version` increments from 1→2):
 
-- **Annotations persist** in `full_frame_box_labels` with their original `crop_bounds_version=1`
+- **Annotations persist** in `full_frame_box_labels` with their original `crop_region_version=1`
 - **OCR is regenerated** - `cropped_frame_ocr` is re-populated with new boxes for the same frame indices
 - **Annotations still display** - frame indices still exist, query by `frame_index` still works
 - **May not align** - old annotations were for old OCR boxes, new OCR boxes are different
@@ -234,18 +234,18 @@ When crop bounds change (e.g., `crop_bounds_version` increments from 1→2):
 
 **Example scenario:**
 
-1. User annotates boxes in cropped frame #123 with `crop_bounds_version=1`
-   - Creates: `annotation_source='cropped_frame'`, `frame_index=123`, `crop_bounds_version=1`
-2. Crop bounds change → `crop_bounds_version` increments to 2
-   - `cropped_frame_ocr` regenerated for frame #123 with new crop bounds
+1. User annotates boxes in cropped frame #123 with `crop_region_version=1`
+   - Creates: `annotation_source='cropped_frame'`, `frame_index=123`, `crop_region_version=1`
+2. Crop region change → `crop_region_version` increments to 2
+   - `cropped_frame_ocr` regenerated for frame #123 with new crop region
    - New OCR boxes appear for the newly cropped region
 3. Annotations from version 1 still display
    - Query: `WHERE frame_index=123` returns both old and potentially new annotations
-   - Old annotations may not align with new OCR boxes (different crop bounds)
+   - Old annotations may not align with new OCR boxes (different crop region)
    - May be confusing to user (boxes don't match current OCR)
 4. User clicks "clear all" button for frame #123
    - Deletes all annotations WHERE frame_index=123
-   - Removes all old annotations for this frame regardless of crop_bounds_version
+   - Removes all old annotations for this frame regardless of crop_region_version
    - DELETE succeeds normally (no special handling needed)
 
 ## Summary

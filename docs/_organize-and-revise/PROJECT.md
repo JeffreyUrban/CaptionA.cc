@@ -67,7 +67,7 @@ Create a data annotation and training pipeline and maintainable SaaS application
 
 ## Database Design Considerations
 
-The video is divided into audio segments and burned-in captions. Audio segments may be nested or overlapping. Audio segment word boundaries may not match burned-in caption word boundaries. 
+The video is divided into audio segments and burned-in captions. Audio segments may be nested or overlapping. Audio segment frame extents may not match burned-in caption frame extents. 
 
 ### Core Data Models
 
@@ -154,7 +154,7 @@ Pipelines are in subdirectories:
 
 **Process**:
 1. **Caption Detection**: ML models identify burned-in caption regions in video frames
-2. **Bounds Extraction**: Determine caption bounding box per video (e.g., bottom of frame)
+2. **Crop Region Extraction**: Determine caption crop region per video (e.g., rectangle near bottom of frame)
 3. **OCR**: Extract text content from detected caption regions
 4. **Timing**: Capture precise start/end timestamps for each caption
 5. **Annotation Workflow**: Human review and correction of ML-generated annotations
@@ -164,7 +164,7 @@ Pipelines are in subdirectories:
 
 ### Audio Clipping Pipeline
 
-**Purpose**: Detect natural audio segment boundaries and speaker changes for audio-based exercises.
+**Purpose**: Detect natural audio segment frame extents and speaker changes for audio-based exercises.
 
 **Technology**: Pyannote library for audio segmentation and diarization.
 
@@ -172,18 +172,18 @@ Pipelines are in subdirectories:
 1. **Audio Extraction**: Extract audio track from video
 2. **Segmentation**: Identify natural breaks, pauses, speaker changes
 3. **Diarization**: Identify different speakers
-4. **Boundary Detection**: Determine precise start/end times for audio segments
-5. **Annotation Workflow**: Human review and adjustment of segment boundaries
+4. **Audio Segment Frame Extents Detection**: Determine precise start/end times for audio segments
+5. **Annotation Workflow**: Human review and adjustment of audio segment frame extents
 6. **Database Import**: Store audio segment metadata
 
-**Output**: Audio segment boundaries for use cases requiring audio or video playback.
+**Output**: Audio segment frame extents for use cases requiring audio or video playback.
 
 ### Pipeline Integration Vision
 
 **Admin Annotation Correction**:
-- Admin user notices incorrect caption or audio boundary
+- Admin user notices incorrect caption frame extents or audio segment frame extents
 - Clicks "Edit" to enter annotation correction mode
-- Makes correction inline (adjust timing, fix text, refine boundaries)
+- Makes correction inline (adjust timing, fix text, refine frame extents)
 - Correction saved to database AND fed back to ML training pipeline
 - Improves ML models over time through active learning
 

@@ -1,7 +1,7 @@
 """API models for requests and responses."""
 
 from app.models.captions import (
-    BoundaryState,
+    CaptionFrameExtentsState,
     Caption,
     CaptionBatchUpdate,
     CaptionCreate,
@@ -38,7 +38,7 @@ from app.models.responses import (
 
 __all__ = [
     # Caption models
-    "BoundaryState",
+    "CaptionFrameExtentsState",
     "Caption",
     "CaptionBatchUpdate",
     "CaptionCreate",

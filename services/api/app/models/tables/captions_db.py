@@ -33,9 +33,9 @@ class Caption(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     start_frame_index: int
     end_frame_index: int
-    boundary_state: str = Field(default="predicted")  # 'predicted', 'confirmed', 'gap'
-    boundary_pending: bool = Field(default=True)
-    boundary_updated_at: datetime = Field(default_factory=utc_now)
+    caption_frame_extents_state: str = Field(default="predicted")  # 'predicted', 'confirmed', 'gap'
+    caption_frame_extents_pending: bool = Field(default=True)
+    caption_frame_extents_updated_at: datetime = Field(default_factory=utc_now)
     text: Optional[str] = None
     text_pending: bool = Field(default=True)
     text_status: Optional[str] = None

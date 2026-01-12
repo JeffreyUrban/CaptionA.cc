@@ -161,7 +161,7 @@ Browser downloads directly from Wasabi (free egress)
 
 - ~1,875 frames total (frames where index % 16 === 0)
 - Coarse overview for 50-minute videos
-- Captures annotation boundaries well
+- Captures annotation caption frame extents well
 - For ±200 frame scroll: ~25 frames (good coverage)
 
 **Modulo 4** (every 0.4 sec):
@@ -305,20 +305,20 @@ function isChunkPinned(
   activeAnnotation: Annotation | null,
   nextAnnotation: Annotation | null
 ): boolean {
-  const BOUNDARY_BUFFER = 20 // Frames around annotation boundaries
+  const CAPTION_FRAME_EXTENTS_BUFFER = 20 // Frames around annotation caption frame extents
   const chunkEnd = chunkStart + 32 * modulo - 1
 
   // Check active annotation (with ±20 buffer)
   if (activeAnnotation) {
-    const start = Math.max(0, activeAnnotation.start - BOUNDARY_BUFFER)
-    const end = activeAnnotation.end + BOUNDARY_BUFFER
+    const start = Math.max(0, activeAnnotation.start - CAPTION_FRAME_EXTENTS_BUFFER)
+    const end = activeAnnotation.end + CAPTION_FRAME_EXTENTS_BUFFER
     if (chunkStart <= end && chunkEnd >= start) return true
   }
 
   // Check next annotation (with ±20 buffer)
   if (nextAnnotation) {
-    const start = Math.max(0, nextAnnotation.start - BOUNDARY_BUFFER)
-    const end = nextAnnotation.end + BOUNDARY_BUFFER
+    const start = Math.max(0, nextAnnotation.start - CAPTION_FRAME_EXTENTS_BUFFER)
+    const end = nextAnnotation.end + CAPTION_FRAME_EXTENTS_BUFFER
     if (chunkStart <= end && chunkEnd >= start) return true
   }
 
@@ -329,7 +329,7 @@ function isChunkPinned(
 **Benefits**:
 
 - ✅ **Instant navigation to next annotation** - frames already loaded & pinned
-- ✅ **Smooth boundary adjustments** - ±20 buffer ensures frames available
+- ✅ **Smooth caption frame extents adjustments** - ±20 buffer ensures frames available
 - ✅ **No thrashing** - pinned chunks protected during navigation
 - ✅ **Large cache** - 150 chunks total supports multiple annotations resident
 
@@ -431,7 +431,7 @@ Browser creates object URLs and displays images
 
 ### Modulo-Based Hierarchical Loading
 
-**Current Implementation** (`useBoundaryFrameLoader.ts`):
+**Current Implementation** (`useCaptionFrameExtentsFrameLoader.ts`):
 
 **Three-tier priority system**:
 
@@ -452,7 +452,7 @@ Browser creates object URLs and displays images
    - Starts immediately when next annotation identified
    - Yields to explicit jumps
    - Loads ALL modulos for short annotations (<500 frames)
-   - Loads overview + boundaries for long annotations
+   - Loads overview + caption frame extents for long annotations
 
 **Cache Management**:
 
@@ -552,7 +552,7 @@ Browser creates object URLs and displays images
    - Cache response (1 hour)
 
 2. **Update frontend frame loader** (MODIFY)
-   - File: `apps/captionacc-web/app/hooks/useBoundaryFrameLoader.ts`
+   - File: `apps/captionacc-web/app/hooks/useCaptionFrameExtentsFrameLoader.ts`
    - Change endpoint: `/batch` → `/batch-signed-urls`
    - Parse response: Extract `signed_url` instead of `image_data`
    - Fetch from Wasabi: `fetch(signed_url)` instead of `atob(image_data)`
@@ -568,7 +568,7 @@ Browser creates object URLs and displays images
 
 - ✅ Batch signed URLs endpoint working
 - ✅ Frontend fetches frames from Wasabi
-- ✅ Boundaries annotation workflow functional
+- ✅ Caption frame extents annotation workflow functional
 - ✅ No more SQLite BLOB queries
 
 ### Week 5-6: Supabase Auth Integration
@@ -652,7 +652,7 @@ Browser creates object URLs and displays images
    - Remove SQLite BLOB query
    - Generate signed URL, return redirect
 
-2. **`apps/captionacc-web/app/hooks/useBoundaryFrameLoader.ts`**
+2. **`apps/captionacc-web/app/hooks/useCaptionFrameExtentsFrameLoader.ts`**
    - Change endpoint to `/batch-signed-urls`
    - Fetch from Wasabi instead of decoding base64
 

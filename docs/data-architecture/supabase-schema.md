@@ -109,7 +109,7 @@ Frame extraction versioning for cache invalidation.
 | `video_id` | UUID FK | Parent video |
 | `version` | INTEGER NOT NULL | Version number |
 | `storage_prefix` | TEXT | Wasabi prefix for chunks |
-| `crop_bounds` | JSONB | `{left, top, right, bottom}` |
+| `crop_region` | JSONB | `{left, top, right, bottom}` |
 | `frame_rate` | REAL | Extraction frame rate |
 | `chunk_count` | INTEGER | Number of WebM chunks |
 | `total_frames` | INTEGER | Total frames extracted |
@@ -214,7 +214,7 @@ Preview access control.
 
 ### ML Processing Tables
 
-#### `boundary_inference_runs`
+#### `caption_frame_extents_inference_runs`
 
 Completed inference runs. Used to avoid redundant processing—before starting a new job, check for existing run with same (video_id, cropped_frames_version, model_version).
 
@@ -232,7 +232,7 @@ Completed inference runs. Used to avoid redundant processing—before starting a
 | `processing_time_seconds` | REAL | Total time |
 | `started_at/completed_at` | TIMESTAMPTZ | Timestamps |
 
-#### `boundary_inference_jobs`
+#### `caption_frame_extents_inference_jobs`
 
 Active inference queue.
 
@@ -249,7 +249,7 @@ Active inference queue.
 | `error_message` | TEXT | Error if failed |
 | `inference_run_id` | UUID FK | Completed run reference |
 
-#### `boundary_inference_rejections`
+#### `caption_frame_extents_inference_rejections`
 
 Validation failure tracking.
 
@@ -471,8 +471,8 @@ Location: `supabase/migrations/`
 | `20260106180000_platform_admin_and_user_isolation.sql` | Admin access, roles |
 | `20260106190000_invite_codes_and_quotas.sql` | Invite system, quotas |
 | `20260107000000_access_tiers.sql` | Feature tiers |
-| `20260107000000_boundary_inference_tables.sql` | ML job tables |
-| `20260107000001_boundary_inference_rejections.sql` | Rejection tracking |
+| `20260107000000_caption_frame_extents_inference_tables.sql` | ML job tables |
+| `20260107000001_caption_frame_extents_inference_rejections.sql` | Rejection tracking |
 | `20260107010000_demo_videos.sql` | Demo video support |
 | `20260107020000_security_audit_logging.sql` | Security audit |
 | `20260107210000_allow_self_admin_check.sql` | Policy fixes |

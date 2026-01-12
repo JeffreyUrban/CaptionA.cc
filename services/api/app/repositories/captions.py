@@ -8,7 +8,7 @@ from app.models.captions import (
     CaptionRow,
     CaptionTextUpdate,
     CaptionUpdate,
-    BoundaryState,
+    CaptionFrameExtentsState,
     OverlapResolutionResponse,
 )
 
@@ -19,9 +19,9 @@ def _row_to_caption_row(row: sqlite3.Row) -> CaptionRow:
         id=row["id"],
         start_frame_index=row["start_frame_index"],
         end_frame_index=row["end_frame_index"],
-        boundary_state=BoundaryState(row["boundary_state"]),
-        boundary_pending=row["boundary_pending"],
-        boundary_updated_at=row["boundary_updated_at"],
+        caption_frame_extents_state=CaptionFrameExtentsState(row["caption_frame_extents_state"]),
+        caption_frame_extents_pending=row["caption_frame_extents_pending"],
+        caption_frame_extents_updated_at=row["caption_frame_extents_updated_at"],
         text=row["text"],
         text_pending=row["text_pending"],
         text_status=row["text_status"],
@@ -74,7 +74,7 @@ class CaptionRepository:
 
         # Add workable filter
         if workable_only:
-            conditions.append("(boundary_state = 'gap' OR boundary_pending = 1)")
+            conditions.append("(caption_frame_extents_state = 'gap' OR caption_frame_extents_pending = 1)")
 
         # Build query
         if conditions:
@@ -103,23 +103,23 @@ class CaptionRepository:
 
         Does NOT perform overlap resolution - caller should handle that.
         """
-        is_gap = input.boundaryState == BoundaryState.GAP
-        is_pending = input.boundaryPending
+        is_gap = input.captionFrameExtentsState == CaptionFrameExtentsState.GAP
+        is_pending = input.captionFrameExtentsPending
         needs_image_regen = 0 if is_gap or is_pending else 1
 
         cursor = self.conn.execute(
             """
             INSERT INTO captions (
-                start_frame_index, end_frame_index, boundary_state,
-                boundary_pending, text, image_needs_regen
+                start_frame_index, end_frame_index, caption_frame_extents_state,
+                caption_frame_extents_pending, text, image_needs_regen
             )
             VALUES (?, ?, ?, ?, ?, ?)
             """,
             (
                 input.startFrameIndex,
                 input.endFrameIndex,
-                input.boundaryState.value,
-                1 if input.boundaryPending else 0,
+                input.captionFrameExtentsState.value,
+                1 if input.captionFrameExtentsPending else 0,
                 input.text,
                 needs_image_regen,
             ),
@@ -133,7 +133,7 @@ class CaptionRepository:
         self, caption_id: int, input: CaptionUpdate
     ) -> OverlapResolutionResponse:
         """
-        Update caption boundaries with automatic overlap resolution.
+        Update caption frame extents with automatic overlap resolution.
 
         Handles:
         - Deleting captions completely contained in new range
@@ -167,7 +167,7 @@ class CaptionRepository:
             original, input.startFrameIndex, input.endFrameIndex
         )
 
-        # Check if boundaries changed
+        # Check if caption frame extents changed
         boundaries_changed = (
             input.startFrameIndex != original.start_frame_index
             or input.endFrameIndex != original.end_frame_index
@@ -179,16 +179,16 @@ class CaptionRepository:
             UPDATE captions
             SET start_frame_index = ?,
                 end_frame_index = ?,
-                boundary_state = ?,
-                boundary_pending = 0,
+                caption_frame_extents_state = ?,
+                caption_frame_extents_pending = 0,
                 image_needs_regen = ?,
-                boundary_updated_at = datetime('now')
+                caption_frame_extents_updated_at = datetime('now')
             WHERE id = ?
             """,
             (
                 input.startFrameIndex,
                 input.endFrameIndex,
-                input.boundaryState.value,
+                input.captionFrameExtentsState.value,
                 1 if boundaries_changed else 0,
                 caption_id,
             ),
@@ -246,7 +246,7 @@ class CaptionRepository:
         field_map = {
             "startFrameIndex": "start_frame_index",
             "endFrameIndex": "end_frame_index",
-            "boundaryState": "boundary_state",
+            "captionFrameExtentsState": "caption_frame_extents_state",
             "text": "text",
             "textStatus": "text_status",
             "textNotes": "text_notes",
@@ -268,7 +268,7 @@ class CaptionRepository:
             return True
 
         # Add updated timestamp
-        set_parts.append("boundary_updated_at = datetime('now')")
+        set_parts.append("caption_frame_extents_updated_at = datetime('now')")
 
         params.append(caption_id)
         query = f"UPDATE captions SET {', '.join(set_parts)} WHERE id = ?"
@@ -352,7 +352,7 @@ class CaptionRepository:
             self.conn.execute(
                 """
                 UPDATE captions
-                SET end_frame_index = ?, boundary_pending = 1
+                SET end_frame_index = ?, caption_frame_extents_pending = 1
                 WHERE id = ?
                 """,
                 (start_frame - 1, overlap.id),
@@ -365,12 +365,12 @@ class CaptionRepository:
             cursor = self.conn.execute(
                 """
                 INSERT INTO captions (
-                    start_frame_index, end_frame_index, boundary_state,
-                    boundary_pending, text
+                    start_frame_index, end_frame_index, caption_frame_extents_state,
+                    caption_frame_extents_pending, text
                 )
                 VALUES (?, ?, ?, 1, ?)
                 """,
-                (end_frame + 1, overlap.end_frame_index, overlap.boundary_state.value, overlap.text),
+                (end_frame + 1, overlap.end_frame_index, overlap.caption_frame_extents_state.value, overlap.text),
             )
             if cursor.lastrowid:
                 right_cap = self.get_caption(cursor.lastrowid)
@@ -382,7 +382,7 @@ class CaptionRepository:
             self.conn.execute(
                 """
                 UPDATE captions
-                SET end_frame_index = ?, boundary_pending = 1
+                SET end_frame_index = ?, caption_frame_extents_pending = 1
                 WHERE id = ?
                 """,
                 (start_frame - 1, overlap.id),
@@ -396,7 +396,7 @@ class CaptionRepository:
             self.conn.execute(
                 """
                 UPDATE captions
-                SET start_frame_index = ?, boundary_pending = 1
+                SET start_frame_index = ?, caption_frame_extents_pending = 1
                 WHERE id = ?
                 """,
                 (end_frame + 1, overlap.id),
@@ -433,7 +433,7 @@ class CaptionRepository:
         cursor = self.conn.execute(
             """
             SELECT * FROM captions
-            WHERE boundary_state = 'gap'
+            WHERE caption_frame_extents_state = 'gap'
             AND (
                 end_frame_index = ? - 1
                 OR start_frame_index = ? + 1
@@ -465,7 +465,7 @@ class CaptionRepository:
         cursor = self.conn.execute(
             """
             INSERT INTO captions (
-                start_frame_index, end_frame_index, boundary_state, boundary_pending
+                start_frame_index, end_frame_index, caption_frame_extents_state, caption_frame_extents_pending
             )
             VALUES (?, ?, 'gap', 0)
             """,

@@ -75,7 +75,7 @@ def get_confirmed_text_annotations(db_path: Path) -> list[dict[str, Any]]:
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
-        # Query for captions with confirmed boundaries and text
+        # Query for captions with confirmed caption frame extents and text
         cursor.execute("""
             SELECT
                 id, start_frame_index, end_frame_index,
@@ -83,7 +83,7 @@ def get_confirmed_text_annotations(db_path: Path) -> list[dict[str, Any]]:
             FROM captions
             WHERE text IS NOT NULL
               AND text != ''
-              AND boundary_state = 'confirmed'
+              AND caption_frame_extents_state = 'confirmed'
             ORDER BY start_frame_index
         """)
 

@@ -18,18 +18,18 @@ class TestGetLayout:
         assert layout["frameWidth"] == 1920
         assert layout["frameHeight"] == 1080
 
-        # Check crop bounds structure
-        assert "cropBounds" in layout
-        assert layout["cropBounds"]["left"] == 10
-        assert layout["cropBounds"]["top"] == 20
-        assert layout["cropBounds"]["right"] == 30
-        assert layout["cropBounds"]["bottom"] == 40
+        # Check crop region structure
+        assert "cropRegion" in layout
+        assert layout["cropRegion"]["left"] == 10
+        assert layout["cropRegion"]["top"] == 20
+        assert layout["cropRegion"]["right"] == 30
+        assert layout["cropRegion"]["bottom"] == 40
 
         # Check selection mode
         assert layout["selectionMode"] == "manual"
 
         # Check version tracking
-        assert layout["cropBoundsVersion"] == 1
+        assert layout["cropRegionVersion"] == 1
 
     async def test_get_layout_not_initialized(
         self, layout_client_empty_db: AsyncClient, test_video_id: str
@@ -42,37 +42,37 @@ class TestGetLayout:
 class TestUpdateLayout:
     """Tests for PUT /{video_id}/layout endpoint."""
 
-    async def test_update_crop_bounds(self, layout_client: AsyncClient, test_video_id: str):
-        """Should update crop bounds."""
+    async def test_update_crop_region(self, layout_client: AsyncClient, test_video_id: str):
+        """Should update crop region."""
         response = await layout_client.put(
             f"/videos/{test_video_id}/layout",
             json={
-                "cropBounds": {"left": 50, "top": 60, "right": 70, "bottom": 80}
+                "cropRegion": {"left": 50, "top": 60, "right": 70, "bottom": 80}
             },
         )
         assert response.status_code == 200
 
         data = response.json()
         layout = data["layout"]
-        assert layout["cropBounds"]["left"] == 50
-        assert layout["cropBounds"]["top"] == 60
-        assert layout["cropBounds"]["right"] == 70
-        assert layout["cropBounds"]["bottom"] == 80
+        assert layout["cropRegion"]["left"] == 50
+        assert layout["cropRegion"]["top"] == 60
+        assert layout["cropRegion"]["right"] == 70
+        assert layout["cropRegion"]["bottom"] == 80
 
-    async def test_update_selection_bounds(self, layout_client: AsyncClient, test_video_id: str):
-        """Should update selection bounds."""
+    async def test_update_selection_region(self, layout_client: AsyncClient, test_video_id: str):
+        """Should update selection region."""
         response = await layout_client.put(
             f"/videos/{test_video_id}/layout",
             json={
-                "selectionBounds": {"left": 100, "top": 100, "right": 500, "bottom": 300}
+                "selectionRegion": {"left": 100, "top": 100, "right": 500, "bottom": 300}
             },
         )
         assert response.status_code == 200
 
         data = response.json()
         layout = data["layout"]
-        assert layout["selectionBounds"]["left"] == 100
-        assert layout["selectionBounds"]["right"] == 500
+        assert layout["selectionRegion"]["left"] == 100
+        assert layout["selectionRegion"]["right"] == 500
 
     async def test_update_selection_mode(self, layout_client: AsyncClient, test_video_id: str):
         """Should update selection mode."""
@@ -121,4 +121,4 @@ class TestInitLayout:
         layout = data["layout"]
         assert layout["frameWidth"] == 1280
         assert layout["frameHeight"] == 720
-        assert layout["cropBoundsVersion"] == 1
+        assert layout["cropRegionVersion"] == 1

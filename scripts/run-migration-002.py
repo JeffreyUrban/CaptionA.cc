@@ -2,7 +2,7 @@
 """Run migration 002: Add analysis_model_version column to all databases.
 
 This migration adds analysis_model_version to video_layout_config to track
-which model version was used for the current crop bounds.
+which model version was used for the current crop region.
 
 Usage:
     python3 scripts/run-migration-002.py [--dry-run]

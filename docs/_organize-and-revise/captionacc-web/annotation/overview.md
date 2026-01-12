@@ -14,7 +14,7 @@ Migrating caption annotation workflow from PyQt6 desktop applications to web-bas
 
 For each video, we generate cropped caption frames at 10Hz (~25,000 frames per video). The annotation task involves:
 
-1. **Boundary marking**: Identify start/end frames for caption sequences and non-caption sequences
+1. **Caption frame extents marking**: Identify start/end frames for caption sequences and non-caption sequences
 2. **Text correction**: Correct OCR-extracted text for caption sequences
 
 **Caption sequences:**
@@ -33,13 +33,13 @@ For each video, we generate cropped caption frames at 10Hz (~25,000 frames per v
 
 ### 1. Workflow Separation
 
-**Key Insight:** Separate boundary marking from text correction into distinct workflows.
+**Key Insight:** Separate caption frame extents marking from text correction into distinct workflows.
 
 **Rationale:**
 
 - Different cognitive tasks (visual comparison vs text editing)
 - More efficient to batch similar tasks
-- Allows marking boundaries without determining text immediately
+- Allows marking caption frame extents without determining text immediately
 - Reduces context switching
 
 ### 2. Video-Agnostic Data Model
@@ -85,7 +85,7 @@ For each video, we generate cropped caption frames at 10Hz (~25,000 frames per v
 
 ## Two Workflows
 
-### Workflow A: Boundary Marking
+### Workflow A: Caption Frame Extents Marking
 
 **Purpose:** Efficiently identify caption/non-caption sequences
 
@@ -96,7 +96,7 @@ For each video, we generate cropped caption frames at 10Hz (~25,000 frames per v
 - Classify as "Caption" (text TBD) or "Non-caption"
 - No text entry
 
-**Output:** Annotation with boundaries, type, and text status
+**Output:** Annotation with caption frame extents, type, and text status
 
 ### Workflow B: Text Correction
 
@@ -198,7 +198,7 @@ interface Frame {
 ### Routes
 
 ```
-/annotate/boundaries    - Boundary marking workflow
+/annotate/caption-frame-extents    - Caption frame extents marking workflow
 /annotate/text          - Text correction workflow
 ```
 
@@ -216,7 +216,7 @@ Frames stored at: `/!__local/data/_has_been_deprecated__!/<video_id>/crop_frames
 ### API Endpoints
 
 ```
-GET  /api/annotations/next?mode=boundaries    - Get next annotation to mark
+GET  /api/annotations/next?mode=caption-frame-extents    - Get next annotation to mark
 GET  /api/annotations/next?mode=text          - Get next annotation needing text
 GET  /api/frames/:video_id/:frame_index       - Get specific frame
 GET  /api/frames/:video_id/range?start=X&end=Y - Get frame range
@@ -233,9 +233,9 @@ GET  /api/annotations/history                  - Get session history
 
 ## Next Steps
 
-1. Document boundary workflow in detail → [boundary-workflow.md](boundary-workflow.md)
+1. Document caption frame extents workflow in detail → [caption-frame-extents-workflow.md](caption-frame-extents-workflow.md)
 2. Document text correction workflow in detail → [text-correction-workflow.md](text-correction-workflow.md)
-3. Implement boundary workflow first
+3. Implement caption frame extents workflow first
 4. Test with real data
 5. Implement text correction workflow
 6. Iterate based on usage

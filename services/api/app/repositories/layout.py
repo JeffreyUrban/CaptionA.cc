@@ -43,7 +43,7 @@ def _row_to_layout_config_row(row: sqlite3.Row) -> VideoLayoutConfigRow:
         bottom_edge_std=row["bottom_edge_std"],
         horizontal_std_slope=row["horizontal_std_slope"],
         horizontal_std_intercept=row["horizontal_std_intercept"],
-        crop_bounds_version=row["crop_bounds_version"],
+        crop_region_version=row["crop_region_version"],
         analysis_model_version=row["analysis_model_version"],
         updated_at=row["updated_at"],
     )
@@ -123,7 +123,7 @@ class LayoutRepository:
         return self.get_layout_config()  # type: ignore
 
     def update_layout_config(self, input: VideoLayoutConfigUpdate) -> VideoLayoutConfig | None:
-        """Update crop bounds and selection region."""
+        """Update crop region and selection region."""
         updates: list[str] = []
         params: list[int | str] = []
 
@@ -158,12 +158,12 @@ class LayoutRepository:
         if not updates:
             return self.get_layout_config()
 
-        # Increment crop_bounds_version when crop bounds change
+        # Increment crop_region_version when crop region change
         if any(
             x is not None
             for x in [input.cropLeft, input.cropTop, input.cropRight, input.cropBottom]
         ):
-            updates.append("crop_bounds_version = crop_bounds_version + 1")
+            updates.append("crop_region_version = crop_region_version + 1")
 
         updates.append("updated_at = datetime('now')")
 

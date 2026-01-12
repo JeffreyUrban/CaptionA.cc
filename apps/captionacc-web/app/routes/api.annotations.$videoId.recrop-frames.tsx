@@ -19,7 +19,7 @@ async function getDatabase(videoId: string): Promise<Database.Database | Respons
   return new Database(dbPath)
 }
 
-// POST - Trigger frame re-cropping based on current crop bounds
+// POST - Trigger frame re-cropping based on current crop region
 export async function action({ params }: ActionFunctionArgs) {
   const { videoId: encodedVideoId } = params
 
@@ -36,7 +36,7 @@ export async function action({ params }: ActionFunctionArgs) {
     const db = await getDatabase(videoId)
     if (db instanceof Response) return db
 
-    // Get current crop bounds from video_layout_config
+    // Get current crop region from video_layout_config
     const layoutConfig = db
       .prepare(
         `
@@ -109,7 +109,7 @@ export async function action({ params }: ActionFunctionArgs) {
       videoPath,
       dbPath,
       outputDir: resolve(videoDir, 'crop_frames'),
-      cropBounds: {
+      cropRegion: {
         left: layoutConfig.crop_left,
         top: layoutConfig.crop_top,
         right: layoutConfig.crop_right,
@@ -123,7 +123,7 @@ export async function action({ params }: ActionFunctionArgs) {
       JSON.stringify({
         success: true,
         message: 'Frame cropping queued for processing',
-        cropBounds: {
+        cropRegion: {
           left: layoutConfig.crop_left,
           top: layoutConfig.crop_top,
           right: layoutConfig.crop_right,

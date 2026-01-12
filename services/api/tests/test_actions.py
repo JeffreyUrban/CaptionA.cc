@@ -20,7 +20,7 @@ def seeded_action_layout_db(layout_db: Path) -> Path:
         """
         INSERT INTO video_layout_config (
             id, frame_width, frame_height, crop_left, crop_top, crop_right, crop_bottom,
-            selection_mode, crop_bounds_version
+            selection_mode, crop_region_version
         ) VALUES (1, 1920, 1080, 0, 0, 0, 0, 'manual', 1);
 
         INSERT INTO video_preferences (id, layout_approved) VALUES (1, 0);
@@ -210,7 +210,7 @@ class TestTriggerProcessing:
         """Should return 501 Not Implemented."""
         response = await actions_client.post(
             f"/videos/{test_video_id}/actions/trigger-processing",
-            json={"type": "crop-and-infer-boundaries"},
+            json={"type": "crop-and-infer-caption-frame-extents"},
         )
         assert response.status_code == 501
 

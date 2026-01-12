@@ -75,10 +75,10 @@ def get_captions_needing_text(db_path: Path, limit: int | None = None) -> list[d
     query = """
         SELECT
             id, start_frame_index, end_frame_index,
-            boundary_state, text, text_pending, text_status, caption_ocr
+            caption_frame_extents_state, text, text_pending, text_status, caption_ocr
         FROM captions
         WHERE (text IS NULL OR text_pending = 1)
-          AND boundary_state != 'gap'
+          AND caption_frame_extents_state != 'gap'
         ORDER BY start_frame_index
     """
 
@@ -216,7 +216,7 @@ def get_caption_by_frames(db_path: Path, start_frame: int, end_frame: int) -> di
         """
         SELECT
             id, start_frame_index, end_frame_index,
-            boundary_state, text, text_pending, text_status,
+            caption_frame_extents_state, text, text_pending, text_status,
             text_notes, caption_ocr
         FROM captions
         WHERE start_frame_index = ? AND end_frame_index = ?
