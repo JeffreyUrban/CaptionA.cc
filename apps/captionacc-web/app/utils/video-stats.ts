@@ -506,7 +506,7 @@ function isVideoReadyForAnnotation(stats: Omit<VideoStats, 'badges'>): boolean {
   // Must have OCR data (layout phase complete)
   if (!stats.hasOcrData) return false
 
-  // Must have layout approved (boundaries phase unlocked)
+  // Must have layout approved (caption frame extents phase unlocked)
   if (!stats.layoutApproved) return false
 
   // Must have some annotations (not just empty)
@@ -566,7 +566,7 @@ function calculateLayoutBadge(
 }
 
 /**
- * Create an error badge for boundaries stage
+ * Create an error badge for caption frame extents stage
  */
 function createCaptionFrameExtentsErrorBadge(
   videoId: string,
@@ -584,7 +584,7 @@ function createCaptionFrameExtentsErrorBadge(
       stack: extra?.stack,
       context: {
         videoId,
-        stage: 'boundaries',
+        stage: 'caption frame extents',
         issue,
         ...(extra?.errorType && { errorType: extra.errorType }),
       },
@@ -593,7 +593,7 @@ function createCaptionFrameExtentsErrorBadge(
 }
 
 /**
- * Create a boundaries action badge (annotate or review)
+ * Create a caption frame extents action badge (annotate or review)
  */
 function createCaptionFrameExtentsActionBadge(
   videoId: string,
@@ -601,16 +601,16 @@ function createCaptionFrameExtentsActionBadge(
 ): BadgeState {
   const isReview = action === 'review'
   return {
-    type: 'boundaries',
+    type: 'caption frame extents',
     label: isReview ? 'Caption Frame Extents: Review' : 'Caption Frame Extents: Annotate',
     color: isReview ? 'yellow' : 'green',
     clickable: true,
-    url: `/annotate/boundariescaption-frame-extents?videoId=${encodeURIComponent(videoId)}`,
+    url: `/annotate/caption-frame-extents?videoId=${encodeURIComponent(videoId)}`,
   }
 }
 
 /**
- * Handle crop frames processing state for boundaries badge
+ * Handle crop frames processing state for caption frame extents badge
  * Returns null if no processing state applies
  */
 function handleCropFramesProcessingState(

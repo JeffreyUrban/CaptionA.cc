@@ -206,7 +206,7 @@ def extract_frame_pairs_from_captions(db_path: Path, caption_frame_extents_state
                             }
                         )
 
-            # Sample across boundaries (different label)
+            # Sample across caption_frame_extents (different label)
             if i < len(captions) - 1:
                 next_caption = captions[i + 1]
                 next_caption["id"]

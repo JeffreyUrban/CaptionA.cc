@@ -160,7 +160,7 @@ CREATE TABLE captionacc_production.daily_uploads (
   PRIMARY KEY (tenant_id, upload_date)
 );
 
--- Boundary inference runs
+-- Caption frame extents inference runs
 CREATE TABLE captionacc_production.caption_frame_extents_inference_runs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   run_id TEXT UNIQUE NOT NULL,
@@ -179,7 +179,7 @@ CREATE TABLE captionacc_production.caption_frame_extents_inference_runs (
   UNIQUE(video_id, cropped_frames_version, model_version)
 );
 
--- Boundary inference jobs
+-- Caption frame extents inference jobs
 CREATE TABLE captionacc_production.caption_frame_extents_inference_jobs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   video_id UUID NOT NULL REFERENCES captionacc_production.videos(id) ON DELETE CASCADE,
@@ -195,7 +195,7 @@ CREATE TABLE captionacc_production.caption_frame_extents_inference_jobs (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Boundary inference rejections
+-- Caption frame extents inference rejections
 CREATE TABLE captionacc_production.caption_frame_extents_inference_rejections (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   video_id UUID NOT NULL REFERENCES captionacc_production.videos(id) ON DELETE CASCADE,
@@ -484,17 +484,17 @@ CREATE POLICY "Platform admins view uploads"
   ON captionacc_production.daily_uploads FOR SELECT
   USING (captionacc_production.is_platform_admin());
 
--- Boundary inference runs
+-- Caption frame extents inference runs
 CREATE POLICY "Users view tenant inference runs"
   ON captionacc_production.caption_frame_extents_inference_runs FOR SELECT
   USING (tenant_id = captionacc_production.current_user_tenant_id());
 
--- Boundary inference jobs
+-- Caption frame extents inference jobs
 CREATE POLICY "Users view tenant inference jobs"
   ON captionacc_production.caption_frame_extents_inference_jobs FOR SELECT
   USING (tenant_id = captionacc_production.current_user_tenant_id());
 
--- Boundary inference rejections
+-- Caption frame extents inference rejections
 CREATE POLICY "Users view tenant rejections"
   ON captionacc_production.caption_frame_extents_inference_rejections FOR SELECT
   USING (tenant_id = captionacc_production.current_user_tenant_id());

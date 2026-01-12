@@ -59,10 +59,10 @@ CaptionA.cc uses CR-SQLite to synchronize client-facing databases (`layout.db`, 
 
 ## Database Sync Directions
 
-| Database | Direction | When |
-|----------|-----------|------|
-| `layout.db` | **Bidirectional** | Client: annotations. Server: predictions, bounds |
-| `captions.db` | **Client → Server** | During caption workflow (client editing) |
+| Database | Direction | When                                                  |
+|----------|-----------|-------------------------------------------------------|
+| `layout.db` | **Bidirectional** | Client: annotations. Server: predictions, crop region |
+| `captions.db` | **Client → Server** | During caption workflow (client editing)              |
 
 **Key principle:** Client and server never write the same columns simultaneously. Workflow locks enforce this separation.
 
@@ -679,7 +679,7 @@ ws.onclose = reconnect;
 
 ### Batching Changes
 
-For rapid edits (e.g., dragging boundaries), batch changes before sending:
+For rapid edits (e.g., rectangle select), batch changes before sending:
 
 ```typescript
 let pendingChanges = [];

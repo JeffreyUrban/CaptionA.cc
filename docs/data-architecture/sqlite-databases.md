@@ -68,7 +68,7 @@ Key: STS credentials for all client/* content (media and databases).
 | Database | Path | Access | Sync | Size | Purpose                         |
 |----------|------|--------|------|------|---------------------------------|
 | `layout.db.gz` | `client/` | STS credentials | CR-SQLite (bidirectional) | 0.2-2 MB | Boxes, annotations, crop region |
-| `captions.db.gz` | `client/` | STS credentials | CR-SQLite (client→server) | 0.04-0.8 MB | Caption boundaries, text        |
+| `captions.db.gz` | `client/` | STS credentials | CR-SQLite (client→server) | 0.04-0.8 MB | Caption caption frame extents, text        |
 | `raw-ocr.db.gz` | `server/` | None | None | 0.5-5 MB | Full OCR results                |
 | `layout-server.db.gz` | `server/` | None | None | 0.1-20 MB | ML model, analysis params       |
 | `full_frames/*.jpg` | `client/` | STS credentials | None | 15-70 MB | Video frames at 0.1Hz           |
@@ -158,7 +158,7 @@ SELECT crsql_as_crr('preferences');
 
 ## captions.db
 
-Caption boundaries, text, and annotation metadata.
+Caption frame extents, text, and annotation metadata.
 
 **Sync:** Client → Server via CR-SQLite (during client workflow)
 - **Fixed:** Schema, OCR-derived data, images

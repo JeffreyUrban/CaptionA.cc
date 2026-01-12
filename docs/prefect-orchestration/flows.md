@@ -103,7 +103,7 @@ videos.status: 'uploading' → 'processing' → 'active'
 
 ## 2. captionacc-crop-and-infer-caption-frame-extents
 
-Crops frames to annotation bounds, runs caption frame extents inference, and creates caption_frame_extents.db.
+Crops frames to crop region, runs caption frame extents inference, and creates caption_frame_extents.db.
 
 ### Trigger
 
@@ -115,7 +115,7 @@ POST /videos/{video_id}/approve-layout
 
 # Request body
 {
-    "bounds": {
+    "crop_region": {
         "crop_left": 0.1,
         "crop_top": 0.7,
         "crop_right": 0.9,
@@ -126,18 +126,18 @@ POST /videos/{video_id}/approve-layout
 
 ### Parameters
 
-| Parameter | Type | Source | Description |
-|-----------|------|--------|-------------|
-| `video_id` | UUID | API | Video identifier |
-| `tenant_id` | UUID | JWT | Tenant for path scoping |
-| `bounds` | object | API/layout.db | Crop boundaries (0-1 normalized) |
+| Parameter        | Type | Source | Description                         |
+|------------------|------|--------|-------------------------------------|
+| `video_id`       | UUID | API | Video identifier                    |
+| `tenant_id`      | UUID | JWT | Tenant for path scoping             |
+| `crop_region`    | object | API/layout.db | Crop region (0-1 normalized)        |
 | `layout_version` | int | layout.db | Version hash for cache invalidation |
 
 ### Steps
 
 ```python
 @flow(name="captionacc-crop-and-infer-caption-frame-extents")
-def captionacc_crop_and_infer_caption_frame_extents(video_id: str, tenant_id: str, bounds: dict):
+def captionacc_crop_and_infer_caption_frame_extents(video_id: str, tenant_id: str, crop_region: dict):
     # 1. Acquire server lock on video
     acquire_server_lock(video_id, lock_type="processing")
 
@@ -147,7 +147,7 @@ def captionacc_crop_and_infer_caption_frame_extents(video_id: str, tenant_id: st
             video_key=f"{tenant_id}/client/videos/{video_id}/video.mp4",
             tenant_id=tenant_id,
             video_id=video_id,
-            bounds=bounds,
+            crop_region=crop_region,
             frame_rate=10.0,  # 10 frames per second for captions
         )
         # Modal uploads:
@@ -157,7 +157,7 @@ def captionacc_crop_and_infer_caption_frame_extents(video_id: str, tenant_id: st
         # 3. Call API to process inference results into captions.db
         api_process_inference(
             video_id=video_id,
-            boundaries_results_key=modal_result.caption_frame_extents_db_key,
+            caption_frame_extents_results_key=modal_result.caption_frame_extents_db_key,
             cropped_frames_version=modal_result.version
         )
         # API creates:
@@ -364,7 +364,7 @@ deployments:
 ```python
 from prefect.client import get_client
 
-async def trigger_captionacc_crop_and_infer_caption_frame_extents(video_id: str, tenant_id: str, bounds: dict):
+async def trigger_captionacc_crop_and_infer_caption_frame_extents(video_id: str, tenant_id: str, crop_region: dict):
     async with get_client() as client:
         deployment = await client.read_deployment_by_name("captionacc-crop-and-infer-caption-frame-extents/production")
         flow_run = await client.create_flow_run_from_deployment(
@@ -372,7 +372,7 @@ async def trigger_captionacc_crop_and_infer_caption_frame_extents(video_id: str,
             parameters={
                 "video_id": video_id,
                 "tenant_id": tenant_id,
-                "bounds": bounds
+                "crop_region": crop_region
             }
         )
         return flow_run.id

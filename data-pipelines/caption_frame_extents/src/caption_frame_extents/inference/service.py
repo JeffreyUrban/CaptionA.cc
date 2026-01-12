@@ -465,8 +465,8 @@ def run_caption_frame_extents_inference_batch(
         # Build storage key for caption frame extents database
         from caption_frame_extents.inference.caption_frame_extents_db import get_db_filename
 
-        boundaries_filename = get_db_filename(cropped_frames_version, model_version, run_id)
-        storage_key = f"videos/{tenant_id}/{video_id}/boundaries/{boundaries_filename}"
+        caption_frame_extents_filename = get_db_filename(cropped_frames_version, model_version, run_id)
+        storage_key = f"videos/{tenant_id}/{video_id}/caption_frame_extents/{caption_frame_extents_filename}"
 
         wasabi.upload_file(db_path, storage_key, content_type="application/x-sqlite3")
         file_size_bytes = db_path.stat().st_size

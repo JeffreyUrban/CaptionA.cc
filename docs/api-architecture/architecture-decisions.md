@@ -37,7 +37,7 @@ All services scale to zero when idle.
 5. USER SESSION - CAPTIONS (sync, Fly.io + CR-SQLite)
    Client ◄───STS credentials───▶ Wasabi (captions.db.gz, if needsDownload)
    Client ◄──── WebSocket ────▶ api (working copy on disk)
-   api: boundary edits, text edits
+   api: caption frame extents edits, text edits
         Periodically uploads to Wasabi
 ```
 

@@ -137,7 +137,7 @@ export default function AnnotateText() {
   // Switch to caption frame extents mode
   const switchToCaptionFrameExtents = () => {
     void navigate(
-      `/annotate/boundariescaption-frame-extents?videoId=${encodeURIComponent(videoId)}`
+      `/annotate/caption-frame-extents?videoId=${encodeURIComponent(videoId)}`
     )
   }
 

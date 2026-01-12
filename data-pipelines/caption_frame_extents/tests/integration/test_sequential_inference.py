@@ -338,7 +338,7 @@ class TestQualityChecksIntegration:
     @pytest.mark.integration
     def test_quality_checks_on_valid_sequence(self, tmp_path):
         """Quality checks should pass for valid caption frame extents sequence."""
-        boundaries = [
+        caption_frame_extents = [
             {"frame1_index": 0, "frame2_index": 1, "predicted_label": "same"},
             {"frame1_index": 1, "frame2_index": 2, "predicted_label": "same"},
             {"frame1_index": 2, "frame2_index": 3, "predicted_label": "different"},
@@ -384,7 +384,7 @@ class TestQualityChecksIntegration:
 
         result = run_quality_checks(
             video_db_path=tmp_path / "fake.db",
-            boundaries=boundaries,
+            caption_frame_extents=caption_frame_extents,
         )
 
         assert result["pass_rate"] == 1.0

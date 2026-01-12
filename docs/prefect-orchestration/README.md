@@ -39,7 +39,7 @@ Prefect: trigger on video record insert
 Prefect: trigger on layout approval
     │
     ├──▶ Modal: crop_and_infer_caption_frame_extents()
-    │        video + bounds → cropped_frames/*.webm → Wasabi
+    │        video + crop region → cropped_frames/*.webm → Wasabi
     │        frame_pairs → inference → caption_frame_extents.db → Wasabi
     │
     ├──▶ API: process_caption_frame_extents_results()

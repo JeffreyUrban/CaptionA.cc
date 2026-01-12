@@ -168,7 +168,7 @@ class CaptionRepository:
         )
 
         # Check if caption frame extents changed
-        boundaries_changed = (
+        caption_frame_extents_changed = (
             input.startFrameIndex != original.start_frame_index
             or input.endFrameIndex != original.end_frame_index
         )
@@ -189,7 +189,7 @@ class CaptionRepository:
                 input.startFrameIndex,
                 input.endFrameIndex,
                 input.captionFrameExtentsState.value,
-                1 if boundaries_changed else 0,
+                1 if caption_frame_extents_changed else 0,
                 caption_id,
             ),
         )

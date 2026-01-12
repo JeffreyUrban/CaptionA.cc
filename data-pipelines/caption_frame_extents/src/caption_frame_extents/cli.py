@@ -166,16 +166,16 @@ def analyze(
         # Load predictions
         with open(predictions_json) as f:
             data = json.load(f)
-            boundaries = data.get("boundaries", [])
+            caption_frame_extents = data.get("caption frame extents", [])
 
-        if not boundaries:
-            console.print("[yellow]⚠[/yellow] No boundaries found in file")
+        if not caption_frame_extents:
+            console.print("[yellow]⚠[/yellow] No caption frame extents found in file")
             return
 
         # Run quality checks
         quality_results = run_quality_checks(
             video_db_path=video_db,
-            boundaries=boundaries,
+            caption_frame_extents=caption_frame_extents,
             ocr_confidence_min=ocr_confidence_min,
         )
 

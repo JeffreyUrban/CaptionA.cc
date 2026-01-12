@@ -99,7 +99,7 @@ class ExtractResult:
 
 ### 2. crop_and_infer_caption_frame_extents
 
-Crops frames to bounds, encodes as WebM, and runs caption frame extents inference.
+Crops frames to crop region, encodes as WebM, and runs caption frame extents inference.
 
 #### Function Signature
 
@@ -114,7 +114,7 @@ def crop_and_infer_caption_frame_extents(
     video_key: str,
     tenant_id: str,
     video_id: str,
-    bounds: CropRegion,
+    crop_region: CropRegion,
     frame_rate: float = 10.0
 ) -> CropInferResult:
     ...
@@ -122,12 +122,12 @@ def crop_and_infer_caption_frame_extents(
 
 #### Parameters
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `video_key` | str | Wasabi S3 key for video file |
-| `tenant_id` | str | Tenant UUID |
-| `video_id` | str | Video UUID |
-| `bounds` | CropRegion | Normalized crop boundaries (0-1) |
+| Parameter | Type | Description                       |
+|-----------|------|-----------------------------------|
+| `video_key` | str | Wasabi S3 key for video file      |
+| `tenant_id` | str | Tenant UUID                       |
+| `video_id` | str | Video UUID                        |
+| `crop_region` | CropRegion | Normalized crop region (0-1)      |
 | `frame_rate` | float | Frames per second (default: 10.0) |
 
 ```python

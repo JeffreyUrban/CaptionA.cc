@@ -29,7 +29,7 @@ __all__ = [
     "VideoPreferences",
     # fullOCR.db
     "FullFrameOcr",
-    # boundaries inference db
+    # caption frame extents inference db
     "CaptionFrameExtentsRunMetadata",
     "PairResult",
 ]

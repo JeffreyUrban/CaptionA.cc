@@ -246,7 +246,7 @@ class TestUpdateCaption:
     async def test_update_caption_overlap_resolution(
         self, client: AsyncClient, test_video_id: str, auth_headers: dict
     ):
-        """Should handle overlap resolution when expanding boundaries."""
+        """Should handle overlap resolution when expanding caption frame extents."""
         # Expand caption 1 to overlap with caption 2
         response = await client.put(
             f"/videos/{test_video_id}/captions/1",

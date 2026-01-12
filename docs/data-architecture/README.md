@@ -68,7 +68,7 @@ Databases are split by **visibility**:
 | Database | Location | Access | Sync | Purpose |
 |----------|----------|--------|------|---------|
 | `layout.db` | `client/` | STS credentials | CR-SQLite (bidirectional) | Boxes, annotations, crop region |
-| `captions.db` | `client/` | STS credentials | CR-SQLite (client→server) | Caption boundaries, text |
+| `captions.db` | `client/` | STS credentials | CR-SQLite (client→server) | Caption frame extents, text |
 | `raw-ocr.db.gz` | `server/` | None | None | Full OCR results |
 | `layout-server.db.gz` | `server/` | None | None | ML model, analysis params |
 
@@ -115,7 +115,7 @@ Each video has SQLite databases stored in Wasabi, split by visibility:
 | Database | Sync Direction | Content |
 |----------|----------------|---------|
 | `layout.db` | Bidirectional | Box positions, user annotations, server predictions, crop region |
-| `captions.db` | Client → Server | Caption boundaries, text, status |
+| `captions.db` | Client → Server | Caption frame extents, text, status |
 
 **Server-Only (internal):**
 

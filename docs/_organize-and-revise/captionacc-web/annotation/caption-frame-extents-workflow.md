@@ -426,7 +426,7 @@ Background optimization for seamless "Next" workflow:
   - **Goal**: User clicks "Next" → sees frames instantly (no wait)
 - For long annotations (>500 frames):
   - Loads modulo_16 across annotation (overview)
-  - Loads modulo_4 near boundaries (precision)
+  - Loads modulo_4 near caption frame extents (precision)
   - Defers modulo_1 until user arrives
 
 **Caching with Smart Pinning:**

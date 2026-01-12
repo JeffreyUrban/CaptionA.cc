@@ -140,26 +140,26 @@ class TestRunQualityChecks:
         assert result["quality_stats"]["total_caption_frame_extents"] == 2
 
     def test_flagged_caption_frame_extents_reduce_pass_rate(self):
-        """Flagged boundaries should reduce pass rate."""
+        """Flagged caption frame extents should reduce pass rate."""
         from pathlib import Path
 
-        boundaries = [
+        caption_frame_extents = [
             {"frame1_index": 0, "frame2_index": 1, "predicted_label": "different"},
             {"frame1_index": 1, "frame2_index": 2, "predicted_label": "different"},
         ]
         result = run_quality_checks(
             video_db_path=Path("/fake/path"),
-            boundaries=boundaries,
+            caption_frame_extents=caption_frame_extents,
         )
         assert result["pass_rate"] < 1.0
         assert len(result["flagged_caption_frame_extents"]) > 0
         assert result["quality_stats"]["sequence_issues"] > 0
 
     def test_flagged_caption_frame_extents_contain_original_data(self):
-        """Flagged boundaries should preserve original data plus flags."""
+        """Flagged caption frame extents should preserve original data plus flags."""
         from pathlib import Path
 
-        boundaries = [
+        caption_frame_extents = [
             {
                 "frame1_index": 0,
                 "frame2_index": 1,
@@ -175,7 +175,7 @@ class TestRunQualityChecks:
         ]
         result = run_quality_checks(
             video_db_path=Path("/fake/path"),
-            boundaries=boundaries,
+            caption_frame_extents=caption_frame_extents,
         )
         for flagged in result["flagged_caption_frame_extents"]:
             assert "frame1_index" in flagged

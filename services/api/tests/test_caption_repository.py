@@ -125,7 +125,7 @@ class TestUpdateCaptionWithOverlapResolution:
     """Tests for update_caption_with_overlap_resolution method."""
 
     def test_update_caption_frame_extents_no_overlap(self, seeded_repo: CaptionRepository):
-        """Should update boundaries without affecting other captions."""
+        """Should update caption frame extents without affecting other captions."""
         result = seeded_repo.update_caption_with_overlap_resolution(
             1,
             CaptionUpdate(

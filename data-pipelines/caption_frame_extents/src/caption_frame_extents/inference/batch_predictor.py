@@ -212,7 +212,7 @@ class BatchCaptionFrameExtentsPredictor:
         frame_pairs: list[tuple[PILImage.Image, PILImage.Image]],
         batch_size: int = 32,
     ) -> list[dict[str, Any]]:
-        """Predict boundaries for batch of frame pairs.
+        """Predict caption frame extents for batch of frame pairs.
 
         Args:
             frame_pairs: List of (frame1, frame2) PIL Image tuples
