@@ -25,7 +25,7 @@ Client-facing databases (`layout.db`, `captions.db`) use CR-SQLite for synchroni
 │                                                                              │
 │  1. GET /database/{db}/state     → Check version, lock status               │
 │  2. POST /database/{db}/lock     → Acquire lock, get WebSocket URL          │
-│  3. GET /database/{db}/download  → Presigned URL for .db.gz (if needed)     │
+│  3. Client downloads .db.gz from Wasabi using STS credentials (if needed)   │
 │  4. WebSocket /sync/{db}         → Real-time change sync                    │
 │  5. DELETE /database/{db}/lock   → Release lock (optional, auto-expires)    │
 │                                                                              │
@@ -33,7 +33,7 @@ Client-facing databases (`layout.db`, `captions.db`) use CR-SQLite for synchroni
 ```
 
 REST endpoints remain for:
-- **Read-only data**: Stats, preferences, presigned URLs for images/chunks
+- **Read-only data**: Stats, preferences
 - **Admin operations**: Database status, schema inspection
 
 ---
@@ -86,7 +86,8 @@ Response (lock granted):
   "granted": true,
   "websocketUrl": "wss://api.captiona.cc/v1/videos/{videoId}/sync/{db}",
   "needsDownload": true,
-  "serverVersion": 42
+  "serverVersion": 42,
+  "wasabiVersion": 42
 }
 ```
 
@@ -100,33 +101,16 @@ Response (lock denied - another user):
 ```
 
 **`needsDownload`:**
-- `true` → Server has no working copy, client should download from Wasabi
+- `true` → Server has no working copy, client downloads from Wasabi using STS credentials
 - `false` → Server has working copy, client will receive state via WebSocket
 
----
+**`wasabiVersion`:** The version of the database in Wasabi. When `needsDownload: true`, client downloads this version and uses it as the starting point for CR-SQLite sync.
 
-### 3. Database Download URL
-
-```
-GET /videos/{videoId}/database/{db}/download-url
-```
-
-Get presigned URL for downloading database from Wasabi (gzip compressed).
-
-Response:
-```json
-{
-  "url": "https://s3.wasabisys.com/caption-acc-prod/.../layout.db.gz?...",
-  "expiresIn": 900,
-  "version": 42
-}
-```
-
-**Note:** Only needed when `needsDownload: true` from lock acquisition.
+**S3 key pattern:** `{tenant_id}/client/videos/{video_id}/{db}.db.gz`
 
 ---
 
-### 4. Release Lock
+### 3. Release Lock
 
 ```
 DELETE /videos/{videoId}/database/{db}/lock
@@ -143,7 +127,7 @@ Response:
 
 ---
 
-### 5. WebSocket Sync
+### 4. WebSocket Sync
 
 ```
 WebSocket /videos/{videoId}/sync/{db}
@@ -169,7 +153,7 @@ Summary:
 
 ## Video Endpoints
 
-### 6. Stats
+### 5. Stats
 
 ```
 GET /videos/{videoId}/stats
@@ -191,7 +175,7 @@ Response:
 
 ---
 
-### 7. Preferences
+### 6. Preferences
 
 ```
 GET /videos/{videoId}/preferences
@@ -213,7 +197,7 @@ PUT body:
 
 ## Direct Wasabi Access
 
-### 8. S3 Credentials (STS) - Edge Function
+### 7. S3 Credentials (STS) - Edge Function
 
 ```
 GET /functions/v1/captionacc-s3-credentials
@@ -262,22 +246,19 @@ const chunk = await s3.send(new GetObjectCommand({
 - ✅ `client/videos/{id}/video.mp4` - Original video
 - ✅ `client/videos/{id}/full_frames/*.jpg` - Frame images
 - ✅ `client/videos/{id}/cropped_frames_v*/*.webm` - Video chunks
-- ✅ `client/videos/{id}/layout.db.gz` - Layout database (use presigned URLs for versioning)
-- ✅ `client/videos/{id}/captions.db.gz` - Captions database (use presigned URLs for versioning)
+- ✅ `client/videos/{id}/layout.db.gz` - Layout database
+- ✅ `client/videos/{id}/captions.db.gz` - Captions database
 - ❌ `server/*` - Server-only, never accessible
 
 **When to use:**
-- High-volume media access (chunks, frames)
+- All media access (chunks, frames, video)
+- Database downloads (when `needsDownload: true` from lock API)
 - Caption editor streaming
 - Layout page thumbnails
 
-**When NOT to use:**
-- Database downloads (use sync API for versioning)
-- One-off large file downloads (use presigned URL)
-
 ---
 
-### 9. Upload URL (Edge Function)
+### 8. Upload URL (Edge Function)
 
 ```
 POST /functions/v1/captionacc-presigned-upload
@@ -306,72 +287,9 @@ Response:
 
 ---
 
-## Legacy Presigned URL Endpoints
-
-These endpoints remain for backwards compatibility but STS credentials (above) are preferred for high-volume access.
-
-### 10. Image URLs
-
-```
-GET /videos/{videoId}/image-urls?frames=0,10,20&size=thumb
-```
-
-Get presigned URLs for frame images (layout page). Consider using STS credentials instead for better performance.
-
-| Query Param | Type | Description |
-|-------------|------|-------------|
-| `frames` | string | Comma-separated frame indices |
-| `size` | string | `thumb` (default) or `full` |
-
-Response:
-```json
-{
-  "urls": {
-    "0": "https://wasabi.../client/full_frames/frame_0_thumb.jpg?signature=...",
-    "10": "https://wasabi.../client/full_frames/frame_10_thumb.jpg?signature=..."
-  },
-  "expiresIn": 900
-}
-```
-
----
-
-### 11. Frame Chunks
-
-```
-GET /videos/{videoId}/frame-chunks?modulo=4&indices=0,4,8,12
-```
-
-Get presigned URLs for VP9 WebM video chunks. Consider using STS credentials instead for better performance.
-
-| Query Param | Type | Description |
-|-------------|------|-------------|
-| `modulo` | int | Sampling level: `16`, `4`, or `1` |
-| `indices` | string | Comma-separated frame indices |
-
-Response:
-```json
-{
-  "chunks": [
-    {
-      "chunkIndex": 0,
-      "signedUrl": "https://wasabi.../client/cropped_frames_v1/modulo_4/chunk_0000.webm?signature=...",
-      "frameIndices": [0, 4, 8, 12]
-    }
-  ]
-}
-```
-
-**Hierarchical loading:**
-- `modulo=16`: Coarsest, every 16th frame, large range
-- `modulo=4`: Medium, every 4th frame (excluding mod-16)
-- `modulo=1`: Finest, all remaining frames
-
----
-
 ## Admin Endpoints
 
-### 11. Database Status
+### 9. Database Status
 
 ```
 GET /admin/databases
@@ -403,7 +321,7 @@ Response:
 
 ---
 
-### 12. Force Wasabi Sync
+### 10. Force Wasabi Sync
 
 ```
 POST /admin/databases/{videoId}/{db}/sync
@@ -428,16 +346,13 @@ Response:
 |---|----------|---------|---------|
 | 1 | `/videos/{id}/database/{db}/state` | GET | Database version and lock status |
 | 2 | `/videos/{id}/database/{db}/lock` | POST, DELETE | Acquire/release editing lock |
-| 3 | `/videos/{id}/database/{db}/download-url` | GET | Presigned URL for database download |
-| 4 | `/videos/{id}/sync/{db}` | WebSocket | CR-SQLite real-time sync |
-| 5 | `/videos/{id}/stats` | GET | Video stats and progress |
-| 6 | `/videos/{id}/preferences` | GET, PUT | Video preferences |
-| 7 | `/videos/{id}/image-urls` | GET | Frame image presigned URLs (legacy) |
-| 8 | `/videos/{id}/frame-chunks` | GET | VP9 chunk presigned URLs (legacy) |
-| 9 | `/admin/databases` | GET | Database status list |
-| 10 | `/admin/databases/{id}/{db}/sync` | POST | Force Wasabi sync |
-| 11 | `/admin/locks/cleanup` | POST | Release stale locks |
+| 3 | `/videos/{id}/sync/{db}` | WebSocket | CR-SQLite real-time sync |
+| 4 | `/videos/{id}/stats` | GET | Video stats and progress |
+| 5 | `/videos/{id}/preferences` | GET, PUT | Video preferences |
+| 6 | `/admin/databases` | GET | Database status list |
+| 7 | `/admin/databases/{id}/{db}/sync` | POST | Force Wasabi sync |
+| 8 | `/admin/locks/cleanup` | POST | Release stale locks |
 
 Plus Edge Functions:
 - `POST /functions/v1/captionacc-presigned-upload` - Upload URL generation
-- `GET /functions/v1/captionacc-s3-credentials` - STS credentials for direct Wasabi access
+- `GET /functions/v1/captionacc-s3-credentials` - STS credentials for direct Wasabi access (media + databases)

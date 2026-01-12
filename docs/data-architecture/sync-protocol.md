@@ -38,7 +38,7 @@ CaptionA.cc uses CR-SQLite to synchronize client-facing databases (`layout.db`, 
 │            │                              └──────────────────────┘          │
 │            │                                                     │          │
 │            └─────────────────────────────────────────────────────┘          │
-│                        Initial download (if no active session)              │
+│                        Initial download (if needsDownload=true)             │
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -114,16 +114,20 @@ await db.loadExtension('crsqlite');
 
 // 4. Get database content
 if (lockResult.needsDownload) {
-  // No active server session - download from Wasabi (gzip compressed)
-  const { url } = await api.get(`/videos/${videoId}/database/${dbName}/download-url`);
-  const response = await fetch(url);
-  const compressedBuffer = await response.arrayBuffer();
+  // No server working copy - download from Wasabi using STS credentials
+  const s3Key = `${tenantId}/client/videos/${videoId}/${dbName}.db.gz`;
+  const response = await s3Client.send(new GetObjectCommand({
+    Bucket: "caption-acc-prod",
+    Key: s3Key
+  }));
+  const compressedBuffer = await response.Body.transformToByteArray();
 
   // Decompress (modern browsers support DecompressionStream)
   const decompressed = await decompressGzip(compressedBuffer);
   await db.deserialize(dbName, decompressed);
+  // lockResult.wasabiVersion tells us which version we downloaded
 } else {
-  // Server has working copy - will receive via WebSocket
+  // Server has working copy - will receive current state via WebSocket
 }
 
 // Helper: decompress gzip using native browser API
@@ -908,6 +912,6 @@ def test_change_tracking():
 ## Related Documentation
 
 - [SQLite Database Reference](./sqlite-databases.md) - Database schemas
-- [Wasabi Storage Reference](./wasabi-storage.md) - Presigned URL generation
+- [Wasabi Storage](./wasabi/) - Bucket configuration, STS credentials
 - [Supabase Schema Reference](./supabase-schema.md) - `video_database_state` table for versioning and locks
 - [CR-SQLite Documentation](https://github.com/vlcn-io/cr-sqlite) - Upstream library

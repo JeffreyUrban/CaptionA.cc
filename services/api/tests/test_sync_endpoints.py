@@ -2,7 +2,7 @@
 
 from collections.abc import AsyncGenerator
 from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from fastapi import FastAPI
@@ -288,6 +288,7 @@ class TestAcquireLock:
         assert "websocket_url" in data
         assert data["needs_download"] is True  # No working copy
         assert data["server_version"] == 0
+        assert data["wasabi_version"] == 0
 
     async def test_acquire_lock_with_working_copy(
         self,
@@ -362,6 +363,7 @@ class TestAcquireLock:
         data = response.json()
         assert data["granted"] is True
         assert data["server_version"] == 5
+        assert data["wasabi_version"] == 3
         # Old connection should have been notified
         assert old_connection_id in mock_ws_manager._notified_connections
 
@@ -432,57 +434,6 @@ class TestReleaseLock:
 
         data = response.json()
         assert data["released"] is False
-
-
-class TestGetDownloadUrl:
-    """Tests for GET /videos/{video_id}/database/{db}/download-url endpoint."""
-
-    async def test_get_download_url(
-        self, sync_client: AsyncClient, test_video_id: str
-    ):
-        """Should return presigned URL."""
-        mock_s3_client = MagicMock()
-        mock_s3_client.generate_presigned_url.return_value = (
-            "https://wasabi.example.com/test-bucket/test-key?signature=xyz"
-        )
-
-        with patch("app.routers.sync._get_s3_client", return_value=mock_s3_client):
-            response = await sync_client.get(
-                f"/videos/{test_video_id}/database/layout/download-url"
-            )
-            assert response.status_code == 200
-
-            data = response.json()
-            assert "url" in data
-            assert data["url"].startswith("https://")
-            assert data["expires_in"] == 900  # 15 minutes
-            assert data["version"] == 0  # No state exists
-
-    async def test_get_download_url_with_version(
-        self,
-        sync_client: AsyncClient,
-        test_video_id: str,
-        mock_state_repo: MockDatabaseStateRepository,
-    ):
-        """Should include wasabi_version from state."""
-        mock_state_repo.states[f"{test_video_id}/layout"] = {
-            "video_id": test_video_id,
-            "database_name": "layout",
-            "server_version": 10,
-            "wasabi_version": 8,
-        }
-
-        mock_s3_client = MagicMock()
-        mock_s3_client.generate_presigned_url.return_value = "https://example.com/db"
-
-        with patch("app.routers.sync._get_s3_client", return_value=mock_s3_client):
-            response = await sync_client.get(
-                f"/videos/{test_video_id}/database/layout/download-url"
-            )
-            assert response.status_code == 200
-
-            data = response.json()
-            assert data["version"] == 8
 
 
 class TestEnsureDatabaseState:

@@ -51,15 +51,15 @@ Wasabi paths are organized with **access level at the top** for simple IAM polic
 │
 └── server/                        # Server-only (never client-accessible)
     └── videos/{video_id}/
-        ├── ocr-server.db          # Full OCR results
-        └── layout-server.db       # ML model, analysis params
+        ├── ocr-server.db.gz       # Full OCR results (gzip)
+        └── layout-server.db.gz    # ML model, analysis params (gzip)
 ```
 
 **Security principle:** Access level (`client/` vs `server/`) at the top enables simple IAM policies:
 - `{tenant_id}/client/*` - Tenant gets STS credentials for read-only access
 - `{tenant_id}/server/*` - Never included in any client credentials
 
-See: [Wasabi Storage Reference](./wasabi-storage.md)
+See: [Wasabi Storage](./wasabi/)
 
 ## Client vs Server Data
 
@@ -67,12 +67,12 @@ Databases are split by **visibility**:
 
 | Database | Location | Access | Sync | Purpose |
 |----------|----------|--------|------|---------|
-| `layout.db` | `client/` | STS or Presigned URL | CR-SQLite (bidirectional) | Boxes, annotations, bounds |
-| `captions.db` | `client/` | STS or Presigned URL | CR-SQLite (client→server) | Caption boundaries, text |
-| `ocr-server.db` | `server/` | None | None | Full OCR results |
-| `layout-server.db` | `server/` | None | None | ML model, analysis params |
+| `layout.db` | `client/` | STS credentials | CR-SQLite (bidirectional) | Boxes, annotations, bounds |
+| `captions.db` | `client/` | STS credentials | CR-SQLite (client→server) | Caption boundaries, text |
+| `ocr-server.db.gz` | `server/` | None | None | Full OCR results |
+| `layout-server.db.gz` | `server/` | None | None | ML model, analysis params |
 
-**Key principle:** Client-facing databases live in `client/` alongside media. While technically accessible via STS credentials, clients should use presigned URLs via the sync API for proper version tracking.
+**Key principle:** Client-facing databases live in `client/` alongside media. Client uses STS credentials for download; version info comes from the lock API response.
 
 See: [SQLite Database Reference](./sqlite-databases.md)
 
@@ -100,11 +100,11 @@ Wasabi provides **cost-effective object storage** with free egress bandwidth. It
 - **Full-resolution frames**: `client/videos/{id}/full_frames/*.jpg` (0.1Hz)
 - **Cropped frame chunks**: `client/videos/{id}/cropped_frames_v*/modulo_*/*.webm`
 - **Client databases**: `client/videos/{id}/layout.db.gz`, `captions.db.gz` (gzip compressed)
-- **Server databases**: `server/videos/{id}/ocr-server.db`, `layout-server.db`
+- **Server databases**: `server/videos/{id}/ocr-server.db.gz`, `layout-server.db.gz`
 
 Bucket: `caption-acc-prod` (us-east-1)
 
-See: [Wasabi Storage Reference](./wasabi-storage.md)
+See: [Wasabi Storage](./wasabi/)
 
 ### 3. SQLite Databases (Per-Video)
 
@@ -121,8 +121,8 @@ Each video has SQLite databases stored in Wasabi, split by visibility:
 
 | Database | Content |
 |----------|---------|
-| `ocr-server.db` | Full OCR results from Google Vision API |
-| `layout-server.db` | Trained ML model, analysis parameters |
+| `ocr-server.db.gz` | Full OCR results from Google Vision API |
+| `layout-server.db.gz` | Trained ML model, analysis parameters |
 
 See: [SQLite Database Reference](./sqlite-databases.md)
 
@@ -136,7 +136,7 @@ See: [SQLite Database Reference](./sqlite-databases.md)
 3. Backend creates video record in Supabase (status: 'uploading')
 4. Prefect flow: upload_and_process_video
    a. Extract full frames → client/videos/{id}/full_frames/*.jpg
-   b. Run OCR → server/videos/{id}/ocr-server.db
+   b. Run OCR → server/videos/{id}/ocr-server.db.gz
    c. Initialize client/videos/{id}/layout.db.gz with box data from OCR
 5. Video status set to 'active'
 ```
@@ -144,8 +144,8 @@ See: [SQLite Database Reference](./sqlite-databases.md)
 ### Layout Annotation Flow (CR-SQLite Sync)
 
 ```
-1. Client requests presigned URL for client/videos/{id}/layout.db.gz
-2. Client downloads directly from Wasabi (no server load)
+1. Client acquires lock via API → gets needsDownload + wasabiVersion
+2. If needsDownload: Client downloads layout.db.gz from Wasabi using STS credentials
 3. Client loads into wa-sqlite + CR-SQLite extension
 4. User annotates boxes (in/out/clear) - instant local edits
 5. Client syncs changes via WebSocket → Server applies → uploads to Wasabi
@@ -157,7 +157,7 @@ See: [SQLite Database Reference](./sqlite-databases.md)
 
 ```
 1. Prefect flow: crop_frames_to_webm
-2. Download client/videos/{id}/video.mp4 + server/videos/{id}/layout-server.db from Wasabi
+2. Download client/videos/{id}/video.mp4 + server/videos/{id}/layout-server.db.gz from Wasabi
 3. Extract cropped frames at 10Hz using layout bounds
 4. Encode as VP9/WebM chunks (hierarchical modulo levels)
 5. Upload chunks to Wasabi: client/videos/{id}/cropped_frames_v{version}/modulo_{M}/chunk_NNNN.webm
@@ -169,8 +169,8 @@ See: [SQLite Database Reference](./sqlite-databases.md)
 
 ```
 1. Client gets STS credentials for tenant (one-time per session)
-2. Client requests presigned URL for client/videos/{id}/captions.db.gz
-3. Client downloads captions.db directly from Wasabi
+2. Client acquires lock via API → gets needsDownload + wasabiVersion
+3. If needsDownload: Client downloads captions.db.gz from Wasabi using STS credentials
 4. Client loads into wa-sqlite + CR-SQLite extension
 5. Browser streams cropped frame chunks directly from Wasabi using STS credentials
 6. User edits caption boundaries and text - instant local edits
@@ -183,7 +183,7 @@ See: [SQLite Database Reference](./sqlite-databases.md)
 |------------|---------------|-----|
 | Frame chunks (`.webm`) | STS credentials | High volume, performance critical |
 | Frame images (`.jpg`) | STS credentials | High volume, layout thumbnails |
-| Client databases (`.db.gz`) | Presigned URL via API | Version tracking via sync API |
+| Client databases (`.db.gz`) | STS credentials | Version info from lock API |
 | Original video | STS credentials | Part of client/ path |
 | Server databases | None | Proprietary, server-only |
 
@@ -217,14 +217,17 @@ Client and server use CR-SQLite for change tracking and synchronization:
 ```
 Client                                    Server
 ──────                                    ──────
-Download .db from Wasabi ◄─────────────── Presigned URL
+Acquire lock ─────────────────────────────► Returns needsDownload + wasabiVersion
+If needsDownload:
+  Download .db.gz from Wasabi (STS creds)
 Load wa-sqlite + CR-SQLite
+Connect WebSocket
 Make local edits (instant)
 
 Query crsql_changes table
 Send changes via WebSocket ──────────────► Validate & apply
                            ◄────────────── Ack + version
-                                          Upload to Wasabi
+                                          Upload to Wasabi (periodic)
 ```
 
 **Workflow Locks:** Supabase `video_database_state` table prevents concurrent client/server writes. Client notified via WebSocket when lock state changes.
@@ -258,8 +261,8 @@ caption-acc-prod/
     │
     └── server/                              # Server-only (never client-accessible)
         └── videos/{video_id}/
-            ├── ocr-server.db                # Full OCR results
-            └── layout-server.db             # ML model, analysis params
+            ├── ocr-server.db.gz             # Full OCR results (gzip)
+            └── layout-server.db.gz          # ML model, analysis params (gzip)
 ```
 
 ### Local Processing Path Pattern
@@ -279,5 +282,5 @@ local/processing/
 
 - [SQLite Database Reference](./sqlite-databases.md) - Database schemas, client vs server split
 - [Sync Protocol Reference](./sync-protocol.md) - CR-SQLite WebSocket sync details
-- [Wasabi Storage Reference](./wasabi-storage.md) - Bucket configuration, IAM policies, STS setup
+- [Wasabi Storage](./wasabi/) - Bucket configuration, IAM policies, STS setup
 - [Supabase Schema Reference](./supabase-schema.md) - PostgreSQL tables, RLS policies, functions

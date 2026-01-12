@@ -9,7 +9,6 @@ from app.routers import (
     preferences,
     stats,
     sync,
-    videos,
     websocket_sync,
 )
 
@@ -22,6 +21,5 @@ __all__ = [
     "preferences",
     "stats",
     "sync",
-    "videos",
     "websocket_sync",
 ]

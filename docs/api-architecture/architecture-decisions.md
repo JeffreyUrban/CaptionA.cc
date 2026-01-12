@@ -8,7 +8,7 @@
 
 | Service | Function | Infra | Cost |
 |---------|----------|-------|------|
-| **api** | Sync: database locks, CR-SQLite WebSocket, presigned URLs | Fly.io (auto-stop) | Pay for usage |
+| **api** | Sync: database locks, CR-SQLite WebSocket | Fly.io (auto-stop) | Pay for usage |
 | **prefect** | Job orchestration | Fly.io (auto-stop) | Pay for usage |
 | **modal-gpu** | Async: full_frames + OCR, crop + inference | Modal | Per-video, scales to 0 |
 
@@ -25,7 +25,7 @@ All services scale to zero when idle.
                                                                 → layout.db (boxes) → Wasabi
 
 3. USER SESSION - LAYOUT (sync, Fly.io + CR-SQLite)
-   Client ◄──presigned URL── Wasabi (layout.db.gz, if no active session)
+   Client ◄───STS credentials───▶ Wasabi (layout.db.gz, if needsDownload)
    Client ◄──── WebSocket ────▶ api (working copy on disk)
    api: box annotations ↔ ML predictions ↔ crop bounds
         Periodically uploads to Wasabi (idle/checkpoint)
@@ -35,7 +35,7 @@ All services scale to zero when idle.
    api: process results → captions.db → sync to client
 
 5. USER SESSION - CAPTIONS (sync, Fly.io + CR-SQLite)
-   Client ◄──presigned URL── Wasabi (captions.db.gz, if no active session)
+   Client ◄───STS credentials───▶ Wasabi (captions.db.gz, if needsDownload)
    Client ◄──── WebSocket ────▶ api (working copy on disk)
    api: boundary edits, text edits
         Periodically uploads to Wasabi
@@ -50,13 +50,13 @@ All services scale to zero when idle.
 - **Direct Supabase queries**: SPA queries video list, user profile directly (RLS enforced)
 
 **Wasabi tenant isolation:**
-- All S3 paths scoped: `{tenant_id}/videos/{video_id}/...`
+- All S3 paths scoped: `{tenant_id}/client/videos/{video_id}/...` or `{tenant_id}/server/videos/{video_id}/...`
 - `tenant_id` extracted from validated JWT, never from request params
-- Presigned URLs (15 min expiry) generated server-side with Wasabi credentials
-- Client cannot forge paths - signature would be invalid
+- STS credentials (via Edge Function) scoped to tenant's `client/*` path only
+- Client cannot access other tenants - IAM session policy enforced
 - Upload URLs via Supabase Edge Functions (keeps Wasabi creds isolated from API)
 
-### CR-SQLite Sync (replaces REST + Supabase Realtime)
+### CR-SQLite Sync
 
 Client-facing databases (`layout.db`, `captions.db`) sync via CR-SQLite:
 
@@ -96,14 +96,15 @@ See: [Sync Protocol Reference](../data-architecture/sync-protocol.md)
 
 ### API Style
 - **Sync endpoints** for database state, locks, WebSocket connection
-- **REST** for read-only data: stats, preferences, presigned URLs
+- **REST** for read-only data: stats, preferences
+- **STS credentials** (Edge Function) for all client Wasabi access (media + databases)
 - Everything scoped under `/videos/{videoId}`
-- ~10 consolidated endpoints
+- ~8 consolidated endpoints
 - Client-facing only (no internal service endpoints)
 - Server-side operations (layout analysis, crop+inference) triggered by state changes
 
 ### Realtime Updates
-- **Database sync**: WebSocket for CR-SQLite changes (replaces Supabase Realtime for layout/captions)
+- **Database sync**: WebSocket for CR-SQLite changes
 - **Job status**: Supabase Realtime for `videos` table changes (processing status)
 - Jobs write status directly to Supabase (no internal API endpoints)
 
@@ -116,12 +117,12 @@ See: [Sync Protocol Reference](../data-architecture/sync-protocol.md)
 ### Storage
 
 **Wasabi S3:**
-- **Videos**: Original uploads, presigned URLs
-- **Full frames**: `full_frames/*.jpg`, presigned URLs to client (~500KB each)
+- **Videos**: Original uploads (direct access via STS credentials)
+- **Full frames**: `full_frames/*.jpg` (direct access via STS credentials, ~500KB each)
 - **Thumbnails**: Alongside full frames (~10KB each, ~100px wide)
-- **Client databases**: `layout.db.gz`, `captions.db.gz` (gzip compressed, ~60-70% reduction)
-- **Server databases**: `ocr-server.db`, `layout-server.db` (uncompressed)
-- **Cropped frame chunks**: VP9 WebM files
+- **Client databases**: `layout.db.gz`, `captions.db.gz` (direct access via STS credentials, gzip compressed)
+- **Server databases**: `ocr-server.db.gz`, `layout-server.db.gz` (gzip compressed, server-only)
+- **Cropped frame chunks**: VP9 WebM files (direct access via STS credentials)
 - **S3 versioning**: Enabled for corruption recovery
 
 **Server local disk:**
@@ -136,16 +137,16 @@ See: [Sync Protocol Reference](../data-architecture/sync-protocol.md)
 
 ### Frame Images (Layout Page)
 - **Thumbnails generated during OCR job**: Ready when user arrives at layout page
-- **Presigned URLs fetched on-demand**: Client requests URLs for frames it needs
-- **Short-lived URLs**: ~15 min expiry, fetched close to use for security
+- **Direct S3 access via STS credentials**: Client gets tenant-scoped credentials once per session
 - **Workflow**:
-  1. Client gets box data from layout.db (via CR-SQLite sync)
-  2. Client identifies frames needing review
-  3. Client requests presigned URLs for those frames
-  4. As work progresses, client requests URLs for new frames
+  1. Client gets STS credentials (Edge Function, scoped to `{tenant_id}/client/*`)
+  2. Client acquires lock, downloads layout.db.gz if needed, connects WebSocket for sync
+  3. Client reads box data from local layout.db
+  4. Client fetches frames directly from Wasabi using S3 SDK (no API round-trip)
 
 ### Frame Chunks (Caption Editing)
 - **VP9 WebM chunks**: 32 cropped frames per chunk, generated during crop+inference
+- **Direct S3 access via STS credentials**: Same credentials used for frame images
 - **Hierarchical loading**: modulo levels (16, 4, 1) for coarse-to-fine progressive loading
 - **Client-side extraction**: Fetch WebM, load in video element, seek + canvas extract
 - **LRU cache with pinning**: ~75-130MB across modulo levels, pins active/next annotation

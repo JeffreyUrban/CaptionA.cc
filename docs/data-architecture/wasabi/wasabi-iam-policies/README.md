@@ -429,7 +429,7 @@ Update the DENY statement accordingly.
 ## Related Documentation
 
 - **Data Architecture:** `../../README.md`
-- **Wasabi Storage Reference:** `../../wasabi-storage.md`
+- **Wasabi Storage:** `../README.md`
 - **Edge Functions README:** `../../../../supabase/functions/README.md`
 - **Test Scripts:** `/scripts/test-wasabi-access.sh`, `/scripts/test-both-credentials.sh`
 

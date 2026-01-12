@@ -23,7 +23,6 @@ from app.routers import (
     preferences,
     stats,
     sync,
-    videos,
     websocket_sync,
 )
 from app.services.background_tasks import get_upload_worker
@@ -85,7 +84,6 @@ def create_app() -> FastAPI:
     )
 
     # Include routers
-    app.include_router(videos.router, prefix="/videos", tags=["videos"])
     app.include_router(captions.router, prefix="/videos", tags=["captions"])
     app.include_router(boxes.router, prefix="/videos", tags=["boxes"])
     app.include_router(layout.router, prefix="/videos", tags=["layout"])

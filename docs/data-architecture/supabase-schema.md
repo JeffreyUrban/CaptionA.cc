@@ -216,7 +216,7 @@ Preview access control.
 
 #### `boundary_inference_runs`
 
-Completed inference job registry (deduplication).
+Completed inference runs. Used to avoid redundant processing—before starting a new job, check for existing run with same (video_id, cropped_frames_version, model_version).
 
 | Column | Type | Description |
 |--------|------|-------------|

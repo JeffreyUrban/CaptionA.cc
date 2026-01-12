@@ -20,14 +20,14 @@ Paths are organized by **access level** at the top for simple IAM policies:
 │
 └── server/                        # Server-only (never client-accessible)
     └── videos/{video_id}/
-        ├── ocr-server.db          # Full OCR results, model predictions
-        └── layout-server.db       # ML model blob, analysis parameters
+        ├── ocr-server.db.gz       # Full OCR results, model predictions (gzip)
+        └── layout-server.db.gz    # ML model blob, analysis parameters (gzip)
 ```
 
 **Security:** Access level (`client/` vs `server/`) at the top enables simple IAM policies:
 - STS credentials grant read access to `{tenant_id}/client/*`
 - Server files at `{tenant_id}/server/*` never accessible to clients
-- Databases in `client/` accessible via presigned URLs (use sync API for versioning)
+- Version info comes from lock API response (`wasabiVersion`)
 
 ## Client Access Pattern
 
@@ -39,28 +39,27 @@ Paths are organized by **access level** at the top for simple IAM policies:
 │   Browser                         Wasabi S3                    API       │
 │   ───────                         ─────────                    ───       │
 │                                                                          │
-│   MEDIA (STS Credentials - one-time per session):                       │
+│   STS CREDENTIALS (one-time per session):                               │
 │   1. Request STS credentials ───────────────────────────────► │         │
 │   2. ◄─────────────────────────────────────── temp credentials          │
-│   3. Direct S3 access ──────────► client/videos/{id}/full_frames/*.jpg  │
+│                                                                          │
+│   DATABASE SYNC:                                                        │
+│   3. Acquire lock ──────────────────────────────────────────► │         │
+│   4. ◄──────────────────────────── needsDownload + wasabiVersion        │
+│   5. If needsDownload:                                                  │
+│      Download .db.gz ───────────► client/videos/{id}/layout.db.gz      │
+│      (using STS credentials)                                            │
+│   6. Decompress (gzip) and load into wa-sqlite + CR-SQLite              │
+│   7. Connect WebSocket for sync ────────────────────────────► │         │
+│                                                                          │
+│   MEDIA ACCESS (using same STS credentials):                            │
+│   8. Direct S3 access ──────────► client/videos/{id}/full_frames/*.jpg  │
 │      (client signs requests)      client/videos/{id}/cropped_frames_v*/ │
-│                                                                          │
-│   DATABASES (Presigned URLs per download - for version tracking):       │
-│   4. Request presigned URL ─────────────────────────────────► │         │
-│   5. ◄─────────────────────────────────────────────────────── URL       │
-│   6. Download .db.gz file ──────────► client/videos/{id}/layout.db.gz   │
-│      (direct from Wasabi)                                               │
-│                                                                          │
-│   7. Decompress (gzip) and load into wa-sqlite + CR-SQLite              │
-│      Make local edits (instant)                                         │
-│                                                                          │
-│   8. Sync changes via WebSocket ────────────────────────────► │         │
-│   9. ◄─────────────────────────────────────────────────────── ack       │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 
 Key: STS credentials for all client/* content (media and databases).
-     Use presigned URLs via sync API for databases to ensure version tracking.
+     Lock API provides version info (wasabiVersion) for database downloads.
      Server-only files (server/*) never accessible to client.
 ```
 
@@ -68,10 +67,10 @@ Key: STS credentials for all client/* content (media and databases).
 
 | Database | Path | Access | Sync | Size | Purpose |
 |----------|------|--------|------|------|---------|
-| `layout.db.gz` | `client/` | Presigned URL | CR-SQLite (bidirectional) | 0.2-2 MB | Boxes, annotations, bounds |
-| `captions.db.gz` | `client/` | Presigned URL | CR-SQLite (client→server) | 0.04-0.8 MB | Caption boundaries, text |
-| `ocr-server.db` | `server/` | None | None | 0.5-5 MB | Full OCR results |
-| `layout-server.db` | `server/` | None | None | 0.1-20 MB | ML model, analysis params |
+| `layout.db.gz` | `client/` | STS credentials | CR-SQLite (bidirectional) | 0.2-2 MB | Boxes, annotations, bounds |
+| `captions.db.gz` | `client/` | STS credentials | CR-SQLite (client→server) | 0.04-0.8 MB | Caption boundaries, text |
+| `ocr-server.db.gz` | `server/` | None | None | 0.5-5 MB | Full OCR results |
+| `layout-server.db.gz` | `server/` | None | None | 0.1-20 MB | ML model, analysis params |
 | `full_frames/*.jpg` | `client/` | STS credentials | None | 15-70 MB | Video frames at 0.1Hz |
 | `cropped_frames_v*/*.webm` | `client/` | STS credentials | None | 50-500 MB | VP9 video chunks |
 
@@ -326,7 +325,7 @@ client/videos/{video_id}/full_frames/
 └── ...
 ```
 
-**Access:** Client uses STS credentials from `GET /functions/v1/captionacc-s3-credentials` to access directly via S3 SDK. Legacy presigned URLs available via `GET /videos/{id}/image-urls`.
+**Access:** Client uses STS credentials from `GET /functions/v1/captionacc-s3-credentials` to access directly via S3 SDK.
 
 **Metadata:** Video duration, frame count, and hash stored in Supabase `videos` table.
 
@@ -344,7 +343,7 @@ client/videos/{video_id}/cropped_frames_v1/
 └── modulo_1/            # Every frame (finest)
 ```
 
-**Access:** Client uses STS credentials from `GET /functions/v1/captionacc-s3-credentials` to stream directly via S3 SDK. Legacy presigned URLs available via `GET /videos/{id}/frame-chunks`.
+**Access:** Client uses STS credentials from `GET /functions/v1/captionacc-s3-credentials` to stream directly via S3 SDK.
 
 **Hierarchical loading:** Client loads coarse chunks first (modulo_16), then progressively finer detail as needed.
 
@@ -389,10 +388,16 @@ VALUES (...);
 Client                                    Server
 ──────                                    ──────
 
-1. GET presigned URL for client/videos/{id}/layout.db.gz or captions.db.gz
-2. Download directly from Wasabi (no server load)
-3. Decompress and load wa-sqlite + CR-SQLite extension
-   last_sync_version = db_version
+1. POST /lock ─────────────────────────────────────────────────►
+                                          ◄─────────────────────
+   { needsDownload: true, wasabiVersion: 42 }
+
+2. If needsDownload:
+   Download .db.gz from Wasabi using STS credentials
+   Decompress and load wa-sqlite + CR-SQLite extension
+   last_sync_version = wasabiVersion
+
+3. Connect WebSocket ──────────────────────────────────────────►
 
 4. User makes edit (instant, local)
 
@@ -403,11 +408,11 @@ Client                                    Server
                                           ───────────────────►
                                                               Validate
                                                               Apply changes
-                                                              Upload to client/
                                           ◄───────────────────
    { type: "ack", version: 43 }
 
 7. last_sync_version = 43
+   (Server periodically uploads to Wasabi)
 ```
 
 ---
@@ -453,32 +458,8 @@ Per-run, immutable database storing ML inference results. Internal to data pipel
 
 ---
 
-# Migration Notes
-
-## video.db → full_frames/
-
-The `video.db` database (JPEG blobs in SQLite) is replaced with individual .jpg files:
-
-1. Extract frames from `video.db.full_frames` table to `full_frames/*.jpg`
-2. Move video metadata to Supabase `videos` table
-3. Delete `video.db`
-
-## fullOCR.db → ocr-server.db + layout.db
-
-Original `fullOCR.db` is split:
-- Full OCR data stays in `ocr-server.db` (server-only)
-- Box positions/text copied to `layout.db` `boxes` table (client-synced)
-
-## layout.db Decomposition
-
-Original `layout.db` split into:
-- `layout-server.db`: ML model blob, analysis parameters (server-only)
-- `layout.db`: Boxes, annotations, bounds, preferences (client-synced)
-
----
-
 # Related Documentation
 
 - [Sync Protocol Reference](./sync-protocol.md) - WebSocket sync details
-- [Wasabi Storage Reference](./wasabi-storage.md) - Bucket configuration, presigned URLs
+- [Wasabi Storage](./wasabi/) - Bucket configuration, STS credentials, IAM policies
 - [Supabase Schema Reference](./supabase-schema.md) - PostgreSQL tables, RLS policies

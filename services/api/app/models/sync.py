@@ -45,6 +45,7 @@ class LockGrantedResponse(BaseModel):
     websocket_url: str
     needs_download: bool
     server_version: int
+    wasabi_version: int  # Version in Wasabi (use when needs_download=True)
 
 
 class LockDeniedResponse(BaseModel):
@@ -59,14 +60,6 @@ class LockReleaseResponse(BaseModel):
     """Response for DELETE /database/{db}/lock."""
 
     released: bool
-
-
-class DownloadUrlResponse(BaseModel):
-    """Response for GET /database/{db}/download-url."""
-
-    url: str
-    expires_in: int
-    version: int
 
 
 class S3CredentialsInfo(BaseModel):

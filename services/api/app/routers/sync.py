@@ -1,20 +1,16 @@
 """Database sync REST endpoints.
 
-Handles lock acquisition, state queries, and download URLs for CR-SQLite sync.
+Handles lock acquisition and state queries for CR-SQLite sync.
+Database downloads use STS credentials (via Edge Function) for direct S3 access.
 """
 
-import asyncio
-
-import boto3
-from botocore.config import Config
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter
 
 from app.config import get_settings
 from app.dependencies import Auth
 from app.models.sync import (
     DatabaseName,
     DatabaseStateResponse,
-    DownloadUrlResponse,
     LockDeniedResponse,
     LockGrantedResponse,
     LockReleaseResponse,
@@ -25,21 +21,6 @@ from app.services.supabase_client import DatabaseStateRepository
 from app.services.websocket_manager import get_websocket_manager
 
 router = APIRouter()
-
-PRESIGNED_URL_EXPIRES = 900  # 15 minutes
-
-
-def _get_s3_client():
-    """Create S3 client for Wasabi."""
-    settings = get_settings()
-    return boto3.client(
-        "s3",
-        endpoint_url=settings.wasabi_endpoint_url,
-        aws_access_key_id=settings.effective_wasabi_access_key,
-        aws_secret_access_key=settings.effective_wasabi_secret_key,
-        region_name=settings.wasabi_region,
-        config=Config(signature_version="s3v4"),
-    )
 
 
 @router.get("/{video_id}/database/{db}/state", response_model=DatabaseStateResponse)
@@ -130,10 +111,12 @@ async def acquire_lock(video_id: str, db: DatabaseName, auth: Auth):
     # Check if we have a working copy on disk
     needs_download = not cr_manager.has_working_copy(auth.tenant_id, video_id, db.value)
 
-    # Get server version
+    # Get versions
     server_version = 0
+    wasabi_version = 0
     if state:
         server_version = state.get("server_version", 0)
+        wasabi_version = state.get("wasabi_version", 0)
 
     # Build WebSocket URL
     # Use the configured API host or default
@@ -146,6 +129,7 @@ async def acquire_lock(video_id: str, db: DatabaseName, auth: Auth):
         websocket_url=websocket_url,
         needs_download=needs_download,
         server_version=server_version,
+        wasabi_version=wasabi_version,
     )
 
 
@@ -166,42 +150,6 @@ async def release_lock(video_id: str, db: DatabaseName, auth: Auth):
         return LockReleaseResponse(released=True)
 
     return LockReleaseResponse(released=False)
-
-
-@router.get("/{video_id}/database/{db}/download-url", response_model=DownloadUrlResponse)
-async def get_download_url(video_id: str, db: DatabaseName, auth: Auth):
-    """Get presigned URL for downloading database from Wasabi.
-
-    The database is stored gzip-compressed. Client should:
-    1. Fetch the URL
-    2. Decompress using browser's DecompressionStream
-    3. Load into wa-sqlite with CR-SQLite extension
-
-    Only needed when `needs_download: true` from lock acquisition.
-    """
-    settings = get_settings()
-    repo = DatabaseStateRepository()
-
-    state = await repo.get_state(video_id, db.value)
-    version = state.get("wasabi_version", 0) if state else 0
-
-    s3_client = _get_s3_client()
-    s3_key = f"{auth.tenant_id}/client/videos/{video_id}/{db.value}.db.gz"
-
-    def _generate_url():
-        return s3_client.generate_presigned_url(
-            "get_object",
-            Params={"Bucket": settings.wasabi_bucket, "Key": s3_key},
-            ExpiresIn=PRESIGNED_URL_EXPIRES,
-        )
-
-    url = await asyncio.to_thread(_generate_url)
-
-    return DownloadUrlResponse(
-        url=url,
-        expires_in=PRESIGNED_URL_EXPIRES,
-        version=version,
-    )
 
 
 @router.post("/{video_id}/database/{db}/ensure-state")
