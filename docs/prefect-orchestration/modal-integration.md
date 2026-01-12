@@ -145,8 +145,6 @@ class CropRegion:
 @dataclass
 class CropInferResult:
     version: int              # Cropped frames version number
-    frame_count: int          # Total frames extracted
-    chunk_count: int          # Number of WebM chunks
     caption_frame_extents_db_key: str     # Wasabi path to caption_frame_extents.db
     cropped_frames_prefix: str  # Wasabi prefix for chunks
 ```

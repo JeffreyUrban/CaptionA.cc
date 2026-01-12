@@ -87,7 +87,7 @@ fly apps restart captionacc-prefect
 # 3. Upgrading to faster GPU
 
 # Retry the flow manually
-prefect deployment run "captionacc-video-initial-processing/production" \
+prefect deployment run "captionacc-video-initial-processing" \
   --param video_id=xxx \
   --param tenant_id=xxx \
   --param storage_key=xxx
@@ -195,7 +195,7 @@ aws s3 rm s3://caption-acc-prod/{tenant}/server/videos/{id}/ --recursive
 aws s3 rm s3://caption-acc-prod/{tenant}/client/videos/{id}/layout.db.gz
 
 # 3. Trigger reprocessing
-prefect deployment run "captionacc-video-initial-processing/production" \
+prefect deployment run "captionacc-video-initial-processing" \
   --param video_id=xxx \
   --param tenant_id=xxx \
   --param storage_key=xxx

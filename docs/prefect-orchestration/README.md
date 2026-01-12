@@ -111,11 +111,11 @@ Prefect: trigger on caption frame extents confirmation
 
 ## Prefect Flows
 
-| Flow | Trigger | Steps                                           |
-|------|---------|-------------------------------------------------|
-| `captionacc-video-initial-processing` | Supabase webhook | Modal: frames + OCR                             |
-| `captionacc-crop-and-infer-caption-frame-extents` | API call | Modal: crop + infer → API: create caption_frame_extents.db |
-| `captionacc-caption-ocr` | API call | Modal: median + OCR → API: update caption       |
+| Flow | Trigger | Steps                                                               |
+|------|---------|---------------------------------------------------------------------|
+| `captionacc-video-initial-processing` | Supabase webhook | Modal: frames + OCR                                                 |
+| `captionacc-crop-and-infer-caption-frame-extents` | API call | Modal: crop + infer: caption_frame_extents.db                       |
+| `captionacc-caption-ocr` | API call | caption_frame_extents.db, Modal: median + OCR → API: update caption |
 
 See [Flows Reference](./flows.md) for detailed specifications.
 

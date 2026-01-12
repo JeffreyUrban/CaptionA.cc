@@ -178,7 +178,6 @@ def captionacc_crop_and_infer_caption_frame_extents(video_id: str, tenant_id: st
     return {
         "video_id": video_id,
         "cropped_frames_version": modal_result.version,
-        "caption_count": modal_result.caption_count
     }
 ```
 
@@ -232,19 +231,20 @@ POST /videos/{video_id}/captions/{caption_id}/request-ocr
 
 ### Parameters
 
-| Parameter | Type | Source | Description |
-|-----------|------|--------|-------------|
-| `video_id` | UUID | API | Video identifier |
-| `caption_id` | int | API | Caption record ID |
-| `start_frame` | int | captions.db | Caption start frame index |
-| `end_frame` | int | captions.db | Caption end frame index |
+| Parameter | Type | Source | Description                      |
+|-----------|------|--------|----------------------------------|
+| `tenant_id` | UUID | API | Tenant identifier                |
+| `video_id` | UUID | API | Video identifier                 |
+| `caption_id` | int | API | Caption record ID                |
+| `start_frame` | int | captions.db | Caption start frame index        |
+| `end_frame` | int | captions.db | Caption end frame index          |
 | `cropped_frames_version` | int | Supabase | Version of cropped frames to use |
 
 ### Steps
 
 ```python
 @flow(name="captionacc-caption-ocr")
-def captionacc_caption_ocr(video_id: str, caption_id: int, start_frame: int, end_frame: int, version: int):
+def captionacc_caption_ocr(tenant_id: str, video_id: str, caption_id: int, start_frame: int, end_frame: int, version: int):
     # 1. Update caption status
     update_caption_ocr_status(video_id, caption_id, status="processing")
 

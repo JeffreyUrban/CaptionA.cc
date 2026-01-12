@@ -201,14 +201,15 @@ fly secrets set WASABI_SECRET_KEY=xxx
 
 ### Required Secrets
 
-| Secret | Purpose |
-|--------|---------|
+| Secret | Purpose                  |
+|--------|--------------------------|
 | `MODAL_TOKEN_ID` | Modal API authentication |
 | `MODAL_TOKEN_SECRET` | Modal API authentication |
-| `SUPABASE_URL` | Supabase project URL |
-| `SUPABASE_SERVICE_KEY` | Supabase admin access |
-| `WASABI_ACCESS_KEY` | Wasabi S3 access |
-| `WASABI_SECRET_KEY` | Wasabi S3 secret |
+| `WEBHOOK_SECRET` | TODO: write description  |
+| `SUPABASE_URL` | Supabase project URL     |
+| `SUPABASE_SERVICE_KEY` | Supabase admin access    |
+| `WASABI_ACCESS_KEY` | Wasabi S3 access         |
+| `WASABI_SECRET_KEY` | Wasabi S3 secret         |
 
 ## Deployment
 
@@ -292,7 +293,7 @@ async def handle_supabase_webhook(request: Request):
         record = payload["record"]
         async with get_client() as client:
             deployment = await client.read_deployment_by_name(
-                "captionacc-video-initial-processing/production"
+                "captionacc-video-initial-processing"
             )
             await client.create_flow_run_from_deployment(
                 deployment.id,
@@ -369,7 +370,7 @@ fly monitoring alerts create \
 
 ## Cost Estimation
 
-### Fly.io Pricing (as of 2024)
+### Fly.io Pricing (as of 2026)
 
 | Resource | Allocation | Cost/Month |
 |----------|------------|------------|
