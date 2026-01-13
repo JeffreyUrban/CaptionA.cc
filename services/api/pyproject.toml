@@ -63,3 +63,37 @@ typeCheckingMode = "standard"
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+# Custom markers for test categorization
+markers = [
+    "unit: Unit tests (fast, no external dependencies)",
+    "integration: Integration tests (moderate speed, mocked externals)",
+    "api: API endpoint tests (uses TestClient)",
+    "flows: Prefect flow tests (mocked Modal/Supabase/Wasabi)",
+    "slow: Slow-running tests (> 1s per test)",
+    "websocket: WebSocket connection tests",
+]
+
+# Coverage settings
+[tool.coverage.run]
+source = ["app"]
+omit = [
+    "*/tests/*",
+    "*/conftest.py",
+    "*/__init__.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "@abstractmethod",
+]
+fail_under = 80  # Minimum coverage threshold
