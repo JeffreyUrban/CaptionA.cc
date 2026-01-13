@@ -1,7 +1,7 @@
 """
 Test script for pipelined crop_and_infer implementation.
 
-This script tests ONLY the pipelined crop_and_infer Modal function:
+This script tests the pipelined crop_and_infer Modal function:
 1. Sets up test tenant directory structure on Wasabi
 2. Copies test fixture video to tenant's client directory
 3. Creates and uploads minimal layout.db with crop region
@@ -9,7 +9,7 @@ This script tests ONLY the pipelined crop_and_infer Modal function:
 5. Cleans up test data (automatic in finally block)
 
 Prerequisites:
-- Test fixture video at: test-fixtures/videos/car-teardown-comparison-08.mp4
+- Test fixture video at: test-fixtures/videos/short-test.mp4
 - Modal deployment with crop_and_infer_caption_frame_extents function
 
 Run as `python test_pipelined.py`
@@ -55,8 +55,8 @@ def run_pipelined_test():
     tenant_id = str(uuid.uuid4())
     video_id = str(uuid.uuid4())
 
-    # Source fixture and target video key
-    fixture_key = "test-fixtures/videos/car-teardown-comparison-08.mp4"
+    # Source fixture and target video key (using short test video)
+    fixture_key = "test-fixtures/videos/short-test.mp4"
     video_key = f"{tenant_id}/client/videos/{video_id}/video.mp4"
 
     print(f"[1/4] Setting up test tenant directory")
@@ -208,17 +208,17 @@ def run_pipelined_test():
         print("✓ Pipelined implementation completed successfully!")
         print()
         print("Results:")
-        print(f"  • Version: {result['version']}")
-        print(f"  • Frame count: {result['frame_count']}")
-        print(f"  • Label counts: {result['label_counts']}")
-        print(f"  • Processing duration: {result['processing_duration_seconds']:.2f}s")
-        print(f"  • Cropped frames prefix: {result['cropped_frames_prefix']}")
-        print(f"  • Caption frame extents DB: {result['caption_frame_extents_db_key']}")
+        print(f"  • Version: {result.version}")
+        print(f"  • Frame count: {result.frame_count}")
+        print(f"  • Label counts: {result.label_counts}")
+        print(f"  • Processing duration: {result.processing_duration_seconds:.2f}s")
+        print(f"  • Cropped frames prefix: {result.cropped_frames_prefix}")
+        print(f"  • Caption frame extents DB: {result.caption_frame_extents_db_key}")
         print()
 
         # Calculate throughput
-        if result['processing_duration_seconds'] > 0:
-            throughput = result['frame_count'] / result['processing_duration_seconds']
+        if result.processing_duration_seconds > 0:
+            throughput = result.frame_count / result.processing_duration_seconds
             print(f"Overall throughput: {throughput:.1f} frames/second")
         print()
 

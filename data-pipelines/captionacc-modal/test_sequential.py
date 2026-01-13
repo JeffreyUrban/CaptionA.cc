@@ -27,7 +27,7 @@ from pathlib import Path
 from PIL import Image as PILImage
 
 
-def run_pipelined_test():
+def run_sequential_test():
     """Run sequential implementation test."""
     print("=" * 80)
     print("SEQUENTIAL IMPLEMENTATION TEST")
@@ -249,5 +249,5 @@ def run_pipelined_test():
 
 
 if __name__ == "__main__":
-    success = run_pipelined_test()
+    success = run_sequential_test()
     sys.exit(0 if success else 1)

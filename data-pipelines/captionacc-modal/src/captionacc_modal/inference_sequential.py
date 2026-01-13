@@ -135,7 +135,7 @@ class FrameExtractor:
         Stream frames using GPU-accelerated extraction with precise timing.
 
         Calculates exact frame indices for target FPS to maintain 0.1s accuracy over
-        10+ hours while enabling pipelining (decode → crop → inference streaming).
+        10+ hours.
 
         Yields:
             Tuple of (frame_index, frame_array)
