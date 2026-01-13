@@ -111,7 +111,9 @@ def update_video_metadata_task(
         f"{frame_count} frames, {duration:.1f}s duration"
     )
     supabase.update_video_metadata(
-        video_id=video_id, duration_seconds=duration
+        video_id=video_id,
+        frame_count=frame_count,
+        duration_seconds=duration
     )
 
 
