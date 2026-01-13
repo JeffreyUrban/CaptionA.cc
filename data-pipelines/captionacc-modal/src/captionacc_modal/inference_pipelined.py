@@ -58,12 +58,6 @@ import ffmpeg
 import torch
 from PIL import Image as PILImage
 
-try:
-    import PyNvVideoCodec as nvvc
-    PYNVVIDEOCODEC_AVAILABLE = True
-except ImportError:
-    PYNVVIDEOCODEC_AVAILABLE = False
-
 from .models import CropInferResult, CropRegion
 
 # Import from caption_frame_extents package
