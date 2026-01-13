@@ -384,8 +384,8 @@ CREATE POLICY "Platform admins view all videos"
 ```bash
 # Generate new keys in Wasabi console
 # Update Fly.io secrets
-fly secrets set WASABI_ACCESS_KEY_READONLY="new_key"
-fly secrets set WASABI_SECRET_KEY_READONLY="new_secret"
+fly secrets set WASABI_ACCESS_KEY_READONLY="<replace-with-new-access>"
+fly secrets set WASABI_SECRET_KEY_READONLY="<replace-with-new-value>"
 
 # Redeploy application
 fly deploy
@@ -460,12 +460,12 @@ const accessKey = process.env.WASABI_ACCESS_KEY_READONLY
 -- Store secrets in Supabase Vault
 SELECT vault.create_secret(
   'WASABI_ACCESS_KEY_READONLY',
-  'SNAX2WPJAV4OGXCN4HEC'
+  '<replace-with-wasabi-access>_HERE'
 );
 
 SELECT vault.create_secret(
   'WASABI_SECRET_KEY_READONLY',
-  '9K26uuzEoN3AQsjgGHZVerCuHmmf7BLwht5Mo0wF'
+  '<replace-with-wasabi-secret>_HERE'
 );
 ```
 

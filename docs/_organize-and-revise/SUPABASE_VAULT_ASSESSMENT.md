@@ -41,8 +41,8 @@ Supabase Vault is a Postgres extension (`pgsodium` + `supabase_vault`) that prov
 ```bash
 # Set secrets via Fly.io CLI
 fly secrets set \
-  WASABI_ACCESS_KEY_READONLY="SNAX2WPJAV4OGXCN4HEC" \
-  WASABI_SECRET_KEY_READONLY="9K26uuzEoN3AQsjgGHZVerCuHmmf7BLwht5Mo0wF"
+  WASABI_ACCESS_KEY_READONLY="<replace-with-wasabi-access>" \
+  WASABI_SECRET_KEY_READONLY="<replace-with-wasabi-secret>"
 ```
 
 ```typescript
@@ -92,8 +92,8 @@ CREATE EXTENSION IF NOT EXISTS supabase_vault;
 -- Insert secrets into vault
 INSERT INTO vault.secrets (name, secret)
 VALUES
-  ('wasabi_access_key_readonly', 'SNAX2WPJAV4OGXCN4HEC'),
-  ('wasabi_secret_key_readonly', '9K26uuzEoN3AQsjgGHZVerCuHmmf7BLwht5Mo0wF');
+  ('wasabi_access_key_readonly', 'example_wasabi_access_key_here'),
+  ('wasabi_secret_key_readonly', 'example_wasabi_secret_key_value_here');
 ```
 
 **Step 3: Create RLS policies for access control**
@@ -355,7 +355,7 @@ Repeat Phase 2 for remaining secrets:
    ```sql
    -- Rotate secret (keeps version history)
    UPDATE vault.secrets
-   SET secret = 'new_secret_value',
+   SET secret = '<insert-new-value-here>',
        updated_at = NOW()
    WHERE name = 'wasabi_access_key_readonly';
 

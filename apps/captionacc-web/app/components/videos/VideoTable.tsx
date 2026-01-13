@@ -834,8 +834,8 @@ function VideoActionsMenu({
   const textDisabled = !stats?.layoutApproved || (stats?.totalAnnotations ?? 0) === 0
 
   const getStatusText = () => {
-    if (stats?.processingStatus?.status) {
-      return `(${stats.processingStatus.status.replace(/_/g, ' ')})`
+    if (stats?.processingStatus?.status !== 'processing_complete') {
+      return '(processing)'
     }
     if (!stats?.hasOcrData) {
       return '(no OCR data)'
@@ -878,7 +878,7 @@ function VideoActionsMenu({
                 </span>
               ) : (
                 <Link
-                  to={`/annotate/boundariescaption-frame-extents?videoId=${encodeURIComponent(videoId)}`}
+                  to={`/annotate/caption-frame-extents?videoId=${encodeURIComponent(videoId)}`}
                   className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 data-[focus]:bg-gray-100 dark:data-[focus]:bg-gray-700 data-[focus]:text-gray-900 dark:data-[focus]:text-white data-[focus]:outline-none"
                 >
                   Mark Caption Frame Extents

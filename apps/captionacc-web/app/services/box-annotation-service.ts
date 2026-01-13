@@ -498,9 +498,9 @@ export async function getFrameBoxes(
 
   try {
     // Get layout config
-    const layoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as
-      | VideoLayoutConfigRow
-      | undefined
+    const layoutConfig = db
+      .prepare('SELECT * FROM video_layout_config ORDER BY created_at DESC LIMIT 1')
+      .get() as VideoLayoutConfigRow | undefined
 
     if (!layoutConfig) {
       throw new Error('Layout config not found')
@@ -630,7 +630,9 @@ export async function saveBoxAnnotations(
   try {
     // Get layout config for frame dimensions
     const layoutConfig = db
-      .prepare('SELECT frame_width, frame_height FROM video_layout_config WHERE id = 1')
+      .prepare(
+        'SELECT frame_width, frame_height FROM video_layout_config ORDER BY created_at DESC LIMIT 1'
+      )
       .get() as { frame_width: number; frame_height: number } | undefined
 
     if (!layoutConfig) {
@@ -654,9 +656,9 @@ export async function saveBoxAnnotations(
     }
 
     // Get full layout config for predictions
-    const fullLayoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as
-      | VideoLayoutConfigRow
-      | undefined
+    const fullLayoutConfig = db
+      .prepare('SELECT * FROM video_layout_config ORDER BY created_at DESC LIMIT 1')
+      .get() as VideoLayoutConfigRow | undefined
 
     // Get model version if available
     const modelInfo = db
@@ -843,9 +845,9 @@ export async function bulkAnnotateRectangle(
 
   try {
     // Get layout config for frame dimensions
-    const layoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as
-      | VideoLayoutConfigRow
-      | undefined
+    const layoutConfig = db
+      .prepare('SELECT * FROM video_layout_config ORDER BY created_at DESC LIMIT 1')
+      .get() as VideoLayoutConfigRow | undefined
 
     if (!layoutConfig) {
       throw new Error('Layout config not found')
@@ -1029,9 +1031,9 @@ export async function bulkAnnotateRectangleAllFrames(
 
   try {
     // Validate inputs and get configuration
-    const layoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as
-      | VideoLayoutConfigRow
-      | undefined
+    const layoutConfig = db
+      .prepare('SELECT * FROM video_layout_config ORDER BY created_at DESC LIMIT 1')
+      .get() as VideoLayoutConfigRow | undefined
     if (!layoutConfig) {
       throw new Error('Layout config not found')
     }
@@ -1158,7 +1160,9 @@ export async function bulkAnnotateAll(
 
       // Get layout config
       const layoutConfig = db
-        .prepare('SELECT frame_width, frame_height FROM video_layout_config WHERE id = 1')
+        .prepare(
+          'SELECT frame_width, frame_height FROM video_layout_config ORDER BY created_at DESC LIMIT 1'
+        )
         .get() as { frame_width: number; frame_height: number }
 
       // Get model version
@@ -1230,9 +1234,9 @@ export async function calculatePredictions(videoId: string): Promise<CalculatePr
 
   try {
     // Get layout config
-    const layoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as
-      | VideoLayoutConfigRow
-      | undefined
+    const layoutConfig = db
+      .prepare('SELECT * FROM video_layout_config ORDER BY created_at DESC LIMIT 1')
+      .get() as VideoLayoutConfigRow | undefined
 
     if (!layoutConfig) {
       throw new Error('Layout config not found')

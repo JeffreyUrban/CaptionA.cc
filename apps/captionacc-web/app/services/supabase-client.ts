@@ -25,9 +25,19 @@ type ProductionDatabase = {
   }
 }
 
-// Environment variables for Supabase connection
-const supabaseUrl = import.meta.env['VITE_SUPABASE_URL']
-const supabaseAnonKey = import.meta.env['VITE_SUPABASE_ANON_KEY']
+// Local Supabase demo keys - Placeholder values for local development
+// For actual local development, get keys from: https://supabase.com/docs/guides/cli/local-development
+// These keys only work with `supabase start` on localhost:54321
+// Production keys are NEVER in code - only in environment variables/secrets
+const LOCAL_SUPABASE_URL = 'http://localhost:54321'
+const LOCAL_SUPABASE_ANON_KEY = 'LOCAL_DEVELOPMENT_ANON_KEY_PLACEHOLDER'
+const LOCAL_SUPABASE_SERVICE_ROLE_KEY = 'LOCAL_DEVELOPMENT_SERVICE_ROLE_KEY_PLACEHOLDER'
+
+// Use environment variables if provided, otherwise default to local
+const supabaseUrl = import.meta.env['VITE_SUPABASE_URL'] || LOCAL_SUPABASE_URL
+const supabaseAnonKey = import.meta.env['VITE_SUPABASE_ANON_KEY'] || LOCAL_SUPABASE_ANON_KEY
+
+// Both local and remote use captionacc_production schema for consistency
 const supabaseSchema = import.meta.env['VITE_SUPABASE_SCHEMA'] || 'captionacc_production'
 
 if (!supabaseUrl || !supabaseAnonKey) {

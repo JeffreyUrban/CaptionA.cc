@@ -1,7 +1,22 @@
 repos:
+
+# Secrets check via detect-secrets
+# *** NOTE: Our strategy is to avoid committing anything that even looks like a secret. ***
+# Initial setup - snapshot current state
+#      detect-secrets scan > .secrets.baseline
+# Later, if intentionally adding something that must absolutely look secret-ish
+# but isn't (like a test fixture), revise it to look like a placeholder.
+# To audit:
+#      detect-secrets scan --baseline .secrets.baseline
+- repo: https://github.com/Yelp/detect-secrets
+  rev: v1.5.0
+  hooks:
+    - id: detect-secrets
+      args: ['--baseline', '.secrets.baseline']
+
 # Python checks
 - repo: https://github.com/astral-sh/ruff-pre-commit
-  rev: v0.14.6
+  rev: v0.14.11
   hooks:
   - id: ruff
     args:
@@ -10,7 +25,7 @@ repos:
   - id: ruff-format
     files: ^data-pipelines/crop_frames/
 - repo: https://github.com/RobertCraigie/pyright-python
-  rev: v1.1.390
+  rev: v1.1.408
   hooks:
   - id: pyright
     additional_dependencies:
@@ -63,7 +78,7 @@ repos:
 
 # General checks
 - repo: https://github.com/pre-commit/pre-commit-hooks
-  rev: v4.5.0
+  rev: v6.0.0
   hooks:
   - id: trailing-whitespace
     files: ^data-pipelines/crop_frames/

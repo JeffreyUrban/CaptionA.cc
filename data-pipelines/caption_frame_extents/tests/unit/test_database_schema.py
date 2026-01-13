@@ -203,7 +203,7 @@ def test_experiment_creation(test_db):
         best_val_f1=0.92,
         best_val_accuracy=0.94,
         best_checkpoint_path="/checkpoints/best.pt",
-        git_commit="abc123def456",
+        git_commit="test-commit-hash",
         git_branch="main",
     )
 

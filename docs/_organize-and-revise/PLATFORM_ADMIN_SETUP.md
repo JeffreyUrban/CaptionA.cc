@@ -45,7 +45,7 @@ This applies migration `20260106120000_platform_admin_and_user_isolation.sql`
 
 ```bash
 # Connect to your local Supabase
-psql postgresql://postgres:postgres@localhost:54322/postgres
+psql postgresql://postgres:<replace-with-db-password>@localhost:54322/postgres
 ```
 
 ```sql

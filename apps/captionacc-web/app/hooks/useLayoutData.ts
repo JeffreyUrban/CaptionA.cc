@@ -228,9 +228,10 @@ export function useLayoutData({ videoId, showAlert }: UseLayoutDataParams): UseL
     if (!videoId) return
     try {
       const data = await fetchAnalysisBoxes(videoId)
-      setAnalysisBoxes(data.boxes ?? [])
+      setAnalysisBoxes(Array.isArray(data.boxes) ? data.boxes : [])
     } catch (loadError) {
       console.error('Error loading analysis boxes:', loadError)
+      setAnalysisBoxes([]) // Clear on error to prevent filter errors
     }
   }, [videoId])
 

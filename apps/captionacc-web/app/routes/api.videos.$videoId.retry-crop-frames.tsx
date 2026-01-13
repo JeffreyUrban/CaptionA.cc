@@ -73,7 +73,7 @@ export async function action({ params }: ActionFunctionArgs) {
         .prepare(
           `
         SELECT crop_left, crop_top, crop_right, crop_bottom
-        FROM video_layout_config WHERE id = 1
+        FROM video_layout_config ORDER BY created_at DESC LIMIT 1
       `
         )
         .get() as

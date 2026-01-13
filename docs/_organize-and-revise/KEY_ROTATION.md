@@ -42,8 +42,8 @@ Wasabi allows up to **2 active access keys** per user, enabling zero-downtime ro
 ```bash
 # Set new readonly credentials
 fly secrets set \
-  WASABI_ACCESS_KEY_READONLY="new_access_key_id" \
-  WASABI_SECRET_KEY_READONLY="new_secret_key" \
+  WASABI_ACCESS_KEY_READONLY="<replace-with-new-access-id>" \
+  WASABI_SECRET_KEY_READONLY="<replace-with-new-value>" \
   -a captionacc-web
 
 # This triggers automatic restart
@@ -112,8 +112,8 @@ npm run dev
 ```bash
 # Set new readwrite credentials
 fly secrets set \
-  WASABI_ACCESS_KEY_READWRITE="new_access_key_id" \
-  WASABI_SECRET_KEY_READWRITE="new_secret_key" \
+  WASABI_ACCESS_KEY_READWRITE="<replace-with-new-access-id>" \
+  WASABI_SECRET_KEY_READWRITE="<replace-with-new-value>" \
   -a captionacc-orchestrator
 
 # Triggers restart (takes 90s due to Prefect connection)
@@ -164,8 +164,8 @@ If health checks fail after rotation:
 ```bash
 # Restore old credentials
 fly secrets set \
-  WASABI_ACCESS_KEY_READONLY="old_access_key_id" \
-  WASABI_SECRET_KEY_READONLY="old_secret_key" \
+  WASABI_ACCESS_KEY_READONLY="<replace-with-old-access-id>" \
+  WASABI_SECRET_KEY_READONLY="<replace-with-old-value>" \
   -a captionacc-web
 
 # Wait for restart
@@ -259,7 +259,7 @@ Used by orchestrator to connect to Prefect Cloud.
 **2. Update Orchestrator**
 ```bash
 fly secrets set \
-  PREFECT_API_KEY="new_key" \
+  PREFECT_API_KEY="<replace-with-prefect-value>" \
   -a captionacc-orchestrator
 ```
 
@@ -366,7 +366,7 @@ fly secrets set WASABI_ACCESS_KEY_READONLY="correct_key_id" -a captionacc-web
 
 # Unset and reset (clears any whitespace issues)
 fly secrets unset WASABI_SECRET_KEY_READONLY -a captionacc-web
-fly secrets set WASABI_SECRET_KEY_READONLY="correct_secret" -a captionacc-web
+fly secrets set WASABI_SECRET_KEY_READONLY="<replace-with-correct-value>" -a captionacc-web
 ```
 
 ### Health Check Passes But Videos Don't Load

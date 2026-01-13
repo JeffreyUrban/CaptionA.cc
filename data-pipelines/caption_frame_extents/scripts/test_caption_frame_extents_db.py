@@ -63,11 +63,11 @@ def test_db_filename_generation():
     # Test with long hashes
     filename = get_db_filename(
         cropped_frames_version=1,
-        model_version="abc123def456abc123def456abc123def456",
+        model_version="test-model-version-placeholder-string",
         run_id="550e8400-e29b-41d4-a716-446655440000",
     )
 
-    expected = "v1_model-abc123de_run-550e8400.db"
+    expected = "v1_model-test-mod_run-550e8400.db"
     assert filename == expected, f"Expected {expected}, got {filename}"
 
     console.print(f"  Generated filename: {filename}")

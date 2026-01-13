@@ -44,7 +44,7 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
   const limit = limitParam ? parseInt(limitParam, 10) : 11
 
   try {
-    const result = getLayoutQueue(videoId, limit)
+    const result = await getLayoutQueue(videoId, limit)
     return jsonResponse(result)
   } catch (error) {
     const err = error as ProcessingError

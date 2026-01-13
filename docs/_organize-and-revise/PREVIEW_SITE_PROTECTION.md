@@ -30,7 +30,7 @@ This guide covers the security and cost controls implemented for the preview/sta
 
 ```bash
 # From project root
-psql postgresql://postgres:postgres@127.0.0.1:54322/postgres \
+psql postgresql://postgres:<replace-with-db-password>@127.0.0.1:54322/postgres \
   -f supabase/migrations/20260106130000_invite_codes_and_quotas.sql
 ```
 
@@ -38,7 +38,7 @@ psql postgresql://postgres:postgres@127.0.0.1:54322/postgres \
 
 ```sql
 -- Connect to your database
-psql postgresql://postgres:postgres@127.0.0.1:54322/postgres
+psql postgresql://postgres:<replace-with-db-password>@127.0.0.1:54322/postgres
 
 -- Generate an invite code
 INSERT INTO invite_codes (

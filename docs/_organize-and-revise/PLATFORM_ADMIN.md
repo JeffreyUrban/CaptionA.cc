@@ -86,7 +86,7 @@ Platform admin access must be granted manually via psql or Supabase Studio. This
 
 ```bash
 # Connect to your Supabase database
-psql postgresql://postgres:postgres@localhost:54322/postgres
+psql postgresql://postgres:<replace-with-db-password>@localhost:54322/postgres
 
 # Or for production:
 # psql postgresql://postgres.[PROJECT-REF].supabase.co:5432/postgres
