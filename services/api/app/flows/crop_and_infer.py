@@ -134,11 +134,11 @@ async def call_modal_crop_and_infer(
 
     import modal
 
-    # Lookup the Modal app
-    modal_app = modal.App.lookup("captionacc-processing")
-
-    # Get the crop and infer function
-    crop_infer_fn = modal_app.function("crop_and_infer_caption_frame_extents")
+    # Lookup the deployed Modal function
+    crop_infer_fn = modal.Function.from_name(
+        "captionacc-processing",
+        "crop_and_infer_caption_frame_extents"
+    )
 
     # Call the Modal function remotely
     result = await crop_infer_fn.remote.aio(

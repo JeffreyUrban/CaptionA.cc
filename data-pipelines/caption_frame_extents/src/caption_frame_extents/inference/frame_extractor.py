@@ -8,8 +8,8 @@ import tempfile
 from pathlib import Path
 
 import cv2
+import httpx
 import numpy as np
-import requests
 from rich.console import Console
 
 console = Console(stderr=True)
@@ -131,9 +131,9 @@ def extract_frame_from_chunk(
 
     # Download chunk to temp file
     try:
-        response = requests.get(signed_url, timeout=30)
+        response = httpx.get(signed_url, timeout=30)
         response.raise_for_status()
-    except requests.RequestException as e:
+    except httpx.RequestError as e:
         raise ValueError(f"Failed to download chunk: {e}") from e
 
     with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as f:
@@ -193,9 +193,9 @@ def extract_all_frames_from_chunk(
     """
     # Download chunk to temp file
     try:
-        response = requests.get(signed_url, timeout=60)
+        response = httpx.get(signed_url, timeout=60)
         response.raise_for_status()
-    except requests.RequestException as e:
+    except httpx.RequestError as e:
         raise ValueError(f"Failed to download chunk: {e}") from e
 
     with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as f:

@@ -14,6 +14,9 @@ dependencies = [
     "boto3>=1.35.0",
     "apsw>=3.48.0",           # SQLite wrapper with extension loading for CR-SQLite
     "supabase>=2.0.0",        # Supabase client for video_database_state
+    "prefect>=3.0.0",         # Workflow orchestration
+    "modal>=0.63.0",          # Serverless compute for video processing
+    "captionacc-modal",       # Modal function models and types
 ]
 
 [project.optional-dependencies]
@@ -63,3 +66,7 @@ typeCheckingMode = "standard"
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "e2e: End-to-end integration tests with real services (Modal, Supabase, Wasabi)",
+    "slow: Tests that take a long time to run (>10 seconds)",
+]

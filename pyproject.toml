@@ -29,6 +29,7 @@ exclude = [
     "services/ocr-service",  # Standalone FastAPI service, not a workspace package
     "services/prefect-service",  # Standalone Docker service for Fly.io, not a workspace package
     "data-pipelines/docs",  # Documentation directory, not a Python package
+    "data-pipelines/caption_boundaries",  # Incomplete package, missing pyproject.toml
     "**/__pycache__",  # Exclude all pycache directories
     "**/.pytest_cache",  # Exclude pytest cache
 ]
@@ -53,6 +54,7 @@ full-frames = { workspace = true }
 orchestrator = { workspace = true }
 vp9-utils = { workspace = true }
 frames-db = { workspace = true }
+captionacc-modal = { workspace = true }
 
 # Common tool settings shared across all workspace members
 [tool.ruff]
@@ -100,6 +102,7 @@ testpaths = [
     "packages/frames_db/tests",
     "packages/video_utils/tests",
     "services/orchestrator/tests",
+    "services/api/tests",
 ]
 # Skip directories with incomplete/skeleton tests
 # These can be re-enabled once the modules are properly implemented
@@ -109,4 +112,12 @@ norecursedirs = [
     "data-pipelines/layout_analysis",
     "packages/ocr_box_model",
     "packages/jetbrains_integration",
+]
+
+# Pytest markers for test organization and filtering
+markers = [
+    "e2e: End-to-end integration tests with real external services (Modal, Supabase, Wasabi)",
+    "slow: Tests that take significant time to run (> 30 seconds)",
+    "unit: Fast unit tests with no external dependencies",
+    "integration: Integration tests with mocked external services",
 ]

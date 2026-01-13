@@ -16,10 +16,11 @@ from .models import CaptionOcrResult, CropInferResult, CropRegion, ExtractResult
 
 # Create Modal app
 if modal:
-    app = modal.App("captionacc")
+    app = modal.App("captionacc-processing")
 
     # Import image builders and implementations
-    from .inference import get_inference_image, crop_and_infer_caption_frame_extents_impl
+    from .inference import get_inference_image
+    from .inference_pipelined import crop_and_infer_caption_frame_extents_pipelined
     from .extract import extract_frames_and_ocr_impl
 
     # Base image with common dependencies
@@ -116,12 +117,16 @@ if modal:
         return extract_frames_and_ocr_impl(video_key, tenant_id, video_id, frame_rate)
 
     # Register crop_and_infer_caption_frame_extents function
+    # Mount model volume
+    model_volume = modal.Volume.from_name("boundary-models", create_if_missing=False)
+
     @app.function(
         image=get_inference_image(),
         gpu="A10G",
         timeout=3600,  # 60 minutes
         retries=0,
         secrets=[modal.Secret.from_name("wasabi")],
+        volumes={"/root/boundary-models": model_volume},
     )
     def crop_and_infer_caption_frame_extents(
         video_key: str,
@@ -129,13 +134,18 @@ if modal:
         video_id: str,
         crop_region: CropRegion,
         frame_rate: float = 10.0,
+        encoder_workers: int = 4,
     ) -> CropInferResult:
         """Crop frames to caption region, encode as WebM, and run inference.
 
-        See inference.py for full implementation details.
+        Uses pipelined implementation with GPU-accelerated extraction and parallel encoding.
+        See inference_pipelined.py for full implementation details.
+
+        Args:
+            encoder_workers: Number of parallel VP9 encoding workers (default: 4)
         """
-        return crop_and_infer_caption_frame_extents_impl(
-            video_key, tenant_id, video_id, crop_region, frame_rate
+        return crop_and_infer_caption_frame_extents_pipelined(
+            video_key, tenant_id, video_id, crop_region, frame_rate, encoder_workers
         )
 
 else:

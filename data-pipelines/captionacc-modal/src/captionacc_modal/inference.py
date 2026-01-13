@@ -49,12 +49,18 @@ def get_inference_image():
             # Data/Storage
             "boto3",
             "sqlalchemy",
+            "supabase",  # Required by caption_frame_extents
             # Utilities
             "rich",
             "ffmpeg-python",
+            "httpx",
+            "pydantic",  # Required by caption_frame_extents
+            # Monitoring
+            "psutil",
+            "nvidia-ml-py3",  # pynvml for GPU monitoring
         )
         # Add caption_frame_extents package for inference
-        .add_local_python_source("caption_frame_extents", remote_path="/root/caption_frame_extents")
+        .add_local_python_source("caption_frame_extents")
     )
 
 
@@ -272,10 +278,18 @@ def crop_and_infer_caption_frame_extents_impl(
         # Generate sequential frame pairs (i, i+1) for all frames
         frame_pairs = [(i, i + 1) for i in range(frame_count - 1)]
 
-        # Download layout.db for OCR visualization
+        # Download and decompress layout.db.gz for OCR visualization
+        import gzip
+        import shutil
+        layout_db_gz_path = tmp_path / "layout.db.gz"
         layout_db_path = tmp_path / "layout.db"
-        layout_storage_key = f"{tenant_id}/client/videos/{video_id}/layout.db"
-        wasabi.download_file(layout_storage_key, layout_db_path)
+        layout_storage_key = f"{tenant_id}/client/videos/{video_id}/layout.db.gz"
+        wasabi.download_file(layout_storage_key, layout_db_gz_path)
+
+        # Decompress the layout.db.gz file
+        with gzip.open(layout_db_gz_path, 'rb') as f_in:
+            with open(layout_db_path, 'wb') as f_out:
+                shutil.copyfileobj(f_in, f_out)
 
         # Load inference model
         # TODO: Configure model checkpoint path (for now, assume it's available in Modal volume)

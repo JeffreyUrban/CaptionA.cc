@@ -282,7 +282,8 @@ class SupabaseServiceImpl:
             .execute()
         )
 
-        state = response.data if response.data else None
+        # Handle None response (e.g., when query returns 406 Not Acceptable)
+        state = getattr(response, 'data', None) if response else None
 
         # If state doesn't exist, we need to get tenant_id from videos table
         if not state:
