@@ -42,6 +42,28 @@ Key optimizations:
 - Modulo filtering: no overlap (modulo 16, 4, 1 are mutually exclusive)
 - Precise timing: maintains 0.1s accuracy over 10+ hours
 - Overlapped uploads: chunks upload while encoding continues
+
+Observed performance vs batch size with video_fixture = "car-teardown-comparison-08.mp4":
+
+32: Processing duration: 175.02s
+Encoding duration: 0.08s
+Total duration: 176.39s
+
+64: Processing duration: 148.67s
+Encoding duration: 0.16s
+Total duration: 154.83s
+
+128: Processing duration: 150.54s
+Encoding duration: 0.27s
+Total duration: 157.72s
+
+256: Processing duration: 171.07s
+Encoding duration: 0.30s
+Total duration: 177.69s
+
+512: Processing duration: 183.05s
+Encoding duration: 0.31s
+Total duration: 189.37s
 """
 
 import subprocess
@@ -569,7 +591,7 @@ def crop_and_infer_caption_frame_extents_pipelined(
     crop_region: CropRegion,
     frame_rate: float = 10.0,
     encoder_workers: int = 4,
-    inference_batch_size: int = 32,
+    inference_batch_size: int = 64,
 ) -> CropInferResult:
     """
     Pipelined implementation of crop_and_infer_caption_frame_extents.

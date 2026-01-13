@@ -197,7 +197,7 @@ export WEBHOOK_SECRET="test-webhook-secret"  # Default: test-webhook-secret
 1. **Clone repository and install dependencies:**
    ```bash
    cd services/api
-   pip install -e ".[dev]"
+   uv pip install -e ".[dev]"
    ```
 
 2. **Configure environment variables:**
@@ -627,7 +627,7 @@ jobs:
       - name: Install dependencies
         run: |
           cd services/api
-          pip install -e ".[dev]"
+          uv pip install -e ".[dev]"
 
       - name: Run E2E tests
         env:
