@@ -21,6 +21,7 @@ if modal:
     # Import image builders and implementations
     from .inference import get_inference_image
     from .inference_pipelined import crop_and_infer_caption_frame_extents_pipelined
+    from .inference_sequential import crop_and_infer_caption_frame_extents_sequential
     from .extract import extract_frames_and_ocr_impl
 
     # Base image with common dependencies
@@ -146,6 +147,35 @@ if modal:
         """
         return crop_and_infer_caption_frame_extents_pipelined(
             video_key, tenant_id, video_id, crop_region, frame_rate, encoder_workers
+        )
+
+    @app.function(
+        image=get_inference_image(),
+        gpu="A10G",
+        timeout=3600,  # 60 minutes
+        retries=0,
+        secrets=[modal.Secret.from_name("wasabi")],
+        volumes={"/root/boundary-models": model_volume},
+    )
+    def crop_and_infer_sequential(
+        video_key: str,
+        tenant_id: str,
+        video_id: str,
+        crop_region: CropRegion,
+        frame_rate: float = 10.0,
+        encoder_workers: int = 4,
+        max_frames: int = 5000,
+    ) -> CropInferResult:
+        """Sequential (non-pipelined) implementation for performance profiling.
+
+        Runs each stage sequentially with detailed timing and monitoring.
+        Limited to first max_frames for faster iteration.
+
+        Args:
+            max_frames: Maximum number of frames to process (default: 5000)
+        """
+        return crop_and_infer_caption_frame_extents_sequential(
+            video_key, tenant_id, video_id, crop_region, frame_rate, encoder_workers, max_frames
         )
 
 else:

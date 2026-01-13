@@ -46,6 +46,8 @@ def get_inference_image():
             "opencv-python-headless",
             "numpy",
             "pillow",
+            # GPU Video Processing
+            "PyNvVideoCodec",  # NVIDIA GPU-accelerated video decoding
             # Data/Storage
             "boto3",
             "sqlalchemy",
