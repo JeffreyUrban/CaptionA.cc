@@ -2,6 +2,8 @@
 
 VLM-based caption text extraction and correction pipeline for CaptionA.cc.
 
+# TODO: The database details in this doc are out of date. 
+
 ## Overview
 
 This pipeline provides automated caption text extraction using a fine-tuned Qwen2.5-VL vision-language model, with OCR comparison for auto-validation and LLM-based error correction.
@@ -29,9 +31,9 @@ uv pip install -e data-pipelines/caption_text
 
 Before running the pipeline, ensure you have:
 
-1. **Cropped frames** in `captions.db` (`cropped_frames` table)
-2. **Layout configuration** in `captions.db` (`video_layout_config` table)
-3. **Caption boundaries** in `captions.db` (`captions` table)
+1. **Cropped frames** as WebM chunks in Wasabi (`cropped_frames_v{version}/` directory)
+2. **Layout configuration** in `layout.db` (`video_layout_config` table)
+3. **Caption frame extents** in `captions.db` (`captions` table)
 4. **Font example image** (reference image showing caption font style)
 
 ### Model Checkpoint
@@ -48,20 +50,20 @@ Train a model on all confirmed text annotations from your video library:
 
 ```bash
 # Collect training data and train in one command
-caption_text train local/data \\
+caption_text train !__local/data/_has_been_deprecated__! \\
     --output models/caption_text \\
     --epochs 3 \\
     --batch-size 4 \\
     --learning-rate 2e-4
 
 # Or collect data first (for inspection)
-caption_text collect-data local/data \\
+caption_text collect-data !__local/data/_has_been_deprecated__! \\
     --output training_data \\
     --save-images  # Optional: save sample images for debugging
 ```
 
 **Training collects data from all videos with:**
-- Confirmed caption boundaries (`boundary_state = 'confirmed'`)
+- Confirmed caption frame extents (`caption_frame_extents_state = 'confirmed'`)
 - Non-empty text annotations (`text IS NOT NULL AND text != ''`)
 - Cropped frames in database
 - OCR annotations
@@ -91,16 +93,16 @@ caption_text collect-data local/data \\
 Generate caption text for all captions needing annotation:
 
 ```bash
-caption_text infer local/data/video_id \\
+caption_text infer !__local/data/_has_been_deprecated__!/video_id \\
     --checkpoint models/qwen_finetuned.ckpt \\
-    --font-example local/data/video_id/font_example.jpg \\
+    --font-example !__local/data/_has_been_deprecated__!/video_id/font_example.jpg \\
     --output vlm_results.csv
 ```
 
 **Options:**
 - `--checkpoint, -c`: Path to fine-tuned model checkpoint (required)
 - `--font-example, -f`: Path to font example image (required)
-- `--output, -o`: Output CSV file (default: `vlm_inference_results.csv`)
+- `--output, -o`: Output CSV file (default: `vlm_captions_results.csv`)
 - `--limit, -n`: Maximum number of captions to process
 
 **Output:**
@@ -112,13 +114,13 @@ caption_text infer local/data/video_id \\
 Compare VLM results with OCR and auto-validate exact matches:
 
 ```bash
-caption_text compare local/data/video_id \\
+caption_text compare !__local/data/_has_been_deprecated__!/video_id \\
     --vlm-csv vlm_results.csv \\
     --auto-validate
 ```
 
 **Options:**
-- `--vlm-csv`: Path to VLM results CSV (default: `vlm_inference_results.csv`)
+- `--vlm-csv`: Path to VLM results CSV (default: `vlm_captions_results.csv`)
 - `--auto-validate/--no-auto-validate`: Auto-validate exact matches (default: true)
 
 **Output:**
@@ -131,12 +133,12 @@ Vet caption text for transcription errors using LLM:
 
 ```bash
 # Using Anthropic Claude API
-caption_text vet local/data/video_id \\
+caption_text vet !__local/data/_has_been_deprecated__!/video_id \\
     --model claude-sonnet-4-5 \\
     --output vetting_results.jsonl
 
 # Using Ollama (local)
-caption_text vet local/data/video_id \\
+caption_text vet !__local/data/_has_been_deprecated__!/video_id \\
     --ollama \\
     --model qwen3:14b \\
     --output vetting_results.jsonl
@@ -183,21 +185,21 @@ caption_id,start_frame,end_frame,original_text,corrected_text
 
 ```bash
 # Step 0: Train model on all confirmed annotations (first-time only)
-caption_text train local/data \\
+caption_text train !__local/data/_has_been_deprecated__! \\
     --output models/caption_text \\
     --epochs 3 \\
     --batch-size 4
 
 # Step 1: Generate caption text with fine-tuned VLM
-caption_text infer local/data/video_id \\
+caption_text infer !__local/data/_has_been_deprecated__!/video_id \\
     -c models/caption_text/checkpoints/best.ckpt \\
-    -f local/data/video_id/font_example.jpg
+    -f !__local/data/_has_been_deprecated__!/video_id/font_example.jpg
 
 # Step 2: Compare with OCR and auto-validate matches
-caption_text compare local/data/video_id --auto-validate
+caption_text compare !__local/data/_has_been_deprecated__!/video_id --auto-validate
 
 # Step 3: Vet remaining captions for errors
-caption_text vet local/data/video_id --model claude-sonnet-4-5
+caption_text vet !__local/data/_has_been_deprecated__!/video_id --model claude-sonnet-4-5
 
 # Step 4: Extract errors for manual review
 caption_text extract-errors caption_vetting_results.jsonl -o errors.csv
@@ -216,7 +218,7 @@ text TEXT,                 -- NULL = not annotated, '' = no caption
 text_pending INTEGER,      -- 0 or 1
 text_status TEXT,          -- 'valid_caption', 'ocr_error', etc.
 text_notes TEXT,           -- Annotation notes
-text_ocr_combined TEXT,    -- Cached OCR result
+caption_ocr TEXT,    -- Cached OCR result
 text_updated_at TEXT       -- Timestamp of last text update
 ```
 

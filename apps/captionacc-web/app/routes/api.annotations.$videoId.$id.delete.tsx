@@ -4,10 +4,10 @@ import Database from 'better-sqlite3'
 import { type ActionFunctionArgs } from 'react-router'
 
 import { deleteCombinedImage } from '~/utils/image-processing'
-import { getDbPath } from '~/utils/video-paths'
+import { getCaptionsDbPath } from '~/utils/video-paths'
 
 async function getDatabase(videoId: string): Promise<Database.Database | Response> {
-  const dbPath = await getDbPath(videoId)
+  const dbPath = await getCaptionsDbPath(videoId)
   if (!dbPath) {
     return new Response('Video not found', { status: 404 })
   }
@@ -61,7 +61,7 @@ export async function action({ params }: ActionFunctionArgs) {
       .prepare(
         `
       SELECT * FROM captions
-      WHERE boundary_state = 'gap'
+      WHERE caption_frame_extents_state = 'gap'
       AND (
         end_frame_index = ? - 1
         OR start_frame_index = ? + 1
@@ -106,7 +106,7 @@ export async function action({ params }: ActionFunctionArgs) {
     const result = db
       .prepare(
         `
-      INSERT INTO captions (start_frame_index, end_frame_index, boundary_state, boundary_pending)
+      INSERT INTO captions (start_frame_index, end_frame_index, caption_frame_extents_state, caption_frame_extents_pending)
       VALUES (?, ?, 'gap', 0)
     `
       )

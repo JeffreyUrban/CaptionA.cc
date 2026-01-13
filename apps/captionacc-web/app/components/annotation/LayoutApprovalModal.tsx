@@ -65,7 +65,7 @@ export function LayoutApprovalModal({
           <p>This will perform the following actions:</p>
           <ul className="list-inside list-disc space-y-2 pl-2">
             <li>Mark layout annotation as complete</li>
-            <li>Enable boundary annotation for this video</li>
+            <li>Enable caption frame extents annotation for this video</li>
             <li>Start frame re-cropping in the background</li>
           </ul>
           <p className="text-xs text-gray-600 dark:text-gray-400">

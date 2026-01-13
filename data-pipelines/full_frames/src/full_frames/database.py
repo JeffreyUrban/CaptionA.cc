@@ -1,6 +1,6 @@
 """Database operations for full_frames pipeline.
 
-Writes OCR results directly to the full_frame_ocr table in the video's captions.db.
+Writes OCR results directly to the full_frame_ocr table in the video's fullOCR.db.
 Writes frame images to full_frames table for blob storage.
 """
 
@@ -13,22 +13,17 @@ from PIL import Image
 
 
 def get_database_path(output_dir: Path) -> Path:
-    """Get captions.db path from full_frames output directory.
+    """Get fullOCR.db path from full_frames output directory.
 
     Args:
         output_dir: Path to full_frames output directory
-                   (e.g., local/data/show_name/video_id/full_frames)
 
     Returns:
-        Path to captions.db file
-
-    Example:
-        >>> get_database_path(Path("local/data/show_name/video_id/full_frames"))
-        Path("local/data/show_name/video_id/captions.db")
+        Path to fullOCR.db file
     """
     # Go up one level from full_frames to video directory
     video_dir = output_dir.parent
-    return video_dir / "captions.db"
+    return video_dir / "fullOCR.db"
 
 
 # These functions have been moved to ocr_utils package
@@ -42,7 +37,7 @@ def load_ocr_annotations_from_database(db_path: Path) -> list[dict]:
     with analysis functions.
 
     Args:
-        db_path: Path to captions.db file
+        db_path: Path to fullOCR.db file
 
     Returns:
         List of OCR annotation dictionaries, one per frame
@@ -108,20 +103,12 @@ def write_frames_to_database(
 
     Args:
         frames_dir: Directory containing frame images (frame_*.jpg)
-        db_path: Path to captions.db file
+        db_path: Path to fullOCR.db file
         progress_callback: Optional callback (current, total) -> None
         delete_after_write: If True, delete frame files after writing to DB
 
     Returns:
         Number of frames written to database
-
-    Example:
-        >>> write_frames_to_database(
-        ...     frames_dir=Path("local/data/show/video/full_frames"),
-        ...     db_path=Path("local/data/show/video/captions.db"),
-        ...     delete_after_write=True
-        ... )
-        42
     """
     from frames_db import write_frames_batch
 
@@ -183,7 +170,7 @@ def process_frames_to_database(
 
     Args:
         frames_dir: Directory containing frame images
-        db_path: Path to captions.db file
+        db_path: Path to fullOCR.db file
         language: OCR language preference
         progress_callback: Optional callback (current, total) -> None
         max_workers: Maximum concurrent OCR workers (default: 1 for macOS OCR)

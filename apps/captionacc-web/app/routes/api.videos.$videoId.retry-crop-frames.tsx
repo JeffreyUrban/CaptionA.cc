@@ -6,7 +6,7 @@ import Database from 'better-sqlite3'
 import { type ActionFunctionArgs } from 'react-router'
 
 import { queueCropFramesProcessing } from '~/services/prefect'
-import { getDbPath, getVideoDir } from '~/utils/video-paths'
+import { getCaptionsDbPath, getVideoDir } from '~/utils/video-paths'
 
 export async function action({ params }: ActionFunctionArgs) {
   const { videoId: encodedVideoId } = params
@@ -21,7 +21,7 @@ export async function action({ params }: ActionFunctionArgs) {
   const videoId = decodeURIComponent(encodedVideoId)
 
   try {
-    const dbPath = await getDbPath(videoId)
+    const dbPath = await getCaptionsDbPath(videoId)
     if (!dbPath) {
       return new Response(JSON.stringify({ error: 'Video not found' }), {
         status: 404,
@@ -68,7 +68,7 @@ export async function action({ params }: ActionFunctionArgs) {
         )
       }
 
-      // Get crop bounds from video_layout_config (most recent row)
+      // Get crop region from video_layout_config
       const config = db
         .prepare(
           `
@@ -152,7 +152,7 @@ export async function action({ params }: ActionFunctionArgs) {
       videoPath: videoFilePath,
       dbPath,
       outputDir: resolve(videoDir, 'crop_frames'),
-      cropBounds: {
+      cropRegion: {
         left: layoutConfig.crop_left,
         top: layoutConfig.crop_top,
         right: layoutConfig.crop_right,

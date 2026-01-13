@@ -5,7 +5,7 @@
 
 import Database from 'better-sqlite3'
 
-import { getAllVideos, getDbPath } from '~/utils/video-paths'
+import { getAllVideos, getCaptionsDbPath } from '~/utils/video-paths'
 
 interface ActiveUpload {
   videoId: string
@@ -22,7 +22,7 @@ export async function loader() {
     const allVideos = await getAllVideos()
 
     for (const video of allVideos) {
-      const dbPath = await getDbPath(video.videoId)
+      const dbPath = await getCaptionsDbPath(video.videoId)
       if (!dbPath) continue
 
       try {

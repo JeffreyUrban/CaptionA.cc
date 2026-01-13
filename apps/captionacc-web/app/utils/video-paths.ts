@@ -6,7 +6,7 @@
  * - storage_path: Hash-bucketed UUID path like "a4/a4f2b8c3-..."
  * - videoId: UUID for the video
  *
- * NOTE: Legacy filesystem-based functions (resolveDisplayPath, getDbPath, etc.)
+ * NOTE: Legacy filesystem-based functions (resolveDisplayPath, getCaptionsDbPath, etc.)
  * are deprecated and only work server-side. getAllVideos() now uses Supabase.
  */
 
@@ -19,19 +19,6 @@ export interface VideoMetadata {
 }
 
 /**
- * @deprecated Local databases are deprecated. Use Supabase queries instead.
- * Video data is now stored in Wasabi and accessed via the orchestrator service.
- * See services/orchestrator/flows/ for the new architecture.
- */
-export async function resolveDisplayPath(displayPath: string): Promise<string | null> {
-  throw new Error(
-    `[DEPRECATED] resolveDisplayPath() called for ${displayPath}. ` +
-      `Local databases are deprecated. Video data is now stored in Wasabi. ` +
-      `This code path needs to be migrated to use the cloud-based architecture.`
-  )
-}
-
-/**
  * Resolve videoId to storage_path
  * Uses hash-bucketing: first 2 chars of UUID
  */
@@ -40,42 +27,69 @@ export function resolveVideoId(videoId: string): string {
 }
 
 /**
- * @deprecated Local filesystem storage is deprecated. Use Wasabi cloud storage instead.
- * Video data is now stored in Wasabi and accessed via the orchestrator service.
- * See services/orchestrator/flows/ for the new architecture.
+ * Get video directory path from display_path or videoId
+ * DEPRECATED: Use Supabase queries instead
+ * SERVER-SIDE ONLY
  */
 export async function getVideoDir(pathOrId: string): Promise<string | null> {
-  throw new Error(
-    `[DEPRECATED] getVideoDir() called for ${pathOrId}. ` +
-      `Local filesystem storage is deprecated. Video data is now stored in Wasabi. ` +
-      `This code path needs to be migrated to use the cloud-based architecture.`
-  )
+  if (typeof window !== 'undefined') {
+    throw new Error('getVideoDir is server-side only')
+  }
+
+  const { existsSync } = await import('fs')
+  const { resolve } = await import('path')
+
+  const dataDir = resolve(process.cwd(), '..', '..', 'local', 'processing')
+
+  let storagePath: string | null
+
+  // It's a videoId - resolve directly
+  storagePath = resolveVideoId(pathOrId)
+
+  if (!storagePath) return null
+
+  const videoDir = resolve(dataDir, ...storagePath.split('/'))
+  return existsSync(videoDir) ? videoDir : null
 }
 
 /**
- * @deprecated Local databases are deprecated. Use Wasabi cloud storage instead.
- * Video data is now stored in Wasabi and accessed via the orchestrator service.
- * See services/orchestrator/flows/ for the new architecture.
+ * Get captions database path from display_path or videoId
+ * DEPRECATED: Use Supabase queries instead
+ * SERVER-SIDE ONLY
  */
-export async function getDbPath(pathOrId: string): Promise<string | null> {
-  throw new Error(
-    `[DEPRECATED] getDbPath() called for ${pathOrId}. ` +
-      `Local databases are deprecated. Video data is now stored in Wasabi. ` +
-      `This code path needs to be migrated to use the cloud-based architecture.`
-  )
+export async function getCaptionsDbPath(pathOrId: string): Promise<string | null> {
+  if (typeof window !== 'undefined') {
+    throw new Error('getCaptionsDbPath is server-side only')
+  }
+
+  const { existsSync } = await import('fs')
+  const { resolve } = await import('path')
+
+  const videoDir = await getVideoDir(pathOrId)
+  if (!videoDir) return null
+
+  const dbPath = resolve(videoDir, 'captions.db')
+  return existsSync(dbPath) ? dbPath : null
 }
 
 /**
- * @deprecated Local databases are deprecated. Use Wasabi cloud storage instead.
- * Video data is now stored in Wasabi and accessed via the orchestrator service.
- * See services/orchestrator/flows/ for the new architecture.
+ * Get layout database path from display_path or videoId
+ * DEPRECATED: Use Supabase queries instead
+ * SERVER-SIDE ONLY
  */
-export async function getVideoMetadata(pathOrId: string): Promise<VideoMetadata | null> {
-  throw new Error(
-    `[DEPRECATED] getVideoMetadata() called for ${pathOrId}. ` +
-      `Local databases are deprecated. Video data is now stored in Wasabi. ` +
-      `This code path needs to be migrated to use the cloud-based architecture.`
-  )
+export async function getLayoutDbPath(pathOrId: string): Promise<string | null> {
+  if (typeof window !== 'undefined') {
+    throw new Error('getLayoutDbPath is server-side only')
+  }
+
+  const { existsSync } = await import('fs')
+  const { resolve } = await import('path')
+
+  const videoDir = await getVideoDir(pathOrId)
+  if (!videoDir) return null
+
+  const dbPath = resolve(videoDir, 'layout.db')
+  return existsSync(dbPath) ? dbPath : null
 }
 
 /**

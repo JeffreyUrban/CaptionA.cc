@@ -1,5 +1,5 @@
 /**
- * Annotation CRUD service for caption boundary management.
+ * Annotation CRUD service for caption caption frame extents management.
  *
  * Provides create, read, update, delete operations for caption annotations,
  * including complex overlap resolution and gap management.
@@ -7,15 +7,11 @@
 
 import type Database from 'better-sqlite3'
 
-import {
-  getAnnotationDatabase,
-  getWritableDatabase,
-  getOrCreateAnnotationDatabase,
-} from '~/utils/database'
+import { getCaptionDb, getWritableCaptionDb, getOrCreateCaptionDb } from '~/utils/database'
 import { deleteCombinedImage } from '~/utils/image-processing'
 import type { AnnotationState, TextStatus } from '~/types/enums'
-import { queueCaptionMedianOcrProcessing } from './prefect'
-import { getDbPath, getVideoDir } from '~/utils/video-paths'
+import { queueCaptionOcrProcessing } from './prefect'
+import { getCaptionsDbPath, getVideoDir } from '~/utils/video-paths'
 
 // =============================================================================
 // Type Definitions
@@ -28,19 +24,19 @@ interface AnnotationRow {
   id: number
   start_frame_index: number
   end_frame_index: number
-  boundary_state: AnnotationState
-  boundary_pending: number
-  boundary_updated_at: string
+  caption_frame_extents_state: AnnotationState
+  caption_frame_extents_pending: number
+  caption_frame_extents_updated_at: string
   text: string | null
   text_pending: number
   text_status: string | null
   text_notes: string | null
-  text_ocr_combined: string | null
+  caption_ocr: string | null
   text_updated_at: string
   image_needs_regen: number
-  median_ocr_status: string
-  median_ocr_error: string | null
-  median_ocr_processed_at: string | null
+  caption_ocr_status: string
+  caption_ocr_error: string | null
+  caption_ocr_processed_at: string | null
   created_at: string
 }
 
@@ -51,19 +47,19 @@ export interface Annotation {
   id: number
   startFrameIndex: number
   endFrameIndex: number
-  boundaryState: AnnotationState
-  boundaryPending: boolean
-  boundaryUpdatedAt: string
+  captionFrameExtentsState: AnnotationState
+  captionFrameExtentsPending: boolean
+  captionFrameExtentsUpdatedAt: string
   text: string | null
   textPending: boolean
   textStatus: string | null
   textNotes: string | null
-  textOcrCombined: string | null
+  captionOcr: string | null
   textUpdatedAt: string
   imageNeedsRegen: boolean
-  medianOcrStatus: string
-  medianOcrError: string | null
-  medianOcrProcessedAt: string | null
+  captionOcrStatus: string
+  captionOcrError: string | null
+  captionOcrProcessedAt: string | null
   createdAt: string
 }
 
@@ -73,8 +69,8 @@ export interface Annotation {
 export interface CreateAnnotationInput {
   startFrameIndex: number
   endFrameIndex: number
-  boundaryState?: AnnotationState
-  boundaryPending?: boolean
+  captionFrameExtentsState?: AnnotationState
+  captionFrameExtentsPending?: boolean
   text?: string | null
 }
 
@@ -85,7 +81,7 @@ export interface UpdateAnnotationInput {
   id: number
   startFrameIndex: number
   endFrameIndex: number
-  boundaryState?: AnnotationState
+  captionFrameExtentsState?: AnnotationState
 }
 
 /**
@@ -136,19 +132,19 @@ function transformAnnotation(row: AnnotationRow): Annotation {
     id: row.id,
     startFrameIndex: row.start_frame_index,
     endFrameIndex: row.end_frame_index,
-    boundaryState: row.boundary_state,
-    boundaryPending: row.boundary_pending === 1,
-    boundaryUpdatedAt: row.boundary_updated_at,
+    captionFrameExtentsState: row.caption_frame_extents_state,
+    captionFrameExtentsPending: row.caption_frame_extents_pending === 1,
+    captionFrameExtentsUpdatedAt: row.caption_frame_extents_updated_at,
     text: row.text,
     textPending: row.text_pending === 1,
     textStatus: row.text_status,
     textNotes: row.text_notes,
-    textOcrCombined: row.text_ocr_combined,
+    captionOcr: row.caption_ocr,
     textUpdatedAt: row.text_updated_at,
     imageNeedsRegen: row.image_needs_regen === 1,
-    medianOcrStatus: row.median_ocr_status,
-    medianOcrError: row.median_ocr_error,
-    medianOcrProcessedAt: row.median_ocr_processed_at,
+    captionOcrStatus: row.caption_ocr_status,
+    captionOcrError: row.caption_ocr_error,
+    captionOcrProcessedAt: row.caption_ocr_processed_at,
     createdAt: row.created_at,
   }
 }
@@ -170,20 +166,20 @@ async function markImageForRegeneration(
     `
     UPDATE captions
     SET image_needs_regen = 1,
-        text_ocr_combined = NULL,
+        caption_ocr = NULL,
         text_pending = 1,
-        median_ocr_status = 'queued'
+        caption_ocr_status = 'queued'
     WHERE id = ?
   `
   ).run(annotationId)
 
   // Queue median frame OCR processing via Prefect (async)
-  const dbPath = await getDbPath(videoId)
+  const dbPath = await getCaptionsDbPath(videoId)
   const videoDir = await getVideoDir(videoId)
 
   if (dbPath && videoDir) {
     try {
-      await queueCaptionMedianOcrProcessing({
+      await queueCaptionOcrProcessing({
         videoId,
         dbPath,
         videoDir,
@@ -199,8 +195,8 @@ async function markImageForRegeneration(
       db.prepare(
         `
         UPDATE captions
-        SET median_ocr_status = 'error',
-            median_ocr_error = ?
+        SET caption_ocr_status = 'error',
+            caption_ocr_error = ?
         WHERE id = ?
       `
       ).run(error instanceof Error ? error.message : String(error), annotationId)
@@ -263,7 +259,7 @@ function detectOverlaps(
 }
 
 /**
- * Split overlapping annotations at the boundaries of a new annotation.
+ * Split overlapping annotations at the caption frame extents of a new annotation.
  *
  * Handles three cases:
  * - Completely contained: delete the overlapping annotation
@@ -302,7 +298,7 @@ function splitOverlappingAnnotations(
       db.prepare(
         `
         UPDATE captions
-        SET end_frame_index = ?, boundary_pending = 1
+        SET end_frame_index = ?, caption_frame_extents_pending = 1
         WHERE id = ?
       `
       ).run(startFrameIndex - 1, overlap.id)
@@ -316,11 +312,16 @@ function splitOverlappingAnnotations(
       const rightResult = db
         .prepare(
           `
-          INSERT INTO captions (start_frame_index, end_frame_index, boundary_state, boundary_pending, text)
+          INSERT INTO captions (start_frame_index, end_frame_index, caption_frame_extents_state, caption_frame_extents_pending, text)
           VALUES (?, ?, ?, 1, ?)
         `
         )
-        .run(endFrameIndex + 1, overlap.end_frame_index, overlap.boundary_state, overlap.text)
+        .run(
+          endFrameIndex + 1,
+          overlap.end_frame_index,
+          overlap.caption_frame_extents_state,
+          overlap.text
+        )
       modifiedAnnotations.push({
         id: rightResult.lastInsertRowid as number,
         startFrame: endFrameIndex + 1,
@@ -331,7 +332,7 @@ function splitOverlappingAnnotations(
       db.prepare(
         `
         UPDATE captions
-        SET end_frame_index = ?, boundary_pending = 1
+        SET end_frame_index = ?, caption_frame_extents_pending = 1
         WHERE id = ?
       `
       ).run(startFrameIndex - 1, overlap.id)
@@ -345,7 +346,7 @@ function splitOverlappingAnnotations(
       db.prepare(
         `
         UPDATE captions
-        SET start_frame_index = ?, boundary_pending = 1
+        SET start_frame_index = ?, caption_frame_extents_pending = 1
         WHERE id = ?
       `
       ).run(endFrameIndex + 1, overlap.id)
@@ -444,7 +445,7 @@ function createOrMergeGap(
     .prepare(
       `
       SELECT * FROM captions
-      WHERE boundary_state = 'gap'
+      WHERE caption_frame_extents_state = 'gap'
       AND (
         end_frame_index = ? - 1
         OR start_frame_index = ? + 1
@@ -480,7 +481,7 @@ function createOrMergeGap(
   const result = db
     .prepare(
       `
-      INSERT INTO captions (start_frame_index, end_frame_index, boundary_state, boundary_pending)
+      INSERT INTO captions (start_frame_index, end_frame_index, caption_frame_extents_state, caption_frame_extents_pending)
       VALUES (?, ?, 'gap', 0)
     `
     )
@@ -514,7 +515,7 @@ export async function listAnnotations(
   workableOnly: boolean = false,
   limit?: number
 ): Promise<Annotation[]> {
-  const result = await getOrCreateAnnotationDatabase(videoId)
+  const result = await getOrCreateCaptionDb(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -527,7 +528,7 @@ export async function listAnnotations(
       ? `
         SELECT * FROM captions
         WHERE end_frame_index >= ? AND start_frame_index <= ?
-        AND (boundary_state = 'gap' OR boundary_pending = 1)
+        AND (caption_frame_extents_state = 'gap' OR caption_frame_extents_pending = 1)
         ORDER BY start_frame_index
       `
       : `
@@ -558,7 +559,7 @@ export async function getAnnotation(
   videoId: string,
   annotationId: number
 ): Promise<Annotation | null> {
-  const result = await getAnnotationDatabase(videoId)
+  const result = await getCaptionDb(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -593,7 +594,7 @@ export async function createAnnotation(
   videoId: string,
   input: CreateAnnotationInput
 ): Promise<Annotation> {
-  const result = await getOrCreateAnnotationDatabase(videoId)
+  const result = await getOrCreateCaptionDb(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -602,22 +603,22 @@ export async function createAnnotation(
 
   try {
     // For non-gap, non-pending annotations, mark for image generation
-    const isPending = input.boundaryPending ?? false
-    const isGap = input.boundaryState === 'gap'
+    const isPending = input.captionFrameExtentsPending ?? false
+    const isGap = input.captionFrameExtentsState === 'gap'
     const needsImageRegen = !isGap && !isPending ? 1 : 0
 
     const insertResult = db
       .prepare(
         `
-        INSERT INTO captions (start_frame_index, end_frame_index, boundary_state, boundary_pending, text, image_needs_regen)
+        INSERT INTO captions (start_frame_index, end_frame_index, caption_frame_extents_state, caption_frame_extents_pending, text, image_needs_regen)
         VALUES (?, ?, ?, ?, ?, ?)
       `
       )
       .run(
         input.startFrameIndex,
         input.endFrameIndex,
-        input.boundaryState ?? 'predicted',
-        input.boundaryPending ? 1 : 0,
+        input.captionFrameExtentsState ?? 'predicted',
+        input.captionFrameExtentsPending ? 1 : 0,
         input.text ?? null,
         needsImageRegen
       )
@@ -627,22 +628,22 @@ export async function createAnnotation(
     // Queue median OCR processing for non-gap, non-pending annotations via Prefect
     // image_needs_regen flag is already set in INSERT above
     if (!isGap && !isPending) {
-      // Update median_ocr_status to queued
+      // Update caption_ocr_status to queued
       db.prepare(
         `
         UPDATE captions
-        SET median_ocr_status = 'queued'
+        SET caption_ocr_status = 'queued'
         WHERE id = ?
       `
       ).run(annotationId)
 
       // Queue median frame OCR processing via Prefect (async)
-      const dbPath = await getDbPath(videoId)
+      const dbPath = await getCaptionsDbPath(videoId)
       const videoDir = await getVideoDir(videoId)
 
       if (dbPath && videoDir) {
         try {
-          await queueCaptionMedianOcrProcessing({
+          await queueCaptionOcrProcessing({
             videoId,
             dbPath,
             videoDir,
@@ -658,8 +659,8 @@ export async function createAnnotation(
           db.prepare(
             `
             UPDATE captions
-            SET median_ocr_status = 'error',
-                median_ocr_error = ?
+            SET caption_ocr_status = 'error',
+                caption_ocr_error = ?
             WHERE id = ?
           `
           ).run(error instanceof Error ? error.message : String(error), annotationId)
@@ -684,14 +685,14 @@ export async function createAnnotation(
 /**
  * Update an annotation with automatic overlap resolution.
  *
- * When updating boundaries, this function:
+ * When updating caption frame extents, this function:
  * 1. Deletes annotations completely contained within the new range
  * 2. Trims or splits overlapping annotations
  * 3. Creates gap annotations for uncovered ranges when shrinking
  * 4. Marks images for async regeneration and queues Prefect flows
  *
  * @param videoId - Video identifier
- * @param input - Update input with new boundaries
+ * @param input - Update input with new caption frame extents
  * @returns Overlap resolution result with all affected annotations
  * @throws Error if database or annotation is not found
  */
@@ -699,7 +700,7 @@ export async function updateAnnotationWithOverlapResolution(
   videoId: string,
   input: UpdateAnnotationInput
 ): Promise<OverlapResolutionResult> {
-  const result = await getWritableDatabase(videoId)
+  const result = await getWritableCaptionDb(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -707,7 +708,7 @@ export async function updateAnnotationWithOverlapResolution(
   const db = result.db
 
   try {
-    const { id, startFrameIndex, endFrameIndex, boundaryState } = input
+    const { id, startFrameIndex, endFrameIndex, captionFrameExtentsState } = input
 
     // Get the original annotation
     const original = db.prepare('SELECT * FROM captions WHERE id = ?').get(id) as
@@ -734,8 +735,8 @@ export async function updateAnnotationWithOverlapResolution(
     // Create gap annotations for uncovered ranges when annotation shrinks
     const createdGaps = createGapAnnotations(db, original, startFrameIndex, endFrameIndex)
 
-    // Check if boundaries changed
-    const boundariesChanged =
+    // Check if caption frame extents changed
+    const captionFrameExtentsChanged =
       startFrameIndex !== original.start_frame_index || endFrameIndex !== original.end_frame_index
 
     // Update the annotation and mark as confirmed
@@ -744,22 +745,22 @@ export async function updateAnnotationWithOverlapResolution(
       UPDATE captions
       SET start_frame_index = ?,
           end_frame_index = ?,
-          boundary_state = ?,
-          boundary_pending = 0,
+          caption_frame_extents_state = ?,
+          caption_frame_extents_pending = 0,
           image_needs_regen = ?,
-          boundary_updated_at = datetime('now')
+          caption_frame_extents_updated_at = datetime('now')
       WHERE id = ?
     `
     ).run(
       startFrameIndex,
       endFrameIndex,
-      boundaryState ?? 'confirmed',
-      boundariesChanged ? 1 : 0,
+      captionFrameExtentsState ?? 'confirmed',
+      captionFrameExtentsChanged ? 1 : 0,
       id
     )
 
-    // Delete old combined image if boundaries changed
-    if (boundariesChanged) {
+    // Delete old combined image if caption frame extents changed
+    if (captionFrameExtentsChanged) {
       deleteCombinedImage(videoId, id)
     }
 
@@ -774,10 +775,10 @@ export async function updateAnnotationWithOverlapResolution(
 
     console.log(`[updateAnnotationWithOverlapResolution] Updated annotation ${id}:`, {
       id: updatedAnnotation.id,
-      boundary_state: updatedAnnotation.boundary_state,
-      boundary_updated_at: updatedAnnotation.boundary_updated_at,
-      original_state: original.boundary_state,
-      original_updated_at: original.boundary_updated_at,
+      caption_frame_extents_state: updatedAnnotation.caption_frame_extents_state,
+      caption_frame_extents_updated_at: updatedAnnotation.caption_frame_extents_updated_at,
+      original_state: original.caption_frame_extents_state,
+      original_updated_at: original.caption_frame_extents_updated_at,
     })
 
     return {
@@ -800,7 +801,7 @@ export async function updateAnnotationWithOverlapResolution(
  * @throws Error if database is not found
  */
 export async function deleteAnnotation(videoId: string, annotationId: number): Promise<boolean> {
-  const result = await getWritableDatabase(videoId)
+  const result = await getWritableCaptionDb(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -827,7 +828,7 @@ export async function deleteAnnotation(videoId: string, annotationId: number): P
  * @throws Error if database is not found
  */
 export async function clearAllAnnotations(videoId: string): Promise<number> {
-  const result = await getWritableDatabase(videoId)
+  const result = await getWritableCaptionDb(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -862,7 +863,7 @@ export async function getAnnotationFrames(
   videoId: string,
   annotationId: number
 ): Promise<AnnotationFrameRange | null> {
-  const result = await getAnnotationDatabase(videoId)
+  const result = await getCaptionDb(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -902,7 +903,7 @@ export async function updateAnnotationText(
   annotationId: number,
   input: UpdateTextInput
 ): Promise<Annotation> {
-  const result = await getWritableDatabase(videoId)
+  const result = await getWritableCaptionDb(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -945,7 +946,7 @@ export async function updateAnnotationText(
  * @throws Error if database or annotation is not found
  */
 export async function markTextPending(videoId: string, annotationId: number): Promise<Annotation> {
-  const result = await getWritableDatabase(videoId)
+  const result = await getWritableCaptionDb(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -987,7 +988,7 @@ export async function getNextTextPendingAnnotation(
   videoId: string,
   afterId?: number
 ): Promise<Annotation | null> {
-  const result = await getAnnotationDatabase(videoId)
+  const result = await getCaptionDb(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -1008,7 +1009,7 @@ export async function getNextTextPendingAnnotation(
             `
             SELECT * FROM captions
             WHERE text_pending = 1
-            AND boundary_state IN ('predicted', 'confirmed')
+            AND caption_frame_extents_state IN ('predicted', 'confirmed')
             AND (start_frame_index > ? OR (start_frame_index = ? AND id > ?))
             ORDER BY start_frame_index ASC, id ASC
             LIMIT 1
@@ -1024,7 +1025,7 @@ export async function getNextTextPendingAnnotation(
             `
             SELECT * FROM captions
             WHERE text_pending = 1
-            AND boundary_state IN ('predicted', 'confirmed')
+            AND caption_frame_extents_state IN ('predicted', 'confirmed')
             ORDER BY start_frame_index ASC, id ASC
             LIMIT 1
           `
@@ -1037,7 +1038,7 @@ export async function getNextTextPendingAnnotation(
           `
           SELECT * FROM captions
           WHERE text_pending = 1
-          AND boundary_state IN ('predicted', 'confirmed')
+          AND caption_frame_extents_state IN ('predicted', 'confirmed')
           ORDER BY start_frame_index ASC, id ASC
           LIMIT 1
         `

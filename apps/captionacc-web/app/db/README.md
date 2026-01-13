@@ -1,5 +1,7 @@
 # Database Schema Files
 
+# TODO: The database details in this file are out of date.
+
 ## Schema Files
 
 - `annotations-schema-latest.sql` - (Optional) Latest unreleased working schema
@@ -40,8 +42,8 @@ Repair adds missing tables/columns for current/latest versions. For older versio
 
 ## Documentation
 
-See [`docs/database/`](../../docs/database/) for complete documentation:
+See [`docs/database/`](../../../../docs/data-architecture/archive-revise-or-remove/database/) for complete documentation:
 
-- [README.md](../../docs/database/README.md) - Database overview
-- [versioning-strategy.md](../../docs/database/versioning-strategy.md) - Versioning approach
-- [migrations.md](../../docs/database/migrations.md) - Migration details
+- [README.md](../../../../docs/data-architecture/archive-revise-or-remove/README-DB.md) - Database overview
+- [versioning-strategy.md](../../../../docs/data-architecture/archive-revise-or-remove/database/versioning-strategy.md) - Versioning approach
+- [migrations.md](../../../../docs/data-architecture/archive-revise-or-remove/database/migrations.md) - Migration details

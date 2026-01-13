@@ -1,5 +1,7 @@
 # Google Cloud Vision OCR Montage Testing
 
+# TODO: The database details in this file are out of date. 
+
 This directory contains scripts for testing Google Cloud Vision Document Text Detection API with different caption crop packing densities.
 
 ## Prerequisites
@@ -48,14 +50,14 @@ Test one video with specific packing densities:
 
 ```bash
 python scripts/test-gcp-vision-montage.py \
-    local/data/02/025780e3-f936-43c4-b988-134182783993 \
+    !__local/data/_has_been_deprecated__!/02/025780e3-f936-43c4-b988-134182783993 \
     --densities 10 25 50 \
     --max-frames 100 \
     --output-dir ./test-results
 ```
 
 **Arguments:**
-- `video_dir`: Path to video directory containing `cropping.db`
+- `video_dir`: Path to video directory
 - `--densities`: Number of crops per montage to test (default: 10 25 50)
 - `--max-frames`: Limit number of frames to process (default: all)
 - `--output-dir`: Where to save JSON results (default: no output)
@@ -73,7 +75,6 @@ Run batch test on multiple videos:
 - `OUTPUT_DIR`: Output directory (default: ./ocr-test-results)
 
 The script will:
-1. Find all videos with `cropping.db` in `local/data/`
 2. Test densities: 10, 25, 50, 75, 100 crops/montage
 3. Save results to `OUTPUT_DIR/`
 
@@ -82,7 +83,7 @@ The script will:
 ### 1. Create Montages
 
 For each packing density (e.g., 25 crops/montage):
-- Load cropped frames from `cropping.db`
+- Load cropped frames
 - Stack them vertically with thin separator lines
 - Create JPEG montages
 
@@ -146,7 +147,7 @@ Results are saved to `OUTPUT_DIR/{video_id}_montage_test.json`:
 
 ```json
 {
-  "video_dir": "local/data/02/025780e3-f936-43c4-b988-134182783993",
+  "video_dir": "!__local/data/_has_been_deprecated__!/02/025780e3-f936-43c4-b988-134182783993",
   "total_frames": 3000,
   "frame_width": 1920,
   "frame_height": 200,
@@ -227,14 +228,6 @@ Make scripts executable:
 ```bash
 chmod +x scripts/test-gcp-vision-montage.py
 chmod +x scripts/test-gcp-vision-batch.sh
-```
-
-### "No cropping.db found"
-
-Ensure you've processed videos with the crop_frames pipeline:
-```bash
-# Check for existing databases
-find local/data -name "cropping.db" -type f
 ```
 
 ## API Limits

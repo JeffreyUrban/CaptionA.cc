@@ -1,5 +1,7 @@
 """Training data collection from confirmed text annotations across all videos."""
 
+# TODO: The database details in this file are out of date.
+
 import json
 import sqlite3
 from dataclasses import dataclass
@@ -45,7 +47,7 @@ def find_all_video_dirs(data_root: Path) -> list[Path]:
     Looks for directories containing captions.db files.
 
     Args:
-        data_root: Root data directory (e.g., local/data/)
+        data_root: Root data directory (e.g., !__local/data/_has_been_deprecated__!/)
 
     Returns:
         List of video directory paths
@@ -73,7 +75,7 @@ def get_confirmed_text_annotations(db_path: Path) -> list[dict[str, Any]]:
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
-        # Query for captions with confirmed boundaries and text
+        # Query for captions with confirmed caption frame extents and text
         cursor.execute("""
             SELECT
                 id, start_frame_index, end_frame_index,
@@ -81,7 +83,7 @@ def get_confirmed_text_annotations(db_path: Path) -> list[dict[str, Any]]:
             FROM captions
             WHERE text IS NOT NULL
               AND text != ''
-              AND boundary_state = 'confirmed'
+              AND caption_frame_extents_state = 'confirmed'
             ORDER BY start_frame_index
         """)
 
@@ -190,7 +192,7 @@ def collect_all_training_data(
     """Collect training data from all videos in data root.
 
     Args:
-        data_root: Root data directory (e.g., local/data/)
+        data_root: Root data directory (e.g., !__local/data/_has_been_deprecated__!/)
         output_dir: Optional directory to save training data manifest
         save_images: If True, save images to output_dir (for debugging)
         generate_font_examples: If True, auto-generate font example images

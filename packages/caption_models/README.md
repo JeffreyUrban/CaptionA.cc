@@ -30,12 +30,7 @@ ocr_file = Path("OCR.jsonl")
 annotations = load_ocr_annotations(ocr_file)
 
 # Analyze subtitle region
-region = analyze_subtitle_region(
-    annotations,
-    width=1920,
-    height=1080,
-    min_overlap=0.75
-)
+region = analyze_subtitle_region(annotations, width=1920, height=1080)
 
 # Save analysis
 save_analysis_text(region, Path("subtitle_analysis.txt"))

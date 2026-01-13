@@ -5,13 +5,15 @@
  * for optimal OCR text extraction.
  */
 
+// TODO: The database details in this file are out of date.
+
 import { existsSync, mkdirSync, unlinkSync } from 'fs'
 import { resolve } from 'path'
 
 import Database from 'better-sqlite3'
 import sharp from 'sharp'
 
-import { getDbPath, getVideoDir } from './video-paths'
+import { getCaptionsDbPath, getVideoDir } from './video-paths'
 
 // Image quality constant
 const COMBINED_IMAGE_QUALITY = 95
@@ -31,7 +33,7 @@ export async function generateCombinedImage(
   startFrame: number,
   endFrame: number
 ): Promise<string> {
-  const dbPath = await getDbPath(videoPath)
+  const dbPath = await getCaptionsDbPath(videoPath)
   if (!dbPath) {
     throw new Error(`Database not found for video: ${videoPath}`)
   }
@@ -262,7 +264,7 @@ export async function getOrGenerateCombinedImage(
 
 /**
  * Delete cached combined image for an annotation.
- * Called when annotation boundaries change.
+ * Called when annotation caption frame extents change.
  *
  * @param videoPath - Relative path to video
  * @param annotationId - Annotation ID

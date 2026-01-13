@@ -46,7 +46,7 @@ export interface LayoutConfig {
   bottomEdgeStd: number | null
   horizontalStdSlope: number | null
   horizontalStdIntercept: number | null
-  cropBoundsVersion: number
+  cropRegionVersion: number
 }
 
 export interface BoxData {
@@ -63,7 +63,7 @@ export interface BoxData {
 export interface FrameBoxesData {
   frameIndex: number
   imageUrl: string
-  cropBounds: { left: number; top: number; right: number; bottom: number }
+  cropRegion: { left: number; top: number; right: number; bottom: number }
   frameWidth: number
   frameHeight: number
   boxes: BoxData[]

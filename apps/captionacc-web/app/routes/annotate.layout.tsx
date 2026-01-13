@@ -54,7 +54,7 @@ export default function AnnotateLayout() {
   } | null>(null)
 
   // Frame view toggle state
-  const [showCropBoundsInFrame, setShowCropBoundsInFrame] = useState(false)
+  const [showCropRegionInFrame, setShowCropRegionInFrame] = useState(false)
 
   // Data management hook
   const {
@@ -72,16 +72,16 @@ export default function AnnotateLayout() {
     analysisBoxes,
     annotationsSinceRecalc,
     isRecalculating,
-    boundsMismatch,
+    cropRegionMismatch,
     analysisThumbnailUrl,
     setAnalysisThumbnailUrl,
-    cropBoundsEdit,
+    cropRegionEdit,
     boxStats,
     pulseStartTime,
     frameBoxesCache,
     loadQueue,
     loadAnalysisBoxes,
-    recalculateCropBounds,
+    recalculateCropRegion,
     handleThumbnailClick,
     handleBoxClick,
     setCurrentFrameBoxes,
@@ -115,12 +115,12 @@ export default function AnnotateLayout() {
     annotationsSinceRecalc,
     pulseStartTime,
     frameBoxesCache,
-    showCropBoundsInFrame,
+    showCropRegionInFrame,
     setCurrentFrameBoxes,
     setHasUnsyncedAnnotations,
     setAnnotationsSinceRecalc,
     handleBoxClick,
-    recalculateCropBounds,
+    recalculateCropRegion,
     loadAnalysisBoxes,
   })
 
@@ -217,7 +217,7 @@ export default function AnnotateLayout() {
               viewMode={viewMode}
               layoutConfig={layoutConfig}
               layoutApproved={layoutApproved}
-              boundsMismatch={boundsMismatch}
+              cropRegionMismatch={cropRegionMismatch}
               currentFrameBoxes={currentFrameBoxes}
               analysisBoxes={analysisBoxes}
               loadingFrame={loadingFrame}
@@ -251,14 +251,14 @@ export default function AnnotateLayout() {
             viewMode={viewMode}
             layoutApproved={layoutApproved}
             layoutConfig={layoutConfig}
-            cropBoundsEdit={cropBoundsEdit}
+            cropRegionEdit={cropRegionEdit}
             currentFrameBoxes={currentFrameBoxes}
             boxStats={boxStats}
             annotationsSinceRecalc={annotationsSinceRecalc}
             isRecalculating={isRecalculating}
             recalcThreshold={RECALC_THRESHOLD}
-            showCropBoundsInFrame={showCropBoundsInFrame}
-            onToggleCropBounds={setShowCropBoundsInFrame}
+            showCropRegionInFrame={showCropRegionInFrame}
+            onToggleCropRegion={setShowCropRegionInFrame}
             onApprove={() => setShowApproveModal(true)}
             onClearAll={handleClearAllWithConfirmation}
           />
@@ -282,7 +282,7 @@ export default function AnnotateLayout() {
       {showClearConfirmModal && (
         <LayoutConfirmModal
           title="Clear All Annotations"
-          message={`Clear all layout annotations? This will:\n\n• Delete all user annotations\n• Reset predictions to seed model\n• Recalculate crop bounds\n\nThis action cannot be undone.`}
+          message={`Clear all layout annotations? This will:\n\n• Delete all user annotations\n• Reset predictions to seed model\n• Recalculate crop region\n\nThis action cannot be undone.`}
           confirmLabel="Clear All"
           cancelLabel="Cancel"
           confirmType="danger"

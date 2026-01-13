@@ -1,4 +1,4 @@
-"""Rejection logging and alerting for boundary inference.
+"""Rejection logging and alerting for caption frame extents inference.
 
 Records rejected jobs in Supabase for monitoring and triggers alerts.
 """
@@ -10,7 +10,7 @@ from services.orchestrator.supabase_client import get_supabase_client
 
 
 class RejectionRow(TypedDict):
-    """Supabase boundary_inference_rejections table row structure."""
+    """Supabase caption_frame_extents_inference_rejections table row structure."""
 
     id: str
     video_id: str
@@ -75,7 +75,7 @@ def log_rejection(
         supabase = get_supabase_client(schema="captionacc_production")
 
         # Insert rejection record
-        supabase.schema("captionacc_production").table("boundary_inference_rejections").insert(
+        supabase.schema("captionacc_production").table("caption_frame_extents_inference_rejections").insert(
             {
                 "video_id": video_id,
                 "tenant_id": tenant_id,
@@ -119,7 +119,7 @@ def get_unacknowledged_rejections(limit: int = 100) -> list[RejectionRow]:
 
     response = (
         supabase.schema("captionacc_production")
-        .table("boundary_inference_rejections")
+        .table("caption_frame_extents_inference_rejections")
         .select("*")
         .eq("acknowledged", False)
         .order("created_at", desc=True)
@@ -147,7 +147,7 @@ def acknowledge_rejection(rejection_id: str, acknowledged_by: str | None = None)
     if acknowledged_by:
         update_data["acknowledged_by"] = acknowledged_by
 
-    supabase.schema("captionacc_production").table("boundary_inference_rejections").update(
+    supabase.schema("captionacc_production").table("caption_frame_extents_inference_rejections").update(
         update_data
     ).eq("id", rejection_id).execute()
 
@@ -182,7 +182,7 @@ def get_rejection_summary(days: int = 7) -> dict[str, Any]:
     # Fallback: Simple query with client-side aggregation
     response = (
         supabase.schema("captionacc_production")
-        .table("boundary_inference_rejections")
+        .table("caption_frame_extents_inference_rejections")
         .select("rejection_type, created_at")
         .gte("created_at", f"now() - interval '{days} days'")
         .execute()

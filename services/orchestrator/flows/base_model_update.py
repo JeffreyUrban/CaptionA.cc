@@ -1,6 +1,8 @@
 """
 Base Model Update Flow
 
+# TODO: The database details in this file are out of date.
+
 Handles updating the global Bayesian base model and retraining all affected videos.
 
 The base model represents default priors for box classification (caption vs noise).
@@ -145,7 +147,7 @@ def train_base_model(
        - Query all databases for user labels (full_frame_box_labels where label_source='user')
     2. Extract features for each labeled box
        - Load OCR boxes from full_frame_ocr
-       - Load video_layout_config for anchor/bounds
+       - Load video_layout_config for anchor/crop region
        - Calculate features (vertical_alignment, height_similarity, etc.)
     3. Train Gaussian Naive Bayes
        - Calculate class priors (P(in), P(out))
@@ -222,7 +224,7 @@ def find_videos_with_models(data_dir: str) -> list[dict[str, str]]:
     box_classification_model table with trained model.
 
     Args:
-        data_dir: Path to data directory (e.g., local/data/)
+        data_dir: Path to data directory (e.g., !__local/data/_has_been_deprecated__!/)
 
     Returns:
         List of dicts with video_id, db_path, display_path

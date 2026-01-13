@@ -16,7 +16,7 @@ import type {
   FrameBoxesData,
   ViewMode,
   BoxStats,
-  CropBoundsEdit,
+  CropRegionEdit,
 } from '~/types/layout'
 
 interface LayoutControlPanelProps {
@@ -24,14 +24,14 @@ interface LayoutControlPanelProps {
   viewMode: ViewMode
   layoutApproved: boolean
   layoutConfig: LayoutConfig | null
-  cropBoundsEdit: CropBoundsEdit | null
+  cropRegionEdit: CropRegionEdit | null
   currentFrameBoxes: FrameBoxesData | null
   boxStats: BoxStats | null
   annotationsSinceRecalc: number
   isRecalculating: boolean
   recalcThreshold: number
-  showCropBoundsInFrame: boolean
-  onToggleCropBounds: (show: boolean) => void
+  showCropRegionInFrame: boolean
+  onToggleCropRegion: (show: boolean) => void
   onApprove: () => void
   onClearAll: () => void
 }
@@ -41,14 +41,14 @@ export function LayoutControlPanel({
   viewMode,
   layoutApproved,
   layoutConfig,
-  cropBoundsEdit,
+  cropRegionEdit,
   currentFrameBoxes,
   boxStats,
   annotationsSinceRecalc,
   isRecalculating,
   recalcThreshold,
-  showCropBoundsInFrame,
-  onToggleCropBounds,
+  showCropRegionInFrame,
+  onToggleCropRegion,
   onApprove,
   onClearAll,
 }: LayoutControlPanelProps) {
@@ -87,24 +87,24 @@ export function LayoutControlPanel({
       <LayoutActionButtons
         layoutApproved={layoutApproved}
         layoutConfig={layoutConfig}
-        cropBoundsEdit={cropBoundsEdit}
+        cropRegionEdit={cropRegionEdit}
         isRecalculating={isRecalculating}
         onApprove={onApprove}
         onClearAll={onClearAll}
       />
 
-      {/* Crop Boundary Toggle (Frame view only) */}
+      {/* Crop Region Toggle (Frame view only) */}
       {viewMode === 'frame' && (
         <div className="rounded-md bg-gray-50 p-3 dark:bg-gray-900">
           <label className="flex cursor-pointer items-center gap-2">
             <input
               type="checkbox"
-              checked={showCropBoundsInFrame}
-              onChange={e => onToggleCropBounds(e.target.checked)}
+              checked={showCropRegionInFrame}
+              onChange={e => onToggleCropRegion(e.target.checked)}
               className="h-4 w-4"
             />
             <span className="text-sm text-gray-700 dark:text-gray-300">
-              Show crop boundary overlay
+              Show crop region overlay
             </span>
           </label>
         </div>

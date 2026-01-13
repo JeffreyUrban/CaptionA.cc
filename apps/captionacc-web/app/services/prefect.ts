@@ -12,40 +12,6 @@ function log(message: string) {
   console.log(`${timestamp} ${message}`)
 }
 
-interface QueueFlowOptions {
-  videoId?: string
-  videoPath?: string
-  virtualPath?: string
-  dbPath?: string
-  outputDir?: string
-  videoDir?: string
-  dataDir?: string
-  frameRate?: number
-  cropBounds?: {
-    left: number
-    top: number
-    right: number
-    bottom: number
-  }
-  cropBoundsVersion?: number
-  captionIds?: number[]
-  language?: string
-  trainingSource?: string
-  retrainVideos?: boolean
-  updatePredictions?: boolean
-  filename?: string
-  fileSize?: number
-  tenantId?: string
-  uploadedByUserId?: string
-  triggerCropRegen?: boolean
-}
-
-interface QueueFlowResult {
-  flowRunId: string
-  status: string
-  priority: string
-}
-
 /**
  * Deployment name suffix - allows multiple worktrees to use different deployments
  *
@@ -81,13 +47,47 @@ function getDeployName(): string {
 
 const DEPLOY_NAME = getDeployName()
 
+interface QueueFlowOptions {
+  videoId?: string
+  videoPath?: string
+  virtualPath?: string
+  dbPath?: string
+  outputDir?: string
+  videoDir?: string
+  dataDir?: string
+  frameRate?: number
+  cropRegion?: {
+    left: number
+    top: number
+    right: number
+    bottom: number
+  }
+  cropRegionVersion?: number
+  captionIds?: number[]
+  language?: string
+  trainingSource?: string
+  retrainVideos?: boolean
+  updatePredictions?: boolean
+  filename?: string
+  fileSize?: number
+  tenantId?: string
+  uploadedByUserId?: string
+  triggerCropRegen?: boolean
+}
+
+interface QueueFlowResult {
+  flowRunId: string
+  status: string
+  priority: string
+}
+
 /**
  * Deployment name mapping for flow types
  */
 const DEPLOYMENT_NAMES: Record<string, string> = {
   'full-frames': `process-video-initial/${DEPLOY_NAME}`,
   'crop-frames': `crop-video-frames/${DEPLOY_NAME}`,
-  'caption-median-ocr': `process-caption-median-ocr/${DEPLOY_NAME}`,
+  caption_ocr: `process-caption_ocr/${DEPLOY_NAME}`,
   'update-base-model': `update-base-model-globally/${DEPLOY_NAME}`,
   'retrain-video-model': `retrain-video-model/${DEPLOY_NAME}`,
   'upload-and-process': `upload-and-process-video/${DEPLOY_NAME}`,
@@ -107,7 +107,7 @@ async function queueFlow(
   flowType:
     | 'full-frames'
     | 'crop-frames'
-    | 'caption-median-ocr'
+    | 'caption_ocr'
     | 'update-base-model'
     | 'retrain-video-model'
     | 'upload-and-process'
@@ -122,9 +122,9 @@ async function queueFlow(
   let parameters: Record<string, unknown> = {}
   let tags: string[] = []
 
-  if (flowType === 'caption-median-ocr') {
+  if (flowType === 'caption_ocr') {
     if (!options.videoDir || !options.captionIds || options.captionIds.length === 0) {
-      throw new Error('videoDir and captionIds required for caption-median-ocr flow')
+      throw new Error('videoDir and captionIds required for caption_ocr flow')
     }
     parameters = {
       video_id: options.videoId!,
@@ -174,13 +174,13 @@ async function queueFlow(
     }
     tags = ['upload', 'processing', 'high-priority']
   } else if (flowType === 'crop-frames-to-webm') {
-    if (!options.videoId || !options.cropBounds) {
-      throw new Error('videoId and cropBounds required for crop-frames-to-webm flow')
+    if (!options.videoId || !options.cropRegion) {
+      throw new Error('videoId and cropRegion required for crop-frames-to-webm flow')
     }
     parameters = {
       video_id: options.videoId,
       tenant_id: options.tenantId ?? '00000000-0000-0000-0000-000000000001',
-      crop_bounds: options.cropBounds,
+      crop_region: options.cropRegion,
       frame_rate: options.frameRate ?? 10.0,
     }
     if (options.filename) {
@@ -249,10 +249,10 @@ async function queueFlow(
       !options.outputDir ||
       !options.videoId ||
       !options.dbPath ||
-      !options.cropBounds
+      !options.cropRegion
     ) {
       throw new Error(
-        'videoId, videoPath, dbPath, outputDir, and cropBounds required for crop-frames flow'
+        'videoId, videoPath, dbPath, outputDir, and cropRegion required for crop-frames flow'
       )
     }
     parameters = {
@@ -260,8 +260,8 @@ async function queueFlow(
       video_path: options.videoPath,
       db_path: options.dbPath,
       output_dir: options.outputDir,
-      crop_bounds: options.cropBounds,
-      crop_bounds_version: options.cropBoundsVersion ?? 1,
+      crop_region: options.cropRegion,
+      crop_region_version: options.cropRegionVersion ?? 1,
       frame_rate: 10.0,
     }
     tags = ['user-initiated', 'crop-frames']
@@ -354,19 +354,19 @@ export async function queueCropFramesProcessing(options: {
   videoPath: string
   dbPath: string
   outputDir: string
-  cropBounds: {
+  cropRegion: {
     left: number
     top: number
     right: number
     bottom: number
   }
-  cropBoundsVersion?: number
+  cropRegionVersion?: number
 }): Promise<QueueFlowResult> {
   log(`[Prefect] Queuing crop frames processing for ${options.videoId}`)
 
   const result = await queueFlow('crop-frames', {
     ...options,
-    cropBoundsVersion: options.cropBoundsVersion ?? 1,
+    cropRegionVersion: options.cropRegionVersion ?? 1,
   })
 
   log(`[Prefect] Crop frames flow queued: ${result.flowRunId} (status: ${result.status})`)
@@ -374,11 +374,11 @@ export async function queueCropFramesProcessing(options: {
 }
 
 /**
- * Queue caption median OCR processing (user-initiated after boundary changes)
+ * Queue caption median OCR processing (user-initiated after caption frame extents changes)
  *
  * Replaces: synchronous OCR in api.annotations.$videoId.$id.text.tsx
  */
-export async function queueCaptionMedianOcrProcessing(options: {
+export async function queueCaptionOcrProcessing(options: {
   videoId: string
   dbPath: string
   videoDir: string
@@ -389,7 +389,7 @@ export async function queueCaptionMedianOcrProcessing(options: {
     `[Prefect] Queuing caption median OCR for ${options.videoId}, captions: ${options.captionIds.join(', ')}`
   )
 
-  const result = await queueFlow('caption-median-ocr', {
+  const result = await queueFlow('caption_ocr', {
     ...options,
     language: options.language ?? 'zh-Hans',
   })
@@ -494,7 +494,7 @@ export async function queueUploadAndProcessing(options: {
  */
 export async function queueCropFramesToWebm(options: {
   videoId: string
-  cropBounds: {
+  cropRegion: {
     left: number
     top: number
     right: number
@@ -509,7 +509,7 @@ export async function queueCropFramesToWebm(options: {
 
   const result = await queueFlow('crop-frames-to-webm', {
     videoId: options.videoId,
-    cropBounds: options.cropBounds,
+    cropRegion: options.cropRegion,
     tenantId: options.tenantId,
     filename: options.filename,
     frameRate: options.frameRate ?? 10.0,
@@ -551,7 +551,7 @@ export async function queueDownloadForLayoutAnnotation(options: {
  * Queue upload of annotated layout.db to Wasabi
  *
  * Uploads layout.db and optionally triggers cropped frames regeneration
- * if crop bounds have changed.
+ * if crop region have changed.
  */
 export async function queueUploadLayoutDb(options: {
   videoId: string

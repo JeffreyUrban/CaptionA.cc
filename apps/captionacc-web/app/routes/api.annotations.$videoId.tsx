@@ -1,5 +1,5 @@
 /**
- * Annotation API route handler for caption boundary management.
+ * Annotation API route handler for caption frame extents management.
  *
  * This is a thin route handler that delegates to the annotation-crud-service
  * for all business logic. It handles:
@@ -88,7 +88,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
         id: body.id,
         startFrameIndex: body.start_frame_index,
         endFrameIndex: body.end_frame_index,
-        boundaryState: body.boundary_state,
+        captionFrameExtentsState: body.caption_frame_extents_state,
       }
 
       const result = await updateAnnotationWithOverlapResolution(videoId, input)
@@ -105,8 +105,8 @@ export async function action({ params, request }: ActionFunctionArgs) {
       const input: CreateAnnotationInput = {
         startFrameIndex: body.start_frame_index,
         endFrameIndex: body.end_frame_index,
-        boundaryState: body.boundary_state,
-        boundaryPending: body.boundary_pending,
+        captionFrameExtentsState: body.caption_frame_extents_state,
+        captionFrameExtentsPending: body.caption_frame_extents_pending,
         text: body.text,
       }
 
@@ -135,19 +135,19 @@ function toSnakeCase(annotation: Annotation) {
     id: annotation.id,
     start_frame_index: annotation.startFrameIndex,
     end_frame_index: annotation.endFrameIndex,
-    state: annotation.boundaryState, // Frontend expects 'state', not 'boundary_state'
-    pending: annotation.boundaryPending, // Frontend expects 'pending' as boolean
-    boundary_updated_at: annotation.boundaryUpdatedAt,
+    state: annotation.captionFrameExtentsState, // Frontend expects 'state', not 'caption_frame_extents_state'
+    pending: annotation.captionFrameExtentsPending, // Frontend expects 'pending' as boolean
+    caption_frame_extents_updated_at: annotation.captionFrameExtentsUpdatedAt,
     text: annotation.text,
     text_pending: annotation.textPending ? 1 : 0,
     text_status: annotation.textStatus,
     text_notes: annotation.textNotes,
-    text_ocr_combined: annotation.textOcrCombined,
+    caption_ocr: annotation.captionOcr,
     text_updated_at: annotation.textUpdatedAt,
     image_needs_regen: annotation.imageNeedsRegen ? 1 : 0,
-    median_ocr_status: annotation.medianOcrStatus,
-    median_ocr_error: annotation.medianOcrError,
-    median_ocr_processed_at: annotation.medianOcrProcessedAt,
+    caption_ocr_status: annotation.captionOcrStatus,
+    caption_ocr_error: annotation.captionOcrError,
+    caption_ocr_processed_at: annotation.captionOcrProcessedAt,
     created_at: annotation.createdAt,
   }
 }

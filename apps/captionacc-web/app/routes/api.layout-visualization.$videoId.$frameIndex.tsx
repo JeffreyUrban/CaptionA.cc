@@ -4,7 +4,7 @@ import Database from 'better-sqlite3'
 import { type LoaderFunctionArgs } from 'react-router'
 import sharp from 'sharp'
 
-import { getDbPath } from '~/utils/video-paths'
+import { getCaptionsDbPath } from '~/utils/video-paths'
 
 interface VideoLayoutConfig {
   id: number
@@ -28,7 +28,7 @@ interface VideoLayoutConfig {
   bottom_edge_std: number | null
   horizontal_std_slope: number | null
   horizontal_std_intercept: number | null
-  crop_bounds_version: number
+  crop_region_version: number
 }
 
 interface OCRBox {
@@ -46,7 +46,7 @@ interface OCRBox {
 }
 
 async function getDatabase(videoId: string): Promise<Database.Database | Response> {
-  const dbPath = await getDbPath(videoId)
+  const dbPath = await getCaptionsDbPath(videoId)
   if (!dbPath) {
     return new Response('Video not found', { status: 404 })
   }
@@ -256,7 +256,7 @@ function generateLayoutVisualizationSVG(
     `)
   }
 
-  // Draw crop bounds
+  // Draw crop region
   elements.push(`
     <rect
       x="${layoutConfig.crop_left}"

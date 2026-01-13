@@ -52,7 +52,7 @@ def determine_anchor_type(boxes, region_bounds):
     left_edges = [box[0] for box in boxes]
     right_edges = [box[2] for box in boxes]
 
-    # Get bounds
+    # Get bounds of region
     min_left = min(left_edges)
     max_right = max(right_edges)
     region_width = max_right - min_left
@@ -145,12 +145,7 @@ def get_anchor_position(boxes, anchor_type, crop_left, crop_right):
         return mode_value
 
 
-def analyze_subtitle_region(
-    ocr_annotations: list[dict],
-    width: int,
-    height: int,
-    min_overlap: float = 0.75,  # Deprecated parameter, kept for compatibility
-) -> SubtitleRegion:
+def analyze_subtitle_region(ocr_annotations: list[dict], width: int, height: int) -> SubtitleRegion:
     """Analyze OCR boxes to determine subtitle region characteristics.
 
     Creates an initial layout config from ALL detected OCR boxes without
@@ -161,7 +156,6 @@ def analyze_subtitle_region(
         ocr_annotations: List of OCR result dictionaries from load_ocr_annotations()
         width: Video frame width in pixels
         height: Video frame height in pixels
-        min_overlap: Deprecated (kept for compatibility, no longer used)
 
     Returns:
         SubtitleRegion with analyzed characteristics

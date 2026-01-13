@@ -13,7 +13,7 @@ interface UseWorkflowProgressResult {
 }
 
 /**
- * Manages workflow progress for boundary annotation.
+ * Manages workflow progress for caption frame extents annotation.
  * Loads progress on mount and provides an updateProgress function.
  *
  * @param videoId - The ID of the video

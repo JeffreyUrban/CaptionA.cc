@@ -11,7 +11,7 @@
  */
 
 import { listAnnotations } from '~/services/annotation-crud-service'
-import { getWritableDatabase } from '~/utils/database'
+import { getWritableCaptionDb } from '~/utils/database'
 import { getOrGenerateCombinedImage } from '~/utils/image-processing'
 
 /**
@@ -25,7 +25,7 @@ export async function regenerateAnnotationImage(
   videoId: string,
   annotationId: number
 ): Promise<boolean> {
-  const result = await getWritableDatabase(videoId)
+  const result = await getWritableCaptionDb(videoId)
   if (!result.success) {
     console.error(`[ImageRegenQueue] Database not found for video: ${videoId}`)
     return false
@@ -132,7 +132,7 @@ export async function processPendingRegenerations(
  * @returns Number of annotations needing regeneration
  */
 export async function getPendingRegenerationCount(videoId: string): Promise<number> {
-  const result = await getWritableDatabase(videoId)
+  const result = await getWritableCaptionDb(videoId)
   if (!result.success) {
     return 0
   }

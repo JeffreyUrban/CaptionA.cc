@@ -51,7 +51,7 @@ def extract_frames(
         ...,
         "--crop",
         "-c",
-        help="Crop bounds as 'left,top,right,bottom' in pixels",
+        help="Crop region as 'left,top,right,bottom' in pixels",
     ),
     rate: float = typer.Option(
         10.0,
@@ -79,10 +79,10 @@ def extract_frames(
         "--write-to-db",
         help="Write frames to database and cleanup filesystem frames",
     ),
-    crop_bounds_version: int = typer.Option(
+    crop_region_version: int = typer.Option(
         1,
-        "--crop-bounds-version",
-        help="Crop bounds version from video_layout_config (required if --write-to-db)",
+        "--crop-region-version",
+        help="Crop region version from video_layout_config (required if --write-to-db)",
     ),
     version: bool | None = typer.Option(
         None,
@@ -107,7 +107,7 @@ def extract_frames(
         crop_frames extract-frames video.mp4 ./output \\
           --crop "100,200,700,250" --run-ocr --write-to-db
     """
-    # Parse crop bounds [left, top, right, bottom]
+    # Parse crop region [left, top, right, bottom]
     try:
         parts = [int(x.strip()) for x in crop.split(",")]
         if len(parts) != 4:
@@ -141,7 +141,7 @@ def extract_frames(
         console.print(f"Resize: {resize_width}×{resize_height}")
         console.print(f"Mode: {'preserve aspect' if preserve_aspect else 'stretch'}")
     if write_to_db:
-        console.print(f"Database: Write to DB and cleanup (crop_bounds_version: {crop_bounds_version})")
+        console.print(f"Database: Write to DB and cleanup (crop_region_version: {crop_region_version})")
     console.print()
 
     # Clear existing frames before processing (to avoid stale frames from previous runs)
@@ -186,8 +186,8 @@ def extract_frames(
             console.print("[bold]Writing frames to database...[/bold]")
 
             db_path = get_database_path(result_dir)
-            # Crop bounds as (left, top, right, bottom)
-            crop_bounds_tuple = (left, top, right, bottom)
+            # Crop region as (left, top, right, bottom)
+            crop_region_tuple = (left, top, right, bottom)
 
             with Progress(
                 SpinnerColumn(),
@@ -201,8 +201,8 @@ def extract_frames(
                 frames_written = write_frames_to_database(
                     frames_dir=result_dir,
                     db_path=db_path,
-                    crop_bounds=crop_bounds_tuple,
-                    crop_bounds_version=crop_bounds_version,
+                    crop_region=crop_region_tuple,
+                    crop_region_version=crop_region_version,
                     progress_callback=lambda current, total: progress.update(task, completed=current),
                     delete_after_write=True,
                 )

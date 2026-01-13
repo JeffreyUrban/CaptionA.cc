@@ -3,13 +3,13 @@ import { existsSync } from 'fs'
 import Database from 'better-sqlite3'
 import { type LoaderFunctionArgs } from 'react-router'
 
-import { getDbPath } from '~/utils/video-paths'
+import { getCaptionsDbPath } from '~/utils/video-paths'
 
 interface TextQueueAnnotation {
   id: number
   start_frame_index: number
   end_frame_index: number
-  boundary_state: 'predicted' | 'confirmed' | 'gap'
+  caption_frame_extents_state: 'predicted' | 'confirmed' | 'gap'
   text: string | null
   text_pending: number
   text_status: string | null
@@ -17,7 +17,7 @@ interface TextQueueAnnotation {
 }
 
 async function getDatabase(videoId: string): Promise<Database.Database | Response> {
-  const dbPath = await getDbPath(videoId)
+  const dbPath = await getCaptionsDbPath(videoId)
   if (!dbPath) {
     return new Response('Video not found', { status: 404 })
   }
@@ -47,7 +47,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
     // Find annotations that need text annotation:
     // - text IS NULL (not yet annotated), OR
-    // - text_pending = 1 (boundaries changed, needs re-annotation)
+    // - text_pending = 1 (caption frame extents changed, needs re-annotation)
     // Exclude gaps
     // Order by start_frame_index
     const annotations = db
@@ -57,14 +57,14 @@ export async function loader({ params }: LoaderFunctionArgs) {
         id,
         start_frame_index,
         end_frame_index,
-        boundary_state,
+        caption_frame_extents_state,
         text,
         text_pending,
         text_status,
         created_at
       FROM captions
       WHERE (text IS NULL OR text_pending = 1)
-        AND boundary_state != 'gap'
+        AND caption_frame_extents_state != 'gap'
       ORDER BY start_frame_index ASC
     `
       )

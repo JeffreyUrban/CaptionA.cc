@@ -15,7 +15,6 @@ import { resolve } from 'path'
 
 import Database from 'better-sqlite3'
 
-import { recoverStalledCropFrames } from './crop-frames-processing'
 import {
   tryStartProcessing,
   finishProcessing,
@@ -23,7 +22,7 @@ import {
 } from './processing-coordinator'
 
 import { migrateDatabase } from '~/db/migrate'
-import { getDbPath, getVideoDir, getAllVideos } from '~/utils/video-paths'
+import { getCaptionsDbPath, getVideoDir, getAllVideos } from '~/utils/video-paths'
 
 interface ProcessingOptions {
   videoPath: string // Display path (user-facing) like "show_name/video_name"
@@ -274,7 +273,7 @@ export async function triggerVideoProcessing(options: ProcessingOptions): Promis
 
   // Resolve to actual storage paths (prefer videoId if available)
   const pathOrId = videoId ?? videoPath
-  const dbPath = await getDbPath(pathOrId)
+  const dbPath = await getCaptionsDbPath(pathOrId)
   const videoDir = await getVideoDir(pathOrId)
 
   if (!dbPath || !videoDir) {
@@ -399,7 +398,7 @@ export async function triggerVideoProcessing(options: ProcessingOptions): Promis
  * Get processing status for a video
  */
 export async function getProcessingStatus(videoPath: string) {
-  const dbPath = await getDbPath(videoPath)
+  const dbPath = await getCaptionsDbPath(videoPath)
 
   if (!dbPath) {
     return null
@@ -431,7 +430,7 @@ export async function recoverStalledProcessing() {
   const allVideos = await getAllVideos()
 
   for (const video of allVideos) {
-    const dbPath = await getDbPath(video.videoId)
+    const dbPath = await getCaptionsDbPath(video.videoId)
     if (dbPath) {
       // Run migrations (idempotent - safe to run multiple times)
       try {
@@ -440,9 +439,8 @@ export async function recoverStalledProcessing() {
         console.error(`[VideoProcessing] Failed to migrate ${video.displayPath}:`, error)
       }
 
-      // Check both full_frames and crop_frames processing
+      // Check full_frames processing
       await checkAndRecoverVideo(dbPath, video.displayPath, video.videoId)
-      recoverStalledCropFrames(video.videoId, video.displayPath)
     }
   }
 }

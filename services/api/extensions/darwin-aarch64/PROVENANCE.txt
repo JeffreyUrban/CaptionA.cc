@@ -1,0 +1,8 @@
+CR-SQLite Extension Provenance
+==============================
+Artifact:     crsqlite.dylib
+Release Tag:  prebuild-test.main-438663b8
+Repository:   https://github.com/superfly/cr-sqlite
+Download URL: https://github.com/superfly/cr-sqlite/releases/download/prebuild-test.main-438663b8/crsqlite-darwin-aarch64.zip
+Downloaded:   2026-01-11T20:49:22Z
+SHA256:       1f11beea9831efd94b2edb051f33e6336d7c85d0934be9ef23bbb3a68f638db1

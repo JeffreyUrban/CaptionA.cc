@@ -16,7 +16,7 @@ def get_frame_from_db(
     Args:
         db_path: Path to SQLite database file
         frame_index: Frame index to retrieve
-        table: Table name ("full_frames" or "cropped_frames")
+        table: Table name ("full_frames")
 
     Returns:
         FrameData object if found, None otherwise
@@ -34,8 +34,8 @@ def get_frame_from_db(
         ...     img = frame.to_pil_image()
         ...     img.show()
     """
-    if table not in ("full_frames", "cropped_frames"):
-        raise ValueError(f"Invalid table: {table}. Must be 'full_frames' or 'cropped_frames'")
+    if table not in ("full_frames"):
+        raise ValueError(f"Invalid table: {table}. Must be 'full_frames'")
 
     conn = sqlite3.connect(db_path)
     try:
@@ -78,7 +78,7 @@ def get_frames_range(
         db_path: Path to SQLite database file
         start_index: Start frame index (inclusive)
         end_index: End frame index (inclusive)
-        table: Table name ("full_frames" or "cropped_frames")
+        table: Table name ("full_frames")
 
     Returns:
         List of FrameData objects sorted by frame_index
@@ -91,13 +91,13 @@ def get_frames_range(
         ...     db_path=Path("captions.db"),
         ...     start_index=0,
         ...     end_index=1000,
-        ...     table="cropped_frames"
+        ...     table="full_frames"
         ... )
         >>> for frame in frames:
         ...     print(f"Frame {frame.frame_index}: {frame.width}x{frame.height}")
     """
-    if table not in ("full_frames", "cropped_frames"):
-        raise ValueError(f"Invalid table: {table}. Must be 'full_frames' or 'cropped_frames'")
+    if table not in ("full_frames"):
+        raise ValueError(f"Invalid table: {table}. Must be 'full_frames'")
 
     conn = sqlite3.connect(db_path)
     try:
@@ -141,7 +141,7 @@ def get_all_frame_indices(
 
     Args:
         db_path: Path to SQLite database file
-        table: Table name ("full_frames" or "cropped_frames")
+        table: Table name ("full_frames")
 
     Returns:
         List of frame indices sorted in ascending order
@@ -157,8 +157,8 @@ def get_all_frame_indices(
         >>> print(f"Found {len(indices)} frames")
         >>> print(f"Range: {min(indices)} to {max(indices)}")
     """
-    if table not in ("full_frames", "cropped_frames"):
-        raise ValueError(f"Invalid table: {table}. Must be 'full_frames' or 'cropped_frames'")
+    if table not in ("full_frames"):
+        raise ValueError(f"Invalid table: {table}. Must be 'full_frames'")
 
     conn = sqlite3.connect(db_path)
     try:

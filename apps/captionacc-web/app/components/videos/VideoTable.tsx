@@ -45,7 +45,7 @@ function calculateFolderStatsFromMap(
     coveredFrames: 0,
     hasOcrData: false,
     layoutApproved: false,
-    boundaryPendingReview: 0,
+    captionFrameExtentsPendingReview: 0,
     textPendingReview: 0,
     badges: [],
   }
@@ -158,7 +158,7 @@ export function TableHeader({
           colSpan={4}
           className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800"
         >
-          Boundary Annotation
+          Caption Frame Extents Annotation
         </th>
         <th scope="col" className="relative py-2 pl-3 pr-4 sm:pr-6 bg-gray-50 dark:bg-gray-800">
           {/* Actions column - no group header */}
@@ -828,14 +828,13 @@ function VideoActionsMenu({
   onMoveVideo,
   onDeleteVideo,
 }: VideoActionsMenuProps) {
-  // Check if video is still processing based on badges
-  const isProcessing = stats?.badges?.some(b => b.label === 'Processing' || b.label === 'Uploading')
-  const layoutDisabled = !stats?.hasOcrData || isProcessing
-  const boundariesDisabled = !stats?.layoutApproved
+  const layoutDisabled =
+    !stats?.hasOcrData || stats?.processingStatus?.status !== 'processing_complete'
+  const captionFrameExtentsDisabled = !stats?.layoutApproved
   const textDisabled = !stats?.layoutApproved || (stats?.totalAnnotations ?? 0) === 0
 
   const getStatusText = () => {
-    if (isProcessing) {
+    if (stats?.processingStatus?.status !== 'processing_complete') {
       return '(processing)'
     }
     if (!stats?.hasOcrData) {
@@ -871,18 +870,18 @@ function VideoActionsMenu({
               )
             }
           </MenuItem>
-          <MenuItem disabled={boundariesDisabled}>
+          <MenuItem disabled={captionFrameExtentsDisabled}>
             {({ disabled }) =>
               disabled ? (
                 <span className="block px-4 py-2 text-sm text-gray-400 dark:text-gray-600 cursor-not-allowed">
-                  Mark Boundaries
+                  Mark Caption Frame Extents
                 </span>
               ) : (
                 <Link
-                  to={`/annotate/boundaries?videoId=${encodeURIComponent(videoId)}`}
+                  to={`/annotate/caption-frame-extents?videoId=${encodeURIComponent(videoId)}`}
                   className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 data-[focus]:bg-gray-100 dark:data-[focus]:bg-gray-700 data-[focus]:text-gray-900 dark:data-[focus]:text-white data-[focus]:outline-none"
                 >
-                  Mark Boundaries
+                  Mark Caption Frame Extents
                 </Link>
               )
             }

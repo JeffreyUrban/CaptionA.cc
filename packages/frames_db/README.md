@@ -4,7 +4,7 @@ Database storage and retrieval for video frames.
 
 ## Overview
 
-This package provides utilities for storing and retrieving video frames in SQLite databases. Frames are stored as JPEG-compressed BLOBs alongside metadata (dimensions, file size, timestamps).
+This package provides utilities for storing and retrieving video frames. Frames are stored as JPEG-compressed BLOBs alongside metadata (dimensions, file size, timestamps).
 
 ## Features
 
@@ -12,7 +12,7 @@ This package provides utilities for storing and retrieving video frames in SQLit
 - **Retrieval**: Read frames by index or range
 - **Conversions**: Convert frames to PIL Image, OpenCV array, or temporary files
 - **Performance**: Batched writes with transactions for efficiency
-- **Invalidation**: Support for crop_bounds_version tracking
+- **Invalidation**: Support for crop_region_version tracking
 
 ## Usage
 
@@ -23,7 +23,7 @@ from frames_db import write_frame_to_db, write_frames_batch
 
 # Write single frame
 write_frame_to_db(
-    db_path=Path("captions.db"),
+    db_path=Path("video.db"),
     frame_index=100,
     image_data=jpeg_bytes,
     width=1920,
@@ -38,7 +38,7 @@ frames = [
     (200, jpeg_bytes_200, 1920, 1080),
 ]
 write_frames_batch(
-    db_path=Path("captions.db"),
+    db_path=Path("video.db"),
     frames=frames,
     table="full_frames"
 )
@@ -51,7 +51,7 @@ from frames_db import get_frame_from_db, get_frames_range
 
 # Get single frame
 frame = get_frame_from_db(
-    db_path=Path("captions.db"),
+    db_path=Path("video.db"),
     frame_index=100,
     table="full_frames"
 )
@@ -63,10 +63,10 @@ temp_path = frame.to_temp_file()  # For tools requiring filesystem paths
 
 # Get range of frames
 frames = get_frames_range(
-    db_path=Path("captions.db"),
+    db_path=Path("video.db"),
     start_index=0,
     end_index=1000,
-    table="cropped_frames"
+    table="full_frames"
 )
 ```
 
@@ -81,20 +81,6 @@ CREATE TABLE full_frames (
     width INTEGER NOT NULL,
     height INTEGER NOT NULL,
     file_size INTEGER NOT NULL,
-    created_at TEXT NOT NULL
-);
-```
-
-### cropped_frames Table (10Hz sampling)
-
-```sql
-CREATE TABLE cropped_frames (
-    frame_index INTEGER PRIMARY KEY,
-    image_data BLOB NOT NULL,
-    width INTEGER NOT NULL,
-    height INTEGER NOT NULL,
-    file_size INTEGER NOT NULL,
-    crop_bounds_version INTEGER DEFAULT 1,
     created_at TEXT NOT NULL
 );
 ```

@@ -40,12 +40,13 @@ const supabaseAnonKey = import.meta.env['VITE_SUPABASE_ANON_KEY'] || LOCAL_SUPAB
 // Both local and remote use captionacc_production schema for consistency
 const supabaseSchema = import.meta.env['VITE_SUPABASE_SCHEMA'] || 'captionacc_production'
 
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error('Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY environment variables')
+}
+
 // Log Supabase connection info in development
 if (import.meta.env.DEV) {
-  const isLocal = supabaseUrl === LOCAL_SUPABASE_URL
-  console.log(
-    `🔌 Supabase: ${isLocal ? 'LOCAL' : 'ONLINE'} (${supabaseUrl}) [schema: ${supabaseSchema}]`
-  )
+  console.log(`🔌 Supabase: ${supabaseUrl} [schema: ${supabaseSchema}]`)
 }
 
 /**
@@ -63,31 +64,6 @@ export const supabase = createClient<ProductionDatabase>(supabaseUrl, supabaseAn
     schema: supabaseSchema, // Set PostgreSQL schema
   },
 })
-
-/**
- * Create a Supabase client for server-side operations
- * Uses the service role key which bypasses RLS (use carefully)
- * Only available on the server
- * Both local and remote use captionacc_production schema
- */
-export function createServerSupabaseClient() {
-  if (typeof window !== 'undefined') {
-    throw new Error('Server-side Supabase client should not be used in the browser')
-  }
-
-  const serviceRoleKey =
-    import.meta.env['VITE_SUPABASE_SERVICE_ROLE_KEY'] || LOCAL_SUPABASE_SERVICE_ROLE_KEY
-
-  return createClient<ProductionDatabase>(supabaseUrl, serviceRoleKey, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-    },
-    db: {
-      schema: supabaseSchema, // Set PostgreSQL schema (same as client)
-    },
-  })
-}
 
 /**
  * Get the current authenticated user

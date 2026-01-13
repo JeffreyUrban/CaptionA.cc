@@ -1,23 +1,14 @@
 # Prefect deployment configuration
-#
-# Deployment names are auto-detected from the worktree directory name.
-# Use the deploy.sh script which handles this automatically:
-#
-#   ./deploy.sh        # Deploys with auto-detected name (e.g., "claude1")
-#   ./deploy.sh prod   # Deploys with name "production"
-#
-# The __DEPLOY_NAME__ placeholder is replaced by deploy.sh at deploy time.
-#
 name: captionacc-orchestrator
 
-# Pull step: Uses current working directory (set by deploy.sh)
+# Pull step: Get the code (local for development)
 pull:
   - prefect.deployments.steps.set_working_directory:
-      directory: __WORKING_DIR__
+      directory: /Users/jurban/PycharmProjects/CaptionA.cc-claude3/services/orchestrator
 
-# Deployments - __DEPLOY_NAME__ is replaced by deploy.sh
+# Deployments
 deployments:
-  - name: __DEPLOY_NAME__
+  - name: production
     entrypoint: flows/upload_and_process_video.py:upload_and_process_video_flow
     work_pool:
       name: captionacc-workers
@@ -26,7 +17,7 @@ deployments:
       - processing
       - high-priority
 
-  - name: __DEPLOY_NAME__
+  - name: production
     entrypoint: flows/layout_annotation.py:download_for_layout_annotation_flow
     work_pool:
       name: captionacc-workers
@@ -35,7 +26,7 @@ deployments:
       - layout-annotation
       - user-initiated
 
-  - name: __DEPLOY_NAME__
+  - name: production
     entrypoint: flows/layout_annotation.py:upload_layout_db_flow
     work_pool:
       name: captionacc-workers
@@ -45,7 +36,7 @@ deployments:
       - user-initiated
       - high-priority
 
-  - name: __DEPLOY_NAME__
+  - name: production
     entrypoint: flows/crop_frames_to_webm.py:crop_frames_to_webm_flow
     work_pool:
       name: captionacc-workers
@@ -55,7 +46,7 @@ deployments:
       - user-initiated
       - high-priority
 
-  - name: __DEPLOY_NAME__
+  - name: production
     entrypoint: flows/caption_annotation.py:download_for_caption_annotation_flow
     work_pool:
       name: captionacc-workers
@@ -64,7 +55,7 @@ deployments:
       - caption-annotation
       - user-initiated
 
-  - name: __DEPLOY_NAME__
+  - name: production
     entrypoint: flows/caption_annotation.py:upload_captions_db_flow
     work_pool:
       name: captionacc-workers
@@ -74,7 +65,7 @@ deployments:
       - user-initiated
       - high-priority
 
-  - name: __DEPLOY_NAME__
+  - name: production
     entrypoint: flows/video_processing.py:process_video_initial_flow
     work_pool:
       name: captionacc-workers
@@ -82,7 +73,7 @@ deployments:
       - background
       - full-frames
 
-  - name: __DEPLOY_NAME__
+  - name: production
     entrypoint: flows/crop_frames.py:crop_frames_flow
     work_pool:
       name: captionacc-workers
@@ -90,15 +81,15 @@ deployments:
       - user-initiated
       - crop-frames
 
-  - name: __DEPLOY_NAME__
-    entrypoint: flows/caption_median_ocr.py:caption_median_ocr_flow
+  - name: production
+    entrypoint: flows/caption_caption_ocr.py:caption_caption_ocr_flow
     work_pool:
       name: captionacc-workers
     tags:
       - user-initiated
-      - median-ocr
+      - caption_ocr
 
-  - name: __DEPLOY_NAME__
+  - name: production
     entrypoint: flows/base_model_update.py:base_model_update_flow
     work_pool:
       name: captionacc-workers
@@ -106,7 +97,7 @@ deployments:
       - admin
       - base-model
 
-  - name: __DEPLOY_NAME__
+  - name: production
     entrypoint: flows/video_model_retrain.py:retrain_video_model_flow
     work_pool:
       name: captionacc-workers

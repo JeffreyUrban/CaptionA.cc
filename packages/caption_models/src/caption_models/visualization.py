@@ -30,7 +30,7 @@ def create_analysis_visualization(
     if img is None:
         raise ValueError(f"Failed to load image at {ocr_img_path}")
 
-    # Draw crop bounds (green) - tight box around detected captions
+    # Draw crop region (green) - tight box around detected captions
     cv2.rectangle(
         img,
         (region.crop_left, region.crop_top),

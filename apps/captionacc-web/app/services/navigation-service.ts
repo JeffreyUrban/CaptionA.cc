@@ -5,7 +5,7 @@
  * This is a low-complexity service focused on annotation navigation operations.
  */
 
-import { getAnnotationDatabase, getWritableDatabase } from '~/utils/database'
+import { getCaptionDb, getWritableCaptionDb } from '~/utils/database'
 
 // =============================================================================
 // Type Definitions
@@ -18,14 +18,14 @@ interface AnnotationRow {
   id: number
   start_frame_index: number
   end_frame_index: number
-  boundary_state: 'predicted' | 'confirmed' | 'gap'
-  boundary_pending: number
-  boundary_updated_at: string
+  caption_frame_extents_state: 'predicted' | 'confirmed' | 'gap'
+  caption_frame_extents_pending: number
+  caption_frame_extents_updated_at: string
   text: string | null
   text_pending: number
   text_status: string | null
   text_notes: string | null
-  text_ocr_combined: string | null
+  caption_ocr: string | null
   text_updated_at: string
   created_at: string
 }
@@ -37,14 +37,14 @@ export interface Annotation {
   id: number
   startFrameIndex: number
   endFrameIndex: number
-  boundaryState: 'predicted' | 'confirmed' | 'gap'
-  boundaryPending: boolean
-  boundaryUpdatedAt: string
+  captionFrameExtentsState: 'predicted' | 'confirmed' | 'gap'
+  captionFrameExtentsPending: boolean
+  captionFrameExtentsUpdatedAt: string
   text: string | null
   textPending: boolean
   textStatus: string | null
   textNotes: string | null
-  textOcrCombined: string | null
+  captionOcr: string | null
   textUpdatedAt: string
   createdAt: string
 }
@@ -93,14 +93,14 @@ function transformAnnotation(row: AnnotationRow): Annotation {
     id: row.id,
     startFrameIndex: row.start_frame_index,
     endFrameIndex: row.end_frame_index,
-    boundaryState: row.boundary_state,
-    boundaryPending: row.boundary_pending === 1,
-    boundaryUpdatedAt: row.boundary_updated_at,
+    captionFrameExtentsState: row.caption_frame_extents_state,
+    captionFrameExtentsPending: row.caption_frame_extents_pending === 1,
+    captionFrameExtentsUpdatedAt: row.caption_frame_extents_updated_at,
     text: row.text,
     textPending: row.text_pending === 1,
     textStatus: row.text_status,
     textNotes: row.text_notes,
-    textOcrCombined: row.text_ocr_combined,
+    captionOcr: row.caption_ocr,
     textUpdatedAt: row.text_updated_at,
     createdAt: row.created_at,
   }
@@ -113,7 +113,7 @@ function transformAnnotation(row: AnnotationRow): Annotation {
 /**
  * Navigate to the previous or next annotation.
  *
- * Navigation is based on boundary_updated_at timestamp, allowing users to review
+ * Navigation is based on caption_frame_extents_updated_at timestamp, allowing users to review
  * annotations in the order they were last modified. Only non-gap annotations
  * (predicted or confirmed) are included in navigation.
  *
@@ -128,7 +128,7 @@ export async function navigateAnnotation(
   currentId: number,
   direction: NavigationDirection
 ): Promise<NavigationResult> {
-  const result = await getAnnotationDatabase(videoId)
+  const result = await getCaptionDb(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -150,17 +150,17 @@ export async function navigateAnnotation(
       id: current.id,
       start_frame_index: current.start_frame_index,
       end_frame_index: current.end_frame_index,
-      boundary_updated_at: current.boundary_updated_at,
-      boundary_state: current.boundary_state,
+      caption_frame_extents_updated_at: current.caption_frame_extents_updated_at,
+      caption_frame_extents_state: current.caption_frame_extents_state,
     })
 
     // Get nearby annotations for context (include all states for debugging)
     const nearby = db
       .prepare(
         `
-        SELECT id, start_frame_index, end_frame_index, boundary_updated_at, boundary_state
+        SELECT id, start_frame_index, end_frame_index, caption_frame_extents_updated_at, caption_frame_extents_state
         FROM captions
-        ORDER BY boundary_updated_at DESC
+        ORDER BY caption_frame_extents_updated_at DESC
         LIMIT 15
       `
       )
@@ -168,19 +168,19 @@ export async function navigateAnnotation(
       id: number
       start_frame_index: number
       end_frame_index: number
-      boundary_updated_at: string
-      boundary_state: string
+      caption_frame_extents_updated_at: string
+      caption_frame_extents_state: string
     }>
 
     console.log(
-      `[navigateAnnotation] Recent annotations (ordered by boundary_updated_at DESC):`,
+      `[navigateAnnotation] Recent annotations (ordered by caption_frame_extents_updated_at DESC):`,
       nearby
     )
 
     let annotation: AnnotationRow | undefined
 
     if (direction === 'prev') {
-      if (current.boundary_state === 'gap') {
+      if (current.caption_frame_extents_state === 'gap') {
         // For gaps, use current time as reference to find most recently-completed annotation
         // This supports the standard workflow: load gap → Prev → most recent completed work
         const now = new Date().toISOString().replace('T', ' ').slice(0, 19)
@@ -188,9 +188,9 @@ export async function navigateAnnotation(
           .prepare(
             `
             SELECT * FROM captions
-            WHERE boundary_updated_at < ?
-            AND boundary_state IN ('predicted', 'confirmed')
-            ORDER BY boundary_updated_at DESC, id DESC
+            WHERE caption_frame_extents_updated_at < ?
+            AND caption_frame_extents_state IN ('predicted', 'confirmed')
+            ORDER BY caption_frame_extents_updated_at DESC, id DESC
             LIMIT 1
           `
           )
@@ -201,15 +201,17 @@ export async function navigateAnnotation(
           .prepare(
             `
             SELECT * FROM captions
-            WHERE (boundary_updated_at < ? OR (boundary_updated_at = ? AND id < ?))
-            AND boundary_state IN ('predicted', 'confirmed')
-            ORDER BY boundary_updated_at DESC, id DESC
+            WHERE (caption_frame_extents_updated_at < ? OR (caption_frame_extents_updated_at = ? AND id < ?))
+            AND caption_frame_extents_state IN ('predicted', 'confirmed')
+            ORDER BY caption_frame_extents_updated_at DESC, id DESC
             LIMIT 1
           `
           )
-          .get(current.boundary_updated_at, current.boundary_updated_at, currentId) as
-          | AnnotationRow
-          | undefined
+          .get(
+            current.caption_frame_extents_updated_at,
+            current.caption_frame_extents_updated_at,
+            currentId
+          ) as AnnotationRow | undefined
       }
 
       console.log(
@@ -219,26 +221,26 @@ export async function navigateAnnotation(
               id: annotation.id,
               start_frame_index: annotation.start_frame_index,
               end_frame_index: annotation.end_frame_index,
-              boundary_updated_at: annotation.boundary_updated_at,
+              caption_frame_extents_updated_at: annotation.caption_frame_extents_updated_at,
             }
           : null
       )
     } else {
-      // Get next annotation (later boundary_updated_at, or same with higher id)
+      // Get next annotation (later caption_frame_extents_updated_at, or same with higher id)
       // For gaps, use current time; for confirmed, use actual timestamp
       const referenceTimestamp =
-        current.boundary_state === 'gap'
+        current.caption_frame_extents_state === 'gap'
           ? new Date().toISOString().replace('T', ' ').slice(0, 19)
-          : current.boundary_updated_at
+          : current.caption_frame_extents_updated_at
 
       // First try confirmed/predicted annotations with later timestamps
       annotation = db
         .prepare(
           `
           SELECT * FROM captions
-          WHERE (boundary_updated_at > ? OR (boundary_updated_at = ? AND id > ?))
-          AND boundary_state IN ('predicted', 'confirmed')
-          ORDER BY boundary_updated_at ASC, id ASC
+          WHERE (caption_frame_extents_updated_at > ? OR (caption_frame_extents_updated_at = ? AND id > ?))
+          AND caption_frame_extents_state IN ('predicted', 'confirmed')
+          ORDER BY caption_frame_extents_updated_at ASC, id ASC
           LIMIT 1
         `
         )
@@ -252,7 +254,7 @@ export async function navigateAnnotation(
             `
             SELECT * FROM captions
             WHERE id > ?
-            AND boundary_state = 'gap'
+            AND caption_frame_extents_state = 'gap'
             ORDER BY id ASC
             LIMIT 1
           `
@@ -267,8 +269,8 @@ export async function navigateAnnotation(
               id: annotation.id,
               start_frame_index: annotation.start_frame_index,
               end_frame_index: annotation.end_frame_index,
-              boundary_updated_at: annotation.boundary_updated_at,
-              boundary_state: annotation.boundary_state,
+              caption_frame_extents_updated_at: annotation.caption_frame_extents_updated_at,
+              caption_frame_extents_state: annotation.caption_frame_extents_state,
             }
           : null
       )
@@ -285,7 +287,7 @@ export async function navigateAnnotation(
 /**
  * Get the next pending annotation for review.
  *
- * Returns the next annotation that needs user attention (boundary_pending = 1),
+ * Returns the next annotation that needs user attention (caption_frame_extents_pending = 1),
  * ordered by frame position. Optionally starts searching after a specific annotation.
  *
  * @param videoId - Video identifier
@@ -297,7 +299,7 @@ export async function getNextPendingAnnotation(
   videoId: string,
   afterId?: number
 ): Promise<Annotation | null> {
-  const result = await getAnnotationDatabase(videoId)
+  const result = await getCaptionDb(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -319,8 +321,8 @@ export async function getNextPendingAnnotation(
           .prepare(
             `
             SELECT * FROM captions
-            WHERE boundary_pending = 1
-            AND boundary_state IN ('predicted', 'confirmed')
+            WHERE caption_frame_extents_pending = 1
+            AND caption_frame_extents_state IN ('predicted', 'confirmed')
             AND (start_frame_index > ? OR (start_frame_index = ? AND id > ?))
             ORDER BY start_frame_index ASC, id ASC
             LIMIT 1
@@ -335,8 +337,8 @@ export async function getNextPendingAnnotation(
           .prepare(
             `
             SELECT * FROM captions
-            WHERE boundary_pending = 1
-            AND boundary_state IN ('predicted', 'confirmed')
+            WHERE caption_frame_extents_pending = 1
+            AND caption_frame_extents_state IN ('predicted', 'confirmed')
             ORDER BY start_frame_index ASC, id ASC
             LIMIT 1
           `
@@ -349,8 +351,8 @@ export async function getNextPendingAnnotation(
         .prepare(
           `
           SELECT * FROM captions
-          WHERE boundary_pending = 1
-          AND boundary_state IN ('predicted', 'confirmed')
+          WHERE caption_frame_extents_pending = 1
+          AND caption_frame_extents_state IN ('predicted', 'confirmed')
           ORDER BY start_frame_index ASC, id ASC
           LIMIT 1
         `
@@ -375,7 +377,7 @@ export async function getNextPendingAnnotation(
  * @throws Error if database is not found
  */
 export async function getProgressStats(videoId: string): Promise<ProgressStats> {
-  const result = await getAnnotationDatabase(videoId)
+  const result = await getCaptionDb(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -388,9 +390,9 @@ export async function getProgressStats(videoId: string): Promise<ProgressStats> 
         `
         SELECT
           COUNT(*) as total,
-          SUM(CASE WHEN boundary_state = 'confirmed' AND boundary_pending = 0 THEN 1 ELSE 0 END) as confirmed,
-          SUM(CASE WHEN boundary_pending = 1 THEN 1 ELSE 0 END) as pending,
-          SUM(CASE WHEN boundary_state = 'gap' THEN 1 ELSE 0 END) as gaps
+          SUM(CASE WHEN caption_frame_extents_state = 'confirmed' AND caption_frame_extents_pending = 0 THEN 1 ELSE 0 END) as confirmed,
+          SUM(CASE WHEN caption_frame_extents_pending = 1 THEN 1 ELSE 0 END) as pending,
+          SUM(CASE WHEN caption_frame_extents_state = 'gap' THEN 1 ELSE 0 END) as gaps
         FROM captions
       `
       )
@@ -422,7 +424,7 @@ export async function getProgressStats(videoId: string): Promise<ProgressStats> 
  * Mark an annotation as no longer pending (reviewed by user).
  *
  * This is used when a user has reviewed an annotation but made no changes.
- * The annotation is marked as not pending without changing its boundary state.
+ * The annotation is marked as not pending without changing its caption frame extents state.
  *
  * @param videoId - Video identifier
  * @param annotationId - ID of the annotation to mark as reviewed
@@ -433,7 +435,7 @@ export async function markAnnotationReviewed(
   videoId: string,
   annotationId: number
 ): Promise<Annotation> {
-  const result = await getWritableDatabase(videoId)
+  const result = await getWritableCaptionDb(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -444,7 +446,7 @@ export async function markAnnotationReviewed(
     db.prepare(
       `
       UPDATE captions
-      SET boundary_pending = 0
+      SET caption_frame_extents_pending = 0
       WHERE id = ?
     `
     ).run(annotationId)
@@ -475,7 +477,7 @@ export async function getAnnotationById(
   videoId: string,
   annotationId: number
 ): Promise<Annotation | null> {
-  const result = await getAnnotationDatabase(videoId)
+  const result = await getCaptionDb(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }

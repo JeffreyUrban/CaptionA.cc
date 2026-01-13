@@ -70,7 +70,7 @@ export function buildVideoTree(videos: VideoInfo[]): TreeNode[] {
             coveredFrames: 0,
             hasOcrData: false,
             layoutApproved: false,
-            boundaryPendingReview: 0,
+            captionFrameExtentsPendingReview: 0,
             textPendingReview: 0,
             badges: [],
           },
@@ -154,7 +154,7 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
       coveredFrames: 0,
       hasOcrData: false,
       layoutApproved: false,
-      boundaryPendingReview: 0,
+      captionFrameExtentsPendingReview: 0,
       textPendingReview: 0,
       badges: [],
     }
@@ -162,29 +162,16 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
 
   const db = new Database(dbPath, { readonly: true })
 
-  // Count cropped frames from database (not filesystem)
-  // Frames are written to DB and filesystem is cleaned up after processing
-  let totalFrames = 0
-  try {
-    const frameCount = db.prepare(`SELECT COUNT(*) as count FROM cropped_frames`).get() as
-      | { count: number }
-      | undefined
-    totalFrames = frameCount?.count ?? 0
-  } catch {
-    // Table doesn't exist yet
-    totalFrames = 0
-  }
-
   try {
     const result = db
       .prepare(
         `
       SELECT
         COUNT(*) as total,
-        SUM(CASE WHEN boundary_pending = 1 THEN 1 ELSE 0 END) as pending,
-        SUM(CASE WHEN boundary_state = 'confirmed' THEN 1 ELSE 0 END) as confirmed,
-        SUM(CASE WHEN boundary_state = 'predicted' THEN 1 ELSE 0 END) as predicted,
-        SUM(CASE WHEN boundary_state = 'gap' THEN 1 ELSE 0 END) as gaps
+        SUM(CASE WHEN caption_frame_extents_pending = 1 THEN 1 ELSE 0 END) as pending,
+        SUM(CASE WHEN caption_frame_extents_state = 'confirmed' THEN 1 ELSE 0 END) as confirmed,
+        SUM(CASE WHEN caption_frame_extents_state = 'predicted' THEN 1 ELSE 0 END) as predicted,
+        SUM(CASE WHEN caption_frame_extents_state = 'gap' THEN 1 ELSE 0 END) as gaps
       FROM captions
     `
       )
@@ -203,7 +190,7 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
       SELECT
         SUM(end_frame_index - start_frame_index + 1) as covered_frames
       FROM captions
-      WHERE boundary_state != 'gap' AND boundary_pending = 0
+      WHERE caption_frame_extents_state != 'gap' AND caption_frame_extents_pending = 0
     `
       )
       .get() as { covered_frames: number | null }
@@ -222,7 +209,7 @@ export async function getVideoStats(videoId: string): Promise<VideoStats> {
       coveredFrames,
       hasOcrData: false,
       layoutApproved: false,
-      boundaryPendingReview: 0,
+      captionFrameExtentsPendingReview: 0,
       textPendingReview: 0,
       badges: [],
     }
@@ -284,7 +271,7 @@ export function calculateFolderStats(node: FolderNode): void {
     coveredFrames,
     hasOcrData: false,
     layoutApproved: false,
-    boundaryPendingReview: 0,
+    captionFrameExtentsPendingReview: 0,
     textPendingReview: 0,
     badges: [],
   }

@@ -21,7 +21,7 @@ interface ModelVersionStats {
   total: number
   upToDate: number
   recalculated: number
-  boundsChanged: number
+  cropRegionChanged: number
   errors: number
   changedVideos: Array<{ displayPath: string; oldVersion: string | null; newVersion: string }>
 }
@@ -836,7 +836,7 @@ export default function AdminPage() {
                 <div>
                   <dt className="text-gray-600 dark:text-gray-400">Bounds Changed</dt>
                   <dd className="font-medium text-yellow-600 dark:text-yellow-400">
-                    {modelVersionStats.boundsChanged}
+                    {modelVersionStats.cropRegionChanged}
                   </dd>
                 </div>
               </dl>

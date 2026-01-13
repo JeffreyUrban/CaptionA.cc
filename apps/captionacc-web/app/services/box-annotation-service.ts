@@ -21,10 +21,10 @@ import {
   pixelToCroppedDisplay,
   boundsIntersect,
   type PixelBounds,
-  type FractionalBounds,
-  type CropBounds,
+  type FractionalCropRegionBounds,
+  type CropRegion,
 } from '~/utils/coordinate-utils'
-import { getAnnotationDatabase, getWritableDatabase } from '~/utils/database'
+import { getLayoutDb, getWritableLayoutDb } from '~/utils/database'
 import {
   shouldTriggerFullRetrain,
   getRetrainState,
@@ -76,7 +76,7 @@ export interface BoxData {
   /** Original pixel coordinates in full frame space */
   originalBounds: PixelBounds
   /** Display bounds as fractional coordinates (0-1) in cropped space */
-  displayBounds: FractionalBounds
+  displayBounds: FractionalCropRegionBounds
   predictedLabel: 'in' | 'out'
   predictedConfidence: number
   userLabel: 'in' | 'out' | null
@@ -95,7 +95,7 @@ export interface BoxData {
 export interface FrameBoxesResult {
   frameIndex: number
   imageUrl: string
-  cropBounds: CropBounds
+  cropRegion: CropRegion
   frameWidth: number
   frameHeight: number
   boxes: BoxData[]
@@ -429,7 +429,7 @@ function applyStreamingUpdatesInBackground(
 
   // Fire and forget - don't await
   const runStreamingUpdate = async () => {
-    const dbResult = await getWritableDatabase(videoId)
+    const dbResult = await getWritableLayoutDb(videoId)
     if (!dbResult.success) {
       console.error('[streamingUpdateBackground] Failed to open database')
       completeProcessing(videoId)
@@ -489,7 +489,7 @@ export async function getFrameBoxes(
   videoId: string,
   frameIndex: number
 ): Promise<FrameBoxesResult> {
-  const result = await getAnnotationDatabase(videoId)
+  const result = await getLayoutDb(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -543,7 +543,7 @@ export async function getFrameBoxes(
       ocrToPixelBounds(box, layoutConfig.frame_width, layoutConfig.frame_height)
     )
 
-    const cropBounds: CropBounds = {
+    const cropRegion: CropRegion = {
       left: layoutConfig.crop_left,
       top: layoutConfig.crop_top,
       right: layoutConfig.crop_right,
@@ -572,7 +572,7 @@ export async function getFrameBoxes(
       const userLabel = userAnnotationMap.get(boxIndex) ?? null
 
       // Calculate display bounds (fractional in cropped space)
-      const displayBounds = pixelToCroppedDisplay(originalBounds, cropBounds)
+      const displayBounds = pixelToCroppedDisplay(originalBounds, cropRegion)
 
       // Determine color code
       const colorCode = getBoxColorCode(prediction.label, prediction.confidence, userLabel)
@@ -592,7 +592,7 @@ export async function getFrameBoxes(
     return {
       frameIndex,
       imageUrl: `/api/full-frames/${encodeURIComponent(videoId)}/${frameIndex}.jpg`,
-      cropBounds,
+      cropRegion,
       frameWidth: layoutConfig.frame_width,
       frameHeight: layoutConfig.frame_height,
       boxes,
@@ -620,7 +620,7 @@ export async function saveBoxAnnotations(
   frameIndex: number,
   annotations: BoxAnnotationInput[]
 ): Promise<SaveAnnotationsResult> {
-  const result = await getWritableDatabase(videoId)
+  const result = await getWritableLayoutDb(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -836,7 +836,7 @@ export async function bulkAnnotateRectangle(
   frameIndex: number,
   input: BulkAnnotateRectangleInput
 ): Promise<BulkAnnotateResult> {
-  const result = await getWritableDatabase(videoId)
+  const result = await getWritableLayoutDb(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -1022,7 +1022,7 @@ export async function bulkAnnotateRectangleAllFrames(
   rectangle: PixelBounds,
   action: BulkAnnotateRectangleAllAction
 ): Promise<BulkAnnotateRectangleAllResult> {
-  const result = await getWritableDatabase(videoId)
+  const result = await getWritableLayoutDb(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -1101,7 +1101,7 @@ export async function bulkAnnotateAll(
   videoId: string,
   action: BulkAnnotateAllAction
 ): Promise<BulkAnnotateAllResult> {
-  const result = await getWritableDatabase(videoId)
+  const result = await getWritableLayoutDb(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -1225,7 +1225,7 @@ export async function bulkAnnotateAll(
  * @throws Error if database is not found
  */
 export async function calculatePredictions(videoId: string): Promise<CalculatePredictionsResult> {
-  const result = await getWritableDatabase(videoId)
+  const result = await getWritableLayoutDb(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }

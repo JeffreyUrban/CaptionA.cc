@@ -6,7 +6,7 @@ This is called by TypeScript app via spawn() instead of running a separate API s
 
 Usage:
     python queue_flow.py full-frames --video-id UUID --video-path /path --db-path /path --output-dir /path
-    python queue_flow.py crop-frames --video-id UUID --video-path /path --db-path /path --output-dir /path --crop-bounds '{"left":0,"top":0,"right":100,"bottom":100}'
+    python queue_flow.py crop-frames --video-id UUID --video-path /path --db-path /path --output-dir /path --crop-region '{"left":0,"top":0,"right":100,"bottom":100}'
 """
 
 import asyncio
@@ -79,16 +79,16 @@ def queue_crop_frames(
     video_path: str,
     db_path: str,
     output_dir: str,
-    crop_bounds: str,  # JSON string: '{"left":0,"top":0,"right":100,"bottom":100}'
-    crop_bounds_version: int = 1,
+    crop_region: str,  # JSON string: '{"left":0,"top":0,"right":100,"bottom":100}'
+    crop_region_version: int = 1,
     frame_rate: float = 10.0,
 ):
     """Queue crop frames processing (user-initiated job)."""
 
     async def _queue():
         try:
-            # Parse crop bounds JSON
-            bounds = json.loads(crop_bounds)
+            # Parse crop region JSON
+            crop_region = json.loads(crop_region)
 
             # Prefect type stubs incorrectly type run_deployment as returning FlowRun directly
             flow_run = await run_deployment(  # type: ignore[misc]
@@ -98,8 +98,8 @@ def queue_crop_frames(
                     "video_path": video_path,
                     "db_path": db_path,
                     "output_dir": output_dir,
-                    "crop_bounds": bounds,
-                    "crop_bounds_version": crop_bounds_version,
+                    "crop_region": crop_region,
+                    "crop_region_version": crop_region_version,
                     "frame_rate": frame_rate,
                 },
                 timeout=0,
@@ -123,8 +123,8 @@ def queue_crop_frames(
     sys.exit(exit_code)
 
 
-@app.command("caption-median-ocr")
-def queue_caption_median_ocr(
+@app.command("caption_ocr")
+def queue_caption_caption_ocr(
     video_id: str,
     db_path: str,
     video_dir: str,
@@ -140,7 +140,7 @@ def queue_caption_median_ocr(
 
             # Prefect type stubs incorrectly type run_deployment as returning FlowRun directly
             flow_run = await run_deployment(  # type: ignore[misc]
-                name="process-caption-median-ocr/production",
+                name="process-caption_ocr/production",
                 parameters={
                     "video_id": video_id,
                     "db_path": db_path,
@@ -302,7 +302,7 @@ def queue_upload_and_process(
 @app.command("crop-frames-to-webm")
 def queue_crop_frames_to_webm(
     video_id: str,
-    crop_bounds: str,  # JSON string: '{"left":0,"top":0,"right":100,"bottom":100}'
+    crop_region: str,  # JSON string: '{"left":0,"top":0,"right":100,"bottom":100}'
     tenant_id: str = "00000000-0000-0000-0000-000000000001",
     filename: str | None = None,
     frame_rate: float = 10.0,
@@ -312,13 +312,13 @@ def queue_crop_frames_to_webm(
 
     async def _queue():
         try:
-            # Parse crop bounds JSON
-            bounds = json.loads(crop_bounds)
+            # Parse crop region JSON
+            crop_region = json.loads(crop_region)
 
             parameters = {
                 "video_id": video_id,
                 "tenant_id": tenant_id,
-                "crop_bounds": bounds,
+                "crop_region": crop_region,
                 "frame_rate": frame_rate,
             }
 

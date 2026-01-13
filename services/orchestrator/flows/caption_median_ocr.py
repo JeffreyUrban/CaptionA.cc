@@ -1,11 +1,11 @@
 """
 Caption Median OCR Processing Flow
 
-Handles median frame generation and OCR after boundary annotation changes:
+Handles median frame generation and OCR after caption frame extents annotation changes:
 1. Generate per-pixel median frame from caption frame range
 2. Run OCR on median frame
 3. Update captions table with OCR text
-4. Set median_ocr_status and text_pending
+4. Set caption_ocr_status and text_pending
 
 This replaces the synchronous OCR processing in apps/captionacc-web/app/routes/api.annotations.$videoId.$id.text.tsx
 """
@@ -196,9 +196,9 @@ def update_caption_ocr_result(
         conn.execute(
             """
             UPDATE captions
-            SET text_ocr_combined = ?,
-                median_ocr_status = 'complete',
-                median_ocr_processed_at = datetime('now'),
+            SET caption_ocr = ?,
+                caption_ocr_status = 'complete',
+                caption_ocr_processed_at = datetime('now'),
                 text_pending = 1
             WHERE id = ?
             """,
@@ -224,7 +224,7 @@ def update_caption_ocr_status(
     error_message: str | None = None,
 ) -> None:
     """
-    Update caption median_ocr_status field.
+    Update caption caption_ocr_status field.
 
     Args:
         db_path: Path to captions.db
@@ -240,8 +240,8 @@ def update_caption_ocr_status(
             conn.execute(
                 """
                 UPDATE captions
-                SET median_ocr_status = ?,
-                    median_ocr_error = ?
+                SET caption_ocr_status = ?,
+                    caption_ocr_error = ?
                 WHERE id = ?
                 """,
                 (status, error_message, caption_id),
@@ -250,7 +250,7 @@ def update_caption_ocr_status(
             conn.execute(
                 """
                 UPDATE captions
-                SET median_ocr_status = ?
+                SET caption_ocr_status = ?
                 WHERE id = ?
                 """,
                 (status, caption_id),
@@ -263,12 +263,12 @@ def update_caption_ocr_status(
 
 
 @flow(
-    name="process-caption-median-ocr",
+    name="process-caption_ocr",
     log_prints=True,
     retries=1,
     retry_delay_seconds=60,
 )
-def caption_median_ocr_flow(
+def caption_caption_ocr_flow(
     video_id: str,
     db_path: str,
     video_dir: str,
@@ -283,7 +283,7 @@ def caption_median_ocr_flow(
     2. Runs OCR on median frame
     3. Updates caption with OCR text and sets text_pending flag
 
-    Priority: High (user is actively annotating boundaries)
+    Priority: High (user is actively annotating caption frame extents)
 
     Args:
         video_id: Video UUID

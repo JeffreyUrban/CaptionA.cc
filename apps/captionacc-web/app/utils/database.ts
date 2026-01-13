@@ -2,31 +2,21 @@
  * Database access utilities for annotation API routes.
  *
  * This module provides standardized database access patterns including:
- * - Read-only database access for queries (downloads from Wasabi)
- * - Read-write access with upload back to Wasabi
+ * - Read-only database access for queries
+ * - Read-write access with automatic database creation
  * - Transaction wrappers with automatic rollback on error
  *
  * All functions return Response objects on error (not throw) to allow
  * clean early returns in route handlers.
- *
- * Architecture:
- * - Databases are stored in Wasabi S3: {tenant_id}/{video_id}/{db_name}
- * - Downloaded to local cache for processing
- * - Uploaded back to Wasabi after modifications
  */
+
+import { existsSync } from 'fs'
 
 import Database from 'better-sqlite3'
 
 import { migrateDatabase } from '~/db/migrate'
 import { notFoundResponse, errorResponse } from '~/utils/api-responses'
-import {
-  downloadDatabase,
-  uploadDatabase,
-  fileExistsInWasabi,
-  buildStorageKey,
-  getCachePath,
-} from '~/services/wasabi-client'
-import { createServerSupabaseClient } from '~/services/supabase-client'
+import { getCaptionsDbPath, getLayoutDbPath, getVideoDir } from '~/utils/video-paths'
 
 // =============================================================================
 // Type Definitions
@@ -37,17 +27,15 @@ import { createServerSupabaseClient } from '~/services/supabase-client'
  * Either contains the database instance or a Response for the error case.
  */
 export type DatabaseResult =
-  | { success: true; db: Database.Database; tenantId: string; videoId: string }
+  | { success: true; db: Database.Database }
   | { success: false; response: Response }
 
 /**
  * Options for database access functions.
  */
 export interface DatabaseOptions {
-  /** Open in read-only mode (default: false for getAnnotationDatabase, ignored for getOrCreate) */
+  /** Open in read-only mode (default: false for getCaptionDb, ignored for getOrCreate) */
   readonly?: boolean
-  /** Database name to use (default: 'fullOCR.db' for layout annotation) */
-  dbName?: 'video.db' | 'fullOCR.db' | 'layout.db' | 'captions.db'
 }
 
 /**
@@ -58,35 +46,6 @@ export interface TransactionOptions {
   createIfMissing?: boolean
   /** Open in read-only mode - incompatible with createIfMissing (default: false) */
   readonly?: boolean
-  /** Database name to use */
-  dbName?: 'video.db' | 'fullOCR.db' | 'layout.db' | 'captions.db'
-}
-
-// Default tenant for development
-const DEFAULT_TENANT_ID = '00000000-0000-0000-0000-000000000001'
-
-/**
- * Get the tenant ID for a video from Supabase
- */
-async function getTenantIdForVideo(videoId: string): Promise<string | null> {
-  try {
-    const supabase = createServerSupabaseClient()
-    const { data, error } = await supabase
-      .from('videos')
-      .select('tenant_id')
-      .eq('id', videoId)
-      .single()
-
-    if (error || !data) {
-      console.log(`[Database] Video ${videoId} not found in Supabase`)
-      return null
-    }
-
-    return data.tenant_id
-  } catch (error) {
-    console.error(`[Database] Error fetching tenant for video ${videoId}:`, error)
-    return null
-  }
 }
 
 // =============================================================================
@@ -95,43 +54,50 @@ async function getTenantIdForVideo(videoId: string): Promise<string | null> {
 
 /**
  * Get a read-only database connection for a video.
- * Downloads the database from Wasabi if not cached locally.
  *
- * @param videoId - Video UUID
- * @param options - Database options
+ * Returns an error Response if the video or database doesn't exist.
+ * The caller is responsible for closing the database when done.
+ *
+ * @param videoId - Video identifier (UUID or display path)
  * @returns DatabaseResult with database instance or error response
+ *
+ * @example
+ * const result = await getCaptionDb(videoId)
+ * if (!result.success) return result.response
+ * const db = result.db
+ * try {
+ *   // ... use database
+ * } finally {
+ *   db.close()
+ * }
  */
-export async function getAnnotationDatabase(
-  videoId: string,
-  options: DatabaseOptions = {}
-): Promise<DatabaseResult> {
-  const { dbName = 'fullOCR.db' } = options
+export async function getCaptionDb(videoId: string): Promise<DatabaseResult> {
+  const { existsSync } = await import('fs')
+  const Database = (await import('better-sqlite3')).default
 
-  // Get tenant ID from Supabase
-  const tenantId = (await getTenantIdForVideo(videoId)) ?? DEFAULT_TENANT_ID
-
-  // Check if database exists in Wasabi
-  const storageKey = buildStorageKey(tenantId, videoId, dbName)
-  const exists = await fileExistsInWasabi(storageKey)
-
-  if (!exists) {
+  const dbPath = await getCaptionsDbPath(videoId)
+  if (!dbPath) {
     return {
       success: false,
-      response: notFoundResponse(`Database ${dbName} not found for video: ${videoId}`),
+      response: notFoundResponse('Video not found'),
+    }
+  }
+
+  if (!existsSync(dbPath)) {
+    return {
+      success: false,
+      response: notFoundResponse(`Database not found for video: ${videoId}`),
     }
   }
 
   try {
-    // Download database from Wasabi
-    const localPath = await downloadDatabase(tenantId, videoId, dbName)
-
-    const db = new Database(localPath, { readonly: true })
+    const db = new Database(dbPath, { readonly: true })
+    // Enable WAL mode for better concurrent access
+    // WAL allows reads to proceed while writes are happening
     db.pragma('journal_mode = WAL')
-
-    return { success: true, db, tenantId, videoId }
+    return { success: true, db }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to open database'
-    console.error(`[Database] Error opening ${dbName} for ${videoId}:`, error)
     return {
       success: false,
       response: errorResponse(message),
@@ -141,46 +107,43 @@ export async function getAnnotationDatabase(
 
 /**
  * Get a read-write database connection for a video.
- * Downloads from Wasabi, allows modifications, and uploads back when closed.
  *
- * @param videoId - Video UUID
- * @param options - Database options
+ * Unlike getCaptionDb, this opens the database in read-write mode.
+ * Returns an error Response if the video or database doesn't exist.
+ *
+ * @param videoId - Video identifier (UUID or display path)
  * @returns DatabaseResult with database instance or error response
  */
-export async function getWritableDatabase(
-  videoId: string,
-  options: DatabaseOptions = {}
-): Promise<DatabaseResult> {
-  const { dbName = 'fullOCR.db' } = options
+export async function getWritableCaptionDb(videoId: string): Promise<DatabaseResult> {
+  const { existsSync } = await import('fs')
+  const Database = (await import('better-sqlite3')).default
 
-  // Get tenant ID from Supabase
-  const tenantId = (await getTenantIdForVideo(videoId)) ?? DEFAULT_TENANT_ID
-
-  // Check if database exists in Wasabi
-  const storageKey = buildStorageKey(tenantId, videoId, dbName)
-  const exists = await fileExistsInWasabi(storageKey)
-
-  if (!exists) {
+  const dbPath = await getCaptionsDbPath(videoId)
+  if (!dbPath) {
     return {
       success: false,
-      response: notFoundResponse(`Database ${dbName} not found for video: ${videoId}`),
+      response: notFoundResponse('Video not found'),
+    }
+  }
+
+  if (!existsSync(dbPath)) {
+    return {
+      success: false,
+      response: notFoundResponse(`Database not found for video: ${videoId}`),
     }
   }
 
   try {
-    // Download database from Wasabi (force refresh to get latest)
-    const localPath = await downloadDatabase(tenantId, videoId, dbName, true)
+    // Run migrations before opening for writing
+    migrateDatabase(dbPath)
 
-    // Run migrations
-    migrateDatabase(localPath)
-
-    const db = new Database(localPath)
+    const db = new Database(dbPath)
+    // Enable WAL mode for better concurrent access
+    // WAL allows reads to proceed while writes are happening
     db.pragma('journal_mode = WAL')
-
-    return { success: true, db, tenantId, videoId }
+    return { success: true, db }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to open database'
-    console.error(`[Database] Error opening writable ${dbName} for ${videoId}:`, error)
     return {
       success: false,
       response: errorResponse(message),
@@ -189,27 +152,276 @@ export async function getWritableDatabase(
 }
 
 /**
- * Upload a modified database back to Wasabi.
- * Call this after making changes to a writable database.
+ * Get or create an annotation database for a video.
+ *
+ * Creates the database file if it doesn't exist. Does NOT create schema -
+ * that should be done separately using init-annotations-db.ts or migrations.
+ *
+ * Note: This function is for backwards compatibility. New databases should
+ * be initialized using the proper schema creation scripts.
+ *
+ * @param videoId - Video identifier (UUID or display path)
+ * @returns DatabaseResult with database instance or error response
+ *
+ * @example
+ * const result = await getOrCreateCaptionDb(videoId)
+ * if (!result.success) return result.response
+ * const { db, created } = result
  */
-export async function syncDatabaseToWasabi(
-  tenantId: string,
-  videoId: string,
-  dbName: 'video.db' | 'fullOCR.db' | 'layout.db' | 'captions.db'
-): Promise<void> {
-  await uploadDatabase(tenantId, videoId, dbName)
+export async function getOrCreateCaptionDb(
+  videoId: string
+): Promise<DatabaseResult & { created?: boolean }> {
+  const { existsSync } = await import('fs')
+  const Database = (await import('better-sqlite3')).default
+
+  // First check if video directory exists
+  const videoDir = await getVideoDir(videoId)
+  if (!videoDir) {
+    return {
+      success: false,
+      response: notFoundResponse('Video not found'),
+    }
+  }
+
+  const dbPath = await getCaptionsDbPath(videoId)
+  const dbExists = dbPath !== null && existsSync(dbPath)
+
+  // If dbPath is null but videoDir exists, we need to construct the path
+  const actualDbPath = dbPath ?? `${videoDir}/captions.db`
+
+  try {
+    // Run migrations if database already exists
+    if (dbExists) {
+      migrateDatabase(actualDbPath)
+    }
+
+    const db = new Database(actualDbPath)
+    // Enable WAL mode for better concurrent access
+    // WAL allows reads to proceed while writes are happening
+    db.pragma('journal_mode = WAL')
+
+    // Return whether database was created (for callers that need to initialize schema)
+    return {
+      success: true,
+      db,
+      created: !dbExists,
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to open database'
+    return {
+      success: false,
+      response: errorResponse(message),
+    }
+  }
+}
+
+// =============================================================================
+// Layout Database Access Functions
+// =============================================================================
+
+/**
+ * Get a read-only layout database connection for a video.
+ *
+ * Returns an error Response if the video or database doesn't exist.
+ * The caller is responsible for closing the database when done.
+ *
+ * @param videoId - Video identifier (UUID or display path)
+ * @returns DatabaseResult with database instance or error response
+ */
+export async function getLayoutDb(videoId: string): Promise<DatabaseResult> {
+  const { existsSync } = await import('fs')
+  const Database = (await import('better-sqlite3')).default
+
+  const dbPath = await getLayoutDbPath(videoId)
+  if (!dbPath) {
+    return {
+      success: false,
+      response: notFoundResponse('Video not found'),
+    }
+  }
+
+  if (!existsSync(dbPath)) {
+    return {
+      success: false,
+      response: notFoundResponse(`Layout database not found for video: ${videoId}`),
+    }
+  }
+
+  try {
+    const db = new Database(dbPath, { readonly: true })
+    db.pragma('journal_mode = WAL')
+    return { success: true, db }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to open layout database'
+    return {
+      success: false,
+      response: errorResponse(message),
+    }
+  }
 }
 
 /**
- * @deprecated Use getWritableDatabase instead.
- * Database creation is now handled by the orchestrator service.
+ * Get a read-write layout database connection for a video.
+ *
+ * @param videoId - Video identifier (UUID or display path)
+ * @returns DatabaseResult with database instance or error response
  */
-export async function getOrCreateAnnotationDatabase(
+export async function getWritableLayoutDb(videoId: string): Promise<DatabaseResult> {
+  const { existsSync } = await import('fs')
+  const Database = (await import('better-sqlite3')).default
+
+  const dbPath = await getLayoutDbPath(videoId)
+  if (!dbPath) {
+    return {
+      success: false,
+      response: notFoundResponse('Video not found'),
+    }
+  }
+
+  if (!existsSync(dbPath)) {
+    return {
+      success: false,
+      response: notFoundResponse(`Layout database not found for video: ${videoId}`),
+    }
+  }
+
+  try {
+    const db = new Database(dbPath)
+    db.pragma('journal_mode = WAL')
+    return { success: true, db }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to open layout database'
+    return {
+      success: false,
+      response: errorResponse(message),
+    }
+  }
+}
+
+/**
+ * Get or create a layout database for a video.
+ *
+ * Creates the database file and schema if it doesn't exist.
+ * Includes database_metadata table for schema versioning.
+ *
+ * @param videoId - Video identifier (UUID or display path)
+ * @returns DatabaseResult with database instance or error response
+ */
+export async function getOrCreateLayoutDb(
   videoId: string
 ): Promise<DatabaseResult & { created?: boolean }> {
-  // Delegate to getWritableDatabase - creation is now handled by orchestrator
-  const result = await getWritableDatabase(videoId)
-  return { ...result, created: false }
+  const { existsSync } = await import('fs')
+  const Database = (await import('better-sqlite3')).default
+
+  const videoDir = await getVideoDir(videoId)
+  if (!videoDir) {
+    return {
+      success: false,
+      response: notFoundResponse('Video not found'),
+    }
+  }
+
+  const dbPath = await getLayoutDbPath(videoId)
+  const dbExists = dbPath !== null && existsSync(dbPath)
+  const actualDbPath = dbPath ?? `${videoDir}/layout.db`
+
+  try {
+    const db = new Database(actualDbPath)
+    db.pragma('journal_mode = WAL')
+
+    // Create schema if database was just created
+    if (!dbExists) {
+      // Create database_metadata table
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS database_metadata (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          schema_version INTEGER NOT NULL DEFAULT 1,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          migrated_at TEXT
+        )
+      `)
+      db.exec(`
+        INSERT OR IGNORE INTO database_metadata (id, schema_version) VALUES (1, 1)
+      `)
+
+      // Create video_layout_config table
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS video_layout_config (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          frame_width INTEGER NOT NULL,
+          frame_height INTEGER NOT NULL,
+          crop_left INTEGER NOT NULL DEFAULT 0,
+          crop_top INTEGER NOT NULL DEFAULT 0,
+          crop_right INTEGER NOT NULL DEFAULT 0,
+          crop_bottom INTEGER NOT NULL DEFAULT 0,
+          selection_left INTEGER,
+          selection_top INTEGER,
+          selection_right INTEGER,
+          selection_bottom INTEGER,
+          selection_mode TEXT NOT NULL DEFAULT 'disabled',
+          vertical_position REAL,
+          vertical_std REAL,
+          box_height REAL,
+          box_height_std REAL,
+          anchor_type TEXT,
+          anchor_position REAL,
+          top_edge_std REAL,
+          bottom_edge_std REAL,
+          horizontal_std_slope REAL,
+          horizontal_std_intercept REAL,
+          crop_region_version INTEGER NOT NULL DEFAULT 1,
+          analysis_model_version TEXT,
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+      `)
+
+      // Create full_frame_box_labels table
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS full_frame_box_labels (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          frame_index INTEGER NOT NULL,
+          box_index INTEGER NOT NULL,
+          label TEXT NOT NULL CHECK (label IN ('in', 'out')),
+          label_source TEXT NOT NULL DEFAULT 'user' CHECK (label_source IN ('user', 'model')),
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          UNIQUE(frame_index, box_index, label_source)
+        )
+      `)
+      db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_box_labels_frame ON full_frame_box_labels(frame_index)
+      `)
+
+      // Create box_classification_model table
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS box_classification_model (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          model_data BLOB,
+          model_version TEXT,
+          trained_at TEXT
+        )
+      `)
+
+      // Create video_preferences table
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS video_preferences (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          layout_approved INTEGER NOT NULL DEFAULT 0
+        )
+      `)
+    }
+
+    return {
+      success: true,
+      db,
+      created: !dbExists,
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to open layout database'
+    return {
+      success: false,
+      response: errorResponse(message),
+    }
+  }
 }
 
 // =============================================================================
@@ -249,23 +461,23 @@ export async function withDatabase<T extends Response>(
   fn: (db: Database.Database) => Promise<T> | T,
   options: TransactionOptions = {}
 ): Promise<T | Response> {
-  const { createIfMissing = false, readonly = false, dbName = 'fullOCR.db' } = options
+  const { createIfMissing = false, readonly = false } = options
 
   // Get database connection
-  let result: DatabaseResult
+  let result: DatabaseResult & { created?: boolean }
   if (createIfMissing) {
-    result = await getOrCreateAnnotationDatabase(videoId)
+    result = await getOrCreateCaptionDb(videoId)
   } else if (readonly) {
-    result = await getAnnotationDatabase(videoId, { dbName })
+    result = await getCaptionDb(videoId)
   } else {
-    result = await getWritableDatabase(videoId, { dbName })
+    result = await getWritableCaptionDb(videoId)
   }
 
   if (!result.success) {
     return result.response
   }
 
-  const { db, tenantId } = result
+  const db = result.db
 
   // For read-only, just execute without transaction
   if (readonly) {
@@ -280,16 +492,13 @@ export async function withDatabase<T extends Response>(
     }
   }
 
-  // For read-write, use transaction and sync to Wasabi after
-  let shouldSync = false
+  // For read-write, use transaction
   try {
     db.prepare('BEGIN TRANSACTION').run()
 
     const response = await fn(db)
 
     db.prepare('COMMIT').run()
-    shouldSync = true
-
     return response
   } catch (error) {
     // Attempt rollback
@@ -304,14 +513,6 @@ export async function withDatabase<T extends Response>(
     return errorResponse(message) as T
   } finally {
     db.close()
-    // Sync changes to Wasabi if transaction succeeded
-    if (shouldSync) {
-      try {
-        await syncDatabaseToWasabi(tenantId, videoId, dbName)
-      } catch (syncError) {
-        console.error('Failed to sync database to Wasabi:', syncError)
-      }
-    }
   }
 }
 
@@ -337,33 +538,24 @@ export async function withDatabaseNoTransaction<T extends Response>(
   fn: (db: Database.Database) => Promise<T> | T,
   options: DatabaseOptions = {}
 ): Promise<T | Response> {
-  const { readonly = false, dbName = 'fullOCR.db' } = options
+  const { readonly = false } = options
 
-  const result = readonly
-    ? await getAnnotationDatabase(videoId, { dbName })
-    : await getWritableDatabase(videoId, { dbName })
+  const result = readonly ? await getCaptionDb(videoId) : await getWritableCaptionDb(videoId)
 
   if (!result.success) {
     return result.response
   }
 
-  const { db, tenantId } = result
+  const db = result.db
 
   try {
-    const response = await fn(db)
-    // Sync changes if not readonly
-    if (!readonly) {
-      db.close()
-      await syncDatabaseToWasabi(tenantId, videoId, dbName)
-    } else {
-      db.close()
-    }
-    return response
+    return await fn(db)
   } catch (error) {
     console.error('Database error:', error)
     const message = error instanceof Error ? error.message : 'Database error'
-    db.close()
     return errorResponse(message) as T
+  } finally {
+    db.close()
   }
 }
 
@@ -383,7 +575,7 @@ export async function withDatabaseNoTransaction<T extends Response>(
  * @returns Query result or null on error
  *
  * @example
- * const config = safeGet<VideoLayoutConfig>(db, 'SELECT * FROM video_layout_config ORDER BY created_at DESC LIMIT 1')
+ * const config = safeGet<VideoLayoutConfig>(db, 'SELECT * FROM video_layout_config WHERE id = 1')
  * if (!config) {
  *   // Handle missing config
  * }
@@ -418,5 +610,5 @@ export function safeAll<T>(db: Database.Database, sql: string, ...params: unknow
 // Re-exports for convenience
 // =============================================================================
 
-// Re-export Wasabi functions that are commonly used with database utils
-export { buildStorageKey, getCachePath, fileExistsInWasabi } from '~/services/wasabi-client'
+// Re-export video-paths functions that are commonly used with database utils
+export { getCaptionsDbPath, getLayoutDbPath, getVideoDir } from '~/utils/video-paths'

@@ -4,7 +4,7 @@ import Database from 'better-sqlite3'
 import { type LoaderFunctionArgs } from 'react-router'
 import sharp from 'sharp'
 
-import { getDbPath } from '~/utils/video-paths'
+import { getCaptionsDbPath } from '~/utils/video-paths'
 
 function fillAnnotationGaps(db: Database.Database, totalFrames: number): number {
   // Find all gaps in annotation coverage and create gap annotations for them
@@ -30,7 +30,7 @@ function fillAnnotationGaps(db: Database.Database, totalFrames: number): number 
       // Create gap annotation for frames [expectedFrame, annotation.start_frame_index - 1]
       db.prepare(
         `
-        INSERT INTO captions (start_frame_index, end_frame_index, boundary_state, boundary_pending)
+        INSERT INTO captions (start_frame_index, end_frame_index, caption_frame_extents_state, caption_frame_extents_pending)
         VALUES (?, ?, 'gap', 0)
       `
       ).run(expectedFrame, annotation.start_frame_index - 1)
@@ -45,7 +45,7 @@ function fillAnnotationGaps(db: Database.Database, totalFrames: number): number 
   if (expectedFrame < totalFrames) {
     db.prepare(
       `
-      INSERT INTO captions (start_frame_index, end_frame_index, boundary_state, boundary_pending)
+      INSERT INTO captions (start_frame_index, end_frame_index, caption_frame_extents_state, caption_frame_extents_pending)
       VALUES (?, ?, 'gap', 0)
     `
     ).run(expectedFrame, totalFrames - 1)
@@ -69,7 +69,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
   const videoId = decodeURIComponent(encodedVideoId)
 
   // Get database path
-  const dbPath = await getDbPath(videoId)
+  const dbPath = await getCaptionsDbPath(videoId)
   if (!dbPath) {
     return new Response(JSON.stringify({ error: 'Video not found' }), {
       status: 404,
@@ -81,47 +81,6 @@ export async function loader({ params }: LoaderFunctionArgs) {
   if (!existsSync(dbPath)) {
     return new Response(JSON.stringify({ error: 'Database not found' }), {
       status: 404,
-      headers: { 'Content-Type': 'application/json' },
-    })
-  }
-
-  // Get total frames from database (cropped_frames table)
-  const db = new Database(dbPath)
-  let totalFrames = 0
-  let cropWidth = 0
-  let cropHeight = 0
-
-  try {
-    // Count total number of frames in cropped_frames table
-    const result = db.prepare('SELECT COUNT(*) as count FROM cropped_frames').get() as {
-      count: number
-    }
-
-    totalFrames = result.count
-
-    if (totalFrames === 0) {
-      db.close()
-      return new Response(JSON.stringify({ error: 'No cropped frames found in database' }), {
-        status: 404,
-        headers: { 'Content-Type': 'application/json' },
-      })
-    }
-
-    // Get crop dimensions from first frame
-    const frameRow = db.prepare('SELECT image_data FROM cropped_frames LIMIT 1').get() as
-      | { image_data: Buffer }
-      | undefined
-
-    if (frameRow) {
-      const metadata = await sharp(frameRow.image_data).metadata()
-      cropWidth = metadata.width || 0
-      cropHeight = metadata.height || 0
-    }
-  } catch (error) {
-    console.error('Error querying cropped_frames:', error)
-    db.close()
-    return new Response(JSON.stringify({ error: 'Failed to query frame count from database' }), {
-      status: 500,
       headers: { 'Content-Type': 'application/json' },
     })
   }

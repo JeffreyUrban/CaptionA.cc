@@ -26,36 +26,8 @@ import { Providers } from '~/providers'
 
 export const links: LinksFunction = () => []
 
-/**
- * Root loader
- *
- * Note: Auth is client-side only (localStorage) so no user data provided here.
- * Use AuthProvider/useAuth hook to access authentication state in components.
- */
-export async function loader() {
-  // Set security headers via headers export below
-  return {}
-}
-
-/**
- * Security headers - prevent XSS attacks
- */
-export function headers() {
-  // Content Security Policy
-  // TODO: Restrict localhost to specific ports in production (currently allows all for dev)
-  const csp = [
-    "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
-    "style-src 'self' 'unsafe-inline'",
-    "font-src 'self'",
-    "img-src 'self' data: https:",
-    "connect-src 'self' http://localhost:* https://*.supabase.co wss://*.supabase.co",
-  ].join('; ')
-
-  return {
-    'Content-Security-Policy': csp,
-  }
-}
+// Note: In SPA mode, security headers must be configured on your web server/CDN
+// (e.g., nginx, Cloudflare, Vercel) rather than in React Router.
 
 export default function App() {
   return (

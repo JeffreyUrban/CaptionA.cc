@@ -173,7 +173,7 @@ class BoundingBox:
 
 
 @dataclass
-class CropBounds:
+class CropRegion:
     """Crop region bounds in absolute pixel coordinates.
 
     Defines a rectangular region within the original frame.
@@ -202,7 +202,7 @@ class CropBounds:
         return self.bottom - self.top
 
     def to_bounding_box(self) -> BoundingBox:
-        """Convert crop bounds to bounding box."""
+        """Convert crop region to bounding box."""
         return BoundingBox(
             left=self.left,
             top=self.top,
@@ -230,7 +230,7 @@ class CropBounds:
     @classmethod
     def from_fractional(
         cls, left: float, top: float, right: float, bottom: float, frame_width: int, frame_height: int
-    ) -> "CropBounds":
+    ) -> "CropRegion":
         """Create from fractional coordinates.
 
         Args:
@@ -242,7 +242,7 @@ class CropBounds:
             frame_height: Original frame height in pixels
 
         Returns:
-            CropBounds with pixel coordinates
+            CropRegion with pixel coordinates
         """
         return cls(
             left=int(left * frame_width),
@@ -252,7 +252,7 @@ class CropBounds:
         )
 
 
-def original_to_cropped(box: BoundingBox, crop_bounds: CropBounds) -> Optional[BoundingBox]:
+def original_to_cropped(box: BoundingBox, crop_region: CropRegion) -> Optional[BoundingBox]:
     """Convert original frame coords to cropped frame coords.
 
     Takes a bounding box in original frame coordinates (pixels) and converts it to
@@ -261,7 +261,7 @@ def original_to_cropped(box: BoundingBox, crop_bounds: CropBounds) -> Optional[B
 
     Args:
         box: Bounding box in original frame pixel coordinates
-        crop_bounds: Crop region boundaries in original frame pixel coordinates
+        crop_region: Crop region boundaries in original frame pixel coordinates
 
     Returns:
         BoundingBox in cropped frame pixel coordinates, or None if box is outside crop region
@@ -270,28 +270,28 @@ def original_to_cropped(box: BoundingBox, crop_bounds: CropBounds) -> Optional[B
         >>> # Original: Box at (960, 864) to (1152, 972) in 1920x1080 frame
         >>> box = BoundingBox(left=960, top=864, right=1152, bottom=972)
         >>> # Crop: Bottom half of frame (top=540)
-        >>> crop = CropBounds(left=0, top=540, right=1920, bottom=1080)
+        >>> crop = CropRegion(left=0, top=540, right=1920, bottom=1080)
         >>> cropped = original_to_cropped(box, crop)
         >>> # In cropped coords: top becomes 864-540 = 324
         >>> print(f"{cropped.left}, {cropped.top}, {cropped.right}, {cropped.bottom}")
         960, 324, 1152, 432
     """
     # Check if box is completely outside crop region
-    crop_box = crop_bounds.to_bounding_box()
+    crop_box = crop_region.to_bounding_box()
     if not box.overlaps(crop_box):
         return None
 
     # Clamp box to crop region
-    clamped_left = max(box.left, crop_bounds.left)
-    clamped_top = max(box.top, crop_bounds.top)
-    clamped_right = min(box.right, crop_bounds.right)
-    clamped_bottom = min(box.bottom, crop_bounds.bottom)
+    clamped_left = max(box.left, crop_region.left)
+    clamped_top = max(box.top, crop_region.top)
+    clamped_right = min(box.right, crop_region.right)
+    clamped_bottom = min(box.bottom, crop_region.bottom)
 
     # Convert to cropped coordinates by subtracting crop offset
-    cropped_left = clamped_left - crop_bounds.left
-    cropped_top = clamped_top - crop_bounds.top
-    cropped_right = clamped_right - crop_bounds.left
-    cropped_bottom = clamped_bottom - crop_bounds.top
+    cropped_left = clamped_left - crop_region.left
+    cropped_top = clamped_top - crop_region.top
+    cropped_right = clamped_right - crop_region.left
+    cropped_bottom = clamped_bottom - crop_region.top
 
     return BoundingBox(
         left=cropped_left,
@@ -301,7 +301,7 @@ def original_to_cropped(box: BoundingBox, crop_bounds: CropBounds) -> Optional[B
     )
 
 
-def cropped_to_original(box: BoundingBox, crop_bounds: CropBounds) -> BoundingBox:
+def cropped_to_original(box: BoundingBox, crop_region: CropRegion) -> BoundingBox:
     """Convert cropped frame coords to original frame coords.
 
     Takes a bounding box in cropped frame coordinates (pixels) and converts it back to
@@ -309,7 +309,7 @@ def cropped_to_original(box: BoundingBox, crop_bounds: CropBounds) -> BoundingBo
 
     Args:
         box: Bounding box in cropped frame pixel coordinates
-        crop_bounds: Crop region boundaries in original frame pixel coordinates
+        crop_region: Crop region boundaries in original frame pixel coordinates
 
     Returns:
         BoundingBox in original frame pixel coordinates
@@ -318,17 +318,17 @@ def cropped_to_original(box: BoundingBox, crop_bounds: CropBounds) -> BoundingBo
         >>> # Cropped: Box at (960, 324) to (1152, 432)
         >>> box = BoundingBox(left=960, top=324, right=1152, bottom=432)
         >>> # Crop: Bottom half (top=540)
-        >>> crop = CropBounds(left=0, top=540, right=1920, bottom=1080)
+        >>> crop = CropRegion(left=0, top=540, right=1920, bottom=1080)
         >>> original = cropped_to_original(box, crop)
         >>> # In original coords: top becomes 324+540 = 864
         >>> print(f"{original.left}, {original.top}, {original.right}, {original.bottom}")
         960, 864, 1152, 972
     """
     # Add crop offset to convert to original coordinates
-    original_left = box.left + crop_bounds.left
-    original_top = box.top + crop_bounds.top
-    original_right = box.right + crop_bounds.left
-    original_bottom = box.bottom + crop_bounds.top
+    original_left = box.left + crop_region.left
+    original_top = box.top + crop_region.top
+    original_right = box.right + crop_region.left
+    original_bottom = box.bottom + crop_region.top
 
     return BoundingBox(
         left=original_left,
@@ -338,27 +338,27 @@ def cropped_to_original(box: BoundingBox, crop_bounds: CropBounds) -> BoundingBo
     )
 
 
-def is_box_inside_crop(box: BoundingBox, crop_bounds: CropBounds) -> bool:
+def is_box_inside_crop(box: BoundingBox, crop_region: CropRegion) -> bool:
     """Check if a box (in original coords) is completely inside crop region.
 
     Args:
         box: Bounding box in original frame pixel coordinates
-        crop_bounds: Crop region boundaries
+        crop_region: Crop region boundaries
 
     Returns:
         True if box is completely inside crop region
     """
-    return box.is_inside(crop_bounds.to_bounding_box())
+    return box.is_inside(crop_region.to_bounding_box())
 
 
-def box_overlap_with_crop(box: BoundingBox, crop_bounds: CropBounds) -> float:
+def box_overlap_with_crop(box: BoundingBox, crop_region: CropRegion) -> float:
     """Calculate fraction of box (in original coords) that overlaps with crop region.
 
     Args:
         box: Bounding box in original frame pixel coordinates
-        crop_bounds: Crop region boundaries
+        crop_region: Crop region boundaries
 
     Returns:
         Fraction [0-1] of box area that overlaps with crop region
     """
-    return box.overlap_fraction(crop_bounds.to_bounding_box())
+    return box.overlap_fraction(crop_region.to_bounding_box())

@@ -4,7 +4,7 @@ import Database from 'better-sqlite3'
 import { type LoaderFunctionArgs, type ActionFunctionArgs } from 'react-router'
 
 import type { TextAnchor } from '~/types/enums'
-import { getDbPath } from '~/utils/video-paths'
+import { getCaptionsDbPath } from '~/utils/video-paths'
 
 interface VideoPreferences {
   text_size: number
@@ -15,7 +15,7 @@ interface VideoPreferences {
 async function getDatabase(
   videoId: string
 ): Promise<{ db: Database.Database; path: string } | Response> {
-  const dbPath = await getDbPath(videoId)
+  const dbPath = await getCaptionsDbPath(videoId)
   if (!dbPath) {
     return new Response('Video not found', { status: 404 })
   }

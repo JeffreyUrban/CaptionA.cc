@@ -40,13 +40,13 @@ queueVideoProcessing({
 ### After:
 ```typescript
 const { queueFullFramesProcessing } = await import('~/services/prefect')
-const { getVideoDir, getDbPath } = await import('~/utils/video-paths')
+const { getVideoDir, getCaptionsDbPath } = await import('~/utils/video-paths')
 
 try {
   const result = await queueFullFramesProcessing({
     videoId: metadata.metadata.videoId!,
     videoPath: finalVideoPath,
-    dbPath: getDbPath(metadata.metadata.videoId!),
+    dbPath: getCaptionsDbPath(metadata.metadata.videoId!),
     outputDir: resolve(getVideoDir(metadata.metadata.videoId!), 'full_frames'),
     frameRate: 0.1,
   })
@@ -81,7 +81,7 @@ import { queueFullFramesProcessing } from '~/services/prefect'
 await queueFullFramesProcessing({
   videoId,
   videoPath: videoFile,
-  dbPath: getDbPath(videoId),
+  dbPath: getCaptionsDbPath(videoId),
   outputDir: resolve(getVideoDir(videoId), 'full_frames'),
   frameRate: 0.1,
 })
@@ -98,7 +98,7 @@ import { queueCropFramesProcessing } from '~/services/crop-frames-processing'
 queueCropFramesProcessing({
   videoId,
   videoPath,
-  cropBounds: {
+  cropRegion: {
     left: layoutConfig.crop_left,
     top: layoutConfig.crop_top,
     right: layoutConfig.crop_right,
@@ -114,15 +114,15 @@ import { queueCropFramesProcessing } from '~/services/prefect'
 const result = await queueCropFramesProcessing({
   videoId,
   videoPath: getVideoFile(videoId),
-  dbPath: getDbPath(videoId),
+  dbPath: getCaptionsDbPath(videoId),
   outputDir: resolve(getVideoDir(videoId), 'crop_frames'),
-  cropBounds: {
+  cropRegion: {
     left: layoutConfig.crop_left,
     top: layoutConfig.crop_top,
     right: layoutConfig.crop_right,
     bottom: layoutConfig.crop_bottom,
   },
-  cropBoundsVersion: layoutConfig.crop_bounds_version,
+  cropRegionVersion: layoutConfig.crop_region_version,
 })
 
 console.log(`[Prefect] Queued crop frames: ${result.flowRunId}`)

@@ -5,7 +5,6 @@ Example of how to integrate Supabase status updates with Prefect flows.
 This flow demonstrates:
 1. Updating video status in Supabase
 2. Storing metadata in multi-tenant catalog
-3. Maintaining backward compatibility with SQLite database
 
 To migrate existing flows, add similar status updates at key points.
 """
@@ -18,7 +17,7 @@ from typing import Any
 from prefect import flow, task
 
 # Import our Supabase client
-from ..supabase_client import SearchIndexRepository, VideoRepository
+from ..supabase_client import VideoRepository
 
 
 @task(
@@ -70,58 +69,6 @@ def update_captions_db_key(video_id: str, captions_db_key: str) -> None:
 
 
 @task(
-    name="index-video-content",
-    tags=["supabase", "search"],
-    log_prints=True,
-)
-def index_video_content(video_id: str, db_path: str) -> int:
-    """
-    Index OCR content in Supabase for cross-video search.
-
-    Args:
-        video_id: Video UUID
-        db_path: Path to captions.db with OCR results
-
-    Returns:
-        Number of frames indexed
-    """
-    try:
-        search_repo = SearchIndexRepository()
-        conn = sqlite3.connect(db_path)
-
-        try:
-            # Get OCR results from full_frame_ocr table
-            cursor = conn.execute(
-                """
-                SELECT f.frame_index, GROUP_CONCAT(o.text, ' ') as ocr_text
-                FROM full_frames f
-                LEFT JOIN full_frame_ocr o ON f.id = o.frame_id
-                GROUP BY f.frame_index
-                ORDER BY f.frame_index
-                """
-            )
-
-            indexed_count = 0
-            for row in cursor:
-                frame_index, ocr_text = row
-                if ocr_text:  # Only index frames with OCR text
-                    search_repo.upsert_frame_text(
-                        video_id=video_id, frame_index=frame_index, ocr_text=ocr_text
-                    )
-                    indexed_count += 1
-
-            print(f"✓ Supabase: Indexed {indexed_count} frames for video {video_id}")
-            return indexed_count
-
-        finally:
-            conn.close()
-
-    except Exception as e:
-        print(f"⚠ Warning: Failed to index video content: {e}")
-        return 0
-
-
-@task(
     name="extract-full-frames",
     retries=3,
     retry_delay_seconds=60,
@@ -136,7 +83,7 @@ def extract_full_frames(
 
     Args:
         video_path: Full path to video file
-        db_path: Path to captions.db
+        db_path: Path to video.db
         output_dir: Directory to write frames
         frame_rate: Frame extraction rate in Hz (default 0.1 = every 10 seconds)
 
@@ -210,12 +157,11 @@ def process_video_with_supabase_flow(
     This flow demonstrates how to:
     1. Update Supabase status throughout processing
     2. Index content for cross-video search
-    3. Maintain backward compatibility with SQLite
 
     Args:
         video_id: Video UUID (matches Supabase videos.id)
         video_path: Full path to video file
-        db_path: Path to captions.db
+        db_path: Path to video.db
         output_dir: Directory for frame output
         frame_rate: Frame extraction rate in Hz
 

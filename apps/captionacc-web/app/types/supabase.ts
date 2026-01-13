@@ -88,7 +88,7 @@ export type Database = {
           chunk_count: number | null
           created_at: string | null
           created_by_user_id: string | null
-          crop_bounds: Json | null
+          crop_region: Json | null
           frame_rate: number | null
           id: string
           layout_db_hash: string | null
@@ -108,7 +108,7 @@ export type Database = {
           chunk_count?: number | null
           created_at?: string | null
           created_by_user_id?: string | null
-          crop_bounds?: Json | null
+          crop_region?: Json | null
           frame_rate?: number | null
           id?: string
           layout_db_hash?: string | null
@@ -128,7 +128,7 @@ export type Database = {
           chunk_count?: number | null
           created_at?: string | null
           created_by_user_id?: string | null
-          crop_bounds?: Json | null
+          crop_region?: Json | null
           frame_rate?: number | null
           id?: string
           layout_db_hash?: string | null
@@ -492,44 +492,6 @@ export type Database = {
             columns: ['tenant_id']
             isOneToOne: false
             referencedRelation: 'tenants'
-            referencedColumns: ['id']
-          },
-        ]
-      }
-      video_search_index: {
-        Row: {
-          caption_text: string | null
-          frame_index: number | null
-          id: number
-          ocr_text: string | null
-          search_vector: unknown
-          updated_at: string | null
-          video_id: string | null
-        }
-        Insert: {
-          caption_text?: string | null
-          frame_index?: number | null
-          id?: number
-          ocr_text?: string | null
-          search_vector?: unknown
-          updated_at?: string | null
-          video_id?: string | null
-        }
-        Update: {
-          caption_text?: string | null
-          frame_index?: number | null
-          id?: number
-          ocr_text?: string | null
-          search_vector?: unknown
-          updated_at?: string | null
-          video_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: 'video_search_index_video_id_fkey'
-            columns: ['video_id']
-            isOneToOne: false
-            referencedRelation: 'videos'
             referencedColumns: ['id']
           },
         ]

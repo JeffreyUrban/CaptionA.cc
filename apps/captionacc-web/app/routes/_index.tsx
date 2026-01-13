@@ -246,8 +246,8 @@ export default function Home() {
                 Automated Extraction
               </h3>
               <p className="mt-4 text-sm/7 text-olive-700 dark:text-olive-400">
-                Our system identifies caption boundaries and extracts text with professional-grade
-                accuracy
+                Our system identifies caption frame extents and extracts text with
+                professional-grade accuracy
               </p>
             </div>
             <div>
@@ -345,8 +345,8 @@ export default function Home() {
             question="What formats do you support?"
             answer={
               <p>
-                We export to SRT, VTT, and other standard subtitle formats. Upload common video
-                formats like MP4, MOV, MKV, and AVI.
+                We export to SRT, VTT, and other standard subtitle formats. Upload MP4 video format
+                (let us know if you need support for other formats).
               </p>
             }
           />

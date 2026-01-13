@@ -25,11 +25,11 @@ The model uses 26 features extracted from box spatial properties, character sets
 
 ```python
 from ocr_box_model.features import extract_box_features
-from caption_models import BoundingBox, CropBounds
+from caption_models import BoundingBox, CropRegion
 
 # Box and layout configuration
 box = BoundingBox(left=960, top=918, right=998, bottom=972)
-crop_bounds = CropBounds(left=0, top=723, right=1920, bottom=1080)
+crop_region = CropRegion(left=0, top=723, right=1920, bottom=1080)
 
 # Layout parameters from SubtitleRegion analysis
 layout_params = {
@@ -46,7 +46,7 @@ features = extract_box_features(
     box=box,
     frame_width=1920,
     frame_height=1080,
-    crop_bounds=crop_bounds,
+    crop_region=crop_region,
     layout_params=layout_params,
 )
 ```
@@ -61,7 +61,7 @@ predictions = predict_with_heuristics(
     boxes=[box1, box2, box3],
     frame_width=1920,
     frame_height=1080,
-    crop_bounds=crop_bounds,
+    crop_region=crop_region,
     layout_params=layout_params,
 )
 
@@ -121,7 +121,7 @@ The first version used 7 spatial features:
 6. Normalized Y position (vertical position in frame)
 7. Normalized area (box size relative to frame)
 
-**Problem discovered**: Crop bounds extended far past actual captions despite high confidence predictions.
+**Problem discovered**: Crop region extended far past actual captions despite high confidence predictions.
 
 **Root cause**: User annotations were only used for training the model parameters (means/stds), but NOT as input features during prediction. This meant the model couldn't directly incorporate the strong signal of "user already labeled this box as out".
 
@@ -220,7 +220,7 @@ This ensures the largest exponent is always 0, preventing overflow.
 
 #### Iteration 4: Feature Expansion to 26 Features (2024-12)
 
-**Problem discovered**: Crop bounds still extending past actual captions in some videos (e.g., feichengwurao/20220122: rightmost predicted "in" at x=980 vs user annotations at x=607).
+**Problem discovered**: Crop region still extending past actual captions in some videos (e.g., feichengwurao/20220122: rightmost predicted "in" at x=980 vs user annotations at x=607).
 
 **Root cause**: Model lacked direct horizontal position information. The horizontal clustering score captured relative positioning but not absolute position, making it unable to learn "boxes far to the right are noise".
 
@@ -247,7 +247,6 @@ This ensures the largest exponent is always 0, preventing overflow.
 
 **Implementation details**:
 - Database schema migration: Added 68 new columns (17 new features × 2 params × 2 classes)
-- Backward compatibility: Schema auto-migrates when model loads
 - Temporal metadata: Backfill script populates duration and timestamps for existing videos
 - Frame sampling: Currently fixed 10Hz indexing (native framerate support deferred)
 

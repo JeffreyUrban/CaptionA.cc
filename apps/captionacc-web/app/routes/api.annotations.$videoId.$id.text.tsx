@@ -6,26 +6,26 @@ import { type LoaderFunctionArgs, type ActionFunctionArgs } from 'react-router'
 import { getOrGenerateCombinedImage } from '../utils/image-processing'
 import { runOCROnCombinedImage } from '../utils/ocr-wrapper'
 
-import { getDbPath } from '~/utils/video-paths'
+import { getCaptionsDbPath } from '~/utils/video-paths'
 
 interface Annotation {
   id: number
   start_frame_index: number
   end_frame_index: number
-  boundary_state: 'predicted' | 'confirmed' | 'gap'
-  boundary_pending: number
-  boundary_updated_at: string
+  caption_frame_extents_state: 'predicted' | 'confirmed' | 'gap'
+  caption_frame_extents_pending: number
+  caption_frame_extents_updated_at: string
   text: string | null
   text_pending: number
   text_status: string | null
   text_notes: string | null
-  text_ocr_combined: string | null
+  caption_ocr: string | null
   text_updated_at: string
   created_at: string
 }
 
 async function getDatabase(videoId: string): Promise<Database.Database | Response> {
-  const dbPath = await getDbPath(videoId)
+  const dbPath = await getCaptionsDbPath(videoId)
   if (!dbPath) {
     return new Response('Video not found', { status: 404 })
   }
@@ -72,9 +72,9 @@ export async function loader({ params }: LoaderFunctionArgs) {
     }
 
     // Check if combined OCR is already cached in database
-    let combinedOCRText = annotation.text_ocr_combined
+    let combinedOCRText = annotation.caption_ocr
     console.log(
-      '  Current text_ocr_combined:',
+      '  Current caption_ocr:',
       combinedOCRText ? `"${combinedOCRText.substring(0, 50)}..."` : 'null'
     )
 
@@ -133,7 +133,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
       db.prepare(
         `
         UPDATE captions
-        SET text_ocr_combined = ?
+        SET caption_ocr = ?
         WHERE id = ?
       `
       ).run(combinedOCRText, annotationId)
@@ -150,7 +150,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
       JSON.stringify({
         annotation: {
           ...annotation,
-          text_ocr_combined: combinedOCRText,
+          caption_ocr: combinedOCRText,
         },
         combinedImageUrl: `/api/images/${encodeURIComponent(videoId)}/text_images/annotation_${annotationId}.jpg`,
       }),

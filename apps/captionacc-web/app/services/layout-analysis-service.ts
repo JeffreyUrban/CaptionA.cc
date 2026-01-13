@@ -1,13 +1,13 @@
 /**
  * Layout analysis service for video annotation setup.
  *
- * Provides functionality for analyzing OCR data to determine optimal crop bounds,
+ * Provides functionality for analyzing OCR data to determine optimal crop region,
  * layout parameters, and anchor types for caption detection.
  */
 
 import type { TextAnchor } from '~/types/enums'
 import { predictBoxLabel } from '~/utils/box-prediction'
-import { getAnnotationDatabase, getWritableDatabase } from '~/utils/database'
+import { getLayoutDb, getWritableLayoutDb } from '~/utils/database'
 
 // =============================================================================
 // Type Definitions
@@ -55,7 +55,7 @@ interface VideoLayoutConfigRow {
   bottom_edge_std: number | null
   horizontal_std_slope: number | null
   horizontal_std_intercept: number | null
-  crop_bounds_version: number
+  crop_region_version: number
   analysis_model_version: string | null
   updated_at: string
 }
@@ -85,7 +85,7 @@ export interface LayoutConfig {
   bottomEdgeStd: number | null
   horizontalStdSlope: number | null
   horizontalStdIntercept: number | null
-  cropBoundsVersion: number
+  cropRegionVersion: number
   analysisModelVersion: string | null
 }
 
@@ -104,9 +104,9 @@ export interface LayoutParams {
 }
 
 /**
- * Crop bounds in pixels.
+ * Crop region in pixels.
  */
-export interface CropBounds {
+export interface CropRegion {
   left: number
   top: number
   right: number
@@ -114,9 +114,9 @@ export interface CropBounds {
 }
 
 /**
- * Selection bounds in pixels.
+ * Selection region in pixels.
  */
-export interface SelectionBounds {
+export interface SelectionRegion {
   left: number
   top: number
   right: number
@@ -139,8 +139,8 @@ export interface AnalysisStats {
  * Input for updating layout configuration.
  */
 export interface UpdateLayoutConfigInput {
-  cropBounds?: CropBounds
-  selectionBounds?: SelectionBounds
+  cropRegion?: CropRegion
+  selectionRegion?: SelectionRegion
   selectionMode?: 'hard' | 'soft' | 'disabled'
   layoutParams?: {
     verticalPosition: number
@@ -157,16 +157,16 @@ export interface UpdateLayoutConfigInput {
  */
 export interface UpdateLayoutConfigResult {
   success: boolean
-  boundsChanged: boolean
+  cropRegionChanged: boolean
   framesInvalidated: number
   layoutParamsChanged: boolean
 }
 
 /**
- * Result of resetting crop bounds.
+ * Result of resetting crop region.
  */
-export interface ResetCropBoundsResult {
-  newCropBounds: CropBounds
+export interface ResetCropRegionResult {
+  newCropRegion: CropRegion
   analysisData: AnalysisStats
 }
 
@@ -214,7 +214,7 @@ interface AnchorInfo {
  * OCR analysis result.
  */
 interface OCRAnalysisResult {
-  cropBounds: CropBounds
+  cropRegion: CropRegion
   layoutParams: LayoutParams
   stats: AnalysisStats
 }
@@ -340,7 +340,7 @@ function collectBoxStatistics(
       // Skip very small boxes (likely noise)
       if (boxHeight < 10 || boxWidth < 10) continue
 
-      // Track bounds
+      // Track region
       stats.minTop = Math.min(stats.minTop, boxTop)
       stats.maxBottom = Math.max(stats.maxBottom, boxBottom)
       stats.minLeft = Math.min(stats.minLeft, boxLeft)
@@ -481,9 +481,9 @@ function determineAnchorType(
 }
 
 /**
- * Calculate final crop bounds with adaptive padding.
+ * Calculate final crop region with adaptive padding.
  */
-function calculateCropBoundsFromAnalysis(
+function calculateCropRegionFromAnalysis(
   anchorInfo: AnchorInfo,
   verticalAnalysis: DensityAnalysisResult,
   stats: BoxStats,
@@ -491,7 +491,7 @@ function calculateCropBoundsFromAnalysis(
   frameHeight: number,
   boxWidth: number,
   boxHeight: number
-): CropBounds {
+): CropRegion {
   const PADDING_FRACTION = 0.1
   const SHARPNESS_FACTOR = 2.0
 
@@ -509,7 +509,7 @@ function calculateCropBoundsFromAnalysis(
   let cropTop = Math.max(0, verticalAnalysis.positiveEdgePos - topPadding)
   let cropBottom = Math.min(frameHeight, verticalAnalysis.negativeEdgePos + bottomPadding)
 
-  // Horizontal bounds
+  // Horizontal crop region
   const leftAnchorPaddingMultiplier =
     1 + SHARPNESS_FACTOR * (1 - Math.min(1, anchorInfo.leftEdgeSharpness))
   const rightAnchorPaddingMultiplier =
@@ -552,7 +552,7 @@ function calculateCropBoundsFromAnalysis(
 }
 
 /**
- * Analyze OCR boxes to determine optimal crop bounds and layout parameters.
+ * Analyze OCR boxes to determine optimal crop region and layout parameters.
  */
 function analyzeOCRBoxes(
   frames: FrameOCR[],
@@ -622,8 +622,8 @@ function analyzeOCRBoxes(
     frameHeight - 1
   )
 
-  // Calculate crop bounds
-  const cropBounds = calculateCropBoundsFromAnalysis(
+  // Calculate crop region
+  const cropRegion = calculateCropRegionFromAnalysis(
     anchorInfo,
     verticalAnalysis,
     stats,
@@ -639,7 +639,7 @@ function analyzeOCRBoxes(
   ).length
 
   return {
-    cropBounds,
+    cropRegion,
     layoutParams: {
       verticalPosition,
       verticalStd,
@@ -666,62 +666,237 @@ function analyzeOCRBoxes(
 // =============================================================================
 
 /**
- * Result of detecting crop bounds changes.
+ * Result of detecting crop region changes.
  */
-interface CropBoundsChangeResult {
+interface CropRegionChangeResult {
   changed: boolean
   requiresVersionIncrement: boolean
 }
 
 /**
- * Detect if crop bounds have changed from current config.
+ * Detect if crop region have changed from current config.
  *
  * @param currentConfig - Current layout configuration from database
- * @param newCropBounds - New crop bounds to compare against
- * @returns Object indicating if bounds changed and if version increment is needed
+ * @param newCropRegion - New crop region to compare against
+ * @returns Object indicating if crop region changed and if version increment is needed
  */
-function detectCropBoundsChanges(
+function detectCropRegionChanges(
   currentConfig: VideoLayoutConfigRow,
-  newCropBounds: CropBounds | undefined
-): CropBoundsChangeResult {
-  if (!newCropBounds) {
+  newCropRegion: CropRegion | undefined
+): CropRegionChangeResult {
+  if (!newCropRegion) {
     return { changed: false, requiresVersionIncrement: false }
   }
 
   const changed =
-    newCropBounds.left !== currentConfig.crop_left ||
-    newCropBounds.top !== currentConfig.crop_top ||
-    newCropBounds.right !== currentConfig.crop_right ||
-    newCropBounds.bottom !== currentConfig.crop_bottom
+    newCropRegion.left !== currentConfig.crop_left ||
+    newCropRegion.top !== currentConfig.crop_top ||
+    newCropRegion.right !== currentConfig.crop_right ||
+    newCropRegion.bottom !== currentConfig.crop_bottom
 
   return { changed, requiresVersionIncrement: changed }
 }
 
 /**
- * Invalidate frames when crop bounds change by resetting their crop_bounds_version.
+ * Invalidate frames when crop region change by resetting their crop_region_version.
  *
  * @param db - Database connection
- * @param cropBounds - New crop bounds to apply
+ * @param cropRegion - New crop region to apply
  * @returns Number of frames invalidated
  */
 async function invalidateFramesForCropChange(
   db: import('better-sqlite3').Database,
-  cropBounds: CropBounds
+  cropRegion: CropRegion
 ): Promise<number> {
-  // Note: This function only invalidates frames and generates visualization.
-  // The layout config update is done via INSERT in the calling function.
+  // Get layout config for frame dimensions
+  const layoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as
+    | VideoLayoutConfigRow
+    | undefined
 
-  // Invalidate all frames (set crop_bounds_version to 0)
+  if (!layoutConfig) {
+    throw new Error('Layout config not found')
+  }
+
+  // Get all OCR boxes for visualization
+  const boxes = db
+    .prepare(
+      `
+    SELECT id, frame_index, box_index, text, x, y, width, height, predicted_label, predicted_confidence
+    FROM full_frame_ocr ORDER BY frame_index, box_index
+  `
+    )
+    .all() as OcrBoxRow[]
+
+  const analysisBoxes: LayoutAnalysisBox[] = []
+  for (const box of boxes) {
+    const bounds = convertToPixelBounds(box, layoutConfig)
+    const predictedLabel: 'in' | 'out' = box.predicted_label ?? 'out'
+    const predictedConfidence = box.predicted_confidence ?? 0
+    const userLabel = null
+
+    analysisBoxes.push({
+      boxIndex: box.box_index,
+      text: box.text,
+      originalBounds: bounds,
+      displayBounds: bounds,
+      predictedLabel,
+      predictedConfidence,
+      userLabel,
+      colorCode: getBoxColorCode(userLabel, predictedLabel),
+    })
+  }
+
+  // Generate OCR visualization image with layout annotations
+  const layoutParams =
+    layoutConfig.anchor_type &&
+    layoutConfig.anchor_position !== null &&
+    layoutConfig.vertical_position !== null
+      ? {
+          anchorType: layoutConfig.anchor_type,
+          anchorPosition: layoutConfig.anchor_position,
+          verticalPosition: layoutConfig.vertical_position,
+        }
+      : undefined
+
+  const ocrVisualizationImage = await generateOCRVisualization(
+    analysisBoxes,
+    cropRegion,
+    layoutConfig.frame_width,
+    layoutConfig.frame_height,
+    layoutParams
+  )
+
+  // Increment crop_region_version and update crop region with OCR visualization
+  db.prepare(
+    `
+    UPDATE video_layout_config
+    SET crop_region_version = crop_region_version + 1,
+        crop_left = ?,
+        crop_top = ?,
+        crop_right = ?,
+        crop_bottom = ?,
+        ocr_visualization_image = ?,
+        updated_at = datetime('now')
+    WHERE id = 1
+  `
+  ).run(cropRegion.left, cropRegion.top, cropRegion.right, cropRegion.bottom, ocrVisualizationImage)
+
+  // Invalidate all frames (set crop_region_version to 0)
   const invalidateResult = db
     .prepare(
       `
     UPDATE frames_ocr
-    SET crop_bounds_version = 0
+    SET crop_region_version = 0
   `
     )
     .run()
 
   return invalidateResult.changes
+}
+
+/**
+ * Layout parameters input for database update.
+ */
+interface LayoutParamsInput {
+  verticalPosition: number
+  verticalStd: number
+  boxHeight: number
+  boxHeightStd: number
+  anchorType: 'left' | 'center' | 'right'
+  anchorPosition: number
+}
+
+/**
+ * Update layout parameters (Bayesian priors) in the database.
+ * Also clears the trained model since it was trained with different parameters.
+ *
+ * @param db - Database connection
+ * @param layoutParams - New layout parameters
+ * @returns True if parameters were updated
+ */
+function updateLayoutParameters(
+  db: import('better-sqlite3').Database,
+  layoutParams: LayoutParamsInput
+): boolean {
+  db.prepare(
+    `
+    UPDATE video_layout_config
+    SET vertical_position = ?,
+        vertical_std = ?,
+        box_height = ?,
+        box_height_std = ?,
+        anchor_type = ?,
+        anchor_position = ?,
+        updated_at = datetime('now')
+    WHERE id = 1
+  `
+  ).run(
+    layoutParams.verticalPosition,
+    layoutParams.verticalStd,
+    layoutParams.boxHeight,
+    layoutParams.boxHeightStd,
+    layoutParams.anchorType,
+    layoutParams.anchorPosition
+  )
+
+  // Clear the trained model since it was trained with different layout parameters
+  // Predictions will fall back to heuristics until model is retrained
+  db.prepare(`DELETE FROM box_classification_model WHERE id = 1`).run()
+  console.log(
+    `[Layout Config] Layout parameters changed, cleared trained model (will use heuristics until retrained)`
+  )
+
+  return true
+}
+
+/**
+ * Update selection region and mode in the database.
+ *
+ * @param db - Database connection
+ * @param selectionRegion - Optional new selection region
+ * @param selectionMode - Optional new selection mode
+ */
+function updateSelectionConfig(
+  db: import('better-sqlite3').Database,
+  selectionRegion: SelectionRegion | undefined,
+  selectionMode: 'hard' | 'soft' | 'disabled' | undefined
+): void {
+  if (selectionRegion === undefined && selectionMode === undefined) {
+    return
+  }
+
+  const updates: string[] = []
+  const values: (number | string)[] = []
+
+  if (selectionRegion !== undefined) {
+    updates.push(
+      'selection_left = ?',
+      'selection_top = ?',
+      'selection_right = ?',
+      'selection_bottom = ?'
+    )
+    values.push(
+      selectionRegion.left,
+      selectionRegion.top,
+      selectionRegion.right,
+      selectionRegion.bottom
+    )
+  }
+
+  if (selectionMode !== undefined) {
+    updates.push('selection_mode = ?')
+    values.push(selectionMode)
+  }
+
+  updates.push("updated_at = datetime('now')")
+
+  db.prepare(
+    `
+    UPDATE video_layout_config
+    SET ${updates.join(', ')}
+    WHERE id = 1
+  `
+  ).run(...values)
 }
 
 /**
@@ -918,7 +1093,7 @@ function buildCaptionBoxFrames(
 }
 
 /**
- * Save analysis results to the database (append-only for history).
+ * Save analysis results to the database.
  *
  * @param db - Database connection
  * @param analysis - OCR analysis result
@@ -931,39 +1106,33 @@ function saveAnalysisResults(
   modelVersion: string | null,
   ocrVisualizationImage: Buffer
 ): void {
-  // Get current config to preserve other fields
-  const current = db
-    .prepare('SELECT * FROM video_layout_config ORDER BY created_at DESC LIMIT 1')
-    .get() as Record<string, unknown> | undefined
-
-  if (!current) {
-    throw new Error('No layout config found to update')
-  }
-
-  // Insert new row with analysis results (append-only for history)
   db.prepare(
-    `INSERT INTO video_layout_config (
-      frame_width, frame_height,
-      crop_left, crop_top, crop_right, crop_bottom,
-      selection_left, selection_top, selection_right, selection_bottom,
-      selection_mode,
-      vertical_position, vertical_std, box_height, box_height_std,
-      anchor_type, anchor_position, top_edge_std, bottom_edge_std,
-      horizontal_std_slope, horizontal_std_intercept,
-      crop_bounds_version, analysis_model_version, ocr_visualization_image
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `
+    UPDATE video_layout_config
+    SET crop_left = ?,
+        crop_top = ?,
+        crop_right = ?,
+        crop_bottom = ?,
+        crop_region_version = crop_region_version + 1,
+        analysis_model_version = ?,
+        vertical_position = ?,
+        vertical_std = ?,
+        box_height = ?,
+        box_height_std = ?,
+        anchor_type = ?,
+        anchor_position = ?,
+        top_edge_std = ?,
+        bottom_edge_std = ?,
+        ocr_visualization_image = ?,
+        updated_at = datetime('now')
+    WHERE id = 1
+  `
   ).run(
-    current['frame_width'],
-    current['frame_height'],
-    analysis.cropBounds.left,
-    analysis.cropBounds.top,
-    analysis.cropBounds.right,
-    analysis.cropBounds.bottom,
-    current['selection_left'],
-    current['selection_top'],
-    current['selection_right'],
-    current['selection_bottom'],
-    current['selection_mode'],
+    analysis.cropRegion.left,
+    analysis.cropRegion.top,
+    analysis.cropRegion.right,
+    analysis.cropRegion.bottom,
+    modelVersion,
     analysis.layoutParams.verticalPosition,
     analysis.layoutParams.verticalStd,
     analysis.layoutParams.boxHeight,
@@ -972,10 +1141,6 @@ function saveAnalysisResults(
     analysis.layoutParams.anchorPosition,
     analysis.layoutParams.topEdgeStd,
     analysis.layoutParams.bottomEdgeStd,
-    current['horizontal_std_slope'],
-    current['horizontal_std_intercept'],
-    (current['crop_bounds_version'] as number) + 1,
-    modelVersion,
     ocrVisualizationImage
   )
 }
@@ -985,13 +1150,13 @@ function saveAnalysisResults(
 // =============================================================================
 
 /**
- * Generate OCR visualization image for boundary detection model.
+ * Generate OCR visualization image for caption frame extents detection model.
  *
  * Creates a PNG image showing OCR boxes cropped to the caption bounds using additive
  * darkening. Boxes from all frames are overlaid, with overlapping areas appearing darker.
  *
  * @param analysisBoxes - All OCR boxes from the video
- * @param cropBounds - Crop bounds to apply
+ * @param cropRegion - Crop region to apply
  * @param frameWidth - Original frame width
  * @param frameHeight - Original frame height
  * @param layoutParams - Optional layout parameters for annotations (anchor type, position, etc.)
@@ -1029,7 +1194,7 @@ function countBoxEdges(
  */
 function countBoxOverlaps(
   analysisBoxes: Pick<LayoutAnalysisBox, 'predictedLabel' | 'originalBounds'>[],
-  cropBounds: CropBounds,
+  cropRegion: CropRegion,
   croppedWidth: number,
   croppedHeight: number
 ): {
@@ -1044,10 +1209,10 @@ function countBoxOverlaps(
   for (const box of analysisBoxes) {
     if (box.predictedLabel !== 'in') continue
 
-    const x1 = box.originalBounds.left - cropBounds.left
-    const y1 = box.originalBounds.top - cropBounds.top
-    const x2 = box.originalBounds.right - cropBounds.left
-    const y2 = box.originalBounds.bottom - cropBounds.top
+    const x1 = box.originalBounds.left - cropRegion.left
+    const y1 = box.originalBounds.top - cropRegion.top
+    const x2 = box.originalBounds.right - cropRegion.left
+    const y2 = box.originalBounds.bottom - cropRegion.top
 
     // Skip boxes outside crop region
     if (x2 < 0 || x1 >= croppedWidth || y2 < 0 || y1 >= croppedHeight) continue
@@ -1169,12 +1334,12 @@ function drawLayoutAnnotations(
     anchorPosition: number
     verticalPosition: number
   },
-  cropBounds: CropBounds,
+  cropRegion: CropRegion,
   croppedWidth: number,
   croppedHeight: number
 ): void {
   // Draw vertical anchor line
-  const anchorX = layoutParams.anchorPosition - cropBounds.left
+  const anchorX = layoutParams.anchorPosition - cropRegion.left
   if (anchorX >= 0 && anchorX <= croppedWidth) {
     const anchorColors = {
       left: 'rgb(0, 0, 255)',
@@ -1190,7 +1355,7 @@ function drawLayoutAnnotations(
   }
 
   // Draw horizontal vertical position line
-  const verticalY = layoutParams.verticalPosition - cropBounds.top
+  const verticalY = layoutParams.verticalPosition - cropRegion.top
   if (verticalY >= 0 && verticalY <= croppedHeight) {
     ctx.strokeStyle = 'rgb(255, 255, 0)'
     ctx.lineWidth = 2
@@ -1203,7 +1368,7 @@ function drawLayoutAnnotations(
 
 export async function generateOCRVisualization(
   analysisBoxes: Pick<LayoutAnalysisBox, 'predictedLabel' | 'originalBounds'>[],
-  cropBounds: CropBounds,
+  cropRegion: CropRegion,
   frameWidth: number,
   frameHeight: number,
   layoutParams?: {
@@ -1217,8 +1382,8 @@ export async function generateOCRVisualization(
   const canvasModule = await import('canvas')
   const { createCanvas } = canvasModule
 
-  const croppedWidth = cropBounds.right - cropBounds.left
-  const croppedHeight = cropBounds.bottom - cropBounds.top
+  const croppedWidth = cropRegion.right - cropRegion.left
+  const croppedHeight = cropRegion.bottom - cropRegion.top
 
   const canvas = createCanvas(croppedWidth, croppedHeight)
   const ctx = canvas.getContext('2d')
@@ -1229,7 +1394,7 @@ export async function generateOCRVisualization(
   // Count box overlaps
   const { edgeCount, fillCount, maxEdgeCount, maxFillCount } = countBoxOverlaps(
     analysisBoxes,
-    cropBounds,
+    cropRegion,
     croppedWidth,
     croppedHeight
   )
@@ -1247,7 +1412,7 @@ export async function generateOCRVisualization(
 
   // Draw annotations
   if (layoutParams) {
-    drawLayoutAnnotations(ctx, layoutParams, cropBounds, croppedWidth, croppedHeight)
+    drawLayoutAnnotations(ctx, layoutParams, cropRegion, croppedWidth, croppedHeight)
   }
 
   return canvas.toBuffer('image/png')
@@ -1283,7 +1448,7 @@ function transformLayoutConfig(row: VideoLayoutConfigRow): LayoutConfig {
     bottomEdgeStd: row.bottom_edge_std,
     horizontalStdSlope: row.horizontal_std_slope,
     horizontalStdIntercept: row.horizontal_std_intercept,
-    cropBoundsVersion: row.crop_bounds_version,
+    cropRegionVersion: row.crop_region_version,
     analysisModelVersion: row.analysis_model_version,
   }
 }
@@ -1296,12 +1461,11 @@ function transformLayoutConfig(row: VideoLayoutConfigRow): LayoutConfig {
  * Get the current layout configuration for a video.
  *
  * @param videoId - Video identifier
- * @returns Layout configuration, or null if not configured yet
+ * @returns Layout configuration, or null if not found
  * @throws Error if database is not found
  */
 export async function getLayoutConfig(videoId: string): Promise<LayoutConfig | null> {
-  // Use layout.db for layout configuration
-  const result = await getAnnotationDatabase(videoId, { dbName: 'layout.db' })
+  const result = await getLayoutDb(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -1309,10 +1473,9 @@ export async function getLayoutConfig(videoId: string): Promise<LayoutConfig | n
   const db = result.db
 
   try {
-    // Get the most recent config (append-only table)
-    const layoutConfig = db
-      .prepare('SELECT * FROM video_layout_config ORDER BY created_at DESC LIMIT 1')
-      .get() as VideoLayoutConfigRow | undefined
+    const layoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as
+      | VideoLayoutConfigRow
+      | undefined
 
     return layoutConfig ? transformLayoutConfig(layoutConfig) : null
   } finally {
@@ -1323,21 +1486,20 @@ export async function getLayoutConfig(videoId: string): Promise<LayoutConfig | n
 /**
  * Update the layout configuration.
  *
- * Handles crop bounds changes with versioning, frame invalidation, and layout parameter updates.
- * When crop bounds change, increments the version and invalidates all frames.
+ * Handles crop region changes with versioning, frame invalidation, and layout parameter updates.
+ * When crop region change, increments the version and invalidates all frames.
  * When layout parameters change, clears the trained model and triggers prediction recalculation.
  *
  * @param videoId - Video identifier
  * @param input - Layout configuration updates
  * @returns Result indicating what changed
- * @throws Error if database not found
+ * @throws Error if database or config is not found
  */
 export async function updateLayoutConfig(
   videoId: string,
   input: UpdateLayoutConfigInput
 ): Promise<UpdateLayoutConfigResult> {
-  // Use layout.db for layout configuration
-  const result = await getWritableDatabase(videoId, { dbName: 'layout.db' })
+  const result = await getWritableLayoutDb(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -1345,142 +1507,45 @@ export async function updateLayoutConfig(
   const db = result.db
 
   try {
-    // Get the most recent config (append-only table)
-    const currentConfig = db
-      .prepare('SELECT * FROM video_layout_config ORDER BY created_at DESC LIMIT 1')
-      .get() as VideoLayoutConfigRow | undefined
+    const currentConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as
+      | VideoLayoutConfigRow
+      | undefined
 
-    const { cropBounds, selectionBounds, selectionMode, layoutParams } = input
-
-    // If no config exists, we need to create one
     if (!currentConfig) {
-      if (!cropBounds) {
-        throw new Error('Crop bounds required when creating initial layout config')
-      }
-
-      // Get frame dimensions from video.db
-      const videoDbResult = await getAnnotationDatabase(videoId, { dbName: 'video.db' })
-      if (!videoDbResult.success) {
-        throw new Error('video.db not found - cannot get frame dimensions')
-      }
-
-      let frameWidth: number
-      let frameHeight: number
-      try {
-        const frame = videoDbResult.db
-          .prepare('SELECT width, height FROM full_frames LIMIT 1')
-          .get() as { width: number; height: number } | undefined
-
-        if (!frame) {
-          throw new Error('No frames found in video.db')
-        }
-        frameWidth = frame.width
-        frameHeight = frame.height
-      } finally {
-        videoDbResult.db.close()
-      }
-
-      // Insert initial config row (append-only)
-      db.prepare(
-        `INSERT INTO video_layout_config (
-          frame_width, frame_height,
-          crop_left, crop_top, crop_right, crop_bottom,
-          selection_mode, crop_bounds_version
-        ) VALUES (?, ?, ?, ?, ?, ?, 'disabled', 0)`
-      ).run(
-        frameWidth,
-        frameHeight,
-        cropBounds.left,
-        cropBounds.top,
-        cropBounds.right,
-        cropBounds.bottom
-      )
-
-      console.log(
-        `Created initial layout config: ${frameWidth}x${frameHeight}, crop: [${cropBounds.left}, ${cropBounds.top}, ${cropBounds.right}, ${cropBounds.bottom}]`
-      )
-
-      return {
-        success: true,
-        boundsChanged: true,
-        framesInvalidated: 0,
-        layoutParamsChanged: false,
-      }
+      throw new Error('Layout config not found')
     }
 
-    // Config exists - append a new row with merged values
-    const boundsChange = detectCropBoundsChanges(currentConfig, cropBounds)
+    const { cropRegion, selectionRegion, selectionMode, layoutParams } = input
+    const boundsChange = detectCropRegionChanges(currentConfig, cropRegion)
     let framesInvalidated = 0
 
-    // Build new config by merging current with updates
-    const newCropLeft = cropBounds?.left ?? currentConfig.crop_left
-    const newCropTop = cropBounds?.top ?? currentConfig.crop_top
-    const newCropRight = cropBounds?.right ?? currentConfig.crop_right
-    const newCropBottom = cropBounds?.bottom ?? currentConfig.crop_bottom
-    const newSelectionLeft = selectionBounds?.left ?? currentConfig.selection_left
-    const newSelectionTop = selectionBounds?.top ?? currentConfig.selection_top
-    const newSelectionRight = selectionBounds?.right ?? currentConfig.selection_right
-    const newSelectionBottom = selectionBounds?.bottom ?? currentConfig.selection_bottom
-    const newSelectionMode = selectionMode ?? currentConfig.selection_mode
-    const newVerticalPosition = layoutParams?.verticalPosition ?? currentConfig.vertical_position
-    const newVerticalStd = layoutParams?.verticalStd ?? currentConfig.vertical_std
-    const newBoxHeight = layoutParams?.boxHeight ?? currentConfig.box_height
-    const newBoxHeightStd = layoutParams?.boxHeightStd ?? currentConfig.box_height_std
-    const newAnchorType = layoutParams?.anchorType ?? currentConfig.anchor_type
-    const newAnchorPosition = layoutParams?.anchorPosition ?? currentConfig.anchor_position
-    // These fields are computed, not user-provided, so preserve from current config
-    const newTopEdgeStd = currentConfig.top_edge_std
-    const newBottomEdgeStd = currentConfig.bottom_edge_std
-    const newHorizontalStdSlope = currentConfig.horizontal_std_slope
-    const newHorizontalStdIntercept = currentConfig.horizontal_std_intercept
-    const newCropBoundsVersion = boundsChange.changed
-      ? currentConfig.crop_bounds_version + 1
-      : currentConfig.crop_bounds_version
+    db.prepare('BEGIN TRANSACTION').run()
 
-    // Handle frame invalidation if bounds changed
-    if (boundsChange.changed && cropBounds) {
-      framesInvalidated = await invalidateFramesForCropChange(db, cropBounds)
-      console.log(`Crop bounds changed: invalidated ${framesInvalidated} frames`)
+    try {
+      // Handle crop region changes
+      if (boundsChange.changed && cropRegion) {
+        framesInvalidated = await invalidateFramesForCropChange(db, cropRegion)
+        console.log(`Crop region changed: invalidated ${framesInvalidated} frames`)
+      } else if (cropRegion) {
+        // Update crop region without invalidation (no actual change)
+        db.prepare(
+          `UPDATE video_layout_config SET crop_left = ?, crop_top = ?, crop_right = ?, crop_bottom = ?, updated_at = datetime('now') WHERE id = 1`
+        ).run(cropRegion.left, cropRegion.top, cropRegion.right, cropRegion.bottom)
+      }
+
+      // Update selection config
+      updateSelectionConfig(db, selectionRegion, selectionMode)
+
+      // Update layout parameters
+      if (layoutParams) {
+        updateLayoutParameters(db, layoutParams)
+      }
+
+      db.prepare('COMMIT').run()
+    } catch (error) {
+      db.prepare('ROLLBACK').run()
+      throw error
     }
-
-    // Insert new config row (append-only for history)
-    db.prepare(
-      `INSERT INTO video_layout_config (
-        frame_width, frame_height,
-        crop_left, crop_top, crop_right, crop_bottom,
-        selection_left, selection_top, selection_right, selection_bottom,
-        selection_mode,
-        vertical_position, vertical_std, box_height, box_height_std,
-        anchor_type, anchor_position, top_edge_std, bottom_edge_std,
-        horizontal_std_slope, horizontal_std_intercept,
-        crop_bounds_version
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(
-      currentConfig.frame_width,
-      currentConfig.frame_height,
-      newCropLeft,
-      newCropTop,
-      newCropRight,
-      newCropBottom,
-      newSelectionLeft,
-      newSelectionTop,
-      newSelectionRight,
-      newSelectionBottom,
-      newSelectionMode,
-      newVerticalPosition,
-      newVerticalStd,
-      newBoxHeight,
-      newBoxHeightStd,
-      newAnchorType,
-      newAnchorPosition,
-      newTopEdgeStd,
-      newBottomEdgeStd,
-      newHorizontalStdSlope,
-      newHorizontalStdIntercept,
-      newCropBoundsVersion
-    )
-
-    console.log(`Appended new layout config (version ${newCropBoundsVersion})`)
 
     // Trigger async prediction recalculation if layout parameters changed
     if (layoutParams) {
@@ -1489,7 +1554,7 @@ export async function updateLayoutConfig(
 
     return {
       success: true,
-      boundsChanged: boundsChange.changed,
+      cropRegionChanged: boundsChange.changed,
       framesInvalidated,
       layoutParamsChanged: !!layoutParams,
     }
@@ -1499,18 +1564,18 @@ export async function updateLayoutConfig(
 }
 
 /**
- * Reset crop bounds by re-analyzing OCR data.
+ * Reset crop region by re-analyzing OCR data.
  *
  * Uses caption boxes (predicted + user overrides) to determine optimal
- * crop bounds and layout parameters. Falls back to all boxes if no
+ * crop region and layout parameters. Falls back to all boxes if no
  * caption boxes are available.
  *
  * @param videoId - Video identifier
  * @returns Reset result with new bounds and analysis data
  * @throws Error if database or required data is not found
  */
-export async function resetCropBounds(videoId: string): Promise<ResetCropBoundsResult> {
-  const result = await getWritableDatabase(videoId)
+export async function resetCropRegion(videoId: string): Promise<ResetCropRegionResult> {
+  const result = await getWritableLayoutDb(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -1519,9 +1584,9 @@ export async function resetCropBounds(videoId: string): Promise<ResetCropBoundsR
 
   try {
     // Get current layout config for frame dimensions
-    const layoutConfig = db
-      .prepare('SELECT * FROM video_layout_config ORDER BY created_at DESC LIMIT 1')
-      .get() as VideoLayoutConfigRow | undefined
+    const layoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as
+      | VideoLayoutConfigRow
+      | undefined
 
     if (!layoutConfig) {
       throw new Error('Layout config not found')
@@ -1579,7 +1644,7 @@ export async function resetCropBounds(videoId: string): Promise<ResetCropBoundsR
 
     const ocrVisualizationImage = await generateOCRVisualization(
       analysisBoxes,
-      analysis.cropBounds,
+      analysis.cropRegion,
       layoutConfig.frame_width,
       layoutConfig.frame_height,
       layoutParams
@@ -1589,7 +1654,7 @@ export async function resetCropBounds(videoId: string): Promise<ResetCropBoundsR
     saveAnalysisResults(db, analysis, modelInfo?.model_version ?? null, ocrVisualizationImage)
 
     return {
-      newCropBounds: analysis.cropBounds,
+      newCropRegion: analysis.cropRegion,
       analysisData: analysis.stats,
     }
   } finally {
@@ -1605,7 +1670,7 @@ export async function resetCropBounds(videoId: string): Promise<ResetCropBoundsR
  * @throws Error if database is not found
  */
 export async function setLayoutApproved(videoId: string, approved: boolean): Promise<void> {
-  const result = await getWritableDatabase(videoId)
+  const result = await getWritableLayoutDb(videoId)
   if (!result.success) {
     throw new Error('Database not found')
   }
@@ -1785,14 +1850,14 @@ export async function getLayoutAnalysisBoxes(
   videoId: string,
   frameIndex?: number
 ): Promise<LayoutAnalysisBox[]> {
-  const result = await getWritableDatabase(videoId)
+  const result = await getWritableLayoutDb(videoId)
   if (!result.success) throw new Error('Database not found')
   const db = result.db
 
   try {
-    const layoutConfig = db
-      .prepare('SELECT * FROM video_layout_config ORDER BY created_at DESC LIMIT 1')
-      .get() as VideoLayoutConfigRow | undefined
+    const layoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as
+      | VideoLayoutConfigRow
+      | undefined
     if (!layoutConfig) throw new Error('Layout config not found')
 
     // Log model version mismatch for background recalculation

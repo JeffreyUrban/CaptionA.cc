@@ -258,74 +258,6 @@ class VideoRepository:
         return response.data[0] if response.data else {}  # type: ignore[return-value]
 
 
-class SearchIndexRepository:
-    """Repository for video search index operations"""
-
-    def __init__(self, client: Client | None = None):
-        self.client = client or get_supabase_client()
-
-    def upsert_frame_text(
-        self,
-        video_id: str,
-        frame_index: int,
-        ocr_text: str | None = None,
-        caption_text: str | None = None,
-    ) -> dict[str, Any]:
-        """
-        Upsert text for a video frame into the search index.
-
-        Args:
-            video_id: Video UUID
-            frame_index: Frame index
-            ocr_text: OCR extracted text
-            caption_text: Caption text from annotations
-
-        Returns:
-            Upserted search index record
-        """
-        data = {
-            "video_id": video_id,
-            "frame_index": frame_index,
-            "ocr_text": ocr_text,
-            "caption_text": caption_text,
-            "updated_at": datetime.utcnow().isoformat(),
-        }
-
-        response = (
-            self.client.schema(self.client._preferred_schema)  # type: ignore[attr-defined]
-            .table("video_search_index")
-            .upsert(data)
-            .execute()
-        )
-        return response.data[0] if response.data else {}  # type: ignore[return-value]
-
-    def search_text(
-        self, query: str, tenant_id: str | None = None, limit: int = 50
-    ) -> list[dict[str, Any]]:
-        """
-        Full-text search across video frames.
-
-        Args:
-            query: Search query
-            tenant_id: Optional tenant ID to filter results
-            limit: Max number of results
-
-        Returns:
-            List of matching search index records
-        """
-        # Note: This uses the search_vector generated column
-        # Full-text search query format: 'word1 & word2' or 'word1 | word2'
-        response = (
-            self.client.schema(self.client._preferred_schema)  # type: ignore[attr-defined]
-            .table("video_search_index")
-            .select("*")
-            .text_search("search_vector", query)
-            .limit(limit)  # type: ignore[return-value]
-            .execute()
-        )
-        return response.data if response.data else []
-
-
 class CroppedFramesVersionRepository:
     """Repository for cropped frames version operations"""
 
@@ -355,7 +287,7 @@ class CroppedFramesVersionRepository:
         tenant_id: str,
         version: int,
         storage_prefix: str,
-        crop_bounds: dict[str, int],
+        crop_region: dict[str, int],
         frame_rate: float = 10.0,
         layout_db_storage_key: str | None = None,
         layout_db_hash: str | None = None,
@@ -370,7 +302,7 @@ class CroppedFramesVersionRepository:
             tenant_id: Tenant UUID
             version: Version number
             storage_prefix: Wasabi storage prefix for chunks
-            crop_bounds: Crop bounds dict {left, top, right, bottom}
+            crop_region: Crop region dict {left, top, right, bottom}
             frame_rate: Frame extraction rate in Hz
             layout_db_storage_key: Wasabi key for layout.db
             layout_db_hash: SHA-256 hash of layout.db
@@ -385,7 +317,7 @@ class CroppedFramesVersionRepository:
             "tenant_id": tenant_id,
             "version": version,
             "storage_prefix": storage_prefix,
-            "crop_bounds": crop_bounds,
+            "crop_region": crop_region,
             "frame_rate": frame_rate,
             "layout_db_storage_key": layout_db_storage_key,
             "layout_db_hash": layout_db_hash,

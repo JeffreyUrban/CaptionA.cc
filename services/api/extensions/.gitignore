@@ -1,0 +1,12 @@
+# Ignore binary artifacts - download using ./download.sh
+*.dylib
+*.so
+*.dll
+*.zip
+
+# Keep documentation, provenance, and scripts
+!SOURCES.md
+!PROVENANCE.txt
+!.gitignore
+!download.sh
+!upload-to-wasabi.sh

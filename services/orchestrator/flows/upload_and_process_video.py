@@ -23,7 +23,7 @@ from typing import Any
 from prefect import flow, task
 from prefect.artifacts import create_table_artifact
 
-from supabase_client import SearchIndexRepository, VideoRepository
+from supabase_client import VideoRepository
 from wasabi_client import get_wasabi_client
 
 # Default tenant for development (will be replaced with user's tenant in production)
@@ -270,6 +270,17 @@ def extract_full_frames_to_video_db(
             video_hash TEXT
         )
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS database_metadata (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            schema_version INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            migrated_at TEXT
+        )
+    """)
+    conn.execute("""
+        INSERT OR IGNORE INTO database_metadata (id, schema_version) VALUES (1, 1)
+    """)
     conn.commit()
     conn.close()
 
@@ -372,6 +383,17 @@ def run_ocr_to_full_ocr_db(
         ocr_conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_frame_index ON full_frame_ocr(frame_index)"
         )
+        ocr_conn.execute("""
+            CREATE TABLE IF NOT EXISTS database_metadata (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                schema_version INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                migrated_at TEXT
+            )
+        """)
+        ocr_conn.execute("""
+            INSERT OR IGNORE INTO database_metadata (id, schema_version) VALUES (1, 1)
+        """)
         ocr_conn.commit()
     except Exception as e:
         ocr_conn.close()
@@ -637,54 +659,6 @@ def create_layout_db(output_path: str) -> dict[str, Any]:
         "db_path": str(layout_db_path),
         "status": "created",
     }
-
-
-@task(
-    name="index-video-ocr-content",
-    tags=["supabase", "search"],
-    log_prints=True,
-)
-def index_video_ocr_content(video_id: str, full_ocr_db_path: str) -> int:
-    """
-    Index OCR content from fullOCR.db in Supabase for cross-video search.
-    """
-    try:
-        import sqlite3
-
-        search_repo = SearchIndexRepository()
-        conn = sqlite3.connect(full_ocr_db_path)
-
-        try:
-            cursor = conn.execute(
-                """
-                SELECT frame_index, GROUP_CONCAT(text, ' ') as ocr_text
-                FROM full_frame_ocr
-                WHERE text IS NOT NULL AND text != ''
-                GROUP BY frame_index
-                ORDER BY frame_index
-                """
-            )
-
-            indexed_count = 0
-            for row in cursor:
-                frame_index, ocr_text = row
-                if ocr_text:
-                    search_repo.upsert_frame_text(
-                        video_id=video_id,
-                        frame_index=frame_index,
-                        ocr_text=ocr_text,
-                    )
-                    indexed_count += 1
-
-            print(f"[Supabase] Indexed {indexed_count} frames for video {video_id}")
-            return indexed_count
-
-        finally:
-            conn.close()
-
-    except Exception as e:
-        print(f"⚠️  Warning: Failed to index video content: {e}")
-        return 0
 
 
 @flow(

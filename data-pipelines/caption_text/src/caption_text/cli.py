@@ -1,5 +1,7 @@
 """Command-line interface for caption_text pipeline."""
 
+# TODO: The database details in this file are out of date.
+
 from pathlib import Path
 
 import typer
@@ -37,7 +39,7 @@ def version_callback(value: bool) -> None:
 def infer(
     video_dir: Path = typer.Argument(
         ...,
-        help="Path to video directory (e.g., local/data/video_id/)",
+        help="Path to video directory (e.g., !__local/data/_has_been_deprecated__!/video_id/)",
         exists=True,
         dir_okay=True,
         file_okay=False,
@@ -83,9 +85,9 @@ def infer(
     and font example. Saves results to database and optionally to CSV.
 
     Example:
-        caption_text infer local/data/video_id \\
+        caption_text infer !__local/data/_has_been_deprecated__!/video_id \\
             --checkpoint models/qwen_finetuned.ckpt \\
-            --font-example local/data/video_id/font_example.jpg
+            --font-example !__local/data/_has_been_deprecated__!/video_id/font_example.jpg
     """
     from PIL import Image
     from tqdm import tqdm
@@ -199,7 +201,7 @@ def compare(
     as missing OCR data.
 
     Example:
-        caption_text compare local/data/video_id
+        caption_text compare !__local/data/_has_been_deprecated__!/video_id
     """
     if vlm_csv is None:
         vlm_csv = video_dir / "vlm_inference_results.csv"
@@ -272,8 +274,8 @@ def vet(
     provide translations, and explain meaning in context.
 
     Example:
-        caption_text vet local/data/video_id --model claude-sonnet-4-5
-        caption_text vet local/data/video_id --ollama --model qwen3:14b
+        caption_text vet !__local/data/_has_been_deprecated__!/video_id --model claude-sonnet-4-5
+        caption_text vet !__local/data/_has_been_deprecated__!/video_id --ollama --model qwen3:14b
     """
     if output is None:
         output = video_dir / "caption_vetting_results.jsonl"
@@ -347,7 +349,7 @@ def extract_errors(
 def collect_data(
     data_root: Path = typer.Argument(
         ...,
-        help="Root data directory (e.g., local/data/)",
+        help="Root data directory (e.g., !__local/data/_has_been_deprecated__!/)",
         exists=True,
         dir_okay=True,
         file_okay=False,
@@ -378,7 +380,7 @@ def collect_data(
     for model training. Saves a manifest in JSONL format.
 
     Example:
-        caption_text collect-data local/data --output training_data
+        caption_text collect-data !__local/data/_has_been_deprecated__! --output training_data
     """
     from .training_data import collect_all_training_data, get_training_data_stats
 
@@ -412,7 +414,7 @@ def collect_data(
 def train(
     data_root: Path = typer.Argument(
         ...,
-        help="Root data directory (e.g., local/data/)",
+        help="Root data directory (e.g., !__local/data/_has_been_deprecated__!/)",
         exists=True,
         dir_okay=True,
         file_okay=False,
@@ -471,7 +473,7 @@ def train(
     Automatically handles data collection, training, and checkpoint saving.
 
     Example:
-        caption_text train local/data \\
+        caption_text train !__local/data/_has_been_deprecated__! \\
             --output models/caption_text \\
             --epochs 3 \\
             --batch-size 4

@@ -1,0 +1,427 @@
+# Operations Guide
+
+Monitoring, debugging, and recovery procedures for Prefect orchestration.
+
+## Monitoring
+
+### Dashboards
+
+| Dashboard | URL | Purpose |
+|-----------|-----|---------|
+| Prefect UI | https://captionacc-prefect.fly.dev | Flow runs, work pools, logs |
+| Fly.io | https://fly.io/apps/captionacc-prefect | Machine status, metrics |
+| Modal | https://modal.com/apps | Function invocations, GPU usage |
+| Supabase | Project dashboard | Video status, database state |
+
+### Key Metrics
+
+| Metric | Source | Alert Threshold |
+|--------|--------|-----------------|
+| Flow run failures | Prefect | > 3 in 1 hour |
+| Worker offline | Prefect | > 5 minutes |
+| Machine restarts | Fly.io | > 3 in 1 hour |
+| Modal timeouts | Modal | > 2 in 1 hour |
+| Processing backlog | Prefect | > 10 pending runs |
+
+### Health Checks
+
+```bash
+# Prefect server health
+curl https://captionacc-prefect.fly.dev/api/health
+
+# Check worker status
+curl https://captionacc-prefect.fly.dev/api/work_pools/captionacc-workers/workers
+
+# Fly.io machine status
+fly status --app captionacc-prefect
+```
+
+---
+
+## Common Issues
+
+### 1. Flow Run Stuck in "Pending"
+
+**Symptoms**: Flow runs remain in pending state, never start.
+
+**Causes**:
+- Worker not running
+- Work pool paused
+- Concurrency limit reached
+
+**Resolution**:
+
+```bash
+# Check worker status
+fly ssh console --app captionacc-prefect
+ps aux | grep prefect
+
+# Restart worker if needed
+fly apps restart captionacc-prefect
+
+# Check work pool status via Prefect UI
+# Work Pools → captionacc-workers → Status
+
+# Check concurrency
+# If at limit, wait for running flows to complete
+```
+
+### 2. Modal Function Timeout
+
+**Symptoms**: Flow fails with Modal timeout error.
+
+**Causes**:
+- Video too large
+- Network issues between Modal and Wasabi
+- GPU contention
+
+**Resolution**:
+
+```python
+# Check Modal logs for the function invocation
+# Modal Dashboard → Functions → extract_frames_and_ocr → Logs
+
+# If video is too large, consider:
+# 1. Increasing timeout (up to 1 hour max)
+# 2. Chunking large videos
+# 3. Upgrading to faster GPU
+
+# Retry the flow manually
+prefect deployment run "captionacc-video-initial-processing" \
+  --param video_id=xxx \
+  --param tenant_id=xxx \
+  --param storage_key=xxx
+```
+
+### 3. Webhook Not Triggering Flows
+
+**Symptoms**: Videos uploaded but processing never starts.
+
+**Causes**:
+- Fly.io machine sleeping (cold start timeout)
+- Webhook secret mismatch
+- Supabase webhook disabled
+
+**Resolution**:
+
+```bash
+# Check if machine is running
+fly status --app captionacc-prefect
+
+# Wake machine with health check
+curl https://captionacc-prefect.fly.dev/api/health
+
+# Verify webhook in Supabase Dashboard
+# Database → Webhooks → videos table
+
+# Check Prefect logs for webhook receipt
+fly logs --app captionacc-prefect | grep webhook
+
+# Manually trigger if needed
+curl -X POST https://captionacc-prefect.fly.dev/webhooks/supabase \
+  -H "Authorization: Bearer $WEBHOOK_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{"type":"INSERT","table":"videos","record":{...}}'
+```
+
+### 4. Server Lock Not Released
+
+**Symptoms**: Video stuck in "processing" state, user cannot edit.
+
+**Causes**:
+- Flow crashed without releasing lock
+- Fly.io machine terminated unexpectedly
+
+**Resolution**:
+
+```sql
+-- Check lock status in Supabase
+SELECT * FROM video_database_state
+WHERE video_id = 'xxx';
+
+-- Force release lock (use with caution)
+UPDATE video_database_state
+SET lock_holder_user_id = NULL,
+    lock_type = NULL
+WHERE video_id = 'xxx';
+
+-- Update video status
+UPDATE videos
+SET caption_status = 'error'
+WHERE id = 'xxx';
+```
+
+### 5. SQLite Database Corruption (Prefect)
+
+**Symptoms**: Prefect server fails to start, database errors in logs.
+
+**Causes**:
+- Machine terminated during write
+- Volume full
+
+**Resolution**:
+
+```bash
+# SSH into machine
+fly ssh console --app captionacc-prefect
+
+# Check volume usage
+df -h /data
+
+# Backup and recreate database if corrupted
+cp /data/prefect.db /data/prefect.db.bak
+rm /data/prefect.db
+
+# Restart (will recreate database)
+# Note: Loses flow run history
+fly apps restart captionacc-prefect
+```
+
+---
+
+## Recovery Procedures
+
+### Reprocess Failed Video
+
+When initial processing fails, reprocess from scratch:
+
+```bash
+# 1. Reset video status in Supabase
+UPDATE videos SET status = 'uploading' WHERE id = 'xxx';
+
+# 2. Clear any partial outputs in Wasabi
+aws s3 rm s3://caption-acc-prod/{tenant}/client/videos/{id}/full_frames/ --recursive
+aws s3 rm s3://caption-acc-prod/{tenant}/server/videos/{id}/ --recursive
+aws s3 rm s3://caption-acc-prod/{tenant}/client/videos/{id}/layout.db.gz
+
+# 3. Trigger reprocessing
+prefect deployment run "captionacc-video-initial-processing" \
+  --param video_id=xxx \
+  --param tenant_id=xxx \
+  --param storage_key=xxx
+```
+
+### Rerun Crop and Caption Frame Extents Inference
+
+When captionacc-crop-and-infer-caption-frame-extents fails after partial completion:
+
+```bash
+# 1. Release any server lock
+UPDATE video_database_state
+SET lock_holder_user_id = NULL, lock_type = NULL
+WHERE video_id = 'xxx' AND database_name = 'layout';
+
+# 2. Clear partial outputs
+aws s3 rm s3://caption-acc-prod/{tenant}/client/videos/{id}/cropped_frames_v*/ --recursive
+aws s3 rm s3://caption-acc-prod/{tenant}/server/videos/{id}/caption_frame_extents.db
+aws s3 rm s3://caption-acc-prod/{tenant}/client/videos/{id}/captions.db.gz
+
+# 3. Reset status
+UPDATE videos SET caption_status = NULL WHERE id = 'xxx';
+
+# 4. User can re-approve layout to trigger again
+```
+
+### Full System Recovery
+
+If Prefect infrastructure needs complete rebuild:
+
+```bash
+# 1. Export any important data from logs
+fly logs --app captionacc-prefect > prefect-logs-backup.txt
+
+# 2. Destroy and recreate volume (loses history)
+fly volumes destroy prefect_data
+fly volumes create prefect_data --size 1 --region iad
+
+# 3. Redeploy
+fly deploy --app captionacc-prefect
+
+# 4. Verify
+curl https://captionacc-prefect.fly.dev/api/health
+
+# 5. Check for stuck videos in Supabase and reprocess
+SELECT id, status, caption_status FROM videos
+WHERE status = 'processing' OR caption_status = 'processing';
+```
+
+---
+
+## Deployment Process
+
+### Standard Deployment
+
+```bash
+# 1. Run tests
+pytest tests/
+
+# 2. Deploy to Fly.io
+cd services/prefect
+fly deploy
+
+# 3. Verify deployment
+curl https://captionacc-prefect.fly.dev/api/health
+
+# 4. Check worker connected
+# Prefect UI → Work Pools → captionacc-workers
+```
+
+### Rolling Back
+
+```bash
+# List recent deployments
+fly releases --app captionacc-prefect
+
+# Rollback to previous version
+fly deploy --image registry.fly.io/captionacc-prefect:v123
+```
+
+### Updating Flow Definitions
+
+1. Update flow code in `flows/`
+2. Deploy to Fly.io (flows are bundled in image)
+3. Deployments are re-registered on startup
+
+```bash
+# Verify deployments after update
+prefect deployment ls
+```
+
+---
+
+## Debugging
+
+### View Flow Run Logs
+
+```bash
+# Via Prefect UI
+# Flow Runs → Select run → Logs tab
+
+# Via CLI (if connected to Prefect server)
+prefect flow-run logs <flow-run-id>
+```
+
+### View Fly.io Logs
+
+```bash
+# Real-time logs
+fly logs --app captionacc-prefect
+
+# Historical logs
+fly logs --app captionacc-prefect --since 1h
+```
+
+### View Modal Logs
+
+```bash
+# Via Modal CLI
+modal logs <function-name>
+
+# Or via Modal Dashboard
+# Functions → select function → Logs
+```
+
+### SSH into Prefect Machine
+
+```bash
+fly ssh console --app captionacc-prefect
+
+# Check processes
+ps aux
+
+# Check database
+sqlite3 /data/prefect.db "SELECT * FROM flow_run LIMIT 10;"
+
+# Check environment
+env | grep PREFECT
+```
+
+### Test Webhook Locally
+
+```python
+# Send test webhook payload
+import requests
+
+response = requests.post(
+    "https://captionacc-prefect.fly.dev/webhooks/supabase",
+    headers={
+        "Authorization": "Bearer {webhook_secret}",
+        "Content-Type": "application/json"
+    },
+    json={
+        "type": "INSERT",
+        "table": "videos",
+        "record": {
+            "id": "test-video-id",
+            "tenant_id": "test-tenant-id",
+            "storage_key": "test/videos/test.mp4",
+            "status": "uploading"
+        }
+    }
+)
+print(response.json())
+```
+
+---
+
+## Runbooks
+
+### Daily Operations
+
+1. Check Prefect UI for failed runs
+2. Review Fly.io metrics for anomalies
+3. Check Modal dashboard for cost trends
+
+### Weekly Operations
+
+1. Review processing success rate
+2. Check for stuck videos in Supabase
+3. Review and clean up old flow runs
+4. Verify backup procedures
+
+### Incident Response
+
+1. **Identify**: Check dashboards for failure indicators
+2. **Contain**: Pause work pool if needed to stop new runs
+3. **Investigate**: Check logs (Prefect → Fly.io → Modal)
+4. **Fix**: Apply resolution from common issues
+5. **Recover**: Reprocess affected videos
+6. **Document**: Update runbook if new issue type
+
+---
+
+## Alerting Configuration
+
+### Prefect Automations
+
+```yaml
+# Alert on flow failure
+trigger:
+  type: flow_run_state_change
+  from_states: [RUNNING]
+  to_states: [FAILED, CRASHED]
+action:
+  type: send_notification
+  block_document_id: <slack-webhook-block-id>
+```
+
+### Fly.io Alerts
+
+```bash
+# Create alert for machine restarts
+fly monitoring alerts create \
+  --app captionacc-prefect \
+  --type machine_restart \
+  --threshold 3 \
+  --window 1h \
+  --email alerts@captiona.cc
+```
+
+---
+
+## Related Documentation
+
+- [README](./README.md) - Architecture overview
+- [Flows](./flows.md) - Flow specifications
+- [Infrastructure](./infrastructure.md) - Deployment configuration
+- [Modal Integration](./modal-integration.md) - Modal function details

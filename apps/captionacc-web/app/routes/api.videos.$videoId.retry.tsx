@@ -8,7 +8,7 @@ import Database from 'better-sqlite3'
 import { type ActionFunctionArgs } from 'react-router'
 
 import { queueFullFramesProcessing } from '~/services/prefect'
-import { getDbPath, getVideoDir } from '~/utils/video-paths'
+import { getCaptionsDbPath, getVideoDir } from '~/utils/video-paths'
 
 export async function action({ params }: ActionFunctionArgs) {
   const { videoId: encodedVideoId } = params
@@ -23,7 +23,7 @@ export async function action({ params }: ActionFunctionArgs) {
   const videoId = decodeURIComponent(encodedVideoId)
 
   try {
-    const dbPath = await getDbPath(videoId)
+    const dbPath = await getCaptionsDbPath(videoId)
     if (!dbPath) {
       return new Response(JSON.stringify({ error: 'Video not found' }), {
         status: 404,

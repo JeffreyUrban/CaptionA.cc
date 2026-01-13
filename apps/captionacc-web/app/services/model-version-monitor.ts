@@ -3,7 +3,14 @@
  *
  * Periodically checks all videos for model version mismatches and
  * triggers recalculation + review marking when needed.
+ *
+ * Uses split database architecture:
+ * - layout.db: video_layout_config, full_frame_box_labels, box_classification_model
+ * - captions.db: captions table
  */
+
+import { existsSync } from 'fs'
+import { resolve } from 'path'
 
 import Database from 'better-sqlite3'
 
@@ -13,20 +20,20 @@ interface RecalculationResult {
   videoId: string
   displayPath: string
   recalculated: boolean
-  boundsChanged: boolean
+  cropRegionChanged: boolean
   oldVersion: string | null
   newVersion: string
   error?: string
 }
 
 /**
- * Calculate new crop bounds from 'in' boxes
+ * Calculate new crop region from 'in' boxes
  */
-function calculateBoundsFromBoxes(
-  db: Database.Database
+function updateCropRegionFromBoxes(
+  layoutDb: Database.Database
 ): { crop_left: number; crop_top: number; crop_right: number; crop_bottom: number } | null {
   // Get predicted 'in' boxes
-  const inBoxes = db
+  const inBoxes = layoutDb
     .prepare(
       `
       SELECT box_left, box_top, box_right, box_bottom
@@ -38,7 +45,7 @@ function calculateBoundsFromBoxes(
 
   // Fallback to user-annotated 'in' boxes if no predictions
   if (inBoxes.length === 0) {
-    const userInBoxes = db
+    const userInBoxes = layoutDb
       .prepare(
         `
         SELECT box_left, box_top, box_right, box_bottom
@@ -69,74 +76,59 @@ function calculateBoundsFromBoxes(
 }
 
 /**
- * Update crop bounds and mark captions as pending review (append-only for history)
+ * Update crop region in layout.db and mark captions as pending review in captions.db
  */
-function updateBoundsAndMarkPending(
-  db: Database.Database,
-  newBounds: { crop_left: number; crop_top: number; crop_right: number; crop_bottom: number },
+function updateCropRegionAndMarkPending(
+  layoutDb: Database.Database,
+  captionsDb: Database.Database | null,
+  newCropRegion: { crop_left: number; crop_top: number; crop_right: number; crop_bottom: number },
   currentVersion: string
 ): void {
-  // Get current config
-  const current = db
-    .prepare('SELECT * FROM video_layout_config ORDER BY created_at DESC LIMIT 1')
-    .get() as Record<string, unknown> | undefined
-
-  if (!current) {
-    return // No config to update
-  }
-
-  // Insert new row with updated bounds (append-only for history)
-  db.prepare(
-    `INSERT INTO video_layout_config (
-      frame_width, frame_height,
-      crop_left, crop_top, crop_right, crop_bottom,
-      selection_left, selection_top, selection_right, selection_bottom,
-      selection_mode,
-      vertical_position, vertical_std, box_height, box_height_std,
-      anchor_type, anchor_position, top_edge_std, bottom_edge_std,
-      horizontal_std_slope, horizontal_std_intercept,
-      crop_bounds_version, analysis_model_version
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(
-    current['frame_width'],
-    current['frame_height'],
-    newBounds.crop_left,
-    newBounds.crop_top,
-    newBounds.crop_right,
-    newBounds.crop_bottom,
-    current['selection_left'],
-    current['selection_top'],
-    current['selection_right'],
-    current['selection_bottom'],
-    current['selection_mode'],
-    current['vertical_position'],
-    current['vertical_std'],
-    current['box_height'],
-    current['box_height_std'],
-    current['anchor_type'],
-    current['anchor_position'],
-    current['top_edge_std'],
-    current['bottom_edge_std'],
-    current['horizontal_std_slope'],
-    current['horizontal_std_intercept'],
-    (current['crop_bounds_version'] as number) + 1,
-    currentVersion
-  )
-
-  db.prepare(
-    `
-    UPDATE captions
-    SET boundary_pending = 1
-    WHERE boundary_state != 'gap'
+  layoutDb
+    .prepare(
+      `
+    UPDATE video_layout_config
+    SET
+      crop_left = ?,
+      crop_top = ?,
+      crop_right = ?,
+      crop_bottom = ?,
+      crop_region_version = crop_region_version + 1,
+      analysis_model_version = ?,
+      updated_at = datetime('now')
+    WHERE id = 1
   `
-  ).run()
+    )
+    .run(
+      newCropRegion.crop_left,
+      newCropRegion.crop_top,
+      newCropRegion.crop_right,
+      newCropRegion.crop_bottom,
+      currentVersion
+    )
+
+  if (captionsDb) {
+    captionsDb
+      .prepare(
+        `
+      UPDATE captions
+      SET caption_frame_extents_pending = 1
+      WHERE caption_frame_extents_state != 'gap'
+    `
+      )
+      .run()
+  }
 }
 
 interface VideoModelInfo {
-  metadata: { video_id: string; display_path: string }
   analysisVersion: string | null
   currentVersion: string
-  oldBounds: { crop_left: number; crop_top: number; crop_right: number; crop_bottom: number } | null
+  oldCropRegion: {
+    crop_left: number
+    crop_top: number
+    crop_right: number
+    crop_bottom: number
+  } | null
 }
 
 interface RecalculationDecision {
@@ -145,20 +137,12 @@ interface RecalculationDecision {
 }
 
 /**
- * Query video model version and layout info from database
+ * Query video model version and layout info from layout database
  */
-function getVideoModelInfo(db: Database.Database): VideoModelInfo | null {
-  const metadata = db
-    .prepare('SELECT video_id, display_path FROM video_metadata WHERE id = 1')
-    .get() as { video_id: string; display_path: string } | undefined
-
-  if (!metadata) {
-    return null
-  }
-
-  const layoutConfig = db
+function getVideoModelInfo(layoutDb: Database.Database): VideoModelInfo | null {
+  const layoutConfig = layoutDb
     .prepare(
-      'SELECT analysis_model_version, crop_left, crop_top, crop_right, crop_bottom FROM video_layout_config ORDER BY created_at DESC LIMIT 1'
+      'SELECT analysis_model_version, crop_left, crop_top, crop_right, crop_bottom FROM video_layout_config WHERE id = 1'
     )
     .get() as {
     analysis_model_version: string | null
@@ -168,15 +152,14 @@ function getVideoModelInfo(db: Database.Database): VideoModelInfo | null {
     crop_bottom: number
   } | null
 
-  const modelInfo = db
+  const modelInfo = layoutDb
     .prepare('SELECT model_version FROM box_classification_model WHERE id = 1')
     .get() as { model_version: string } | undefined
 
   return {
-    metadata,
     analysisVersion: layoutConfig?.analysis_model_version ?? null,
     currentVersion: modelInfo?.model_version ?? 'unknown',
-    oldBounds: layoutConfig
+    oldCropRegion: layoutConfig
       ? {
           crop_left: layoutConfig.crop_left,
           crop_top: layoutConfig.crop_top,
@@ -206,69 +189,26 @@ function shouldRecalculatePredictions(
 }
 
 /**
- * Update model version by appending a new config row (append-only for history)
+ * Update model version without changing crop region
  */
-function updateModelVersionOnly(db: Database.Database, currentVersion: string): void {
-  // Get current config
-  const current = db
-    .prepare('SELECT * FROM video_layout_config ORDER BY created_at DESC LIMIT 1')
-    .get() as Record<string, unknown> | undefined
-
-  if (!current) {
-    return // No config to update
-  }
-
-  // Insert new row with updated model version
-  db.prepare(
-    `INSERT INTO video_layout_config (
-      frame_width, frame_height,
-      crop_left, crop_top, crop_right, crop_bottom,
-      selection_left, selection_top, selection_right, selection_bottom,
-      selection_mode,
-      vertical_position, vertical_std, box_height, box_height_std,
-      anchor_type, anchor_position, top_edge_std, bottom_edge_std,
-      horizontal_std_slope, horizontal_std_intercept,
-      crop_bounds_version, analysis_model_version
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(
-    current['frame_width'],
-    current['frame_height'],
-    current['crop_left'],
-    current['crop_top'],
-    current['crop_right'],
-    current['crop_bottom'],
-    current['selection_left'],
-    current['selection_top'],
-    current['selection_right'],
-    current['selection_bottom'],
-    current['selection_mode'],
-    current['vertical_position'],
-    current['vertical_std'],
-    current['box_height'],
-    current['box_height_std'],
-    current['anchor_type'],
-    current['anchor_position'],
-    current['top_edge_std'],
-    current['bottom_edge_std'],
-    current['horizontal_std_slope'],
-    current['horizontal_std_intercept'],
-    current['crop_bounds_version'],
-    currentVersion
-  )
+function updateModelVersionOnly(layoutDb: Database.Database, currentVersion: string): void {
+  layoutDb
+    .prepare('UPDATE video_layout_config SET analysis_model_version = ? WHERE id = 1')
+    .run(currentVersion)
 }
 
 /**
- * Check if bounds have changed
+ * Check if region has changed
  */
-function haveBoundsChanged(
-  oldBounds: { crop_left: number; crop_top: number; crop_right: number; crop_bottom: number },
-  newBounds: { crop_left: number; crop_top: number; crop_right: number; crop_bottom: number }
+function hasCropRegionChanged(
+  oldCropRegion: { crop_left: number; crop_top: number; crop_right: number; crop_bottom: number },
+  newCropRegion: { crop_left: number; crop_top: number; crop_right: number; crop_bottom: number }
 ): boolean {
   return (
-    newBounds.crop_left !== oldBounds.crop_left ||
-    newBounds.crop_top !== oldBounds.crop_top ||
-    newBounds.crop_right !== oldBounds.crop_right ||
-    newBounds.crop_bottom !== oldBounds.crop_bottom
+    newCropRegion.crop_left !== oldCropRegion.crop_left ||
+    newCropRegion.crop_top !== oldCropRegion.crop_top ||
+    newCropRegion.crop_right !== oldCropRegion.crop_right ||
+    newCropRegion.crop_bottom !== oldCropRegion.crop_bottom
   )
 }
 
@@ -279,47 +219,56 @@ function buildResult(
   videoId: string,
   displayPath: string,
   recalculated: boolean,
-  boundsChanged: boolean,
+  cropRegionChanged: boolean,
   oldVersion: string | null,
   newVersion: string,
   error?: string
 ): RecalculationResult {
-  return { videoId, displayPath, recalculated, boundsChanged, oldVersion, newVersion, error }
+  return { videoId, displayPath, recalculated, cropRegionChanged, oldVersion, newVersion, error }
 }
 
 /**
  * Check a single video for model version mismatch
+ * Uses split databases: layout.db for layout tables, captions.db for captions table
  */
-function checkVideoModelVersion(dbPath: string): RecalculationResult | null {
-  try {
-    const db = new Database(dbPath)
+function checkVideoModelVersion(
+  videoId: string,
+  displayPath: string,
+  videoDir: string
+): RecalculationResult | null {
+  const layoutDbPath = resolve(videoDir, 'layout.db')
+  const captionsDbPath = resolve(videoDir, 'captions.db')
 
-    const videoInfo = getVideoModelInfo(db)
+  // Check if layout.db exists
+  if (!existsSync(layoutDbPath)) {
+    return null // No layout database yet
+  }
+
+  let layoutDb: Database.Database | null = null
+  let captionsDb: Database.Database | null = null
+
+  try {
+    layoutDb = new Database(layoutDbPath)
+
+    const videoInfo = getVideoModelInfo(layoutDb)
     if (!videoInfo) {
-      db.close()
+      layoutDb.close()
       return null
     }
 
-    const { metadata, analysisVersion, currentVersion, oldBounds } = videoInfo
+    const { analysisVersion, currentVersion, oldCropRegion } = videoInfo
     const decision = shouldRecalculatePredictions(analysisVersion, currentVersion)
 
     if (!decision.shouldRecalculate) {
-      db.close()
-      return buildResult(
-        metadata.video_id,
-        metadata.display_path,
-        false,
-        false,
-        analysisVersion,
-        currentVersion
-      )
+      layoutDb.close()
+      return buildResult(videoId, displayPath, false, false, analysisVersion, currentVersion)
     }
 
-    if (!oldBounds) {
-      db.close()
+    if (!oldCropRegion) {
+      layoutDb.close()
       return buildResult(
-        metadata.video_id,
-        metadata.display_path,
+        videoId,
+        displayPath,
         false,
         false,
         analysisVersion,
@@ -328,51 +277,54 @@ function checkVideoModelVersion(dbPath: string): RecalculationResult | null {
       )
     }
 
-    const newBounds = calculateBoundsFromBoxes(db)
+    const newCropRegion = updateCropRegionFromBoxes(layoutDb)
 
-    if (!newBounds) {
-      updateModelVersionOnly(db, currentVersion)
-      db.close()
-      return buildResult(
-        metadata.video_id,
-        metadata.display_path,
-        true,
-        false,
-        analysisVersion,
-        currentVersion
-      )
+    if (!newCropRegion) {
+      updateModelVersionOnly(layoutDb, currentVersion)
+      layoutDb.close()
+      return buildResult(videoId, displayPath, true, false, analysisVersion, currentVersion)
     }
 
-    const boundsChanged = haveBoundsChanged(oldBounds, newBounds)
+    const cropRegionChanged = hasCropRegionChanged(oldCropRegion, newCropRegion)
 
-    if (!boundsChanged) {
-      updateModelVersionOnly(db, currentVersion)
-      db.close()
-      return buildResult(
-        metadata.video_id,
-        metadata.display_path,
-        true,
-        false,
-        analysisVersion,
-        currentVersion
-      )
+    if (!cropRegionChanged) {
+      updateModelVersionOnly(layoutDb, currentVersion)
+      layoutDb.close()
+      return buildResult(videoId, displayPath, true, false, analysisVersion, currentVersion)
     }
 
-    updateBoundsAndMarkPending(db, newBounds, currentVersion)
-    db.close()
+    // Bounds changed - need to update both databases
+    // Open captions.db if it exists
+    if (existsSync(captionsDbPath)) {
+      captionsDb = new Database(captionsDbPath)
+    }
 
-    return buildResult(
-      metadata.video_id,
-      metadata.display_path,
-      true,
-      true,
-      analysisVersion,
-      currentVersion
-    )
+    updateCropRegionAndMarkPending(layoutDb, captionsDb, newCropRegion, currentVersion)
+
+    layoutDb.close()
+    if (captionsDb) {
+      captionsDb.close()
+    }
+
+    return buildResult(videoId, displayPath, true, true, analysisVersion, currentVersion)
   } catch (error) {
+    if (layoutDb) {
+      try {
+        layoutDb.close()
+      } catch {
+        /* ignore */
+      }
+    }
+    if (captionsDb) {
+      try {
+        captionsDb.close()
+      } catch {
+        /* ignore */
+      }
+    }
     return buildResult(
-      'unknown',
-      dbPath,
+      videoId,
+      displayPath,
       false,
       false,
       null,
@@ -389,7 +341,7 @@ export async function runModelVersionCheck(): Promise<{
   total: number
   upToDate: number
   recalculated: number
-  boundsChanged: number
+  cropRegionChanged: number
   errors: number
   changedVideos: Array<{ displayPath: string; oldVersion: string | null; newVersion: string }>
 }> {
@@ -401,13 +353,13 @@ export async function runModelVersionCheck(): Promise<{
   )
 
   for (const video of videos) {
-    const dbPath = `${process.cwd()}/../../local/processing/${video.storagePath}/captions.db`
-    const result = checkVideoModelVersion(dbPath)
+    const videoDir = `${process.cwd()}/../../local/processing/${video.storagePath}`
+    const result = checkVideoModelVersion(video.videoId, video.displayPath, videoDir)
 
     if (result) {
       results.push(result)
 
-      if (result.boundsChanged) {
+      if (result.cropRegionChanged) {
         const action = result.oldVersion === null ? 'Initial calculation' : 'Recalculated'
         console.log(
           `[ModelVersionMonitor] ${result.displayPath}: ${action} (${result.oldVersion ?? 'null'} → ${result.newVersion})`
@@ -420,10 +372,10 @@ export async function runModelVersionCheck(): Promise<{
     total: results.length,
     upToDate: results.filter(r => !r.recalculated).length,
     recalculated: results.filter(r => r.recalculated).length,
-    boundsChanged: results.filter(r => r.boundsChanged).length,
+    cropRegionChanged: results.filter(r => r.cropRegionChanged).length,
     errors: results.filter(r => r.error).length,
     changedVideos: results
-      .filter(r => r.boundsChanged)
+      .filter(r => r.cropRegionChanged)
       .map(r => ({
         displayPath: r.displayPath,
         oldVersion: r.oldVersion,
@@ -433,7 +385,7 @@ export async function runModelVersionCheck(): Promise<{
 
   console.log(
     `[ModelVersionMonitor] Complete: ${stats.upToDate} up-to-date, ` +
-      `${stats.recalculated} recalculated, ${stats.boundsChanged} bounds changed, ` +
+      `${stats.recalculated} recalculated, ${stats.cropRegionChanged} crop region changed, ` +
       `${stats.errors} errors`
   )
 

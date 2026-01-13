@@ -58,7 +58,7 @@ def extract_geometric_features(box, layout_config) -> dict:
     - vertical_alignment: Distance from mode vertical position
     - height_similarity: Similarity to mode height
     - anchor_distance: Distance from anchor point
-    - crop_overlap: Overlap with crop bounds
+    - crop_overlap: Overlap with crop region
     - aspect_ratio: Box width/height ratio
     - normalized_y: Vertical position (0-1)
     - normalized_area: Box area normalized by frame area
@@ -266,7 +266,7 @@ if (newLabelCount % 10 === 0) {
   // Retrain after every 10 labels
   await queueVideoModelRetrain({
     videoId,
-    dbPath: getDbPath(videoId),
+    dbPath: getCaptionsDbPath(videoId),
     updatePredictions: true,
   })
 }

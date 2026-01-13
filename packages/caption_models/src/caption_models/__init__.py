@@ -3,7 +3,7 @@
 from caption_models.analysis import analyze_subtitle_region
 from caption_models.coordinates import (
     BoundingBox,
-    CropBounds,
+    CropRegion,
     box_overlap_with_crop,
     cropped_to_original,
     is_box_inside_crop,
@@ -24,7 +24,7 @@ __all__ = [
     "__version_tuple__",
     "SubtitleRegion",
     "BoundingBox",
-    "CropBounds",
+    "CropRegion",
     "analyze_subtitle_region",
     "load_ocr_annotations",
     "save_analysis_text",

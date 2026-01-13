@@ -1,5 +1,5 @@
 # Auto-generated version files by hatch-vcs
 */_version.py
 **/*/_version.py
-data-pipelines/caption_boundaries/src/caption_boundaries/_version.py
+data-pipelines/caption_frame_extents/src/caption_frame_extents/_version.py
 data-pipelines/caption_text/src/caption_text/_version.py

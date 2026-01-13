@@ -77,9 +77,7 @@ def analyze(
     4. Analyze subtitle region characteristics
 
     Database Storage:
-    - OCR results are written directly to captions.db (full_frame_ocr table)
-    - Database location: {output_dir}/../captions.db
-    - Example: output_dir=local/data/show/ep/full_frames → db=local/data/show/ep/captions.db
+    - OCR results are written directly to fullOCR.db (full_frame_ocr table)
 
     Frame Indexing:
     - Database OCR samples at 10Hz (every 0.1 seconds)
@@ -208,7 +206,7 @@ def analyze(
         console.print("  Layout analysis will be performed by ML model in web app...")
 
         # Write minimal layout config with just frame dimensions
-        # Full layout (crop bounds, anchor, etc.) calculated by web app using ML model
+        # Full layout (crop region, anchor, etc.) calculated by web app using ML model
         import sqlite3
 
         conn = sqlite3.connect(db_path)
@@ -218,7 +216,7 @@ def analyze(
                 INSERT OR REPLACE INTO video_layout_config (
                     id, frame_width, frame_height,
                     crop_left, crop_top, crop_right, crop_bottom,
-                    crop_bounds_version
+                    crop_region_version
                 ) VALUES (1, ?, ?, 0, 0, ?, ?, 1)
             """,
                 (width, height, width, height),
@@ -402,68 +400,6 @@ def run_ocr(
     except Exception as e:
         console.print(f"[red]Error:[/red] {e}")
         raise typer.Exit(1) from e
-
-
-@app.command()
-def analyze_region(
-    ocr_file: Path = typer.Argument(
-        ...,
-        help="Path to OCR.jsonl file",
-        exists=True,
-        dir_okay=False,
-        resolve_path=True,
-    ),
-    video: Path = typer.Option(
-        None,
-        "--video",
-        help="Path to original video file (to get dimensions)",
-        exists=True,
-        dir_okay=False,
-        resolve_path=True,
-    ),
-    width: int = typer.Option(
-        None,
-        "--width",
-        help="Video width in pixels (if not providing --video)",
-    ),
-    height: int = typer.Option(
-        None,
-        "--height",
-        help="Video height in pixels (if not providing --video)",
-    ),
-    output_dir: Path = typer.Option(
-        Path("output"),
-        "--output-dir",
-        "-o",
-        help="Directory for analysis output files",
-    ),
-) -> None:
-    """DEPRECATED: Analyze subtitle region characteristics from OCR data.
-
-    This command is deprecated because it used hardcoded heuristics (e.g., assuming
-    subtitles are in the bottom third of the frame) which are not valid for all videos.
-
-    Layout analysis is now performed by the ML box classification model in the web app.
-
-    Migration path:
-    1. Use 'full_frames analyze' command to process your video
-    2. Open the video in the web app (http://localhost:5173)
-    3. The ML model will automatically classify OCR boxes and calculate layout
-    """
-    console.print("[yellow]⚠ DEPRECATED COMMAND[/yellow]")
-    console.print()
-    console.print("This command has been deprecated because it relied on hardcoded heuristics")
-    console.print("(e.g., assuming subtitles are in the bottom third of frame) which are")
-    console.print("not valid for all videos.")
-    console.print()
-    console.print("[bold cyan]New Workflow:[/bold cyan]")
-    console.print("1. Run: full_frames analyze <video> --output-dir <dir>")
-    console.print("2. Open video in web app: http://localhost:5173")
-    console.print("3. ML model automatically classifies boxes and calculates layout")
-    console.print()
-    console.print("The ML model uses 26 features and is trained on real data,")
-    console.print("providing more accurate layout analysis than hardcoded rules.")
-    raise typer.Exit(1)
 
 
 if __name__ == "__main__":
