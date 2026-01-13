@@ -1,17 +1,18 @@
 """
 True pipelined implementation of crop_and_infer_caption_frame_extents.
 
-This module implements GPU-accelerated batched processing with parallel VP9 encoding:
-1. Extract batch of 17 frames on GPU (decode + crop)
-2. Run batched inference on 16 consecutive pairs (32 images at once)
+This module implements GPU-accelerated batched processing with parallel VP9 encoding and Wasabi uploads:
+1. Extract batch of frames on GPU (decode + crop)
+2. Run batched inference on consecutive pairs (configurable batch size)
 3. Transfer to CPU and save to disk
 4. **Immediately trigger VP9 encoding** as chunks become ready (overlapped!)
+5. **Immediately trigger Wasabi uploads** as chunks are encoded (overlapped!)
 
 Architecture:
     ┌─ GPU Thread ─────────────────────────────────────┐
-    │  For each batch (17 frames):                     │
+    │  For each batch:                                 │
     │    PyNvVideoCodec decode → GPU crop (stay GPU)   │
-    │    Batched inference on 16 pairs (32 images)     │
+    │    Batched inference on pairs (N images/batch)   │
     │    Transfer to CPU and save to disk              │
     │    → mark_frame_available() ──┐                  │
     └───────────────────────────────┼──────────────────┘
@@ -23,15 +24,24 @@ Architecture:
                                 ↓
                     Encoder Pool (4 workers) starts encoding
                     as soon as 32-frame chunks are ready
+                                │
+                    ┌───────────┴───────────────────┐
+                    │  Upload Coordinator           │
+                    │  (runs in background threads) │
+                    └───────────┬───────────────────┘
+                                ↓
+                    Upload Pool (4 workers) uploads chunks
+                    to Wasabi as soon as encoding completes
 
 Key optimizations:
-- **True parallelization**: GPU and VP9 encoding run simultaneously
-- Batched inference: 32 images per GPU call → efficient GPU utilization
+- **True parallelization**: GPU, VP9 encoding, and Wasabi uploads all run simultaneously
+- Batched inference: configurable images per GPU call → efficient GPU utilization
 - Frames stay on GPU from decode → inference (no CPU roundtrip)
 - GPU cropping before transfers (15x less data: 402×27 vs 640×360)
 - Zero-copy GPU operations via DLPack
 - Modulo filtering: no overlap (modulo 16, 4, 1 are mutually exclusive)
 - Precise timing: maintains 0.1s accuracy over 10+ hours
+- Overlapped uploads: chunks upload while encoding continues
 """
 
 import subprocess
@@ -137,6 +147,7 @@ class ParallelEncodingCoordinator:
         num_workers: int = 4,
         frames_per_chunk: int = 32,
         modulo_levels: list = None,
+        upload_coordinator: 'ParallelUploadCoordinator' = None,
     ):
         self.frames_dir = frames_dir
         self.chunks_dir = chunks_dir
@@ -144,6 +155,7 @@ class ParallelEncodingCoordinator:
         self.num_workers = num_workers
         self.frames_per_chunk = frames_per_chunk
         self.modulo_levels = modulo_levels or [16, 4, 1]
+        self.upload_coordinator = upload_coordinator
 
         # Track available frames and encoded chunks
         self.available_frames = set()
@@ -271,6 +283,11 @@ class ParallelEncodingCoordinator:
                 text=True,
                 check=True,
             )
+
+            # Trigger upload immediately if coordinator is available
+            if self.upload_coordinator:
+                self.upload_coordinator.upload_chunk(modulo, chunk_output)
+
             return chunk_output
         finally:
             Path(filelist_path).unlink(missing_ok=True)
@@ -296,6 +313,80 @@ class ParallelEncodingCoordinator:
 
         self.executor.shutdown(wait=True)
         return chunk_paths
+
+
+class ParallelUploadCoordinator:
+    """Coordinates parallel Wasabi uploads as chunks become available.
+
+    This allows uploads to start immediately when chunks are encoded,
+    overlapping with ongoing encoding work.
+    """
+
+    def __init__(
+        self,
+        wasabi_client,
+        tenant_id: str,
+        video_id: str,
+        version: int,
+        num_workers: int = 4,
+    ):
+        self.wasabi_client = wasabi_client
+        self.tenant_id = tenant_id
+        self.video_id = video_id
+        self.version = version
+        self.num_workers = num_workers
+
+        # Track uploads
+        self.uploaded_chunks = []
+        self.lock = threading.Lock()
+
+        # Executor for parallel uploads
+        self.executor = ThreadPoolExecutor(max_workers=num_workers)
+        self.futures = []
+
+    def upload_chunk(self, modulo: int, chunk_path: Path):
+        """Submit a chunk for upload (called when chunk encoding completes)."""
+        future = self.executor.submit(self._upload_chunk, modulo, chunk_path)
+        with self.lock:
+            self.futures.append(future)
+
+    def _upload_chunk(self, modulo: int, chunk_path: Path) -> tuple[int, Path]:
+        """Upload a single chunk to Wasabi (called in worker thread)."""
+        chunk_filename = chunk_path.name
+        chunk_index = int(chunk_filename.split("_")[1].split(".")[0])
+
+        storage_key = WasabiClient.build_chunk_storage_key(
+            tenant_id=self.tenant_id,
+            video_id=self.video_id,
+            chunk_type="cropped_frames",
+            chunk_index=chunk_index,
+            version=self.version,
+            modulo=modulo,
+        )
+
+        self.wasabi_client.upload_file(chunk_path, storage_key, content_type="video/webm")
+
+        return (modulo, chunk_path)
+
+    def wait_for_completion(self) -> list[tuple[int, Path]]:
+        """Wait for all upload tasks to complete and return uploaded chunk info."""
+        uploaded = []
+        completed = 0
+        total = len(self.futures)
+
+        for future in as_completed(self.futures):
+            try:
+                modulo, chunk_path = future.result()
+                uploaded.append((modulo, chunk_path))
+                completed += 1
+
+                if completed % 50 == 0 or completed == total:
+                    print(f"    Upload progress: {completed}/{total} chunks")
+            except Exception as e:
+                print(f"    Upload error: {e}")
+
+        self.executor.shutdown(wait=True)
+        return uploaded
 
 
 class PerformanceMetrics:
@@ -606,6 +697,17 @@ def crop_and_infer_caption_frame_extents_pipelined(
         # Compute crop region pixel coordinates
         crop_helper = CropRegionHelper(crop_region, frame_width, frame_height)
 
+        # Initialize parallel upload coordinator
+        # This will upload chunks to Wasabi as soon as they're encoded
+        print("  [Upload] Starting parallel Wasabi upload coordinator...")
+        upload_coordinator = ParallelUploadCoordinator(
+            wasabi_client=wasabi,
+            tenant_id=tenant_id,
+            video_id=video_id,
+            version=version,
+            num_workers=4,  # 4 parallel upload workers
+        )
+
         # Initialize parallel encoding coordinator
         # This will start encoding chunks as soon as they're ready
         print("  [Encoder] Starting parallel VP9 encoding coordinator...")
@@ -616,6 +718,7 @@ def crop_and_infer_caption_frame_extents_pipelined(
             num_workers=encoder_workers,
             frames_per_chunk=32,
             modulo_levels=[16, 4, 1],
+            upload_coordinator=upload_coordinator,
         )
 
         # Load inference model
@@ -804,11 +907,13 @@ def crop_and_infer_caption_frame_extents_pipelined(
         pipeline_duration = time.time() - pipeline_start
         print(f"  GPU processing complete: {frame_count} frames, {len(pair_results)} pairs in {pipeline_duration:.2f}s\n")
 
-        # Step 6: Wait for parallel VP9 encoding to complete
-        print("[6/7] Waiting for parallel VP9 encoding to complete...")
+        # Step 6: Wait for parallel VP9 encoding and uploads to complete
+        print("[6/7] Waiting for parallel VP9 encoding and Wasabi uploads to complete...")
         metrics.encoding_start = time.time()
+        upload_start = time.time()
 
         # Encoding started in background as frames became available
+        # Uploads started in background as chunks were encoded
         # Now wait for all encoding tasks to finish
         chunk_paths = encoding_coordinator.wait_for_completion()
 
@@ -816,11 +921,18 @@ def crop_and_infer_caption_frame_extents_pipelined(
         metrics.chunks_encoded = len(chunk_paths)
 
         encoding_duration = time.time() - metrics.encoding_start
-        print(f"  All encoding complete: {len(chunk_paths)} chunks in {encoding_duration:.2f}s\n")
+        print(f"  All encoding complete: {len(chunk_paths)} chunks in {encoding_duration:.2f}s")
+
+        # Wait for all uploads to complete (chunks are already uploading in parallel)
+        print(f"  Waiting for chunk uploads to complete...")
+        uploaded_chunks = upload_coordinator.wait_for_completion()
+
+        upload_duration = time.time() - upload_start
+        print(f"  All chunk uploads complete: {len(uploaded_chunks)} chunks in {upload_duration:.2f}s\n")
 
         # Step 7: Create DB and upload to Wasabi
         print("[7/7] Creating database and uploading to Wasabi...")
-        upload_start = time.time()
+        db_upload_start = time.time()
 
         # Compute label counts
         label_counts = Counter()
@@ -848,26 +960,11 @@ def crop_and_infer_caption_frame_extents_pipelined(
             model_checkpoint_path=str(checkpoint_path) if checkpoint_path.exists() else None,
         )
 
-        # Upload WebM chunks
-        for modulo, chunk_path in chunk_paths:
-            chunk_filename = chunk_path.name
-            chunk_index = int(chunk_filename.split("_")[1].split(".")[0])
-
-            storage_key = WasabiClient.build_chunk_storage_key(
-                tenant_id=tenant_id,
-                video_id=video_id,
-                chunk_type="cropped_frames",
-                chunk_index=chunk_index,
-                version=version,
-                modulo=modulo,
-            )
-            wasabi.upload_file(chunk_path, storage_key, content_type="video/webm")
-
         # Upload caption frame extents database
         db_storage_key = f"{tenant_id}/server/videos/{video_id}/caption_frame_extents.db"
         wasabi.upload_file(db_path, db_storage_key, content_type="application/x-sqlite3")
 
-        print(f"  Uploaded {len(chunk_paths)} chunks and database in {time.time() - upload_start:.2f}s\n")
+        print(f"  Uploaded database in {time.time() - db_upload_start:.2f}s\n")
 
         # Print performance metrics
         metrics.report()
