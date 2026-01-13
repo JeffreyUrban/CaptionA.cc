@@ -63,3 +63,6 @@ typeCheckingMode = "standard"
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "recovery: marks tests for recovery and error handling scenarios",
+]
