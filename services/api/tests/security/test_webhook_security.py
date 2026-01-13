@@ -349,7 +349,7 @@ class TestWebhookSecurity:
             headers=webhook_auth_header,
         )
 
-        assert response.status_code == 200
+        assert response.status_code == 202
         data = response.json()
         assert data["success"] is True
         assert data["status"] == "accepted"
@@ -387,7 +387,7 @@ class TestWebhookSecurity:
             headers=webhook_auth_header,
         )
 
-        assert response.status_code == 200
+        assert response.status_code == 202
         data = response.json()
         assert data["success"] is True
         assert data["status"] == "accepted"
@@ -467,7 +467,7 @@ class TestWebhookSecurity:
             headers=webhook_auth_header,
         )
 
-        assert response.status_code == 200
+        assert response.status_code == 202
         data = response.json()
         assert data["success"] is True
 

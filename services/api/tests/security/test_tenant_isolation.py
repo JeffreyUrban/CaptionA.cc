@@ -526,7 +526,7 @@ class TestTenantIsolation:
         )
 
         # Webhook should succeed (it has valid auth)
-        assert response.status_code == 200
+        assert response.status_code == 202
         data = response.json()
         assert data["success"] is True
 
@@ -718,7 +718,7 @@ class TestTenantIsolation:
             headers=webhook_auth_header,
         )
 
-        assert response.status_code == 200
+        assert response.status_code == 202
         data = response.json()
         assert data["success"] is True
 
@@ -804,7 +804,7 @@ class TestTenantIsolation:
         )
 
         # Webhook should still process it (it's Supabase's job to validate)
-        assert response.status_code == 200
+        assert response.status_code == 202
 
         # But the flow receives the data as-is, which would cause issues downstream
         # This test documents that we rely on Supabase for data integrity
