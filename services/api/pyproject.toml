@@ -23,6 +23,7 @@ dev = [
     "pytest-cov>=6.0.0",
     "ruff>=0.8.0",
     "pyright>=1.1.390",
+    "prefect>=3.0.0",  # Required for tests that import app.main
 ]
 
 [build-system]
@@ -59,10 +60,13 @@ known-first-party = ["app"]
 [tool.pyright]
 pythonVersion = "3.12"
 typeCheckingMode = "standard"
+reportUnusedParameter = "none"  # Suppress unused parameter warnings (common in test fixtures)
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
 markers = [
+    "security: marks tests as security tests (deselect with '-m \"not security\"')",
     "recovery: marks tests for recovery and error handling scenarios",
 ]
