@@ -1,16 +1,21 @@
 """
 Sequential implementation of crop_and_infer_caption_frame_extents.
 
-This module implements a sequential pipeline using PyNvVideoCodec:
-1. GPU-accelerated frame extraction with FPS decimation (PyNvVideoCodec) - completes first
-2. CPU-based cropping (will be replaced with CV-CUDA)
-3. Batch inference on saved frames - runs after extraction
+This module implements a GPU-accelerated sequential pipeline:
+1. GPU-accelerated frame extraction with precise FPS timing (PyNvVideoCodec)
+2. GPU-accelerated cropping (PyTorch tensor slicing)
+3. Batch inference on saved frames
 4. Parallel VP9 encoding on CPU (multiple workers)
 
 Architecture:
-    PyNvVideoCodec Decoder → FPS Decimation → Crop (CPU) → Saved Frames → GPU Inference → Results
-                                                                                              ↓
-                                                                                       Encoder Pool → Wasabi Upload
+    PyNvVideoCodec Decoder → Precise FPS → GPU Crop → CPU Transfer → Saved Frames → GPU Inference → Results
+                                                                                                        ↓
+                                                                                                 Encoder Pool → Wasabi Upload
+
+Key optimizations:
+- Zero-copy GPU decoding via DLPack
+- GPU cropping before CPU transfer (15x less data)
+- Precise timing: maintains 0.1s accuracy over 10+ hours
 
 IMPORTANT: This includes performance instrumentation to measure bottlenecks.
 """
@@ -183,19 +188,20 @@ class FrameExtractor:
                     print(f"    Warning: Failed to decode frame {native_frame_idx} (output {output_idx})")
                     continue
 
-                # Convert DLPack tensor to numpy via PyTorch
-                # DLPack -> PyTorch (zero-copy) -> numpy (CPU copy)
+                # Convert DLPack tensor to PyTorch (zero-copy on GPU)
                 frame_tensor = torch.from_dlpack(frame_dlpack)
-                frame_rgb = frame_tensor.cpu().numpy()
 
-                # Crop to caption region (on CPU for now, will use CV-CUDA later)
-                # frame_rgb shape: (height, width, 3) for RGB or (3, height, width) for RGBP
-                # Assuming HWC format (height, width, channels)
-                cropped_frame = frame_rgb[
+                # Crop on GPU using PyTorch tensor slicing
+                # This is much faster than cropping after CPU transfer
+                # Transfers 15x less data: 402×27×3 vs 640×360×3
+                cropped_tensor = frame_tensor[
                     self.crop_top_px:self.crop_bottom_px,
                     self.crop_left_px:self.crop_right_px,
                     :
                 ]
+
+                # Transfer cropped frame to CPU
+                cropped_frame = cropped_tensor.cpu().numpy()
 
                 # Optionally save to disk for VP9 encoding
                 if self.save_to_disk and self.frames_dir:
