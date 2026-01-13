@@ -3,7 +3,7 @@ Dynamic priority calculation for Prefect flow runs.
 Priority range: 0-100 (higher = more urgent)
 Age-based boosting is enabled by default to prevent starvation.
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import IntEnum
 from typing import Optional
 
@@ -75,7 +75,7 @@ def calculate_flow_priority(
 
     # Age-based boost (default enabled, prevents starvation)
     if enable_age_boosting and request_time:
-        age_minutes = (datetime.now() - request_time).total_seconds() / 60
+        age_minutes = (datetime.now(timezone.utc) - request_time).total_seconds() / 60
         age_boost = min(age_minutes / age_boost_per_minutes, age_boost_cap)
         priority += age_boost
 
