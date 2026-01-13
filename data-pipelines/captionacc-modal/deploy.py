@@ -1,6 +1,8 @@
 """
 Modal deployment entry point for CaptionA.cc processing functions.
 
+Run as `modal deploy deploy.py`
+
 This file imports and exposes the Modal app for deployment.
 """
 

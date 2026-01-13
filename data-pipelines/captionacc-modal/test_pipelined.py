@@ -11,6 +11,8 @@ This script tests ONLY the pipelined crop_and_infer Modal function:
 Prerequisites:
 - Test fixture video at: test-fixtures/videos/car-teardown-comparison-08.mp4
 - Modal deployment with crop_and_infer_caption_frame_extents function
+
+Run as `python test_pipelined.py`
 """
 
 import gzip
