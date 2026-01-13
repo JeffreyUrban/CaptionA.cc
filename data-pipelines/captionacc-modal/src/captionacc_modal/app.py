@@ -136,6 +136,7 @@ if modal:
         crop_region: CropRegion,
         frame_rate: float = 10.0,
         encoder_workers: int = 4,
+        inference_batch_size: int = 32,
     ) -> CropInferResult:
         """Crop frames to caption region, encode as WebM, and run inference.
 
@@ -144,9 +145,10 @@ if modal:
 
         Args:
             encoder_workers: Number of parallel VP9 encoding workers (default: 4)
+            inference_batch_size: Number of images per inference batch (default: 32)
         """
         return crop_and_infer_caption_frame_extents_pipelined(
-            video_key, tenant_id, video_id, crop_region, frame_rate, encoder_workers
+            video_key, tenant_id, video_id, crop_region, frame_rate, encoder_workers, inference_batch_size
         )
 
     @app.function(

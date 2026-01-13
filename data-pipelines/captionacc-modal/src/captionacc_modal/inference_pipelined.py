@@ -1,35 +1,42 @@
 """
-Batched streaming implementation of crop_and_infer_caption_frame_extents.
+True pipelined implementation of crop_and_infer_caption_frame_extents.
 
-This module implements GPU-accelerated batched processing:
+This module implements GPU-accelerated batched processing with parallel VP9 encoding:
 1. Extract batch of 17 frames on GPU (decode + crop)
 2. Run batched inference on 16 consecutive pairs (32 images at once)
 3. Transfer to CPU and save to disk
-4. Parallel VP9 encoding on CPU (4 workers)
+4. **Immediately trigger VP9 encoding** as chunks become ready (overlapped!)
 
 Architecture:
-    ┌─ GPU Processing (single thread) ────────────────┐
+    ┌─ GPU Thread ─────────────────────────────────────┐
     │  For each batch (17 frames):                     │
     │    PyNvVideoCodec decode → GPU crop (stay GPU)   │
     │    Batched inference on 16 pairs (32 images)     │
     │    Transfer to CPU and save to disk              │
-    └──────────────────┬───────────────────────────────┘
-                       ↓
-                 Encoder Pool (4 workers) → Wasabi Upload
+    │    → mark_frame_available() ──┐                  │
+    └───────────────────────────────┼──────────────────┘
+                                    │
+                    ┌───────────────┴───────────────┐
+                    │  Encoding Coordinator         │
+                    │  (runs in background threads) │
+                    └───────────┬───────────────────┘
+                                ↓
+                    Encoder Pool (4 workers) starts encoding
+                    as soon as 32-frame chunks are ready
 
 Key optimizations:
-- Batched inference: 32 images per GPU call (vs 2) → much better GPU utilization
+- **True parallelization**: GPU and VP9 encoding run simultaneously
+- Batched inference: 32 images per GPU call → efficient GPU utilization
 - Frames stay on GPU from decode → inference (no CPU roundtrip)
 - GPU cropping before transfers (15x less data: 402×27 vs 640×360)
 - Zero-copy GPU operations via DLPack
+- Modulo filtering: no overlap (modulo 16, 4, 1 are mutually exclusive)
 - Precise timing: maintains 0.1s accuracy over 10+ hours
-
-Note: Single-threaded GPU processing avoids CUDA context issues.
-Batching provides the parallelization we need for efficient GPU use.
 """
 
 import subprocess
 import tempfile
+import threading
 import time
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -113,6 +120,182 @@ class CropRegionHelper:
         self.crop_bottom_px = int(crop_region.crop_bottom * frame_height)
         self.crop_width = self.crop_right_px - self.crop_left_px
         self.crop_height = self.crop_bottom_px - self.crop_top_px
+
+
+class ParallelEncodingCoordinator:
+    """Coordinates parallel VP9 encoding as frames become available.
+
+    This allows encoding to start immediately when chunks are ready,
+    overlapping with GPU processing.
+    """
+
+    def __init__(
+        self,
+        frames_dir: Path,
+        chunks_dir: Path,
+        frame_rate: float,
+        num_workers: int = 4,
+        frames_per_chunk: int = 32,
+        modulo_levels: list = None,
+    ):
+        self.frames_dir = frames_dir
+        self.chunks_dir = chunks_dir
+        self.frame_rate = frame_rate
+        self.num_workers = num_workers
+        self.frames_per_chunk = frames_per_chunk
+        self.modulo_levels = modulo_levels or [16, 4, 1]
+
+        # Track available frames and encoded chunks
+        self.available_frames = set()
+        self.encoded_chunks = set()  # (modulo, start_frame_idx)
+        self.lock = threading.Lock()
+
+        # Executor for parallel encoding
+        self.executor = ThreadPoolExecutor(max_workers=num_workers)
+        self.futures = []
+
+    def mark_frame_available(self, frame_idx: int):
+        """Mark a frame as available and check for ready chunks."""
+        with self.lock:
+            self.available_frames.add(frame_idx)
+
+        # Check if any new chunks are ready to encode
+        self._check_and_encode_ready_chunks()
+
+    def _get_frames_for_modulo(self, available_frames: list, modulo: int) -> list:
+        """Get frames that belong to this specific modulo level (no overlap).
+
+        - modulo 16: every 16th frame (0, 16, 32, ...)
+        - modulo 4: every 4th frame excluding modulo 16 (4, 8, 12, 20, 24, ...)
+        - modulo 1: all other frames (1, 2, 3, 5, 6, 7, 9, ...)
+        """
+        if modulo == 16:
+            # Highest priority: every 16th frame
+            return [f for f in available_frames if f % 16 == 0]
+        elif modulo == 4:
+            # Middle priority: every 4th frame, excluding modulo 16
+            return [f for f in available_frames if f % 4 == 0 and f % 16 != 0]
+        elif modulo == 1:
+            # Lowest priority: all frames excluding modulo 16 and modulo 4
+            return [f for f in available_frames if f % 4 != 0]
+        else:
+            return []
+
+    def _check_and_encode_ready_chunks(self):
+        """Check for complete chunks and submit them for encoding."""
+        with self.lock:
+            available = sorted(self.available_frames)
+            if not available:
+                return
+
+            # Check each modulo level (with proper filtering for no overlap)
+            for modulo in self.modulo_levels:
+                # Get frames at this specific modulo level (no overlap)
+                modulo_frames = self._get_frames_for_modulo(available, modulo)
+
+                if len(modulo_frames) < self.frames_per_chunk:
+                    continue
+
+                # Split into chunks
+                for chunk_start_idx in range(0, len(modulo_frames) - self.frames_per_chunk + 1, self.frames_per_chunk):
+                    chunk_frames = modulo_frames[chunk_start_idx:chunk_start_idx + self.frames_per_chunk]
+
+                    # Use first frame index as chunk identifier
+                    start_frame_idx = chunk_frames[0]
+                    chunk_id = (modulo, start_frame_idx)
+
+                    # Skip if already encoded or in progress
+                    if chunk_id in self.encoded_chunks:
+                        continue
+
+                    # Check if all frames in chunk are available
+                    if all(f in self.available_frames for f in chunk_frames):
+                        # Mark as being encoded
+                        self.encoded_chunks.add(chunk_id)
+
+                        # Submit encoding task
+                        future = self.executor.submit(
+                            self._encode_chunk,
+                            modulo,
+                            chunk_frames,
+                            start_frame_idx
+                        )
+                        self.futures.append(future)
+
+    def _encode_chunk(self, modulo: int, chunk_frame_indices: list, start_frame_idx: int) -> Path:
+        """Encode a single chunk (called in worker thread)."""
+        import tempfile
+
+        # Create modulo directory
+        modulo_dir = self.chunks_dir / f"modulo_{modulo}"
+        modulo_dir.mkdir(exist_ok=True, parents=True)
+
+        # Build frame file paths
+        chunk_frames = [
+            self.frames_dir / f"frame_{idx:010d}.jpg"
+            for idx in chunk_frame_indices
+        ]
+
+        # Output path
+        chunk_output = modulo_dir / f"chunk_{start_frame_idx:010d}.webm"
+
+        # Create FFmpeg file list
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            for frame_file in chunk_frames:
+                f.write(f"file '{frame_file.absolute()}'\n")
+                f.write(f"duration {1.0 / self.frame_rate}\n")
+            filelist_path = f.name
+
+        try:
+            # Encode with VP9
+            subprocess.run(
+                [
+                    "ffmpeg",
+                    "-f", "concat",
+                    "-safe", "0",
+                    "-i", filelist_path,
+                    "-c:v", "libvpx-vp9",
+                    "-crf", "30",
+                    "-b:v", "0",
+                    "-cpu-used", "2",
+                    "-threads", "2",
+                    "-row-mt", "1",
+                    "-tile-columns", "1",
+                    "-frame-parallel", "1",
+                    "-auto-alt-ref", "1",
+                    "-lag-in-frames", "25",
+                    "-y",
+                    str(chunk_output),
+                ],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            return chunk_output
+        finally:
+            Path(filelist_path).unlink(missing_ok=True)
+
+    def wait_for_completion(self) -> list[Tuple[int, Path]]:
+        """Wait for all encoding tasks to complete and return chunk paths."""
+        chunk_paths = []
+        completed = 0
+        total = len(self.futures)
+
+        for future in as_completed(self.futures):
+            try:
+                chunk_output = future.result()
+                # Extract modulo from path
+                modulo = int(chunk_output.parent.name.split("_")[1])
+                chunk_paths.append((modulo, chunk_output))
+                completed += 1
+
+                if completed % 50 == 0 or completed == total:
+                    print(f"    Encoding progress: {completed}/{total} chunks")
+            except Exception as e:
+                print(f"    Encoding error: {e}")
+
+        self.executor.shutdown(wait=True)
+        return chunk_paths
 
 
 class PerformanceMetrics:
@@ -301,6 +484,7 @@ def crop_and_infer_caption_frame_extents_pipelined(
     crop_region: CropRegion,
     frame_rate: float = 10.0,
     encoder_workers: int = 4,
+    inference_batch_size: int = 32,
 ) -> CropInferResult:
     """
     Pipelined implementation of crop_and_infer_caption_frame_extents.
@@ -422,6 +606,18 @@ def crop_and_infer_caption_frame_extents_pipelined(
         # Compute crop region pixel coordinates
         crop_helper = CropRegionHelper(crop_region, frame_width, frame_height)
 
+        # Initialize parallel encoding coordinator
+        # This will start encoding chunks as soon as they're ready
+        print("  [Encoder] Starting parallel VP9 encoding coordinator...")
+        encoding_coordinator = ParallelEncodingCoordinator(
+            frames_dir=frames_dir,
+            chunks_dir=chunks_dir,
+            frame_rate=frame_rate,
+            num_workers=encoder_workers,
+            frames_per_chunk=32,
+            modulo_levels=[16, 4, 1],
+        )
+
         # Load inference model
         model_version = "mrn0fkfd_a4b1a61c"
         checkpoint_path = Path("/root/boundary-models/checkpoints/mrn0fkfd_a4b1a61c.pt")
@@ -457,7 +653,6 @@ def crop_and_infer_caption_frame_extents_pipelined(
 
         # Process in batches for efficient GPU inference
         # Batch size configuration (all derived from this single parameter)
-        inference_batch_size = 32  # Number of images passed to predictor at once
         pairs_per_batch = inference_batch_size // 2  # Each pair = 2 images (forward + backward)
         frames_first_batch = pairs_per_batch + 1  # Need N+1 frames for N consecutive pairs
         frames_per_subsequent = pairs_per_batch  # Add N new frames (plus 1 reused = N+1 total)
@@ -581,13 +776,17 @@ def crop_and_infer_caption_frame_extents_pipelined(
                 )
                 pair_results.append(pair_result)
 
-            # Save all frames from batch
+            # Save all frames from batch and notify encoder
             for i, save_frame_idx in enumerate(batch_frame_indices):
                 if save_frame_idx not in frames_saved:
                     frame_np = batch_frames_gpu[i].cpu().numpy()
                     frame_path = frames_dir / f"frame_{save_frame_idx:010d}.jpg"
                     PILImage.fromarray(frame_np).save(frame_path, quality=95)
                     frames_saved[save_frame_idx] = True
+
+                    # Notify encoding coordinator that frame is available
+                    # This may trigger encoding of complete chunks
+                    encoding_coordinator.mark_frame_available(save_frame_idx)
 
             # Move to next batch
             frame_idx += frames_to_extract
@@ -605,23 +804,19 @@ def crop_and_infer_caption_frame_extents_pipelined(
         pipeline_duration = time.time() - pipeline_start
         print(f"  GPU processing complete: {frame_count} frames, {len(pair_results)} pairs in {pipeline_duration:.2f}s\n")
 
-        # Step 6: Encode VP9 chunks in parallel
-        print("[6/7] Encoding VP9 chunks...")
-        encode_start = time.time()
+        # Step 6: Wait for parallel VP9 encoding to complete
+        print("[6/7] Waiting for parallel VP9 encoding to complete...")
+        metrics.encoding_start = time.time()
 
-        frame_files = sorted(frames_dir.glob("frame_*.jpg"))
+        # Encoding started in background as frames became available
+        # Now wait for all encoding tasks to finish
+        chunk_paths = encoding_coordinator.wait_for_completion()
 
-        encoder_pool = VP9EncoderPool(
-            frames_dir=frames_dir,
-            chunks_dir=chunks_dir,
-            frame_rate=frame_rate,
-            num_workers=encoder_workers,
-            metrics=metrics,
-        )
+        metrics.encoding_end = time.time()
+        metrics.chunks_encoded = len(chunk_paths)
 
-        chunk_paths = encoder_pool.encode_all_chunks(frame_files)
-
-        print(f"  Encoded {len(chunk_paths)} chunks in {time.time() - encode_start:.2f}s\n")
+        encoding_duration = time.time() - metrics.encoding_start
+        print(f"  All encoding complete: {len(chunk_paths)} chunks in {encoding_duration:.2f}s\n")
 
         # Step 7: Create DB and upload to Wasabi
         print("[7/7] Creating database and uploading to Wasabi...")
@@ -692,7 +887,7 @@ def crop_and_infer_caption_frame_extents_pipelined(
         print(f"Inference pairs: {len(pair_results)}")
         print(f"Label counts: {label_counts_dict}")
         print(f"Processing duration: {pipeline_duration:.2f}s")
-        print(f"Encoding duration: {time.time() - encode_start:.2f}s")
+        print(f"Encoding duration: {encoding_duration:.2f}s")
         print(f"Total duration: {total_duration:.2f}s")
         print(f"{'=' * 80}\n")
 

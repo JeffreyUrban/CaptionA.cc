@@ -9,12 +9,19 @@ This script tests the pipelined crop_and_infer Modal function:
 5. Cleans up test data (automatic in finally block)
 
 Prerequisites:
-- Test fixture video at: test-fixtures/videos/short-test.mp4
+- Test fixture videos at:
+  - test-fixtures/videos/short-test.mp4 (18s, ~184 frames)
+  - test-fixtures/videos/car-teardown-comparison-08.mp4 (full length)
 - Modal deployment with crop_and_infer_caption_frame_extents function
 
-Run as `python test_pipelined.py`
+Usage:
+    python test_pipelined.py                    # Short video, batch_size=32
+    python test_pipelined.py --full             # Full video, batch_size=32
+    python test_pipelined.py --batch-size 64    # Short video, batch_size=64
+    python test_pipelined.py --full --batch-size 16
 """
 
+import argparse
 import gzip
 import io
 import shutil
@@ -27,10 +34,14 @@ from pathlib import Path
 from PIL import Image as PILImage
 
 
-def run_pipelined_test():
+def run_pipelined_test(video_fixture: str, batch_size: int):
     """Run pipelined implementation test."""
     print("=" * 80)
     print("PIPELINED IMPLEMENTATION TEST")
+    print("=" * 80)
+    print(f"Configuration:")
+    print(f"  Video: {video_fixture}")
+    print(f"  Batch size: {batch_size}")
     print("=" * 80)
     print()
 
@@ -55,8 +66,8 @@ def run_pipelined_test():
     tenant_id = str(uuid.uuid4())
     video_id = str(uuid.uuid4())
 
-    # Source fixture and target video key (using short test video)
-    fixture_key = "test-fixtures/videos/short-test.mp4"
+    # Source fixture and target video key
+    fixture_key = f"test-fixtures/videos/{video_fixture}"
     video_key = f"{tenant_id}/client/videos/{video_id}/video.mp4"
 
     print(f"[1/4] Setting up test tenant directory")
@@ -191,6 +202,7 @@ def run_pipelined_test():
 
         # Call Modal function with the tenant video key
         print("  Spawning Modal function call...")
+        print(f"  Parameters: frame_rate=10.0, encoder_workers=4, inference_batch_size={batch_size}")
         result_call = crop_and_infer_fn.spawn(
             video_key=video_key,
             tenant_id=tenant_id,
@@ -198,6 +210,7 @@ def run_pipelined_test():
             crop_region=crop_region,
             frame_rate=10.0,  # 10 Hz
             encoder_workers=4,  # 4 parallel encoding workers
+            inference_batch_size=batch_size,
         )
         print("  Modal function dispatched, waiting for completion...")
         print("  (Check Modal dashboard for live progress)\n")
@@ -249,5 +262,25 @@ def run_pipelined_test():
 
 
 if __name__ == "__main__":
-    success = run_pipelined_test()
+    parser = argparse.ArgumentParser(
+        description="Test pipelined crop_and_infer implementation with configurable batch size and video."
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=32,
+        help="Inference batch size (number of images per GPU call, default: 32)",
+    )
+    parser.add_argument(
+        "--full",
+        action="store_true",
+        help="Use full-length test video instead of short video (default: short)",
+    )
+
+    args = parser.parse_args()
+
+    # Select video fixture based on --full flag
+    video_fixture = "car-teardown-comparison-08.mp4" if args.full else "short-test.mp4"
+
+    success = run_pipelined_test(video_fixture, args.batch_size)
     sys.exit(0 if success else 1)
