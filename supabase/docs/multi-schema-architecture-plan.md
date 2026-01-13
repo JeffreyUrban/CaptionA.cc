@@ -312,10 +312,10 @@ For Umami analytics (separate concern):
 
 ```bash
 # Umami expects its own database or schema
-# Configure Umami to use: postgresql://user:pass@host:5432/db?schema=umami
+# Configure Umami to use: postgresql://<user>:<pass>@host:5432/db?schema=umami
 
 # Or in Umami's .env:
-DATABASE_URL=postgresql://postgres:password@db.your-project.supabase.co:5432/postgres?schema=umami
+DATABASE_URL=postgresql://postgres:<replace-with-db-password>@db.your-project.supabase.co:5432/postgres?schema=umami
 ```
 
 ### Prefect Integration
@@ -327,7 +327,7 @@ For Prefect Server (self-hosted alternative to Prefect Cloud):
 # Point Prefect to captionacc_prefect schema
 
 # In Prefect Server configuration:
-PREFECT_API_DATABASE_CONNECTION_URL=postgresql://postgres:password@db.your-project.supabase.co:5432/postgres?options=-c%20search_path%3Dcaptionacc_prefect
+PREFECT_API_DATABASE_CONNECTION_URL=postgresql://postgres:<replace-with-db-password>@db.your-project.supabase.co:5432/postgres?options=-c%20search_path%3Dcaptionacc_prefect
 
 # Or use environment variable with schema parameter
 DATABASE_URL=postgresql://...?schema=captionacc_prefect
@@ -346,7 +346,7 @@ prefect server database upgrade
    ./scripts/start-supabase.sh
 
    # Create schemas locally
-   psql postgresql://postgres:postgres@localhost:54322/postgres -c "
+   psql postgresql://postgres:<replace-with-db-password>@localhost:54322/postgres -c "
      CREATE SCHEMA captionacc_production;
      CREATE SCHEMA captionacc_staging;
      CREATE SCHEMA captionacc_prefect;

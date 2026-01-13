@@ -15,16 +15,12 @@ from typing import Any
 from supabase import Client, create_client
 from supabase.lib.client_options import SyncClientOptions
 
-# Local Supabase demo keys - These are Supabase's standard public keys for local development
-# Documented at: https://supabase.com/docs/guides/cli/local-development
-# These keys are safe to commit - they only work with `supabase start` on localhost:54321
+# Local Supabase demo keys - Placeholder values for local development
+# For actual local development, get keys from: https://supabase.com/docs/guides/cli/local-development
+# These keys only work with `supabase start` on localhost:54321
 # Production keys are NEVER in code - only in environment variables/secrets
 LOCAL_SUPABASE_URL = "http://localhost:54321"
-LOCAL_SUPABASE_SERVICE_ROLE_KEY = (
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
-    "eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0."
-    "EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU"
-)
+LOCAL_SUPABASE_SERVICE_ROLE_KEY = "LOCAL_DEVELOPMENT_SERVICE_ROLE_KEY_PLACEHOLDER"
 
 
 def get_supabase_client(require_production: bool = False, schema: str | None = None) -> Client:

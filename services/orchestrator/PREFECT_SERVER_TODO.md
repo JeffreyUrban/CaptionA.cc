@@ -86,7 +86,7 @@ Prefect server needs a PostgreSQL database. Use your existing Supabase:
 
 # Set as Fly secret
 fly secrets set \
-  PREFECT_API_DATABASE_CONNECTION_URL="postgresql://postgres:xxx@xxx.supabase.co:5432/postgres" \
+  PREFECT_API_DATABASE_CONNECTION_URL="postgresql://postgres:<replace-with-db-password>@<your-project-id>.supabase.co:5432/postgres" \
   -a prefect
 ```
 
@@ -115,7 +115,7 @@ Add secrets to orchestrator:
 ```bash
 fly secrets set \
   PREFECT_API_URL="https://prefect.fly.dev/api" \
-  PREFECT_API_KEY="pnu_xxx..." \
+  PREFECT_API_KEY="<replace-with-prefect-value>" \
   -a captionacc-orchestrator
 ```
 

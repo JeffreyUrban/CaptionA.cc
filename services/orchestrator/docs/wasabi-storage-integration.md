@@ -359,8 +359,8 @@ Required in `.env`:
 
 ```bash
 # Wasabi S3 Storage
-WASABI_ACCESS_KEY=...
-WASABI_SECRET_KEY=...
+WASABI_ACCESS_KEY=<replace-with-wasabi-access>
+WASABI_SECRET_KEY=<replace-with-wasabi-secret>
 WASABI_BUCKET=caption-acc-prod
 WASABI_REGION=us-east-1
 
