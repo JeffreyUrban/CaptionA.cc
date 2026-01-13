@@ -61,10 +61,10 @@ fly apps create captionacc-umami --org personal
 fly secrets set DATABASE_URL="postgresql://postgres:[YOUR-PASSWORD]@db.xxx.supabase.co:5432/postgres?schema=umami" -a captionacc-umami
 
 # Set HASH_SALT (use the value you generated)
-fly secrets set HASH_SALT="your_generated_hash_salt_here" -a captionacc-umami
+fly secrets set HASH_SALT="<replace-with-hash-salt>" -a captionacc-umami
 
 # Set APP_SECRET (use the value you generated)
-fly secrets set APP_SECRET="your_generated_app_secret_here" -a captionacc-umami
+fly secrets set APP_SECRET="<replace-with-app-value>" -a captionacc-umami
 ```
 
 ### 6. Deploy Umami
@@ -92,7 +92,7 @@ Or visit: `https://captionacc-umami.fly.dev`
 
 **Default credentials:**
 - Username: `admin`
-- Password: `umami`
+- Login credential: `umami` (default, change immediately!)
 
 **IMPORTANT:** Change the password immediately after first login!
 

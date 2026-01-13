@@ -107,7 +107,7 @@ dvc remote modify storage url /mnt/shared-storage/caption-boundaries/dvc-storage
 ```bash
 dvc remote add -d storage myremote
 dvc remote modify storage url ssh://user@server/path/to/storage --local
-dvc remote modify storage password YOUR_PASSWORD --local
+dvc remote modify storage password <replace-with-db-password> --local
 ```
 
 **Note:** In all cases above, the actual storage location (URL) is stored in `.dvc/config.local` which is gitignored, keeping your infrastructure details private.

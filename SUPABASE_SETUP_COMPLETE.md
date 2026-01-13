@@ -79,7 +79,7 @@ supabase start
 Open http://localhost:54323 and:
 1. Go to **Authentication** > **Users**
 2. Click **Add User**
-3. Email: `demo@captionacc.local`, Password: `demo123456`
+3. Email: `demo@captionacc.local`, Pass: `<insert-demo-pass>`
 4. Auto Confirm: **Yes**
 
 Then create user profile in **Table Editor** > **user_profiles**:

@@ -62,8 +62,7 @@ export async function requirePlatformAdmin(request: Request): Promise<string> {
   const { createClient } = await import('@supabase/supabase-js')
   const supabaseUrl = process.env['VITE_SUPABASE_URL'] || 'http://localhost:54321'
   const supabaseAnonKey =
-    process.env['VITE_SUPABASE_ANON_KEY'] ||
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0'
+    process.env['VITE_SUPABASE_ANON_KEY'] || 'LOCAL_DEVELOPMENT_ANON_KEY_PLACEHOLDER'
 
   const supabase = createClient<Database, 'captionacc_production'>(supabaseUrl, supabaseAnonKey, {
     auth: { persistSession: false, autoRefreshToken: false },

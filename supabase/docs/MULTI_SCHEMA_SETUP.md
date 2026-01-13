@@ -112,11 +112,11 @@ flyctl secrets set \
 ```bash
 flyctl secrets set \
   SUPABASE_URL="https://your-project.supabase.co" \
-  SUPABASE_SERVICE_ROLE_KEY="your_service_role_key" \
-  PREFECT_API_URL="your_prefect_url" \
-  PREFECT_API_KEY="your_prefect_key" \
-  WASABI_ACCESS_KEY_READWRITE="your_key" \
-  WASABI_SECRET_KEY_READWRITE="your_secret" \
+  SUPABASE_SERVICE_ROLE_KEY="<replace-with-service-role>" \
+  PREFECT_API_URL="YOUR_PREFECT_URL" \
+  PREFECT_API_KEY="<replace-with-prefect-value>" \
+  WASABI_ACCESS_KEY_READWRITE="<replace-with-wasabi-access>" \
+  WASABI_SECRET_KEY_READWRITE="<replace-with-wasabi-secret>" \
   WASABI_BUCKET="your-bucket" \
   WASABI_REGION="us-east-1" \
   ENVIRONMENT="production" \

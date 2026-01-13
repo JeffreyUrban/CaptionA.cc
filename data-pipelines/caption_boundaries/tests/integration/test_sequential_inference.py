@@ -241,7 +241,7 @@ class TestBoundariesDatabaseCreation:
         create_boundaries_db(
             db_path=db_path,
             cropped_frames_version=1,
-            model_version="abc123def456",
+            model_version="test-model-version",
             run_id="test-run-123",
             started_at=datetime.now(),
             completed_at=datetime.now(),
