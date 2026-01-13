@@ -68,4 +68,5 @@ asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
 markers = [
     "security: marks tests as security tests (deselect with '-m \"not security\"')",
+    "recovery: marks tests for recovery and error handling scenarios",
 ]
