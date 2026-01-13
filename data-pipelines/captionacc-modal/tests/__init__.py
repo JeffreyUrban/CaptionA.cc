@@ -1,1 +1,1 @@
-"""Tests for captionacc-modal package."""
+"""Tests for captionacc-modal."""

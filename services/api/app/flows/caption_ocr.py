@@ -114,9 +114,11 @@ async def caption_ocr(
         )
 
         # Step 2: Call Modal generate_caption_ocr function
-        logger.info("Looking up Modal app and function")
-        modal_app = modal.App.lookup("captionacc-processing")
-        ocr_fn = modal_app.function("generate_caption_ocr")
+        logger.info("Looking up Modal function")
+        ocr_fn = modal.Function.from_name(
+            "captionacc-processing",
+            "generate_caption_ocr"
+        )
 
         chunks_prefix = f"{tenant_id}/client/videos/{video_id}/cropped_frames_v{version}/"
         logger.info(f"Calling Modal generate_caption_ocr with chunks_prefix: {chunks_prefix}")

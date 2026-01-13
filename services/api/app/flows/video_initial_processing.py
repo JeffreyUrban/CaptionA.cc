@@ -55,9 +55,11 @@ def extract_frames_and_ocr_task(
         f"Starting frame extraction for video {video_id} at {frame_rate} fps"
     )
 
-    # Look up the Modal app and function
-    modal_app = modal.App.lookup("captionacc")
-    extract_fn = modal_app.function("extract_frames_and_ocr")
+    # Look up the deployed Modal function
+    extract_fn = modal.Function.from_name(
+        "captionacc-processing",
+        "extract_frames_and_ocr"
+    )
 
     # Call the Modal function remotely
     try:

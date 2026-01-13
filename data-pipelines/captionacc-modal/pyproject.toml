@@ -33,7 +33,14 @@ disallow_untyped_defs = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+asyncio_mode = "auto"
 markers = [
+    "modal: marks tests as requiring Modal deployment (deselect with '-m \"not modal\"')",
     "integration: Integration tests requiring real services (Modal, Wasabi, Google Cloud)",
     "slow: Slow running tests (>30 seconds)",
 ]
+# Default: skip Modal tests unless --run-modal is provided
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--tb=short",

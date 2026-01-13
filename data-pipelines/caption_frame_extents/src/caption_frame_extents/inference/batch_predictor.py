@@ -223,8 +223,6 @@ class BatchCaptionFrameExtentsPredictor:
         """
         results = []
 
-        console.print(f"[cyan]Running batch inference on {len(frame_pairs)} pairs...[/cyan]")
-
         # Process in batches
         for i in range(0, len(frame_pairs), batch_size):
             batch = frame_pairs[i : i + batch_size]
@@ -282,8 +280,7 @@ class BatchCaptionFrameExtentsPredictor:
                 results.append(result)
 
             # Progress logging
-            if (i + batch_size) % 1000 == 0 or i + batch_size >= len(frame_pairs):
+            if (i + batch_size) % 1000 == 0:
                 console.print(f"  Processed {min(i + batch_size, len(frame_pairs))}/{len(frame_pairs)} pairs")
 
-        console.print("[green]✓ Batch inference complete[/green]")
         return results

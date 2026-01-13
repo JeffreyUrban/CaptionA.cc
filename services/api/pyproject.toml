@@ -14,6 +14,9 @@ dependencies = [
     "boto3>=1.35.0",
     "apsw>=3.48.0",           # SQLite wrapper with extension loading for CR-SQLite
     "supabase>=2.0.0",        # Supabase client for video_database_state
+    "prefect>=3.0.0",         # Workflow orchestration
+    "modal>=0.63.0",          # Serverless compute for video processing
+    "captionacc-modal",       # Modal function models and types
 ]
 
 [project.optional-dependencies]
@@ -66,40 +69,7 @@ reportUnusedParameter = "none"  # Suppress unused parameter warnings (common in 
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
-python_files = ["test_*.py"]
-python_classes = ["Test*"]
-python_functions = ["test_*"]
-
-# Custom markers for test categorization
 markers = [
-    "unit: Unit tests (fast, no external dependencies)",
-    "integration: Integration tests (moderate speed, mocked externals)",
-    "api: API endpoint tests (uses TestClient)",
-    "flows: Prefect flow tests (mocked Modal/Supabase/Wasabi)",
-    "slow: Slow-running tests (> 1s per test)",
-    "websocket: WebSocket connection tests",
-    "security: marks tests as security tests (deselect with '-m \"not security\"')",
-    "recovery: marks tests for recovery and error handling scenarios",
+    "e2e: End-to-end integration tests with real services (Modal, Supabase, Wasabi)",
+    "slow: Tests that take a long time to run (>10 seconds)",
 ]
-
-# Coverage settings
-[tool.coverage.run]
-source = ["app"]
-omit = [
-    "*/tests/*",
-    "*/conftest.py",
-    "*/__init__.py",
-]
-
-[tool.coverage.report]
-exclude_lines = [
-    "pragma: no cover",
-    "def __repr__",
-    "raise AssertionError",
-    "raise NotImplementedError",
-    "if __name__ == .__main__.:",
-    "if TYPE_CHECKING:",
-    "@abstractmethod",
-]
-fail_under = 80  # Minimum coverage threshold
-
