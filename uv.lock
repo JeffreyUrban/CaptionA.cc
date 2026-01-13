@@ -511,6 +511,7 @@ dependencies = [
 
 [package.optional-dependencies]
 dev = [
+    { name = "prefect" },
     { name = "pyright" },
     { name = "pytest" },
     { name = "pytest-asyncio" },

@@ -36,11 +36,11 @@ testpaths = ["tests"]
 asyncio_mode = "auto"
 markers = [
     "modal: marks tests as requiring Modal deployment (deselect with '-m \"not modal\"')",
-    "integration: marks tests as integration tests (deselect with '-m \"not integration\"')",
+    "integration: Integration tests requiring real services (Modal, Wasabi, Google Cloud)",
+    "slow: Slow running tests (>30 seconds)",
 ]
 # Default: skip Modal tests unless --run-modal is provided
 addopts = [
     "-v",
     "--strict-markers",
     "--tb=short",
-]

@@ -1,1 +1,1 @@
-"""Integration tests for captionacc-modal."""
+"""Integration tests for Modal functions."""
