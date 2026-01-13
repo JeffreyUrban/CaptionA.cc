@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, Header, HTTPException, Request, status
+from fastapi import APIRouter, Header, HTTPException, Request, Response, status
 from pydantic import BaseModel
 
 from app.config import get_settings
@@ -143,6 +143,7 @@ async def trigger_prefect_flow(
 @router.post("/webhooks/supabase/videos", response_model=WebhookResponse)
 async def supabase_videos_webhook(
     request: Request,
+    response: Response,
     authorization: str | None = Header(None),
 ):
     """
@@ -266,6 +267,7 @@ async def supabase_videos_webhook(
             tags=tags,
         )
 
+        response.status_code = status.HTTP_202_ACCEPTED
         return WebhookResponse(
             success=True,
             flow_run_id=result["flow_run_id"],
