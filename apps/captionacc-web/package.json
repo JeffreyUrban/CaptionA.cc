@@ -38,6 +38,7 @@
     "@supabase/supabase-js": "^2.89.0",
     "@tailwindcss/typography": "^0.5.19",
     "@tailwindplus/elements": "^1.0.22",
+    "@vlcn.io/crsqlite-wasm": "^0.16.0",
     "@tus/file-store": "^2.0.0",
     "@tus/server": "^2.3.0",
     "@types/dompurify": "^3.0.5",
