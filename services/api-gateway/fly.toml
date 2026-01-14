@@ -1,0 +1,60 @@
+# Fly.io configuration for Traefik API Gateway
+# Generic gateway for multiple projects
+
+app = "api-gateway"
+primary_region = "ewr"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  # No project-specific env vars here
+  # All configuration is in dynamic/*.yml files
+
+# HTTP Service (Traefik web entrypoint)
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = false # Keep gateway running
+  auto_start_machines = true
+  min_machines_running = 1 # Always keep 1 instance running
+
+  # Health check
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "30s"
+    method = "GET"
+    path = "/ping"
+
+# HTTPS Service (Traefik websecure entrypoint)
+[[services]]
+  internal_port = 8443
+  protocol = "tcp"
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[services.ports]]
+    port = 443
+    handlers = ["tls", "http"]
+
+  [[services.ports]]
+    port = 80
+    handlers = ["http"]
+
+  [services.concurrency]
+    type = "connections"
+    hard_limit = 100
+    soft_limit = 80
+
+# VM Configuration
+[[vm]]
+  memory = "256mb" # Traefik is lightweight
+  cpu_kind = "shared"
+  cpus = 1
+
+# Metrics (optional)
+[metrics]
+  port = 8080
+  path = "/metrics"

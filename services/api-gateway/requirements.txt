@@ -1,0 +1,2 @@
+# Requirements for token generation script
+httpx>=0.27.0
