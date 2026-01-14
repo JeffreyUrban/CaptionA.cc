@@ -20,6 +20,72 @@ export interface VideoPermissions {
 }
 
 /**
+ * Check if a trial user can annotate a specific video.
+ * Trial users can only annotate their first 3 uploaded videos.
+ */
+async function canTrialUserAnnotate(
+  supabase: ReturnType<typeof createServerSupabaseClient>,
+  userId: string,
+  videoId: string
+): Promise<boolean> {
+  // Trial tier: only first 3 uploaded videos (including deleted in count)
+  const { data: allUserVideos } = await supabase
+    .from('videos')
+    .select('id, deleted_at')
+    .eq('uploaded_by_user_id', userId)
+    .order('uploaded_at', { ascending: true })
+    .limit(3)
+
+  const isInFirstThree = allUserVideos?.some(v => v.id === videoId)
+  if (!isInFirstThree) {
+    return false
+  }
+
+  const { data: currentVideo } = await supabase
+    .from('videos')
+    .select('deleted_at')
+    .eq('id', videoId)
+    .single()
+
+  return !currentVideo?.deleted_at
+}
+
+/**
+ * Determine if a user can annotate a video based on ownership and access tier.
+ */
+async function checkAnnotationPermission(
+  supabase: ReturnType<typeof createServerSupabaseClient>,
+  userId: string,
+  videoId: string,
+  isOwner: boolean,
+  isAdmin: boolean
+): Promise<boolean> {
+  if (isAdmin) {
+    return true
+  }
+
+  if (!isOwner) {
+    return false
+  }
+
+  const { data: profile } = await supabase
+    .from('user_profiles')
+    .select('access_tier_id')
+    .eq('id', userId)
+    .single()
+
+  if (profile?.access_tier_id === 'active') {
+    return true
+  }
+
+  if (profile?.access_tier_id === 'trial') {
+    return canTrialUserAnnotate(supabase, userId, videoId)
+  }
+
+  return false
+}
+
+/**
  * Get permissions for a specific video
  * Handles demo videos, trial tier limits, and ownership
  *
@@ -73,37 +139,7 @@ export async function getVideoPermissions(
   const canDelete = isOwner || isAdmin
 
   // Annotation permission depends on access tier
-  let canAnnotate = false
-  if (isOwner) {
-    const { data: profile } = await supabase
-      .from('user_profiles')
-      .select('access_tier_id')
-      .eq('id', userId)
-      .single()
-
-    if (profile?.access_tier_id === 'trial') {
-      // Trial tier: only first 3 uploaded videos (including deleted in count)
-      const { data: allUserVideos } = await supabase
-        .from('videos')
-        .select('id, deleted_at')
-        .eq('uploaded_by_user_id', userId)
-        .order('uploaded_at', { ascending: true })
-        .limit(3)
-
-      const isInFirstThree = allUserVideos?.some(v => v.id === videoId)
-      const { data: currentVideo } = await supabase
-        .from('videos')
-        .select('deleted_at')
-        .eq('id', videoId)
-        .single()
-
-      canAnnotate = !!isInFirstThree && !currentVideo?.deleted_at
-    } else if (profile?.access_tier_id === 'active') {
-      canAnnotate = true
-    }
-  } else if (isAdmin) {
-    canAnnotate = true
-  }
+  const canAnnotate = await checkAnnotationPermission(supabase, userId, videoId, isOwner, isAdmin)
 
   return {
     canView,

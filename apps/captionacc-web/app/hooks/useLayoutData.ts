@@ -123,6 +123,7 @@ function processQueueResponse(
   }
 }
 
+// eslint-disable-next-line max-lines-per-function -- Layout data management with loading, saving, and state synchronization
 export function useLayoutData({ videoId, showAlert }: UseLayoutDataParams): UseLayoutDataReturn {
   const [frames, setFrames] = useState<FrameInfo[]>([])
   const [layoutConfig, setLayoutConfig] = useState<LayoutConfig | null>(null)

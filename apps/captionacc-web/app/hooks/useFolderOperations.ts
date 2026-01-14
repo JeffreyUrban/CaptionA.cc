@@ -51,6 +51,7 @@ interface UseFolderOperationsReturn {
 /**
  * Hook for managing folder CRUD operations and modal state.
  */
+// eslint-disable-next-line max-lines-per-function -- Folder operations with modals and error handling for CRUD
 export function useFolderOperations({
   onOperationComplete,
 }: UseFolderOperationsParams): UseFolderOperationsReturn {

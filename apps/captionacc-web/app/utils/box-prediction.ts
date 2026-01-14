@@ -1490,24 +1490,40 @@ export function initializeSeedModel(db: Database.Database): void {
   console.log('[initializeSeedModel] Seed model initialized successfully')
 }
 
-/**
- * Train Bayesian model using user annotations.
- *
- * Fetches all user-labeled boxes, extracts features, calculates Gaussian
- * parameters for each feature per class, and stores in box_classification_model table.
- *
- * Replaces the seed model once 10+ annotations are available.
- *
- * @param db Database connection
- * @param layoutConfig Video layout configuration
- * @returns Number of training samples used, or null if insufficient data
- */
-export function trainModel(db: Database.Database, layoutConfig: VideoLayoutConfig): number | null {
-  // Migrate schema if needed (add user_annotation columns)
-  migrateModelSchema(db)
+/** Annotation row from the database */
+interface AnnotationRow {
+  label: 'in' | 'out'
+  box_left: number
+  box_top: number
+  box_right: number
+  box_bottom: number
+  frame_index: number
+  box_index: number
+}
 
-  // Fetch all user annotations
-  const annotations = db
+/** OCR box row from the database */
+interface OcrBoxRow {
+  box_index: number
+  text: string
+  timestamp_seconds: number
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+/** Frame data cache for efficient feature extraction */
+interface FrameDataCache {
+  boxesCache: Map<number, BoxBounds[]>
+  textCache: Map<string, string>
+  timestampCache: Map<number, number>
+}
+
+/**
+ * Fetch user annotations from the database.
+ */
+function fetchUserAnnotations(db: Database.Database): AnnotationRow[] {
+  return db
     .prepare(
       `
     SELECT
@@ -1523,98 +1539,77 @@ export function trainModel(db: Database.Database, layoutConfig: VideoLayoutConfi
     ORDER BY frame_index
   `
     )
-    .all() as Array<{
-    label: 'in' | 'out'
-    box_left: number
-    box_top: number
-    box_right: number
-    box_bottom: number
-    frame_index: number
-    box_index: number
-  }>
+    .all() as AnnotationRow[]
+}
 
-  if (annotations.length < 10) {
-    console.log(`[trainModel] Insufficient training data: ${annotations.length} samples (need 10+)`)
-
-    // If annotations were cleared, reset to seed model
-    const existingModel = db
-      .prepare('SELECT n_training_samples FROM box_classification_model WHERE id = 1')
-      .get() as { n_training_samples: number } | undefined
-
-    if (existingModel && existingModel.n_training_samples >= 10) {
-      console.log(`[trainModel] Resetting to seed model (annotations cleared)`)
-      // Re-initialize seed model to replace trained model
-      db.prepare('DELETE FROM box_classification_model WHERE id = 1').run()
-      // Seed model will be re-initialized on next prediction calculation
-    }
-
-    return null
+/**
+ * Build frame data caches for efficient feature extraction.
+ */
+function buildFrameDataCache(
+  db: Database.Database,
+  frameIndex: number,
+  layoutConfig: VideoLayoutConfig,
+  cache: FrameDataCache
+): void {
+  if (cache.boxesCache.has(frameIndex)) {
+    return
   }
 
-  console.log(`[trainModel] Training with ${annotations.length} user annotations`)
+  const boxes = db
+    .prepare(
+      `
+    SELECT box_index, text, timestamp_seconds, x, y, width, height
+    FROM full_frame_ocr
+    WHERE frame_index = ?
+    ORDER BY box_index
+  `
+    )
+    .all(frameIndex) as OcrBoxRow[]
 
-  // Get video duration for temporal features
-  const videoDuration = db
-    .prepare('SELECT duration_seconds FROM video_metadata WHERE id = 1')
-    .get() as { duration_seconds: number } | undefined
-  const durationSeconds = videoDuration?.duration_seconds ?? 600.0 // Default 10 minutes if not set
+  // Cache box bounds
+  const boxBounds = boxes.map(b => {
+    const left = Math.floor(b.x * layoutConfig.frame_width)
+    const bottom = Math.floor((1 - b.y) * layoutConfig.frame_height)
+    const boxWidth = Math.floor(b.width * layoutConfig.frame_width)
+    const boxHeight = Math.floor(b.height * layoutConfig.frame_height)
+    const top = bottom - boxHeight
+    const right = left + boxWidth
+    return { left, top, right, bottom }
+  })
+  cache.boxesCache.set(frameIndex, boxBounds)
 
-  // Get all OCR boxes for each frame (needed for feature extraction context)
-  const frameBoxesCache = new Map<number, BoxBounds[]>()
-  const frameBoxTextCache = new Map<string, string>() // Key: "frameIndex-boxIndex"
-  const frameBoxTimestampCache = new Map<number, number>() // Key: frameIndex
+  // Cache box text and timestamp
+  for (const box of boxes) {
+    cache.textCache.set(`${frameIndex}-${box.box_index}`, box.text)
+  }
+  const firstBox = boxes[0]
+  if (firstBox) {
+    cache.timestampCache.set(frameIndex, firstBox.timestamp_seconds)
+  }
+}
 
-  // Extract features for each annotation
+/**
+ * Extract features for all annotations and separate by class.
+ */
+function extractAllFeatures(
+  db: Database.Database,
+  annotations: AnnotationRow[],
+  layoutConfig: VideoLayoutConfig,
+  durationSeconds: number
+): { inFeatures: number[][]; outFeatures: number[][] } {
+  const cache: FrameDataCache = {
+    boxesCache: new Map(),
+    textCache: new Map(),
+    timestampCache: new Map(),
+  }
+
   const inFeatures: number[][] = []
   const outFeatures: number[][] = []
 
   for (const ann of annotations) {
-    // Get all boxes in this frame for context
-    if (!frameBoxesCache.has(ann.frame_index)) {
-      const boxes = db
-        .prepare(
-          `
-        SELECT box_index, text, timestamp_seconds, x, y, width, height
-        FROM full_frame_ocr
-        WHERE frame_index = ?
-        ORDER BY box_index
-      `
-        )
-        .all(ann.frame_index) as Array<{
-        box_index: number
-        text: string
-        timestamp_seconds: number
-        x: number
-        y: number
-        width: number
-        height: number
-      }>
+    buildFrameDataCache(db, ann.frame_index, layoutConfig, cache)
 
-      // Cache box bounds
-      const boxBounds = boxes.map(b => {
-        const left = Math.floor(b.x * layoutConfig.frame_width)
-        const bottom = Math.floor((1 - b.y) * layoutConfig.frame_height)
-        const boxWidth = Math.floor(b.width * layoutConfig.frame_width)
-        const boxHeight = Math.floor(b.height * layoutConfig.frame_height)
-        const top = bottom - boxHeight
-        const right = left + boxWidth
-        return { left, top, right, bottom }
-      })
-      frameBoxesCache.set(ann.frame_index, boxBounds)
-
-      // Cache box text and timestamp
-      for (const box of boxes) {
-        frameBoxTextCache.set(`${ann.frame_index}-${box.box_index}`, box.text)
-      }
-      if (boxes.length > 0) {
-        const firstBox = boxes[0]
-        if (firstBox) {
-          frameBoxTimestampCache.set(ann.frame_index, firstBox.timestamp_seconds)
-        }
-      }
-    }
-
-    const allBoxes = frameBoxesCache.get(ann.frame_index) ?? []
+    const allBoxes = cache.boxesCache.get(ann.frame_index) ?? []
     const boxBounds: BoxBounds = {
       left: ann.box_left,
       top: ann.box_top,
@@ -1622,9 +1617,8 @@ export function trainModel(db: Database.Database, layoutConfig: VideoLayoutConfi
       bottom: ann.box_bottom,
     }
 
-    // Get box text and timestamp
-    const boxText = frameBoxTextCache.get(`${ann.frame_index}-${ann.box_index}`) ?? ''
-    const timestampSeconds = frameBoxTimestampCache.get(ann.frame_index) ?? 0.0
+    const boxText = cache.textCache.get(`${ann.frame_index}-${ann.box_index}`) ?? ''
+    const timestampSeconds = cache.timestampCache.get(ann.frame_index) ?? 0.0
 
     const features = extractFeatures(
       boxBounds,
@@ -1645,27 +1639,29 @@ export function trainModel(db: Database.Database, layoutConfig: VideoLayoutConfi
     }
   }
 
-  // Need at least 2 samples per class for meaningful statistics
-  if (inFeatures.length < 2 || outFeatures.length < 2) {
-    console.log(
-      `[trainModel] Insufficient samples per class: in=${inFeatures.length}, out=${outFeatures.length}`
-    )
-    return null
-  }
+  return { inFeatures, outFeatures }
+}
 
-  // Calculate Gaussian parameters for each feature
-  const calculateGaussian = (values: number[]): { mean: number; std: number } => {
-    const mean = values.reduce((sum, v) => sum + v, 0) / values.length
-    const variance = values.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / values.length
-    const std = Math.sqrt(variance)
-    // Use minimum std of 0.01 to avoid numerical precision issues
-    // For user_annotation feature with all 0s or all 1s, this allows ~68% probability within ±0.01
-    return { mean, std: Math.max(std, 0.01) }
-  }
+/**
+ * Calculate Gaussian parameters (mean and std) for an array of values.
+ */
+function calculateGaussian(values: number[]): { mean: number; std: number } {
+  const mean = values.reduce((sum, v) => sum + v, 0) / values.length
+  const variance = values.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / values.length
+  const std = Math.sqrt(variance)
+  // Use minimum std of 0.01 to avoid numerical precision issues
+  return { mean, std: Math.max(std, 0.01) }
+}
 
-  // Extract each feature column and calculate parameters (26 features)
-  const inParams: Array<{ mean: number; std: number }> = []
-  const outParams: Array<{ mean: number; std: number }> = []
+/**
+ * Calculate Gaussian parameters for all 26 features.
+ */
+function calculateGaussianParams(
+  inFeatures: number[][],
+  outFeatures: number[][]
+): { inParams: GaussianParams[]; outParams: GaussianParams[] } {
+  const inParams: GaussianParams[] = []
+  const outParams: GaussianParams[] = []
 
   for (let i = 0; i < 26; i++) {
     const inFeatureValues = inFeatures.map(f => f[i] ?? 0)
@@ -1675,13 +1671,27 @@ export function trainModel(db: Database.Database, layoutConfig: VideoLayoutConfi
     outParams.push(calculateGaussian(outFeatureValues))
   }
 
-  // Calculate priors
-  const total = annotations.length
-  const priorIn = inFeatures.length / total
-  const priorOut = outFeatures.length / total
+  return { inParams, outParams }
+}
 
-  // Calculate feature importance (Fisher scores)
+/**
+ * Calculate streaming prediction metrics (feature importance and covariance).
+ */
+function calculateStreamingMetrics(
+  inFeatures: number[][],
+  outFeatures: number[][],
+  inParams: GaussianParams[],
+  outParams: GaussianParams[],
+  total: number
+): {
+  featureImportanceJson: string | null
+  covarianceMatrixJson: string | null
+  covarianceInverseJson: string | null
+} {
   let featureImportanceJson: string | null = null
+  let covarianceMatrixJson: string | null = null
+  let covarianceInverseJson: string | null = null
+
   if (shouldCalculateFeatureImportance(total)) {
     const featureImportance = calculateFeatureImportance(inParams, outParams)
     featureImportanceJson = JSON.stringify(featureImportance)
@@ -1694,19 +1704,9 @@ export function trainModel(db: Database.Database, layoutConfig: VideoLayoutConfi
     )
   }
 
-  // Calculate pooled covariance matrix and its inverse
-  let covarianceMatrixJson: string | null = null
-  let covarianceInverseJson: string | null = null
-
   if (inFeatures.length >= 2 && outFeatures.length >= 2) {
-    const inSamples: ClassSamples = {
-      n: inFeatures.length,
-      features: inFeatures,
-    }
-    const outSamples: ClassSamples = {
-      n: outFeatures.length,
-      features: outFeatures,
-    }
+    const inSamples: ClassSamples = { n: inFeatures.length, features: inFeatures }
+    const outSamples: ClassSamples = { n: outFeatures.length, features: outFeatures }
 
     const covarianceMatrix = computePooledCovariance(inSamples, outSamples)
     const covarianceInverse = invertCovarianceMatrix(covarianceMatrix)
@@ -1714,10 +1714,26 @@ export function trainModel(db: Database.Database, layoutConfig: VideoLayoutConfi
     covarianceMatrixJson = JSON.stringify(covarianceMatrix)
     covarianceInverseJson = JSON.stringify(covarianceInverse)
 
-    console.log(`[trainModel] Computed pooled covariance matrix (26×26 = 676 values)`)
+    console.log(`[trainModel] Computed pooled covariance matrix (26x26 = 676 values)`)
   }
 
-  // Store model in database (26 features = 104 columns + metadata + streaming prediction data)
+  return { featureImportanceJson, covarianceMatrixJson, covarianceInverseJson }
+}
+
+/**
+ * Store trained model in the database.
+ */
+function storeTrainedModel(
+  db: Database.Database,
+  total: number,
+  priorIn: number,
+  priorOut: number,
+  inParams: GaussianParams[],
+  outParams: GaussianParams[],
+  featureImportanceJson: string | null,
+  covarianceMatrixJson: string | null,
+  covarianceInverseJson: string | null
+): void {
   db.prepare(
     `
     INSERT OR REPLACE INTO box_classification_model (
@@ -1798,6 +1814,91 @@ export function trainModel(db: Database.Database, layoutConfig: VideoLayoutConfi
     priorOut,
     ...inParams.flatMap(p => [p.mean, p.std]),
     ...outParams.flatMap(p => [p.mean, p.std]),
+    featureImportanceJson,
+    covarianceMatrixJson,
+    covarianceInverseJson
+  )
+}
+
+/**
+ * Train Bayesian model using user annotations.
+ *
+ * Fetches all user-labeled boxes, extracts features, calculates Gaussian
+ * parameters for each feature per class, and stores in box_classification_model table.
+ *
+ * Replaces the seed model once 10+ annotations are available.
+ *
+ * @param db Database connection
+ * @param layoutConfig Video layout configuration
+ * @returns Number of training samples used, or null if insufficient data
+ */
+export function trainModel(db: Database.Database, layoutConfig: VideoLayoutConfig): number | null {
+  // Migrate schema if needed (add user_annotation columns)
+  migrateModelSchema(db)
+
+  // Fetch all user annotations
+  const annotations = fetchUserAnnotations(db)
+
+  if (annotations.length < 10) {
+    console.log(`[trainModel] Insufficient training data: ${annotations.length} samples (need 10+)`)
+
+    // If annotations were cleared, reset to seed model
+    const existingModel = db
+      .prepare('SELECT n_training_samples FROM box_classification_model WHERE id = 1')
+      .get() as { n_training_samples: number } | undefined
+
+    if (existingModel && existingModel.n_training_samples >= 10) {
+      console.log(`[trainModel] Resetting to seed model (annotations cleared)`)
+      db.prepare('DELETE FROM box_classification_model WHERE id = 1').run()
+    }
+
+    return null
+  }
+
+  console.log(`[trainModel] Training with ${annotations.length} user annotations`)
+
+  // Get video duration for temporal features
+  const videoDuration = db
+    .prepare('SELECT duration_seconds FROM video_metadata WHERE id = 1')
+    .get() as { duration_seconds: number } | undefined
+  const durationSeconds = videoDuration?.duration_seconds ?? 600.0
+
+  // Extract features for all annotations
+  const { inFeatures, outFeatures } = extractAllFeatures(
+    db,
+    annotations,
+    layoutConfig,
+    durationSeconds
+  )
+
+  // Need at least 2 samples per class for meaningful statistics
+  if (inFeatures.length < 2 || outFeatures.length < 2) {
+    console.log(
+      `[trainModel] Insufficient samples per class: in=${inFeatures.length}, out=${outFeatures.length}`
+    )
+    return null
+  }
+
+  // Calculate Gaussian parameters for all features
+  const { inParams, outParams } = calculateGaussianParams(inFeatures, outFeatures)
+
+  // Calculate priors
+  const total = annotations.length
+  const priorIn = inFeatures.length / total
+  const priorOut = outFeatures.length / total
+
+  // Calculate streaming prediction metrics
+  const { featureImportanceJson, covarianceMatrixJson, covarianceInverseJson } =
+    calculateStreamingMetrics(inFeatures, outFeatures, inParams, outParams, total)
+
+  // Store model in database
+  storeTrainedModel(
+    db,
+    total,
+    priorIn,
+    priorOut,
+    inParams,
+    outParams,
     featureImportanceJson,
     covarianceMatrixJson,
     covarianceInverseJson

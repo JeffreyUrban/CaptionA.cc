@@ -167,6 +167,8 @@ async function handleHeadRequest(uploadId: string): Promise<Response> {
   })
 }
 
+// Complex upload patch handler with multiple state transitions - acceptable complexity for resumable uploads
+/* eslint-disable complexity */
 async function handlePatchRequest(request: Request, uploadId: string): Promise<Response> {
   const { resolve } = await import('path')
   const { existsSync, statSync, createWriteStream, unlinkSync } = await import('fs')
@@ -304,10 +306,15 @@ async function handlePatchRequest(request: Request, uploadId: string): Promise<R
       console.log(`[Prefect] Filename: ${metadata.metadata.filename}`)
       console.log(`[Prefect] File size: ${metadata.uploadLength} bytes`)
 
+      const videoId = metadata.metadata.videoId
+      if (!videoId) {
+        throw new Error('Video ID is required but not found in metadata')
+      }
+
       const result = await queueUploadAndProcessing({
         videoPath: finalVideoPath,
         virtualPath: metadata.metadata.videoPath,
-        videoId: metadata.metadata.videoId!,
+        videoId,
         filename: metadata.metadata.filename,
         fileSize: metadata.uploadLength,
         frameRate: 0.1,

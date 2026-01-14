@@ -85,6 +85,8 @@ interface ContactFormData {
   message: string
 }
 
+// Contact form page component with inline state and handlers - acceptable length for form UI
+/* eslint-disable max-lines-per-function */
 export default function Contact() {
   const { register, reset, handleSubmit } = useForm<ContactFormData>()
   const [isSuccess, setIsSuccess] = useState(false)

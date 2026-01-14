@@ -227,7 +227,10 @@ export async function extractFramesFromWasabi(
     if (!chunkToFrames.has(chunkIndex)) {
       chunkToFrames.set(chunkIndex, [])
     }
-    chunkToFrames.get(chunkIndex)!.push(frameIndex)
+    const frames = chunkToFrames.get(chunkIndex)
+    if (frames) {
+      frames.push(frameIndex)
+    }
   }
 
   // Create temporary directory for processing

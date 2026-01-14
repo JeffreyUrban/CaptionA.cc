@@ -92,6 +92,291 @@ function getActualColumns(db: Database.Database, tableName: string): Map<string,
   return columns
 }
 
+/**
+ * Add missing tables to database
+ */
+function addMissingTables(
+  db: Database.Database,
+  schemaSQL: string,
+  expectedTables: ReturnType<typeof parseSchemaFull>,
+  actualTables: Set<string>,
+  result: RepairResult
+): void {
+  const missingTables = [...expectedTables.keys()].filter(t => !actualTables.has(t))
+
+  if (missingTables.length === 0) return
+
+  result.actions.push(`Missing tables: ${missingTables.join(', ')}`)
+  result.status = 'repaired'
+  db.exec(schemaSQL)
+  result.actions.push('Created missing tables')
+
+  actualTables.clear()
+  for (const name of getActualTables(db)) {
+    actualTables.add(name)
+  }
+}
+
+/**
+ * Add missing columns to existing tables
+ */
+function addMissingColumns(
+  db: Database.Database,
+  expectedTables: ReturnType<typeof parseSchemaFull>,
+  actualTables: Set<string>,
+  result: RepairResult
+): void {
+  for (const [tableName, expectedSchema] of expectedTables) {
+    if (!actualTables.has(tableName)) continue
+
+    const actualColumns = getActualColumns(db, tableName)
+    const missingColumns = [...expectedSchema.columns.keys()].filter(col => !actualColumns.has(col))
+
+    if (missingColumns.length === 0) continue
+
+    result.status = 'repaired'
+
+    for (const colName of missingColumns) {
+      const colDef = expectedSchema.columns.get(colName)
+      if (!colDef) continue
+
+      let alterSQL = `ALTER TABLE ${tableName} ADD COLUMN ${colDef.name} ${colDef.type}`
+      if (colDef.dflt_value) {
+        alterSQL += ` DEFAULT ${colDef.dflt_value}`
+      }
+
+      try {
+        db.exec(alterSQL)
+        result.actions.push(`Added column: ${tableName}.${colName}`)
+      } catch (error) {
+        result.actions.push(`Failed to add ${tableName}.${colName}: ${error}`)
+      }
+    }
+  }
+}
+
+/**
+ * Handle extra tables (not in expected schema)
+ */
+function handleExtraTables(
+  db: Database.Database,
+  expectedTables: ReturnType<typeof parseSchemaFull>,
+  actualTables: Set<string>,
+  force: boolean,
+  result: RepairResult
+): void {
+  const extraTables = [...actualTables].filter(table => !expectedTables.has(table))
+  if (extraTables.length === 0) return
+
+  for (const tableName of extraTables) {
+    const rowCount = (
+      db.prepare(`SELECT COUNT(*) as count FROM ${tableName}`).get() as { count: number }
+    ).count
+    const hasData = rowCount > 0
+
+    if (hasData) {
+      result.destructiveActions.push(
+        `Remove table: ${tableName} (contains ${rowCount} row${rowCount !== 1 ? 's' : ''})`
+      )
+    }
+
+    if (force) {
+      try {
+        db.exec(`DROP TABLE IF EXISTS ${tableName}`)
+        result.actions.push(`Removed extra table: ${tableName}`)
+        result.status = 'repaired'
+      } catch (error) {
+        result.actions.push(`Failed to remove table ${tableName}: ${error}`)
+      }
+    } else if (hasData) {
+      result.status = 'needs_confirmation'
+    } else {
+      try {
+        db.exec(`DROP TABLE IF EXISTS ${tableName}`)
+        result.actions.push(`Removed empty table: ${tableName}`)
+        result.status = 'repaired'
+      } catch (error) {
+        result.actions.push(`Failed to remove table ${tableName}: ${error}`)
+      }
+    }
+  }
+}
+
+/**
+ * Remove columns from a table by recreating it
+ */
+function removeColumnsFromTable(
+  db: Database.Database,
+  tableName: string,
+  schemaSQL: string,
+  expectedSchema: { columns: Map<string, ColumnDefinition> },
+  columnsToRemove: string[],
+  columnsWithData: string[],
+  result: RepairResult
+): void {
+  const tableDefMatch = schemaSQL.match(
+    new RegExp(`CREATE TABLE IF NOT EXISTS ${tableName}\\s*\\([\\s\\S]*?\\);`, 'i')
+  )
+
+  if (!tableDefMatch) {
+    result.actions.push(
+      `Cannot remove columns from ${tableName}: Table definition not found in schema`
+    )
+    return
+  }
+
+  const createTableSQL = tableDefMatch[0].replace(/CREATE TABLE IF NOT EXISTS/, 'CREATE TABLE')
+  const keepColumns = [...expectedSchema.columns.keys()]
+  const columnList = keepColumns.join(', ')
+  const tempTableName = `_temp_${tableName}_${Date.now()}`
+
+  db.exec(`
+    ALTER TABLE ${tableName} RENAME TO ${tempTableName};
+    ${createTableSQL}
+    INSERT INTO ${tableName} (${columnList}) SELECT ${columnList} FROM ${tempTableName};
+    DROP TABLE ${tempTableName};
+  `)
+
+  const removedCount = columnsToRemove.length
+  const hadData = columnsWithData.some(col => columnsToRemove.includes(col))
+  result.actions.push(
+    `Removed ${removedCount} column(s) from ${tableName}${hadData ? ' (data discarded)' : ''}: ${columnsToRemove.join(', ')}`
+  )
+  result.status = 'repaired'
+}
+
+/**
+ * Handle extra columns in tables
+ */
+function handleExtraColumns(
+  db: Database.Database,
+  schemaSQL: string,
+  expectedTables: ReturnType<typeof parseSchemaFull>,
+  actualTables: Set<string>,
+  force: boolean,
+  result: RepairResult
+): void {
+  for (const tableName of actualTables) {
+    if (!expectedTables.has(tableName)) continue
+
+    const expectedSchema = expectedTables.get(tableName)
+    if (!expectedSchema) continue
+
+    const actualColumns = getActualColumns(db, tableName)
+    const extraColumns = [...actualColumns.keys()].filter(col => !expectedSchema.columns.has(col))
+
+    if (extraColumns.length === 0) continue
+
+    const columnsWithData: string[] = []
+    const emptyColumns: string[] = []
+
+    for (const colName of extraColumns) {
+      const hasData =
+        (
+          db
+            .prepare(`SELECT COUNT(*) as count FROM ${tableName} WHERE ${colName} IS NOT NULL`)
+            .get() as { count: number }
+        ).count > 0
+
+      if (hasData) {
+        columnsWithData.push(colName)
+      } else {
+        emptyColumns.push(colName)
+      }
+    }
+
+    if (columnsWithData.length > 0) {
+      for (const colName of columnsWithData) {
+        result.destructiveActions.push(`Remove column: ${tableName}.${colName} (contains data)`)
+      }
+
+      if (!force) {
+        result.status = 'needs_confirmation'
+      }
+    }
+
+    const columnsToRemove = force ? extraColumns : emptyColumns
+
+    if (columnsToRemove.length > 0) {
+      try {
+        removeColumnsFromTable(
+          db,
+          tableName,
+          schemaSQL,
+          expectedSchema,
+          columnsToRemove,
+          columnsWithData,
+          result
+        )
+      } catch (error) {
+        result.actions.push(`Failed to remove empty columns from ${tableName}: ${error}`)
+      }
+    }
+  }
+}
+
+/**
+ * Check and update version metadata
+ */
+function updateVersionMetadata(
+  db: Database.Database,
+  schemaSQL: string,
+  targetVersion: number,
+  actualTables: Set<string>,
+  result: RepairResult
+): void {
+  const hasMetadata = actualTables.has('database_metadata')
+
+  if (!hasMetadata) {
+    result.actions.push('Missing database_metadata table')
+    result.status = 'repaired'
+  } else {
+    try {
+      const metadata = db.prepare('SELECT schema_version FROM database_metadata').get() as
+        | { schema_version: number }
+        | undefined
+
+      if (!metadata) {
+        result.actions.push('Missing version metadata row')
+        result.status = 'repaired'
+      } else if (metadata.schema_version !== targetVersion) {
+        result.actions.push(`Version change: ${metadata.schema_version} → ${targetVersion}`)
+        result.status = 'repaired'
+      }
+    } catch {
+      result.actions.push('Could not read version metadata')
+      result.status = 'repaired'
+    }
+  }
+
+  if (result.status === 'repaired') {
+    const metadataExists = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='database_metadata'")
+      .get()
+
+    if (!metadataExists) {
+      db.exec(schemaSQL)
+    }
+
+    const rowExists = db.prepare('SELECT id FROM database_metadata WHERE id = 1').get()
+    const versionLabel = targetVersion === LATEST_SCHEMA_VERSION ? 'latest' : `v${targetVersion}`
+
+    if (!rowExists) {
+      db.prepare(
+        `INSERT INTO database_metadata (schema_version, created_at, verified_at)
+         VALUES (?, datetime('now'), datetime('now'))`
+      ).run(targetVersion)
+      result.actions.push(`Set version to ${versionLabel}`)
+    } else {
+      db.prepare(
+        `UPDATE database_metadata SET schema_version = ?, verified_at = datetime('now')
+         WHERE id = 1`
+      ).run(targetVersion)
+      result.actions.push(`Updated version to ${versionLabel}`)
+    }
+  }
+}
+
 function repairDatabase(
   dbPath: string,
   schemaSQL: string,
@@ -109,245 +394,14 @@ function repairDatabase(
 
   try {
     db = new Database(dbPath)
-
-    // Add missing tables/columns to match target schema
     const expectedTables = parseSchemaFull(schemaSQL)
     const actualTables = getActualTables(db)
 
-    const missingTables = [...expectedTables.keys()].filter(t => !actualTables.has(t))
-
-    if (missingTables.length > 0) {
-      result.actions.push(`Missing tables: ${missingTables.join(', ')}`)
-      result.status = 'repaired'
-      db.exec(schemaSQL)
-      result.actions.push('Created missing tables')
-
-      actualTables.clear()
-      for (const name of getActualTables(db)) {
-        actualTables.add(name)
-      }
-    }
-
-    for (const [tableName, expectedSchema] of expectedTables) {
-      if (!actualTables.has(tableName)) continue
-
-      const actualColumns = getActualColumns(db, tableName)
-      const missingColumns = [...expectedSchema.columns.keys()].filter(
-        col => !actualColumns.has(col)
-      )
-
-      if (missingColumns.length > 0) {
-        result.status = 'repaired'
-
-        for (const colName of missingColumns) {
-          const colDef = expectedSchema.columns.get(colName)
-          if (!colDef) continue
-
-          let alterSQL = `ALTER TABLE ${tableName} ADD COLUMN ${colDef.name} ${colDef.type}`
-
-          if (colDef.dflt_value) {
-            alterSQL += ` DEFAULT ${colDef.dflt_value}`
-          }
-
-          try {
-            db.exec(alterSQL)
-            result.actions.push(`Added column: ${tableName}.${colName}`)
-          } catch (error) {
-            result.actions.push(`Failed to add ${tableName}.${colName}: ${error}`)
-          }
-        }
-      }
-    }
-
-    // Detect extra tables (not in expected schema)
-    // Note: getActualTables() already filters out sqlite_* internal tables
-    const extraTables = [...actualTables].filter(table => !expectedTables.has(table))
-
-    if (extraTables.length > 0) {
-      for (const tableName of extraTables) {
-        // Check if table has data
-        const rowCount = (
-          db.prepare(`SELECT COUNT(*) as count FROM ${tableName}`).get() as { count: number }
-        ).count
-        const hasData = rowCount > 0
-
-        if (hasData) {
-          result.destructiveActions.push(
-            `Remove table: ${tableName} (contains ${rowCount} row${rowCount !== 1 ? 's' : ''})`
-          )
-        }
-
-        if (force) {
-          try {
-            db.exec(`DROP TABLE IF EXISTS ${tableName}`)
-            result.actions.push(`Removed extra table: ${tableName}`)
-            result.status = 'repaired'
-          } catch (error) {
-            result.actions.push(`Failed to remove table ${tableName}: ${error}`)
-          }
-        } else if (hasData) {
-          result.status = 'needs_confirmation'
-        } else {
-          // No data, safe to remove without confirmation
-          try {
-            db.exec(`DROP TABLE IF EXISTS ${tableName}`)
-            result.actions.push(`Removed empty table: ${tableName}`)
-            result.status = 'repaired'
-          } catch (error) {
-            result.actions.push(`Failed to remove table ${tableName}: ${error}`)
-          }
-        }
-      }
-    }
-
-    // Detect extra columns (not in expected schema)
-    for (const tableName of actualTables) {
-      if (!expectedTables.has(tableName)) continue
-
-      const expectedSchema = expectedTables.get(tableName)!
-      const actualColumns = getActualColumns(db, tableName)
-      const extraColumns = [...actualColumns.keys()].filter(col => !expectedSchema.columns.has(col))
-
-      if (extraColumns.length > 0) {
-        // Check if any extra columns have data
-        const columnsWithData: string[] = []
-        const emptyColumns: string[] = []
-
-        for (const colName of extraColumns) {
-          const hasData =
-            (
-              db
-                .prepare(`SELECT COUNT(*) as count FROM ${tableName} WHERE ${colName} IS NOT NULL`)
-                .get() as { count: number }
-            ).count > 0
-
-          if (hasData) {
-            columnsWithData.push(colName)
-          } else {
-            emptyColumns.push(colName)
-          }
-        }
-
-        // Report columns with data as destructive actions
-        if (columnsWithData.length > 0) {
-          for (const colName of columnsWithData) {
-            result.destructiveActions.push(`Remove column: ${tableName}.${colName} (contains data)`)
-          }
-
-          if (!force) {
-            result.status = 'needs_confirmation'
-          }
-        }
-
-        // Remove extra columns (both empty and with data if force=true)
-        const columnsToRemove = force ? extraColumns : emptyColumns
-
-        if (columnsToRemove.length > 0) {
-          try {
-            // Get the CREATE TABLE statement for this table from the schema
-            const tableDefMatch = schemaSQL.match(
-              new RegExp(`CREATE TABLE IF NOT EXISTS ${tableName}\\s*\\([\\s\\S]*?\\);`, 'i')
-            )
-
-            if (!tableDefMatch) {
-              result.actions.push(
-                `Cannot remove columns from ${tableName}: Table definition not found in schema`
-              )
-            } else {
-              const createTableSQL = tableDefMatch[0].replace(
-                /CREATE TABLE IF NOT EXISTS/,
-                'CREATE TABLE'
-              )
-              const keepColumns = [...expectedSchema.columns.keys()]
-              const columnList = keepColumns.join(', ')
-
-              // Recreate table with proper schema (removes ALL extra columns at once)
-              const tempTableName = `_temp_${tableName}_${Date.now()}`
-              db.exec(`
-                ALTER TABLE ${tableName} RENAME TO ${tempTableName};
-                ${createTableSQL}
-                INSERT INTO ${tableName} (${columnList}) SELECT ${columnList} FROM ${tempTableName};
-                DROP TABLE ${tempTableName};
-              `)
-
-              const removedCount = columnsToRemove.length
-              const hadData = columnsWithData.some(col => columnsToRemove.includes(col))
-              result.actions.push(
-                `Removed ${removedCount} column(s) from ${tableName}${hadData ? ' (data discarded)' : ''}: ${columnsToRemove.join(', ')}`
-              )
-              result.status = 'repaired'
-            }
-          } catch (error) {
-            result.actions.push(`Failed to remove empty columns from ${tableName}: ${error}`)
-          }
-        }
-      }
-    }
-
-    // Check version metadata
-    const _actualTablesRefresh = getActualTables(db)
-    const hasMetadata = actualTables.has('database_metadata')
-
-    if (!hasMetadata) {
-      result.actions.push('Missing database_metadata table')
-      result.status = 'repaired'
-    } else {
-      try {
-        const metadata = db.prepare('SELECT schema_version FROM database_metadata').get() as
-          | { schema_version: number }
-          | undefined
-
-        if (!metadata) {
-          result.actions.push('Missing version metadata row')
-          result.status = 'repaired'
-        } else if (metadata.schema_version !== targetVersion) {
-          result.actions.push(`Version change: ${metadata.schema_version} → ${targetVersion}`)
-          result.status = 'repaired'
-        }
-      } catch {
-        result.actions.push('Could not read version metadata')
-        result.status = 'repaired'
-      }
-    }
-
-    // Update version if needed
-    if (result.status === 'repaired') {
-      const metadataExists = db
-        .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='database_metadata'")
-        .get()
-
-      if (!metadataExists) {
-        db.exec(schemaSQL)
-      }
-
-      const rowExists = db.prepare('SELECT id FROM database_metadata WHERE id = 1').get()
-
-      // Format version label for display in actions
-      const versionLabel = targetVersion === LATEST_SCHEMA_VERSION ? 'latest' : `v${targetVersion}`
-
-      if (!rowExists) {
-        db.prepare(
-          `
-          INSERT INTO database_metadata (
-            schema_version,
-            created_at,
-            verified_at
-          ) VALUES (?, datetime('now'), datetime('now'))
-        `
-        ).run(targetVersion)
-        result.actions.push(`Set version to ${versionLabel}`)
-      } else {
-        db.prepare(
-          `
-          UPDATE database_metadata
-          SET schema_version = ?,
-              verified_at = datetime('now')
-          WHERE id = 1
-        `
-        ).run(targetVersion)
-        result.actions.push(`Updated version to ${versionLabel}`)
-      }
-    }
+    addMissingTables(db, schemaSQL, expectedTables, actualTables, result)
+    addMissingColumns(db, expectedTables, actualTables, result)
+    handleExtraTables(db, expectedTables, actualTables, force, result)
+    handleExtraColumns(db, schemaSQL, expectedTables, actualTables, force, result)
+    updateVersionMetadata(db, schemaSQL, targetVersion, actualTables, result)
   } catch (error) {
     result.status = 'failed'
     result.error = String(error)
@@ -391,6 +445,42 @@ function findAllDatabases(): string[] {
 }
 
 /**
+ * Build summary of destructive actions from results
+ */
+function buildDestructiveActionsSummary(results: RepairResult[]): {
+  tablesToRemove: Record<string, { databases: number; totalRows: number }>
+  columnsToRemove: Record<string, { databases: number }>
+} {
+  const tablesToRemove: Record<string, { databases: number; totalRows: number }> = {}
+  const columnsToRemove: Record<string, { databases: number }> = {}
+
+  for (const result of results) {
+    for (const action of result.destructiveActions) {
+      // Parse "Remove table: X (contains N rows)"
+      const tableMatch = action.match(/Remove table: (\w+) \(contains (\d+) rows?\)/)
+      if (tableMatch?.[1] && tableMatch[2]) {
+        const tableName = tableMatch[1]
+        const rowCount = parseInt(tableMatch[2], 10)
+
+        tablesToRemove[tableName] ??= { databases: 0, totalRows: 0 }
+        tablesToRemove[tableName].databases++
+        tablesToRemove[tableName].totalRows += rowCount
+      }
+
+      // Parse "Remove column: X.Y (contains data)"
+      const columnMatch = action.match(/Remove column: (\w+)\.(\w+)/)
+      if (columnMatch?.[1] && columnMatch[2]) {
+        const fullColumn = `${columnMatch[1]}.${columnMatch[2]}`
+        columnsToRemove[fullColumn] ??= { databases: 0 }
+        columnsToRemove[fullColumn].databases++
+      }
+    }
+  }
+
+  return { tablesToRemove, columnsToRemove }
+}
+
+/**
  * Repair all databases to target schema version
  *
  * @param targetVersion - Target schema version to repair to
@@ -426,38 +516,9 @@ export async function repairAllDatabases(
   }
 
   const hasDestructiveChanges = results.some(r => r.destructiveActions.length > 0)
-
-  // Build summary of destructive actions (avoid overwhelming list)
-  let destructiveActionsSummary
-  if (hasDestructiveChanges) {
-    const tablesToRemove: Record<string, { databases: number; totalRows: number }> = {}
-    const columnsToRemove: Record<string, { databases: number }> = {}
-
-    for (const result of results) {
-      for (const action of result.destructiveActions) {
-        // Parse "Remove table: X (contains N rows)"
-        const tableMatch = action.match(/Remove table: (\w+) \(contains (\d+) rows?\)/)
-        if (tableMatch?.[1] && tableMatch[2]) {
-          const tableName = tableMatch[1]
-          const rowCount = parseInt(tableMatch[2], 10)
-
-          tablesToRemove[tableName] ??= { databases: 0, totalRows: 0 }
-          tablesToRemove[tableName].databases++
-          tablesToRemove[tableName].totalRows += rowCount
-        }
-
-        // Parse "Remove column: X.Y (contains data)"
-        const columnMatch = action.match(/Remove column: (\w+)\.(\w+)/)
-        if (columnMatch?.[1] && columnMatch[2]) {
-          const fullColumn = `${columnMatch[1]}.${columnMatch[2]}`
-          columnsToRemove[fullColumn] ??= { databases: 0 }
-          columnsToRemove[fullColumn].databases++
-        }
-      }
-    }
-
-    destructiveActionsSummary = { tablesToRemove, columnsToRemove }
-  }
+  const destructiveActionsSummary = hasDestructiveChanges
+    ? buildDestructiveActionsSummary(results)
+    : undefined
 
   const summary: RepairSummary = {
     total: databases.length,

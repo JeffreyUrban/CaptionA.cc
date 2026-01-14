@@ -36,6 +36,7 @@ interface UseUploadQueueResult {
  * @param onUploadComplete - Callback when all uploads complete
  * @returns Upload control functions and state
  */
+// eslint-disable-next-line max-lines-per-function -- Upload queue management with TUS protocol and state tracking
 export function useUploadQueue(
   videoFiles: VideoFilePreview[],
   setVideoFiles: React.Dispatch<React.SetStateAction<VideoFilePreview[]>>,

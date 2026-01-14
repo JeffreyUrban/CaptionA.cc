@@ -22,6 +22,59 @@ interface UploadMetadataFile {
   offset: number
 }
 
+function markDatabaseAsDeleted(dbPath: string): void {
+  if (!existsSync(dbPath)) return
+
+  const db = new Database(dbPath)
+  try {
+    db.prepare(
+      `
+      UPDATE processing_status
+      SET status = 'error',
+          error_message = 'Upload interrupted and cleared',
+          deleted = 1,
+          deleted_at = datetime('now')
+      WHERE id = 1
+    `
+    ).run()
+  } finally {
+    db.close()
+  }
+}
+
+function clearUploadFiles(
+  uploadId: string,
+  uploadsDir: string,
+  metadata: UploadMetadataFile | null
+): void {
+  const metadataPath = resolve(uploadsDir, `${uploadId}.json`)
+  const uploadPath = resolve(uploadsDir, uploadId)
+
+  // Delete partial upload file
+  if (existsSync(uploadPath)) {
+    unlinkSync(uploadPath)
+  }
+
+  // Delete metadata file
+  if (existsSync(metadataPath)) {
+    unlinkSync(metadataPath)
+  }
+
+  // Also delete the database if it exists
+  if (metadata?.metadata?.storagePath) {
+    const dbPath = resolve(
+      process.cwd(),
+      '..',
+      '..',
+      'local',
+      'data',
+      ...metadata.metadata.storagePath.split('/'),
+      'captions.db'
+    )
+    markDatabaseAsDeleted(dbPath)
+  }
+}
+
 export async function action() {
   try {
     const uploadsDir = resolve(process.cwd(), '..', '..', 'local', 'uploads')
@@ -33,7 +86,6 @@ export async function action() {
     for (const jsonFile of files) {
       const uploadId = jsonFile.replace('.json', '')
       const metadataPath = resolve(uploadsDir, jsonFile)
-      const uploadPath = resolve(uploadsDir, uploadId)
 
       try {
         // Read metadata first before deleting
@@ -42,47 +94,7 @@ export async function action() {
           metadata = JSON.parse(readFileSync(metadataPath, 'utf-8')) as UploadMetadataFile
         }
 
-        // Delete partial upload file
-        if (existsSync(uploadPath)) {
-          unlinkSync(uploadPath)
-        }
-
-        // Delete metadata file
-        if (existsSync(metadataPath)) {
-          unlinkSync(metadataPath)
-        }
-
-        // Also delete the database if it exists (may have been created but upload incomplete)
-        if (metadata?.metadata?.storagePath) {
-          const dbPath = resolve(
-            process.cwd(),
-            '..',
-            '..',
-            'local',
-            'data',
-            ...metadata.metadata.storagePath.split('/'),
-            'captions.db'
-          )
-          if (existsSync(dbPath)) {
-            // Mark as deleted in database first
-            const db = new Database(dbPath)
-            try {
-              db.prepare(
-                `
-                UPDATE processing_status
-                SET status = 'error',
-                    error_message = 'Upload interrupted and cleared',
-                    deleted = 1,
-                    deleted_at = datetime('now')
-                WHERE id = 1
-              `
-              ).run()
-            } finally {
-              db.close()
-            }
-          }
-        }
-
+        clearUploadFiles(uploadId, uploadsDir, metadata)
         cleared++
       } catch (error) {
         console.error(`[ClearIncomplete] Error clearing ${jsonFile}:`, error)

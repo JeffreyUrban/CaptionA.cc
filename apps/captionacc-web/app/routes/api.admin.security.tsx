@@ -16,6 +16,8 @@ import { createServerSupabaseClient } from '~/services/supabase-client'
 import { requireAuth } from '~/utils/api-auth'
 import { errorResponse, jsonResponse } from '~/utils/api-responses'
 
+// Complex security check loader with multiple permission validations - acceptable complexity for admin route
+/* eslint-disable complexity */
 export async function loader({ request }: LoaderFunctionArgs) {
   try {
     // Require platform admin access

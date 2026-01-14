@@ -36,6 +36,24 @@ export async function resolveDisplayPath(displayPath: string): Promise<string | 
 
   const dataDir = resolve(process.cwd(), '..', '..', 'local', 'data')
 
+  // Try to find storage_path in a video database
+  const findStoragePathInDb = (dbPath: string, targetDisplayPath: string): string | null => {
+    try {
+      const db = new Database(dbPath, { readonly: true })
+      try {
+        const result = db
+          .prepare('SELECT storage_path FROM video_metadata WHERE id = 1 AND display_path = ?')
+          .get(targetDisplayPath) as { storage_path: string } | undefined
+        return result?.storage_path ?? null
+      } finally {
+        db.close()
+      }
+    } catch {
+      // Ignore DB errors
+      return null
+    }
+  }
+
   // Scan all video directories for matching display_path
   const scanDir = (dir: string): string | null => {
     if (!existsSync(dir)) return null
@@ -43,37 +61,19 @@ export async function resolveDisplayPath(displayPath: string): Promise<string | 
     const entries = readdirSync(dir, { withFileTypes: true })
 
     for (const entry of entries) {
-      if (entry.isDirectory()) {
-        const fullPath = resolve(dir, entry.name)
+      if (!entry.isDirectory()) continue
 
-        // Check if this is a video directory (has captions.db)
-        const dbPath = resolve(fullPath, 'captions.db')
-        if (existsSync(dbPath)) {
-          try {
-            const db = new Database(dbPath, { readonly: true })
-            try {
-              const result = db
-                .prepare(
-                  `
-                SELECT storage_path FROM video_metadata WHERE id = 1 AND display_path = ?
-              `
-                )
-                .get(displayPath) as { storage_path: string } | undefined
+      const fullPath = resolve(dir, entry.name)
+      const dbPath = resolve(fullPath, 'captions.db')
 
-              if (result) {
-                return result.storage_path
-              }
-            } finally {
-              db.close()
-            }
-          } catch {
-            // Ignore DB errors, continue scanning
-          }
-        } else {
-          // Not a video directory, recurse
-          const found = scanDir(fullPath)
-          if (found) return found
-        }
+      if (existsSync(dbPath)) {
+        // This is a video directory - check for matching display_path
+        const storagePath = findStoragePathInDb(dbPath, displayPath)
+        if (storagePath) return storagePath
+      } else {
+        // Not a video directory, recurse
+        const found = scanDir(fullPath)
+        if (found) return found
       }
     }
 

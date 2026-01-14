@@ -53,6 +53,328 @@ interface DatabaseAdministrationProps {
   hasLatestSchema: boolean
 }
 
+interface RepairResultDisplayProps {
+  result: RepairSummary
+}
+
+function RepairResultDisplay({ result }: RepairResultDisplayProps) {
+  return (
+    <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+      <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-300 mb-2">
+        Repair Complete
+      </h3>
+      <div className="text-xs text-blue-800 dark:text-blue-400 space-y-1">
+        <div>Total databases: {result.total}</div>
+        <div>
+          No repair needed: {result.current}{' '}
+          <span className="text-gray-600 dark:text-gray-500">
+            (already v{result.schemaVersion})
+          </span>
+        </div>
+        <div>Successfully repaired: {result.repaired}</div>
+        {result.needsConfirmation > 0 && (
+          <div className="text-yellow-600 dark:text-yellow-400 font-medium">
+            Needs confirmation: {result.needsConfirmation}
+          </div>
+        )}
+        {result.failed > 0 && (
+          <div className="text-red-600 dark:text-red-400 font-medium">Failed: {result.failed}</div>
+        )}
+        <RepairResultDetails result={result} />
+      </div>
+    </div>
+  )
+}
+
+interface RepairResultDetailsProps {
+  result: RepairSummary
+}
+
+interface DatabaseStatsProps {
+  summary: StatusSummary
+}
+
+function DatabaseStats({ summary }: DatabaseStatsProps) {
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+      <div className="bg-gray-50 dark:bg-gray-700 rounded p-3">
+        <div className="text-xs text-gray-600 dark:text-gray-400">Total</div>
+        <div className="text-2xl font-bold text-gray-900 dark:text-white">{summary.total}</div>
+      </div>
+      <div className="bg-green-50 dark:bg-green-900/20 rounded p-3">
+        <div className="text-xs text-green-600 dark:text-green-400">Valid</div>
+        <div className="text-2xl font-bold text-green-700 dark:text-green-300">
+          {summary.health.valid}
+        </div>
+      </div>
+      <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded p-3">
+        <div className="text-xs text-yellow-600 dark:text-yellow-400">Schema Drift</div>
+        <div className="text-2xl font-bold text-yellow-700 dark:text-yellow-300">
+          {summary.health.drift}
+        </div>
+      </div>
+      <div className="bg-red-50 dark:bg-red-900/20 rounded p-3">
+        <div className="text-xs text-red-600 dark:text-red-400">Issues</div>
+        <div className="text-2xl font-bold text-red-700 dark:text-red-300">
+          {summary.health.incomplete + summary.health.unversioned}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+interface DatabaseHeaderProps {
+  CURRENT_SCHEMA_VERSION: number
+  LATEST_SCHEMA_VERSION: number
+  hasLatestSchema: boolean
+  minSupportedVersion: number
+  maxSupportedVersion: number
+  versionCounts: Array<{ version: number; count: number }>
+  repairing: boolean
+  onRepair: (version: number) => void
+  onRefresh: () => void
+}
+
+function DatabaseHeader({
+  CURRENT_SCHEMA_VERSION,
+  LATEST_SCHEMA_VERSION,
+  hasLatestSchema,
+  minSupportedVersion,
+  maxSupportedVersion,
+  versionCounts,
+  repairing,
+  onRepair,
+  onRefresh,
+}: DatabaseHeaderProps) {
+  return (
+    <div className="flex items-center justify-between mb-4">
+      <div>
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+          Database Administration
+        </h2>
+        <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 space-y-0.5">
+          <div>
+            Schema versions supported: v{minSupportedVersion}–v{maxSupportedVersion}
+          </div>
+          <div>
+            Current distribution:{' '}
+            {versionCounts
+              .map(({ version, count }) => {
+                const versionLabel = version === LATEST_SCHEMA_VERSION ? 'latest' : `v${version}`
+                return `${versionLabel} (${count})`
+              })
+              .join(', ')}
+          </div>
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <div className="flex flex-col gap-1">
+          <div className="text-xs text-gray-600 dark:text-gray-400 font-medium">Repair to:</div>
+          <div className="flex">
+            {hasLatestSchema && (
+              <button
+                onClick={() => {
+                  onRepair(LATEST_SCHEMA_VERSION)
+                }}
+                disabled={repairing}
+                className="px-3 py-1.5 bg-purple-600 text-white text-sm font-medium rounded-l-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Repair to latest unreleased schema (development)"
+              >
+                {repairing ? 'Repairing...' : 'Latest'}
+              </button>
+            )}
+            <button
+              onClick={() => {
+                onRepair(CURRENT_SCHEMA_VERSION)
+              }}
+              disabled={repairing}
+              className={`px-3 py-1.5 bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed ${hasLatestSchema ? 'border-l border-blue-500' : 'rounded-l-md'}`}
+            >
+              v{CURRENT_SCHEMA_VERSION}
+            </button>
+            <button
+              onClick={() => {
+                onRepair(minSupportedVersion)
+              }}
+              disabled={repairing || minSupportedVersion === CURRENT_SCHEMA_VERSION}
+              className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-r-md hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed border-l border-blue-400"
+              title={`Repair to v${minSupportedVersion} (for testing)`}
+            >
+              v{minSupportedVersion}
+            </button>
+          </div>
+        </div>
+        <button
+          onClick={onRefresh}
+          className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+        >
+          Refresh
+        </button>
+      </div>
+    </div>
+  )
+}
+
+interface DatabaseListProps {
+  databases: DatabaseInfo[]
+}
+
+function DatabaseList({ databases }: DatabaseListProps) {
+  return (
+    <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
+      <div className="max-h-64 overflow-y-auto">
+        <table className="w-full text-sm">
+          <thead className="text-xs text-gray-600 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700">
+            <tr>
+              <th className="text-left py-2">Video ID</th>
+              <th className="text-left py-2">Path</th>
+              <th className="text-center py-2">Version</th>
+              <th className="text-center py-2">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {databases.slice(0, 50).map(db => (
+              <tr key={db.videoId} className="border-b border-gray-100 dark:border-gray-800">
+                <td className="py-2 font-mono text-xs text-gray-900 dark:text-gray-300">
+                  {db.videoId.slice(0, 8)}...
+                </td>
+                <td className="py-2 truncate max-w-[200px] text-gray-900 dark:text-gray-300">
+                  {db.displayPath ?? '—'}
+                </td>
+                <td className="py-2 text-center text-gray-900 dark:text-gray-300">
+                  {db.versionLabel}
+                </td>
+                <td className="py-2 text-center">
+                  <span
+                    className={`px-2 py-0.5 rounded text-xs ${
+                      db.status === 'valid'
+                        ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                        : db.status === 'drift'
+                          ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
+                          : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+                    }`}
+                  >
+                    {db.status}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {databases.length > 50 && (
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+            Showing first 50 of {databases.length} databases
+          </p>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function RepairResultDetails({ result }: RepairResultDetailsProps) {
+  return (
+    <div className="mt-2 pt-2 border-t border-blue-200 dark:border-blue-700 space-y-2">
+      {result.repaired > 0 && (
+        <details className="cursor-pointer">
+          <summary className="font-medium">View repaired databases</summary>
+          <div className="mt-2 space-y-2 max-h-40 overflow-y-auto">
+            {result.results
+              .filter(r => r.status === 'repaired')
+              .map((r, i) => (
+                <div key={i} className="text-xs bg-white dark:bg-gray-800 p-2 rounded">
+                  <div className="font-mono">{r.path}</div>
+                  <div className="text-gray-600 dark:text-gray-400 ml-2">
+                    {r.actions.map((action, j) => (
+                      <div key={j}>• {action}</div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+          </div>
+        </details>
+      )}
+      {result.needsConfirmation > 0 && (
+        <details className="cursor-pointer" open>
+          <summary className="font-medium text-yellow-600 dark:text-yellow-400">
+            View databases needing confirmation
+          </summary>
+          <div className="mt-2 space-y-2 max-h-40 overflow-y-auto">
+            {result.results
+              .filter(r => r.status === 'needs_confirmation')
+              .map((r, i) => (
+                <div
+                  key={i}
+                  className="text-xs bg-yellow-50 dark:bg-yellow-900/20 p-2 rounded border border-yellow-200 dark:border-yellow-800"
+                >
+                  <div className="font-mono font-medium text-yellow-900 dark:text-yellow-300">
+                    {r.path}
+                  </div>
+                  {r.destructiveActions.length > 0 && (
+                    <div className="text-yellow-700 dark:text-yellow-400 ml-2 mt-1">
+                      <div className="font-medium">Destructive changes required:</div>
+                      {r.destructiveActions.map((action, j) => (
+                        <div key={j} className="ml-2">
+                          • {action}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {r.actions.length > 0 && (
+                    <div className="text-yellow-600 dark:text-yellow-500 ml-2 mt-1">
+                      <div className="font-medium">Actions attempted:</div>
+                      {r.actions.map((action, j) => (
+                        <div key={j} className="ml-2">
+                          • {action}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+          </div>
+        </details>
+      )}
+      {result.failed > 0 && (
+        <details className="cursor-pointer" open>
+          <summary className="font-medium text-red-600 dark:text-red-400">
+            View failed databases
+          </summary>
+          <div className="mt-2 space-y-2 max-h-40 overflow-y-auto">
+            {result.results
+              .filter(r => r.status === 'failed')
+              .map((r, i) => (
+                <div
+                  key={i}
+                  className="text-xs bg-red-50 dark:bg-red-900/20 p-2 rounded border border-red-200 dark:border-red-800"
+                >
+                  <div className="font-mono font-medium text-red-900 dark:text-red-300">
+                    {r.path}
+                  </div>
+                  <div className="text-red-700 dark:text-red-400 ml-2 mt-1">
+                    <div className="font-medium">Error:</div>
+                    <div className="ml-2">{r.error ?? 'Unknown error'}</div>
+                  </div>
+                  {r.actions.length > 0 && (
+                    <div className="text-red-600 dark:text-red-500 ml-2 mt-1">
+                      <div className="font-medium">Actions attempted:</div>
+                      {r.actions.map((action, j) => (
+                        <div key={j} className="ml-2">
+                          • {action}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+          </div>
+        </details>
+      )}
+    </div>
+  )
+}
+
+// Database administration UI component with inline state and handlers - acceptable length for admin panel
+/* eslint-disable max-lines-per-function */
 function DatabaseAdministration({
   CURRENT_SCHEMA_VERSION,
   LATEST_SCHEMA_VERSION,
@@ -68,6 +390,8 @@ function DatabaseAdministration({
 
   useEffect(() => {
     void loadStatus()
+    // loadStatus is stable and doesn't need to be in deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Helper function for authenticated API calls
@@ -109,98 +433,77 @@ function DatabaseAdministration({
     }
   }
 
-  async function repairDatabases(targetVersion: number, force: boolean = false) {
-    // First pass: check for destructive changes
-    if (!force) {
-      setRepairing(true)
-      setRepairResult(null)
+  const buildDestructiveChangesMessage = (result: RepairSummary): string => {
+    const summary = result.destructiveActionsSummary
+    let message = `⚠️ WARNING: This repair will delete data from ${result.needsConfirmation} databases!\n\n`
 
-      try {
-        const response = await authenticatedFetch('/api/admin/databases/repair', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ targetVersion, force: false }),
-        })
-
-        const result = await response.json()
-
-        if (!response.ok) {
-          alert(`Repair failed: ${result.error ?? 'Unknown error'}`)
-          setRepairing(false)
-          return
-        }
-
-        // Check if there are destructive changes that need confirmation
-        if (result.hasDestructiveChanges) {
-          const summary = result.destructiveActionsSummary
-          let message = `⚠️ WARNING: This repair will delete data from ${result.needsConfirmation} databases!\n\n`
-
-          if (summary?.tablesToRemove && Object.keys(summary.tablesToRemove).length > 0) {
-            message += 'Tables to be removed:\n'
-            for (const [table, info] of Object.entries(summary.tablesToRemove)) {
-              const tableInfo = info as { databases: number; totalRows: number }
-              message += `  - ${table}: ${tableInfo.databases} databases (${tableInfo.totalRows} rows total)\n`
-            }
-          }
-
-          if (summary?.columnsToRemove && Object.keys(summary.columnsToRemove).length > 0) {
-            message += '\nColumns to be removed:\n'
-            for (const [column, info] of Object.entries(summary.columnsToRemove)) {
-              const columnInfo = info as { databases: number }
-              message += `  - ${column}: ${columnInfo.databases} databases\n`
-            }
-          }
-
-          message += '\nContinue?'
-
-          if (!confirm(message)) {
-            setRepairing(false)
-            return
-          }
-
-          // User confirmed, proceed with force
-          setRepairResult(null)
-          await repairDatabases(targetVersion, true)
-          return
-        }
-
-        // No destructive changes, show result
-        setRepairResult(result)
-        await loadStatus()
-        // Refresh video list if it's currently visible
-        if (showDetails) {
-          await loadDetails()
-        }
-      } catch (error) {
-        console.error('Failed to repair databases:', error)
-        alert('Failed to repair databases')
-      } finally {
-        setRepairing(false)
+    if (summary?.tablesToRemove && Object.keys(summary.tablesToRemove).length > 0) {
+      message += 'Tables to be removed:\n'
+      for (const [table, info] of Object.entries(summary.tablesToRemove)) {
+        const tableInfo = info as { databases: number; totalRows: number }
+        message += `  - ${table}: ${tableInfo.databases} databases (${tableInfo.totalRows} rows total)\n`
       }
-      return
     }
 
-    // Second pass: apply with force
+    if (summary?.columnsToRemove && Object.keys(summary.columnsToRemove).length > 0) {
+      message += '\nColumns to be removed:\n'
+      for (const [column, info] of Object.entries(summary.columnsToRemove)) {
+        const columnInfo = info as { databases: number }
+        message += `  - ${column}: ${columnInfo.databases} databases\n`
+      }
+    }
+
+    message += '\nContinue?'
+    return message
+  }
+
+  const performRepair = async (targetVersion: number, force: boolean) => {
+    const response = await authenticatedFetch('/api/admin/databases/repair', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targetVersion, force }),
+    })
+
+    const result = await response.json()
+
+    if (!response.ok) {
+      alert(`Repair failed: ${result.error ?? 'Unknown error'}`)
+      return null
+    }
+
+    return result
+  }
+
+  async function repairDatabases(targetVersion: number, force: boolean = false) {
     setRepairing(true)
+    setRepairResult(null)
 
     try {
-      const response = await authenticatedFetch('/api/admin/databases/repair', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ targetVersion, force: true }),
-      })
+      const result = await performRepair(targetVersion, force)
+      if (!result) {
+        return
+      }
 
-      const result = await response.json()
-
-      if (response.ok) {
-        setRepairResult(result)
-        await loadStatus()
-        // Refresh video list if it's currently visible
-        if (showDetails) {
-          await loadDetails()
+      // Check if there are destructive changes that need confirmation
+      if (!force && result.hasDestructiveChanges) {
+        const message = buildDestructiveChangesMessage(result)
+        if (!confirm(message)) {
+          return
         }
-      } else {
-        alert(`Repair failed: ${result.error ?? 'Unknown error'}`)
+
+        // User confirmed, proceed with force
+        setRepairResult(null)
+        await repairDatabases(targetVersion, true)
+        return
+      }
+
+      // No destructive changes or force applied, show result
+      setRepairResult(result)
+      await loadStatus()
+
+      // Refresh video list if it's currently visible
+      if (showDetails) {
+        await loadDetails()
       }
     } catch (error) {
       console.error('Failed to repair databases:', error)
@@ -239,227 +542,29 @@ function DatabaseAdministration({
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-            Database Administration
-          </h2>
-          <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 space-y-0.5">
-            <div>
-              Schema versions supported: v{minSupportedVersion}–v{maxSupportedVersion}
-            </div>
-            <div>
-              Current distribution:{' '}
-              {versionCounts
-                .map(({ version, count }) => {
-                  const versionLabel = version === LATEST_SCHEMA_VERSION ? 'latest' : `v${version}`
-                  return `${versionLabel} (${count})`
-                })
-                .join(', ')}
-            </div>
-          </div>
-        </div>
-        <div className="flex gap-2">
-          <div className="flex flex-col gap-1">
-            <div className="text-xs text-gray-600 dark:text-gray-400 font-medium">Repair to:</div>
-            <div className="flex">
-              {hasLatestSchema && (
-                <button
-                  onClick={() => {
-                    void repairDatabases(LATEST_SCHEMA_VERSION)
-                  }}
-                  disabled={repairing}
-                  className="px-3 py-1.5 bg-purple-600 text-white text-sm font-medium rounded-l-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Repair to latest unreleased schema (development)"
-                >
-                  {repairing ? 'Repairing...' : 'Latest'}
-                </button>
-              )}
-              <button
-                onClick={() => {
-                  void repairDatabases(CURRENT_SCHEMA_VERSION)
-                }}
-                disabled={repairing}
-                className={`px-3 py-1.5 bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed ${hasLatestSchema ? 'border-l border-blue-500' : 'rounded-l-md'}`}
-              >
-                v{CURRENT_SCHEMA_VERSION}
-              </button>
-              <button
-                onClick={() => {
-                  void repairDatabases(minSupportedVersion)
-                }}
-                disabled={repairing || minSupportedVersion === CURRENT_SCHEMA_VERSION}
-                className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-r-md hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed border-l border-blue-400"
-                title={`Repair to v${minSupportedVersion} (for testing)`}
-              >
-                v{minSupportedVersion}
-              </button>
-            </div>
-          </div>
-          <button
-            onClick={() => {
-              void loadStatus()
-            }}
-            className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
-          >
-            Refresh
-          </button>
-        </div>
-      </div>
+      <DatabaseHeader
+        CURRENT_SCHEMA_VERSION={CURRENT_SCHEMA_VERSION}
+        LATEST_SCHEMA_VERSION={LATEST_SCHEMA_VERSION}
+        hasLatestSchema={hasLatestSchema}
+        minSupportedVersion={minSupportedVersion}
+        maxSupportedVersion={maxSupportedVersion}
+        versionCounts={versionCounts}
+        repairing={repairing}
+        onRepair={version => {
+          void repairDatabases(version)
+        }}
+        onRefresh={() => {
+          void loadStatus()
+        }}
+      />
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-        <div className="bg-gray-50 dark:bg-gray-700 rounded p-3">
-          <div className="text-xs text-gray-600 dark:text-gray-400">Total</div>
-          <div className="text-2xl font-bold text-gray-900 dark:text-white">{summary.total}</div>
-        </div>
-        <div className="bg-green-50 dark:bg-green-900/20 rounded p-3">
-          <div className="text-xs text-green-600 dark:text-green-400">Valid</div>
-          <div className="text-2xl font-bold text-green-700 dark:text-green-300">
-            {summary.health.valid}
-          </div>
-        </div>
-        <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded p-3">
-          <div className="text-xs text-yellow-600 dark:text-yellow-400">Schema Drift</div>
-          <div className="text-2xl font-bold text-yellow-700 dark:text-yellow-300">
-            {summary.health.drift}
-          </div>
-        </div>
-        <div className="bg-red-50 dark:bg-red-900/20 rounded p-3">
-          <div className="text-xs text-red-600 dark:text-red-400">Issues</div>
-          <div className="text-2xl font-bold text-red-700 dark:text-red-300">
-            {summary.health.incomplete + summary.health.unversioned}
-          </div>
-        </div>
-      </div>
+      <DatabaseStats summary={summary} />
 
       <div className="text-xs text-gray-500 dark:text-gray-400 mb-3">
         Last scan: {new Date(summary.lastScan).toLocaleString()}
       </div>
 
-      {repairResult && (
-        <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-          <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-300 mb-2">
-            Repair Complete
-          </h3>
-          <div className="text-xs text-blue-800 dark:text-blue-400 space-y-1">
-            <div>Total databases: {repairResult.total}</div>
-            <div>
-              No repair needed: {repairResult.current}{' '}
-              <span className="text-gray-600 dark:text-gray-500">
-                (already v{repairResult.schemaVersion})
-              </span>
-            </div>
-            <div>Successfully repaired: {repairResult.repaired}</div>
-            {repairResult.needsConfirmation > 0 && (
-              <div className="text-yellow-600 dark:text-yellow-400 font-medium">
-                Needs confirmation: {repairResult.needsConfirmation}
-              </div>
-            )}
-            {repairResult.failed > 0 && (
-              <div className="text-red-600 dark:text-red-400 font-medium">
-                Failed: {repairResult.failed}
-              </div>
-            )}
-            <div className="mt-2 pt-2 border-t border-blue-200 dark:border-blue-700 space-y-2">
-              {repairResult.repaired > 0 && (
-                <details className="cursor-pointer">
-                  <summary className="font-medium">View repaired databases</summary>
-                  <div className="mt-2 space-y-2 max-h-40 overflow-y-auto">
-                    {repairResult.results
-                      .filter(r => r.status === 'repaired')
-                      .map((r, i) => (
-                        <div key={i} className="text-xs bg-white dark:bg-gray-800 p-2 rounded">
-                          <div className="font-mono">{r.path}</div>
-                          <div className="text-gray-600 dark:text-gray-400 ml-2">
-                            {r.actions.map((action, j) => (
-                              <div key={j}>• {action}</div>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                  </div>
-                </details>
-              )}
-              {repairResult.needsConfirmation > 0 && (
-                <details className="cursor-pointer" open>
-                  <summary className="font-medium text-yellow-600 dark:text-yellow-400">
-                    View databases needing confirmation
-                  </summary>
-                  <div className="mt-2 space-y-2 max-h-40 overflow-y-auto">
-                    {repairResult.results
-                      .filter(r => r.status === 'needs_confirmation')
-                      .map((r, i) => (
-                        <div
-                          key={i}
-                          className="text-xs bg-yellow-50 dark:bg-yellow-900/20 p-2 rounded border border-yellow-200 dark:border-yellow-800"
-                        >
-                          <div className="font-mono font-medium text-yellow-900 dark:text-yellow-300">
-                            {r.path}
-                          </div>
-                          {r.destructiveActions.length > 0 && (
-                            <div className="text-yellow-700 dark:text-yellow-400 ml-2 mt-1">
-                              <div className="font-medium">Destructive changes required:</div>
-                              {r.destructiveActions.map((action, j) => (
-                                <div key={j} className="ml-2">
-                                  • {action}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                          {r.actions.length > 0 && (
-                            <div className="text-yellow-600 dark:text-yellow-500 ml-2 mt-1">
-                              <div className="font-medium">Actions attempted:</div>
-                              {r.actions.map((action, j) => (
-                                <div key={j} className="ml-2">
-                                  • {action}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                  </div>
-                </details>
-              )}
-              {repairResult.failed > 0 && (
-                <details className="cursor-pointer" open>
-                  <summary className="font-medium text-red-600 dark:text-red-400">
-                    View failed databases
-                  </summary>
-                  <div className="mt-2 space-y-2 max-h-40 overflow-y-auto">
-                    {repairResult.results
-                      .filter(r => r.status === 'failed')
-                      .map((r, i) => (
-                        <div
-                          key={i}
-                          className="text-xs bg-red-50 dark:bg-red-900/20 p-2 rounded border border-red-200 dark:border-red-800"
-                        >
-                          <div className="font-mono font-medium text-red-900 dark:text-red-300">
-                            {r.path}
-                          </div>
-                          <div className="text-red-700 dark:text-red-400 ml-2 mt-1">
-                            <div className="font-medium">Error:</div>
-                            <div className="ml-2">{r.error ?? 'Unknown error'}</div>
-                          </div>
-                          {r.actions.length > 0 && (
-                            <div className="text-red-600 dark:text-red-500 ml-2 mt-1">
-                              <div className="font-medium">Actions attempted:</div>
-                              {r.actions.map((action, j) => (
-                                <div key={j} className="ml-2">
-                                  • {action}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                  </div>
-                </details>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      {repairResult && <RepairResultDisplay result={repairResult} />}
 
       <button
         onClick={() => {
@@ -474,55 +579,7 @@ function DatabaseAdministration({
         {showDetails ? 'Hide Databases ↑' : 'View All Databases →'}
       </button>
 
-      {showDetails && (
-        <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
-          <div className="max-h-64 overflow-y-auto">
-            <table className="w-full text-sm">
-              <thead className="text-xs text-gray-600 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700">
-                <tr>
-                  <th className="text-left py-2">Video ID</th>
-                  <th className="text-left py-2">Path</th>
-                  <th className="text-center py-2">Version</th>
-                  <th className="text-center py-2">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {databases.slice(0, 50).map(db => (
-                  <tr key={db.videoId} className="border-b border-gray-100 dark:border-gray-800">
-                    <td className="py-2 font-mono text-xs text-gray-900 dark:text-gray-300">
-                      {db.videoId.slice(0, 8)}...
-                    </td>
-                    <td className="py-2 truncate max-w-[200px] text-gray-900 dark:text-gray-300">
-                      {db.displayPath ?? '—'}
-                    </td>
-                    <td className="py-2 text-center text-gray-900 dark:text-gray-300">
-                      {db.versionLabel}
-                    </td>
-                    <td className="py-2 text-center">
-                      <span
-                        className={`px-2 py-0.5 rounded text-xs ${
-                          db.status === 'valid'
-                            ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                            : db.status === 'drift'
-                              ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
-                              : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-                        }`}
-                      >
-                        {db.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {databases.length > 50 && (
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                Showing first 50 of {databases.length} databases
-              </p>
-            )}
-          </div>
-        </div>
-      )}
+      {showDetails && <DatabaseList databases={databases} />}
     </div>
   )
 }
@@ -547,6 +604,179 @@ export async function loader() {
     LATEST_SCHEMA_VERSION,
     hasLatestSchema: hasLatest,
   }
+}
+
+interface FailedCropFramesProps {
+  failedVideos: FailedVideo[]
+  loadingFailed: boolean
+  retryingVideos: Set<string>
+  onRefresh: () => void
+  onRetryVideo: (videoId: string) => void
+  onRetryAll: () => void
+}
+
+function FailedCropFramesSection({
+  failedVideos,
+  loadingFailed,
+  retryingVideos,
+  onRefresh,
+  onRetryVideo,
+  onRetryAll,
+}: FailedCropFramesProps) {
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Failed Crop Frames</h2>
+        <button
+          onClick={onRefresh}
+          className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+        >
+          Refresh
+        </button>
+      </div>
+
+      {loadingFailed ? (
+        <div className="text-center py-8">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 dark:border-white"></div>
+          <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">Loading...</p>
+        </div>
+      ) : failedVideos.length === 0 ? (
+        <div className="text-center py-8">
+          <p className="text-sm text-gray-600 dark:text-gray-400">No failed videos found ✓</p>
+        </div>
+      ) : (
+        <>
+          <div className="mb-4">
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              {failedVideos.length} video{failedVideos.length !== 1 ? 's' : ''} with errors
+            </p>
+            <button
+              onClick={onRetryAll}
+              disabled={retryingVideos.size > 0}
+              className="mt-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Retry All
+            </button>
+          </div>
+
+          <div className="space-y-3 max-h-96 overflow-y-auto">
+            {failedVideos.map(video => (
+              <div
+                key={video.videoId}
+                className="border border-gray-200 dark:border-gray-700 rounded-md p-3"
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                      {video.displayPath}
+                    </p>
+                    <p className="text-xs text-red-600 dark:text-red-400 mt-1">
+                      {video.errorMessage}
+                    </p>
+                    {video.processingStartedAt && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        Failed at: {new Date(video.processingStartedAt).toLocaleString()}
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => {
+                      onRetryVideo(video.videoId)
+                    }}
+                    disabled={retryingVideos.has(video.videoId)}
+                    className="ml-3 px-3 py-1 bg-blue-600 text-white text-xs font-medium rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {retryingVideos.has(video.videoId) ? 'Retrying...' : 'Retry'}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+interface ModelVersionCheckProps {
+  modelVersionStats: ModelVersionStats | null
+  runningModelCheck: boolean
+  onRunCheck: () => void
+}
+
+function ModelVersionCheckSection({
+  modelVersionStats,
+  runningModelCheck,
+  onRunCheck,
+}: ModelVersionCheckProps) {
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Model Version Check</h2>
+      </div>
+
+      <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+        Check all videos for model version mismatches and trigger automatic recalculation.
+      </p>
+
+      <button
+        onClick={onRunCheck}
+        disabled={runningModelCheck}
+        className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {runningModelCheck ? 'Running...' : 'Run Model Version Check'}
+      </button>
+
+      {modelVersionStats && (
+        <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-4">
+          <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-2">
+            Last Check Results
+          </h3>
+          <dl className="grid grid-cols-2 gap-3 text-sm">
+            <div>
+              <dt className="text-gray-600 dark:text-gray-400">Total Videos</dt>
+              <dd className="font-medium text-gray-900 dark:text-white">
+                {modelVersionStats.total}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-gray-600 dark:text-gray-400">Up to Date</dt>
+              <dd className="font-medium text-green-600 dark:text-green-400">
+                {modelVersionStats.upToDate}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-gray-600 dark:text-gray-400">Recalculated</dt>
+              <dd className="font-medium text-blue-600 dark:text-blue-400">
+                {modelVersionStats.recalculated}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-gray-600 dark:text-gray-400">Bounds Changed</dt>
+              <dd className="font-medium text-yellow-600 dark:text-yellow-400">
+                {modelVersionStats.boundsChanged}
+              </dd>
+            </div>
+          </dl>
+
+          {modelVersionStats.changedVideos.length > 0 && (
+            <div className="mt-4">
+              <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">
+                Videos with Changed Bounds
+              </h4>
+              <div className="max-h-48 overflow-y-auto space-y-1">
+                {modelVersionStats.changedVideos.map((video, idx) => (
+                  <div key={idx} className="text-xs text-gray-600 dark:text-gray-400 font-mono">
+                    {video.displayPath} ({video.oldVersion ?? 'null'} → {video.newVersion})
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
 }
 
 export default function AdminPage() {
@@ -598,6 +828,8 @@ export default function AdminPage() {
     if (isAdmin === true) {
       void loadFailedVideos()
     }
+    // loadFailedVideos is stable and doesn't need to be in deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdmin])
 
   // Helper function for authenticated API calls
@@ -708,156 +940,28 @@ export default function AdminPage() {
 
       {/* Grid of admin sections */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Failed Crop Frames Section */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-              Failed Crop Frames
-            </h2>
-            <button
-              onClick={() => {
-                void loadFailedVideos()
-              }}
-              className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
-            >
-              Refresh
-            </button>
-          </div>
+        <FailedCropFramesSection
+          failedVideos={failedVideos}
+          loadingFailed={loadingFailed}
+          retryingVideos={retryingVideos}
+          onRefresh={() => {
+            void loadFailedVideos()
+          }}
+          onRetryVideo={videoId => {
+            void retryVideo(videoId)
+          }}
+          onRetryAll={() => {
+            void retryAll()
+          }}
+        />
 
-          {loadingFailed ? (
-            <div className="text-center py-8">
-              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 dark:border-white"></div>
-              <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">Loading...</p>
-            </div>
-          ) : failedVideos.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-sm text-gray-600 dark:text-gray-400">No failed videos found ✓</p>
-            </div>
-          ) : (
-            <>
-              <div className="mb-4">
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  {failedVideos.length} video{failedVideos.length !== 1 ? 's' : ''} with errors
-                </p>
-                <button
-                  onClick={() => {
-                    void retryAll()
-                  }}
-                  disabled={retryingVideos.size > 0}
-                  className="mt-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Retry All
-                </button>
-              </div>
-
-              <div className="space-y-3 max-h-96 overflow-y-auto">
-                {failedVideos.map(video => (
-                  <div
-                    key={video.videoId}
-                    className="border border-gray-200 dark:border-gray-700 rounded-md p-3"
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                          {video.displayPath}
-                        </p>
-                        <p className="text-xs text-red-600 dark:text-red-400 mt-1">
-                          {video.errorMessage}
-                        </p>
-                        {video.processingStartedAt && (
-                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                            Failed at: {new Date(video.processingStartedAt).toLocaleString()}
-                          </p>
-                        )}
-                      </div>
-                      <button
-                        onClick={() => {
-                          void retryVideo(video.videoId)
-                        }}
-                        disabled={retryingVideos.has(video.videoId)}
-                        className="ml-3 px-3 py-1 bg-blue-600 text-white text-xs font-medium rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {retryingVideos.has(video.videoId) ? 'Retrying...' : 'Retry'}
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* Model Version Check Section */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-              Model Version Check
-            </h2>
-          </div>
-
-          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-            Check all videos for model version mismatches and trigger automatic recalculation.
-          </p>
-
-          <button
-            onClick={() => {
-              void runModelVersionCheck()
-            }}
-            disabled={runningModelCheck}
-            className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {runningModelCheck ? 'Running...' : 'Run Model Version Check'}
-          </button>
-
-          {modelVersionStats && (
-            <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-4">
-              <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-2">
-                Last Check Results
-              </h3>
-              <dl className="grid grid-cols-2 gap-3 text-sm">
-                <div>
-                  <dt className="text-gray-600 dark:text-gray-400">Total Videos</dt>
-                  <dd className="font-medium text-gray-900 dark:text-white">
-                    {modelVersionStats.total}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-gray-600 dark:text-gray-400">Up to Date</dt>
-                  <dd className="font-medium text-green-600 dark:text-green-400">
-                    {modelVersionStats.upToDate}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-gray-600 dark:text-gray-400">Recalculated</dt>
-                  <dd className="font-medium text-blue-600 dark:text-blue-400">
-                    {modelVersionStats.recalculated}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-gray-600 dark:text-gray-400">Bounds Changed</dt>
-                  <dd className="font-medium text-yellow-600 dark:text-yellow-400">
-                    {modelVersionStats.boundsChanged}
-                  </dd>
-                </div>
-              </dl>
-
-              {modelVersionStats.changedVideos.length > 0 && (
-                <div className="mt-4">
-                  <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">
-                    Videos with Changed Bounds
-                  </h4>
-                  <div className="max-h-48 overflow-y-auto space-y-1">
-                    {modelVersionStats.changedVideos.map((video, idx) => (
-                      <div key={idx} className="text-xs text-gray-600 dark:text-gray-400 font-mono">
-                        {video.displayPath} ({video.oldVersion ?? 'null'} → {video.newVersion})
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+        <ModelVersionCheckSection
+          modelVersionStats={modelVersionStats}
+          runningModelCheck={runningModelCheck}
+          onRunCheck={() => {
+            void runModelVersionCheck()
+          }}
+        />
 
         {/* Database Administration */}
         <DatabaseAdministration

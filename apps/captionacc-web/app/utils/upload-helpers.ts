@@ -112,6 +112,73 @@ export function getOriginalPath(video: VideoFilePreview): string {
 // ============================================================================
 
 /**
+ * Fetch existing folder paths from the server.
+ */
+async function fetchExistingFolders(): Promise<Set<string> | null> {
+  try {
+    const response = await fetch('/api/folders')
+    const data = (await response.json()) as { folders?: Array<{ path: string }> }
+    const folderPaths = (data.folders ?? []).map(f => f.path)
+    const folders = new Set<string>(folderPaths)
+    console.log(`[collapseSingleVideoFolders] Found ${folders.size} existing folders`)
+    return folders
+  } catch (error) {
+    console.error('[collapseSingleVideoFolders] Failed to fetch existing folders:', error)
+    return null
+  }
+}
+
+/**
+ * Build a map of folder paths to their video counts.
+ */
+function buildFolderCountsMap(videos: VideoFilePreview[]): Map<string, number> {
+  const folderCounts = new Map<string, number>()
+
+  for (const video of videos) {
+    const pathParts = video.relativePath.split('/')
+    for (let i = 1; i < pathParts.length; i++) {
+      const folderPath = pathParts.slice(0, i).join('/')
+      folderCounts.set(folderPath, (folderCounts.get(folderPath) ?? 0) + 1)
+    }
+  }
+
+  return folderCounts
+}
+
+/**
+ * Check if a video's parent folder should be collapsed.
+ */
+function shouldCollapseVideo(
+  video: VideoFilePreview,
+  folderCounts: Map<string, number>,
+  existingFolders: Set<string>
+): boolean {
+  const pathParts = video.relativePath.split('/')
+  if (pathParts.length < 2) return false
+
+  const parentFolder = pathParts.slice(0, -1).join('/')
+  return folderCounts.get(parentFolder) === 1 && !existingFolders.has(parentFolder)
+}
+
+/**
+ * Collapse a single video's path by removing its immediate parent folder.
+ */
+function collapseVideoPath(video: VideoFilePreview): boolean {
+  const pathParts = video.relativePath.split('/')
+  const filename = pathParts[pathParts.length - 1]
+  if (!filename) return false
+
+  const newPathParts = pathParts.slice(0, -2).concat(filename)
+  const newRelativePath = newPathParts.length > 0 ? newPathParts.join('/') : filename
+
+  console.log(
+    `[collapseSingleVideoFolders] Collapsing: ${video.relativePath} -> ${newRelativePath}`
+  )
+  video.relativePath = newRelativePath
+  return true
+}
+
+/**
  * Collapse single-video folders to avoid unnecessary nesting.
  * Only collapses if the target folder doesn't already exist in local/processing.
  * Stops collapsing when reaching an existing folder.
@@ -129,64 +196,24 @@ export async function collapseSingleVideoFolders(
 ): Promise<number> {
   if (videos.length === 0) return 0
 
-  // Fetch existing folders from the server
-  let existingFolders = new Set<string>()
-  try {
-    const response = await fetch('/api/folders')
-    const data = await response.json()
-    existingFolders = new Set((data.folders ?? []).map((f: { path: string }) => f.path))
-    console.log(`[collapseSingleVideoFolders] Found ${existingFolders.size} existing folders`)
-  } catch (error) {
-    console.error('[collapseSingleVideoFolders] Failed to fetch existing folders:', error)
-    return 0 // Don't collapse if we can't check existing folders
-  }
+  const existingFolders = await fetchExistingFolders()
+  if (!existingFolders) return 0
 
   let totalCollapses = 0
   let changed = true
 
   while (changed) {
     changed = false
-
-    // Build a map of folder paths to their video counts
-    const folderCounts = new Map<string, number>()
+    const folderCounts = buildFolderCountsMap(videos)
 
     for (const video of videos) {
-      const pathParts = video.relativePath.split('/')
-      // Count videos in each folder level
-      for (let i = 1; i < pathParts.length; i++) {
-        const folderPath = pathParts.slice(0, i).join('/')
-        folderCounts.set(folderPath, (folderCounts.get(folderPath) ?? 0) + 1)
+      if (!shouldCollapseVideo(video, folderCounts, existingFolders)) {
+        continue
       }
-    }
 
-    // Check each video for single-video parent folders
-    for (const video of videos) {
-      const pathParts = video.relativePath.split('/')
-
-      // Need at least 2 parts (folder/file) to collapse
-      if (pathParts.length < 2) continue
-
-      // Check if the immediate parent folder only has this one video
-      const parentFolder = pathParts.slice(0, -1).join('/')
-
-      // Collapse if the parent folder:
-      // 1. Would only have this one video (from current upload batch)
-      // 2. Doesn't already exist in local/processing
-      if (folderCounts.get(parentFolder) === 1 && !existingFolders.has(parentFolder)) {
-        totalCollapses++
-
-        if (!preview) {
-          const filename = pathParts[pathParts.length - 1]
-          if (!filename) continue
-          const newPathParts = pathParts.slice(0, -2).concat(filename)
-          const newRelativePath = newPathParts.length > 0 ? newPathParts.join('/') : filename
-
-          console.log(
-            `[collapseSingleVideoFolders] Collapsing: ${video.relativePath} -> ${newRelativePath}`
-          )
-          video.relativePath = newRelativePath
-          changed = true // Only continue looping if we actually modified paths
-        }
+      totalCollapses++
+      if (!preview) {
+        changed = collapseVideoPath(video)
       }
     }
   }

@@ -41,6 +41,54 @@ function getAllFiles(dir: string, fileList: string[] = []): string[] {
   return fileList
 }
 
+interface LinkAttributes {
+  hasTarget: boolean
+  hasNoopener: boolean
+  hasNoreferrer: boolean
+}
+
+function parseLinkAttributes(attributes: string | undefined): LinkAttributes {
+  const hasTarget = TARGET_REGEX.test(attributes ?? '')
+  const relMatch = attributes?.match(REL_REGEX)
+  const rel = relMatch ? relMatch[1] : null
+
+  return {
+    hasTarget,
+    hasNoopener: rel?.includes('noopener') ?? false,
+    hasNoreferrer: rel?.includes('noreferrer') ?? false,
+  }
+}
+
+function createTargetIssue(filePath: string, lineNumber: number, href: string): LinkIssue {
+  return {
+    file: filePath,
+    line: lineNumber,
+    href,
+    issue: 'Missing target="_blank"',
+    suggestion: 'External links should open in a new tab: add target="_blank"',
+  }
+}
+
+function createRelIssue(
+  filePath: string,
+  lineNumber: number,
+  href: string,
+  hasNoopener: boolean,
+  hasNoreferrer: boolean
+): LinkIssue {
+  const missing = []
+  if (!hasNoopener) missing.push('noopener')
+  if (!hasNoreferrer) missing.push('noreferrer')
+
+  return {
+    file: filePath,
+    line: lineNumber,
+    href,
+    issue: `Missing rel="${missing.join(' ')}"`,
+    suggestion: `Security: add rel="noopener noreferrer" to prevent tab-napping attacks`,
+  }
+}
+
 function checkExternalLinks(filePath: string): LinkIssue[] {
   const content = readFileSync(filePath, 'utf-8')
   const issues: LinkIssue[] = []
@@ -59,35 +107,14 @@ function checkExternalLinks(filePath: string): LinkIssue[] {
     const position = match.index
     const lineNumber = content.substring(0, position).split('\n').length
 
-    const hasTarget = TARGET_REGEX.test(attributes ?? '')
-    const relMatch = attributes?.match(REL_REGEX)
-    const rel = relMatch ? relMatch[1] : null
-
-    const hasNoopener = rel?.includes('noopener') ?? false
-    const hasNoreferrer = rel?.includes('noreferrer') ?? false
+    const { hasTarget, hasNoopener, hasNoreferrer } = parseLinkAttributes(attributes)
 
     if (!hasTarget) {
-      issues.push({
-        file: filePath,
-        line: lineNumber,
-        href,
-        issue: 'Missing target="_blank"',
-        suggestion: 'External links should open in a new tab: add target="_blank"',
-      })
+      issues.push(createTargetIssue(filePath, lineNumber, href))
     }
 
     if (!hasNoopener || !hasNoreferrer) {
-      const missing = []
-      if (!hasNoopener) missing.push('noopener')
-      if (!hasNoreferrer) missing.push('noreferrer')
-
-      issues.push({
-        file: filePath,
-        line: lineNumber,
-        href,
-        issue: `Missing rel="${missing.join(' ')}"`,
-        suggestion: `Security: add rel="noopener noreferrer" to prevent tab-napping attacks`,
-      })
+      issues.push(createRelIssue(filePath, lineNumber, href, hasNoopener, hasNoreferrer))
     }
   }
 

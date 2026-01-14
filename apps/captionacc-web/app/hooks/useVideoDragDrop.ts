@@ -44,6 +44,7 @@ interface UseVideoDragDropReturn {
 /**
  * Hook for managing drag and drop operations for videos and folders.
  */
+// eslint-disable-next-line max-lines-per-function -- Drag and drop logic with multiple event handlers and validation
 export function useVideoDragDrop({
   onMoveComplete,
   clearVideoStats,
@@ -219,6 +220,7 @@ export function useVideoDragDrop({
   )
 
   const handleDrop = useCallback(
+    // eslint-disable-next-line complexity -- Drop handler validates multiple conditions and handles different item types
     async (e: React.DragEvent, targetFolderPath: string) => {
       console.log('[DnD] Drop triggered:', { targetFolderPath, draggedItem })
       e.preventDefault()

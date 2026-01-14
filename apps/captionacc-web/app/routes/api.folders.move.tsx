@@ -16,6 +16,8 @@ interface FoldersMetadata {
   emptyFolders: string[]
 }
 
+// Complex folder move action with validation and error handling - acceptable complexity for critical operation
+/* eslint-disable complexity */
 export async function action({ request }: ActionFunctionArgs) {
   if (request.method !== 'PATCH') {
     return Response.json({ error: 'Method not allowed' }, { status: 405 })

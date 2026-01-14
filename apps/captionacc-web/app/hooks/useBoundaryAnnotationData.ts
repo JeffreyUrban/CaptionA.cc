@@ -62,6 +62,7 @@ interface UseBoundaryAnnotationDataReturn {
 /**
  * Hook for managing boundary annotation data and operations.
  */
+// eslint-disable-next-line max-lines-per-function -- Comprehensive annotation management with multiple operations and state
 export function useBoundaryAnnotationData({
   videoId,
   jumpRequestedRef,

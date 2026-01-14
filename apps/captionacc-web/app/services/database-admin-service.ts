@@ -140,6 +140,146 @@ function getActualColumns(db: Database.Database, tableName: string): Set<string>
 }
 
 /**
+ * Get version metadata from database
+ */
+function getVersionMetadata(db: Database.Database): {
+  version: number
+  lastVerified: string | null
+} {
+  try {
+    const metadata = db
+      .prepare('SELECT schema_version, verified_at FROM database_metadata')
+      .get() as { schema_version: number; verified_at: string | null } | undefined
+
+    if (metadata) {
+      return { version: metadata.schema_version, lastVerified: metadata.verified_at }
+    }
+  } catch {
+    // database_metadata table doesn't exist or query failed
+  }
+
+  return { version: 0, lastVerified: null }
+}
+
+/**
+ * Get display path from video_metadata table
+ */
+function getDisplayPath(db: Database.Database): string | null {
+  try {
+    const videoMeta = db.prepare('SELECT display_path FROM video_metadata').get() as
+      | { display_path: string }
+      | undefined
+
+    return videoMeta?.display_path ?? null
+  } catch {
+    // video_metadata table doesn't exist or query failed
+    return null
+  }
+}
+
+/**
+ * Get actual table names from database
+ */
+function getActualTableNames(db: Database.Database): Set<string> {
+  const actualTableNames = db
+    .prepare(
+      `SELECT name FROM sqlite_master
+       WHERE type='table' AND name NOT LIKE 'sqlite_%'
+       ORDER BY name`
+    )
+    .all() as Array<{ name: string }>
+
+  return new Set(actualTableNames.map(t => t.name))
+}
+
+/**
+ * Check schema consistency
+ */
+function checkSchemaConsistency(
+  db: Database.Database,
+  version: number,
+  actualTables: Set<string>
+): {
+  hasMissingTables: boolean
+  hasExtraTables: boolean
+  hasMissingColumns: boolean
+  hasExtraColumns: boolean
+} {
+  const expectedSchema = getExpectedSchema(version)
+  let hasMissingTables = false
+  let hasMissingColumns = false
+  let hasExtraColumns = false
+
+  // Check for missing tables
+  for (const expectedTableName of expectedSchema.keys()) {
+    if (!actualTables.has(expectedTableName)) {
+      hasMissingTables = true
+      break
+    }
+  }
+
+  // Check for extra tables
+  const extraTables = [...actualTables].filter(table => !expectedSchema.has(table))
+  const hasExtraTables = extraTables.length > 0
+
+  // Check for missing/extra columns in existing tables
+  if (!hasMissingTables) {
+    for (const [tableName, expectedTable] of expectedSchema) {
+      if (!actualTables.has(tableName)) continue
+
+      const actualColumns = getActualColumns(db, tableName)
+      const missingColumns = [...expectedTable.columns].filter(col => !actualColumns.has(col))
+      const extraColumns = [...actualColumns].filter(col => !expectedTable.columns.has(col))
+
+      if (missingColumns.length > 0) {
+        hasMissingColumns = true
+        break
+      }
+
+      if (extraColumns.length > 0) {
+        hasExtraColumns = true
+        break
+      }
+    }
+  }
+
+  return { hasMissingTables, hasExtraTables, hasMissingColumns, hasExtraColumns }
+}
+
+/**
+ * Determine database status based on schema checks
+ */
+function determineDatabaseStatus(
+  lastVerified: string | null,
+  tableCount: number,
+  expectedTableCount: number,
+  consistency: ReturnType<typeof checkSchemaConsistency>
+): DatabaseInfo['status'] {
+  // If no metadata was found (lastVerified is null), database is unversioned
+  // Note: v0 is a valid version, so we check lastVerified instead of version === 0
+  if (lastVerified === null) {
+    return 'unversioned'
+  }
+
+  if (
+    consistency.hasMissingTables ||
+    consistency.hasMissingColumns ||
+    tableCount < expectedTableCount
+  ) {
+    // Missing tables/columns = incomplete
+    return 'incomplete'
+  }
+
+  if (consistency.hasExtraTables || consistency.hasExtraColumns) {
+    // Extra tables/columns = schema drift
+    return 'drift'
+  }
+
+  // Matches declared version's schema perfectly = valid
+  return 'valid'
+}
+
+/**
  * Get information about a single database
  */
 function getDatabaseInfo(dbPath: string): DatabaseInfo {
@@ -149,130 +289,35 @@ function getDatabaseInfo(dbPath: string): DatabaseInfo {
   try {
     db = new Database(dbPath, { readonly: true })
 
-    // Get version and metadata
-    let version = 0
-    let lastVerified: string | null = null
-
-    try {
-      const metadata = db
-        .prepare('SELECT schema_version, verified_at FROM database_metadata')
-        .get() as { schema_version: number; verified_at: string | null } | undefined
-
-      if (metadata) {
-        version = metadata.schema_version
-        lastVerified = metadata.verified_at
-      }
-    } catch {
-      // database_metadata table doesn't exist or query failed
-    }
+    const { version, lastVerified } = getVersionMetadata(db)
 
     // Derive version label from version number and timestamp
     const LATEST_VERSION = -1
-    let versionLabel: string
-    if (version === LATEST_VERSION) {
-      // Format: "latest (2026-01-03)"
-      const date = lastVerified ? new Date(lastVerified).toISOString().split('T')[0] : 'unknown'
-      versionLabel = `latest (${date})`
-    } else {
-      versionLabel = `v${version}`
-    }
+    const versionLabel =
+      version === LATEST_VERSION
+        ? `latest (${lastVerified ? new Date(lastVerified).toISOString().split('T')[0] : 'unknown'})`
+        : `v${version}`
 
-    // Get display path from video_metadata
-    let displayPath: string | null = null
-    try {
-      const videoMeta = db.prepare('SELECT display_path FROM video_metadata').get() as
-        | { display_path: string }
-        | undefined
-
-      if (videoMeta) {
-        displayPath = videoMeta.display_path
-      }
-    } catch {
-      // video_metadata table doesn't exist or query failed
-    }
+    const displayPath = getDisplayPath(db)
 
     // Count tables
     const tables = db
       .prepare(
-        `
-      SELECT COUNT(*) as count FROM sqlite_master
-      WHERE type='table' AND name NOT LIKE 'sqlite_%'
-    `
+        `SELECT COUNT(*) as count FROM sqlite_master
+         WHERE type='table' AND name NOT LIKE 'sqlite_%'`
       )
       .get() as { count: number }
 
     const tableCount = tables.count
     const expectedTableCount = getExpectedTableCount(version)
-
-    // Get actual table names
-    const actualTableNames = db
-      .prepare(
-        `
-      SELECT name FROM sqlite_master
-      WHERE type='table' AND name NOT LIKE 'sqlite_%'
-      ORDER BY name
-    `
-      )
-      .all() as Array<{ name: string }>
-
-    const actualTables = new Set(actualTableNames.map(t => t.name))
-
-    // Check for missing tables or columns
-    const expectedSchema = getExpectedSchema(version)
-    let hasMissingTables = false
-    let hasMissingColumns = false
-
-    // Check for missing tables
-    for (const expectedTableName of expectedSchema.keys()) {
-      if (!actualTables.has(expectedTableName)) {
-        hasMissingTables = true
-        break
-      }
-    }
-
-    // Check for extra tables (not in expected schema) - same as repair service
-    const extraTables = [...actualTables].filter(table => !expectedSchema.has(table))
-    const hasExtraTables = extraTables.length > 0
-
-    // Check for missing/extra columns in existing tables
-    let hasExtraColumns = false
-    if (!hasMissingTables) {
-      for (const [tableName, expectedTable] of expectedSchema) {
-        if (!actualTables.has(tableName)) continue
-
-        const actualColumns = getActualColumns(db, tableName)
-        const missingColumns = [...expectedTable.columns].filter(col => !actualColumns.has(col))
-        const extraColumns = [...actualColumns].filter(col => !expectedTable.columns.has(col))
-
-        if (missingColumns.length > 0) {
-          hasMissingColumns = true
-          break
-        }
-
-        if (extraColumns.length > 0) {
-          hasExtraColumns = true
-          break
-        }
-      }
-    }
-
-    // Determine status based on schema validity for this version
-    let status: DatabaseInfo['status']
-
-    // If no metadata was found (lastVerified is null), database is unversioned
-    // Note: v0 is a valid version, so we check lastVerified instead of version === 0
-    if (lastVerified === null) {
-      status = 'unversioned'
-    } else if (hasMissingTables || hasMissingColumns || tableCount < expectedTableCount) {
-      // Missing tables/columns = incomplete
-      status = 'incomplete'
-    } else if (hasExtraTables || hasExtraColumns) {
-      // Extra tables/columns = schema drift
-      status = 'drift'
-    } else {
-      // Matches declared version's schema perfectly = valid
-      status = 'valid'
-    }
+    const actualTables = getActualTableNames(db)
+    const consistency = checkSchemaConsistency(db, version, actualTables)
+    const status = determineDatabaseStatus(
+      lastVerified,
+      tableCount,
+      expectedTableCount,
+      consistency
+    )
 
     return {
       videoId,
@@ -283,7 +328,7 @@ function getDatabaseInfo(dbPath: string): DatabaseInfo {
       tableCount,
       lastVerified,
     }
-  } catch (error) {
+  } catch (_error) {
     // Database failed to open or query
     return {
       videoId,

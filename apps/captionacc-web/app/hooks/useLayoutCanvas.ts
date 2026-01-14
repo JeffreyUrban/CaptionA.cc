@@ -64,6 +64,7 @@ interface UseLayoutCanvasReturn {
 
 export const SELECTION_PADDING = 20
 
+// eslint-disable-next-line max-lines-per-function -- Canvas rendering logic with multiple event handlers and drawing functions
 export function useLayoutCanvas(params: UseLayoutCanvasParams): UseLayoutCanvasReturn {
   const {
     viewMode,
@@ -128,6 +129,7 @@ export function useLayoutCanvas(params: UseLayoutCanvasParams): UseLayoutCanvasR
   }, [viewMode, currentFrameBoxes, layoutConfig])
 
   // Main drawing function
+  // eslint-disable-next-line complexity -- Canvas drawing logic handles multiple view modes and box states
   const drawCanvas = useCallback(() => {
     if (!canvasRef.current || !imageRef.current || canvasSize.width === 0) return
     const ctx = canvasRef.current.getContext('2d')

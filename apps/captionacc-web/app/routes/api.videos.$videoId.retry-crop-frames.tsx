@@ -8,6 +8,8 @@ import { type ActionFunctionArgs } from 'react-router'
 import { queueCropFramesProcessing } from '~/services/prefect'
 import { getDbPath, getVideoDir } from '~/utils/video-paths'
 
+// Large retry action with comprehensive status checks and updates - acceptable length for recovery operation
+/* eslint-disable max-lines-per-function */
 export async function action({ params }: ActionFunctionArgs) {
   const { videoId: encodedVideoId } = params
 

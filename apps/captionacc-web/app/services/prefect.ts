@@ -63,6 +63,221 @@ const DEPLOYMENT_NAMES: Record<string, string> = {
   'upload-captions-db': 'upload-captions-db/production',
 }
 
+const DEFAULT_TENANT = '00000000-0000-0000-0000-000000000001'
+
+type FlowParams = { parameters: Record<string, unknown>; tags: string[] }
+
+/**
+ * Build parameters for processing flows (full-frames, crop-frames)
+ */
+function buildProcessingFlowParams(flowType: string, options: QueueFlowOptions): FlowParams {
+  if (flowType === 'full-frames') {
+    if (!options.videoPath || !options.outputDir || !options.videoId || !options.dbPath) {
+      throw new Error('videoId, videoPath, dbPath, and outputDir required for full-frames flow')
+    }
+    return {
+      parameters: {
+        video_id: options.videoId,
+        video_path: options.videoPath,
+        db_path: options.dbPath,
+        output_dir: options.outputDir,
+        frame_rate: options.frameRate ?? 0.1,
+      },
+      tags: ['background', 'full-frames'],
+    }
+  }
+
+  // crop-frames
+  if (
+    !options.videoPath ||
+    !options.outputDir ||
+    !options.videoId ||
+    !options.dbPath ||
+    !options.cropBounds
+  ) {
+    throw new Error(
+      'videoId, videoPath, dbPath, outputDir, and cropBounds required for crop-frames flow'
+    )
+  }
+  return {
+    parameters: {
+      video_id: options.videoId,
+      video_path: options.videoPath,
+      db_path: options.dbPath,
+      output_dir: options.outputDir,
+      crop_bounds: options.cropBounds,
+      crop_bounds_version: options.cropBoundsVersion ?? 1,
+      frame_rate: 10.0,
+    },
+    tags: ['user-initiated', 'crop-frames'],
+  }
+}
+
+/**
+ * Build parameters for database upload flows
+ */
+function buildDatabaseUploadParams(flowType: string, options: QueueFlowOptions): FlowParams {
+  if (flowType === 'upload-layout-db') {
+    if (!options.videoId || !options.dbPath) {
+      throw new Error('videoId and dbPath required for upload-layout-db flow')
+    }
+    return {
+      parameters: {
+        video_id: options.videoId,
+        layout_db_path: options.dbPath,
+        tenant_id: options.tenantId ?? DEFAULT_TENANT,
+        trigger_crop_regen: options.triggerCropRegen ?? true,
+      },
+      tags: ['upload', 'layout-annotation', 'user-initiated', 'high-priority'],
+    }
+  }
+
+  // upload-captions-db
+  if (!options.videoId || !options.dbPath) {
+    throw new Error('videoId and dbPath required for upload-captions-db flow')
+  }
+  return {
+    parameters: {
+      video_id: options.videoId,
+      captions_db_path: options.dbPath,
+      tenant_id: options.tenantId ?? DEFAULT_TENANT,
+    },
+    tags: ['upload', 'caption-annotation', 'user-initiated', 'high-priority'],
+  }
+}
+
+/**
+ * Build parameters for video upload and process
+ */
+function buildVideoUploadParams(options: QueueFlowOptions): FlowParams {
+  if (!options.videoPath || !options.videoId || !options.filename || !options.fileSize) {
+    throw new Error(
+      'videoPath, videoId, filename, and fileSize required for upload-and-process flow'
+    )
+  }
+  const params: Record<string, unknown> = {
+    local_video_path: options.videoPath,
+    virtual_path: options.virtualPath,
+    video_id: options.videoId,
+    filename: options.filename,
+    file_size: options.fileSize,
+    tenant_id: options.tenantId ?? DEFAULT_TENANT,
+    frame_rate: options.frameRate ?? 0.1,
+  }
+  if (options.uploadedByUserId) params['uploaded_by_user_id'] = options.uploadedByUserId
+  return { parameters: params, tags: ['upload', 'processing', 'high-priority'] }
+}
+
+/**
+ * Build parameters for crop frames to WebM
+ */
+function buildCropWebmParams(options: QueueFlowOptions): FlowParams {
+  if (!options.videoId || !options.cropBounds) {
+    throw new Error('videoId and cropBounds required for crop-frames-to-webm flow')
+  }
+  const params: Record<string, unknown> = {
+    video_id: options.videoId,
+    tenant_id: options.tenantId ?? DEFAULT_TENANT,
+    crop_bounds: options.cropBounds,
+    frame_rate: options.frameRate ?? 10.0,
+  }
+  if (options.filename) params['filename'] = options.filename
+  if (options.uploadedByUserId) params['created_by_user_id'] = options.uploadedByUserId
+  return { parameters: params, tags: ['crop-frames', 'webm', 'user-initiated', 'high-priority'] }
+}
+
+/**
+ * Build parameters for upload flows
+ */
+function buildUploadFlowParams(flowType: string, options: QueueFlowOptions): FlowParams {
+  if (flowType === 'upload-and-process') return buildVideoUploadParams(options)
+  if (flowType === 'crop-frames-to-webm') return buildCropWebmParams(options)
+  return buildDatabaseUploadParams(flowType, options)
+}
+
+/**
+ * Build parameters for download flows
+ */
+function buildDownloadFlowParams(flowType: string, options: QueueFlowOptions): FlowParams {
+  if (!options.videoId || !options.outputDir) {
+    throw new Error(`videoId and outputDir required for ${flowType} flow`)
+  }
+  const annotationType = flowType.includes('layout') ? 'layout-annotation' : 'caption-annotation'
+  return {
+    parameters: {
+      video_id: options.videoId,
+      output_dir: options.outputDir,
+      tenant_id: options.tenantId ?? DEFAULT_TENANT,
+    },
+    tags: ['download', annotationType, 'user-initiated'],
+  }
+}
+
+/**
+ * Build parameters and tags for different flow types
+ */
+function buildFlowParams(flowType: string, options: QueueFlowOptions): FlowParams {
+  if (flowType === 'caption-median-ocr') {
+    if (!options.videoDir || !options.captionIds || options.captionIds.length === 0) {
+      throw new Error('videoDir and captionIds required for caption-median-ocr flow')
+    }
+    if (!options.videoId || !options.dbPath) {
+      throw new Error('videoId and dbPath required for caption-median-ocr flow')
+    }
+    return {
+      parameters: {
+        video_id: options.videoId,
+        db_path: options.dbPath,
+        video_dir: options.videoDir,
+        caption_ids: options.captionIds,
+        language: options.language ?? 'zh-Hans',
+      },
+      tags: ['user-initiated', 'high-priority'],
+    }
+  }
+
+  if (flowType === 'update-base-model') {
+    if (!options.dataDir) {
+      throw new Error('dataDir required for update-base-model flow')
+    }
+    return {
+      parameters: {
+        data_dir: options.dataDir,
+        training_source: options.trainingSource ?? 'all_videos',
+        retrain_videos: options.retrainVideos ?? true,
+      },
+      tags: ['admin', 'base-model', 'low-priority'],
+    }
+  }
+
+  if (flowType === 'retrain-video-model') {
+    if (!options.videoId || !options.dbPath) {
+      throw new Error('videoId and dbPath required for retrain-video-model flow')
+    }
+    return {
+      parameters: {
+        video_id: options.videoId,
+        db_path: options.dbPath,
+        update_predictions: options.updatePredictions ?? true,
+      },
+      tags: ['model-retrain', 'medium-priority'],
+    }
+  }
+
+  if (flowType === 'full-frames' || flowType === 'crop-frames') {
+    return buildProcessingFlowParams(flowType, options)
+  }
+
+  if (
+    flowType === 'download-for-layout-annotation' ||
+    flowType === 'download-for-caption-annotation'
+  ) {
+    return buildDownloadFlowParams(flowType, options)
+  }
+
+  return buildUploadFlowParams(flowType, options)
+}
+
 /**
  * Queue a Prefect flow via REST API
  *
@@ -83,154 +298,7 @@ async function queueFlow(
     | 'upload-captions-db',
   options: QueueFlowOptions
 ): Promise<QueueFlowResult> {
-  // Build parameters based on flow type
-  let parameters: Record<string, unknown> = {}
-  let tags: string[] = []
-
-  if (flowType === 'caption-median-ocr') {
-    if (!options.videoDir || !options.captionIds || options.captionIds.length === 0) {
-      throw new Error('videoDir and captionIds required for caption-median-ocr flow')
-    }
-    parameters = {
-      video_id: options.videoId!,
-      db_path: options.dbPath!,
-      video_dir: options.videoDir!,
-      caption_ids: options.captionIds!,
-      language: options.language ?? 'zh-Hans',
-    }
-    tags = ['user-initiated', 'high-priority']
-  } else if (flowType === 'update-base-model') {
-    if (!options.dataDir) {
-      throw new Error('dataDir required for update-base-model flow')
-    }
-    parameters = {
-      data_dir: options.dataDir,
-      training_source: options.trainingSource ?? 'all_videos',
-      retrain_videos: options.retrainVideos ?? true,
-    }
-    tags = ['admin', 'base-model', 'low-priority']
-  } else if (flowType === 'retrain-video-model') {
-    if (!options.videoId || !options.dbPath) {
-      throw new Error('videoId and dbPath required for retrain-video-model flow')
-    }
-    parameters = {
-      video_id: options.videoId,
-      db_path: options.dbPath,
-      update_predictions: options.updatePredictions ?? true,
-    }
-    tags = ['model-retrain', 'medium-priority']
-  } else if (flowType === 'upload-and-process') {
-    if (!options.videoPath || !options.videoId || !options.filename || !options.fileSize) {
-      throw new Error(
-        'videoPath, videoId, filename, and fileSize required for upload-and-process flow'
-      )
-    }
-    parameters = {
-      local_video_path: options.videoPath,
-      virtual_path: options.virtualPath,
-      video_id: options.videoId,
-      filename: options.filename,
-      file_size: options.fileSize,
-      tenant_id: options.tenantId ?? '00000000-0000-0000-0000-000000000001',
-      frame_rate: options.frameRate ?? 0.1,
-    }
-    if (options.uploadedByUserId) {
-      parameters['uploaded_by_user_id'] = options.uploadedByUserId
-    }
-    tags = ['upload', 'processing', 'high-priority']
-  } else if (flowType === 'crop-frames-to-webm') {
-    if (!options.videoId || !options.cropBounds) {
-      throw new Error('videoId and cropBounds required for crop-frames-to-webm flow')
-    }
-    parameters = {
-      video_id: options.videoId,
-      tenant_id: options.tenantId ?? '00000000-0000-0000-0000-000000000001',
-      crop_bounds: options.cropBounds,
-      frame_rate: options.frameRate ?? 10.0,
-    }
-    if (options.filename) {
-      parameters['filename'] = options.filename
-    }
-    if (options.uploadedByUserId) {
-      parameters['created_by_user_id'] = options.uploadedByUserId
-    }
-    tags = ['crop-frames', 'webm', 'user-initiated', 'high-priority']
-  } else if (flowType === 'download-for-layout-annotation') {
-    if (!options.videoId || !options.outputDir) {
-      throw new Error('videoId and outputDir required for download-for-layout-annotation flow')
-    }
-    parameters = {
-      video_id: options.videoId,
-      output_dir: options.outputDir,
-      tenant_id: options.tenantId ?? '00000000-0000-0000-0000-000000000001',
-    }
-    tags = ['download', 'layout-annotation', 'user-initiated']
-  } else if (flowType === 'upload-layout-db') {
-    if (!options.videoId || !options.dbPath) {
-      throw new Error('videoId and dbPath required for upload-layout-db flow')
-    }
-    parameters = {
-      video_id: options.videoId,
-      layout_db_path: options.dbPath,
-      tenant_id: options.tenantId ?? '00000000-0000-0000-0000-000000000001',
-      trigger_crop_regen: options.triggerCropRegen ?? true,
-    }
-    tags = ['upload', 'layout-annotation', 'user-initiated', 'high-priority']
-  } else if (flowType === 'download-for-caption-annotation') {
-    if (!options.videoId || !options.outputDir) {
-      throw new Error('videoId and outputDir required for download-for-caption-annotation flow')
-    }
-    parameters = {
-      video_id: options.videoId,
-      output_dir: options.outputDir,
-      tenant_id: options.tenantId ?? '00000000-0000-0000-0000-000000000001',
-    }
-    tags = ['download', 'caption-annotation', 'user-initiated']
-  } else if (flowType === 'upload-captions-db') {
-    if (!options.videoId || !options.dbPath) {
-      throw new Error('videoId and dbPath required for upload-captions-db flow')
-    }
-    parameters = {
-      video_id: options.videoId,
-      captions_db_path: options.dbPath,
-      tenant_id: options.tenantId ?? '00000000-0000-0000-0000-000000000001',
-    }
-    tags = ['upload', 'caption-annotation', 'user-initiated', 'high-priority']
-  } else if (flowType === 'full-frames') {
-    if (!options.videoPath || !options.outputDir || !options.videoId || !options.dbPath) {
-      throw new Error('videoId, videoPath, dbPath, and outputDir required for full-frames flow')
-    }
-    parameters = {
-      video_id: options.videoId,
-      video_path: options.videoPath,
-      db_path: options.dbPath,
-      output_dir: options.outputDir,
-      frame_rate: options.frameRate ?? 0.1,
-    }
-    tags = ['background', 'full-frames']
-  } else if (flowType === 'crop-frames') {
-    if (
-      !options.videoPath ||
-      !options.outputDir ||
-      !options.videoId ||
-      !options.dbPath ||
-      !options.cropBounds
-    ) {
-      throw new Error(
-        'videoId, videoPath, dbPath, outputDir, and cropBounds required for crop-frames flow'
-      )
-    }
-    parameters = {
-      video_id: options.videoId,
-      video_path: options.videoPath,
-      db_path: options.dbPath,
-      output_dir: options.outputDir,
-      crop_bounds: options.cropBounds,
-      crop_bounds_version: options.cropBoundsVersion ?? 1,
-      frame_rate: 10.0,
-    }
-    tags = ['user-initiated', 'crop-frames']
-  }
+  const { parameters, tags } = buildFlowParams(flowType, options)
 
   // Get deployment name
   const deploymentName = DEPLOYMENT_NAMES[flowType]

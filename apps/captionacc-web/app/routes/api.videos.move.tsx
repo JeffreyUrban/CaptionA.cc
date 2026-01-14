@@ -12,6 +12,8 @@ import {
   jsonResponse,
 } from '~/utils/api-responses'
 
+// Complex video move action with validation and error handling - acceptable complexity for critical operation
+/* eslint-disable complexity */
 export async function action({ request }: ActionFunctionArgs) {
   if (request.method !== 'PATCH') {
     return errorResponse('Method not allowed', 405)

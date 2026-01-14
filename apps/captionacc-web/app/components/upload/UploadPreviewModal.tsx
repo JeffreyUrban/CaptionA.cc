@@ -17,6 +17,114 @@ import {
 } from '~/utils/upload-folder-structure'
 import { formatBytes } from '~/utils/upload-helpers'
 
+function PreviewFiles({
+  preview,
+}: {
+  preview: { folders: string[]; files: Array<{ path: string; size: number }>; totalSize: number }
+}) {
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Preview</label>
+        <span className="text-xs text-gray-500 dark:text-gray-400">
+          {preview.files.length} files, {formatBytes(preview.totalSize)}
+        </span>
+      </div>
+      <div className="bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-4 max-h-60 overflow-y-auto">
+        <div className="font-mono text-xs space-y-1">
+          {preview.files.slice(0, 20).map((file, idx) => (
+            <div key={idx} className="text-gray-700 dark:text-gray-300">
+              📄 {file.path}{' '}
+              <span className="text-gray-400 dark:text-gray-500">({formatBytes(file.size)})</span>
+            </div>
+          ))}
+          {preview.files.length > 20 && (
+            <div className="text-gray-500 dark:text-gray-400 italic">
+              ... and {preview.files.length - 20} more files
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function FolderModeOptions({
+  mode,
+  collapseSingles,
+  onModeChange,
+  onCollapseSinglesChange,
+}: {
+  mode: FolderStructureMode
+  collapseSingles: boolean
+  onModeChange: (mode: FolderStructureMode) => void
+  onCollapseSinglesChange: (collapse: boolean) => void
+}) {
+  return (
+    <div className="space-y-3">
+      <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+        Folder Structure
+      </label>
+
+      <div className="space-y-2">
+        <label className="flex items-start space-x-3 cursor-pointer group">
+          <input
+            type="radio"
+            checked={mode === 'preserve'}
+            onChange={() => onModeChange('preserve')}
+            className="mt-1 text-teal-600 focus:ring-teal-500"
+          />
+          <div>
+            <div className="text-sm font-medium text-gray-900 dark:text-gray-100 group-hover:text-teal-600 dark:group-hover:text-teal-400">
+              Preserve folder structure{' '}
+              <span className="text-xs text-gray-500 dark:text-gray-400">(recommended)</span>
+            </div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">
+              Maintain the original folder organization
+            </div>
+          </div>
+        </label>
+
+        <label className="flex items-start space-x-3 cursor-pointer group">
+          <input
+            type="radio"
+            checked={mode === 'flatten'}
+            onChange={() => onModeChange('flatten')}
+            className="mt-1 text-teal-600 focus:ring-teal-500"
+          />
+          <div>
+            <div className="text-sm font-medium text-gray-900 dark:text-gray-100 group-hover:text-teal-600 dark:group-hover:text-teal-400">
+              Flatten
+            </div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">
+              Place all files directly in target folder
+            </div>
+          </div>
+        </label>
+      </div>
+
+      {mode === 'preserve' && (
+        <label className="flex items-start space-x-3 cursor-pointer group mt-3 pl-6">
+          <input
+            type="checkbox"
+            checked={collapseSingles}
+            onChange={e => onCollapseSinglesChange(e.target.checked)}
+            className="mt-1 text-teal-600 focus:ring-teal-500 rounded"
+          />
+          <div>
+            <div className="text-sm font-medium text-gray-900 dark:text-gray-100 group-hover:text-teal-600 dark:group-hover:text-teal-400">
+              Collapse single-file folders
+            </div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">
+              Remove folders that contain only one video file
+            </div>
+          </div>
+        </label>
+      )}
+    </div>
+  )
+}
+
 interface UploadPreviewModalProps {
   files: UploadFile[]
   availableFolders: Array<{ path: string; name: string }>
@@ -106,70 +214,12 @@ export function UploadPreviewModal({
             </div>
 
             {/* Folder Structure Options */}
-            <div className="space-y-3">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Folder Structure
-              </label>
-
-              <div className="space-y-2">
-                <label className="flex items-start space-x-3 cursor-pointer group">
-                  <input
-                    type="radio"
-                    checked={mode === 'preserve'}
-                    onChange={() => setMode('preserve')}
-                    className="mt-1 text-teal-600 focus:ring-teal-500"
-                  />
-                  <div>
-                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100 group-hover:text-teal-600 dark:group-hover:text-teal-400">
-                      Preserve folder structure{' '}
-                      <span className="text-xs text-gray-500 dark:text-gray-400">
-                        (recommended)
-                      </span>
-                    </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                      Maintain the original folder organization
-                    </div>
-                  </div>
-                </label>
-
-                <label className="flex items-start space-x-3 cursor-pointer group">
-                  <input
-                    type="radio"
-                    checked={mode === 'flatten'}
-                    onChange={() => setMode('flatten')}
-                    className="mt-1 text-teal-600 focus:ring-teal-500"
-                  />
-                  <div>
-                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100 group-hover:text-teal-600 dark:group-hover:text-teal-400">
-                      Flatten
-                    </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                      Place all files directly in target folder
-                    </div>
-                  </div>
-                </label>
-              </div>
-
-              {/* Collapse Singles Option (only for preserve mode) */}
-              {mode === 'preserve' && (
-                <label className="flex items-start space-x-3 cursor-pointer group mt-3 pl-6">
-                  <input
-                    type="checkbox"
-                    checked={collapseSingles}
-                    onChange={e => setCollapseSingles(e.target.checked)}
-                    className="mt-1 text-teal-600 focus:ring-teal-500 rounded"
-                  />
-                  <div>
-                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100 group-hover:text-teal-600 dark:group-hover:text-teal-400">
-                      Collapse single-file folders
-                    </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                      Remove folders that contain only one video file
-                    </div>
-                  </div>
-                </label>
-              )}
-            </div>
+            <FolderModeOptions
+              mode={mode}
+              collapseSingles={collapseSingles}
+              onModeChange={setMode}
+              onCollapseSinglesChange={setCollapseSingles}
+            />
 
             {/* Target Folder */}
             <div className="space-y-2">
@@ -200,35 +250,7 @@ export function UploadPreviewModal({
                 Processing folder structure...
               </div>
             ) : (
-              preview && (
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Preview
-                    </label>
-                    <span className="text-xs text-gray-500 dark:text-gray-400">
-                      {preview.files.length} files, {formatBytes(preview.totalSize)}
-                    </span>
-                  </div>
-                  <div className="bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-4 max-h-60 overflow-y-auto">
-                    <div className="font-mono text-xs space-y-1">
-                      {preview.files.slice(0, 20).map((file, idx) => (
-                        <div key={idx} className="text-gray-700 dark:text-gray-300">
-                          📄 {file.path}{' '}
-                          <span className="text-gray-400 dark:text-gray-500">
-                            ({formatBytes(file.size)})
-                          </span>
-                        </div>
-                      ))}
-                      {preview.files.length > 20 && (
-                        <div className="text-gray-500 dark:text-gray-400 italic">
-                          ... and {preview.files.length - 20} more files
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )
+              preview && <PreviewFiles preview={preview} />
             )}
           </div>
 

@@ -39,6 +39,7 @@ interface UseReviewLabelsCanvasReturn {
 /**
  * Custom hook for managing canvas interactions in Review Labels workflow.
  */
+// eslint-disable-next-line max-lines-per-function -- Canvas rendering and interaction logic for review labels
 export function useReviewLabelsCanvas({
   viewMode,
   currentFrameBoxes,

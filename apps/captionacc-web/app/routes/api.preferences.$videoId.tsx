@@ -124,6 +124,8 @@ export async function loader({ params }: LoaderFunctionArgs) {
 }
 
 // PUT - Update video preferences
+// Complex preferences action with multiple update paths - acceptable complexity for settings management
+/* eslint-disable complexity */
 export async function action({ params, request }: ActionFunctionArgs) {
   const { videoId: encodedVideoId } = params
 

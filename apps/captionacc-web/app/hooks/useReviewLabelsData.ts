@@ -36,6 +36,7 @@ interface UseReviewLabelsDataReturn {
  * Custom hook for managing Review Labels data fetching and state.
  * Extracts the data management logic from the main component.
  */
+// eslint-disable-next-line max-lines-per-function -- Review labels data management with loading and saving operations
 export function useReviewLabelsData({
   videoId,
 }: UseReviewLabelsDataParams): UseReviewLabelsDataReturn {

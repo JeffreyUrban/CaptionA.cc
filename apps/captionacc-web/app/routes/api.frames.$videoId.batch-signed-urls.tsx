@@ -118,7 +118,10 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
         if (!chunkToFrames.has(foundChunk)) {
           chunkToFrames.set(foundChunk, [])
         }
-        chunkToFrames.get(foundChunk)!.push(frameIndex)
+        const frames = chunkToFrames.get(foundChunk)
+        if (frames) {
+          frames.push(frameIndex)
+        }
       }
     }
 
@@ -127,11 +130,14 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
     const signedUrlsData = await generateBatchSignedUrls(videoId, modulo, uniqueChunkIndices)
 
     // Build response with chunk metadata
-    const chunks = signedUrlsData.map(({ chunkIndex, signedUrl }) => ({
-      chunkIndex,
-      signedUrl,
-      frameIndices: chunkToFrames.get(chunkIndex)!.sort((a, b) => a - b),
-    }))
+    const chunks = signedUrlsData.map(({ chunkIndex, signedUrl }) => {
+      const frameIndices = chunkToFrames.get(chunkIndex) ?? []
+      return {
+        chunkIndex,
+        signedUrl,
+        frameIndices: frameIndices.sort((a, b) => a - b),
+      }
+    })
 
     return new Response(JSON.stringify({ chunks }), {
       headers: {

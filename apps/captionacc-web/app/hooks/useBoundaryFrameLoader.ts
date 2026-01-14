@@ -81,6 +81,17 @@ interface QueueChunk {
 }
 
 /**
+ * Check if a frame should be included for this modulo level.
+ * Non-duplicating strategy: each frame belongs to exactly one modulo level.
+ */
+function shouldIncludeFrame(frameIndex: number, modulo: number): boolean {
+  if (modulo === 16) return frameIndex % 16 === 0
+  if (modulo === 4) return frameIndex % 4 === 0 && frameIndex % 16 !== 0
+  if (modulo === 1) return frameIndex % 4 !== 0
+  return false
+}
+
+/**
  * Build queue of chunks to load for a specific modulo level.
  */
 function buildQueueForModulo(
@@ -121,21 +132,8 @@ function buildQueueForModulo(
     const chunkFrames: number[] = []
 
     // Collect frames at modulo positions within this chunk
-    // Non-duplicating strategy: each frame belongs to exactly one modulo level
-    // - modulo 16: only frames where index % 16 === 0
-    // - modulo 4: only frames where index % 4 === 0 AND index % 16 !== 0
-    // - modulo 1: only frames where index % 4 !== 0
     for (let i = chunkStart; i <= Math.min(chunkEnd, totalFrames - 1); i++) {
-      // modulo_16: frames divisible by 16
-      if (modulo === 16 && i % 16 === 0) {
-        chunkFrames.push(i)
-      }
-      // modulo_4: frames divisible by 4 but not by 16
-      else if (modulo === 4 && i % 4 === 0 && i % 16 !== 0) {
-        chunkFrames.push(i)
-      }
-      // modulo_1: frames not divisible by 4
-      else if (modulo === 1 && i % 4 !== 0) {
+      if (shouldIncludeFrame(i, modulo)) {
         chunkFrames.push(i)
       }
     }
@@ -238,6 +236,31 @@ async function extractFrameFromVideo(
 }
 
 /**
+ * Build sequence of frames in a chunk based on modulo level.
+ */
+function buildFramesInChunk(chunkIndex: number, modulo: number): number[] {
+  const framesInChunk: number[] = []
+
+  if (modulo === 16) {
+    for (let i = chunkIndex; framesInChunk.length < 32; i += 16) {
+      framesInChunk.push(i)
+    }
+  } else if (modulo === 4) {
+    for (let i = chunkIndex; framesInChunk.length < 32; i += 4) {
+      if (i % 16 === 0) continue
+      framesInChunk.push(i)
+    }
+  } else if (modulo === 1) {
+    for (let i = chunkIndex; framesInChunk.length < 32; i++) {
+      if (i % 4 === 0) continue
+      framesInChunk.push(i)
+    }
+  }
+
+  return framesInChunk
+}
+
+/**
  * Process loaded VP9 WebM chunks and extract individual frames.
  */
 async function processLoadedChunks(
@@ -276,42 +299,16 @@ async function processLoadedChunks(
         video.onerror = () => reject(new Error('Failed to load video metadata'))
       })
 
-      // Extract each frame from the chunk
-      // Build the actual sequence of frames in this chunk (non-duplicating strategy)
-      const framesInChunk: number[] = []
-
-      if (modulo === 16) {
-        // modulo_16: frames divisible by 16
-        for (let i = chunk.chunkIndex; framesInChunk.length < 32; i += 16) {
-          framesInChunk.push(i)
-        }
-      } else if (modulo === 4) {
-        // modulo_4: frames divisible by 4 but not by 16
-        for (let i = chunk.chunkIndex; framesInChunk.length < 32; i += 4) {
-          if (i % 16 !== 0) {
-            framesInChunk.push(i)
-          }
-        }
-      } else if (modulo === 1) {
-        // modulo_1: frames NOT divisible by 4
-        for (let i = chunk.chunkIndex; framesInChunk.length < 32; i++) {
-          if (i % 4 !== 0) {
-            framesInChunk.push(i)
-          }
-        }
-      }
+      const framesInChunk = buildFramesInChunk(chunk.chunkIndex, modulo)
 
       for (const frameIndex of chunk.frameIndices) {
-        // Find the actual position of this frame in the chunk's frame sequence
         const framePositionInChunk = framesInChunk.indexOf(frameIndex)
-
         if (framePositionInChunk === -1) {
           console.warn(`Frame ${frameIndex} not found in chunk ${chunk.chunkIndex}`)
           continue
         }
 
         const frameTime = framePositionInChunk / fps
-
         const imageUrl = await extractFrameFromVideo(video, canvas, frameTime)
         framesMap.set(frameIndex, {
           frame_index: frameIndex,
@@ -364,6 +361,25 @@ function isChunkPinned(
 }
 
 /**
+ * Find first unpinned chunk index in cache for eviction.
+ */
+function findUnpinnedChunkIndex(
+  cache: number[],
+  modulo: number,
+  activeAnnotation: Annotation | null,
+  nextAnnotation: Annotation | null
+): number {
+  for (let i = 0; i < cache.length; i++) {
+    const candidateChunk = cache[i]
+    if (candidateChunk === undefined) continue
+    if (!isChunkPinned(candidateChunk, modulo, activeAnnotation, nextAnnotation)) {
+      return i
+    }
+  }
+  return -1
+}
+
+/**
  * Move chunks from requested to loaded cache with smart eviction.
  * Uses per-modulo limits and respects pinned chunks.
  */
@@ -393,27 +409,22 @@ function updateCacheAfterLoad(
       loadedChunks.set(chunk.modulo, cache)
     }
 
-    const shouldAdd = !cache.includes(chunkStart)
-    if (shouldAdd) {
-      cache.push(chunkStart)
+    if (cache.includes(chunkStart)) continue
 
-      // Evict oldest unpinned chunks if over limit
-      const maxChunks =
-        MAX_CHUNKS_PER_MODULO[chunk.modulo as keyof typeof MAX_CHUNKS_PER_MODULO] ?? 20
-      while (cache.length > maxChunks) {
-        // Find first unpinned chunk to evict
-        let evicted = false
-        for (let i = 0; i < cache.length; i++) {
-          const candidateChunk = cache[i]!
-          if (!isChunkPinned(candidateChunk, chunk.modulo, activeAnnotation, nextAnnotation)) {
-            cache.splice(i, 1)
-            evicted = true
-            break
-          }
-        }
-        // If all chunks are pinned, stop trying to evict
-        if (!evicted) break
-      }
+    cache.push(chunkStart)
+
+    // Evict oldest unpinned chunks if over limit
+    const maxChunks =
+      MAX_CHUNKS_PER_MODULO[chunk.modulo as keyof typeof MAX_CHUNKS_PER_MODULO] ?? 20
+    while (cache.length > maxChunks) {
+      const unpinnedIndex = findUnpinnedChunkIndex(
+        cache,
+        chunk.modulo,
+        activeAnnotation,
+        nextAnnotation
+      )
+      if (unpinnedIndex === -1) break
+      cache.splice(unpinnedIndex, 1)
     }
   }
 }
@@ -487,6 +498,7 @@ function buildNextAnnotationQueue(
 /**
  * Hook for loading frames with hierarchical priority queue.
  */
+// eslint-disable-next-line max-lines-per-function -- Complex loading logic requires stateful polling and preloading
 export function useBoundaryFrameLoader({
   videoId,
   currentFrameIndexRef,
@@ -502,6 +514,7 @@ export function useBoundaryFrameLoader({
   const requestedChunksRef = useRef<Map<number, Set<number>>>(new Map())
   const lastPreloadedAnnotationIdRef = useRef<number | null>(null)
 
+  // eslint-disable-next-line max-lines-per-function -- Effect contains polling and preloading logic with multiple functions
   useEffect(() => {
     if (!isReady || !videoId || totalFrames === 0) return
 
@@ -510,6 +523,7 @@ export function useBoundaryFrameLoader({
     let isLoading = false // Prevent concurrent executions
     let isPreloading = false // Track if we're preloading next annotation
 
+    // eslint-disable-next-line complexity -- Main loading logic handles jump, progressive, and preload cases
     const loadFrameHierarchy = async () => {
       if (cancelled || isLoading) return
 
@@ -769,10 +783,6 @@ export function useBoundaryFrameLoader({
       cancelled = true
       clearInterval(pollInterval)
     }
-    // Note: currentFrameIndexRef is NOT in dependencies - we read from it via polling
-    // This allows continuous monitoring without effect re-triggering
-    // nextAnnotation and activeAnnotation ARE in deps:
-    // - nextAnnotation: triggers immediate preload when next annotation changes
-    // - activeAnnotation: updates cache pinning to protect current annotation frames
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Refs are stable and read inside effect via polling
   }, [totalFrames, videoId, isReady, nextAnnotation, activeAnnotation])
 }

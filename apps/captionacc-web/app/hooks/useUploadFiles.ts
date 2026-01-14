@@ -108,13 +108,14 @@ export function useUploadFiles(uploading: boolean): UseUploadFilesResult {
           for (let i = 0; i < videos.length; i++) {
             const videoPath = videoPaths[i]
             if (!videoPath) continue
-            if (duplicates[videoPath]?.exists) {
-              console.log(`[processFiles] Found duplicate: ${videoPath}`)
-              const video = videos[i]
-              if (!video) continue
-              video.isDuplicate = true
-              video.existingUploadedAt = duplicates[videoPath].uploadedAt
-            }
+            const duplicateInfo = duplicates[videoPath]
+            if (!duplicateInfo?.exists) continue
+
+            console.log(`[processFiles] Found duplicate: ${videoPath}`)
+            const video = videos[i]
+            if (!video) continue
+            video.isDuplicate = true
+            video.existingUploadedAt = duplicateInfo.uploadedAt
           }
         } catch (error) {
           console.error('Failed to check duplicates:', error)

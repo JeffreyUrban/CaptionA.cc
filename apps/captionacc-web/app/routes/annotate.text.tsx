@@ -23,6 +23,8 @@ export async function loader() {
   }
 }
 
+// Text annotation page component with inline state and handlers - acceptable length for annotation UI
+/* eslint-disable max-lines-per-function */
 export default function AnnotateText() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()

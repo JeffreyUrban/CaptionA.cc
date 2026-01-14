@@ -101,14 +101,19 @@ function loadAllBoxesWithFeatures(
     if (!frameBoxesMap.has(box.frame_index)) {
       frameBoxesMap.set(box.frame_index, [])
     }
-    frameBoxesMap.get(box.frame_index)!.push(box)
+    const frameBoxes = frameBoxesMap.get(box.frame_index)
+    if (frameBoxes) {
+      frameBoxes.push(box)
+    }
   }
 
   // Extract features for each box
   const boxesWithFeatures: BoxWithPrediction[] = []
 
   for (const frameIndex of Array.from(frameBoxesMap.keys())) {
-    const frameBoxes = frameBoxesMap.get(frameIndex)!
+    const frameBoxes = frameBoxesMap.get(frameIndex)
+    if (!frameBoxes) continue
+
     // Convert all boxes to bounds for context
     const allBounds = frameBoxes.map(b =>
       ocrToPixelBounds(b, layoutConfig.frame_width, layoutConfig.frame_height)
@@ -145,6 +150,160 @@ function loadAllBoxesWithFeatures(
 }
 
 /**
+ * Extract annotation features from database
+ */
+function extractAnnotationFeatures(
+  db: Database.Database,
+  newAnnotation: { frameIndex: number; boxIndex: number; label: 'in' | 'out' },
+  layoutConfig: VideoLayoutConfig,
+  durationSeconds: number
+): Annotation | null {
+  const annotationBox = db
+    .prepare(
+      `SELECT text, x, y, width, height, timestamp_seconds
+       FROM full_frame_ocr WHERE frame_index = ? AND box_index = ?`
+    )
+    .get(newAnnotation.frameIndex, newAnnotation.boxIndex) as
+    | {
+        text: string
+        x: number
+        y: number
+        width: number
+        height: number
+        timestamp_seconds: number
+      }
+    | undefined
+
+  if (!annotationBox) return null
+
+  const frameBoxes = db
+    .prepare(
+      `SELECT box_index, x, y, width, height
+       FROM full_frame_ocr WHERE frame_index = ? ORDER BY box_index`
+    )
+    .all(newAnnotation.frameIndex) as Array<{
+    box_index: number
+    x: number
+    y: number
+    width: number
+    height: number
+  }>
+
+  const allBoundsInFrame = frameBoxes.map(b =>
+    ocrToPixelBounds(b, layoutConfig.frame_width, layoutConfig.frame_height)
+  )
+
+  const annotationBounds = ocrToPixelBounds(
+    annotationBox,
+    layoutConfig.frame_width,
+    layoutConfig.frame_height
+  )
+
+  const annotationFeatures = extractFeatures(
+    annotationBounds,
+    layoutConfig,
+    allBoundsInFrame,
+    newAnnotation.frameIndex,
+    newAnnotation.boxIndex,
+    annotationBox.text,
+    annotationBox.timestamp_seconds,
+    durationSeconds,
+    db
+  )
+
+  return {
+    frameIndex: newAnnotation.frameIndex,
+    boxIndex: newAnnotation.boxIndex,
+    label: newAnnotation.label,
+    features: annotationFeatures,
+  }
+}
+
+/**
+ * Create prediction update function for adaptive recalculation
+ */
+function createPredictAndUpdate(
+  db: Database.Database,
+  layoutConfig: VideoLayoutConfig,
+  updatePrediction: Database.Statement
+) {
+  return async (
+    batch: Array<BoxWithPrediction & { changeProb: number }>
+  ): Promise<
+    Array<{
+      box: BoxWithPrediction & { changeProb: number }
+      oldLabel: 'in' | 'out'
+      newLabel: 'in' | 'out'
+      didReverse: boolean
+    }>
+  > => {
+    const results: Array<{
+      box: BoxWithPrediction & { changeProb: number }
+      oldLabel: 'in' | 'out'
+      newLabel: 'in' | 'out'
+      didReverse: boolean
+    }> = []
+
+    for (const box of batch) {
+      const boxData = db
+        .prepare(
+          `SELECT x, y, width, height FROM full_frame_ocr WHERE frame_index = ? AND box_index = ?`
+        )
+        .get(box.frameIndex, box.boxIndex) as
+        | { x: number; y: number; width: number; height: number }
+        | undefined
+
+      if (!boxData) continue
+
+      const bounds = ocrToPixelBounds(boxData, layoutConfig.frame_width, layoutConfig.frame_height)
+
+      const frameBoxes = db
+        .prepare(
+          `SELECT box_index, x, y, width, height FROM full_frame_ocr WHERE frame_index = ? ORDER BY box_index`
+        )
+        .all(box.frameIndex) as Array<{
+        box_index: number
+        x: number
+        y: number
+        width: number
+        height: number
+      }>
+
+      const allBounds = frameBoxes.map(b =>
+        ocrToPixelBounds(b, layoutConfig.frame_width, layoutConfig.frame_height)
+      )
+
+      const newPrediction = predictBoxLabel(
+        bounds,
+        layoutConfig,
+        allBounds,
+        box.frameIndex,
+        box.boxIndex,
+        db
+      )
+
+      updatePrediction.run(
+        newPrediction.label,
+        newPrediction.confidence,
+        box.frameIndex,
+        box.boxIndex
+      )
+
+      const didReverse = box.currentPrediction.label !== newPrediction.label
+
+      results.push({
+        box,
+        oldLabel: box.currentPrediction.label,
+        newLabel: newPrediction.label,
+        didReverse,
+      })
+    }
+
+    return results
+  }
+}
+
+/**
  * Apply streaming prediction updates after a new annotation.
  *
  * Uses intelligent scope detection to identify affected boxes and adaptive
@@ -165,7 +324,6 @@ export async function applyStreamingPredictionUpdates(
   layoutConfig: VideoLayoutConfig
 ): Promise<StreamingUpdateResult> {
   try {
-    // Check if model has covariance inverse (required for Mahalanobis distance)
     const modelData = db
       .prepare('SELECT covariance_inverse FROM box_classification_model WHERE id = 1')
       .get() as { covariance_inverse: string | null } | undefined
@@ -183,34 +341,14 @@ export async function applyStreamingPredictionUpdates(
     }
 
     const covarianceInverse = JSON.parse(modelData.covariance_inverse) as number[]
-
-    // Get video duration
     const videoDuration = db
       .prepare('SELECT duration_seconds FROM video_metadata WHERE id = 1')
       .get() as { duration_seconds: number } | undefined
     const durationSeconds = videoDuration?.duration_seconds ?? 600.0
 
-    // Get annotation box data
-    const annotationBox = db
-      .prepare(
-        `
-        SELECT text, x, y, width, height, timestamp_seconds
-        FROM full_frame_ocr
-        WHERE frame_index = ? AND box_index = ?
-      `
-      )
-      .get(newAnnotation.frameIndex, newAnnotation.boxIndex) as
-      | {
-          text: string
-          x: number
-          y: number
-          width: number
-          height: number
-          timestamp_seconds: number
-        }
-      | undefined
+    const annotation = extractAnnotationFeatures(db, newAnnotation, layoutConfig, durationSeconds)
 
-    if (!annotationBox) {
+    if (!annotation) {
       console.warn('[streamingUpdate] Annotation box not found in OCR data')
       return {
         success: false,
@@ -222,60 +360,10 @@ export async function applyStreamingPredictionUpdates(
       }
     }
 
-    // Get all boxes in annotation's frame for feature extraction context
-    const frameBoxes = db
-      .prepare(
-        `
-        SELECT box_index, x, y, width, height
-        FROM full_frame_ocr
-        WHERE frame_index = ?
-        ORDER BY box_index
-      `
-      )
-      .all(newAnnotation.frameIndex) as Array<{
-      box_index: number
-      x: number
-      y: number
-      width: number
-      height: number
-    }>
-
-    const allBoundsInFrame = frameBoxes.map(b =>
-      ocrToPixelBounds(b, layoutConfig.frame_width, layoutConfig.frame_height)
-    )
-
-    const annotationBounds = ocrToPixelBounds(
-      annotationBox,
-      layoutConfig.frame_width,
-      layoutConfig.frame_height
-    )
-
-    // Extract features for the new annotation
-    const annotationFeatures = extractFeatures(
-      annotationBounds,
-      layoutConfig,
-      allBoundsInFrame,
-      newAnnotation.frameIndex,
-      newAnnotation.boxIndex,
-      annotationBox.text,
-      annotationBox.timestamp_seconds,
-      durationSeconds,
-      db
-    )
-
-    const annotation: Annotation = {
-      frameIndex: newAnnotation.frameIndex,
-      boxIndex: newAnnotation.boxIndex,
-      label: newAnnotation.label,
-      features: annotationFeatures,
-    }
-
-    // Load all boxes with features and current predictions
     console.log('[streamingUpdate] Loading all boxes with features...')
     const allBoxes = loadAllBoxesWithFeatures(db, layoutConfig, durationSeconds)
     console.log(`[streamingUpdate] Loaded ${allBoxes.length} boxes`)
 
-    // Identify affected boxes using Mahalanobis distance
     console.log('[streamingUpdate] Identifying affected boxes...')
     const candidates = identifyAffectedBoxes(annotation, allBoxes, covarianceInverse)
     console.log(`[streamingUpdate] Identified ${candidates.length} candidates for update`)
@@ -291,107 +379,14 @@ export async function applyStreamingPredictionUpdates(
       }
     }
 
-    // Prepare update statement
     const updatePrediction = db.prepare(`
       UPDATE full_frame_ocr
       SET predicted_label = ?, predicted_confidence = ?
       WHERE frame_index = ? AND box_index = ?
     `)
 
-    // Create the predictAndUpdate function for adaptive recalculation
-    const predictAndUpdate = async (
-      batch: Array<BoxWithPrediction & { changeProb: number }>
-    ): Promise<
-      Array<{
-        box: BoxWithPrediction & { changeProb: number }
-        oldLabel: 'in' | 'out'
-        newLabel: 'in' | 'out'
-        didReverse: boolean
-      }>
-    > => {
-      const results: Array<{
-        box: BoxWithPrediction & { changeProb: number }
-        oldLabel: 'in' | 'out'
-        newLabel: 'in' | 'out'
-        didReverse: boolean
-      }> = []
+    const predictAndUpdate = createPredictAndUpdate(db, layoutConfig, updatePrediction)
 
-      for (const box of batch) {
-        // Get box data for prediction
-        const boxData = db
-          .prepare(
-            `
-            SELECT x, y, width, height
-            FROM full_frame_ocr
-            WHERE frame_index = ? AND box_index = ?
-          `
-          )
-          .get(box.frameIndex, box.boxIndex) as
-          | { x: number; y: number; width: number; height: number }
-          | undefined
-
-        if (!boxData) continue
-
-        const bounds = ocrToPixelBounds(
-          boxData,
-          layoutConfig.frame_width,
-          layoutConfig.frame_height
-        )
-
-        // Get all boxes in this frame for context
-        const frameBoxes = db
-          .prepare(
-            `
-            SELECT box_index, x, y, width, height
-            FROM full_frame_ocr
-            WHERE frame_index = ?
-            ORDER BY box_index
-          `
-          )
-          .all(box.frameIndex) as Array<{
-          box_index: number
-          x: number
-          y: number
-          width: number
-          height: number
-        }>
-
-        const allBounds = frameBoxes.map(b =>
-          ocrToPixelBounds(b, layoutConfig.frame_width, layoutConfig.frame_height)
-        )
-
-        // Recalculate prediction with updated model
-        const newPrediction = predictBoxLabel(
-          bounds,
-          layoutConfig,
-          allBounds,
-          box.frameIndex,
-          box.boxIndex,
-          db
-        )
-
-        // Update database
-        updatePrediction.run(
-          newPrediction.label,
-          newPrediction.confidence,
-          box.frameIndex,
-          box.boxIndex
-        )
-
-        const didReverse = box.currentPrediction.label !== newPrediction.label
-
-        results.push({
-          box,
-          oldLabel: box.currentPrediction.label,
-          newLabel: newPrediction.label,
-          didReverse,
-        })
-      }
-
-      return results
-    }
-
-    // Run adaptive recalculation
     console.log('[streamingUpdate] Running adaptive recalculation...')
     const recalcResult = await adaptiveRecalculation(candidates, predictAndUpdate)
 

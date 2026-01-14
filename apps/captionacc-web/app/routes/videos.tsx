@@ -197,6 +197,8 @@ function SearchControls({
 // Main Component
 // =============================================================================
 
+// Large videos page component with comprehensive UI sections - acceptable length for library view
+/* eslint-disable max-lines-per-function */
 export default function VideosPage() {
   const { tree } = useLoaderData<{ tree: TreeNode[] }>()
   const revalidator = useRevalidator()

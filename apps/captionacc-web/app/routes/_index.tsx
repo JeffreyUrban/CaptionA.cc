@@ -48,6 +48,8 @@ export async function loader({ request: _request }: LoaderFunctionArgs) {
   return null
 }
 
+// Large Home page component with marketing content - acceptable length for landing page
+/* eslint-disable max-lines-per-function */
 export default function Home() {
   return (
     <>

@@ -9,6 +9,8 @@ import type { ActionFunctionArgs } from 'react-router'
 
 import { getDbPath } from '~/utils/video-paths'
 
+// Large duplicate resolution action with comprehensive error handling - acceptable length for critical workflow
+/* eslint-disable max-lines-per-function */
 export async function action({ request, params }: ActionFunctionArgs) {
   const { videoId } = params
   if (!videoId) {

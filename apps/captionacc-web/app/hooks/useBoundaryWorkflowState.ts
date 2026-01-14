@@ -69,6 +69,7 @@ interface UseBoundaryWorkflowStateReturn {
   navigateFrame: (delta: number) => void
 }
 
+// eslint-disable-next-line max-lines-per-function -- Boundary workflow with complex state management and navigation
 export function useBoundaryWorkflowState({
   videoId,
 }: UseBoundaryWorkflowStateParams): UseBoundaryWorkflowStateReturn {

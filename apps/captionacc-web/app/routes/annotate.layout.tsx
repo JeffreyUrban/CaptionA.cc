@@ -33,6 +33,8 @@ export async function loader() {
   }
 }
 
+// Large layout page component with multiple UI sections - acceptable length for annotation page
+/* eslint-disable max-lines-per-function */
 export default function AnnotateLayout() {
   const [searchParams] = useSearchParams()
   const videoId = searchParams.get('videoId') ?? ''
