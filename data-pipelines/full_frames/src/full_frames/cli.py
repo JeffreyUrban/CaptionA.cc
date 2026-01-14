@@ -13,13 +13,9 @@ from rich.progress import (
 )
 
 from . import __version__
-from .database import (
-    get_database_path,
-    process_frames_to_database,
-    write_frames_to_database,
-)
-from .frames import extract_frames, get_video_dimensions, get_video_duration
-from .ocr import create_ocr_visualization, process_frames_directory
+from .database import get_database_path
+from .ocr_service import process_video_with_gpu_and_ocr_service
+from gpu_video_utils import GPUVideoDecoder
 
 app = typer.Typer(
     name="full_frames",
@@ -59,6 +55,12 @@ def analyze(
         "-r",
         help="Frame sampling rate in Hz (0.1 = one frame every 10 seconds)",
     ),
+    language: str = typer.Option(
+        "zh-Hans",
+        "--language",
+        "-l",
+        help="OCR language preference (e.g., 'zh-Hans' for Simplified Chinese)",
+    ),
     version: bool | None = typer.Option(
         None,
         "--version",
@@ -68,145 +70,74 @@ def analyze(
         help="Show version and exit",
     ),
 ) -> None:
-    """Analyze caption layout from video (full pipeline).
+    """Analyze caption layout from video using GPU acceleration (full pipeline).
 
-    This command runs all pipeline steps in sequence:
-    1. Extract frames from video at specified rate
-    2. Run OCR on frames and write to database (full_frame_ocr table)
-    3. Rename frames to match database frame_index (multiply indices by 100)
-    4. Analyze subtitle region characteristics
+    This GPU-accelerated pipeline:
+    1. Extracts frames using PyNvVideoCodec (GPU)
+    2. Processes frames in batches with Google Vision API (OCR service)
+    3. Stores results and frame images in fullOCR.db
+
+    Requirements:
+    - NVIDIA GPU with CUDA support
+    - OCR service running (see services/ocr-service/README.md)
 
     Database Storage:
-    - OCR results are written directly to fullOCR.db (full_frame_ocr table)
+    - OCR results written to full_frame_ocr table
+    - Frame images stored in full_frames table as BLOBs
+    - Layout config in video_layout_config table
 
     Frame Indexing:
-    - Database OCR samples at 10Hz (every 0.1 seconds)
-    - full_frames samples at 0.1Hz (every 10 seconds) by default
-    - Frames are saved as frame_0000000000.jpg, frame_0000000100.jpg, etc.
-    - Frame filename index = time_in_seconds * 10
-    - This allows 1:1 mapping with database frame_index values
+    - Frames saved with index = time_in_seconds * 10
+    - Example: frame_0000000100.jpg = frame at 10 seconds
     """
-    console.print("[bold cyan]Caption Layout Analysis Pipeline[/bold cyan]")
+    console.print("[bold cyan]GPU-Accelerated Caption Layout Analysis[/bold cyan]")
     console.print(f"Video: {video}")
     console.print(f"Output: {output_dir}")
     console.print(f"Frame rate: {frame_rate} Hz")
+    console.print(f"Language: {language}")
     console.print()
 
     # Create output directory
     output_dir.mkdir(parents=True, exist_ok=True)
 
     try:
-        # Get video info upfront
-        duration = get_video_duration(video)
+        # Get video info upfront using GPU decoder
+        decoder = GPUVideoDecoder(video)
+        video_info = decoder.get_video_info()
+        width = video_info["width"]
+        height = video_info["height"]
+        duration = video_info["duration"]
         expected_frames = int(duration * frame_rate)
-        width, height = get_video_dimensions(video)
+        decoder.close()
 
         console.print(f"  Video duration: {duration:.1f}s")
         console.print(f"  Video dimensions: {width}×{height}")
         console.print(f"  Expected frames: ~{expected_frames}")
         console.print()
 
-        # Step 1: Extract frames directly to output directory
-        console.print("[bold]Step 1/3: Extracting frames[/bold]")
-
-        # Clear output directory to prevent double-renaming issues
-        if output_dir.exists():
-            console.print("  Clearing existing frames...")
-            for frame_file in output_dir.glob("frame_*.jpg"):
-                frame_file.unlink()
-
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TaskProgressColumn(),
-            console=console,
-        ) as progress:
-            task = progress.add_task("  Extracting...", total=expected_frames)
-            frames = extract_frames(
-                video,
-                output_dir,
-                frame_rate,
-                progress_callback=lambda current, total: progress.update(task, completed=current),
-            )
-
-        console.print(f"  [green]✓[/green] Extracted {len(frames)} frames")
-
-        # Rename frames to match database frame_index 1:1
-        # Database samples at 10Hz (frame_index 0, 1, 2, ... = times 0.0s, 0.1s, 0.2s, ...)
-        # full_frames samples at 0.1Hz (frames 0, 1, 2, ... = times 0s, 10s, 20s, ...)
-        # Multiply full_frames indices by 100 to map: frame 0→0, frame 1→100, frame 2→200
-        # Result: frame_0000000000.jpg, frame_0000000100.jpg, frame_0000000200.jpg, etc.
-        # This creates 1:1 mapping where database frame_index maps directly to frame filename
-        console.print("  Renaming frames to match database frame_index...")
-        frame_files = sorted(output_dir.glob("frame_*.jpg"), reverse=True)
-        for frame_file in frame_files:
-            # Extract frame number from filename (e.g., "frame_0000000001.jpg" → 1)
-            frame_num = int(frame_file.stem.split("_")[1])
-            # Multiply by 100 to match database indexing (e.g., 1 → 100)
-            new_index = frame_num * 100
-            new_name = f"frame_{new_index:010d}.jpg"
-            new_path = output_dir / new_name
-            frame_file.rename(new_path)
-
-        console.print(f"  [green]✓[/green] Frames saved: {output_dir}")
-        console.print()
-
-        # Step 2: Run OCR and write to database
-        console.print("[bold]Step 2/3: Running OCR on frames[/bold]")
+        # Run GPU + OCR service pipeline
+        console.print("[bold]Processing with GPU + OCR Service[/bold]")
         db_path = get_database_path(output_dir)
 
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TaskProgressColumn(),
-            console=console,
-        ) as progress:
-            task = progress.add_task("  Processing OCR...", total=len(frames))
-            total_boxes = process_frames_to_database(
-                output_dir,
-                db_path,
-                "zh-Hans",
-                progress_callback=lambda current, total: progress.update(task, completed=current),
-            )
+        total_boxes = process_video_with_gpu_and_ocr_service(
+            video_path=video,
+            db_path=db_path,
+            rate_hz=frame_rate,
+            language=language,
+            progress_callback=None,  # OCR service pipeline handles its own progress reporting
+        )
 
-        console.print(f"  [green]✓[/green] OCR results: {db_path} ({total_boxes} boxes)")
+        console.print()
+        console.print(f"  [green]✓[/green] GPU extraction complete")
+        console.print(f"  [green]✓[/green] OCR processing complete ({total_boxes} text boxes)")
+        console.print(f"  [green]✓[/green] Results saved to: {db_path}")
         console.print()
 
-        # Step 2.5: Write frames to database
-        console.print("[bold]Step 2.5/3: Writing frames to database[/bold]")
-
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TaskProgressColumn(),
-            console=console,
-        ) as progress:
-            task = progress.add_task("  Writing frames...", total=len(frames))
-            frames_written = write_frames_to_database(
-                output_dir,
-                db_path,
-                progress_callback=lambda current, total: progress.update(task, completed=current),
-                delete_after_write=True,
-            )
-
-        console.print(f"  [green]✓[/green] Stored {frames_written} frames in database")
-        console.print("  [green]✓[/green] Deleted filesystem frames")
-
-        # Remove empty output directory
-        if output_dir.exists() and not any(output_dir.iterdir()):
-            output_dir.rmdir()
-            console.print("  [green]✓[/green] Removed empty directory")
-        console.print()
-
-        # Step 3/3: Create minimal layout config
-        console.print("[bold]Step 3/3: Creating initial layout config[/bold]")
+        # Create minimal layout config
+        console.print("[bold]Creating initial layout config[/bold]")
         console.print("  Layout analysis will be performed by ML model in web app...")
 
-        # Write minimal layout config with just frame dimensions
-        # Full layout (crop region, anchor, etc.) calculated by web app using ML model
+        # Write minimal layout config with frame dimensions
         import sqlite3
 
         conn = sqlite3.connect(db_path)
@@ -232,9 +163,10 @@ def analyze(
         console.print("[bold green]Pipeline Complete![/bold green]")
         console.print()
         console.print("[bold cyan]Summary:[/bold cyan]")
-        console.print(f"  Extracted and analyzed {frames_written} frames")
+        console.print(f"  Processed {expected_frames} frames")
+        console.print(f"  Detected {total_boxes} text boxes")
         console.print(f"  Frame dimensions: {width}×{height}")
-        console.print("  Layout analysis: Will be performed by ML model in web app")
+        console.print(f"  Database: {db_path}")
 
     except (RuntimeError, FileNotFoundError, ValueError) as e:
         console.print(f"[red]Error:[/red] {e}")

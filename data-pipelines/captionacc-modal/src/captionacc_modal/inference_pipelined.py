@@ -76,7 +76,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Tuple
 
-import ffmpeg
 import torch
 from PIL import Image as PILImage
 
@@ -86,6 +85,9 @@ from .models import CropInferResult, CropRegion
 from caption_frame_extents.inference.batch_predictor import BatchCaptionFrameExtentsPredictor
 from caption_frame_extents.inference.caption_frame_extents_db import PairResult, create_caption_frame_extents_db
 from caption_frame_extents.inference.wasabi import WasabiClient
+
+# Import shared GPU utilities
+from gpu_video_utils import GPUVideoDecoder
 
 # Try to import monitoring libraries
 try:
@@ -643,17 +645,15 @@ def crop_and_infer_caption_frame_extents_pipelined(
         wasabi.download_file(video_key, video_path)
         print(f"  Downloaded in {time.time() - download_start:.2f}s\n")
 
-        # Step 2: Get video dimensions and FPS
+        # Step 2: Get video dimensions and FPS using GPU decoder
         print("[2/7] Probing video properties...")
-        probe = ffmpeg.probe(str(video_path))
-        video_stream = next(s for s in probe["streams"] if s["codec_type"] == "video")
-        frame_width = int(video_stream["width"])
-        frame_height = int(video_stream["height"])
 
-        # Parse FPS from r_frame_rate (e.g., "25/1" -> 25.0)
-        fps_str = video_stream.get("r_frame_rate", "25/1")
-        fps_parts = fps_str.split("/")
-        native_fps = float(fps_parts[0]) / float(fps_parts[1])
+        # Use shared GPU decoder to get video info
+        with GPUVideoDecoder(video_path) as temp_decoder:
+            video_info = temp_decoder.get_video_info()
+            frame_width = video_info["width"]
+            frame_height = video_info["height"]
+            native_fps = video_info["fps"]
 
         print(f"  Video dimensions: {frame_width}x{frame_height}")
         print(f"  Native FPS: {native_fps}\n")
@@ -756,16 +756,11 @@ def crop_and_infer_caption_frame_extents_pipelined(
         pair_results = []
         frames_saved = {}
 
-        # Initialize decoder
-        decoder = nvvc.SimpleDecoder(
-            enc_file_path=str(video_path),
-            gpu_id=0,
-            use_device_memory=True,
-            output_color_type=nvvc.OutputColorType.RGB,
-        )
+        # Initialize GPU decoder (using shared utility)
+        decoder = GPUVideoDecoder(video_path, gpu_id=0)
 
         total_frames = len(decoder)
-        video_duration = total_frames / native_fps
+        video_duration = decoder.get_video_info()["duration"]
         num_output_frames = int(video_duration * frame_rate)
 
         print(f"    Total frames: {total_frames}, extracting {num_output_frames} at {frame_rate} FPS")
@@ -811,15 +806,15 @@ def crop_and_infer_caption_frame_extents_pipelined(
             for i in range(frames_to_extract):
                 output_idx = frame_idx + i
                 target_time = output_idx / frame_rate
-                native_frame_idx = round(target_time * native_fps)
-                native_frame_idx = min(native_frame_idx, total_frames - 1)
 
-                frame_dlpack = decoder[native_frame_idx]
-                if frame_dlpack is None:
+                # Use shared decoder's frame extraction (handles timing internally)
+                try:
+                    frame_tensor = decoder.get_frame_at_time(target_time)
+                except ValueError:
+                    # Frame out of bounds or decode failure
                     continue
 
                 # Crop on GPU
-                frame_tensor = torch.from_dlpack(frame_dlpack)
                 cropped_tensor = frame_tensor[
                     crop_helper.crop_top_px:crop_helper.crop_bottom_px,
                     crop_helper.crop_left_px:crop_helper.crop_right_px,
@@ -918,6 +913,9 @@ def crop_and_infer_caption_frame_extents_pipelined(
         metrics.inference_end = time.time()
         metrics.frames_extracted = len(frames_saved)
         metrics.pairs_inferred = len(pair_results)
+
+        # Clean up GPU decoder
+        decoder.close()
 
         frame_count = len(frames_saved)
         pipeline_duration = time.time() - pipeline_start

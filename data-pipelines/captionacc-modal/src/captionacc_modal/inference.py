@@ -61,8 +61,9 @@ def get_inference_image():
             "psutil",
             "nvidia-ml-py3",  # pynvml for GPU monitoring
         )
-        # Add caption_frame_extents package for inference
+        # Add local packages for inference
         .add_local_python_source("caption_frame_extents")
+        .add_local_python_source("gpu_video_utils")
     )
 
 
