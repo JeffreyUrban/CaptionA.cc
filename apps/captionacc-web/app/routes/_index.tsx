@@ -270,7 +270,8 @@ export default function Home() {
           subheadline={
             <div className="text-left">
               <p className="mb-6 text-center">
-                We're launching with a select group of early users. During early access, you'll:
+                We&apos;re launching with a select group of early users. During early access,
+                you&apos;ll:
               </p>
               <ul className="mx-auto max-w-2xl space-y-3">
                 <li className="flex items-start">
@@ -325,9 +326,9 @@ export default function Home() {
             question="How accurate is the extraction?"
             answer={
               <p>
-                We've developed the system to deliver exceptional accuracy, significantly better
-                than standard OCR tools. During early access, we'll work with you to ensure quality
-                on your specific content.
+                We&apos;ve developed the system to deliver exceptional accuracy, significantly
+                better than standard OCR tools. During early access, we&apos;ll work with you to
+                ensure quality on your specific content.
               </p>
             }
           />
@@ -335,8 +336,8 @@ export default function Home() {
             question="What languages and character sets do you support?"
             answer={
               <p>
-                We've primarily developed and tested with Chinese subtitles, but the system is
-                designed to work with multiple character sets. We're interested in working with
+                We&apos;ve primarily developed and tested with Chinese subtitles, but the system is
+                designed to work with multiple character sets. We&apos;re interested in working with
                 early users who have content in any language or script.
               </p>
             }
@@ -354,8 +355,8 @@ export default function Home() {
             question="What about pricing?"
             answer={
               <p>
-                We're still finalizing our pricing model. Details will be shared with early access
-                users.
+                We&apos;re still finalizing our pricing model. Details will be shared with early
+                access users.
               </p>
             }
           />

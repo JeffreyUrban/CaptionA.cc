@@ -1348,7 +1348,7 @@ export async function calculatePredictions(videoId: string): Promise<CalculatePr
       if (frameBatches.indexOf(frameBatch) < frameBatches.length - 1) {
         // Sleep for 10ms between batches (yields to other operations)
         const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
-        sleep(10)
+        void sleep(10)
       }
     }
 

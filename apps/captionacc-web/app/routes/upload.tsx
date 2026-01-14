@@ -401,8 +401,8 @@ export default function UploadPage() {
               onDragEnter={handleDragEnter}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-              onFileSelect={handleFileSelect}
+              onDrop={e => void handleDrop(e)}
+              onFileSelect={e => void handleFileSelect(e)}
               onFileInputClick={handleFileInputClick}
               onFileInputCancel={handleFileInputCancel}
             />
@@ -417,8 +417,8 @@ export default function UploadPage() {
               uploads={activeUploads}
               onCancelQueued={cancelQueued}
               onAbortAll={abortAll}
-              onCancelUpload={handleCancelUpload}
-              onRetryUpload={handleRetryUpload}
+              onCancelUpload={id => void handleCancelUpload(id)}
+              onRetryUpload={id => void handleRetryUpload(id)}
             />
 
             {/* Pending Duplicates */}
@@ -456,7 +456,7 @@ export default function UploadPage() {
           files={pendingFiles}
           availableFolders={availableFolders}
           defaultTargetFolder={loaderData.preselectedFolder}
-          onConfirm={handleUploadConfirm}
+          onConfirm={(files, options) => void handleUploadConfirm(files, options)}
           onCancel={handleUploadCancel}
         />
       )}

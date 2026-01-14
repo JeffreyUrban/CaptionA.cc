@@ -272,7 +272,7 @@ export default function AnnotateLayout() {
           onClose={() => setShowApproveModal(false)}
           onConfirm={() => {
             setLayoutApproved(true)
-            navigate('/videos')
+            void navigate('/videos')
           }}
           showAlert={(title, message, type) => setAlertModal({ title, message, type })}
         />

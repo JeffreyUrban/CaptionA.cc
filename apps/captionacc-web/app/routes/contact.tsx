@@ -166,8 +166,8 @@ export default function Contact() {
               Get in touch
             </h1>
             <p className="mt-6 text-base text-olive-700 dark:text-olive-400">
-              Have a question or want to work together? Send us a message and we'll get back to you
-              as soon as possible.
+              Have a question or want to work together? Send us a message and we&apos;ll get back to
+              you as soon as possible.
             </p>
           </header>
 

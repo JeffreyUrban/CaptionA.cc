@@ -67,7 +67,7 @@ function DatabaseAdministration({
   const [repairResult, setRepairResult] = useState<RepairSummary | null>(null)
 
   useEffect(() => {
-    loadStatus()
+    void loadStatus()
   }, [])
 
   // Helper function for authenticated API calls
@@ -565,7 +565,7 @@ export default function AdminPage() {
   useEffect(() => {
     async function checkAdmin() {
       if (!session?.access_token || !user) {
-        navigate('/login?redirectTo=/admin')
+        void navigate('/login?redirectTo=/admin')
         return
       }
 
@@ -579,14 +579,14 @@ export default function AdminPage() {
 
         if (!data.isPlatformAdmin) {
           alert('Access denied: Platform admin privileges required')
-          navigate('/')
+          void navigate('/')
           return
         }
 
         setIsAdmin(true)
       } catch (error) {
         console.error('Failed to check admin status:', error)
-        navigate('/')
+        void navigate('/')
       }
     }
 
