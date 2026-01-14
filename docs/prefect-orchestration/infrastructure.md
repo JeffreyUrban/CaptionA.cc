@@ -1,165 +1,49 @@
 # Prefect Infrastructure
 
-Self-hosted Prefect deployment on Fly.io with auto-stop for cost efficiency.
+Self-hosted Prefect server on Fly.io with auto-stop for cost efficiency.
 
-## Architecture Decision
+---
 
-### Why Self-Hosted?
+## Why Self-Hosted?
 
 | Option | Deployments | Cost | Decision |
 |--------|-------------|------|----------|
 | Prefect Cloud Free | 5 | $0 | Too limited |
 | Prefect Cloud Pro | 20 | $100/mo | Too expensive |
-| Self-hosted (Fly.io) | Unlimited | ~$3/mo | Selected |
+| Self-hosted (Fly.io) | Unlimited | ~$3/mo | **Selected** |
 
 Self-hosted provides unlimited deployments at minimal cost with auto-stop.
 
-## Components
+---
+
+## Deployment Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                     Fly.io Application                           │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│   ┌─────────────────────┐     ┌─────────────────────┐          │
-│   │   Prefect Server    │     │   Prefect Worker    │          │
-│   │   (API + UI)        │     │   (ProcessWorker)   │          │
-│   │   Port 4200         │     │                     │          │
-│   └──────────┬──────────┘     └──────────┬──────────┘          │
-│              │                           │                      │
-│              └───────────┬───────────────┘                      │
-│                          │                                      │
-│                          ▼                                      │
-│              ┌─────────────────────┐                            │
-│              │   SQLite Database   │                            │
-│              │   /data/prefect.db  │                            │
-│              └─────────────────────┘                            │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────┐
+│     Fly.io: prefect-service        │
+├────────────────────────────────────┤
+│  Prefect Server (API + UI)         │
+│  Port: 4200                         │
+│  Database: SQLite (/data/prefect.db)│
+│  Auto-stop: Yes                     │
+└────────────────────────────────────┘
+            ↕
+┌────────────────────────────────────┐
+│     API Service (local/Fly.io)     │
+├────────────────────────────────────┤
+│  Prefect Worker (subprocess)       │
+│  Polls work pool: captionacc-workers│
+│  Executes flows locally            │
+└────────────────────────────────────┘
 ```
+
+**Key Point:** Prefect server only coordinates. API service owns and executes flows.
+
+---
 
 ## Fly.io Configuration
 
-### fly.toml
-
-```toml
-app = "captionacc-prefect"
-primary_region = "iad"
-
-[build]
-  dockerfile = "Dockerfile"
-
-[env]
-  PREFECT_SERVER_API_HOST = "0.0.0.0"
-  PREFECT_SERVER_API_PORT = "4200"
-  PREFECT_API_DATABASE_CONNECTION_URL = "sqlite+aiosqlite:////data/prefect.db"
-
-[http_service]
-  internal_port = 4200
-  force_https = true
-  auto_stop_machines = true
-  auto_start_machines = true
-  min_machines_running = 0
-
-[mounts]
-  source = "prefect_data"
-  destination = "/data"
-
-[[vm]]
-  memory = "512mb"
-  cpu_kind = "shared"
-  cpus = 1
-```
-
-### Dockerfile
-
-```dockerfile
-FROM python:3.11-slim
-
-WORKDIR /app
-
-# Install Prefect
-RUN pip install prefect>=3.0.0
-
-# Copy flow definitions
-COPY flows/ /app/flows/
-COPY prefect.yaml /app/
-
-# Startup script
-COPY start.sh /app/
-RUN chmod +x /app/start.sh
-
-EXPOSE 4200
-
-CMD ["/app/start.sh"]
-```
-
-### start.sh
-
-```bash
-#!/bin/bash
-set -e
-
-# Start Prefect server in background
-prefect server start --host 0.0.0.0 --port 4200 &
-SERVER_PID=$!
-
-# Wait for server to be ready
-sleep 5
-
-# Set API URL for worker
-export PREFECT_API_URL="http://localhost:4200/api"
-
-# Create work pool if it doesn't exist
-prefect work-pool create captionacc-workers --type process || true
-
-# Start worker
-prefect worker start --pool captionacc-workers &
-WORKER_PID=$!
-
-# Handle shutdown
-trap "kill $SERVER_PID $WORKER_PID" SIGTERM SIGINT
-
-# Wait for either process to exit
-wait -n
-exit $?
-```
-
-## Work Pool Configuration
-
-### Pool Settings
-
-```yaml
-name: captionacc-workers
-type: process
-concurrency_limit: 5
-
-# Base job template
-base_job_template:
-  job_configuration:
-    env:
-      MODAL_TOKEN_ID: "{{ $MODAL_TOKEN_ID }}"
-      MODAL_TOKEN_SECRET: "{{ $MODAL_TOKEN_SECRET }}"
-      SUPABASE_URL: "{{ $SUPABASE_URL }}"
-      SUPABASE_SERVICE_KEY: "{{ $SUPABASE_SERVICE_KEY }}"
-      WASABI_ACCESS_KEY: "{{ $WASABI_ACCESS_KEY }}"
-      WASABI_SECRET_KEY: "{{ $WASABI_SECRET_KEY }}"
-```
-
-### Concurrency Limits
-
-| Resource | Limit | Rationale |
-|----------|-------|-----------|
-| Work pool total | 5 | Memory constraint (512MB) |
-| captionacc-video-initial-processing | 3 | Background, can queue |
-| captionacc-crop-and-infer-caption-frame-extents | 2 | User-blocking, priority |
-| captionacc-caption-ocr | 5 | Fast, lightweight |
-
-## Auto-Stop Behavior
-
-Fly.io auto-stop reduces costs by stopping machines when idle.
-
-### Configuration
+### Auto-Stop Settings
 
 ```toml
 [http_service]
@@ -169,49 +53,63 @@ Fly.io auto-stop reduces costs by stopping machines when idle.
 ```
 
 ### Wake-Up Triggers
-
-1. **Webhook request** (Supabase → Prefect)
-2. **API health check** (monitoring)
-3. **Flow run creation** (API → Prefect)
+- Webhook request (Supabase → API → Prefect)
+- API health check
+- Flow run creation
 
 ### Wake-Up Time
-
 - Cold start: ~5-10 seconds
 - Warm (recently stopped): ~2-3 seconds
 
-### Implications
+**Implication:** First flow after idle has 5-10s delay. Supabase webhooks may timeout on cold start (configure retry).
 
-- First flow after idle period has 5-10s delay
-- Webhooks may timeout on cold start (configure retry)
-- Health checks keep machine warm if frequent
+---
+
+## Work Pool Configuration
+
+**Name:** `captionacc-workers`
+**Type:** `process`
+**Concurrency:** 5 (total)
+
+### Per-Flow Concurrency
+
+| Flow | Max Concurrent | Rationale |
+|------|----------------|-----------|
+| video-initial-processing | 5 | Modal scales, background job |
+| crop-and-infer | 2 | Expensive GPU, user-blocking |
+| caption-ocr | 10 | Fast, lightweight |
+
+---
 
 ## Secrets Management
 
-### Fly.io Secrets
+### Required Secrets
 
+**For Prefect Server (Fly.io):**
 ```bash
-# Set secrets
 fly secrets set MODAL_TOKEN_ID=xxx
 fly secrets set MODAL_TOKEN_SECRET=xxx
-fly secrets set SUPABASE_URL=https://xxx.supabase.co
+fly secrets set SUPABASE_URL=xxx
 fly secrets set SUPABASE_SERVICE_KEY=xxx
 fly secrets set WASABI_ACCESS_KEY=xxx
 fly secrets set WASABI_SECRET_KEY=xxx
+fly secrets set WEBHOOK_SECRET=xxx
 ```
 
-### Required Secrets
+**For API Service (.env):**
+```bash
+PREFECT_API_URL=https://prefect-service.fly.dev/api
+WEBHOOK_SECRET=xxx
+SUPABASE_URL=xxx
+SUPABASE_SERVICE_ROLE_KEY=xxx
+WASABI_ACCESS_KEY_READWRITE=xxx
+WASABI_SECRET_KEY_READWRITE=xxx
+WASABI_BUCKET=caption-acc-prod
+```
 
-| Secret | Purpose                  |
-|--------|--------------------------|
-| `MODAL_TOKEN_ID` | Modal API authentication |
-| `MODAL_TOKEN_SECRET` | Modal API authentication |
-| `WEBHOOK_SECRET` | TODO: write description  |
-| `SUPABASE_URL` | Supabase project URL     |
-| `SUPABASE_SERVICE_KEY` | Supabase admin access    |
-| `WASABI_ACCESS_KEY` | Wasabi S3 access         |
-| `WASABI_SECRET_KEY` | Wasabi S3 secret         |
+---
 
-## Deployment
+## Deployment Commands
 
 ### Initial Setup
 
@@ -238,139 +136,51 @@ fly deploy
 # View logs
 fly logs
 
-# SSH into machine
-fly ssh console
-```
-
-### Rollback
-
-```bash
-# List releases
+# Rollback
 fly releases
-
-# Rollback to previous
 fly deploy --image registry.fly.io/captionacc-prefect:v123
 ```
 
-## Webhook Endpoint
-
-Supabase webhooks trigger flows via HTTP POST.
-
-### Endpoint Configuration
-
-```
-URL: https://captionacc-prefect.fly.dev/webhooks/supabase
-Method: POST
-Headers:
-  Authorization: Bearer {webhook_secret}
-  Content-Type: application/json
-```
-
-### Webhook Handler
-
-The Prefect service includes a FastAPI app for webhook handling:
-
-```python
-# webhook_server.py
-from fastapi import FastAPI, Request, HTTPException
-from prefect.client import get_client
-import os
-
-app = FastAPI()
-
-WEBHOOK_SECRET = os.environ["WEBHOOK_SECRET"]
-
-@app.post("/webhooks/supabase")
-async def handle_supabase_webhook(request: Request):
-    # Verify authorization
-    auth = request.headers.get("Authorization", "")
-    if auth != f"Bearer {WEBHOOK_SECRET}":
-        raise HTTPException(401, "Unauthorized")
-
-    payload = await request.json()
-
-    if payload.get("table") == "videos" and payload.get("type") == "INSERT":
-        record = payload["record"]
-        async with get_client() as client:
-            deployment = await client.read_deployment_by_name(
-                "captionacc-video-initial-processing"
-            )
-            await client.create_flow_run_from_deployment(
-                deployment.id,
-                parameters={
-                    "video_id": record["id"],
-                    "tenant_id": record["tenant_id"],
-                    "storage_key": record["storage_key"]
-                }
-            )
-
-    return {"status": "accepted"}
-```
+---
 
 ## Health Checks
 
-### Fly.io Health Check
-
-```toml
-[[services.http_checks]]
-  interval = 30000        # 30 seconds
-  timeout = 5000          # 5 seconds
-  grace_period = "10s"
-  method = "GET"
-  path = "/api/health"
-```
-
-### Prefect Server Health
-
+### Prefect Server
 ```bash
-# Check server status
-curl https://captionacc-prefect.fly.dev/api/health
-
-# Expected response
-{"status": "ok"}
+curl https://prefect-service.fly.dev/api/health
+# Expected: {"status": "ok"}
 ```
 
-### Worker Health
+### Worker Status
+Check via Prefect UI:
+- Work Pools → captionacc-workers → Workers
+- Should show active worker from API service
 
-Workers report health via Prefect server. Monitor via:
-- Prefect UI: Work Pools → captionacc-workers
-- API: `GET /api/work_pools/captionacc-workers/workers`
+---
 
 ## Monitoring
 
 ### Fly.io Metrics
-
 ```bash
-# CPU/Memory usage
-fly status
-
-# Recent logs
-fly logs --app captionacc-prefect
+fly status        # CPU/Memory usage
+fly logs          # Recent logs
 ```
 
 ### Prefect UI
+- **URL:** https://prefect-service.fly.dev
+- Monitor: Flow runs, work pool health, task logs
 
-Access at: `https://captionacc-prefect.fly.dev`
+### Key Metrics
+- Flow execution time per type
+- Flow success rate
+- Lock contention rate
+- Worker health and uptime
 
-- Flow runs and status
-- Work pool health
-- Task execution logs
-
-### Alerts
-
-Configure via Fly.io or external monitoring:
-
-```bash
-# Example: Alert on machine restart
-fly monitoring alerts create \
-  --type machine_restart \
-  --threshold 3 \
-  --window 1h
-```
+---
 
 ## Cost Estimation
 
-### Fly.io Pricing (as of 2026)
+### Fly.io Pricing (2026)
 
 | Resource | Allocation | Cost/Month |
 |----------|------------|------------|
@@ -379,13 +189,70 @@ fly monitoring alerts create \
 | Volume | 1 GB | ~$0.15 |
 | **Total** | | **~$2.70** |
 
-With auto-stop, actual costs depend on uptime:
+**With auto-stop:**
 - Active 10% of time: ~$0.30/mo
 - Active 50% of time: ~$1.35/mo
 - Active 100% of time: ~$2.70/mo
 
+Actual cost depends on usage patterns.
+
+---
+
+## Troubleshooting
+
+### Worker Not Connecting
+
+```bash
+# Check API service logs for worker output
+# Look for: "[Worker] Connecting to Prefect server..."
+
+# Verify PREFECT_API_URL is set
+echo $PREFECT_API_URL
+
+# Test connection
+curl https://prefect-service.fly.dev/api/health
+```
+
+### Flow Runs Stuck in "Scheduled"
+
+**Cause:** Worker not polling or crashed
+
+**Solution:**
+```bash
+# Check if worker is running
+ps aux | grep "prefect worker"
+
+# Restart API service
+# Worker starts automatically with API
+```
+
+### Machine Not Auto-Starting
+
+**Cause:** Webhook timeout too short
+
+**Solution:** Configure Supabase webhook with longer timeout (30s) and retry policy.
+
+### SQLite Database Corruption
+
+**Cause:** Machine terminated during write
+
+**Solution:**
+```bash
+fly ssh console --app captionacc-prefect
+
+# Backup and recreate
+cp /data/prefect.db /data/prefect.db.bak
+rm /data/prefect.db
+
+# Restart (will recreate database)
+fly apps restart captionacc-prefect
+# Note: Loses flow run history
+```
+
+---
+
 ## Related Documentation
 
-- [README](./README.md) - Architecture overview
-- [Flows](./flows.md) - Flow specifications
-- [Operations](./operations.md) - Operational procedures
+- [Architecture & Design](./ARCHITECTURE.md) - Design decisions and rationale
+- [Operations](./operations.md) - Monitoring and recovery procedures
+- [Quick Start](./QUICKSTART.md) - Getting started guide
