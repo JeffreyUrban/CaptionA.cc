@@ -323,7 +323,7 @@ async def get_security_audit(
     """
     # Calculate time window
     now = datetime.now(timezone.utc)
-    start_time = now - timedelta(hours=hours)
+    now - timedelta(hours=hours)
 
     # TODO: Implement actual security log retrieval from Supabase
     # For now, return placeholder data

@@ -1,6 +1,5 @@
 """Montage capacity calculation for OCR batch processing."""
 
-from typing import Dict, Tuple
 
 # OCR backend constraints for montage assembly
 HEIGHT_LIMIT_PX = 50000
@@ -10,7 +9,7 @@ MAX_FRAMES_PER_JOB = 950
 SEPARATOR_PX = 2
 
 
-def calculate_montage_capacity(width: int, height: int) -> Tuple[int, Dict[str, int], str, float]:
+def calculate_montage_capacity(width: int, height: int) -> tuple[int, dict[str, int], str, float]:
     """Calculate maximum number of images that can be safely processed in a montage.
 
     Considers ALL constraints:

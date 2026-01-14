@@ -1,7 +1,6 @@
 """Tests for LayoutRepository."""
 
 import sqlite3
-from pathlib import Path
 
 import pytest
 
@@ -136,13 +135,13 @@ class TestBoxLabels:
         """Should filter by frame index."""
         labels = seeded_repo.list_box_labels(frame_index=0)
         assert len(labels) == 2
-        assert all(l.frameIndex == 0 for l in labels)
+        assert all(label.frameIndex == 0 for label in labels)
 
     def test_list_box_labels_by_source(self, seeded_repo: LayoutRepository):
         """Should filter by label source."""
         labels = seeded_repo.list_box_labels(label_source=LabelSource.USER)
         assert len(labels) == 2
-        assert all(l.labelSource == LabelSource.USER for l in labels)
+        assert all(label.labelSource == LabelSource.USER for label in labels)
 
     def test_list_box_labels_with_limit(self, seeded_repo: LayoutRepository):
         """Should respect limit parameter."""
@@ -193,7 +192,7 @@ class TestBoxLabels:
 
         # Verify only one label exists for this position
         labels = seeded_repo.list_box_labels(frame_index=0)
-        user_labels = [l for l in labels if l.labelSource == LabelSource.USER and l.boxIndex == 0]
+        user_labels = [label for label in labels if label.labelSource == LabelSource.USER and label.boxIndex == 0]
         assert len(user_labels) == 1
 
     def test_create_box_labels_batch(self, repo: LayoutRepository):

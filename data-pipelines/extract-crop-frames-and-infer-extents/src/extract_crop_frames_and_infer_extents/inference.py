@@ -10,7 +10,6 @@ This function:
 6. Returns CropInferResult with statistics
 """
 
-import os
 import subprocess
 import tempfile
 import time
@@ -24,6 +23,7 @@ except ImportError:
     modal = None
 
 from .models import CropInferResult, CropRegion
+
 
 # GPU image with all dependencies for inference
 # This will be used by app.py when registering the function
@@ -98,7 +98,6 @@ def crop_and_infer_caption_frame_extents_impl(
     """
     import ffmpeg
     import torch
-    from PIL import Image as PILImage
 
     # Import from caption_frame_extents package (added to Modal image)
     from caption_frame_extents.inference.batch_predictor import BatchCaptionFrameExtentsPredictor
@@ -106,11 +105,12 @@ def crop_and_infer_caption_frame_extents_impl(
 
     # Import Wasabi client (embedded in caption_frame_extents for Modal compatibility)
     from caption_frame_extents.inference.wasabi import WasabiClient
+    from PIL import Image as PILImage
 
     job_start = time.time()
 
     print(f"\n{'=' * 80}")
-    print(f"Starting Crop and Infer Job")
+    print("Starting Crop and Infer Job")
     print(f"{'=' * 80}")
     print(f"Video: {video_key}")
     print(f"Tenant: {tenant_id}")
@@ -290,9 +290,8 @@ def crop_and_infer_caption_frame_extents_impl(
         wasabi.download_file(layout_storage_key, layout_db_gz_path)
 
         # Decompress the layout.db.gz file
-        with gzip.open(layout_db_gz_path, 'rb') as f_in:
-            with open(layout_db_path, 'wb') as f_out:
-                shutil.copyfileobj(f_in, f_out)
+        with gzip.open(layout_db_gz_path, 'rb') as f_in, open(layout_db_path, 'wb') as f_out:
+            shutil.copyfileobj(f_in, f_out)
 
         # Load inference model
         # TODO: Configure model checkpoint path (for now, assume it's available in Modal volume)
@@ -450,7 +449,7 @@ def crop_and_infer_caption_frame_extents_impl(
         total_duration = time.time() - job_start
 
         print(f"{'=' * 80}")
-        print(f"Job Complete")
+        print("Job Complete")
         print(f"{'=' * 80}")
         print(f"Version: {version}")
         print(f"Frames: {frame_count}")

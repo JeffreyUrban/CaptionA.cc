@@ -3,7 +3,7 @@
 import pytest
 
 
-def test_extract_frames_gpu_tensor_format(test_video_path, tmp_path):
+def test_extract_frames_gpu_tensor_format(test_video_path, _tmp_path):
     """Test frame extraction in tensor format."""
     from gpu_video_utils import extract_frames_gpu
 
@@ -19,7 +19,7 @@ def test_extract_frames_gpu_tensor_format(test_video_path, tmp_path):
     assert all(f.device.type == "cuda" for f in frames)
 
 
-def test_extract_frames_gpu_pil_format(test_video_path, tmp_path):
+def test_extract_frames_gpu_pil_format(test_video_path, _tmp_path):
     """Test frame extraction in PIL format."""
     from gpu_video_utils import extract_frames_gpu
     from PIL import Image
@@ -34,7 +34,7 @@ def test_extract_frames_gpu_pil_format(test_video_path, tmp_path):
     assert all(isinstance(f, Image.Image) for f in frames)
 
 
-def test_extract_frames_gpu_jpeg_format(test_video_path, tmp_path):
+def test_extract_frames_gpu_jpeg_format(test_video_path, _tmp_path):
     """Test frame extraction in JPEG bytes format."""
     from gpu_video_utils import extract_frames_gpu
 
@@ -50,9 +50,9 @@ def test_extract_frames_gpu_jpeg_format(test_video_path, tmp_path):
     assert all(f.startswith(b'\xff\xd8\xff') for f in frames)
 
 
-def test_extract_frames_with_crop(test_video_path, tmp_path):
+def test_extract_frames_with_crop(test_video_path, _tmp_path):
     """Test frame extraction with GPU cropping."""
-    from gpu_video_utils import extract_frames_gpu, GPUVideoDecoder
+    from gpu_video_utils import GPUVideoDecoder, extract_frames_gpu
 
     # Get video dimensions
     with GPUVideoDecoder(test_video_path) as decoder:
@@ -80,7 +80,7 @@ def test_extract_frames_with_crop(test_video_path, tmp_path):
     assert frames[0].size == (expected_width, expected_height)
 
 
-def test_extract_frames_progress_callback(test_video_path, tmp_path):
+def test_extract_frames_progress_callback(test_video_path, _tmp_path):
     """Test progress callback functionality."""
     from gpu_video_utils import extract_frames_gpu
 
@@ -101,7 +101,7 @@ def test_extract_frames_progress_callback(test_video_path, tmp_path):
     assert progress_calls[-1][1] == len(frames)
 
 
-def test_extract_frames_for_montage(test_video_path, tmp_path):
+def test_extract_frames_for_montage(test_video_path, _tmp_path):
     """Test frame extraction batched for montages."""
     from gpu_video_utils import extract_frames_for_montage
 
@@ -120,9 +120,9 @@ def test_extract_frames_for_montage(test_video_path, tmp_path):
         assert all(isinstance(idx, int) for idx in frame_indices)
 
 
-def test_extract_frames_with_normalized_crop(test_video_path, tmp_path):
+def test_extract_frames_with_normalized_crop(test_video_path, _tmp_path):
     """Test frame extraction with normalized crop coordinates (0.0-1.0)."""
-    from gpu_video_utils import extract_frames_gpu, GPUVideoDecoder
+    from gpu_video_utils import GPUVideoDecoder, extract_frames_gpu
 
     # Get video dimensions
     with GPUVideoDecoder(test_video_path) as decoder:
@@ -146,9 +146,9 @@ def test_extract_frames_with_normalized_crop(test_video_path, tmp_path):
     assert frames[0].size == (expected_width, expected_height)
 
 
-def test_normalized_crop_matches_pixel_crop(test_video_path, tmp_path):
+def test_normalized_crop_matches_pixel_crop(test_video_path, _tmp_path):
     """Test that normalized crop produces same results as equivalent pixel crop."""
-    from gpu_video_utils import extract_frames_gpu, GPUVideoDecoder
+    from gpu_video_utils import GPUVideoDecoder, extract_frames_gpu
 
     # Get video dimensions
     with GPUVideoDecoder(test_video_path) as decoder:
@@ -188,7 +188,7 @@ def test_normalized_crop_matches_pixel_crop(test_video_path, tmp_path):
     assert frames_normalized[0].size == frames_pixel[0].size
 
 
-def test_crop_region_and_normalized_mutually_exclusive(test_video_path, tmp_path):
+def test_crop_region_and_normalized_mutually_exclusive(test_video_path, _tmp_path):
     """Test that providing both crop_region and crop_normalized raises ValueError."""
     from gpu_video_utils import extract_frames_gpu
 
@@ -202,7 +202,7 @@ def test_crop_region_and_normalized_mutually_exclusive(test_video_path, tmp_path
         )
 
 
-def test_normalized_crop_invalid_range(test_video_path, tmp_path):
+def test_normalized_crop_invalid_range(test_video_path, _tmp_path):
     """Test that normalized coordinates outside 0.0-1.0 raise ValueError."""
     from gpu_video_utils import extract_frames_gpu
 
@@ -225,7 +225,7 @@ def test_normalized_crop_invalid_range(test_video_path, tmp_path):
         )
 
 
-def test_normalized_crop_invalid_ordering(test_video_path, tmp_path):
+def test_normalized_crop_invalid_ordering(test_video_path, _tmp_path):
     """Test that left >= right or top >= bottom raises ValueError."""
     from gpu_video_utils import extract_frames_gpu
 
@@ -248,11 +248,12 @@ def test_normalized_crop_invalid_ordering(test_video_path, tmp_path):
         )
 
 
-def test_extract_frames_for_montage_with_normalized_crop(test_video_path, tmp_path):
+def test_extract_frames_for_montage_with_normalized_crop(test_video_path, _tmp_path):
     """Test montage extraction with normalized crop coordinates."""
-    from gpu_video_utils import extract_frames_for_montage, GPUVideoDecoder
-    from PIL import Image
     from io import BytesIO
+
+    from gpu_video_utils import GPUVideoDecoder, extract_frames_for_montage
+    from PIL import Image
 
     # Get video dimensions
     with GPUVideoDecoder(test_video_path) as decoder:

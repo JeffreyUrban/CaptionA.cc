@@ -24,7 +24,7 @@ def wasabi_service(mock_s3_client):
         mock_boto.return_value = mock_s3_client
         service = WasabiServiceImpl(
             access_key="test-access",
-            secret_key="test-secret",
+            secret_key="test-secret",   # pragma: allowlist secret
             bucket="test-bucket",
             region="us-east-1"
         )

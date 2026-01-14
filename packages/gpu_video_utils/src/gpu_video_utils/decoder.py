@@ -2,7 +2,6 @@
 
 import time
 from pathlib import Path
-from typing import Dict, List, Optional
 
 import torch
 
@@ -12,7 +11,7 @@ except ImportError:
     raise ImportError(
         "PyNvVideoCodec is required for GPU video processing. "
         "Install with: pip install nvidia-pynvvideocodec"
-    )
+    ) from None
 
 
 class GPUDecoderError(Exception):
@@ -60,9 +59,9 @@ class GPUVideoDecoder:
 
         # Cache video metadata
         self._total_frames = len(self.decoder)
-        self._native_fps: Optional[float] = None
-        self._frame_width: Optional[int] = None
-        self._frame_height: Optional[int] = None
+        self._native_fps: float | None = None
+        self._frame_width: int | None = None
+        self._frame_height: int | None = None
 
     def _init_decoder_with_retry(self):
         """Initialize decoder with exponential backoff retry."""
@@ -97,7 +96,7 @@ class GPUVideoDecoder:
         """Return total number of frames in video."""
         return self._total_frames
 
-    def get_video_info(self) -> Dict:
+    def get_video_info(self) -> dict:
         """Get video metadata.
 
         Returns:
@@ -199,7 +198,7 @@ class GPUVideoDecoder:
 
         return self.get_frame_at_index(native_frame_idx)
 
-    def get_frames_at_times(self, times: List[float]) -> List[torch.Tensor]:
+    def get_frames_at_times(self, times: list[float]) -> list[torch.Tensor]:
         """Extract frames at multiple timestamps (GPU tensors).
 
         Args:

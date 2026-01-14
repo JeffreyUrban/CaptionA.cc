@@ -12,8 +12,6 @@ sys.modules['modal'] = MagicMock()
 sys.modules['extract_crop_frames_and_infer_extents'] = MagicMock()
 sys.modules['extract_crop_frames_and_infer_extents.models'] = MagicMock()
 
-from app.services.caption_service import CaptionService
-from app.services.supabase_service import SupabaseServiceImpl
 
 
 # Mock CropRegion and CropInferResult since extract_crop_frames_and_infer_extents is not installed in test environment
@@ -151,9 +149,9 @@ def mock_env_vars(monkeypatch):
     This fixture uses monkeypatch to ensure test isolation.
     """
     monkeypatch.setenv("SUPABASE_URL", "https://test.supabase.co")
-    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "test-key")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "test-key")  # pragma: allowlist secret
     monkeypatch.setenv("WASABI_ACCESS_KEY_ID", "test-access")
-    monkeypatch.setenv("WASABI_SECRET_ACCESS_KEY", "test-secret")
+    monkeypatch.setenv("WASABI_SECRET_ACCESS_KEY", "test-secret")  # pragma: allowlist secret
     monkeypatch.setenv("WASABI_BUCKET", "test-bucket")
 
 
@@ -262,7 +260,7 @@ def mock_settings() -> Mock:
     """Mock settings object."""
     mock = Mock()
     mock.supabase_url = "https://test.supabase.co"
-    mock.supabase_service_role_key = "test-service-role-key"
+    mock.supabase_service_role_key = "test-service-role-key"  # pragma: allowlist secret
     mock.supabase_schema = "public"
     return mock
 

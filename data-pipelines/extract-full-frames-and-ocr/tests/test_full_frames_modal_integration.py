@@ -110,7 +110,7 @@ def test_full_frames_gpu_ocr_pipeline(setup_test_video):
     print(f"\n{'=' * 80}")
     print("FULL FRAMES GPU + OCR PIPELINE INTEGRATION TEST")
     print(f"{'=' * 80}")
-    print(f"Configuration:")
+    print("Configuration:")
     print(f"  Video: {test_video_fixture}")
     print(f"  Tenant ID: {tenant_id}")
     print(f"  Video ID: {video_id}")
@@ -123,7 +123,7 @@ def test_full_frames_gpu_ocr_pipeline(setup_test_video):
 
     # Call Modal function
     print("Spawning Modal function call...")
-    print(f"Parameters: rate_hz=0.1, language=en\n")
+    print("Parameters: rate_hz=0.1, language=en\n")
 
     result_call = extract_fn.spawn(
         video_key=video_key,
@@ -219,7 +219,7 @@ def test_different_rates_and_languages(setup_test_video, rate_hz, language):
     assert result["frame_count"] > 0, f"Should extract frames at {rate_hz} Hz"
     assert result["total_ocr_boxes"] >= 0, "Should return OCR box count"
 
-    print(f"✓ Test passed!\n")
+    print("✓ Test passed!\n")
 
 
 def test_placeholder_for_test_discovery():

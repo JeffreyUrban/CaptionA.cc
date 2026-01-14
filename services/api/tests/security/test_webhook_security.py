@@ -500,8 +500,8 @@ class TestWebhookSecurity:
         response_text = response.text.lower()
 
         # Verify response doesn't leak sensitive data
-        assert "test-webhook-secret" not in response_text
-        assert "wrong-webhook-secret" not in response_text
+        assert "test-webhook-secret" not in response_text  # pragma: allowlist secret
+        assert "wrong-webhook-secret" not in response_text  # pragma: allowlist secret
 
         # Should only have generic error message
-        assert "invalid webhook secret" in response_text.lower()
+        assert "invalid webhook secret" in response_text.lower()  # pragma: allowlist secret

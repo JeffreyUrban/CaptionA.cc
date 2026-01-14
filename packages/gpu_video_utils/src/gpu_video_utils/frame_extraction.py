@@ -1,8 +1,8 @@
 """GPU-accelerated frame extraction at configurable rates."""
 
+from collections.abc import Callable
 from io import BytesIO
 from pathlib import Path
-from typing import Callable, List, Optional, Tuple, Union
 
 import torch
 from PIL import Image as PILImage
@@ -11,10 +11,10 @@ from .decoder import GPUVideoDecoder
 
 
 def _convert_normalized_to_pixels(
-    crop_normalized: Tuple[float, float, float, float],
+    crop_normalized: tuple[float, float, float, float],
     frame_width: int,
     frame_height: int,
-) -> Tuple[int, int, int, int]:
+) -> tuple[int, int, int, int]:
     """Convert normalized crop coordinates (0.0-1.0) to pixel coordinates.
 
     Args:
@@ -57,8 +57,8 @@ def _convert_normalized_to_pixels(
 
 
 def _validate_crop_params(
-    crop_region: Optional[Tuple[int, int, int, int]],
-    crop_normalized: Optional[Tuple[float, float, float, float]],
+    crop_region: tuple[int, int, int, int] | None,
+    crop_normalized: tuple[float, float, float, float] | None,
 ) -> None:
     """Validate that only one of crop_region or crop_normalized is provided.
 
@@ -80,10 +80,10 @@ def extract_frames_gpu(
     video_path: Path,
     frame_rate_hz: float,
     output_format: str = "pil",
-    crop_region: Optional[Tuple[int, int, int, int]] = None,
-    crop_normalized: Optional[Tuple[float, float, float, float]] = None,
-    progress_callback: Optional[Callable[[int, int], None]] = None,
-) -> List[Union[torch.Tensor, PILImage.Image, bytes]]:
+    crop_region: tuple[int, int, int, int] | None = None,
+    crop_normalized: tuple[float, float, float, float] | None = None,
+    progress_callback: Callable[[int, int], None] | None = None,
+) -> list[torch.Tensor | PILImage.Image | bytes]:
     """Extract frames using GPU decoder at specified rate.
 
     Args:
@@ -125,8 +125,8 @@ def extract_frames_gpu(
     decoder = GPUVideoDecoder(video_path)
     video_info = decoder.get_video_info()
 
-    total_frames = video_info["total_frames"]
-    native_fps = video_info["fps"]
+    video_info["total_frames"]
+    video_info["fps"]
     video_duration = video_info["duration"]
     frame_width = video_info["width"]
     frame_height = video_info["height"]
@@ -190,10 +190,10 @@ def extract_frames_for_montage(
     video_path: Path,
     frame_rate_hz: float,
     max_frames_per_batch: int,
-    crop_region: Optional[Tuple[int, int, int, int]] = None,
-    crop_normalized: Optional[Tuple[float, float, float, float]] = None,
-    progress_callback: Optional[Callable[[int, int], None]] = None,
-) -> List[Tuple[List[int], List[bytes]]]:
+    crop_region: tuple[int, int, int, int] | None = None,
+    crop_normalized: tuple[float, float, float, float] | None = None,
+    progress_callback: Callable[[int, int], None] | None = None,
+) -> list[tuple[list[int], list[bytes]]]:
     """Extract frames in batches sized for montage assembly.
 
     Each batch contains frame indices and JPEG bytes ready for montage creation.

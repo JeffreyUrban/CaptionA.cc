@@ -15,8 +15,7 @@ Test Coverage:
 - Tag generation for observability
 """
 
-import pytest
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from app.services.priority_service import (
     calculate_flow_priority,
     get_priority_tags,

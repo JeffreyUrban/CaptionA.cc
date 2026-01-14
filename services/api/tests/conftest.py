@@ -611,7 +611,6 @@ async def layout_client(
 ) -> AsyncGenerator[AsyncClient, None]:
     """Create an async test client for layout endpoints with mocked dependencies."""
     from app.dependencies import get_auth_context
-    from app.services.database_manager import get_layout_database_manager
 
     # Override dependencies
     app.dependency_overrides[get_auth_context] = lambda: auth_context
@@ -728,7 +727,6 @@ async def client(
 ) -> AsyncGenerator[AsyncClient, None]:
     """Create an async test client with mocked dependencies."""
     from app.dependencies import get_auth_context
-    from app.services.database_manager import get_database_manager
 
     # Override dependencies
     app.dependency_overrides[get_auth_context] = lambda: auth_context

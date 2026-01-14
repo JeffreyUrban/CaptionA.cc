@@ -151,7 +151,7 @@ class TestResourceUsage:
                                 "storage_key": "test/path/video.mp4",
                             },
                         },
-                        headers={"Authorization": "Bearer test-secret"},
+                        headers={"Authorization": "Bearer test-secret"},  # pragma: allowlist secret
                     )
 
                     # Should return error status when Prefect is unavailable

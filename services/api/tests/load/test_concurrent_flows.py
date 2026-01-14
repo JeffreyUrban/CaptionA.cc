@@ -21,7 +21,7 @@ class TestConcurrentFlowExecution:
         client = TestClient(app)
 
         # Mock webhook secret for authentication
-        webhook_secret = "test-webhook-secret"
+        webhook_secret = "test-webhook-secret"  # pragma: allowlist secret
 
         # Mock the Prefect API call to avoid external dependencies
         mock_flow_response = {
@@ -42,7 +42,7 @@ class TestConcurrentFlowExecution:
                 # Configure mock settings
                 mock_settings.return_value.webhook_secret = webhook_secret
                 mock_settings.return_value.prefect_api_url = "http://mock-prefect-api"
-                mock_settings.return_value.prefect_api_key = "mock-api-key"
+                mock_settings.return_value.prefect_api_key = "mock-api-key"  # pragma: allowlist secret
 
                 # Configure mock Prefect API response
                 mock_response = AsyncMock()
@@ -94,7 +94,7 @@ class TestConcurrentFlowExecution:
         avg_duration = sum(r["duration"] for r in results) / len(results)
         max_duration = max(r["duration"] for r in results)
 
-        print(f"\n10 Concurrent Webhooks Performance:")
+        print("\n10 Concurrent Webhooks Performance:")
         print(f"  Average response time: {avg_duration:.2f}s")
         print(f"  Max response time: {max_duration:.2f}s")
         print(f"  Min response time: {min(r['duration'] for r in results):.2f}s")
@@ -111,7 +111,7 @@ class TestConcurrentFlowExecution:
         client = TestClient(app)
 
         # Mock webhook secret for authentication
-        webhook_secret = "test-webhook-secret"
+        webhook_secret = "test-webhook-secret"  # pragma: allowlist secret
 
         # Mock the Prefect API call to avoid external dependencies
         mock_flow_response = {
@@ -130,7 +130,7 @@ class TestConcurrentFlowExecution:
                 # Configure mock settings
                 mock_settings.return_value.webhook_secret = webhook_secret
                 mock_settings.return_value.prefect_api_url = "http://mock-prefect-api"
-                mock_settings.return_value.prefect_api_key = "mock-api-key"
+                mock_settings.return_value.prefect_api_key = "mock-api-key"  # pragma: allowlist secret
 
                 # Configure mock Prefect API response
                 mock_response = AsyncMock()
@@ -168,7 +168,7 @@ class TestConcurrentFlowExecution:
 
         duration = (datetime.now() - start).total_seconds()
 
-        print(f"\nWebhook Handler Throughput Test:")
+        print("\nWebhook Handler Throughput Test:")
         print(f"  Total time for 50 requests: {duration:.2f}s")
         print(f"  Throughput: {len(results) / duration:.2f} requests/second")
 
@@ -199,7 +199,7 @@ class TestConcurrentFlowExecution:
         client = TestClient(app)
 
         # Mock webhook secret for authentication
-        webhook_secret = "test-webhook-secret"
+        webhook_secret = "test-webhook-secret"  # pragma: allowlist secret
 
         # Track the priorities calculated by our system
         captured_priorities = []
@@ -215,7 +215,7 @@ class TestConcurrentFlowExecution:
                 # Configure mock settings
                 mock_settings.return_value.webhook_secret = webhook_secret
                 mock_settings.return_value.prefect_api_url = "http://mock-prefect-api"
-                mock_settings.return_value.prefect_api_key = "mock-api-key"
+                mock_settings.return_value.prefect_api_key = "mock-api-key"  # pragma: allowlist secret
 
                 # Capture the priority from the Prefect API call
                 def capture_priority(_url=None, json=None, _headers=None, **_kwargs):
@@ -272,7 +272,7 @@ class TestConcurrentFlowExecution:
             p for p in captured_priorities if p["tier"] == "enterprise"
         ]
 
-        print(f"\nPriority Calculation Under Load:")
+        print("\nPriority Calculation Under Load:")
         print(f"  Free tier requests: {len(free_results)}")
         print(
             f"  Free tier priority range: {min(p['priority'] for p in free_results)}-{max(p['priority'] for p in free_results)}"

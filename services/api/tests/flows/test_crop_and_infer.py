@@ -10,8 +10,7 @@ Focus areas:
 """
 
 import pytest
-from unittest.mock import AsyncMock, Mock, patch, call
-from typing import Any
+from unittest.mock import AsyncMock, Mock, patch
 
 # Import mocked classes from conftest
 from tests.flows.conftest import CropRegion, CropInferResult
@@ -677,7 +676,6 @@ class TestCropAndInferSuccess:
     def test_process_inference_results_retries(self):
         """Verify process_inference_results task configured with 2 retries and 10s delay."""
         # Import the task to check its configuration
-        from app.flows.crop_and_infer import process_inference_results
 
         # Verify retry configuration
         assert process_inference_results.retries == 2, \
@@ -923,7 +921,6 @@ class TestCropAndInferTasks:
 
     def test_release_lock_task_configuration(self):
         """Verify release_server_lock task has correct configuration."""
-        from app.flows.crop_and_infer import release_server_lock
 
         # Check task configuration
         assert "lock" in release_server_lock.tags
@@ -932,21 +929,18 @@ class TestCropAndInferTasks:
 
     def test_modal_task_no_retries(self):
         """Verify Modal task has no retries (expensive GPU operation)."""
-        from app.flows.crop_and_infer import call_modal_crop_and_infer
 
         # GPU operations should not retry automatically
         assert call_modal_crop_and_infer.retries == 0
 
     def test_update_metadata_task_retries(self):
         """Verify update_video_metadata has retries configured."""
-        from app.flows.crop_and_infer import update_video_metadata
 
         assert update_video_metadata.retries == 2
         assert update_video_metadata.retry_delay_seconds == 5
 
     def test_update_status_task_retries(self):
         """Verify update_caption_status has retries configured."""
-        from app.flows.crop_and_infer import update_caption_status
 
         assert update_caption_status.retries == 2
         assert update_caption_status.retry_delay_seconds == 5

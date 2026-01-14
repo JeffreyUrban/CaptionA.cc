@@ -252,7 +252,7 @@ class CropRegion:
         )
 
 
-def original_to_cropped(box: BoundingBox, crop_region: CropRegion) -> Optional[BoundingBox]:
+def original_to_cropped(box: BoundingBox, crop_region: CropRegion) -> BoundingBox | None:
     """Convert original frame coords to cropped frame coords.
 
     Takes a bounding box in original frame coordinates (pixels) and converts it to

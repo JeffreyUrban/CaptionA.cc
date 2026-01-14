@@ -58,12 +58,12 @@ else:
     app = None
 
     def crop_and_infer_caption_frame_extents(
-        video_key: str,
-        tenant_id: str,
-        video_id: str,
-        crop_region: CropRegion,
-        frame_rate: float = 10.0,
-        encoder_workers: int = 4,
-        inference_batch_size: int = 32,
+        _video_key: str,
+        _tenant_id: str,
+        _video_id: str,
+        _crop_region: CropRegion,
+        _frame_rate: float = 10.0,
+        _encoder_workers: int = 4,
+        _inference_batch_size: int = 32,
     ) -> CropInferResult:
         raise RuntimeError("Modal not installed")

@@ -14,7 +14,7 @@ if modal:
     app = modal.App("extract-full-frames-and-ocr")
 
     # Import image builder and implementation
-    from .modal_inference import get_full_frames_image, extract_frames_and_ocr_impl
+    from .modal_inference import extract_frames_and_ocr_impl, get_full_frames_image
 
     @app.function(
         image=get_full_frames_image(),

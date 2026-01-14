@@ -2,7 +2,6 @@
 
 import time
 from pathlib import Path
-from typing import Optional
 
 import typer
 from rich.console import Console
@@ -55,13 +54,13 @@ def extract_streaming(
         min=0.001,
         max=60.0,
     ),
-    crop: Optional[str] = typer.Option(
+    crop: str | None = typer.Option(
         None,
         "--crop",
         "-c",
         help="Crop region as 'x,y,width,height' (e.g., '100,200,800,600')",
     ),
-    version: Optional[bool] = typer.Option(
+    version: bool | None = typer.Option(
         None,
         "--version",
         callback=version_callback,

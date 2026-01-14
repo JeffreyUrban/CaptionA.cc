@@ -133,7 +133,7 @@ E2E tests require real service credentials configured via environment variables:
 # Required
 export SUPABASE_URL="https://your-project.supabase.co"
 export SUPABASE_SERVICE_ROLE_KEY="eyJhbGc..."  # Service role key for admin access
-export SUPABASE_JWT_SECRET="your-jwt-secret"    # For generating test auth tokens
+export SUPABASE_JWT_SECRET="your-jwt-secret"    # For generating test auth tokens  # pragma: allowlist secret
 
 # Optional
 export SUPABASE_SCHEMA="captionacc_production"  # Default: captionacc_production
@@ -142,11 +142,11 @@ export SUPABASE_SCHEMA="captionacc_production"  # Default: captionacc_production
 #### Wasabi S3 Configuration
 ```bash
 # Required (use either set)
-export WASABI_ACCESS_KEY_READWRITE="WASABI_ACCESS_KEY"
-export WASABI_SECRET_KEY_READWRITE="WASABI_SECRET_KEY"
+export WASABI_ACCESS_KEY_READWRITE="WASABI_ACCESS_KEY"  # pragma: allowlist secret
+export WASABI_SECRET_KEY_READWRITE="WASABI_SECRET_KEY"  # pragma: allowlist secret
 # OR
-export WASABI_ACCESS_KEY_ID="WASABI_ACCESS_KEY"
-export WASABI_SECRET_ACCESS_KEY="WASABI_SECRET_KEY"
+export WASABI_ACCESS_KEY_ID="WASABI_ACCESS_KEY"  # pragma: allowlist secret
+export WASABI_SECRET_ACCESS_KEY="WASABI_SECRET_KEY"  # pragma: allowlist secret
 
 export WASABI_BUCKET="your-bucket-name"
 
@@ -158,7 +158,7 @@ export WASABI_REGION="us-east-1"  # Default: us-east-1
 ```bash
 # Required
 export MODAL_TOKEN_ID="your-modal-token-id"
-export MODAL_TOKEN_SECRET="your-modal-token-secret"
+export MODAL_TOKEN_SECRET="your-modal-token-secret"  # pragma: allowlist secret
 
 # Optional
 export MODAL_ENVIRONMENT="main"  # Default: main
@@ -167,7 +167,7 @@ export MODAL_ENVIRONMENT="main"  # Default: main
 #### Webhook Configuration (for webhook handler tests)
 ```bash
 # Optional
-export WEBHOOK_SECRET="test-webhook-secret"  # Default: test-webhook-secret
+export WEBHOOK_SECRET="test-webhook-secret"  # Default: test-webhook-secret  # pragma: allowlist secret
 ```
 
 ### Service Requirements

@@ -8,7 +8,6 @@ import sqlite3
 from collections.abc import Callable
 from pathlib import Path
 
-from ocr import ensure_ocr_table, write_ocr_result_to_database
 from PIL import Image
 
 

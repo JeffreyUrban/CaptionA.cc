@@ -95,7 +95,7 @@ pip install -r requirements.txt
 
 # Set environment variables
 export SUPABASE_URL="https://YOUR_PROJECT.supabase.co"
-export SUPABASE_SERVICE_ROLE_KEY="your-service-role-key"
+export SUPABASE_SERVICE_ROLE_KEY="your-service-role-key"  # pragma: allowlist secret
 
 # Generate token for Modal workers
 python generate-token.py \

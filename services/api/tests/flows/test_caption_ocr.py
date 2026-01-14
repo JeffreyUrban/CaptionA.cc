@@ -15,8 +15,7 @@ Key Features:
 """
 
 import pytest
-from unittest.mock import AsyncMock, Mock, patch
-from dataclasses import dataclass
+from unittest.mock import Mock, patch
 
 from tests.flows.conftest import CaptionOcrResult
 

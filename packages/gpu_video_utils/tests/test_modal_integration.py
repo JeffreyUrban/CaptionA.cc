@@ -239,7 +239,7 @@ class TestGPUVideoUtilsModal:
         print("Results:")
         print(f"  • Number of batches: {result['num_batches']}")
         print(f"  • Max batch size: {result['max_batch_size']}")
-        print(f"  • Batch details:")
+        print("  • Batch details:")
         for i, batch in enumerate(result['batch_info'][:3]):  # Show first 3
             print(f"    - Batch {i}: {batch['num_frames']} frames, "
                   f"indices {batch['first_index']}-{batch['last_index']}, "

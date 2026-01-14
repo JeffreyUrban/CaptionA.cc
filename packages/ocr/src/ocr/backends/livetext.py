@@ -7,7 +7,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from ..models import OCRResult, BoundingBox, CharacterResult
+from ..models import BoundingBox, CharacterResult, OCRResult
 from .base import OCRBackend
 
 # Import ocrmac only on macOS

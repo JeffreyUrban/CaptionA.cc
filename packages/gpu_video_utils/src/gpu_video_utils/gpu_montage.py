@@ -12,7 +12,6 @@ GPU functions will fail if CUDA is unavailable.
 """
 
 from io import BytesIO
-from typing import Dict, List, Tuple
 
 import torch
 from PIL import Image
@@ -31,12 +30,12 @@ class MontageValidationError(Exception):
 
 
 def create_vertical_montage_gpu(
-    frames: List[torch.Tensor],
-    frame_ids: List[str],
+    frames: list[torch.Tensor],
+    frame_ids: list[str],
     separator_px: int = SEPARATOR_PX,
     device: str = "cuda",
     jpeg_quality: int = 95,
-) -> Tuple[bytes, List[Dict]]:
+) -> tuple[bytes, list[dict]]:
     """Create vertical montage from GPU tensors.
 
     Stacks images vertically with separator pixels between them, performing
@@ -119,10 +118,10 @@ def create_vertical_montage_gpu(
     montage[:, :, 2] = SEPARATOR_COLOR[2]
 
     # Build metadata and paste frames
-    metadata: List[Dict] = []
+    metadata: list[dict] = []
     y_offset = 0
 
-    for i, (frame, frame_id) in enumerate(zip(frames, frame_ids)):
+    for _i, (frame, frame_id) in enumerate(zip(frames, frame_ids, strict=False)):
         # Ensure frame is on correct device
         if frame.device.type != device.split(":")[0]:
             frame = frame.to(device)
@@ -158,10 +157,10 @@ def create_vertical_montage_gpu(
 
 
 def create_vertical_montage_cpu(
-    images: List[Tuple[str, bytes]],
+    images: list[tuple[str, bytes]],
     separator_px: int = SEPARATOR_PX,
     jpeg_quality: int = 95,
-) -> Tuple[bytes, List[Dict]]:
+) -> tuple[bytes, list[dict]]:
     """Create vertical montage from PIL Images (CPU).
 
     CPU-based for environments without GPU support.
@@ -198,7 +197,7 @@ def create_vertical_montage_cpu(
     # Create montage canvas filled with separator color
     montage = Image.new("RGB", (width, total_height), SEPARATOR_COLOR)
 
-    metadata: List[Dict] = []
+    metadata: list[dict] = []
     y_offset = 0
 
     for img_id, img_data in images:
@@ -235,11 +234,11 @@ def create_vertical_montage_cpu(
 
 
 def create_vertical_montage_from_pil(
-    images: List[Image.Image],
-    frame_ids: List[str],
+    images: list[Image.Image],
+    frame_ids: list[str],
     separator_px: int = SEPARATOR_PX,
     jpeg_quality: int = 95,
-) -> Tuple[bytes, List[Dict]]:
+) -> tuple[bytes, list[dict]]:
     """Create vertical montage from PIL Image objects directly.
 
     Convenience function for when you already have PIL Images in memory
@@ -275,10 +274,10 @@ def create_vertical_montage_from_pil(
     # Create montage canvas
     montage = Image.new("RGB", (width, total_height), SEPARATOR_COLOR)
 
-    metadata: List[Dict] = []
+    metadata: list[dict] = []
     y_offset = 0
 
-    for img, frame_id in zip(images, frame_ids):
+    for img, frame_id in zip(images, frame_ids, strict=False):
         # Verify dimensions
         if img.width != width or img.height != height:
             raise ValueError(

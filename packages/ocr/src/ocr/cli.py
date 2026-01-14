@@ -53,7 +53,8 @@ def extract_frames(
 
     CPU-based frame extraction for development on machines without NVIDIA GPUs.
     """
-    from video_utils import extract_frames as do_extract, get_video_duration
+    from video_utils import extract_frames as do_extract
+    from video_utils import get_video_duration
 
     console.print(f"[bold]Extracting frames from {video.name}[/bold]")
     console.print(f"Rate: {frame_rate} Hz")
@@ -124,6 +125,7 @@ def run_livetext(
     the ocrmac package installed (pip install ocrmac).
     """
     import json
+
     from PIL import Image
 
     try:
@@ -242,7 +244,7 @@ def visualize(
     if output is None:
         output = ocr_file.with_suffix(".png")
 
-    console.print(f"[bold]Creating OCR visualization[/bold]")
+    console.print("[bold]Creating OCR visualization[/bold]")
     console.print(f"Input: {ocr_file}")
     console.print(f"Output: {output}")
     console.print(f"Dimensions: {width}×{height}")

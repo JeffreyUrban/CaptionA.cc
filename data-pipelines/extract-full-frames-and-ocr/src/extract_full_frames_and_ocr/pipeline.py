@@ -5,8 +5,8 @@ Uses:
 - ocr package for OCR processing with Google Vision backend
 """
 
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Optional
 
 from gpu_video_utils import extract_frames_gpu
 from ocr import (
@@ -22,7 +22,7 @@ def process_video_with_gpu_and_ocr(
     db_path: Path,
     rate_hz: float = 0.1,
     language: str = "zh-Hans",
-    progress_callback: Optional[Callable[[int, int], None]] = None,
+    progress_callback: Callable[[int, int], None] | None = None,
 ) -> int:
     """Extract frames with GPU and process with OCR.
 
@@ -50,7 +50,7 @@ def process_video_with_gpu_and_ocr(
         >>> total_boxes = process_video_with_gpu_and_ocr(video, db, rate_hz=0.1)
         >>> print(f"Processed {total_boxes} text boxes")
     """
-    print(f"[Pipeline] Starting GPU-accelerated OCR pipeline")
+    print("[Pipeline] Starting GPU-accelerated OCR pipeline")
     print(f"[Pipeline] Video: {video_path}")
     print(f"[Pipeline] Database: {db_path}")
     print(f"[Pipeline] Rate: {rate_hz} Hz")
@@ -77,7 +77,7 @@ def process_video_with_gpu_and_ocr(
     #   frame 0 at t=0s -> index 0
     #   frame 1 at t=10s -> index 100
     #   frame 2 at t=20s -> index 200
-    print(f"\n[Frames] Creating frame tuples...")
+    print("\n[Frames] Creating frame tuples...")
     frames = []
     for frame_num, jpeg_bytes in enumerate(jpeg_frames):
         # Calculate frame index based on timestamp
@@ -91,7 +91,7 @@ def process_video_with_gpu_and_ocr(
     print(f"[Frames] Last frame: {frames[-1][0]}")
 
     # Step 3: Initialize Google Vision backend
-    print(f"\n[OCR] Initializing Google Vision backend...")
+    print("\n[OCR] Initializing Google Vision backend...")
     backend = GoogleVisionBackend()
     print(f"[OCR] Backend initialized with constraints: {backend.get_constraints()}")
 
@@ -105,11 +105,11 @@ def process_video_with_gpu_and_ocr(
     print(f"[OCR] Received {len(ocr_results)} OCR results")
 
     # Step 5: Ensure database table exists
-    print(f"\n[DB] Ensuring OCR table exists...")
+    print("\n[DB] Ensuring OCR table exists...")
     ensure_ocr_table(db_path, table_name="full_frame_ocr")
 
     # Step 6: Convert OCRResults to database format and write
-    print(f"[DB] Writing OCR results to database...")
+    print("[DB] Writing OCR results to database...")
     total_boxes = 0
 
     for ocr_result in ocr_results:

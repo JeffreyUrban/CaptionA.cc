@@ -127,7 +127,7 @@ async def call_modal_crop_and_infer(
             - label_counts: Dict of inference label counts
             - processing_duration_seconds: Processing time
     """
-    print(f"[Modal] Calling crop_and_infer_caption_frame_extents function")
+    print("[Modal] Calling crop_and_infer_caption_frame_extents function")
     print(f"[Modal] Video key: {video_key}")
     print(f"[Modal] Crop region: {crop_region}")
     print(f"[Modal] Frame rate: {frame_rate}Hz")
@@ -149,7 +149,7 @@ async def call_modal_crop_and_infer(
         frame_rate=frame_rate,
     )
 
-    print(f"[Modal] Function completed successfully")
+    print("[Modal] Function completed successfully")
     print(f"[Modal] Version: v{result.version}")
     print(f"[Modal] Frames processed: {result.frame_count}")
     print(f"[Modal] Label counts: {result.label_counts}")
@@ -187,7 +187,7 @@ def process_inference_results(
         caption_frame_extents_db_key: Wasabi key for inference results DB
         cropped_frames_version: Version of cropped frames used
     """
-    print(f"[API] Processing inference results into captions.db")
+    print("[API] Processing inference results into captions.db")
     print(f"[API] Inference DB key: {caption_frame_extents_db_key}")
     print(f"[API] Cropped frames version: v{cropped_frames_version}")
 
@@ -236,7 +236,7 @@ def update_video_metadata(
         cropped_frames_version=cropped_frames_version,
     )
 
-    print(f"[Supabase] Video metadata updated successfully")
+    print("[Supabase] Video metadata updated successfully")
 
 
 @task(
@@ -268,7 +268,7 @@ def update_caption_status(video_id: str, status: str) -> None:
         caption_status=status,
     )
 
-    print(f"[Supabase] Caption status updated successfully")
+    print("[Supabase] Caption status updated successfully")
 
 
 @flow(
@@ -359,7 +359,7 @@ async def crop_and_infer(
             description=f"Crop and infer results for video {video_id}",
         )
 
-        print(f"\nFlow completed successfully!")
+        print("\nFlow completed successfully!")
         print(f"Video ID: {video_id}")
         print(f"Cropped frames version: v{modal_result['version']}")
         print(f"Frame count: {modal_result['frame_count']}")

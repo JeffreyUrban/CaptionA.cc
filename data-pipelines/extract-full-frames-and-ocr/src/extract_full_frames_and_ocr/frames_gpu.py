@@ -4,20 +4,18 @@ This module provides a drop-in replacement for the CPU-based frame extraction
 in frames.py, using GPU acceleration via the gpu_video_utils package.
 """
 
-from io import BytesIO
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Optional
-
-from PIL import Image as PILImage
 
 from gpu_video_utils import GPUVideoDecoder
+from PIL import Image as PILImage
 
 
 def extract_frames_gpu(
     video_path: Path,
     output_dir: Path,
     rate_hz: float = 0.1,
-    crop_box: Optional[tuple[int, int, int, int]] = None,
+    crop_box: tuple[int, int, int, int] | None = None,
     progress_callback: Callable[[int, int], None] | None = None,
 ) -> list[Path]:
     """Extract frames from video at specified rate using GPU acceleration.

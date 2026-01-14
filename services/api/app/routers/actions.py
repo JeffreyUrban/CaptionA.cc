@@ -131,7 +131,7 @@ async def bulk_annotate(video_id: str, body: BulkAnnotateRequest, auth: Auth):
             framesAffected=len(frames_affected),
         )
 
-    except FileNotFoundError as e:
+    except FileNotFoundError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Database not found for video {video_id}",
