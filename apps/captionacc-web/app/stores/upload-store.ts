@@ -30,7 +30,7 @@ export interface ActiveUpload {
   relativePath: string
   targetFolder: string | null
 
-  uploadUrl: string | null
+  // Note: uploadUrl removed - S3 presigned URLs are short-lived and not resumable like TUS
   bytesUploaded: number
   progress: number
   status: 'pending' | 'uploading' | 'error'
@@ -83,7 +83,6 @@ export interface UploadStore {
       | 'id'
       | 'createdAt'
       | 'startedAt'
-      | 'uploadUrl'
       | 'bytesUploaded'
       | 'progress'
       | 'status'
@@ -92,7 +91,6 @@ export interface UploadStore {
   ) => string
   updateProgress: (id: string, bytesUploaded: number, progress: number) => void
   updateStatus: (id: string, status: ActiveUpload['status'], error?: string) => void
-  setUploadUrl: (id: string, uploadUrl: string) => void
   removeUpload: (id: string) => void
 
   // Duplicate handling
@@ -206,7 +204,6 @@ export const useUploadStore = create<UploadStore>()(
             [id]: {
               ...upload,
               id,
-              uploadUrl: null,
               bytesUploaded: 0,
               progress: 0,
               status: 'pending' as const,
@@ -280,23 +277,6 @@ export const useUploadStore = create<UploadStore>()(
               state.completedUploads,
               state.notification.dismissed
             ),
-          }
-        })
-      },
-
-      setUploadUrl: (id, uploadUrl) => {
-        set(state => {
-          const upload = state.activeUploads[id]
-          if (!upload) return state
-
-          return {
-            activeUploads: {
-              ...state.activeUploads,
-              [id]: {
-                ...upload,
-                uploadUrl,
-              },
-            },
           }
         })
       },

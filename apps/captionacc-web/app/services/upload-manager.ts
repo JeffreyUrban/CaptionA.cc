@@ -1,8 +1,8 @@
 /**
- * Upload Manager Service - Singleton for managing TUS uploads
+ * Upload Manager Service - Singleton for managing S3 uploads
  *
  * This service:
- * - Manages TUS upload instances independent of React component lifecycle
+ * - Manages S3 uploads using presigned URLs from Supabase Edge Function
  * - Integrates with upload-store for state persistence
  * - Supports concurrent uploads with queue management
  * - Handles retry logic with exponential backoff
@@ -11,31 +11,25 @@
  * allowing uploads to continue when user navigates between pages.
  */
 
-import * as tus from 'tus-js-client'
-
-import { useUploadStore } from '~/stores/upload-store'
 import {
-  CONCURRENT_UPLOADS,
-  CHUNK_SIZE,
-  RETRY_DELAYS,
-  MAX_RETRIES,
-  STALL_TIMEOUT,
-} from '~/types/upload'
-import { isRetryableError } from '~/utils/upload-helpers'
+  uploadFileToS3,
+  createUploadAbortController,
+  cancelUpload as cancelS3Upload,
+  type S3UploadOptions,
+} from '~/services/s3-upload'
+import { useUploadStore } from '~/stores/upload-store'
+import { CONCURRENT_UPLOADS, STALL_TIMEOUT } from '~/types/upload'
 
 // ============================================================================
 // Upload Manager Class
 // ============================================================================
 
 class UploadManager {
-  // Active TUS upload instances (in-memory, not persisted)
-  private activeUploads = new Map<string, tus.Upload>()
+  // Active S3 upload abort controllers (in-memory, not persisted)
+  private activeUploads = new Map<string, AbortController>()
 
   // Files being uploaded (transient state, not in store)
   private uploadFiles = new Map<string, File>()
-
-  // Retry tracking (upload-manager responsibility, not store)
-  private retryCount = new Map<string, number>()
 
   // Stall detection
   private lastProgressTime = new Map<string, number>()
@@ -108,9 +102,9 @@ class UploadManager {
   }
 
   /**
-   * Create and start a TUS upload instance
+   * Create and start an S3 upload using presigned URL
    */
-  private async createTusUpload(uploadId: string, retryCount: number = 0): Promise<void> {
+  private async createS3Upload(uploadId: string): Promise<void> {
     const store = useUploadStore.getState()
     const uploadMetadata = store.activeUploads[uploadId]
     const file = this.uploadFiles.get(uploadId)
@@ -138,192 +132,11 @@ class UploadManager {
       videoPath = uploadMetadata.targetFolder + '/' + videoPath
     }
 
-    console.log(
-      `[UploadManager] Starting ${uploadMetadata.relativePath} (attempt ${retryCount + 1}/${MAX_RETRIES + 1})`
-    )
+    console.log(`[UploadManager] Starting S3 upload for ${uploadMetadata.relativePath}`)
 
-    // Get auth token from Supabase session
-    const { supabase } = await import('~/services/supabase-client')
-    const {
-      data: { session },
-    } = await supabase.auth.getSession()
-
-    const upload = new tus.Upload(file, {
-      endpoint: '/api/upload',
-      retryDelays: RETRY_DELAYS,
-      chunkSize: CHUNK_SIZE,
-      uploadUrl: uploadMetadata.uploadUrl ?? undefined, // Resume from previous attempt
-
-      metadata: {
-        filename,
-        filetype: uploadMetadata.fileType,
-        videoPath,
-      },
-
-      headers: session?.access_token
-        ? {
-            Authorization: `Bearer ${session.access_token}`,
-          }
-        : {},
-
-      onError: (error: Error | tus.DetailedError) => {
-        // Log full error details for debugging
-        const detailedError = error as tus.DetailedError
-        console.error(`[UploadManager] Failed ${uploadMetadata.relativePath}:`, {
-          message: error.message,
-          error: error,
-          originalRequest: detailedError.originalRequest,
-          originalResponse: detailedError.originalResponse,
-        })
-
-        // Special handling for 404 errors (upload not found on server)
-        // This happens when metadata was cleaned up after completion
-        // Check multiple properties as TUS errors can be formatted differently
-        const errorStr = String(error).toLowerCase()
-        const messageStr = (error.message || '').toLowerCase()
-        const is404 =
-          messageStr.includes('404') ||
-          messageStr.includes('not found') ||
-          errorStr.includes('404') ||
-          errorStr.includes('not found') ||
-          detailedError.originalResponse?.getStatus?.() === 404
-
-        if (is404) {
-          console.log(
-            `[UploadManager] Upload ${uploadId} not found on server - cleaning up from store`
-          )
-          store.removeUpload(uploadId)
-          this.activeUploads.delete(uploadId)
-          this.uploadFiles.delete(uploadId)
-          this.retryCount.delete(uploadId)
-          this.lastProgressTime.delete(uploadId)
-
-          // Process next in queue
-          setTimeout(() => this.processUploadQueue(), 100)
-          return
-        }
-
-        // Check if we should retry
-        const currentRetryCount = retryCount
-        if (currentRetryCount < MAX_RETRIES && isRetryableError(error)) {
-          const delay = RETRY_DELAYS[Math.min(currentRetryCount, RETRY_DELAYS.length - 1)]
-          console.log(`[UploadManager] Will retry ${uploadMetadata.relativePath} in ${delay}ms`)
-
-          // Update status to show retry
-          store.updateStatus(uploadId, 'pending', `Retrying (attempt ${currentRetryCount + 1})`)
-          this.retryCount.set(uploadId, currentRetryCount + 1)
-
-          // Schedule retry
-          setTimeout(() => {
-            this.createTusUpload(uploadId, currentRetryCount + 1)
-          }, delay)
-        } else {
-          // Max retries exceeded or non-retryable error
-          store.updateStatus(uploadId, 'error', error.message)
-          this.activeUploads.delete(uploadId)
-          this.uploadFiles.delete(uploadId)
-          this.retryCount.delete(uploadId)
-          this.lastProgressTime.delete(uploadId)
-
-          // Process next in queue
-          setTimeout(() => this.processUploadQueue(), 100)
-        }
-      },
-
-      onProgress: (bytesUploaded, bytesTotal) => {
-        const progress = Math.round((bytesUploaded / bytesTotal) * 100)
-
-        // Update store
-        store.updateProgress(uploadId, bytesUploaded, progress)
-
-        // Track activity for stall detection
-        this.lastProgressTime.set(uploadId, Date.now())
-      },
-
-      onSuccess: () => {
-        console.log(`[UploadManager] Upload complete ${uploadMetadata.relativePath}`)
-
-        // NOTE: Don't mark as completed here - wait for onAfterResponse to get videoId
-        // If no videoId is provided (shouldn't happen), we'll handle it there
-
-        // Track activity
-        this.lastProgressTime.set(uploadId, Date.now())
-      },
-
-      onAfterResponse: (_req, res) => {
-        // Store TUS upload URL for resumability
-        const uploadUrl = res.getHeader('Location')
-        if (uploadUrl) {
-          store.setUploadUrl(uploadId, uploadUrl)
-        }
-
-        // Get video ID and duplicate detection from headers
-        const videoId = res.getHeader('X-Video-Id')
-        const isDuplicateHeader = res.getHeader('X-Duplicate-Detected')
-
-        // Check if upload is complete (onSuccess was called)
-        const uploadComplete = res.getStatus() === 204 || res.getStatus() === 200
-
-        if (uploadComplete && videoId) {
-          // Check for duplicate detection
-          if (isDuplicateHeader === 'true') {
-            const duplicateOfVideoId = res.getHeader('X-Duplicate-Of-Video-Id')
-            const duplicateOfDisplayPath = res.getHeader('X-Duplicate-Of-Display-Path')
-
-            if (duplicateOfVideoId && duplicateOfDisplayPath) {
-              console.log(
-                `[UploadManager] Duplicate detected for ${uploadId}: ${duplicateOfDisplayPath}`
-              )
-
-              // Move to pending duplicates (removes from active uploads)
-              store.markAsDuplicate(uploadId, videoId, duplicateOfVideoId, duplicateOfDisplayPath)
-
-              // Cleanup
-              this.activeUploads.delete(uploadId)
-              this.uploadFiles.delete(uploadId)
-              this.retryCount.delete(uploadId)
-              this.lastProgressTime.delete(uploadId)
-
-              // Process next in queue
-              setTimeout(() => this.processUploadQueue(), 100)
-            }
-          } else {
-            // Normal completion - no duplicate
-            console.log(`[UploadManager] Video created with ID: ${videoId}`)
-
-            // Move to completed uploads
-            store.completeUpload(uploadId, videoId)
-
-            // Mark video as touched for video list refresh
-            // The video list uses display_path (videoPath) as the identifier
-            if (typeof window !== 'undefined') {
-              try {
-                const touchedList = localStorage.getItem('touched-videos')
-                const touched = touchedList ? new Set(JSON.parse(touchedList)) : new Set()
-                touched.add(videoPath) // videoPath is the display_path
-                localStorage.setItem('touched-videos', JSON.stringify(Array.from(touched)))
-                console.log(`[UploadManager] Marked ${videoPath} as touched for refresh`)
-              } catch (e) {
-                console.error('[UploadManager] Failed to mark video as touched:', e)
-              }
-            }
-
-            // Cleanup
-            this.activeUploads.delete(uploadId)
-            this.uploadFiles.delete(uploadId)
-            this.retryCount.delete(uploadId)
-            this.lastProgressTime.delete(uploadId)
-
-            // Process next in queue
-            setTimeout(() => this.processUploadQueue(), 100)
-          }
-        }
-      },
-    })
-
-    // Start upload and track instance
-    upload.start()
-    this.activeUploads.set(uploadId, upload)
+    // Create abort controller for cancellation
+    const abortController = createUploadAbortController()
+    this.activeUploads.set(uploadId, abortController)
 
     // Update status to uploading
     store.updateStatus(uploadId, 'uploading')
@@ -331,6 +144,75 @@ class UploadManager {
 
     // Start stall detection if not already running
     this.startStallDetection()
+
+    try {
+      // Upload to S3 using presigned URL
+      const result = await uploadFileToS3({
+        file,
+        filename,
+        contentType: uploadMetadata.fileType,
+        folderPath: uploadMetadata.targetFolder,
+        signal: abortController.signal,
+        onProgress: (bytesUploaded, progress) => {
+          // Update store
+          store.updateProgress(uploadId, bytesUploaded, progress)
+
+          // Track activity for stall detection
+          this.lastProgressTime.set(uploadId, Date.now())
+        },
+        onError: error => {
+          // Update status with error message (but keep trying if retry logic continues)
+          console.warn(`[UploadManager] Upload error for ${uploadMetadata.relativePath}:`, error.message)
+        },
+      })
+
+      // Upload successful
+      console.log(`[UploadManager] Upload complete for ${uploadMetadata.relativePath}, video ID: ${result.videoId}`)
+
+      // Move to completed uploads
+      store.completeUpload(uploadId, result.videoId)
+
+      // Mark video as touched for video list refresh
+      if (typeof window !== 'undefined') {
+        try {
+          const touchedList = localStorage.getItem('touched-videos')
+          const touched = touchedList ? new Set(JSON.parse(touchedList)) : new Set()
+          touched.add(videoPath) // videoPath is the display_path
+          localStorage.setItem('touched-videos', JSON.stringify(Array.from(touched)))
+          console.log(`[UploadManager] Marked ${videoPath} as touched for refresh`)
+        } catch (e) {
+          console.error('[UploadManager] Failed to mark video as touched:', e)
+        }
+      }
+
+      // Cleanup
+      this.activeUploads.delete(uploadId)
+      this.uploadFiles.delete(uploadId)
+      this.lastProgressTime.delete(uploadId)
+
+      // Process next in queue
+      setTimeout(() => this.processUploadQueue(), 100)
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error))
+
+      // Handle cancellation
+      if (err.message.includes('cancelled') || err.message.includes('abort')) {
+        console.log(`[UploadManager] Upload cancelled for ${uploadMetadata.relativePath}`)
+        // Don't update store - cancelUpload() will handle removal
+        return
+      }
+
+      // Upload failed after all retries
+      console.error(`[UploadManager] Upload failed for ${uploadMetadata.relativePath}:`, err)
+
+      store.updateStatus(uploadId, 'error', err.message)
+      this.activeUploads.delete(uploadId)
+      this.uploadFiles.delete(uploadId)
+      this.lastProgressTime.delete(uploadId)
+
+      // Process next in queue
+      setTimeout(() => this.processUploadQueue(), 100)
+    }
   }
 
   /**
@@ -353,13 +235,14 @@ class UploadManager {
 
     // Start uploads
     pendingUploads.forEach(upload => {
-      const retryCount = this.retryCount.get(upload.id) ?? 0
-      this.createTusUpload(upload.id, retryCount)
+      void this.createS3Upload(upload.id)
     })
   }
 
   /**
    * Resume an incomplete upload from persisted metadata
+   * Note: S3 uploads with presigned URLs don't support true resume like TUS.
+   * This will restart the upload from the beginning with a new presigned URL.
    */
   async resumeUpload(uploadId: string, file: File): Promise<void> {
     const store = useUploadStore.getState()
@@ -370,12 +253,7 @@ class UploadManager {
       return
     }
 
-    if (!uploadMetadata.uploadUrl) {
-      console.error(`[UploadManager] No upload URL to resume for ${uploadId}`)
-      return
-    }
-
-    console.log(`[UploadManager] Resuming upload ${uploadMetadata.fileName}`)
+    console.log(`[UploadManager] Resuming upload ${uploadMetadata.fileName} (will restart from beginning)`)
 
     // Store file reference
     this.uploadFiles.set(uploadId, file)
@@ -391,10 +269,10 @@ class UploadManager {
    * Cancel an upload
    */
   async cancelUpload(uploadId: string): Promise<void> {
-    const upload = this.activeUploads.get(uploadId)
+    const abortController = this.activeUploads.get(uploadId)
 
-    if (upload) {
-      await upload.abort()
+    if (abortController) {
+      cancelS3Upload(abortController)
       this.activeUploads.delete(uploadId)
     }
 
@@ -405,7 +283,6 @@ class UploadManager {
 
     // Cleanup
     this.uploadFiles.delete(uploadId)
-    this.retryCount.delete(uploadId)
     this.lastProgressTime.delete(uploadId)
 
     // Process queue to fill the slot
@@ -446,16 +323,12 @@ class UploadManager {
     const uploadIds = Array.from(this.activeUploads.keys())
 
     // Abort all active uploads
-    await Promise.all(
-      uploadIds.map(id =>
-        this.activeUploads
-          .get(id)
-          ?.abort()
-          .catch(err => {
-            console.error(`[UploadManager] Error aborting ${id}:`, err)
-          })
-      )
-    )
+    uploadIds.forEach(id => {
+      const abortController = this.activeUploads.get(id)
+      if (abortController) {
+        cancelS3Upload(abortController)
+      }
+    })
 
     const store = useUploadStore.getState()
 
@@ -467,7 +340,6 @@ class UploadManager {
     // Cleanup
     this.activeUploads.clear()
     this.uploadFiles.clear()
-    this.retryCount.clear()
     this.lastProgressTime.clear()
 
     this.stopStallDetection()
@@ -491,22 +363,17 @@ class UploadManager {
           )
 
           // Abort stalled upload and retry
-          const upload = this.activeUploads.get(uploadId)
-          if (upload) {
-            void upload.abort().then(() => {
-              this.activeUploads.delete(uploadId)
+          const abortController = this.activeUploads.get(uploadId)
+          if (abortController) {
+            cancelS3Upload(abortController)
+            this.activeUploads.delete(uploadId)
 
-              // Mark as pending for retry
-              const store = useUploadStore.getState()
-              store.updateStatus(uploadId, 'pending', 'Upload stalled - retrying')
+            // Mark as pending for retry
+            const store = useUploadStore.getState()
+            store.updateStatus(uploadId, 'pending', 'Upload stalled - retrying')
 
-              // Retry
-              const retryCount = this.retryCount.get(uploadId) ?? 0
-              if (retryCount < MAX_RETRIES) {
-                this.retryCount.set(uploadId, retryCount + 1)
-                setTimeout(() => this.processUploadQueue(), 1000)
-              }
-            })
+            // Retry - S3 upload has built-in retry logic, so just re-queue
+            setTimeout(() => this.processUploadQueue(), 1000)
           }
         }
       })
