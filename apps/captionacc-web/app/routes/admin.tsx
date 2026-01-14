@@ -225,7 +225,7 @@ function DatabaseAdministration({
     return null
   }
 
-  const hasProblems =
+  const _hasProblems =
     summary.health.incomplete > 0 || summary.health.drift > 0 || summary.health.unversioned > 0
 
   // Calculate version range (support current and previous version)

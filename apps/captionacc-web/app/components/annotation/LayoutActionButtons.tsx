@@ -32,8 +32,7 @@ export function LayoutActionButtons({
   const boundsUnchanged =
     layoutApproved &&
     layoutConfig &&
-    cropBoundsEdit &&
-    layoutConfig.cropLeft === cropBoundsEdit.left &&
+    layoutConfig.cropLeft === cropBoundsEdit?.left &&
     layoutConfig.cropTop === cropBoundsEdit.top &&
     layoutConfig.cropRight === cropBoundsEdit.right &&
     layoutConfig.cropBottom === cropBoundsEdit.bottom

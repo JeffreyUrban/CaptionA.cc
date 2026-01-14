@@ -117,7 +117,7 @@ export async function listChunks(
     if (!obj.Key) continue
 
     const match = obj.Key.match(/chunk_(\d+)\.webm$/)
-    if (match && match[1]) {
+    if (match?.[1]) {
       chunkIndices.push(parseInt(match[1], 10))
     }
   }

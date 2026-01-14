@@ -8,17 +8,15 @@
 
 import type Database from 'better-sqlite3'
 
-import type { BoxLabel, TextAnchor } from '~/types/enums'
-
 import {
   calculateFeatureImportance,
   computePooledCovariance,
   invertCovarianceMatrix,
   shouldCalculateFeatureImportance,
   type ClassSamples,
-  type GaussianParams as FeatureGaussianParams,
 } from './feature-importance'
-import { type FeatureImportanceMetrics } from './streaming-prediction-config'
+
+import type { BoxLabel, TextAnchor } from '~/types/enums'
 
 /** SQLite error with code property */
 interface SqliteError extends Error {

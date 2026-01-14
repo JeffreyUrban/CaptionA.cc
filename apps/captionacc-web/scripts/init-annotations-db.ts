@@ -6,7 +6,7 @@
  * Example: node scripts/init-captions-db.ts content_name/video_id
  */
 
-import { readFileSync, mkdirSync } from 'fs'
+import { mkdirSync } from 'fs'
 import { resolve, dirname } from 'path'
 
 import Database from 'better-sqlite3'

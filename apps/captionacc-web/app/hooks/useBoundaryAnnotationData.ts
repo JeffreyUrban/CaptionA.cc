@@ -200,8 +200,8 @@ export function useBoundaryAnnotationData({
     async (
       start: number,
       end: number,
-      currentFrameIndexRef: React.RefObject<number>,
-      visibleFramePositions: number[]
+      _currentFrameIndexRef: React.RefObject<number>,
+      _visibleFramePositions: number[]
     ) => {
       const activeAnnotation = activeAnnotationRef.current
       if (!activeAnnotation || start === null || end === null) return
@@ -318,8 +318,8 @@ export function useBoundaryAnnotationData({
     async (
       start: number,
       end: number,
-      currentFrameIndexRef: React.RefObject<number>,
-      visibleFramePositions: number[]
+      _currentFrameIndexRef: React.RefObject<number>,
+      _visibleFramePositions: number[]
     ) => {
       const activeAnnotation = activeAnnotationRef.current
       if (!activeAnnotation || start === null || end === null) return

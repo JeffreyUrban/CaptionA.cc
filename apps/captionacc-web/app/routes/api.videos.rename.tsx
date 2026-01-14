@@ -5,13 +5,13 @@
 import type { ActionFunctionArgs } from 'react-router'
 
 import { createServerSupabaseClient } from '~/services/supabase-client'
+import { requireAuth, requireVideoOwnership } from '~/utils/api-auth'
 import {
   badRequestResponse,
   conflictResponse,
   errorResponse,
   jsonResponse,
 } from '~/utils/api-responses'
-import { requireAuth, requireVideoOwnership } from '~/utils/api-auth'
 
 export async function action({ request }: ActionFunctionArgs) {
   if (request.method !== 'PATCH') {

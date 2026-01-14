@@ -9,8 +9,8 @@
  * - Suspicious activity patterns
  */
 
-import type { Json } from '~/types/supabase'
 import { createServerSupabaseClient } from '~/services/supabase-client'
+import type { Json } from '~/types/supabase'
 
 export type SecurityEventType =
   | 'auth_success'

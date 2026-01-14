@@ -2,7 +2,7 @@ import { type LoaderFunctionArgs } from 'react-router'
 
 import { generateBatchSignedUrls, listChunks } from '~/services/wasabi-storage.server'
 
-const FRAMES_PER_CHUNK = 32
+const _FRAMES_PER_CHUNK = 32
 
 /**
  * Build list of frame indices in a chunk for a given modulo level (non-duplicating strategy)

@@ -10,8 +10,6 @@
  * clean early returns in route handlers.
  */
 
-import { existsSync } from 'fs'
-
 import Database from 'better-sqlite3'
 
 import { migrateDatabase } from '~/db/migrate'

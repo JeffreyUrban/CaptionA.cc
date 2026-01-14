@@ -13,8 +13,8 @@ import type { LoaderFunctionArgs } from 'react-router'
 
 import { getCriticalEvents, getRepeatedCrossTenantAttempts } from '~/services/security-audit.server'
 import { createServerSupabaseClient } from '~/services/supabase-client'
-import { errorResponse, jsonResponse } from '~/utils/api-responses'
 import { requireAuth } from '~/utils/api-auth'
+import { errorResponse, jsonResponse } from '~/utils/api-responses'
 
 export async function loader({ request }: LoaderFunctionArgs) {
   try {

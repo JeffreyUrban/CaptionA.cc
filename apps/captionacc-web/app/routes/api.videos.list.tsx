@@ -10,7 +10,7 @@ import { redirect, type LoaderFunctionArgs } from 'react-router'
 import { createServerSupabaseClient } from '~/services/supabase-client'
 import { jsonResponse } from '~/utils/api-responses'
 
-export async function loader({ request }: LoaderFunctionArgs) {
+export async function loader({ request: _request }: LoaderFunctionArgs) {
   const supabase = createServerSupabaseClient()
 
   // Get authenticated user

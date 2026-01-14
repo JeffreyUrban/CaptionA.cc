@@ -18,7 +18,6 @@ import {
   adaptiveRecalculation,
   type BoxWithPrediction,
   type Annotation,
-  type AdaptiveRecalcResult,
 } from '~/utils/streaming-prediction-updates'
 
 /**
@@ -171,7 +170,7 @@ export async function applyStreamingPredictionUpdates(
       .prepare('SELECT covariance_inverse FROM box_classification_model WHERE id = 1')
       .get() as { covariance_inverse: string | null } | undefined
 
-    if (!modelData || !modelData.covariance_inverse) {
+    if (!modelData?.covariance_inverse) {
       console.log('[streamingUpdate] No covariance matrix - skipping streaming updates')
       return {
         success: false,

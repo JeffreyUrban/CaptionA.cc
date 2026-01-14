@@ -67,7 +67,7 @@ export function UploadPreviewModal({
   }
 
   const totalCount = files.length
-  const totalSize = useMemo(() => files.reduce((sum, f) => sum + f.file.size, 0), [files])
+  const _totalSize = useMemo(() => files.reduce((sum, f) => sum + f.file.size, 0), [files])
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">

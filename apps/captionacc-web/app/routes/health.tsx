@@ -34,7 +34,7 @@ interface HealthResponse {
   }
 }
 
-export async function loader({ request }: LoaderFunctionArgs) {
+export async function loader({ request: _request }: LoaderFunctionArgs) {
   const startTime = Date.now()
 
   const health: HealthResponse = {

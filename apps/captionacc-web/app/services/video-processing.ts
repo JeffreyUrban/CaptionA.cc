@@ -10,7 +10,7 @@
  */
 
 import { spawn } from 'child_process'
-import { existsSync, readdirSync } from 'fs'
+import { existsSync } from 'fs'
 import { resolve } from 'path'
 
 import Database from 'better-sqlite3'
@@ -442,7 +442,7 @@ export async function recoverStalledProcessing() {
 
       // Check both full_frames and crop_frames processing
       await checkAndRecoverVideo(dbPath, video.displayPath, video.videoId)
-      recoverStalledCropFrames(video.videoId, video.displayPath)
+      void recoverStalledCropFrames(video.videoId, video.displayPath)
     }
   }
 }

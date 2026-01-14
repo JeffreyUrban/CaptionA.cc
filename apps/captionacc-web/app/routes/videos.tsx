@@ -76,7 +76,7 @@ export async function loader() {
     })) || []
 
   // Build tree structure from videos only (without stats - will be loaded client-side)
-  let tree = buildVideoTree(videoList)
+  const tree = buildVideoTree(videoList)
 
   // Calculate video counts for each folder
   tree.forEach(node => {

@@ -94,7 +94,7 @@ export async function action({ params }: ActionFunctionArgs) {
     }
 
     // Delete the annotation and its combined image
-    deleteCombinedImage(videoId, annotationId)
+    void deleteCombinedImage(videoId, annotationId)
     db.prepare('DELETE FROM captions WHERE id = ?').run(annotationId)
 
     // Delete adjacent gaps (gaps don't have combined images, so no cleanup needed)

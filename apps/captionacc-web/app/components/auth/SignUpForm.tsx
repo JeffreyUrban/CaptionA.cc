@@ -14,7 +14,7 @@ interface SignUpFormProps {
   onSwitchToLogin?: () => void
 }
 
-export function SignUpForm({ onSuccess, onSwitchToLogin }: SignUpFormProps) {
+export function SignUpForm({ onSuccess: _onSuccess, onSwitchToLogin }: SignUpFormProps) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [fullName, setFullName] = useState('')

@@ -15,7 +15,7 @@ interface PendingDuplicate {
   detectedAt: string
 }
 
-export async function loader({ request }: LoaderFunctionArgs) {
+export async function loader({ request: _request }: LoaderFunctionArgs) {
   const allVideos = await getAllVideos()
   const pendingDuplicates: PendingDuplicate[] = []
 

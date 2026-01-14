@@ -536,7 +536,7 @@ export function useBoundaryFrameLoader({
         if (isJump && jumpTarget !== null && !isNaN(jumpTarget) && jumpTarget >= 0) {
           // Don't clear flag yet - wait until jump completes
 
-          let finestQueue = buildQueueForModulo(
+          const finestQueue = buildQueueForModulo(
             jumpTarget, // Load around target, not current position
             2, // Level 2 = modulo 1 (finest, exact frames)
             totalFrames,

@@ -106,8 +106,7 @@ export function BoundaryFrameStack({
 
           // Find the primary annotation to display (prefer active annotation)
           const primaryAnnotation =
-            frameAnnotations.find(ann => activeAnnotation && ann.id === activeAnnotation.id) ??
-            frameAnnotations[0]
+            frameAnnotations.find(ann => ann.id === activeAnnotation?.id) ?? frameAnnotations[0]
 
           // Determine border classes
           let borderClasses = ''

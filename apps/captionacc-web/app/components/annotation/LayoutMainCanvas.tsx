@@ -3,13 +3,7 @@
  * Handles rendering of frame/analysis views with overlays.
  */
 
-import {
-  RECALC_THRESHOLD,
-  type FrameBoxesData,
-  type LayoutConfig,
-  type BoxData,
-  type ViewMode,
-} from '~/types/layout'
+import { type FrameBoxesData, type LayoutConfig, type BoxData, type ViewMode } from '~/types/layout'
 
 interface LayoutMainCanvasProps {
   viewMode: ViewMode
@@ -37,7 +31,7 @@ function AnalysisViewContent({
   layoutApproved,
   boundsMismatch,
   analysisBoxes,
-  annotationsSinceRecalc,
+  annotationsSinceRecalc: _annotationsSinceRecalc,
   selectionPadding,
   imageRef,
   canvasRef,
@@ -94,7 +88,7 @@ function AnalysisViewContent({
  */
 function FrameViewContent({
   currentFrameBoxes,
-  annotationsSinceRecalc,
+  annotationsSinceRecalc: _annotationsSinceRecalc,
   selectionPadding,
   imageRef,
   canvasRef,

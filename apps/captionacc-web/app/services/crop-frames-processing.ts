@@ -460,7 +460,7 @@ function triggerNeverStarted(videoId: string, videoPath: string, layoutConfig: L
     `[CropFrames] Auto-triggering crop_frames for ${videoPath} (layout approved but processing never started)`
   )
 
-  queueCropFramesProcessing({
+  void queueCropFramesProcessing({
     videoId,
     videoPath,
     cropBounds: createCropBounds(layoutConfig),
@@ -492,7 +492,7 @@ function requeueStuckQueued(
 
   incrementRetryCount(db)
 
-  queueCropFramesProcessing({
+  void queueCropFramesProcessing({
     videoId,
     videoPath,
     cropBounds: createCropBounds(layoutConfig),
@@ -523,7 +523,7 @@ function requeueFalseComplete(
 
   resetToQueuedWithRetry(db)
 
-  queueCropFramesProcessing({
+  void queueCropFramesProcessing({
     videoId,
     videoPath,
     cropBounds: createCropBounds(layoutConfig),
@@ -577,7 +577,7 @@ function retryRecoverableError(
 
   resetToQueuedForAutoRetry(db)
 
-  queueCropFramesProcessing({
+  void queueCropFramesProcessing({
     videoId,
     videoPath,
     cropBounds: createCropBounds(layoutConfig),

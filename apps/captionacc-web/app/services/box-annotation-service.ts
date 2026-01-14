@@ -7,15 +7,15 @@
 
 import type Database from 'better-sqlite3'
 
-import type { BoxLabel, LabelSource, TextAnchor } from '~/types/enums'
 import { triggerModelTraining } from '~/services/model-training'
-import { applyStreamingPredictionUpdates } from '~/services/streaming-prediction-service'
 import {
   startStreamingUpdate,
   startFullRetrain,
   completeProcessing,
   updateProgress,
 } from '~/services/processing-status-tracker'
+import { applyStreamingPredictionUpdates } from '~/services/streaming-prediction-service'
+import type { TextAnchor } from '~/types/enums'
 import { predictBoxLabel, trainModel, initializeSeedModel } from '~/utils/box-prediction'
 import {
   pixelToCroppedDisplay,

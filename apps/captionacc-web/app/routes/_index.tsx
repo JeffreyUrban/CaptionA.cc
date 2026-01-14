@@ -1,6 +1,5 @@
 import { redirect, type LoaderFunctionArgs, type MetaFunction } from 'react-router'
 
-import { supabase } from '~/services/supabase-client'
 import { ThemeSwitcher } from '~/components/ThemeSwitcher'
 import { WaitlistForm } from '~/components/WaitlistForm'
 import { ButtonLink } from '~/components/oatmeal/elements/button'
@@ -20,6 +19,7 @@ import {
 } from '~/components/oatmeal/sections/footer-with-link-categories'
 import { HeroSimpleCentered } from '~/components/oatmeal/sections/hero-simple-centered'
 import { NavbarWithLogoActionsAndLeftAlignedLinks } from '~/components/oatmeal/sections/navbar-with-logo-actions-and-left-aligned-links'
+import { supabase } from '~/services/supabase-client'
 
 export const meta: MetaFunction = () => {
   return [
@@ -34,7 +34,7 @@ export const meta: MetaFunction = () => {
   ]
 }
 
-export async function loader({ request }: LoaderFunctionArgs) {
+export async function loader({ request: _request }: LoaderFunctionArgs) {
   // Check if user is authenticated
   const {
     data: { session },

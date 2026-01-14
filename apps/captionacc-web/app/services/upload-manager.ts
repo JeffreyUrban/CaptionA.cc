@@ -215,7 +215,7 @@ class UploadManager {
 
           // Schedule retry
           setTimeout(() => {
-            this.createTusUpload(uploadId, currentRetryCount + 1)
+            void this.createTusUpload(uploadId, currentRetryCount + 1)
           }, delay)
         } else {
           // Max retries exceeded or non-retryable error
@@ -354,7 +354,7 @@ class UploadManager {
     // Start uploads
     pendingUploads.forEach(upload => {
       const retryCount = this.retryCount.get(upload.id) ?? 0
-      this.createTusUpload(upload.id, retryCount)
+      void this.createTusUpload(upload.id, retryCount)
     })
   }
 

@@ -327,7 +327,7 @@ export function useBoundaryWorkflowState({
 
     // Only load if range actually changed (prevents infinite loop from array recreation)
     const lastRange = lastAnnotationRangeRef.current
-    if (lastRange && lastRange.start === startFrame && lastRange.end === endFrame) {
+    if (lastRange?.start === startFrame && lastRange.end === endFrame) {
       return
     }
 

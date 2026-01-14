@@ -6,6 +6,7 @@
  */
 
 import { createServerSupabaseClient } from './supabase-client'
+
 import type { Database } from '~/types/supabase'
 
 /**
@@ -52,7 +53,7 @@ export async function requirePlatformAdmin(request: Request): Promise<string> {
   // Get access token from Authorization header
   const authHeader = request.headers.get('Authorization')
 
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  if (!authHeader?.startsWith('Bearer ')) {
     throw new Response('Unauthorized: Missing or invalid authorization', { status: 401 })
   }
 

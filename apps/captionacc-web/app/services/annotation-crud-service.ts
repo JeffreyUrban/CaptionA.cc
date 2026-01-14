@@ -7,14 +7,15 @@
 
 import type Database from 'better-sqlite3'
 
+import { queueCaptionMedianOcrProcessing } from './prefect'
+
+import type { AnnotationState } from '~/types/enums'
 import {
   getAnnotationDatabase,
   getWritableDatabase,
   getOrCreateAnnotationDatabase,
 } from '~/utils/database'
 import { deleteCombinedImage } from '~/utils/image-processing'
-import type { AnnotationState, TextStatus } from '~/types/enums'
-import { queueCaptionMedianOcrProcessing } from './prefect'
 import { getDbPath, getVideoDir } from '~/utils/video-paths'
 
 // =============================================================================
@@ -163,7 +164,7 @@ async function markImageForRegeneration(
   db: Database.Database
 ): Promise<void> {
   // Delete old combined image immediately
-  deleteCombinedImage(videoId, annotationId)
+  void deleteCombinedImage(videoId, annotationId)
 
   // Mark for async regeneration, clear OCR cache, and queue via Prefect
   db.prepare(
@@ -290,7 +291,7 @@ function splitOverlappingAnnotations(
   for (const overlap of overlaps) {
     if (overlap.start_frame_index >= startFrameIndex && overlap.end_frame_index <= endFrameIndex) {
       // Completely contained - delete it and its combined image
-      deleteCombinedImage(videoId, overlap.id)
+      void deleteCombinedImage(videoId, overlap.id)
       db.prepare('DELETE FROM captions WHERE id = ?').run(overlap.id)
       deletedIds.push(overlap.id)
     } else if (
@@ -760,7 +761,7 @@ export async function updateAnnotationWithOverlapResolution(
 
     // Delete old combined image if boundaries changed
     if (boundariesChanged) {
-      deleteCombinedImage(videoId, id)
+      void deleteCombinedImage(videoId, id)
     }
 
     // Get updated annotation
@@ -809,7 +810,7 @@ export async function deleteAnnotation(videoId: string, annotationId: number): P
 
   try {
     // Delete combined image first
-    deleteCombinedImage(videoId, annotationId)
+    void deleteCombinedImage(videoId, annotationId)
 
     const deleteResult = db.prepare('DELETE FROM captions WHERE id = ?').run(annotationId)
 
@@ -839,7 +840,7 @@ export async function clearAllAnnotations(videoId: string): Promise<number> {
     const annotations = db.prepare('SELECT id FROM captions').all() as Array<{ id: number }>
 
     for (const ann of annotations) {
-      deleteCombinedImage(videoId, ann.id)
+      void deleteCombinedImage(videoId, ann.id)
     }
 
     const deleteResult = db.prepare('DELETE FROM captions').run()

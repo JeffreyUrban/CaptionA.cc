@@ -285,7 +285,7 @@ function repairDatabase(
     }
 
     // Check version metadata
-    const actualTablesRefresh = getActualTables(db)
+    const _actualTablesRefresh = getActualTables(db)
     const hasMetadata = actualTables.has('database_metadata')
 
     if (!hasMetadata) {
