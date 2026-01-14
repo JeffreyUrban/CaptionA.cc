@@ -9,7 +9,12 @@
  * - Typed error handling
  */
 
-import { S3Client, GetObjectCommand, HeadObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3'
+import {
+  S3Client,
+  GetObjectCommand,
+  HeadObjectCommand,
+  ListObjectsV2Command,
+} from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 
 import { getS3Credentials, refreshS3Credentials } from './s3-credentials'
@@ -87,10 +92,7 @@ interface RetryConfig {
 /**
  * Retry a function with exponential backoff
  */
-async function withRetry<T>(
-  fn: () => Promise<T>,
-  config: RetryConfig = {}
-): Promise<T> {
+async function withRetry<T>(fn: () => Promise<T>, config: RetryConfig = {}): Promise<T> {
   const maxRetries = config.maxRetries ?? MAX_RETRIES
   const initialDelay = config.initialDelay ?? INITIAL_RETRY_DELAY_MS
 
@@ -121,9 +123,7 @@ async function withRetry<T>(
       }
 
       // Max retries exhausted
-      throw new RetryExhaustedError(
-        `Failed after ${maxRetries} retries: ${lastError.message}`
-      )
+      throw new RetryExhaustedError(`Failed after ${maxRetries} retries: ${lastError.message}`)
     }
   }
 
@@ -334,7 +334,11 @@ export async function getObjectUrl(key: string, expiresIn = 3600): Promise<strin
  */
 export async function headObject(
   key: string
-): Promise<{ contentLength: number; contentType: string | undefined; lastModified: Date | undefined }> {
+): Promise<{
+  contentLength: number
+  contentType: string | undefined
+  lastModified: Date | undefined
+}> {
   return withRetry(async () => {
     try {
       const { client, config } = await getS3Client()
@@ -373,7 +377,9 @@ export async function listObjects(prefix: string, maxKeys = 1000): Promise<strin
 
       const response = await client.send(command)
 
-      const keys = (response.Contents ?? []).map(obj => obj.Key).filter((key): key is string => !!key)
+      const keys = (response.Contents ?? [])
+        .map(obj => obj.Key)
+        .filter((key): key is string => !!key)
 
       return keys
     } catch (error) {

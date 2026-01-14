@@ -142,7 +142,9 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
   // Try to get the current session from Supabase
   try {
     const { supabase } = await import('./supabase-client')
-    const { data: { session } } = await supabase.auth.getSession()
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
 
     if (session?.access_token) {
       return {
@@ -238,11 +240,7 @@ export async function downloadDatabase(
     const responseStream = response.Body as ReadableStream<Uint8Array>
 
     // Download with progress tracking
-    const compressedData = await downloadWithProgress(
-      responseStream,
-      totalBytes,
-      onProgress
-    )
+    const compressedData = await downloadWithProgress(responseStream, totalBytes, onProgress)
 
     // Report decompression phase
     onProgress?.({
@@ -265,7 +263,7 @@ export async function downloadDatabase(
 
     console.log(
       `[DatabaseLoader] Downloaded and decompressed ${storageKey}: ` +
-      `${compressedData.length} -> ${decompressedData.length} bytes`
+        `${compressedData.length} -> ${decompressedData.length} bytes`
     )
 
     return {
@@ -291,11 +289,12 @@ export async function downloadDatabase(
     }
 
     // Check if it's a network error
-    if (error instanceof Error && (
-      error.message.includes('network') ||
-      error.message.includes('fetch') ||
-      error.name === 'NetworkError'
-    )) {
+    if (
+      error instanceof Error &&
+      (error.message.includes('network') ||
+        error.message.includes('fetch') ||
+        error.name === 'NetworkError')
+    ) {
       const dbError = networkError(error)
       logDatabaseError(dbError)
       throw dbError
@@ -332,9 +331,7 @@ async function downloadWithProgress(
 
       // Report progress
       if (onProgress) {
-        const percent = totalBytes
-          ? Math.round((bytesDownloaded / totalBytes) * 100)
-          : 0
+        const percent = totalBytes ? Math.round((bytesDownloaded / totalBytes) * 100) : 0
 
         onProgress({
           phase: 'downloading',
@@ -491,7 +488,7 @@ export async function downloadDatabaseWithRetry(
 
       console.log(
         `[DatabaseLoader] Download failed (attempt ${attempt + 1}/${opts.maxRetries + 1}), ` +
-        `retrying in ${delay}ms...`
+          `retrying in ${delay}ms...`
       )
 
       // Wait before retry
@@ -523,10 +520,7 @@ export async function downloadDatabaseWithRetry(
  * @param dbName Database name
  * @returns True if cached locally
  */
-export async function isDatabaseCached(
-  videoId: string,
-  dbName: DatabaseName
-): Promise<boolean> {
+export async function isDatabaseCached(videoId: string, dbName: DatabaseName): Promise<boolean> {
   const filename = `${videoId}_${dbName}.db`
 
   // Check IndexedDB for the database file
@@ -542,7 +536,7 @@ export async function isDatabaseCached(
     const store = transaction.objectStore('files')
     const request = store.get(filename)
 
-    return new Promise((resolve) => {
+    return new Promise(resolve => {
       request.onsuccess = () => resolve(request.result !== undefined)
       request.onerror = () => resolve(false)
     })
@@ -557,10 +551,7 @@ export async function isDatabaseCached(
  * @param videoId Video UUID
  * @param dbName Database name
  */
-export async function clearDatabaseCache(
-  videoId: string,
-  dbName: DatabaseName
-): Promise<void> {
+export async function clearDatabaseCache(videoId: string, dbName: DatabaseName): Promise<void> {
   const filename = `${videoId}_${dbName}.db`
 
   try {

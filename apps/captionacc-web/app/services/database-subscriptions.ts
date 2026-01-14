@@ -93,10 +93,7 @@ class DatabaseSubscriptionManager {
    * @param options Subscription options (filter, debounce)
    * @returns Subscription result with unsubscribe function
    */
-  subscribe(
-    callback: SubscriptionCallback,
-    options?: SubscribeOptions
-  ): SubscriptionResult {
+  subscribe(callback: SubscriptionCallback, options?: SubscribeOptions): SubscriptionResult {
     const id = this.generateSubscriptionId()
 
     // Wrap callback with debounce if requested
@@ -156,10 +153,7 @@ class DatabaseSubscriptionManager {
         try {
           subscription.callback(relevantChanges)
         } catch (error) {
-          console.error(
-            `[DatabaseSubscriptions] Callback error for ${subscription.id}:`,
-            error
-          )
+          console.error(`[DatabaseSubscriptions] Callback error for ${subscription.id}:`, error)
         }
       }
     }
@@ -229,10 +223,7 @@ class DatabaseSubscriptionManager {
   /**
    * Filter changes based on subscription filter.
    */
-  private filterChanges(
-    changes: CRSQLiteChange[],
-    filter: SubscriptionFilter
-  ): CRSQLiteChange[] {
+  private filterChanges(changes: CRSQLiteChange[], filter: SubscriptionFilter): CRSQLiteChange[] {
     return changes.filter(change => {
       // Filter by table
       if (filter.table && change.table !== filter.table) {
@@ -442,10 +433,7 @@ export function clearAllSubscriptions(): void {
  * @param dbName Database name
  * @returns Number of active subscriptions
  */
-export function getSubscriptionCount(
-  videoId: string,
-  dbName: DatabaseName
-): number {
+export function getSubscriptionCount(videoId: string, dbName: DatabaseName): number {
   const instanceId = `${videoId}:${dbName}`
   const manager = subscriptionManagers.get(instanceId)
   return manager?.size ?? 0
@@ -499,7 +487,7 @@ export function createReactSubscription<T>(
   const { unsubscribe } = subscribeToChanges(
     videoId,
     dbName,
-    async (changes) => {
+    async changes => {
       setState(currentState => {
         const result = transform(changes, currentState)
 

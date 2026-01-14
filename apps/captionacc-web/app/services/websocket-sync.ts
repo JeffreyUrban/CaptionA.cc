@@ -30,12 +30,7 @@ import { getLockManager, type LockHolder, type LockState } from './database-lock
 /**
  * WebSocket connection state.
  */
-export type ConnectionState =
-  | 'disconnected'
-  | 'connecting'
-  | 'connected'
-  | 'reconnecting'
-  | 'error'
+export type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'error'
 
 /**
  * Message types from the server.
@@ -180,11 +175,7 @@ export class WebSocketSyncManager {
   readonly instanceId: string
   private handlers: WebSocketEventHandlers
 
-  constructor(
-    videoId: string,
-    dbName: DatabaseName,
-    handlers: WebSocketEventHandlers = {}
-  ) {
+  constructor(videoId: string, dbName: DatabaseName, handlers: WebSocketEventHandlers = {}) {
     this.videoId = videoId
     this.dbName = dbName
     this.instanceId = `${videoId}:${dbName}`
@@ -420,7 +411,7 @@ export class WebSocketSyncManager {
 
       console.log(
         `[WebSocketSync] Sent sync message: ${message.messageId}, ` +
-        `${message.changes.length} changes`
+          `${message.changes.length} changes`
       )
     } catch (error) {
       console.error('[WebSocketSync] Failed to send message:', error)
@@ -539,7 +530,7 @@ export class WebSocketSyncManager {
   private handleServerUpdate(message: ServerUpdateMessage): void {
     console.log(
       `[WebSocketSync] Server update received: ${message.changes.length} changes, ` +
-      `version: ${message.version}`
+        `version: ${message.version}`
     )
 
     // Notify handler
@@ -560,12 +551,7 @@ export class WebSocketSyncManager {
       : undefined
 
     // Update lock manager
-    getLockManager().handleLockChanged(
-      this.videoId,
-      this.dbName,
-      message.state,
-      holder
-    )
+    getLockManager().handleLockChanged(this.videoId, this.dbName, message.state, holder)
 
     // Notify handler
     this.handlers.onLockChanged?.(message.state, holder)

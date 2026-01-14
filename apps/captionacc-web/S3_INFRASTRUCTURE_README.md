@@ -18,8 +18,10 @@ This infrastructure enables the frontend to access S3 (Wasabi) directly using te
 ### 1. Core Services
 
 #### `/app/services/s3-credentials.ts` (7.9 KB)
+
 **Purpose:** STS credential management
 **Features:**
+
 - Fetches credentials from Supabase Edge Function (`/functions/v1/captionacc-s3-credentials`)
 - Caches in sessionStorage until expiration
 - Auto-refresh 5 minutes before expiration
@@ -27,20 +29,24 @@ This infrastructure enables the frontend to access S3 (Wasabi) directly using te
 - Never logs credentials (security)
 
 **Key Functions:**
+
 - `getS3Credentials()` - Get valid credentials (cached or fresh)
 - `refreshS3Credentials()` - Force refresh
 - `clearS3Credentials()` - Clear on logout
 - `subscribeToCredentialUpdates()` - Listen to cross-tab updates
 
 #### `/app/services/s3-client.ts` (11 KB)
+
 **Purpose:** S3 client wrapper with retry logic
 **Features:**
+
 - S3Client initialization with STS credentials
 - Exponential backoff retry (max 3 attempts)
 - Path builders for S3 keys
 - Typed error handling
 
 **Key Functions:**
+
 - `getObject(key)` - Get raw bytes
 - `getObjectUrl(key, expiresIn)` - Get signed URL
 - `headObject(key)` - Get metadata
@@ -49,20 +55,24 @@ This infrastructure enables the frontend to access S3 (Wasabi) directly using te
 - `getVideoResourceUrl(videoId, type, params)` - Helper for video resources
 
 **Custom Errors:**
+
 - `CredentialsExpiredError`
 - `AccessDeniedError`
 - `NotFoundError`
 - `RetryExhaustedError`
 
 #### `/app/services/frame-cache.ts` (8.1 KB)
+
 **Purpose:** LRU cache for frame images
 **Features:**
+
 - Max size: 60MB
 - LRU eviction when over limit
 - Pin/unpin frames to prevent eviction
 - Blob URL management with automatic cleanup
 
 **Key Functions:**
+
 - `getFrame(frameIndex)` - Get cached frame
 - `setFrame(frameIndex, imageUrl, modulo, sizeBytes)` - Cache frame
 - `pinFrame(frameIndex)` - Prevent eviction
@@ -73,8 +83,10 @@ This infrastructure enables the frontend to access S3 (Wasabi) directly using te
 ### 2. State Management
 
 #### `/app/stores/s3-credentials-store.ts` (6.2 KB)
+
 **Purpose:** Zustand store for credentials
 **Features:**
+
 - State: credentials, loading, error, expiresAt
 - Auto-refresh timer (checks every minute)
 - Auth state subscription (clear on logout)
@@ -82,6 +94,7 @@ This infrastructure enables the frontend to access S3 (Wasabi) directly using te
 - Cross-tab sync via BroadcastChannel
 
 **Key Functions:**
+
 - `fetchCredentials()` - Fetch credentials
 - `refreshIfNeeded()` - Refresh if close to expiration
 - `clearCredentials()` - Clear on logout
@@ -90,14 +103,17 @@ This infrastructure enables the frontend to access S3 (Wasabi) directly using te
 ### 3. React Components
 
 #### `/app/components/S3Image.tsx` (7.7 KB)
+
 **Purpose:** S3-backed image component
 **Features:**
+
 - Automatic signed URL generation
 - Loading/error states with fallback
 - Preloading support
 - Frame cache integration (planned)
 
 **Props:**
+
 - `videoId` - Video ID
 - `path` - S3 path or path params
 - `alt` - Alt text
@@ -109,17 +125,21 @@ This infrastructure enables the frontend to access S3 (Wasabi) directly using te
 - `expiresIn` - URL expiration (default: 1 hour)
 
 **Helper:**
+
 - `preloadS3Image(videoId, path, expiresIn)` - Preload image
 
 #### `/app/components/S3Video.tsx` (6.7 KB)
+
 **Purpose:** S3-backed video component
 **Features:**
+
 - Automatic signed URL generation
 - Loading/error states with fallback
 - Support for autoplay, loop, muted, controls
 - Multiple source format support
 
 **Props:**
+
 - `videoId` - Video ID
 - `path` - S3 path or path params
 - `autoPlay` - Autoplay (default: false)
@@ -129,6 +149,7 @@ This infrastructure enables the frontend to access S3 (Wasabi) directly using te
 - Other props same as S3Image
 
 **Helper:**
+
 - `preloadS3Video(videoId, path, expiresIn)` - Preload video metadata
 
 ---
@@ -156,12 +177,14 @@ This infrastructure enables the frontend to access S3 (Wasabi) directly using te
 ## Edge Function Contract
 
 ### Endpoint
+
 ```
 GET /functions/v1/captionacc-s3-credentials
 Authorization: Bearer <supabase_jwt>
 ```
 
 ### Response
+
 ```json
 {
   "credentials": {
@@ -243,12 +266,14 @@ const path = buildS3Path({
 ## Integration Checklist
 
 ### Prerequisites
+
 - [ ] AWS SDK already installed (`@aws-sdk/client-s3`, `@aws-sdk/s3-request-presigner`) ✅
 - [ ] Supabase Edge Function deployed (`/functions/v1/captionacc-s3-credentials`)
 - [ ] Wasabi bucket configured with STS policies
 - [ ] Wasabi CORS configured for `app.captiona.cc`
 
 ### Integration Steps
+
 1. [ ] Call `initializeS3CredentialsStore()` in root component (e.g., `app/root.tsx`)
 2. [ ] Replace existing image proxy calls with `<S3Image>` component
 3. [ ] Replace existing video proxy calls with `<S3Video>` component
@@ -263,12 +288,14 @@ const path = buildS3Path({
 ## Testing Verification
 
 ### Unit Tests Needed
+
 - [ ] `s3-credentials.ts` - Credential caching and refresh logic
 - [ ] `s3-client.ts` - Retry logic and error handling
 - [ ] `frame-cache.ts` - LRU eviction and pinning
 - [ ] `s3-credentials-store.ts` - State management
 
 ### Integration Tests Needed
+
 - [ ] Download test image from S3
 - [ ] Generate signed URL
 - [ ] Credential auto-refresh before expiration
@@ -278,6 +305,7 @@ const path = buildS3Path({
 - [ ] S3Video component loads videos
 
 ### Manual Testing
+
 - [ ] Open multiple tabs, verify credentials sync
 - [ ] Wait for credential expiration, verify auto-refresh
 - [ ] Sign out, verify credentials cleared
@@ -331,12 +359,14 @@ const path = buildS3Path({
 ## Dependencies
 
 ### Existing (Already Installed)
+
 - `@aws-sdk/client-s3@^3.962.0` ✅
 - `@aws-sdk/s3-request-presigner@^3.962.0` ✅
 - `@supabase/supabase-js@^2.89.0` ✅
 - `zustand@^5.0.9` ✅
 
 ### New (None Required)
+
 All dependencies already installed.
 
 ---
@@ -385,33 +415,38 @@ All dependencies already installed.
 
 ## File Sizes
 
-| File | Size | Lines |
-|------|------|-------|
-| `services/s3-credentials.ts` | 7.9 KB | 280 |
-| `services/s3-client.ts` | 11 KB | 400 |
-| `services/frame-cache.ts` | 8.1 KB | 370 |
-| `stores/s3-credentials-store.ts` | 6.2 KB | 200 |
-| `components/S3Image.tsx` | 7.7 KB | 300 |
-| `components/S3Video.tsx` | 6.7 KB | 250 |
-| **Total** | **47.6 KB** | **1,800** |
+| File                             | Size        | Lines     |
+| -------------------------------- | ----------- | --------- |
+| `services/s3-credentials.ts`     | 7.9 KB      | 280       |
+| `services/s3-client.ts`          | 11 KB       | 400       |
+| `services/frame-cache.ts`        | 8.1 KB      | 370       |
+| `stores/s3-credentials-store.ts` | 6.2 KB      | 200       |
+| `components/S3Image.tsx`         | 7.7 KB      | 300       |
+| `components/S3Video.tsx`         | 6.7 KB      | 250       |
+| **Total**                        | **47.6 KB** | **1,800** |
 
 ---
 
 ## Troubleshooting
 
 ### Issue: Credentials not refreshing
+
 **Solution:** Ensure `initializeS3CredentialsStore()` is called in root component
 
 ### Issue: Multi-tab credentials not syncing
+
 **Solution:** Check if BroadcastChannel is supported (`'BroadcastChannel' in window`)
 
 ### Issue: Frame cache not evicting old frames
+
 **Solution:** Check if frames are pinned (`unpinFrame()` when done)
 
 ### Issue: S3Image/S3Video not loading
+
 **Solution:** Check browser console for errors, verify signed URL generation
 
 ### Issue: Type errors in path building
+
 **Solution:** Ensure all required path params are provided (e.g., `filename` for `full_frames`)
 
 ---
@@ -428,5 +463,6 @@ All dependencies already installed.
 ## Contact
 
 For questions or issues with this infrastructure, refer to:
+
 - Migration Plan: `docs/frontend-to-new-backend.md`
 - Track B: S3 Direct Access Layer (Phase 1.2)

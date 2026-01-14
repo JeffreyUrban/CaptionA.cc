@@ -19,7 +19,10 @@ import type { S3PathParams } from '~/services/s3-client'
 // Types
 // ============================================================================
 
-export interface S3VideoProps extends Omit<VideoHTMLAttributes<HTMLVideoElement>, 'src' | 'onLoad' | 'onError' | 'autoPlay' | 'loop' | 'muted' | 'controls'> {
+export interface S3VideoProps extends Omit<
+  VideoHTMLAttributes<HTMLVideoElement>,
+  'src' | 'onLoad' | 'onError' | 'autoPlay' | 'loop' | 'muted' | 'controls'
+> {
   /** Video ID */
   videoId: string
 
@@ -111,12 +114,7 @@ export function S3Video({
         }
 
         // Get signed URL
-        const url = await getVideoResourceUrl(
-          videoId,
-          pathParams.type,
-          pathParams,
-          expiresIn
-        )
+        const url = await getVideoResourceUrl(videoId, pathParams.type, pathParams, expiresIn)
 
         if (!cancelled) {
           setSignedUrl(url)
@@ -250,12 +248,7 @@ export async function preloadS3Video(
   }
 
   // Get signed URL
-  const url = await getVideoResourceUrl(
-    videoId,
-    pathParams.type,
-    pathParams,
-    expiresIn
-  )
+  const url = await getVideoResourceUrl(videoId, pathParams.type, pathParams, expiresIn)
 
   // Preload video metadata
   return new Promise((resolve, reject) => {

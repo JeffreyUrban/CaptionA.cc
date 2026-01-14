@@ -166,7 +166,9 @@ export class DatabaseLockManager {
 
     try {
       const { supabase } = await import('./supabase-client')
-      const { data: { session } } = await supabase.auth.getSession()
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
 
       if (session?.access_token) {
         headers.set('Authorization', `Bearer ${session.access_token}`)
@@ -416,11 +418,7 @@ export class DatabaseLockManager {
   /**
    * Start monitoring lock expiry.
    */
-  private startLockMonitor(
-    videoId: string,
-    dbName: DatabaseName,
-    expiresAt?: Date
-  ): void {
+  private startLockMonitor(videoId: string, dbName: DatabaseName, expiresAt?: Date): void {
     const lockKey = this.createLockKey(videoId, dbName)
 
     // Stop any existing monitor
@@ -499,7 +497,7 @@ export class DatabaseLockManager {
       if (status.state === 'granted') {
         const [videoId, dbName] = lockKey.split(':') as [string, DatabaseName]
         releasePromises.push(
-          this.releaseLock(videoId, dbName).catch((error) => {
+          this.releaseLock(videoId, dbName).catch(error => {
             console.warn(`[DatabaseLock] Failed to release lock ${lockKey}:`, error)
           })
         )
@@ -574,39 +572,27 @@ export function getLockManager(): DatabaseLockManager {
 /**
  * Check lock state for a database.
  */
-export async function checkLockState(
-  videoId: string,
-  dbName: DatabaseName
-): Promise<LockStatus> {
+export async function checkLockState(videoId: string, dbName: DatabaseName): Promise<LockStatus> {
   return getLockManager().checkLockState(videoId, dbName)
 }
 
 /**
  * Acquire a lock for a database.
  */
-export async function acquireLock(
-  videoId: string,
-  dbName: DatabaseName
-): Promise<LockStatus> {
+export async function acquireLock(videoId: string, dbName: DatabaseName): Promise<LockStatus> {
   return getLockManager().acquireLock(videoId, dbName)
 }
 
 /**
  * Release a lock for a database.
  */
-export async function releaseLock(
-  videoId: string,
-  dbName: DatabaseName
-): Promise<void> {
+export async function releaseLock(videoId: string, dbName: DatabaseName): Promise<void> {
   return getLockManager().releaseLock(videoId, dbName)
 }
 
 /**
  * Get current lock status from cache.
  */
-export function getLockStatus(
-  videoId: string,
-  dbName: DatabaseName
-): LockStatus | undefined {
+export function getLockStatus(videoId: string, dbName: DatabaseName): LockStatus | undefined {
   return getLockManager().getLockStatus(videoId, dbName)
 }

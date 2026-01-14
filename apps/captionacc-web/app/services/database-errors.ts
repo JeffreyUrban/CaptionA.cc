@@ -250,22 +250,34 @@ export function databaseInitError(dbName: string, cause?: unknown): DatabaseErro
 }
 
 export function downloadError(url: string, cause?: unknown): DatabaseError {
-  return createDatabaseError(DatabaseErrorCode.DOWNLOAD_FAILED, `Failed to download database from ${url}`, {
-    cause,
-    context: { url },
-  })
+  return createDatabaseError(
+    DatabaseErrorCode.DOWNLOAD_FAILED,
+    `Failed to download database from ${url}`,
+    {
+      cause,
+      context: { url },
+    }
+  )
 }
 
 export function decompressError(cause?: unknown): DatabaseError {
-  return createDatabaseError(DatabaseErrorCode.DECOMPRESS_FAILED, 'Failed to decompress database file', {
-    cause,
-  })
+  return createDatabaseError(
+    DatabaseErrorCode.DECOMPRESS_FAILED,
+    'Failed to decompress database file',
+    {
+      cause,
+    }
+  )
 }
 
 export function credentialsError(cause?: unknown): DatabaseError {
-  return createDatabaseError(DatabaseErrorCode.CREDENTIALS_FAILED, 'Failed to obtain S3 credentials', {
-    cause,
-  })
+  return createDatabaseError(
+    DatabaseErrorCode.CREDENTIALS_FAILED,
+    'Failed to obtain S3 credentials',
+    {
+      cause,
+    }
+  )
 }
 
 export function syncError(message: string, cause?: unknown): DatabaseError {
@@ -281,7 +293,9 @@ export function websocketClosedError(code: number, reason: string): DatabaseErro
 }
 
 export function websocketError(cause?: unknown): DatabaseError {
-  return createDatabaseError(DatabaseErrorCode.WEBSOCKET_ERROR, 'WebSocket connection error', { cause })
+  return createDatabaseError(DatabaseErrorCode.WEBSOCKET_ERROR, 'WebSocket connection error', {
+    cause,
+  })
 }
 
 export function syncTimeoutError(): DatabaseError {
@@ -297,7 +311,9 @@ export function versionConflictError(localVersion: number, serverVersion: number
 }
 
 export function lockDeniedError(holder?: string): DatabaseError {
-  const message = holder ? `Lock denied: currently held by ${holder}` : 'Lock denied: database is locked'
+  const message = holder
+    ? `Lock denied: currently held by ${holder}`
+    : 'Lock denied: database is locked'
   return createDatabaseError(DatabaseErrorCode.LOCK_DENIED, message, {
     recoverable: false,
     context: { holder },
@@ -309,15 +325,23 @@ export function lockExpiredError(): DatabaseError {
 }
 
 export function lockAcquireError(cause?: unknown): DatabaseError {
-  return createDatabaseError(DatabaseErrorCode.LOCK_ACQUIRE_FAILED, 'Failed to acquire database lock', {
-    cause,
-  })
+  return createDatabaseError(
+    DatabaseErrorCode.LOCK_ACQUIRE_FAILED,
+    'Failed to acquire database lock',
+    {
+      cause,
+    }
+  )
 }
 
 export function lockReleaseError(cause?: unknown): DatabaseError {
-  return createDatabaseError(DatabaseErrorCode.LOCK_RELEASE_FAILED, 'Failed to release database lock', {
-    cause,
-  })
+  return createDatabaseError(
+    DatabaseErrorCode.LOCK_RELEASE_FAILED,
+    'Failed to release database lock',
+    {
+      cause,
+    }
+  )
 }
 
 export function sessionTransferredError(newTabId?: string): DatabaseError {

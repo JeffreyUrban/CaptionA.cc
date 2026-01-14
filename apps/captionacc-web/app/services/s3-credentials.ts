@@ -190,16 +190,13 @@ async function fetchCredentialsFromAPI(): Promise<S3CredentialsResponse> {
     throw new Error('VITE_SUPABASE_URL environment variable not set')
   }
 
-  const response = await fetch(
-    `${supabaseUrl}/functions/v1/captionacc-s3-credentials`,
-    {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${jwt}`,
-        'Content-Type': 'application/json',
-      },
-    }
-  )
+  const response = await fetch(`${supabaseUrl}/functions/v1/captionacc-s3-credentials`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${jwt}`,
+      'Content-Type': 'application/json',
+    },
+  })
 
   if (!response.ok) {
     const errorText = await response.text()

@@ -88,13 +88,13 @@ export interface DatabaseVersion {
  * Minimal type definitions for the wa-sqlite API we use.
  */
 interface SQLiteAPI {
-  open_v2(
-    filename: string,
-    flags?: number,
-    vfs?: string
-  ): Promise<number>
+  open_v2(filename: string, flags?: number, vfs?: string): Promise<number>
   close(db: number): Promise<number>
-  exec(db: number, sql: string, callback?: (row: unknown[], columns: string[]) => void): Promise<number>
+  exec(
+    db: number,
+    sql: string,
+    callback?: (row: unknown[], columns: string[]) => void
+  ): Promise<number>
   prepare_v2(db: number, sql: string): Promise<{ stmt: number; sql: string }>
   bind(stmt: number, params: unknown[]): Promise<number>
   step(stmt: number): Promise<number>
@@ -234,7 +234,7 @@ export class CRSQLiteDatabase {
    * Used by the database store to clean up abandoned instances.
    */
   private static instances = new Map<string, WeakRef<CRSQLiteDatabase>>()
-  private static cleanupRegistry = new FinalizationRegistry<string>((instanceId) => {
+  private static cleanupRegistry = new FinalizationRegistry<string>(instanceId => {
     CRSQLiteDatabase.instances.delete(instanceId)
     console.log(`[CRSQLite] Database instance ${instanceId} garbage collected`)
   })
@@ -612,7 +612,9 @@ export function createInstanceId(videoId: string, dbName: DatabaseName): string 
 /**
  * Parse an instance ID back to its components.
  */
-export function parseInstanceId(instanceId: string): { videoId: string; dbName: DatabaseName } | null {
+export function parseInstanceId(
+  instanceId: string
+): { videoId: string; dbName: DatabaseName } | null {
   const parts = instanceId.split(':')
   if (parts.length !== 2) {
     return null

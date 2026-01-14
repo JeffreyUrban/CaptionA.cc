@@ -174,8 +174,8 @@ export function CacheStats() {
       <p>Total Entries: {stats.totalEntries}</p>
       <p>Pinned Entries: {stats.pinnedEntries}</p>
       <p>
-        Size: {(stats.totalSizeBytes / 1024 / 1024).toFixed(2)} MB / {(stats.maxSizeBytes / 1024 / 1024).toFixed(2)}{' '}
-        MB
+        Size: {(stats.totalSizeBytes / 1024 / 1024).toFixed(2)} MB /{' '}
+        {(stats.maxSizeBytes / 1024 / 1024).toFixed(2)} MB
       </p>
     </div>
   )

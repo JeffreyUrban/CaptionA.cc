@@ -14,15 +14,8 @@ import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 
 import { type DatabaseName, DATABASE_NAMES } from '~/config'
-import {
-  CRSQLiteDatabase,
-  type CRSQLiteChange,
-  createInstanceId,
-} from '~/services/crsqlite-client'
-import {
-  downloadDatabaseWithRetry,
-  type DownloadProgress,
-} from '~/services/database-loader'
+import { CRSQLiteDatabase, type CRSQLiteChange, createInstanceId } from '~/services/crsqlite-client'
+import { downloadDatabaseWithRetry, type DownloadProgress } from '~/services/database-loader'
 import {
   acquireLock,
   releaseLock,
@@ -31,20 +24,9 @@ import {
   type LockState,
   type LockHolder,
 } from '~/services/database-lock'
-import {
-  getSyncManager,
-  removeSyncManager,
-  type ConnectionState,
-} from '~/services/websocket-sync'
-import {
-  notifySubscribers,
-  clearSubscriptions,
-} from '~/services/database-subscriptions'
-import {
-  type DatabaseError,
-  logDatabaseError,
-  toDatabaseError,
-} from '~/services/database-errors'
+import { getSyncManager, removeSyncManager, type ConnectionState } from '~/services/websocket-sync'
+import { notifySubscribers, clearSubscriptions } from '~/services/database-subscriptions'
+import { type DatabaseError, logDatabaseError, toDatabaseError } from '~/services/database-errors'
 
 // =============================================================================
 // Types
@@ -173,10 +155,7 @@ export interface DatabaseStoreActions {
   ) => Promise<number>
 
   // State updates (internal)
-  setInstanceState: (
-    instanceId: string,
-    updates: Partial<DatabaseInstance>
-  ) => void
+  setInstanceState: (instanceId: string, updates: Partial<DatabaseInstance>) => void
   setActiveInstance: (instanceId: string | null) => void
   setSyncStatus: (instanceId: string, status: Partial<SyncStatus>) => void
   setLockStatus: (instanceId: string, status: LockStatus | null) => void
@@ -216,10 +195,7 @@ const initialSyncStatus: SyncStatus = {
   connectionState: 'disconnected',
 }
 
-function createInitialInstance(
-  videoId: string,
-  dbName: DatabaseName
-): DatabaseInstance {
+function createInitialInstance(videoId: string, dbName: DatabaseName): DatabaseInstance {
   return {
     videoId,
     dbName,
@@ -265,7 +241,7 @@ export const useDatabaseStore = create<DatabaseStore>()(
         instance = instance || createInitialInstance(videoId, dbName)
         instance.error = null
 
-        set((state) => ({
+        set(state => ({
           instances: { ...state.instances, [instanceId]: instance },
           activeInstanceId: instanceId,
         }))
@@ -276,7 +252,7 @@ export const useDatabaseStore = create<DatabaseStore>()(
             tenantId,
             videoId,
             dbName,
-            (progress) => {
+            progress => {
               get().setDownloadProgress(instanceId, progress)
               options.onProgress?.(progress)
             }
@@ -363,14 +339,12 @@ export const useDatabaseStore = create<DatabaseStore>()(
           }
 
           // Remove from state
-          set((state) => {
+          set(state => {
             const { [instanceId]: _removed, ...remaining } = state.instances
             return {
               instances: remaining,
               activeInstanceId:
-                state.activeInstanceId === instanceId
-                  ? null
-                  : state.activeInstanceId,
+                state.activeInstanceId === instanceId ? null : state.activeInstanceId,
             }
           })
 
@@ -384,7 +358,7 @@ export const useDatabaseStore = create<DatabaseStore>()(
 
       closeAllDatabases: async () => {
         const state = get()
-        const closePromises = Object.values(state.instances).map((instance) =>
+        const closePromises = Object.values(state.instances).map(instance =>
           get().closeDatabase(instance.videoId, instance.dbName)
         )
         await Promise.all(closePromises)
@@ -479,7 +453,7 @@ export const useDatabaseStore = create<DatabaseStore>()(
       // ===========================================================================
 
       setInstanceState: (instanceId, updates) => {
-        set((state) => {
+        set(state => {
           const instance = state.instances[instanceId]
           if (!instance) return state
 
@@ -492,12 +466,12 @@ export const useDatabaseStore = create<DatabaseStore>()(
         })
       },
 
-      setActiveInstance: (instanceId) => {
+      setActiveInstance: instanceId => {
         set({ activeInstanceId: instanceId })
       },
 
       setSyncStatus: (instanceId, status) => {
-        set((state) => {
+        set(state => {
           const instance = state.instances[instanceId]
           if (!instance) return state
 
@@ -543,7 +517,9 @@ export const useDatabaseStore = create<DatabaseStore>()(
         let authToken: string | undefined
         try {
           const { supabase } = await import('~/services/supabase-client')
-          const { data: { session } } = await supabase.auth.getSession()
+          const {
+            data: { session },
+          } = await supabase.auth.getSession()
           authToken = session?.access_token
         } catch {
           // Continue without auth
@@ -552,7 +528,7 @@ export const useDatabaseStore = create<DatabaseStore>()(
         // Create sync manager with handlers
         const store = get()
         const syncManager = getSyncManager(videoId, dbName, {
-          onStateChange: (state) => {
+          onStateChange: state => {
             store.setSyncStatus(instanceId, {
               connected: state === 'connected',
               connectionState: state,
@@ -574,7 +550,7 @@ export const useDatabaseStore = create<DatabaseStore>()(
               syncing: false,
             })
           },
-          onAck: (version) => {
+          onAck: version => {
             store.setInstanceState(instanceId, { version })
             store.setSyncStatus(instanceId, {
               pendingChanges: syncManager.pendingCount,
@@ -588,7 +564,7 @@ export const useDatabaseStore = create<DatabaseStore>()(
               canEdit: state === 'granted',
             })
           },
-          onSessionTransferred: (newTabId) => {
+          onSessionTransferred: newTabId => {
             // Handle session transfer
             console.log(`[DatabaseStore] Session transferred to tab: ${newTabId}`)
             store.setLockStatus(instanceId, {
@@ -596,7 +572,7 @@ export const useDatabaseStore = create<DatabaseStore>()(
               canEdit: false,
             })
           },
-          onError: (error) => {
+          onError: error => {
             logDatabaseError(error, '[DatabaseStore]')
             store.setError(instanceId, error)
           },
@@ -614,7 +590,7 @@ export const useDatabaseStore = create<DatabaseStore>()(
       name: 'database-store',
       storage: createJSONStorage(() => sessionStorage),
       // Only persist instance IDs, not actual database handles
-      partialize: (state) => ({
+      partialize: state => ({
         activeInstanceId: state.activeInstanceId,
         // Store instance metadata only
         instanceMeta: Object.fromEntries(
@@ -645,46 +621,31 @@ export function useDatabaseInstance(
   dbName: DatabaseName
 ): DatabaseInstance | null {
   const instanceId = createInstanceId(videoId, dbName)
-  return useDatabaseStore((state) => state.instances[instanceId] || null)
+  return useDatabaseStore(state => state.instances[instanceId] || null)
 }
 
 /**
  * Get sync status for a database.
  */
-export function useSyncStatus(
-  videoId: string,
-  dbName: DatabaseName
-): SyncStatus {
+export function useSyncStatus(videoId: string, dbName: DatabaseName): SyncStatus {
   const instanceId = createInstanceId(videoId, dbName)
-  return useDatabaseStore(
-    (state) => state.instances[instanceId]?.syncStatus || initialSyncStatus
-  )
+  return useDatabaseStore(state => state.instances[instanceId]?.syncStatus || initialSyncStatus)
 }
 
 /**
  * Get lock status for a database.
  */
-export function useLockStatus(
-  videoId: string,
-  dbName: DatabaseName
-): LockStatus | null {
+export function useLockStatus(videoId: string, dbName: DatabaseName): LockStatus | null {
   const instanceId = createInstanceId(videoId, dbName)
-  return useDatabaseStore(
-    (state) => state.instances[instanceId]?.lockStatus || null
-  )
+  return useDatabaseStore(state => state.instances[instanceId]?.lockStatus || null)
 }
 
 /**
  * Check if a database is ready for queries.
  */
-export function useIsDatabaseReady(
-  videoId: string,
-  dbName: DatabaseName
-): boolean {
+export function useIsDatabaseReady(videoId: string, dbName: DatabaseName): boolean {
   const instanceId = createInstanceId(videoId, dbName)
-  return useDatabaseStore(
-    (state) => state.instances[instanceId]?.ready || false
-  )
+  return useDatabaseStore(state => state.instances[instanceId]?.ready || false)
 }
 
 /**
@@ -695,20 +656,13 @@ export function useDownloadProgress(
   dbName: DatabaseName
 ): DownloadProgress | null {
   const instanceId = createInstanceId(videoId, dbName)
-  return useDatabaseStore(
-    (state) => state.instances[instanceId]?.downloadProgress || null
-  )
+  return useDatabaseStore(state => state.instances[instanceId]?.downloadProgress || null)
 }
 
 /**
  * Get the last error for a database.
  */
-export function useDatabaseError(
-  videoId: string,
-  dbName: DatabaseName
-): DatabaseError | null {
+export function useDatabaseError(videoId: string, dbName: DatabaseName): DatabaseError | null {
   const instanceId = createInstanceId(videoId, dbName)
-  return useDatabaseStore(
-    (state) => state.instances[instanceId]?.error || null
-  )
+  return useDatabaseStore(state => state.instances[instanceId]?.error || null)
 }

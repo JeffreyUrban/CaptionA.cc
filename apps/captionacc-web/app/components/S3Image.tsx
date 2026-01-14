@@ -19,7 +19,10 @@ import type { S3PathParams } from '~/services/s3-client'
 // Types
 // ============================================================================
 
-export interface S3ImageProps extends Omit<ImgHTMLAttributes<HTMLImageElement>, 'src' | 'alt' | 'onLoad' | 'onError'> {
+export interface S3ImageProps extends Omit<
+  ImgHTMLAttributes<HTMLImageElement>,
+  'src' | 'alt' | 'onLoad' | 'onError'
+> {
   /** Video ID */
   videoId: string
 
@@ -95,9 +98,7 @@ export function S3Image({
           } else if (path.includes('cropped_frames')) {
             // Parse cropped frames path
             // Example: cropped_frames_v2/modulo_16/chunk_0001.webm
-            const match = path.match(
-              /cropped_frames_v(\d+)\/modulo_(\d+)\/chunk_(\d+)\.webm/
-            )
+            const match = path.match(/cropped_frames_v(\d+)\/modulo_(\d+)\/chunk_(\d+)\.webm/)
             if (match && match[1] && match[2] && match[3]) {
               pathParams = {
                 videoId,
@@ -121,12 +122,7 @@ export function S3Image({
         }
 
         // Get signed URL
-        const url = await getVideoResourceUrl(
-          videoId,
-          pathParams.type,
-          pathParams,
-          expiresIn
-        )
+        const url = await getVideoResourceUrl(videoId, pathParams.type, pathParams, expiresIn)
 
         if (!cancelled) {
           setSignedUrl(url)
@@ -180,14 +176,7 @@ export function S3Image({
 
   if (error || !signedUrl) {
     if (fallbackSrc) {
-      return (
-        <img
-          src={fallbackSrc}
-          alt={alt}
-          className={className}
-          {...imgProps}
-        />
-      )
+      return <img src={fallbackSrc} alt={alt} className={className} {...imgProps} />
     }
 
     return (
@@ -250,9 +239,7 @@ export async function preloadS3Image(
         filename,
       }
     } else if (path.includes('cropped_frames')) {
-      const match = path.match(
-        /cropped_frames_v(\d+)\/modulo_(\d+)\/chunk_(\d+)\.webm/
-      )
+      const match = path.match(/cropped_frames_v(\d+)\/modulo_(\d+)\/chunk_(\d+)\.webm/)
       if (match && match[1] && match[2] && match[3]) {
         pathParams = {
           videoId,
@@ -275,12 +262,7 @@ export async function preloadS3Image(
   }
 
   // Get signed URL
-  const url = await getVideoResourceUrl(
-    videoId,
-    pathParams.type,
-    pathParams,
-    expiresIn
-  )
+  const url = await getVideoResourceUrl(videoId, pathParams.type, pathParams, expiresIn)
 
   // Preload image
   return new Promise((resolve, reject) => {
