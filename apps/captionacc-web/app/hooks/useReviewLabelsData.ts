@@ -274,7 +274,9 @@ function buildFrameInfos(potentialMislabels: PotentialMislabel[], videoId: strin
       captionBoxCount: frameMislabels.filter(m => m.userLabel === 'in').length,
       minConfidence,
       hasAnnotations: true,
-      imageUrl: `/api/full-frames/${encodeURIComponent(videoId)}/${frameIndex}.jpg`,
+      // Note: imageUrl is now handled client-side via S3 direct access
+      // Frontend should use S3Image component or generate signed URL from frameIndex
+      imageUrl: `s3://full_frames/frame_${String(frameIndex).padStart(4, '0')}.jpg`,
     }
   })
 }

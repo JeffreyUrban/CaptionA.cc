@@ -37,9 +37,12 @@
 import { useEffect, useRef } from 'react'
 
 import type { Annotation, Frame } from '~/types/caption-frame-extents'
+import { getObjectUrl, buildS3Path, getCurrentTenantId } from '~/services/s3-client'
 
 interface UseCaptionFrameExtentsFrameLoaderParams {
   videoId: string
+  tenantId: string | null // Tenant ID for S3 path building
+  croppedFramesVersion: number | null // Version of cropped frames to load
   currentFrameIndexRef: React.RefObject<number> // Pass ref, read inside effect
   jumpRequestedRef: React.RefObject<boolean> // True when user explicitly jumps (not scroll/drag)
   jumpTargetRef: React.RefObject<number | null> // Pending jump destination (null = no pending jump)
@@ -187,6 +190,63 @@ function markChunksAsRequested(
     }
     inFlight.add(chunkStart)
   }
+}
+
+/**
+ * Generate signed URLs for a batch of chunks using client-side S3 access.
+ * Replaces the backend /api/frames/batch-signed-urls endpoint.
+ */
+async function generateSignedUrlsForChunks(
+  tenantId: string,
+  videoId: string,
+  croppedFramesVersion: number,
+  batch: QueueChunk[]
+): Promise<
+  Array<{
+    chunkIndex: number
+    signedUrl: string
+    frameIndices: number[]
+  }>
+> {
+  const results: Array<{
+    chunkIndex: number
+    signedUrl: string
+    frameIndices: number[]
+  }> = []
+
+  for (const chunk of batch) {
+    const firstChunkFrame = chunk.frames[0]
+    if (firstChunkFrame === undefined) continue
+
+    const chunkSize = FRAMES_PER_CHUNK * chunk.modulo
+    const chunkIndex = Math.floor(firstChunkFrame / chunkSize) * chunkSize
+
+    try {
+      // Build S3 path for this chunk
+      const key = buildS3Path({
+        tenantId,
+        videoId,
+        type: 'cropped_frames',
+        croppedFramesVersion,
+        modulo: chunk.modulo,
+        chunkIndex,
+      })
+
+      // Generate signed URL (1 hour expiry)
+      const signedUrl = await getObjectUrl(key, 3600)
+
+      results.push({
+        chunkIndex,
+        signedUrl,
+        frameIndices: chunk.frames,
+      })
+    } catch (error) {
+      console.error(`Failed to generate signed URL for chunk ${chunkIndex}:`, error)
+      // Continue with other chunks even if one fails
+    }
+  }
+
+  return results
 }
 
 /**
@@ -489,6 +549,8 @@ function buildNextAnnotationQueue(
  */
 export function useCaptionFrameExtentsFrameLoader({
   videoId,
+  tenantId,
+  croppedFramesVersion,
   currentFrameIndexRef,
   jumpRequestedRef,
   jumpTargetRef,
@@ -503,7 +565,7 @@ export function useCaptionFrameExtentsFrameLoader({
   const lastPreloadedAnnotationIdRef = useRef<number | null>(null)
 
   useEffect(() => {
-    if (!isReady || !videoId || totalFrames === 0) return
+    if (!isReady || !videoId || totalFrames === 0 || !tenantId || !croppedFramesVersion) return
 
     let cancelled = false
     let lastLoadedFrame = -1000 // Track last frame we loaded around
@@ -529,8 +591,6 @@ export function useCaptionFrameExtentsFrameLoader({
       isLoading = true
       const targetFrameIndex = currentFrameIndex // Capture at start, not end
 
-      const encodedVideoId = encodeURIComponent(videoId)
-
       try {
         // If jumping, load exact frames around jump target FIRST, then navigate
         if (isJump && jumpTarget !== null && !isNaN(jumpTarget) && jumpTarget >= 0) {
@@ -551,23 +611,14 @@ export function useCaptionFrameExtentsFrameLoader({
             const batch = finestQueue.splice(0, MAX_CONCURRENT_REQUESTS)
             markChunksAsRequested(batch, requestedChunksRef.current)
 
-            const batchPromises = batch.map(async chunk => {
-              const indicesParam = chunk.frames.join(',')
-              const response = await fetch(
-                `/api/frames/${encodedVideoId}/batch-signed-urls?modulo=${chunk.modulo}&indices=${indicesParam}`
-              )
-              return response.json() as Promise<{
-                chunks: Array<{
-                  chunkIndex: number
-                  signedUrl: string
-                  frameIndices: number[]
-                }>
-              }>
-            })
+            // Generate signed URLs client-side using S3
+            const allChunks = await generateSignedUrlsForChunks(
+              tenantId,
+              videoId,
+              croppedFramesVersion,
+              batch
+            )
 
-            const results = await Promise.all(batchPromises)
-            // Flatten chunks from all responses
-            const allChunks = results.flatMap(r => r.chunks)
             await processLoadedChunks(allChunks, framesRef.current, 1)
             updateCacheAfterLoad(
               batch,
@@ -630,25 +681,13 @@ export function useCaptionFrameExtentsFrameLoader({
           // Mark chunks as requested IMMEDIATELY to prevent duplicate requests
           markChunksAsRequested(batch, requestedChunksRef.current)
 
-          // Load chunks concurrently
-          const batchPromises = batch.map(async chunk => {
-            const indicesParam = chunk.frames.join(',')
-            const response = await fetch(
-              `/api/frames/${encodedVideoId}/batch-signed-urls?modulo=${chunk.modulo}&indices=${indicesParam}`
-            )
-            return response.json() as Promise<{
-              chunks: Array<{
-                chunkIndex: number
-                signedUrl: string
-                frameIndices: number[]
-              }>
-            }>
-          })
-
-          const results = await Promise.all(batchPromises)
-
-          // Flatten chunks from all responses
-          const allChunks = results.flatMap(r => r.chunks)
+          // Generate signed URLs client-side using S3
+          const allChunks = await generateSignedUrlsForChunks(
+            tenantId,
+            videoId,
+            croppedFramesVersion,
+            batch
+          )
 
           // Update framesRef directly (RAF loop will pick up changes)
           await processLoadedChunks(allChunks, framesRef.current, batch[0]?.modulo ?? 1)
@@ -690,7 +729,6 @@ export function useCaptionFrameExtentsFrameLoader({
       isPreloading = true
 
       try {
-        const encodedVideoId = encodeURIComponent(videoId)
         const queue = buildNextAnnotationQueue(
           nextAnnotation,
           totalFrames,
@@ -716,22 +754,14 @@ export function useCaptionFrameExtentsFrameLoader({
           const batch = queue.splice(0, MAX_CONCURRENT_REQUESTS)
           markChunksAsRequested(batch, requestedChunksRef.current)
 
-          const batchPromises = batch.map(async chunk => {
-            const indicesParam = chunk.frames.join(',')
-            const response = await fetch(
-              `/api/frames/${encodedVideoId}/batch-signed-urls?modulo=${chunk.modulo}&indices=${indicesParam}`
-            )
-            return response.json() as Promise<{
-              chunks: Array<{
-                chunkIndex: number
-                signedUrl: string
-                frameIndices: number[]
-              }>
-            }>
-          })
+          // Generate signed URLs client-side using S3
+          const allChunks = await generateSignedUrlsForChunks(
+            tenantId,
+            videoId,
+            croppedFramesVersion,
+            batch
+          )
 
-          const results = await Promise.all(batchPromises)
-          const allChunks = results.flatMap(r => r.chunks)
           await processLoadedChunks(allChunks, framesRef.current, batch[0]?.modulo ?? 1)
           updateCacheAfterLoad(
             batch,
@@ -774,5 +804,13 @@ export function useCaptionFrameExtentsFrameLoader({
     // nextAnnotation and activeAnnotation ARE in deps:
     // - nextAnnotation: triggers immediate preload when next annotation changes
     // - activeAnnotation: updates cache pinning to protect current annotation frames
-  }, [totalFrames, videoId, isReady, nextAnnotation, activeAnnotation])
+  }, [
+    totalFrames,
+    videoId,
+    tenantId,
+    croppedFramesVersion,
+    isReady,
+    nextAnnotation,
+    activeAnnotation,
+  ])
 }
