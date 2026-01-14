@@ -142,7 +142,7 @@ export async function requireAnnotatePermission(request: Request, videoId: strin
   if (!permissions.canAnnotate) {
     throw new Response('Forbidden: Cannot annotate this video', {
       status: 403,
-      headers: { 'X-Reason': permissions.reason || 'Read-only' },
+      headers: { 'X-Reason': permissions.reason ?? 'Read-only' },
     })
   }
 }

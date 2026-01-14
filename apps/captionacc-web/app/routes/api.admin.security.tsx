@@ -26,9 +26,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
     }
 
     const url = new URL(request.url)
-    const view = url.searchParams.get('view') || 'critical'
-    const hoursBack = parseInt(url.searchParams.get('hours') || '24', 10)
-    const minutesBack = parseInt(url.searchParams.get('minutes') || '15', 10)
+    const view = url.searchParams.get('view') ?? 'critical'
+    const hoursBack = parseInt(url.searchParams.get('hours') ?? '24', 10)
+    const minutesBack = parseInt(url.searchParams.get('minutes') ?? '15', 10)
 
     const supabase = createServerSupabaseClient()
 
@@ -120,7 +120,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         return jsonResponse({
           view: 'user',
           userId,
-          summary: userSummary?.[0] || null,
+          summary: userSummary?.[0] ?? null,
         })
       }
 

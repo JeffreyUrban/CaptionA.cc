@@ -246,19 +246,17 @@ export async function navigateAnnotation(
 
       // If no confirmed/predicted annotation found, look for gaps with higher IDs
       // This allows navigating back to gaps the user was working on
-      if (!annotation) {
-        annotation = db
-          .prepare(
-            `
+      annotation ??= db
+        .prepare(
+          `
             SELECT * FROM captions
             WHERE id > ?
             AND boundary_state = 'gap'
             ORDER BY id ASC
             LIMIT 1
           `
-          )
-          .get(currentId) as AnnotationRow | undefined
-      }
+        )
+        .get(currentId) as AnnotationRow | undefined
 
       console.log(
         `[navigateAnnotation] Next query selected:`,

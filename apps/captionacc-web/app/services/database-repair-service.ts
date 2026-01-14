@@ -441,9 +441,7 @@ export async function repairAllDatabases(
           const tableName = tableMatch[1]
           const rowCount = parseInt(tableMatch[2], 10)
 
-          if (!tablesToRemove[tableName]) {
-            tablesToRemove[tableName] = { databases: 0, totalRows: 0 }
-          }
+          tablesToRemove[tableName] ??= { databases: 0, totalRows: 0 }
           tablesToRemove[tableName].databases++
           tablesToRemove[tableName].totalRows += rowCount
         }
@@ -452,9 +450,7 @@ export async function repairAllDatabases(
         const columnMatch = action.match(/Remove column: (\w+)\.(\w+)/)
         if (columnMatch?.[1] && columnMatch[2]) {
           const fullColumn = `${columnMatch[1]}.${columnMatch[2]}`
-          if (!columnsToRemove[fullColumn]) {
-            columnsToRemove[fullColumn] = { databases: 0 }
-          }
+          columnsToRemove[fullColumn] ??= { databases: 0 }
           columnsToRemove[fullColumn].databases++
         }
       }

@@ -324,7 +324,7 @@ export function getDatabaseStatusSummary(): StatusSummary {
     const info = getDatabaseInfo(dbPath)
 
     // Count by version
-    summary.byVersion[info.version] = (summary.byVersion[info.version] || 0) + 1
+    summary.byVersion[info.version] = (summary.byVersion[info.version] ?? 0) + 1
 
     // Count by health status
     summary.health[info.status]++
@@ -393,7 +393,7 @@ export function getDatabaseDetailedStatus(filters?: {
   }
 
   for (const info of databaseInfos) {
-    summary.byVersion[info.version] = (summary.byVersion[info.version] || 0) + 1
+    summary.byVersion[info.version] = (summary.byVersion[info.version] ?? 0) + 1
     summary.health[info.status]++
   }
 

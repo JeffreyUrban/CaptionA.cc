@@ -78,7 +78,7 @@ export function createServerSupabaseClient() {
   }
 
   const serviceRoleKey =
-    import.meta.env['VITE_SUPABASE_SERVICE_ROLE_KEY'] || LOCAL_SUPABASE_SERVICE_ROLE_KEY
+    import.meta.env['VITE_SUPABASE_SERVICE_ROLE_KEY'] ?? LOCAL_SUPABASE_SERVICE_ROLE_KEY
 
   return createClient<ProductionDatabase>(supabaseUrl, serviceRoleKey, {
     auth: {

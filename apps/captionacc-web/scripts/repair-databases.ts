@@ -121,7 +121,7 @@ function parseColumnDefinition(columnDef: string, columns: Map<string, ColumnDef
   if (!name) return
 
   // Extract type (second word, or default to TEXT)
-  const type = parts[1] || 'TEXT'
+  const type = parts[1] ?? 'TEXT'
 
   // Check for NOT NULL
   const notnull = columnDef.toUpperCase().includes('NOT NULL')

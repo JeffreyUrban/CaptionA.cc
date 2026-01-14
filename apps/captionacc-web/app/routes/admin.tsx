@@ -125,7 +125,7 @@ function DatabaseAdministration({
         const result = await response.json()
 
         if (!response.ok) {
-          alert(`Repair failed: ${result.error || 'Unknown error'}`)
+          alert(`Repair failed: ${result.error ?? 'Unknown error'}`)
           setRepairing(false)
           return
         }
@@ -200,7 +200,7 @@ function DatabaseAdministration({
           await loadDetails()
         }
       } else {
-        alert(`Repair failed: ${result.error || 'Unknown error'}`)
+        alert(`Repair failed: ${result.error ?? 'Unknown error'}`)
       }
     } catch (error) {
       console.error('Failed to repair databases:', error)
@@ -439,7 +439,7 @@ function DatabaseAdministration({
                           </div>
                           <div className="text-red-700 dark:text-red-400 ml-2 mt-1">
                             <div className="font-medium">Error:</div>
-                            <div className="ml-2">{r.error || 'Unknown error'}</div>
+                            <div className="ml-2">{r.error ?? 'Unknown error'}</div>
                           </div>
                           {r.actions.length > 0 && (
                             <div className="text-red-600 dark:text-red-500 ml-2 mt-1">
@@ -493,7 +493,7 @@ function DatabaseAdministration({
                       {db.videoId.slice(0, 8)}...
                     </td>
                     <td className="py-2 truncate max-w-[200px] text-gray-900 dark:text-gray-300">
-                      {db.displayPath || '—'}
+                      {db.displayPath ?? '—'}
                     </td>
                     <td className="py-2 text-center text-gray-900 dark:text-gray-300">
                       {db.versionLabel}

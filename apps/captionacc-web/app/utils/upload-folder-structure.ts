@@ -86,7 +86,7 @@ async function willHaveSingleFile(
     if (!response.ok) return newFileCount === 1 // Assume folder doesn't exist
 
     const data = await response.json()
-    const existingCount = data.fileCount || 0
+    const existingCount = data.fileCount ?? 0
 
     return existingCount + newFileCount === 1
   } catch {

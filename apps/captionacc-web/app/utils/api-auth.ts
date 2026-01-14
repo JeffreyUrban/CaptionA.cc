@@ -49,7 +49,7 @@ export async function requireAuth(request: Request): Promise<AuthContext> {
 
   if (error || !user) {
     // Log authentication failure
-    await logAuthFailure(request, error?.message || 'No user session')
+    await logAuthFailure(request, error?.message ?? 'No user session')
     throw new Response('Unauthorized', { status: 401 })
   }
 

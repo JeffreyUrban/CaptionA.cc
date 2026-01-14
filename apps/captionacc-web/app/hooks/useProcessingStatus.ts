@@ -90,9 +90,7 @@ export function useProcessingStatus(
     void checkStatus()
 
     // Set up polling
-    if (!intervalRef.current) {
-      intervalRef.current = setInterval(() => void checkStatus(), pollInterval)
-    }
+    intervalRef.current ??= setInterval(() => void checkStatus(), pollInterval)
 
     return () => {
       if (intervalRef.current) {

@@ -136,7 +136,7 @@ async function processVideo(
 }
 
 async function main() {
-  const dataDir = process.argv[2] || '../../local/data'
+  const dataDir = process.argv[2] ?? '../../local/data'
 
   console.log(`Searching for video databases in: ${dataDir}`)
 

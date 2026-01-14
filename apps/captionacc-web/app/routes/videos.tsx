@@ -71,9 +71,9 @@ export async function loader() {
   const videoList: VideoInfo[] =
     videos?.map(v => ({
       videoId: v.id,
-      displayPath: v.display_path || v.filename || v.id,
-      isDemo: v.is_demo || false,
-    })) || []
+      displayPath: v.display_path ?? v.filename ?? v.id,
+      isDemo: v.is_demo ?? false,
+    })) ?? []
 
   // Build tree structure from videos only (without stats - will be loaded client-side)
   const tree = buildVideoTree(videoList)

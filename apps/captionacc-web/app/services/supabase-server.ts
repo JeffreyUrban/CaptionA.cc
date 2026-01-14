@@ -32,13 +32,13 @@ export function createSupabaseServerClient(request: Request, responseHeaders: He
           .split(';')
           .map(cookie => {
             const [name, ...valueParts] = cookie.trim().split('=')
-            return { name: name || '', value: valueParts.join('=') || '' }
+            return { name: name ?? '', value: valueParts.join('=') ?? '' }
           })
           .filter(cookie => cookie.name && cookie.value)
       },
       setAll(cookiesToSet) {
         cookiesToSet.forEach(({ name, value, options }) => {
-          const cookieString = `${name}=${value}; Path=${options?.path || '/'}; Max-Age=${options?.maxAge || 3600}; SameSite=${options?.sameSite || 'Lax'}${options?.secure ? '; Secure' : ''}${options?.httpOnly ? '; HttpOnly' : ''}`
+          const cookieString = `${name}=${value}; Path=${options?.path ?? '/'}; Max-Age=${options?.maxAge ?? 3600}; SameSite=${options?.sameSite ?? 'Lax'}${options?.secure ? '; Secure' : ''}${options?.httpOnly ? '; HttpOnly' : ''}`
           responseHeaders.append('Set-Cookie', cookieString)
         })
       },
