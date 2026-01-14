@@ -162,12 +162,17 @@ class UploadManager {
         },
         onError: error => {
           // Update status with error message (but keep trying if retry logic continues)
-          console.warn(`[UploadManager] Upload error for ${uploadMetadata.relativePath}:`, error.message)
+          console.warn(
+            `[UploadManager] Upload error for ${uploadMetadata.relativePath}:`,
+            error.message
+          )
         },
       })
 
       // Upload successful
-      console.log(`[UploadManager] Upload complete for ${uploadMetadata.relativePath}, video ID: ${result.videoId}`)
+      console.log(
+        `[UploadManager] Upload complete for ${uploadMetadata.relativePath}, video ID: ${result.videoId}`
+      )
 
       // Move to completed uploads
       store.completeUpload(uploadId, result.videoId)
@@ -253,7 +258,9 @@ class UploadManager {
       return
     }
 
-    console.log(`[UploadManager] Resuming upload ${uploadMetadata.fileName} (will restart from beginning)`)
+    console.log(
+      `[UploadManager] Resuming upload ${uploadMetadata.fileName} (will restart from beginning)`
+    )
 
     // Store file reference
     this.uploadFiles.set(uploadId, file)

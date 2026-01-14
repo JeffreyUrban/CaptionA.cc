@@ -332,9 +332,7 @@ export async function getObjectUrl(key: string, expiresIn = 3600): Promise<strin
 /**
  * Get object metadata (without downloading content)
  */
-export async function headObject(
-  key: string
-): Promise<{
+export async function headObject(key: string): Promise<{
   contentLength: number
   contentType: string | undefined
   lastModified: Date | undefined

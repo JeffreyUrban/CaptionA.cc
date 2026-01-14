@@ -89,9 +89,7 @@ async function requestPresignedUrl(
 
   if (!response.ok) {
     const errorText = await response.text()
-    throw new Error(
-      `Failed to get presigned URL (${response.status}): ${errorText}`
-    )
+    throw new Error(`Failed to get presigned URL (${response.status}): ${errorText}`)
   }
 
   const data = (await response.json()) as PresignedUploadResponse
@@ -151,9 +149,7 @@ function uploadToS3(
         console.log('[S3Upload] Upload to S3 completed successfully')
         resolve()
       } else {
-        reject(
-          new Error(`S3 upload failed with status ${xhr.status}: ${xhr.statusText}`)
-        )
+        reject(new Error(`S3 upload failed with status ${xhr.status}: ${xhr.statusText}`))
       }
     })
 
@@ -213,15 +209,12 @@ export async function uploadFileToS3(
   const { file, filename, contentType, folderPath, onProgress, onError, signal } = options
 
   try {
-    console.log(`[S3Upload] Starting upload for ${filename} (attempt ${retryCount + 1}/${MAX_RETRIES + 1})`)
+    console.log(
+      `[S3Upload] Starting upload for ${filename} (attempt ${retryCount + 1}/${MAX_RETRIES + 1})`
+    )
 
     // Step 1: Request presigned URL
-    const presignedData = await requestPresignedUrl(
-      filename,
-      contentType,
-      file.size,
-      folderPath
-    )
+    const presignedData = await requestPresignedUrl(filename, contentType, file.size, folderPath)
 
     // Check for cancellation before upload
     if (signal?.aborted) {
@@ -272,7 +265,10 @@ export async function uploadFileToS3(
       return uploadFileToS3(options, retryCount + 1)
     } else {
       // Max retries exceeded or non-retryable error
-      console.error(`[S3Upload] Upload failed for ${filename} after ${retryCount + 1} attempts:`, err)
+      console.error(
+        `[S3Upload] Upload failed for ${filename} after ${retryCount + 1} attempts:`,
+        err
+      )
 
       if (onError) {
         onError(err)

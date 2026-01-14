@@ -80,13 +80,7 @@ export interface UploadStore {
   addUpload: (
     upload: Omit<
       ActiveUpload,
-      | 'id'
-      | 'createdAt'
-      | 'startedAt'
-      | 'bytesUploaded'
-      | 'progress'
-      | 'status'
-      | 'error'
+      'id' | 'createdAt' | 'startedAt' | 'bytesUploaded' | 'progress' | 'status' | 'error'
     >
   ) => string
   updateProgress: (id: string, bytesUploaded: number, progress: number) => void
