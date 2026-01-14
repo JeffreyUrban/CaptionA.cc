@@ -13,6 +13,7 @@ import { useCaptionFrameExtentsKeyboardShortcuts } from './useCaptionFrameExtent
 import { useVideoMetadata } from './useVideoMetadata'
 import { useVideoTouched } from './useVideoTouched'
 import { useWorkflowProgress } from './useWorkflowProgress'
+import { supabase } from '~/services/supabase-client'
 
 import type { CaptionFrameExtentsDisplayState, Annotation } from '~/caption-frame-extents'
 import {
@@ -67,6 +68,10 @@ interface useCaptionFrameExtentsWorkflowStateReturn {
   jumpToFrame: () => Promise<void>
   activateCurrentFrameAnnotation: () => Promise<void>
   navigateFrame: (delta: number) => void
+
+  // Database state
+  isReady: boolean
+  canEdit: boolean
 }
 
 export function useCaptionFrameExtentsWorkflowState({
@@ -74,6 +79,39 @@ export function useCaptionFrameExtentsWorkflowState({
 }: useCaptionFrameExtentsWorkflowStateParams): useCaptionFrameExtentsWorkflowStateReturn {
   // Load video metadata and workflow progress
   const { metadata, loading: isLoadingMetadata } = useVideoMetadata(videoId)
+
+  // Tenant ID and cropped frames version from Supabase
+  const [tenantId, setTenantId] = useState<string | null>(null)
+  const [croppedFramesVersion, setCroppedFramesVersion] = useState<number | null>(null)
+
+  // Fetch tenant ID and cropped frames version from Supabase
+  useEffect(() => {
+    if (!videoId) return
+
+    const fetchVideoMeta = async () => {
+      try {
+        const { data: videoMeta, error } = await supabase
+          .from('videos')
+          .select('tenant_id, current_cropped_frames_version')
+          .eq('id', videoId)
+          .single()
+
+        if (error) {
+          console.error('Failed to fetch video metadata:', error)
+          return
+        }
+
+        if (videoMeta) {
+          setTenantId(videoMeta.tenant_id)
+          setCroppedFramesVersion(videoMeta.current_cropped_frames_version)
+        }
+      } catch (err) {
+        console.error('Error fetching video metadata:', err)
+      }
+    }
+
+    void fetchVideoMeta()
+  }, [videoId])
 
   // Track if we've initialized the starting frame position
   const [isInitialized, setIsInitialized] = useState(false)
@@ -107,9 +145,10 @@ export function useCaptionFrameExtentsWorkflowState({
   // Create framesRef in parent to break circular dependency
   const framesRef = useRef<Map<number, import('~/caption-frame-extents').Frame>>(new Map())
 
-  // Core hooks
+  // Core hooks with tenant ID for database initialization
   const annotationData = useCaptionFrameExtentsAnnotationData({
     videoId,
+    tenantId: tenantId ?? undefined,
     jumpRequestedRef,
     jumpTargetRef,
     updateProgress,
@@ -133,12 +172,14 @@ export function useCaptionFrameExtentsWorkflowState({
   // Frame loader hook (only starts after initial position is set)
   useCaptionFrameExtentsFrameLoader({
     videoId,
+    tenantId,
+    croppedFramesVersion,
     currentFrameIndexRef, // Pass ref itself, not .current value
     jumpRequestedRef, // Signal when user explicitly jumps
     jumpTargetRef, // Pending jump destination
     totalFrames,
     framesRef,
-    isReady: !isLoadingMetadata && isInitialized,
+    isReady: !isLoadingMetadata && isInitialized && !!tenantId && croppedFramesVersion !== null,
     activeAnnotation: annotationData.activeAnnotationRef.current,
     nextAnnotation: annotationData.nextAnnotationRef.current,
   })
@@ -390,5 +431,8 @@ export function useCaptionFrameExtentsWorkflowState({
     jumpToFrame,
     activateCurrentFrameAnnotation,
     navigateFrame,
+    // Database state
+    isReady: annotationData.isReady,
+    canEdit: annotationData.canEdit,
   }
 }

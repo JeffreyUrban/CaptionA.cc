@@ -562,3 +562,471 @@ export async function getFrameIndices(db: CRSQLiteDatabase): Promise<number[]> {
   )
   return result.rows.map(row => row.frame_index)
 }
+
+// =============================================================================
+// Caption Database Types
+// =============================================================================
+
+/**
+ * Caption frame extent state values.
+ */
+export type CaptionFrameExtentState = 'predicted' | 'confirmed' | 'gap' | 'issue'
+
+/**
+ * Text status values.
+ */
+export type TextStatus = 'valid_caption' | 'no_caption' | 'illegible' | 'non_text' | 'partial'
+
+/**
+ * Raw row from caption_frame_extents table.
+ */
+export interface CaptionFrameExtentRow {
+  id: number
+  start_frame_index: number
+  end_frame_index: number
+  caption_frame_extents_state: CaptionFrameExtentState
+  caption_frame_extents_pending: number
+  caption_frame_extents_updated_at: string | null
+  text: string | null
+  text_pending: number
+  text_status: TextStatus | null
+  text_notes: string | null
+  caption_ocr: string | null
+  text_updated_at: string | null
+  created_at: string
+}
+
+/**
+ * Raw row from video_preferences table.
+ */
+export interface VideoPreferencesRow {
+  id: number
+  text_size: number | null
+  padding_scale: number | null
+  text_anchor: TextAnchor | null
+}
+
+/**
+ * Caption queue annotation for list display.
+ */
+export interface CaptionQueueAnnotation {
+  id: number
+  start_frame_index: number
+  end_frame_index: number
+  caption_frame_extents_state: CaptionFrameExtentState
+  text: string | null
+  text_pending: number
+  text_status: TextStatus | null
+  created_at: string
+}
+
+/**
+ * Full caption annotation data.
+ */
+export interface CaptionAnnotationData {
+  id: number
+  start_frame_index: number
+  end_frame_index: number
+  caption_frame_extents_state: CaptionFrameExtentState
+  caption_frame_extents_pending: number
+  caption_frame_extents_updated_at: string | null
+  text: string | null
+  text_pending: number
+  text_status: TextStatus | null
+  text_notes: string | null
+  caption_ocr: string | null
+  text_updated_at: string | null
+  created_at: string
+}
+
+/**
+ * Video preferences for display.
+ */
+export interface VideoPreferencesResult {
+  textSize: number
+  paddingScale: number
+  textAnchor: TextAnchor
+}
+
+/**
+ * Caption queue result with progress info.
+ */
+export interface CaptionQueueResult {
+  annotations: CaptionQueueAnnotation[]
+  total: number
+  completed: number
+  pending: number
+}
+
+/**
+ * Caption frame extents queue result for navigation.
+ */
+export interface CaptionFrameExtentsQueueResult {
+  annotations: CaptionAnnotationData[]
+  total: number
+  completed: number
+  pending: number
+}
+
+// =============================================================================
+// Caption Database Queries
+// =============================================================================
+
+/**
+ * Get text annotation queue - items needing text annotation.
+ * Returns annotations where text is pending (text_status is null or text is null).
+ */
+export async function getTextAnnotationQueue(db: CRSQLiteDatabase): Promise<CaptionQueueResult> {
+  // Get pending annotations (need text annotation)
+  const pendingResult = await db.query<CaptionFrameExtentRow>(
+    `SELECT * FROM caption_frame_extents
+     WHERE (text_status IS NULL OR text IS NULL)
+       AND caption_frame_extents_state IN ('confirmed', 'predicted')
+     ORDER BY start_frame_index`
+  )
+
+  // Get total count for all workable annotations
+  const totalResult = await db.query<{ count: number }>(
+    `SELECT COUNT(*) as count FROM caption_frame_extents
+     WHERE caption_frame_extents_state IN ('confirmed', 'predicted')`
+  )
+
+  // Get completed count
+  const completedResult = await db.query<{ count: number }>(
+    `SELECT COUNT(*) as count FROM caption_frame_extents
+     WHERE caption_frame_extents_state IN ('confirmed', 'predicted')
+       AND text_status IS NOT NULL AND text IS NOT NULL`
+  )
+
+  const total = totalResult.rows[0]?.count ?? 0
+  const completed = completedResult.rows[0]?.count ?? 0
+
+  return {
+    annotations: pendingResult.rows.map(row => ({
+      id: row.id,
+      start_frame_index: row.start_frame_index,
+      end_frame_index: row.end_frame_index,
+      caption_frame_extents_state: row.caption_frame_extents_state,
+      text: row.text,
+      text_pending: row.text_pending,
+      text_status: row.text_status,
+      created_at: row.created_at,
+    })),
+    total,
+    completed,
+    pending: pendingResult.rows.length,
+  }
+}
+
+/**
+ * Get caption frame extents queue - items needing frame extent annotation.
+ * Returns annotations that are workable (predicted or gap state).
+ */
+export async function getCaptionFrameExtentsQueue(
+  db: CRSQLiteDatabase,
+  options?: { startFrame?: number; endFrame?: number; workable?: boolean; limit?: number }
+): Promise<CaptionFrameExtentsQueueResult> {
+  let whereClause = '1=1'
+  const params: unknown[] = []
+
+  if (options?.startFrame !== undefined) {
+    whereClause += ' AND end_frame_index >= ?'
+    params.push(options.startFrame)
+  }
+
+  if (options?.endFrame !== undefined) {
+    whereClause += ' AND start_frame_index <= ?'
+    params.push(options.endFrame)
+  }
+
+  if (options?.workable) {
+    whereClause += ` AND caption_frame_extents_state IN ('predicted', 'gap')`
+  }
+
+  let sql = `SELECT * FROM caption_frame_extents WHERE ${whereClause} ORDER BY start_frame_index`
+  if (options?.limit) {
+    sql += ` LIMIT ?`
+    params.push(options.limit)
+  }
+
+  const result = await db.query<CaptionFrameExtentRow>(sql, params)
+
+  // Get total count
+  const totalResult = await db.query<{ count: number }>(
+    `SELECT COUNT(*) as count FROM caption_frame_extents`
+  )
+
+  // Get completed count (confirmed state)
+  const completedResult = await db.query<{ count: number }>(
+    `SELECT COUNT(*) as count FROM caption_frame_extents
+     WHERE caption_frame_extents_state = 'confirmed'`
+  )
+
+  // Get pending count (workable items)
+  const pendingResult = await db.query<{ count: number }>(
+    `SELECT COUNT(*) as count FROM caption_frame_extents
+     WHERE caption_frame_extents_state IN ('predicted', 'gap')`
+  )
+
+  return {
+    annotations: result.rows,
+    total: totalResult.rows[0]?.count ?? 0,
+    completed: completedResult.rows[0]?.count ?? 0,
+    pending: pendingResult.rows[0]?.count ?? 0,
+  }
+}
+
+/**
+ * Get a single annotation by ID.
+ */
+export async function getCaptionAnnotation(
+  db: CRSQLiteDatabase,
+  annotationId: number
+): Promise<CaptionAnnotationData | null> {
+  const result = await db.query<CaptionFrameExtentRow>(
+    `SELECT * FROM caption_frame_extents WHERE id = ?`,
+    [annotationId]
+  )
+  return result.rows[0] ?? null
+}
+
+/**
+ * Get annotations for a frame range.
+ */
+export async function getCaptionAnnotationsForRange(
+  db: CRSQLiteDatabase,
+  startFrame: number,
+  endFrame: number
+): Promise<CaptionAnnotationData[]> {
+  const result = await db.query<CaptionFrameExtentRow>(
+    `SELECT * FROM caption_frame_extents
+     WHERE start_frame_index <= ? AND end_frame_index >= ?
+     ORDER BY start_frame_index`,
+    [endFrame, startFrame]
+  )
+  return result.rows
+}
+
+/**
+ * Update annotation text, status, and notes.
+ */
+export async function updateCaptionAnnotationText(
+  db: CRSQLiteDatabase,
+  annotationId: number,
+  text: string,
+  textStatus: TextStatus,
+  textNotes: string
+): Promise<number> {
+  const now = new Date().toISOString()
+  return db.exec(
+    `UPDATE caption_frame_extents
+     SET text = ?, text_status = ?, text_notes = ?, text_updated_at = ?, text_pending = 0
+     WHERE id = ?`,
+    [text, textStatus, textNotes, now, annotationId]
+  )
+}
+
+/**
+ * Update annotation frame extents and state.
+ */
+export async function updateCaptionFrameExtents(
+  db: CRSQLiteDatabase,
+  annotationId: number,
+  startFrameIndex: number,
+  endFrameIndex: number,
+  state: CaptionFrameExtentState
+): Promise<number> {
+  const now = new Date().toISOString()
+  return db.exec(
+    `UPDATE caption_frame_extents
+     SET start_frame_index = ?, end_frame_index = ?,
+         caption_frame_extents_state = ?, caption_frame_extents_updated_at = ?,
+         caption_frame_extents_pending = 0
+     WHERE id = ?`,
+    [startFrameIndex, endFrameIndex, state, now, annotationId]
+  )
+}
+
+/**
+ * Create a new annotation (gap fill or split).
+ */
+export async function createCaptionAnnotation(
+  db: CRSQLiteDatabase,
+  startFrameIndex: number,
+  endFrameIndex: number,
+  state: CaptionFrameExtentState = 'gap'
+): Promise<number> {
+  const now = new Date().toISOString()
+  return db.exec(
+    `INSERT INTO caption_frame_extents
+     (start_frame_index, end_frame_index, caption_frame_extents_state,
+      caption_frame_extents_pending, created_at)
+     VALUES (?, ?, ?, 1, ?)`,
+    [startFrameIndex, endFrameIndex, state, now]
+  )
+}
+
+/**
+ * Delete an annotation.
+ */
+export async function deleteCaptionAnnotation(
+  db: CRSQLiteDatabase,
+  annotationId: number
+): Promise<number> {
+  return db.exec(`DELETE FROM caption_frame_extents WHERE id = ?`, [annotationId])
+}
+
+/**
+ * Get video preferences from captions.db.
+ */
+export async function getVideoPreferences(db: CRSQLiteDatabase): Promise<VideoPreferencesResult> {
+  const result = await db.query<VideoPreferencesRow>(`SELECT * FROM video_preferences LIMIT 1`)
+
+  const row = result.rows[0]
+  return {
+    textSize: row?.text_size ?? 3.0,
+    paddingScale: row?.padding_scale ?? 0.75,
+    textAnchor: row?.text_anchor ?? 'left',
+  }
+}
+
+/**
+ * Update video preferences in captions.db.
+ */
+export async function updateVideoPreferences(
+  db: CRSQLiteDatabase,
+  preferences: Partial<VideoPreferencesResult>
+): Promise<number> {
+  // Check if row exists
+  const existingResult = await db.query<{ id: number }>(`SELECT id FROM video_preferences LIMIT 1`)
+
+  if (existingResult.rows.length === 0) {
+    // Insert new row
+    return db.exec(
+      `INSERT INTO video_preferences (text_size, padding_scale, text_anchor) VALUES (?, ?, ?)`,
+      [
+        preferences.textSize ?? 3.0,
+        preferences.paddingScale ?? 0.75,
+        preferences.textAnchor ?? 'left',
+      ]
+    )
+  }
+
+  // Build update query dynamically
+  const updates: string[] = []
+  const params: unknown[] = []
+
+  if (preferences.textSize !== undefined) {
+    updates.push('text_size = ?')
+    params.push(preferences.textSize)
+  }
+  if (preferences.paddingScale !== undefined) {
+    updates.push('padding_scale = ?')
+    params.push(preferences.paddingScale)
+  }
+  if (preferences.textAnchor !== undefined) {
+    updates.push('text_anchor = ?')
+    params.push(preferences.textAnchor)
+  }
+
+  if (updates.length === 0) {
+    return 0
+  }
+
+  return db.exec(`UPDATE video_preferences SET ${updates.join(', ')}`, params)
+}
+
+/**
+ * Get progress stats for caption workflow.
+ */
+export async function getCaptionWorkflowProgress(
+  db: CRSQLiteDatabase
+): Promise<{ total: number; completed: number; pending: number; progress: number }> {
+  const totalResult = await db.query<{ count: number }>(
+    `SELECT COUNT(*) as count FROM caption_frame_extents
+     WHERE caption_frame_extents_state IN ('confirmed', 'predicted')`
+  )
+
+  const completedResult = await db.query<{ count: number }>(
+    `SELECT COUNT(*) as count FROM caption_frame_extents
+     WHERE caption_frame_extents_state IN ('confirmed', 'predicted')
+       AND text_status IS NOT NULL`
+  )
+
+  const total = totalResult.rows[0]?.count ?? 0
+  const completed = completedResult.rows[0]?.count ?? 0
+
+  return {
+    total,
+    completed,
+    pending: total - completed,
+    progress: total > 0 ? (completed / total) * 100 : 0,
+  }
+}
+
+/**
+ * Get progress stats for caption frame extents workflow.
+ */
+export async function getCaptionFrameExtentsWorkflowProgress(
+  db: CRSQLiteDatabase
+): Promise<{ total: number; completed: number; pending: number; progress: number }> {
+  const totalResult = await db.query<{ count: number }>(
+    `SELECT COUNT(*) as count FROM caption_frame_extents`
+  )
+
+  const completedResult = await db.query<{ count: number }>(
+    `SELECT COUNT(*) as count FROM caption_frame_extents
+     WHERE caption_frame_extents_state = 'confirmed'`
+  )
+
+  const pendingResult = await db.query<{ count: number }>(
+    `SELECT COUNT(*) as count FROM caption_frame_extents
+     WHERE caption_frame_extents_state IN ('predicted', 'gap')`
+  )
+
+  const total = totalResult.rows[0]?.count ?? 0
+  const completed = completedResult.rows[0]?.count ?? 0
+
+  return {
+    total,
+    completed,
+    pending: pendingResult.rows[0]?.count ?? 0,
+    progress: total > 0 ? (completed / total) * 100 : 0,
+  }
+}
+
+/**
+ * Handle overlap resolution when updating frame extents.
+ * This creates gaps for any frames that are no longer covered.
+ */
+export async function resolveFrameExtentOverlaps(
+  db: CRSQLiteDatabase,
+  annotationId: number,
+  newStartFrame: number,
+  newEndFrame: number
+): Promise<CaptionAnnotationData[]> {
+  // Get the current annotation
+  const current = await getCaptionAnnotation(db, annotationId)
+  if (!current) return []
+
+  const createdGaps: CaptionAnnotationData[] = []
+  const oldStart = current.start_frame_index
+  const oldEnd = current.end_frame_index
+
+  // Check if we need to create gaps
+  // If new start is after old start, create gap for [oldStart, newStart-1]
+  if (newStartFrame > oldStart) {
+    await createCaptionAnnotation(db, oldStart, newStartFrame - 1, 'gap')
+    const newGap = await getCaptionAnnotationsForRange(db, oldStart, newStartFrame - 1)
+    createdGaps.push(...newGap.filter(g => g.caption_frame_extents_state === 'gap'))
+  }
+
+  // If new end is before old end, create gap for [newEnd+1, oldEnd]
+  if (newEndFrame < oldEnd) {
+    await createCaptionAnnotation(db, newEndFrame + 1, oldEnd, 'gap')
+    const newGap = await getCaptionAnnotationsForRange(db, newEndFrame + 1, oldEnd)
+    createdGaps.push(...newGap.filter(g => g.caption_frame_extents_state === 'gap'))
+  }
+
+  return createdGaps
+}

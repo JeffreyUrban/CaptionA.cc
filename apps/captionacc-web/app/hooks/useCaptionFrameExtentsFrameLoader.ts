@@ -559,7 +559,7 @@ export function useCaptionFrameExtentsFrameLoader({
   isReady,
   activeAnnotation,
   nextAnnotation,
-}: useCaptionFrameExtentsFrameLoaderParams): void {
+}: UseCaptionFrameExtentsFrameLoaderParams): void {
   const loadedChunksRef = useRef<Map<number, number[]>>(new Map())
   const requestedChunksRef = useRef<Map<number, Set<number>>>(new Map())
   const lastPreloadedAnnotationIdRef = useRef<number | null>(null)
