@@ -23,7 +23,7 @@ from typing import Optional
 try:
     import httpx
 except ImportError:
-    print("Error: httpx library not installed. Run: pip install httpx")
+    print("Error: httpx library not installed. Run: uv pip install httpx")
     sys.exit(1)
 
 

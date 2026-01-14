@@ -5,12 +5,13 @@ http:
   # Routers
   routers:
     # CaptionA.cc Prefect API
-    captionacc-prefect:
+    traefik-prefect:
       rule: "PathPrefix(`/captionacc/prefect`)"
-      service: captionacc-prefect-service
+      service: traefik-prefect
       middlewares:
-        - captionacc-prefect-auth
-        - captionacc-prefect-strip-prefix
+        - traefik-prefect-retry
+        - traefik-prefect-auth
+        - traefik-prefect-strip-prefix
       entryPoints:
         - websecure
       tls: {}
@@ -28,8 +29,14 @@ http:
 
   # Middlewares
   middlewares:
+    # Retry middleware for cold starts (Prefect takes ~15-30s to start)
+    traefik-prefect-retry:
+      retry:
+        attempts: 5
+        initialInterval: 2s
+
     # JWT Authentication for Prefect
-    captionacc-prefect-auth:
+    traefik-prefect-auth:
       plugin:
         jwt:
           # JWT signing secret from environment variable (symmetric key)
@@ -54,7 +61,7 @@ http:
             X-Gateway-JTI: jti
 
     # Strip /captionacc/prefect prefix before forwarding
-    captionacc-prefect-strip-prefix:
+    traefik-prefect-strip-prefix:
       stripPrefix:
         prefixes:
           - "/captionacc/prefect"
@@ -85,7 +92,7 @@ http:
   # Services (Backend targets)
   services:
     # Prefect on SAME machine (localhost)
-    captionacc-prefect-service:
+    traefik-prefect:
       loadBalancer:
         servers:
           # Localhost - Prefect container on same machine

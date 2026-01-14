@@ -34,7 +34,7 @@ services:
       - PREFECT_SERVER_API_HOST=0.0.0.0
       - PREFECT_SERVER_API_PORT=4200
       - PREFECT_UI_ENABLED=true
-      - PREFECT_UI_API_URL=${PREFECT_UI_API_URL:-https://prefect-service.fly.dev/captionacc/prefect/api}
+      - PREFECT_UI_API_URL=${PREFECT_UI_API_URL:-https://traefik-prefect.fly.dev/captionacc/prefect/api}
       - PREFECT_API_DATABASE_CONNECTION_URL=${PREFECT_API_DATABASE_CONNECTION_URL}
     networks:
       - gateway

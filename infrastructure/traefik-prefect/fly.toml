@@ -1,4 +1,4 @@
-app = "prefect-service"
+app = "traefik-prefect"
 primary_region = "ewr"
 
 [build]
@@ -10,7 +10,7 @@ primary_region = "ewr"
   PREFECT_SERVER_API_PORT = "4200"
   PREFECT_UI_ENABLED = "true"
   # UI should point to the gateway URL (not direct Prefect)
-  PREFECT_UI_API_URL = "https://prefect-service.fly.dev/captionacc/prefect/api"
+  PREFECT_UI_API_URL = "https://traefik-prefect.fly.dev/captionacc/prefect/api"
 
   # Set PREFECT_API_DATABASE_CONNECTION_URL and GATEWAY_JWT_SECRET in secrets
 

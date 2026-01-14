@@ -1,4 +1,4 @@
-# Prefect Service with Integrated API Gateway
+# Prefect Service with Integrated Traefik API Gateway
 
 **Combined deployment**: Traefik API Gateway + Prefect Server on a single Fly.io machine.
 
@@ -6,7 +6,7 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  prefect-service.fly.dev (1GB Fly.io machine)               │
+│  traefik-prefect.fly.dev (1GB Fly.io machine)               │
 │                                                              │
 │  ┌────────────────────────────────────────┐                 │
 │  │ Traefik Gateway (supervisor process 1) │                 │
@@ -45,7 +45,7 @@
 ## Directory Structure
 
 ```
-services/prefect-service/
+infrastructure/traefik-prefect/
 ├── Dockerfile.combined         # Multi-stage: Traefik + Prefect
 ├── supervisord.conf           # Process manager (runs both)
 ├── fly.toml                   # Fly.io deployment config
@@ -69,7 +69,7 @@ SECRET=$(openssl rand -base64 32)
 fly secrets set \
   GATEWAY_JWT_SECRET="$SECRET" \
   PREFECT_API_DATABASE_CONNECTION_URL="your-supabase-postgres-url" \
-  -a prefect-service
+  -a traefik-prefect
 ```
 
 **Important**: Use the same `GATEWAY_JWT_SECRET` in your Supabase Edge Function!
@@ -77,13 +77,13 @@ fly secrets set \
 ### 2. Deploy to Fly.io
 
 ```bash
-cd services/prefect-service
+cd infrastructure/traefik-prefect
 
 # Deploy
-fly deploy -a prefect-service
+fly deploy -a traefik-prefect
 
 # Verify deployment
-curl https://prefect-service.fly.dev/ping
+curl https://traefik-prefect.fly.dev/ping
 # Should return: OK
 ```
 
@@ -112,14 +112,14 @@ python ../api-gateway/generate-token.py \
 
 **Access Prefect via gateway:**
 ```bash
-curl https://prefect-service.fly.dev/captionacc/prefect/api/health \
+curl https://traefik-prefect.fly.dev/captionacc/prefect/api/health \
   -H "Authorization: Bearer <your-jwt-token>"
 ```
 
 **Client configuration:**
 ```bash
 # For services that need to access Prefect
-export PREFECT_API_URL="https://prefect-service.fly.dev/captionacc/prefect/api"
+export PREFECT_API_URL="https://traefik-prefect.fly.dev/captionacc/prefect/api"
 export PREFECT_AUTH_TOKEN="<your-jwt-token>"
 ```
 
@@ -180,29 +180,29 @@ http:
 
 Then redeploy:
 ```bash
-fly deploy -a prefect-service
+fly deploy -a traefik-prefect
 ```
 
 ## Monitoring
 
 ### Health Check
 ```bash
-curl https://prefect-service.fly.dev/ping
+curl https://traefik-prefect.fly.dev/ping
 ```
 
 ### Logs
 ```bash
 # View combined logs (both Traefik and Prefect)
-fly logs -a prefect-service
+fly logs -a traefik-prefect
 
 # Filter by service
-fly logs -a prefect-service | grep traefik
-fly logs -a prefect-service | grep prefect
+fly logs -a traefik-prefect | grep traefik
+fly logs -a traefik-prefect | grep prefect
 ```
 
 ### Metrics (Prometheus)
 ```bash
-curl https://prefect-service.fly.dev/metrics
+curl https://traefik-prefect.fly.dev/metrics
 ```
 
 ## Scaling
@@ -230,7 +230,7 @@ Expected memory usage on 1GB machine:
 ## Troubleshooting
 
 ### "Connection refused" to Prefect
-- Check both processes are running: `fly ssh console -a prefect-service`
+- Check both processes are running: `fly ssh console -a traefik-prefect`
 - Inside container: `supervisorctl status`
 - Should see: `traefik RUNNING` and `prefect RUNNING`
 
@@ -244,7 +244,7 @@ Expected memory usage on 1GB machine:
 - Check Prefect health: `curl http://localhost:4200/api/health` (from inside container)
 
 ### High memory usage
-- Check `fly status -a prefect-service`
+- Check `fly status -a traefik-prefect`
 - Consider increasing to 2GB if needed: Edit `fly.toml` → `memory = "2048mb"`
 
 ## Cost
@@ -261,7 +261,7 @@ If you need to separate Traefik and Prefect in the future:
 
 1. Copy `gateway/` directory to new `services/api-gateway/`
 2. Create new `api-gateway` Fly.io app
-3. Update `gateway/dynamic/captionacc.yml` to use `http://prefect-service.internal:4200`
+3. Update `gateway/dynamic/captionacc.yml` to use `http://traefik-prefect.internal:4200`
 4. Deploy both separately
 5. Update client URLs to point to new `api-gateway.fly.dev`
 
@@ -285,7 +285,7 @@ The configuration is designed to make this easy!
 ## Support
 
 For issues:
-1. Check logs: `fly logs -a prefect-service`
-2. Check process status: `fly ssh console -a prefect-service` → `supervisorctl status`
-3. Verify secrets are set: `fly secrets list -a prefect-service`
-4. Test gateway health: `curl https://prefect-service.fly.dev/ping`
+1. Check logs: `fly logs -a traefik-prefect`
+2. Check process status: `fly ssh console -a traefik-prefect` → `supervisorctl status`
+3. Verify secrets are set: `fly secrets list -a traefik-prefect`
+4. Test gateway health: `curl https://traefik-prefect.fly.dev/ping`
