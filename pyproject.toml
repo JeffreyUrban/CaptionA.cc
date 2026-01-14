@@ -13,7 +13,6 @@ dependencies = [
     "crop_frames",
     "caption_frame_extents",
     "caption_text",
-    "full_frames",
     "orchestrator",
 ]
 
@@ -26,9 +25,7 @@ members = [
 ]
 exclude = [
     "apps/captionacc-web",
-    "services/ocr-service",  # Standalone FastAPI service, not a workspace package
     "infrastructure/traefik-prefect",  # Standalone Docker service for Fly.io, not a workspace package
-    "services/api-gateway",  # Traefik configuration (not a Python package)
     "data-pipelines/docs",  # Documentation directory, not a Python package
     "data-pipelines/caption_boundaries",  # Incomplete package, missing pyproject.toml
     "**/__pycache__",  # Exclude all pycache directories
@@ -51,11 +48,10 @@ override-dependencies = [
 crop_frames = { workspace = true }
 caption-frame-extents = { workspace = true }
 caption-text = { workspace = true }
-full-frames = { workspace = true }
 orchestrator = { workspace = true }
 vp9-utils = { workspace = true }
 frames-db = { workspace = true }
-captionacc-modal = { workspace = true }
+extract-crop-frames-and-infer-extents = { workspace = true }
 
 # Common tool settings shared across all workspace members
 [tool.ruff]
@@ -110,7 +106,6 @@ testpaths = [
 # These can be re-enabled once the modules are properly implemented
 norecursedirs = [
     "data-pipelines/crop_frames/tests",
-    "data-pipelines/full_frames/tests",
     "data-pipelines/layout_analysis",
     "packages/ocr_box_model",
     "packages/jetbrains_integration",

@@ -111,5 +111,4 @@ exclude_lines = [
 frames_db = { workspace = true }
 image_utils = { workspace = true }
 video_utils = { workspace = true }
-ocr_utils = { workspace = true }
 caption_models = { workspace = true }

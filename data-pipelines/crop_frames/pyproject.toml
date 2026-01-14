@@ -15,7 +15,6 @@ dependencies = [
     "frames_db",
     "image_utils",
     "video_utils",
-    "ocr_utils",
 ]
 
 
@@ -103,5 +102,4 @@ version-file = "src/crop_frames/_version.py"
 frames_db = { workspace = true }
 image_utils = { workspace = true }
 video_utils = { workspace = true }
-ocr_utils = { workspace = true }
 caption_models = { workspace = true }

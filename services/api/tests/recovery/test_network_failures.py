@@ -19,10 +19,10 @@ from postgrest.exceptions import APIError
 
 from app.services.wasabi_service import WasabiServiceImpl
 
-# Mock modal and captionacc_modal modules to avoid import errors in tests
+# Mock modal and extract_crop_frames_and_infer_extents modules to avoid import errors in tests
 sys.modules['modal'] = MagicMock()
-sys.modules['captionacc_modal'] = MagicMock()
-sys.modules['captionacc_modal.models'] = MagicMock()
+sys.modules['extract_crop_frames_and_infer_extents'] = MagicMock()
+sys.modules['extract_crop_frames_and_infer_extents.models'] = MagicMock()
 
 
 @pytest.mark.recovery
@@ -235,7 +235,7 @@ class TestNetworkFailureRecovery:
 
             service = WasabiServiceImpl(
                 access_key="test-access",
-                secret_key="test-secret",
+                secret_key="test-secret",  # pragma: allowlist secret
                 bucket="test-bucket",
                 region="us-east-1"
             )
@@ -284,7 +284,7 @@ class TestNetworkFailureRecovery:
 
             service = WasabiServiceImpl(
                 access_key="test-access",
-                secret_key="test-secret",
+                secret_key="test-secret",  # pragma: allowlist secret
                 bucket="test-bucket",
                 region="us-east-1"
             )
@@ -328,7 +328,7 @@ class TestNetworkFailureRecovery:
 
             service = WasabiServiceImpl(
                 access_key="test-access",
-                secret_key="test-secret",
+                secret_key="test-secret",  # pragma: allowlist secret
                 bucket="test-bucket",
                 region="us-east-1"
             )
@@ -373,7 +373,7 @@ class TestNetworkFailureRecovery:
 
             service = WasabiServiceImpl(
                 access_key="test-access",
-                secret_key="test-secret",
+                secret_key="test-secret",  # pragma: allowlist secret
                 bucket="test-bucket",
                 region="us-east-1"
             )
@@ -451,7 +451,7 @@ class TestNetworkFailureRecovery:
 
             wasabi_service = WasabiServiceImpl(
                 access_key="test-access",
-                secret_key="test-secret",
+                secret_key="test-secret",  # pragma: allowlist secret
                 bucket="test-bucket",
                 region="us-east-1"
             )
