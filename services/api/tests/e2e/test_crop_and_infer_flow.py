@@ -415,12 +415,12 @@ class TestCropAndInferE2E:
         )
 
         print("\n=== Test Passed ===")
-        print(f"✓ Flow executed successfully")
+        print("✓ Flow executed successfully")
         print(f"✓ Version {version} created")
-        print(f"✓ Cropped frames uploaded to Wasabi")
-        print(f"✓ Caption frame extents database created")
-        print(f"✓ Video metadata updated")
-        print(f"✓ Lock properly acquired and released")
+        print("✓ Cropped frames uploaded to Wasabi")
+        print("✓ Caption frame extents database created")
+        print("✓ Video metadata updated")
+        print("✓ Lock properly acquired and released")
 
     @pytest.mark.asyncio
     async def test_crop_and_infer_lock_contention(self, test_video: dict[str, Any]):
@@ -446,7 +446,7 @@ class TestCropAndInferE2E:
         )
 
         # Step 1: Acquire lock externally (simulate another process)
-        print(f"Acquiring lock to simulate concurrent processing...")
+        print("Acquiring lock to simulate concurrent processing...")
         lock_acquired = supabase.acquire_server_lock(
             video_id=video_id,
             database_name="layout",

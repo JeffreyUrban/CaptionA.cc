@@ -78,35 +78,21 @@ markers = [
 
 [tool.black]
 line-length = 120
-target-version = ["py314"]
+target-version = ["py313"]
 
-[tool.ruff]
-line-length = 120
-target-version = "py314"
-
+# Inherits workspace config from root pyproject.toml
+# Only project-specific overrides here
 [tool.ruff.lint]
-select = [
-    "E",   # pycodestyle errors
-    "W",   # pycodestyle warnings
-    "F",   # pyflakes
-    "I",   # isort
-    "B",   # flake8-bugbear
-    "C4",  # flake8-comprehensions
-    "UP",  # pyupgrade
-]
-ignore = [
-    "B008",  # Function calls in argument defaults (typer idiom)
+extend-ignore = [
+    "B008",  # Allow function calls in argument defaults (Typer idiom)
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = ["E741", "E501"]  # Allow short var names and long lines in tests
+"tests/**/*.py" = ["E741"]  # Allow short var names in tests
 "*/_version.py" = ["UP", "I001"]  # Auto-generated file by hatch-vcs
 
-[tool.ruff.format]
-quote-style = "double"
-
 [tool.pyright]
-pythonVersion = "3.14"
+pythonVersion = "3.13"
 typeCheckingMode = "strict"
 reportUnusedImport = true
 reportUnusedVariable = true

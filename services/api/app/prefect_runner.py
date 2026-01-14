@@ -49,7 +49,7 @@ class PrefectWorkerManager:
             )
             return
 
-        logger.info(f"Starting Prefect worker for work pool 'captionacc-workers'")
+        logger.info("Starting Prefect worker for work pool 'captionacc-workers'")
         logger.info(f"Connecting to Prefect server: {settings.prefect_api_url}")
 
         try:

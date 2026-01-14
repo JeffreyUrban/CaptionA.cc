@@ -46,16 +46,16 @@ def mock_env_vars() -> Generator[dict[str, str], None, None]:
 
     test_env = {
         "SUPABASE_URL": "http://test-supabase.local",
-        "SUPABASE_SERVICE_ROLE_KEY": "test-service-role-key",
+        "SUPABASE_SERVICE_ROLE_KEY": "test-service-role-key",  # pragma: allowlist secret
         "SUPABASE_SCHEMA": "captionacc_test",
         "PREFECT_API_URL": "http://test-prefect.local/api",
-        "PREFECT_API_KEY": "test-prefect-key",
+        "PREFECT_API_KEY": "test-prefect-key",  # pragma: allowlist secret
         "WASABI_ENDPOINT": "https://test-wasabi.local",
-        "WASABI_ACCESS_KEY": "test-access-key",
-        "WASABI_SECRET_KEY": "test-secret-key",
+        "WASABI_ACCESS_KEY": "test-access-key",  # pragma: allowlist secret
+        "WASABI_SECRET_KEY": "test-secret-key",  # pragma: allowlist secret
         "WASABI_BUCKET": "test-bucket",
         "MODAL_TOKEN_ID": "test-modal-token-id",
-        "MODAL_TOKEN_SECRET": "test-modal-token-secret",
+        "MODAL_TOKEN_SECRET": "test-modal-token-secret"  # pragma: allowlist secret,
     }
 
     os.environ.update(test_env)

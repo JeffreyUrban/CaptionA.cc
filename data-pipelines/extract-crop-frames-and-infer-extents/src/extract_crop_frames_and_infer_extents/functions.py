@@ -22,7 +22,8 @@ Error Handling Strategy:
     For now, implementations should raise exceptions on any significant failure.
 """
 from typing import Protocol
-from .models import CropRegion, ExtractResult, CropInferResult, CaptionOcrResult
+
+from .models import CaptionOcrResult, CropInferResult, CropRegion, ExtractResult
 
 
 class ExtractFramesAndOcr(Protocol):

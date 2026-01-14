@@ -11,11 +11,9 @@ Reference: docs/prefect-orchestration/TEST_PLAN.md Section 5.1
 
 import os
 import sys
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
-from prefect.exceptions import PrefectException
 from prefect.testing.utilities import prefect_test_harness
 
 # Mock the modal and extract_crop_frames_and_infer_extents modules before importing flows
@@ -27,7 +25,6 @@ from app.flows.video_initial_processing import (
     extract_frames_and_ocr_task,
     update_video_metadata_task,
     update_video_status_task,
-    video_initial_processing,
 )
 
 
@@ -105,7 +102,7 @@ def mock_modal_app():
 def setup_environment():
     """Set up required environment variables for testing."""
     os.environ["SUPABASE_URL"] = "https://test.supabase.co"
-    os.environ["SUPABASE_SERVICE_ROLE_KEY"] = "test-key"
+    os.environ["SUPABASE_SERVICE_ROLE_KEY"] = "test-key"  # pragma: allowlist secret
     os.environ["SUPABASE_SCHEMA"] = "test_schema"
     yield
     # Cleanup

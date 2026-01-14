@@ -1,7 +1,6 @@
 """Montage creation and OCR result distribution for batch processing."""
 
 from io import BytesIO
-from typing import Dict, List, Tuple
 
 from PIL import Image
 
@@ -11,9 +10,9 @@ SEPARATOR_PX = 2
 
 
 def create_vertical_montage(
-    images: List[Tuple[str, bytes]],
+    images: list[tuple[str, bytes]],
     separator_px: int = SEPARATOR_PX,
-) -> Tuple[bytes, List[Dict]]:
+) -> tuple[bytes, list[dict]]:
     """Create vertical montage from list of images.
 
     Args:
@@ -41,7 +40,7 @@ def create_vertical_montage(
     # Create montage with gray separator color
     montage = Image.new("RGB", (width, total_height), (220, 220, 220))
 
-    metadata: List[Dict] = []
+    metadata: list[dict] = []
     y_offset = 0
 
     for img_id, img_data in images:
@@ -77,8 +76,8 @@ def create_vertical_montage(
 
 def distribute_results_to_images(
     ocr_result: OCRResult,
-    metadata: List[Dict],
-) -> List[OCRResult]:
+    metadata: list[dict],
+) -> list[OCRResult]:
     """Distribute OCR results from montage back to individual images.
 
     Takes OCR results from a montage and splits them back to individual
@@ -91,7 +90,7 @@ def distribute_results_to_images(
     Returns:
         List of OCRResult, one per original image
     """
-    results: List[OCRResult] = []
+    results: list[OCRResult] = []
 
     for img_meta in metadata:
         img_id = img_meta["id"]
@@ -100,7 +99,7 @@ def distribute_results_to_images(
         img_h = img_meta["height"]
 
         # Find characters that fall within this image's bounds
-        img_chars: List[CharacterResult] = []
+        img_chars: list[CharacterResult] = []
 
         for char in ocr_result.characters:
             bbox = char.bbox

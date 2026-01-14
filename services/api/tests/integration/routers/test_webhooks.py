@@ -13,7 +13,7 @@ def mock_settings():
     """Mock application settings."""
     with patch("app.routers.webhooks.get_settings") as mock_get_settings:
         settings = Mock()
-        settings.webhook_secret = "test-secret"
+        settings.webhook_secret = "test-secret"  # pragma: allowlist secret
         settings.prefect_api_url = "http://test-prefect.com/api"
         settings.prefect_api_key = None
         mock_get_settings.return_value = settings
@@ -78,7 +78,7 @@ class TestWebhooksRouter:
         """Test webhook with invalid auth."""
         response = client.post(
             "/webhooks/supabase/videos",
-            headers={"Authorization": "Bearer wrong-secret"},
+            headers={"Authorization": "Bearer wrong-secret"  # pragma: allowlist secret},
             json={"type": "INSERT", "table": "videos", "record": {}},
         )
 
@@ -89,7 +89,7 @@ class TestWebhooksRouter:
         """Test webhook with invalid payload (missing required fields)."""
         response = client.post(
             "/webhooks/supabase/videos",
-            headers={"Authorization": "Bearer test-secret"},
+            headers={"Authorization": "Bearer test-secret"},  # pragma: allowlist secret
             json={"invalid": "payload"},
         )
 
@@ -100,7 +100,7 @@ class TestWebhooksRouter:
         """Test webhook with wrong table name."""
         response = client.post(
             "/webhooks/supabase/videos",
-            headers={"Authorization": "Bearer test-secret"},
+            headers={"Authorization": "Bearer test-secret"},  # pragma: allowlist secret
             json={
                 "type": "INSERT",
                 "table": "users",  # Wrong table
@@ -115,7 +115,7 @@ class TestWebhooksRouter:
         """Test webhook with missing required record fields."""
         response = client.post(
             "/webhooks/supabase/videos",
-            headers={"Authorization": "Bearer test-secret"},
+            headers={"Authorization": "Bearer test-secret"},  # pragma: allowlist secret
             json={
                 "type": "INSERT",
                 "table": "videos",
@@ -130,7 +130,7 @@ class TestWebhooksRouter:
         """Test webhook ignores UPDATE events."""
         response = client.post(
             "/webhooks/supabase/videos",
-            headers={"Authorization": "Bearer test-secret"},
+            headers={"Authorization": "Bearer test-secret"},  # pragma: allowlist secret
             json={
                 "type": "UPDATE",
                 "table": "videos",
@@ -148,7 +148,7 @@ class TestWebhooksRouter:
         """Test webhook ignores DELETE events."""
         response = client.post(
             "/webhooks/supabase/videos",
-            headers={"Authorization": "Bearer test-secret"},
+            headers={"Authorization": "Bearer test-secret"},  # pragma: allowlist secret
             json={
                 "type": "DELETE",
                 "table": "videos",
@@ -165,7 +165,7 @@ class TestWebhooksRouter:
         """Test successful webhook processing with premium tier."""
         response = client.post(
             "/webhooks/supabase/videos",
-            headers={"Authorization": "Bearer test-secret"},
+            headers={"Authorization": "Bearer test-secret"},  # pragma: allowlist secret
             json={
                 "type": "INSERT",
                 "table": "videos",
@@ -221,7 +221,7 @@ class TestWebhooksRouter:
 
         response = client.post(
             "/webhooks/supabase/videos",
-            headers={"Authorization": "Bearer test-secret"},
+            headers={"Authorization": "Bearer test-secret"},  # pragma: allowlist secret
             json={
                 "type": "INSERT",
                 "table": "videos",
@@ -249,7 +249,7 @@ class TestWebhooksRouter:
         """Test successful webhook processing with enterprise tier."""
         response = client.post(
             "/webhooks/supabase/videos",
-            headers={"Authorization": "Bearer test-secret"},
+            headers={"Authorization": "Bearer test-secret"},  # pragma: allowlist secret
             json={
                 "type": "INSERT",
                 "table": "videos",
@@ -281,7 +281,7 @@ class TestWebhooksRouter:
 
         response = client.post(
             "/webhooks/supabase/videos",
-            headers={"Authorization": "Bearer test-secret"},
+            headers={"Authorization": "Bearer test-secret"},  # pragma: allowlist secret
             json={
                 "type": "INSERT",
                 "table": "videos",
@@ -310,7 +310,7 @@ class TestWebhooksRouter:
         mock_settings.prefect_api_url = ""
         response = client.post(
             "/webhooks/supabase/videos",
-            headers={"Authorization": "Bearer test-secret"},
+            headers={"Authorization": "Bearer test-secret"},  # pragma: allowlist secret
             json={
                 "type": "INSERT",
                 "table": "videos",
@@ -344,7 +344,7 @@ class TestWebhooksRouter:
 
             response = client.post(
                 "/webhooks/supabase/videos",
-                headers={"Authorization": "Bearer test-secret"},
+                headers={"Authorization": "Bearer test-secret"},  # pragma: allowlist secret
                 json={
                     "type": "INSERT",
                     "table": "videos",
@@ -375,7 +375,7 @@ class TestWebhooksRouter:
 
             response = client.post(
                 "/webhooks/supabase/videos",
-                headers={"Authorization": "Bearer test-secret"},
+                headers={"Authorization": "Bearer test-secret"},  # pragma: allowlist secret
                 json={
                     "type": "INSERT",
                     "table": "videos",
@@ -393,10 +393,10 @@ class TestWebhooksRouter:
 
     def test_webhook_includes_prefect_api_key(self, client, mock_settings, mock_prefect_api):
         """Test webhook includes Prefect API key in request headers when configured."""
-        mock_settings.prefect_api_key = "test-api-key"
+        mock_settings.prefect_api_key = "test-api-key"  # pragma: allowlist secret
         response = client.post(
             "/webhooks/supabase/videos",
-            headers={"Authorization": "Bearer test-secret"},
+            headers={"Authorization": "Bearer test-secret"},  # pragma: allowlist secret
             json={
                 "type": "INSERT",
                 "table": "videos",
@@ -415,13 +415,13 @@ class TestWebhooksRouter:
         call_args = mock_prefect_api.post.call_args
         headers = call_args[1]["headers"]
         assert "Authorization" in headers
-        assert headers["Authorization"] == "Bearer test-api-key"
+        assert headers["Authorization"] == "Bearer test-api-key"  # pragma: allowlist secret
 
     def test_webhook_auth_header_malformed_no_bearer(self, client, mock_settings):
         """Test webhook with malformed auth header (no Bearer prefix)."""
         response = client.post(
             "/webhooks/supabase/videos",
-            headers={"Authorization": "test-secret"},  # Missing "Bearer" prefix
+            headers={"Authorization": "test-secret"},  # Missing "Bearer" prefix # pragma: allowlist secret
             json={
                 "type": "INSERT",
                 "table": "videos",

@@ -20,11 +20,9 @@ Usage:
 import argparse
 import json
 import os
-import sqlite3
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Dict, List, Tuple
 
 import boto3
 from dotenv import load_dotenv
@@ -33,8 +31,8 @@ load_dotenv()
 
 
 def organize_frames_by_modulo(
-    frames: List[Tuple[int, bytes, int, int]],
-) -> Dict[int, List[Tuple[int, bytes, int, int]]]:
+    frames: list[tuple[int, bytes, int, int]],
+) -> dict[int, list[tuple[int, bytes, int, int]]]:
     """Organize frames into modulo levels [16, 4, 1] without duplication.
 
     Non-duplicating strategy:
@@ -70,7 +68,7 @@ def organize_frames_by_modulo(
     return organized
 
 
-def write_frames_to_temp_dir(frames: List[Tuple[int, bytes, int, int]], temp_dir: Path) -> Tuple[int, int]:
+def write_frames_to_temp_dir(frames: list[tuple[int, bytes, int, int]], temp_dir: Path) -> tuple[int, int]:
     """Write frames as JPEG files to temporary directory.
 
     Returns:
@@ -141,10 +139,10 @@ def encode_chunk(input_dir: Path, output_path: Path, width: int, height: int) ->
 
 def encode_modulo_chunks(
     modulo: int,
-    frames: List[Tuple[int, bytes, int, int]],
+    frames: list[tuple[int, bytes, int, int]],
     output_dir: Path,
     chunk_size: int = 32,
-) -> List[Path]:
+) -> list[Path]:
     """Encode all chunks for a modulo level.
 
     Args:
@@ -218,7 +216,7 @@ def upload_to_wasabi(local_path: Path, s3_key: str) -> str:
     return url
 
 
-def generate_test_page(video_id: str, modulo_chunks: Dict[int, List[str]], output_path: Path) -> None:
+def generate_test_page(video_id: str, modulo_chunks: dict[int, list[str]], output_path: Path) -> None:
     """Generate HTML test page for browser performance validation.
 
     Args:
@@ -483,7 +481,7 @@ def main():
 
     # Find database path
     video_id_prefix = video_id[:2]
-    db_path = # TODO: Cropping database has been replaced with modulo chunks on Wasabi
+    db_path = "/path/to/db"  # TODO: Cropping database has been replaced with modulo chunks on Wasabi
 
     if not db_path.exists():
         print(f"❌ Database not found: {db_path}")

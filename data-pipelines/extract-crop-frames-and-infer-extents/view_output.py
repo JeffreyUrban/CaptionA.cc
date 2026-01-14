@@ -129,9 +129,8 @@ def run_test_and_view():
 
             # Compress
             layout_db_gz_path = Path(tmpdir) / "layout.db.gz"
-            with open(layout_db_path, 'rb') as f_in:
-                with gzip.open(layout_db_gz_path, 'wb') as f_out:
-                    shutil.copyfileobj(f_in, f_out)
+            with open(layout_db_path, 'rb') as f_in, gzip.open(layout_db_gz_path, 'wb') as f_out:
+                shutil.copyfileobj(f_in, f_out)
 
             # Upload
             layout_db_gz_key = f"{tenant_id}/client/videos/{video_id}/layout.db.gz"
@@ -208,30 +207,30 @@ def run_test_and_view():
         print("FILES READY FOR VIEWING")
         print(f"{'=' * 80}")
         print(f"Location: {download_dir}")
-        print(f"\nDownloaded files:")
+        print("\nDownloaded files:")
         for path in downloaded:
             print(f"  - {path.name}")
 
-        print(f"\nTo view WebM files:")
+        print("\nTo view WebM files:")
         print(f"  • VLC: vlc {downloaded[0]}")
         print(f"  • ffplay: ffplay {downloaded[0]}")
         print(f"  • mpv: mpv {downloaded[0]}")
 
-        print(f"\nTo extract frames from WebM:")
+        print("\nTo extract frames from WebM:")
         print(f"  ffmpeg -i {downloaded[0]} frame_%04d.jpg")
 
         print(f"\n{'=' * 80}")
         print("TEST DATA PRESERVED")
         print(f"{'=' * 80}")
-        print(f"To clean up later, delete tenant:")
+        print("To clean up later, delete tenant:")
         print(f"  Tenant ID: {tenant_id}")
         print(f"  Wasabi prefix: {tenant_id}/")
         print(f"{'=' * 80}\n")
 
         # Try to open first file in default video player
         try:
-            import subprocess
             import platform
+            import subprocess
 
             if platform.system() == 'Darwin':  # macOS
                 subprocess.run(['open', str(downloaded[0])])

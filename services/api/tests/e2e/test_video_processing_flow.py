@@ -159,7 +159,7 @@ class TestVideoProcessingE2E:
         app = create_app()
         client = TestClient(app)
 
-        webhook_secret = settings.webhook_secret or "test-webhook-secret"
+        webhook_secret = settings.webhook_secret or "test-webhook-secret"  # pragma: allowlist secret
         webhook_response = client.post(
             "/webhooks/supabase/videos",
             headers={"Authorization": f"Bearer {webhook_secret}"},
@@ -247,14 +247,14 @@ class TestVideoProcessingE2E:
         assert wasabi.file_exists(raw_ocr_key), (
             f"Raw OCR database not found at {raw_ocr_key}"
         )
-        print(f"Verified raw-ocr.db.gz exists")
+        print("Verified raw-ocr.db.gz exists")
 
         # Check layout database
         layout_db_key = f"{tenant_id}/client/videos/{video_id}/layout.db.gz"
         assert wasabi.file_exists(layout_db_key), (
             f"Layout database not found at {layout_db_key}"
         )
-        print(f"Verified layout.db.gz exists")
+        print("Verified layout.db.gz exists")
 
         # Step 7: Cleanup - Delete video record from Supabase
         try:

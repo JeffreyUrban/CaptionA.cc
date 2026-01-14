@@ -268,7 +268,7 @@ class TestGapMerging:
         )
 
         # Now shrink the caption, which should create gaps that merge with existing ones
-        result = repo.update_caption_with_overlap_resolution(
+        repo.update_caption_with_overlap_resolution(
             caption.id,
             CaptionUpdate(
                 startFrameIndex=60,

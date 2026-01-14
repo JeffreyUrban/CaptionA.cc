@@ -167,7 +167,7 @@ class TestJWTValidation:
     ):
         """Should return 401 when JWT signature is invalid."""
         # Create token with wrong secret
-        token = jwt.encode(valid_token_payload, "wrong-secret", algorithm="HS256")
+        token = jwt.encode(valid_token_payload, "wrong-secret", algorithm="HS256")  # pragma: allowlist secret
 
         response = await unauthenticated_client.get(
             "/videos/test-video/captions",
@@ -736,7 +736,7 @@ class TestWebhookAuthentication:
                     "storage_key": "path/to/video.mp4",
                 },
             },
-            headers={"Authorization": "Bearer wrong-secret"},
+            headers={"Authorization": "Bearer wrong-secret"},  # pragma: allowlist secret
         )
 
         assert response.status_code == 401

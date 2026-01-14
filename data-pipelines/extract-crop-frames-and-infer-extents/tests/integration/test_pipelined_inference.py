@@ -168,9 +168,8 @@ def setup_test_video(wasabi_service, test_ids, test_video_fixture, crop_region):
 
         # Compress and upload
         layout_db_gz_path = Path(tmpdir) / "layout.db.gz"
-        with open(layout_db_path, "rb") as f_in:
-            with gzip.open(layout_db_gz_path, "wb") as f_out:
-                shutil.copyfileobj(f_in, f_out)
+        with open(layout_db_path, "rb") as f_in, gzip.open(layout_db_gz_path, "wb") as f_out:
+            shutil.copyfileobj(f_in, f_out)
 
         layout_db_gz_key = f"{tenant_id}/client/videos/{video_id}/layout.db.gz"
         wasabi_service.upload_from_path(
@@ -206,7 +205,7 @@ def test_pipelined_crop_and_infer(
     print(f"\n{'=' * 80}")
     print("PIPELINED IMPLEMENTATION INTEGRATION TEST")
     print(f"{'=' * 80}")
-    print(f"Configuration:")
+    print("Configuration:")
     print(f"  Video: {test_video_fixture}")
     print(f"  Batch size: {batch_size}")
     print(f"  Tenant ID: {tenant_id}")

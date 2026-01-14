@@ -9,7 +9,6 @@ import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from app.dependencies import AuthContext
 
 
 @pytest.fixture
@@ -72,7 +71,7 @@ class TestWebhookAuthentication:
                     "storage_key": "tenant-456/videos/video-123.mp4",
                 },
             },
-            headers={"Authorization": "wrong-secret"},
+            headers={"Authorization": "wrong-secret"},  # pragma: allowlist secret
         )
         assert response.status_code == 401
 
@@ -80,7 +79,7 @@ class TestWebhookAuthentication:
         """Should reject request with incorrect webhook secret."""
         with patch("app.routers.webhooks.get_settings") as mock_settings:
             settings = MagicMock()
-            settings.webhook_secret = "correct-secret"
+            settings.webhook_secret = "correct-secret"  # pragma: allowlist secret
             mock_settings.return_value = settings
 
             response = await webhook_client.post(
@@ -94,7 +93,7 @@ class TestWebhookAuthentication:
                         "storage_key": "tenant-456/videos/video-123.mp4",
                     },
                 },
-                headers={"Authorization": "Bearer wrong-secret"},
+                headers={"Authorization": "Bearer wrong-secret"},  # pragma: allowlist secret
             )
             assert response.status_code == 401
             assert "Invalid webhook secret" in response.json()["detail"]
@@ -105,7 +104,7 @@ class TestWebhookAuthentication:
             "app.routers.webhooks.trigger_prefect_flow", new_callable=AsyncMock
         ) as mock_trigger:
             settings = MagicMock()
-            settings.webhook_secret = "test-secret"
+            settings.webhook_secret = "test-secret"  # pragma: allowlist secret
             settings.prefect_api_url = "https://api.prefect.cloud"
             mock_settings.return_value = settings
             mock_trigger.return_value = {
@@ -124,7 +123,7 @@ class TestWebhookAuthentication:
                         "storage_key": "tenant-456/videos/video-123.mp4",
                     },
                 },
-                headers={"Authorization": "Bearer test-secret"},
+                headers={"Authorization": "Bearer test-secret"},  # pragma: allowlist secret
             )
             assert response.status_code == 200
 
@@ -136,14 +135,14 @@ class TestWebhookPayloadValidation:
         """Should reject invalid JSON payload."""
         with patch("app.routers.webhooks.get_settings") as mock_settings:
             settings = MagicMock()
-            settings.webhook_secret = "test-secret"
+            settings.webhook_secret = "test-secret"  # pragma: allowlist secret
             mock_settings.return_value = settings
 
             response = await webhook_client.post(
                 "/webhooks/supabase/videos",
                 content="invalid json",
                 headers={
-                    "Authorization": "Bearer test-secret",
+                    "Authorization": "Bearer test-secret",  # pragma: allowlist secret
                     "Content-Type": "application/json",
                 },
             )
@@ -153,7 +152,7 @@ class TestWebhookPayloadValidation:
         """Should reject payload missing required fields."""
         with patch("app.routers.webhooks.get_settings") as mock_settings:
             settings = MagicMock()
-            settings.webhook_secret = "test-secret"
+            settings.webhook_secret = "test-secret"  # pragma: allowlist secret
             mock_settings.return_value = settings
 
             response = await webhook_client.post(
@@ -162,7 +161,7 @@ class TestWebhookPayloadValidation:
                     "type": "INSERT",
                     # Missing "table" and "record"
                 },
-                headers={"Authorization": "Bearer test-secret"},
+                headers={"Authorization": "Bearer test-secret"},  # pragma: allowlist secret
             )
             assert response.status_code == 400
             assert "Invalid webhook payload" in response.json()["detail"]
@@ -171,7 +170,7 @@ class TestWebhookPayloadValidation:
         """Should reject payload with wrong table name."""
         with patch("app.routers.webhooks.get_settings") as mock_settings:
             settings = MagicMock()
-            settings.webhook_secret = "test-secret"
+            settings.webhook_secret = "test-secret"  # pragma: allowlist secret
             mock_settings.return_value = settings
 
             response = await webhook_client.post(
@@ -181,7 +180,7 @@ class TestWebhookPayloadValidation:
                     "table": "wrong_table",
                     "record": {"id": "123"},
                 },
-                headers={"Authorization": "Bearer test-secret"},
+                headers={"Authorization": "Bearer test-secret"},  # pragma: allowlist secret
             )
             assert response.status_code == 400
             assert "Invalid table" in response.json()["detail"]
@@ -191,7 +190,7 @@ class TestWebhookPayloadValidation:
         """Should reject record without video ID."""
         with patch("app.routers.webhooks.get_settings") as mock_settings:
             settings = MagicMock()
-            settings.webhook_secret = "test-secret"
+            settings.webhook_secret = "test-secret"  # pragma: allowlist secret
             mock_settings.return_value = settings
 
             response = await webhook_client.post(
@@ -205,7 +204,7 @@ class TestWebhookPayloadValidation:
                         "storage_key": "tenant-456/videos/video.mp4",
                     },
                 },
-                headers={"Authorization": "Bearer test-secret"},
+                headers={"Authorization": "Bearer test-secret"},  # pragma: allowlist secret
             )
             assert response.status_code == 400
             assert "Missing required field" in response.json()["detail"]
@@ -214,7 +213,7 @@ class TestWebhookPayloadValidation:
         """Should reject record without tenant ID."""
         with patch("app.routers.webhooks.get_settings") as mock_settings:
             settings = MagicMock()
-            settings.webhook_secret = "test-secret"
+            settings.webhook_secret = "test-secret"  # pragma: allowlist secret
             mock_settings.return_value = settings
 
             response = await webhook_client.post(
@@ -228,7 +227,7 @@ class TestWebhookPayloadValidation:
                         "storage_key": "tenant-456/videos/video.mp4",
                     },
                 },
-                headers={"Authorization": "Bearer test-secret"},
+                headers={"Authorization": "Bearer test-secret"},  # pragma: allowlist secret
             )
             assert response.status_code == 400
             assert "Missing required field" in response.json()["detail"]
@@ -237,7 +236,7 @@ class TestWebhookPayloadValidation:
         """Should reject record without storage key."""
         with patch("app.routers.webhooks.get_settings") as mock_settings:
             settings = MagicMock()
-            settings.webhook_secret = "test-secret"
+            settings.webhook_secret = "test-secret"  # pragma: allowlist secret
             mock_settings.return_value = settings
 
             response = await webhook_client.post(
@@ -251,7 +250,7 @@ class TestWebhookPayloadValidation:
                         # Missing "storage_key"
                     },
                 },
-                headers={"Authorization": "Bearer test-secret"},
+                headers={"Authorization": "Bearer test-secret"},  # pragma: allowlist secret
             )
             assert response.status_code == 400
             assert "Missing required field" in response.json()["detail"]
@@ -264,7 +263,7 @@ class TestWebhookEventTypes:
         """Should ignore UPDATE events."""
         with patch("app.routers.webhooks.get_settings") as mock_settings:
             settings = MagicMock()
-            settings.webhook_secret = "test-secret"
+            settings.webhook_secret = "test-secret"  # pragma: allowlist secret
             mock_settings.return_value = settings
 
             response = await webhook_client.post(
@@ -279,7 +278,7 @@ class TestWebhookEventTypes:
                     },
                     "old_record": {"status": "uploading"},
                 },
-                headers={"Authorization": "Bearer test-secret"},
+                headers={"Authorization": "Bearer test-secret"},  # pragma: allowlist secret
             )
             assert response.status_code == 200
 
@@ -293,7 +292,7 @@ class TestWebhookEventTypes:
         """Should ignore DELETE events."""
         with patch("app.routers.webhooks.get_settings") as mock_settings:
             settings = MagicMock()
-            settings.webhook_secret = "test-secret"
+            settings.webhook_secret = "test-secret"  # pragma: allowlist secret
             mock_settings.return_value = settings
 
             response = await webhook_client.post(
@@ -307,7 +306,7 @@ class TestWebhookEventTypes:
                         "storage_key": "tenant-456/videos/video-123.mp4",
                     },
                 },
-                headers={"Authorization": "Bearer test-secret"},
+                headers={"Authorization": "Bearer test-secret"},  # pragma: allowlist secret
             )
             assert response.status_code == 200
 
@@ -325,7 +324,7 @@ class TestPrefectFlowTriggering:
             "app.routers.webhooks.trigger_prefect_flow", new_callable=AsyncMock
         ) as mock_trigger:
             settings = MagicMock()
-            settings.webhook_secret = "test-secret"
+            settings.webhook_secret = "test-secret"  # pragma: allowlist secret
             settings.prefect_api_url = "https://api.prefect.cloud"
             mock_settings.return_value = settings
             mock_trigger.return_value = {
@@ -345,7 +344,7 @@ class TestPrefectFlowTriggering:
                         "tenant_tier": "premium",
                     },
                 },
-                headers={"Authorization": "Bearer test-secret"},
+                headers={"Authorization": "Bearer test-secret"},  # pragma: allowlist secret
             )
             assert response.status_code == 200
 
@@ -369,7 +368,7 @@ class TestPrefectFlowTriggering:
             "app.routers.webhooks.trigger_prefect_flow", new_callable=AsyncMock
         ) as mock_trigger:
             settings = MagicMock()
-            settings.webhook_secret = "test-secret"
+            settings.webhook_secret = "test-secret"  # pragma: allowlist secret
             settings.prefect_api_url = "https://api.prefect.cloud"
             mock_settings.return_value = settings
             mock_trigger.return_value = {
@@ -390,7 +389,7 @@ class TestPrefectFlowTriggering:
                         # Don't include timestamp to avoid timezone mismatch
                     },
                 },
-                headers={"Authorization": "Bearer test-secret"},
+                headers={"Authorization": "Bearer test-secret"},  # pragma: allowlist secret
             )
             assert response.status_code == 200
 
@@ -404,7 +403,7 @@ class TestPrefectFlowTriggering:
             "app.routers.webhooks.trigger_prefect_flow", new_callable=AsyncMock
         ) as mock_trigger:
             settings = MagicMock()
-            settings.webhook_secret = "test-secret"
+            settings.webhook_secret = "test-secret"  # pragma: allowlist secret
             settings.prefect_api_url = "https://api.prefect.cloud"
             mock_settings.return_value = settings
             mock_trigger.return_value = {
@@ -424,7 +423,7 @@ class TestPrefectFlowTriggering:
                         "tenant_tier": "free",
                     },
                 },
-                headers={"Authorization": "Bearer test-secret"},
+                headers={"Authorization": "Bearer test-secret"},  # pragma: allowlist secret
             )
             assert response.status_code == 200
 
@@ -444,7 +443,7 @@ class TestPrefectFlowTriggering:
             "app.routers.webhooks.trigger_prefect_flow", new_callable=AsyncMock
         ) as mock_trigger:
             settings = MagicMock()
-            settings.webhook_secret = "test-secret"
+            settings.webhook_secret = "test-secret"  # pragma: allowlist secret
             settings.prefect_api_url = "https://api.prefect.cloud"
             mock_settings.return_value = settings
             mock_trigger.return_value = {
@@ -464,7 +463,7 @@ class TestPrefectFlowTriggering:
                         "tenant_tier": "free",
                     },
                 },
-                headers={"Authorization": "Bearer test-secret"},
+                headers={"Authorization": "Bearer test-secret"},  # pragma: allowlist secret
             )
             assert response.status_code == 200
 
@@ -479,7 +478,7 @@ class TestPrefectFlowTriggering:
             "app.routers.webhooks.trigger_prefect_flow", new_callable=AsyncMock
         ) as mock_trigger:
             settings = MagicMock()
-            settings.webhook_secret = "test-secret"
+            settings.webhook_secret = "test-secret"  # pragma: allowlist secret
             settings.prefect_api_url = "https://api.prefect.cloud"
             mock_settings.return_value = settings
             mock_trigger.return_value = {
@@ -499,7 +498,7 @@ class TestPrefectFlowTriggering:
                         "tenant_tier": "premium",
                     },
                 },
-                headers={"Authorization": "Bearer test-secret"},
+                headers={"Authorization": "Bearer test-secret"},  # pragma: allowlist secret
             )
             assert response.status_code == 200
 
@@ -513,7 +512,7 @@ class TestPrefectFlowTriggering:
             "app.routers.webhooks.trigger_prefect_flow", new_callable=AsyncMock
         ) as mock_trigger:
             settings = MagicMock()
-            settings.webhook_secret = "test-secret"
+            settings.webhook_secret = "test-secret"  # pragma: allowlist secret
             settings.prefect_api_url = "https://api.prefect.cloud"
             mock_settings.return_value = settings
             mock_trigger.return_value = {
@@ -533,7 +532,7 @@ class TestPrefectFlowTriggering:
                         # No tenant_tier
                     },
                 },
-                headers={"Authorization": "Bearer test-secret"},
+                headers={"Authorization": "Bearer test-secret"},  # pragma: allowlist secret
             )
             assert response.status_code == 200
 
@@ -549,7 +548,7 @@ class TestPrefectAPIErrors:
         """Should return 503 when Prefect API is not configured."""
         with patch("app.routers.webhooks.get_settings") as mock_settings:
             settings = MagicMock()
-            settings.webhook_secret = "test-secret"
+            settings.webhook_secret = "test-secret"  # pragma: allowlist secret
             settings.prefect_api_url = ""  # Not configured
             mock_settings.return_value = settings
 
@@ -564,7 +563,7 @@ class TestPrefectAPIErrors:
                         "storage_key": "tenant-456/videos/video-123.mp4",
                     },
                 },
-                headers={"Authorization": "Bearer test-secret"},
+                headers={"Authorization": "Bearer test-secret"},  # pragma: allowlist secret
             )
             assert response.status_code == 503
             assert "Prefect API URL not configured" in response.json()["detail"]
@@ -573,9 +572,9 @@ class TestPrefectAPIErrors:
         """Should return 502 when Prefect API returns HTTP error."""
         with patch("app.routers.webhooks.get_settings") as mock_settings:
             settings = MagicMock()
-            settings.webhook_secret = "test-secret"
+            settings.webhook_secret = "test-secret"  # pragma: allowlist secret
             settings.prefect_api_url = "https://api.prefect.cloud"
-            settings.prefect_api_key = "test-key"
+            settings.prefect_api_key = "test-key"  # pragma: allowlist secret
             mock_settings.return_value = settings
 
             # Mock HTTP error response by patching AsyncClient context manager
@@ -603,7 +602,7 @@ class TestPrefectAPIErrors:
                             "storage_key": "tenant-456/videos/video-123.mp4",
                         },
                     },
-                    headers={"Authorization": "Bearer test-secret"},
+                    headers={"Authorization": "Bearer test-secret"},  # pragma: allowlist secret
                 )
                 assert response.status_code == 502
                 assert "Failed to trigger Prefect flow" in response.json()["detail"]
@@ -612,7 +611,7 @@ class TestPrefectAPIErrors:
         """Should return 503 when cannot connect to Prefect API."""
         with patch("app.routers.webhooks.get_settings") as mock_settings:
             settings = MagicMock()
-            settings.webhook_secret = "test-secret"
+            settings.webhook_secret = "test-secret"  # pragma: allowlist secret
             settings.prefect_api_url = "https://api.prefect.cloud"
             mock_settings.return_value = settings
 
@@ -635,7 +634,7 @@ class TestPrefectAPIErrors:
                             "storage_key": "tenant-456/videos/video-123.mp4",
                         },
                     },
-                    headers={"Authorization": "Bearer test-secret"},
+                    headers={"Authorization": "Bearer test-secret"},  # pragma: allowlist secret
                 )
                 assert response.status_code == 503
                 assert "Failed to connect to Prefect API" in response.json()["detail"]
@@ -644,7 +643,7 @@ class TestPrefectAPIErrors:
         """Should return 503 when Prefect API times out."""
         with patch("app.routers.webhooks.get_settings") as mock_settings:
             settings = MagicMock()
-            settings.webhook_secret = "test-secret"
+            settings.webhook_secret = "test-secret"  # pragma: allowlist secret
             settings.prefect_api_url = "https://api.prefect.cloud"
             mock_settings.return_value = settings
 
@@ -667,7 +666,7 @@ class TestPrefectAPIErrors:
                             "storage_key": "tenant-456/videos/video-123.mp4",
                         },
                     },
-                    headers={"Authorization": "Bearer test-secret"},
+                    headers={"Authorization": "Bearer test-secret"},  # pragma: allowlist secret
                 )
                 assert response.status_code == 503
                 assert "Failed to connect to Prefect API" in response.json()["detail"]
@@ -684,7 +683,7 @@ class TestAgeBoosting:
             "app.routers.webhooks.calculate_flow_priority"
         ) as mock_priority:
             settings = MagicMock()
-            settings.webhook_secret = "test-secret"
+            settings.webhook_secret = "test-secret"  # pragma: allowlist secret
             settings.prefect_api_url = "https://api.prefect.cloud"
             mock_settings.return_value = settings
             mock_trigger.return_value = {
@@ -712,7 +711,7 @@ class TestAgeBoosting:
                         "created_at": old_timestamp,
                     },
                 },
-                headers={"Authorization": "Bearer test-secret"},
+                headers={"Authorization": "Bearer test-secret"},  # pragma: allowlist secret
             )
             assert response.status_code == 200
 
@@ -734,7 +733,7 @@ class TestAgeBoosting:
             "app.routers.webhooks.trigger_prefect_flow", new_callable=AsyncMock
         ) as mock_trigger:
             settings = MagicMock()
-            settings.webhook_secret = "test-secret"
+            settings.webhook_secret = "test-secret"  # pragma: allowlist secret
             settings.prefect_api_url = "https://api.prefect.cloud"
             mock_settings.return_value = settings
             mock_trigger.return_value = {
@@ -754,7 +753,7 @@ class TestAgeBoosting:
                         "created_at": "invalid-timestamp",
                     },
                 },
-                headers={"Authorization": "Bearer test-secret"},
+                headers={"Authorization": "Bearer test-secret"},  # pragma: allowlist secret
             )
             # Should still succeed with default priority
             assert response.status_code == 200

@@ -18,7 +18,6 @@ import argparse
 import json
 import os
 import sys
-from typing import Optional
 
 try:
     import httpx
@@ -30,12 +29,12 @@ except ImportError:
 def generate_token(
     project: str,
     service: str,
-    description: Optional[str] = None,
+    description: str | None = None,
     expires_in_days: int = 90,
-    backend: Optional[str] = None,
-    created_by: Optional[str] = None,
-    supabase_url: Optional[str] = None,
-    service_role_key: Optional[str] = None,
+    backend: str | None = None,
+    created_by: str | None = None,
+    supabase_url: str | None = None,
+    service_role_key: str | None = None,
 ) -> dict:
     """
     Generate a JWT token via Supabase Edge Function.

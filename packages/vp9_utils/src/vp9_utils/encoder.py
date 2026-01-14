@@ -3,8 +3,9 @@
 import sqlite3
 import subprocess
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Literal, TypedDict
+from typing import Literal, TypedDict
 
 FrameType = Literal["cropped", "full"]
 
@@ -110,7 +111,7 @@ def write_frames_to_temp_dir(frames: list[tuple[int, bytes, int, int]], temp_dir
 
     width, height = None, None
 
-    for i, (frame_index, image_data, w, h) in enumerate(frames):
+    for i, (_frame_index, image_data, w, h) in enumerate(frames):
         if width is None:
             width, height = w, h
 

@@ -1,7 +1,7 @@
 """GPU-accelerated video processing utilities."""
 
 from .decoder import GPUVideoDecoder
-from .frame_extraction import extract_frames_gpu, extract_frames_for_montage
+from .frame_extraction import extract_frames_for_montage, extract_frames_gpu
 from .gpu_montage import (
     MontageValidationError,
     create_vertical_montage_cpu,

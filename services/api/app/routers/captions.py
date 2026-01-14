@@ -10,8 +10,6 @@ from app.models.captions import (
     BatchRequest,
     BatchResponse,
     BatchResultItem,
-    BatchUpdateData,
-    Caption,
     CaptionCreate,
     CaptionListResponse,
     CaptionResponse,

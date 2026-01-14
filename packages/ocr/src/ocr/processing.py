@@ -1,7 +1,6 @@
 """High-level OCR processing with automatic batching via montage."""
 
 from io import BytesIO
-from typing import List, Tuple
 
 from PIL import Image
 
@@ -12,10 +11,10 @@ from .montage import create_vertical_montage, distribute_results_to_images
 
 
 def process_frames_with_ocr(
-    frames: List[Tuple[str, bytes]],
+    frames: list[tuple[str, bytes]],
     backend: OCRBackend,
     language: str = "zh-Hans",
-) -> List[OCRResult]:
+) -> list[OCRResult]:
     """Process frames with OCR using automatic montage batching.
 
     High-level processing flow:
@@ -66,7 +65,7 @@ def process_frames_with_ocr(
     even_batch_size = calculate_even_batch_size(len(frames), max_batch_size)
 
     # Process frames in batches
-    all_results: List[OCRResult] = []
+    all_results: list[OCRResult] = []
 
     for batch_start in range(0, len(frames), even_batch_size):
         batch_end = min(batch_start + even_batch_size, len(frames))

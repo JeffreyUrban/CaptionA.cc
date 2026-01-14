@@ -41,7 +41,7 @@ class TestGPUFrameExtraction:
             assert frame_path.suffix == ".jpg", f"Frame should be JPEG: {frame_path}"
             assert frame_path.stat().st_size > 0, f"Frame should not be empty: {frame_path}"
 
-        print(f"\n=== GPU Frame Extraction ===")
+        print("\n=== GPU Frame Extraction ===")
         print(f"Extracted {len(frame_paths)} frames")
         print(f"Output directory: {output_dir}")
 
@@ -70,7 +70,7 @@ class TestGPUFrameExtraction:
             assert frame_path.name == expected_name, \
                 f"Frame {i} should be named {expected_name}, got {frame_path.name}"
 
-        print(f"\n=== Frame Naming Convention ===")
+        print("\n=== Frame Naming Convention ===")
         print(f"First frame: {frame_paths[0].name}")
         if len(frame_paths) > 1:
             print(f"Last frame: {frame_paths[-1].name}")
@@ -78,8 +78,9 @@ class TestGPUFrameExtraction:
     @pytest.mark.parametrize("rate_hz", [0.05, 0.1, 0.2])
     def test_extract_frames_gpu_different_rates(self, test_video_path, tmp_path, rate_hz):
         """Test extraction at different frame rates."""
-        from extract_full_frames_and_ocr.frames_gpu import extract_frames_gpu
         from gpu_video_utils import GPUVideoDecoder
+
+        from extract_full_frames_and_ocr.frames_gpu import extract_frames_gpu
 
         output_dir = tmp_path / f"frames_{rate_hz}"
         output_dir.mkdir()
@@ -110,9 +111,10 @@ class TestGPUFrameExtraction:
 
     def test_extract_frames_gpu_with_cropping(self, test_video_path, tmp_path):
         """Test GPU frame extraction with cropping."""
-        from extract_full_frames_and_ocr.frames_gpu import extract_frames_gpu
         from gpu_video_utils import GPUVideoDecoder
         from PIL import Image
+
+        from extract_full_frames_and_ocr.frames_gpu import extract_frames_gpu
 
         # Get video dimensions
         with GPUVideoDecoder(test_video_path) as decoder:
@@ -148,7 +150,7 @@ class TestGPUFrameExtraction:
         assert first_frame.size == (expected_width, expected_height), \
             f"Cropped frame should be {expected_width}x{expected_height}, got {first_frame.size}"
 
-        print(f"\n=== Cropped Frame Extraction ===")
+        print("\n=== Cropped Frame Extraction ===")
         print(f"Original: {width}x{height}")
         print(f"Cropped: {expected_width}x{expected_height}")
         print(f"Extracted {len(frame_paths)} cropped frames")
@@ -179,7 +181,7 @@ class TestGPUFrameExtraction:
         assert progress_calls[-1][1] == len(frame_paths), \
             "Total in progress should match frame count"
 
-        print(f"\n=== Progress Tracking ===")
+        print("\n=== Progress Tracking ===")
         print(f"Progress calls: {len(progress_calls)}")
         print(f"Final: {progress_calls[-1][0]}/{progress_calls[-1][1]}")
 
@@ -227,7 +229,7 @@ class TestGPUOCRIntegration:
 
         conn.close()
 
-        print(f"\n=== GPU + OCR Processing ===")
+        print("\n=== GPU + OCR Processing ===")
         print(f"Total OCR boxes: {total_boxes}")
         print(f"Database: {db_path}")
         print(f"Database size: {db_path.stat().st_size / 1024:.1f} KB")
@@ -253,7 +255,7 @@ class TestGPUOCRIntegration:
         assert db_path.exists(), "Database should be created"
         assert total_boxes >= 0, "Should complete without error"
 
-        print(f"\n=== OCR with Chinese Language Hint ===")
+        print("\n=== OCR with Chinese Language Hint ===")
         print(f"Total boxes: {total_boxes}")
 
 

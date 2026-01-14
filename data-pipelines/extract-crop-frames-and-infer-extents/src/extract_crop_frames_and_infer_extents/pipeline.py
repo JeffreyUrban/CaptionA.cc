@@ -74,12 +74,8 @@ from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
-from typing import Tuple
 
 import torch
-from PIL import Image as PILImage
-
-from .models import CropInferResult, CropRegion
 
 # Import from caption_frame_extents package
 from caption_frame_extents.inference.batch_predictor import BatchCaptionFrameExtentsPredictor
@@ -88,6 +84,9 @@ from caption_frame_extents.inference.wasabi import WasabiClient
 
 # Import shared GPU utilities
 from gpu_video_utils import GPUVideoDecoder
+from PIL import Image as PILImage
+
+from .models import CropInferResult, CropRegion
 
 # Try to import monitoring libraries
 try:
@@ -310,7 +309,7 @@ class ParallelEncodingCoordinator:
         finally:
             Path(filelist_path).unlink(missing_ok=True)
 
-    def wait_for_completion(self) -> list[Tuple[int, Path]]:
+    def wait_for_completion(self) -> list[tuple[int, Path]]:
         """Wait for all encoding tasks to complete and return chunk paths."""
         chunk_paths = []
         completed = 0
@@ -428,21 +427,21 @@ class PerformanceMetrics:
         encoding_time = self.encoding_end - self.encoding_start
 
         print(f"\n{'=' * 80}")
-        print(f"PERFORMANCE METRICS")
+        print("PERFORMANCE METRICS")
         print(f"{'=' * 80}")
-        print(f"Extraction:")
+        print("Extraction:")
         print(f"  • Time: {extraction_time:.2f}s")
         print(f"  • Frames: {self.frames_extracted}")
         print(f"  • Throughput: {self.frames_extracted / extraction_time:.1f} fps")
-        print(f"\nInference:")
+        print("\nInference:")
         print(f"  • Time: {inference_time:.2f}s")
         print(f"  • Pairs: {self.pairs_inferred}")
         print(f"  • Throughput: {self.pairs_inferred / inference_time:.1f} pairs/sec")
-        print(f"\nEncoding:")
+        print("\nEncoding:")
         print(f"  • Time: {encoding_time:.2f}s")
         print(f"  • Chunks: {self.chunks_encoded}")
         print(f"  • Throughput: {self.frames_extracted / encoding_time:.1f} fps")
-        print(f"\nOverlap Analysis:")
+        print("\nOverlap Analysis:")
         # Check if inference finished before extraction
         inference_wait = max(0, self.extraction_end - self.inference_end)
         print(f"  • Inference wait for extraction: {inference_wait:.2f}s")
@@ -450,7 +449,7 @@ class PerformanceMetrics:
         total_pipeline = max(extraction_time, inference_time)
         if encoding_time > total_pipeline * 1.5:
             print(f"  ⚠️  BOTTLENECK: Encoding is {encoding_time/total_pipeline:.1f}x slower than GPU pipeline")
-            print(f"     Consider offloading VP9 encoding to separate instances")
+            print("     Consider offloading VP9 encoding to separate instances")
         else:
             print(f"  ✓ Encoding throughput is adequate ({encoding_time/total_pipeline:.1f}x GPU pipeline time)")
         print(f"{'=' * 80}\n")
@@ -523,9 +522,11 @@ class VP9EncoderPool:
     def encode_all_chunks(
         self,
         frame_files: list[Path],
-        modulo_levels: list[int] = [16, 4, 1],
-    ) -> list[Tuple[int, Path]]:
+        modulo_levels: list[int] = None,
+    ) -> list[tuple[int, Path]]:
         """Encode all chunks in parallel across modulo levels."""
+        if modulo_levels is None:
+            modulo_levels = [16, 4, 1]
         chunk_paths = []
         encoding_tasks = []
 
@@ -621,7 +622,7 @@ def crop_and_infer_caption_frame_extents_pipelined(
     job_start = time.time()
 
     print(f"\n{'=' * 80}")
-    print(f"Starting Pipelined Crop and Infer Job")
+    print("Starting Pipelined Crop and Infer Job")
     print(f"{'=' * 80}")
     print(f"Video: {video_key}")
     print(f"Tenant: {tenant_id}")
@@ -692,10 +693,9 @@ def crop_and_infer_caption_frame_extents_pipelined(
         # Decompress
         import gzip
         import shutil
-        with gzip.open(layout_db_gz_path, 'rb') as f_in:
-            with open(layout_db_path, 'wb') as f_out:
-                shutil.copyfileobj(f_in, f_out)
-        print(f"  Downloaded and decompressed\n")
+        with gzip.open(layout_db_gz_path, 'rb') as f_in, open(layout_db_path, 'wb') as f_out:
+            shutil.copyfileobj(f_in, f_out)
+        print("  Downloaded and decompressed\n")
 
         # Step 5: Initialize pipelined processing
         print("[5/7] Starting pipelined processing...")
@@ -938,7 +938,7 @@ def crop_and_infer_caption_frame_extents_pipelined(
         print(f"  All encoding complete: {len(chunk_paths)} chunks in {encoding_duration:.2f}s")
 
         # Wait for all uploads to complete (chunks are already uploading in parallel)
-        print(f"  Waiting for chunk uploads to complete...")
+        print("  Waiting for chunk uploads to complete...")
         uploaded_chunks = upload_coordinator.wait_for_completion()
 
         upload_duration = time.time() - upload_start
@@ -990,7 +990,7 @@ def crop_and_infer_caption_frame_extents_pipelined(
         total_duration = time.time() - job_start
 
         print(f"{'=' * 80}")
-        print(f"Pipelined Job Complete")
+        print("Pipelined Job Complete")
         print(f"{'=' * 80}")
         print(f"Version: {version}")
         print(f"Frames: {frame_count}")

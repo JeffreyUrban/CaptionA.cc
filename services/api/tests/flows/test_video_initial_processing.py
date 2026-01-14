@@ -7,7 +7,6 @@ Tests cover:
 3. Concurrency scenarios - multiple videos, idempotency, tenant isolation
 """
 import asyncio
-import os
 from unittest.mock import Mock, patch
 
 import pytest
@@ -30,8 +29,8 @@ def mock_extract_result() -> ExtractResult:
         failed_ocr_count=2,
         processing_duration_seconds=45.5,
         full_frames_key="test-tenant-123/client/videos/test-video-789/full_frames/",
-        ocr_db_key="test-tenant-123/server/videos/test-video-789/raw-ocr.db.gz",
-        layout_db_key="test-tenant-123/client/videos/test-video-789/layout.db.gz",
+        ocr_db_key="test-tenant-123/server/videos/test-video-789/raw-ocr.db.gz",  # pragma: allowlist secret
+        layout_db_key="test-tenant-123/client/videos/test-video-789/layout.db.gz",  # pragma: allowlist secret
     )
 
 
@@ -48,7 +47,7 @@ def mock_supabase_service() -> Mock:
 def mock_env_vars(monkeypatch):
     """Mock environment variables for all tests."""
     monkeypatch.setenv("SUPABASE_URL", "https://test.supabase.co")
-    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "test-key")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "test-key")  # pragma: allowlist secret
     monkeypatch.setenv("SUPABASE_SCHEMA", "captionacc_test")
 
 
@@ -764,8 +763,8 @@ class TestVideoInitialProcessingErrors:
             failed_ocr_count=95,  # Most frames failed
             processing_duration_seconds=5.0,
             full_frames_key="test-tenant-123/client/videos/test-video-789/full_frames/",
-            ocr_db_key="test-tenant-123/server/videos/test-video-789/raw-ocr.db.gz",
-            layout_db_key="test-tenant-123/client/videos/test-video-789/layout.db.gz",
+            ocr_db_key="test-tenant-123/server/videos/test-video-789/raw-ocr.db.gz",  # pragma: allowlist secret
+            layout_db_key="test-tenant-123/client/videos/test-video-789/layout.db.gz",  # pragma: allowlist secret
         )
 
         with prefect_test_harness():

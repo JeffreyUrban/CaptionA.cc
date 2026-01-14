@@ -85,9 +85,11 @@ def extract_frames_and_ocr_impl(
         - {tenant_id}/client/videos/{video_id}/full_frames/frame_NNNNNNNNNN.jpg
         - {tenant_id}/server/videos/{video_id}/fullOCR.db
     """
-    from extract_full_frames_and_ocr.pipeline import process_video_with_gpu_and_ocr
-    import boto3
     import os
+
+    import boto3
+
+    from extract_full_frames_and_ocr.pipeline import process_video_with_gpu_and_ocr
 
     # Get S3 client (following captionacc-modal pattern)
     wasabi_client = boto3.client(
@@ -102,7 +104,7 @@ def extract_frames_and_ocr_impl(
     job_start = time.time()
 
     print(f"\n{'=' * 80}")
-    print(f"Starting Full Frames GPU + OCR Job")
+    print("Starting Full Frames GPU + OCR Job")
     print(f"{'=' * 80}")
     print(f"Video: {video_key}")
     print(f"Tenant: {tenant_id}")
@@ -173,7 +175,7 @@ def extract_frames_and_ocr_impl(
         total_duration = time.time() - job_start
 
         print(f"{'=' * 80}")
-        print(f"Job Complete")
+        print("Job Complete")
         print(f"{'=' * 80}")
         print(f"Frames: {frame_count}")
         print(f"OCR boxes: {total_boxes}")

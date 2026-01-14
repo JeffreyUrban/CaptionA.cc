@@ -39,7 +39,7 @@ def supabase_service(mock_supabase_client):
         mock_create.return_value = mock_supabase_client
         service = SupabaseServiceImpl(
             supabase_url="https://test.supabase.co",
-            supabase_key="test-key",
+            supabase_key="test-key",  # pragma: allowlist secret
             schema="test_schema"
         )
         service.client = mock_supabase_client
@@ -500,7 +500,7 @@ class TestGetVideoMetadata:
             "status": "processing",
             "duration_seconds": 120.5,
             "current_cropped_frames_version": 1,
-            "captions_db_key": "captions/video-123.db",
+            "captions_db_key": "captions/video-123.db",  # pragma: allowlist secret
             "prefect_flow_run_id": "flow-run-456"
         }
         response = Mock(data=video_data)
@@ -515,7 +515,7 @@ class TestGetVideoMetadata:
         assert metadata["status"] == "processing"
         assert metadata["duration_seconds"] == 120.5
         assert metadata["current_cropped_frames_version"] == 1
-        assert metadata["captions_db_key"] == "captions/video-123.db"
+        assert metadata["captions_db_key"] == "captions/video-123.db"  # pragma: allowlist secret
         assert metadata["prefect_flow_run_id"] == "flow-run-456"
 
     def test_get_video_metadata_not_found(self, supabase_service, mock_supabase_client):
@@ -572,11 +572,11 @@ class TestSupabaseServiceInitialization:
 
             service = SupabaseServiceImpl(
                 supabase_url="https://test.supabase.co",
-                supabase_key="test-key"
+                supabase_key="test-key"  # pragma: allowlist secret
             )
 
             assert service.supabase_url == "https://test.supabase.co"
-            assert service.supabase_key == "test-key"
+            assert service.supabase_key == "test-key"  # pragma: allowlist secret
             assert service.schema == "captionacc_production"
             assert service.client == mock_client
 
@@ -588,7 +588,7 @@ class TestSupabaseServiceInitialization:
 
             service = SupabaseServiceImpl(
                 supabase_url="https://test.supabase.co",
-                supabase_key="test-key",
+                supabase_key="test-key",  # pragma: allowlist secret
                 schema="custom_schema"
             )
 
@@ -602,10 +602,10 @@ class TestSupabaseServiceInitialization:
 
             _service = SupabaseServiceImpl(
                 supabase_url="https://test.supabase.co",
-                supabase_key="test-key"
+                supabase_key="test-key"  # pragma: allowlist secret
             )
 
             mock_create.assert_called_once_with(
                 "https://test.supabase.co",
-                "test-key"
+                "test-key"  # pragma: allowlist secret
             )

@@ -12,18 +12,17 @@ All functions are called remotely from Prefect flows running in the API service.
 """
 
 # Export models for use by Prefect flows
-from .models import (
-    CropRegion,
-    ExtractResult,
-    CropInferResult,
-    CaptionOcrResult,
-)
-
 # Export function protocols (interface contracts)
 from .functions import (
-    ExtractFramesAndOcr,
     CropAndInferCaptionFrameExtents,
+    ExtractFramesAndOcr,
     GenerateCaptionOcr,
+)
+from .models import (
+    CaptionOcrResult,
+    CropInferResult,
+    CropRegion,
+    ExtractResult,
 )
 
 __all__ = [

@@ -3,12 +3,12 @@
 from pathlib import Path
 
 import typer
+from gpu_video_utils import GPUVideoDecoder
 from rich.console import Console
 
 from . import __version__
 from .database import get_database_path
 from .pipeline import process_video_with_gpu_and_ocr
-from gpu_video_utils import GPUVideoDecoder
 
 app = typer.Typer(
     name="full_frames",
@@ -121,7 +121,7 @@ def analyze(
         )
 
         console.print()
-        console.print(f"  [green]✓[/green] GPU extraction complete")
+        console.print("  [green]✓[/green] GPU extraction complete")
         console.print(f"  [green]✓[/green] OCR processing complete ({total_boxes} text boxes)")
         console.print(f"  [green]✓[/green] Results saved to: {db_path}")
         console.print()

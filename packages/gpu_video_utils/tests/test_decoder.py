@@ -101,7 +101,7 @@ def test_frame_timing_precision(test_video_path):
         frame = decoder.get_frame_at_time(frame_time)
 
         # Expected native frame index
-        expected_idx = round(frame_time * native_fps)
+        round(frame_time * native_fps)
 
         # Frame should exist (no ValueError)
         assert frame is not None

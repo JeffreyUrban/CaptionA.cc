@@ -24,7 +24,7 @@ def webhook_secret() -> str:
 @pytest.fixture
 def invalid_webhook_secret() -> str:
     """Invalid webhook secret for testing unauthorized access."""
-    return "wrong-webhook-secret"
+    return "wrong-webhook-secret"  # pragma: allowlist secret
 
 
 @pytest.fixture
@@ -240,7 +240,7 @@ async def webhook_client(
         mock_settings_instance = mock_settings.return_value
         mock_settings_instance.webhook_secret = webhook_secret
         mock_settings_instance.prefect_api_url = "http://test-prefect-api"
-        mock_settings_instance.prefect_api_key = "test-api-key"
+        mock_settings_instance.prefect_api_key = "test-api-key"  # pragma: allowlist secret
 
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:

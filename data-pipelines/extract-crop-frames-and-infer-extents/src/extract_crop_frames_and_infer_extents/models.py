@@ -3,7 +3,6 @@ Data models for Modal function interfaces.
 These are the contracts between Modal functions and Prefect flows.
 """
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass
@@ -88,4 +87,4 @@ class CaptionOcrResult:
 
     # Processing metadata
     frame_count: int        # Number of frames used to generate median
-    median_frame_index: Optional[int] = None  # Index of the middle frame (for debugging)
+    median_frame_index: int | None = None  # Index of the middle frame (for debugging)

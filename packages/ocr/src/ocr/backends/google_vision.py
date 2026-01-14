@@ -2,19 +2,18 @@
 
 import json
 import os
-from typing import Optional
 
 from google.cloud import vision
 from google.oauth2 import service_account
 
-from ..models import OCRResult, BoundingBox, CharacterResult
+from ..models import BoundingBox, CharacterResult, OCRResult
 from .base import OCRBackend
 
 
 class GoogleVisionBackend(OCRBackend):
     """Google Vision API backend using SERVICE_ACCOUNT_JSON for credentials."""
 
-    def __init__(self, credentials_json: Optional[str] = None):
+    def __init__(self, credentials_json: str | None = None):
         """Initialize with credentials.
 
         Args:

@@ -160,7 +160,7 @@ class TestLockContention:
 
             service = SupabaseServiceImpl(
                 supabase_url="https://test.supabase.co",
-                supabase_key="test-key",
+                supabase_key="test-key",  # pragma: allowlist secret
                 schema="test_schema"
             )
 

@@ -133,7 +133,7 @@ def get_anchor_position(boxes, anchor_type, crop_left, crop_right):
         for _ in range(3):  # A few iterations is enough
             weights = [1.0 / (1.0 + abs(pos - center) / scale) for pos in positions]
             total_weight = sum(weights)
-            center = sum(pos * w for pos, w in zip(positions, weights)) / total_weight
+            center = sum(pos * w for pos, w in zip(positions, weights, strict=False)) / total_weight
 
         return int(round(center))
     else:
@@ -172,7 +172,7 @@ def analyze_subtitle_region(ocr_annotations: list[dict], width: int, height: int
 
     for entry in ocr_annotations:
         total_boxes += len(entry["annotations"])
-        for text, confidence, frac_bounds in entry["annotations"]:
+        for _text, _confidence, frac_bounds in entry["annotations"]:
             # Convert fractional bounds to pixels
             box = convert_fractional_bounds_to_pixels(frac_bounds, img_width, img_height)
             all_boxes.append(box)

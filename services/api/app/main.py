@@ -7,13 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
-logger = logging.getLogger(__name__)
+from app.prefect_runner import get_worker_manager
 from app.routers import (
     actions,
     admin,
@@ -27,7 +21,13 @@ from app.routers import (
     websocket_sync,
 )
 from app.services.background_tasks import get_upload_worker
-from app.prefect_runner import get_worker_manager
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager

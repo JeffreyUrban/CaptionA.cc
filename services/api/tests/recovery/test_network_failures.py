@@ -147,7 +147,7 @@ class TestNetworkFailureRecovery:
 
             service = SupabaseServiceImpl(
                 supabase_url="https://test.supabase.co",
-                supabase_key="test-key",
+                supabase_key="test-key",  # pragma: allowlist secret
                 schema="test_schema"
             )
 
@@ -198,7 +198,7 @@ class TestNetworkFailureRecovery:
 
             service = SupabaseServiceImpl(
                 supabase_url="https://test.supabase.co",
-                supabase_key="test-key",
+                supabase_key="test-key",  # pragma: allowlist secret
                 schema="test_schema"
             )
 
@@ -431,7 +431,7 @@ class TestNetworkFailureRecovery:
 
             supabase_service = SupabaseServiceImpl(
                 supabase_url="https://test.supabase.co",
-                supabase_key="test-key",
+                supabase_key="test-key",  # pragma: allowlist secret
                 schema="test_schema"
             )
 

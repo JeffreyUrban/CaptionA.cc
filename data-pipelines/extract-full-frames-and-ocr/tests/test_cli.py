@@ -4,9 +4,8 @@ import os
 import re
 
 import pytest
-from typer.testing import CliRunner
-
 from full_frames.cli import app
+from typer.testing import CliRunner
 
 # Ensure consistent terminal width for Rich formatting across all environments
 os.environ.setdefault("COLUMNS", "120")

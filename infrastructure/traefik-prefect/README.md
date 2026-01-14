@@ -94,7 +94,7 @@ Use the Supabase Edge Function to generate JWT tokens:
 ```bash
 # Set environment variables
 export SUPABASE_URL="https://your-project.supabase.co"
-export SUPABASE_SERVICE_ROLE_KEY="your-service-role-key"
+export SUPABASE_SERVICE_ROLE_KEY="your-service-role-key"  # pragma: allowlist secret
 
 # Generate tokens (use the helper script from api-gateway service)
 python ../api-gateway/generate-token.py \
