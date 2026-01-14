@@ -98,7 +98,7 @@ export interface VideoFilePreview {
   uploadProgress: number
   uploadStatus: UploadStatus
   uploadId?: string
-  uploadUrl?: string // TUS upload URL for resumability
+  // Note: uploadUrl removed - S3 presigned URLs are short-lived and not resumable like TUS
   videoId?: string // UUID of created video (set when upload completes)
   error?: string
   isDuplicate?: boolean // Pre-upload duplicate check (by path)

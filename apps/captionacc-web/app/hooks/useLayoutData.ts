@@ -1,6 +1,9 @@
 /**
  * Custom hook for managing Layout annotation data fetching and state.
  * Extracts the data management logic from the main AnnotateLayout component.
+ *
+ * Updated to use CR-SQLite database via useLayoutDatabase hook instead of REST API calls.
+ * All existing function signatures and return types are maintained for backward compatibility.
  */
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
@@ -19,19 +22,22 @@ import {
   type LayoutParamsEdit,
   type EditStateUpdaters,
 } from '~/types/layout'
-import {
-  fetchLayoutQueue,
-  fetchAnalysisBoxes,
-  fetchFrameBoxes,
-  saveBoxAnnotations,
-  recalculatePredictions,
-  resetCropRegion,
-  clearAllAnnotations,
-  prefetchFrameBoxes,
-} from '~/utils/layout-api'
+import { useLayoutDatabase, type UseLayoutDatabaseReturn } from './useLayoutDatabase'
+import type {
+  LayoutQueueResult,
+  BoxDataResult,
+  FrameBoxesResult,
+  FrameInfoResult,
+  LayoutConfigResult,
+} from '~/services/database-queries'
+
+// =============================================================================
+// Interface Params & Return
+// =============================================================================
 
 interface UseLayoutDataParams {
   videoId: string
+  tenantId?: string // Optional tenant ID for S3 path
   showAlert?: (title: string, message: string, type: 'info' | 'error' | 'success') => void
 }
 
@@ -69,7 +75,103 @@ interface UseLayoutDataReturn {
   setAnnotationsSinceRecalc: (count: number) => void
   setLayoutApproved: (approved: boolean) => void
   handleClearAll: () => Promise<void>
+  // New properties for lock status (UI can use these to show lock banner)
+  canEdit: boolean
+  lockState:
+    | 'loading'
+    | 'checking'
+    | 'acquiring'
+    | 'granted'
+    | 'denied'
+    | 'transferring'
+    | 'server_processing'
+    | 'released'
+    | 'error'
+  lockHolder: { userId: string; displayName?: string; isCurrentUser: boolean } | null
+  acquireLock: () => Promise<void>
+  releaseLock: () => Promise<void>
 }
+
+// =============================================================================
+// Type Converters
+// =============================================================================
+
+/**
+ * Convert FrameInfoResult to FrameInfo (for backward compatibility).
+ */
+function convertFrameInfo(result: FrameInfoResult): FrameInfo {
+  return {
+    frameIndex: result.frameIndex,
+    totalBoxCount: result.totalBoxCount,
+    captionBoxCount: result.captionBoxCount,
+    minConfidence: result.minConfidence,
+    hasAnnotations: result.hasAnnotations,
+    imageUrl: result.imageUrl,
+  }
+}
+
+/**
+ * Convert LayoutConfigResult to LayoutConfig (for backward compatibility).
+ */
+function convertLayoutConfig(result: LayoutConfigResult): LayoutConfig {
+  return {
+    frameWidth: result.frameWidth,
+    frameHeight: result.frameHeight,
+    cropLeft: result.cropLeft,
+    cropTop: result.cropTop,
+    cropRight: result.cropRight,
+    cropBottom: result.cropBottom,
+    selectionLeft: result.selectionLeft,
+    selectionTop: result.selectionTop,
+    selectionRight: result.selectionRight,
+    selectionBottom: result.selectionBottom,
+    verticalPosition: result.verticalPosition,
+    verticalStd: result.verticalStd,
+    boxHeight: result.boxHeight,
+    boxHeightStd: result.boxHeightStd,
+    anchorType: result.anchorType,
+    anchorPosition: result.anchorPosition,
+    topEdgeStd: result.topEdgeStd,
+    bottomEdgeStd: result.bottomEdgeStd,
+    horizontalStdSlope: result.horizontalStdSlope,
+    horizontalStdIntercept: result.horizontalStdIntercept,
+    cropRegionVersion: result.cropRegionVersion,
+  }
+}
+
+/**
+ * Convert BoxDataResult to BoxData (for backward compatibility).
+ */
+function convertBoxData(result: BoxDataResult): BoxData {
+  return {
+    boxIndex: result.boxIndex,
+    text: result.text,
+    originalBounds: result.originalBounds,
+    displayBounds: result.displayBounds,
+    predictedLabel: result.predictedLabel ?? 'in',
+    predictedConfidence: result.predictedConfidence,
+    userLabel: result.userLabel,
+    colorCode: result.colorCode,
+  }
+}
+
+/**
+ * Convert FrameBoxesResult to FrameBoxesData (for backward compatibility).
+ */
+function convertFrameBoxesData(result: FrameBoxesResult): FrameBoxesData {
+  return {
+    frameIndex: result.frameIndex,
+    imageUrl: result.imageUrl,
+    cropRegion: result.cropRegion,
+    frameWidth: result.frameWidth,
+    frameHeight: result.frameHeight,
+    boxes: result.boxes.map(convertBoxData),
+  }
+}
+
+// =============================================================================
+// Helper Functions
+// =============================================================================
 
 function updateEditStateFromConfig(layoutConfig: LayoutConfig, updaters: EditStateUpdaters): void {
   updaters.setCropRegionEdit({
@@ -107,26 +209,47 @@ function updateEditStateFromConfig(layoutConfig: LayoutConfig, updaters: EditSta
 }
 
 function processQueueResponse(
-  data: LayoutQueueResponse,
+  data: LayoutQueueResult,
   skipEditStateUpdate: boolean,
   setFrames: (frames: FrameInfo[]) => void,
   setLayoutConfig: (config: LayoutConfig | null) => void,
   setLayoutApproved: (approved: boolean) => void,
   editUpdaters: EditStateUpdaters
 ): void {
-  setFrames(data.frames ?? [])
-  setLayoutConfig(data.layoutConfig ?? null)
-  setLayoutApproved(data.layoutApproved ?? false)
+  setFrames(data.frames.map(convertFrameInfo))
+  const config = data.layoutConfig ? convertLayoutConfig(data.layoutConfig) : null
+  setLayoutConfig(config)
+  setLayoutApproved(data.layoutApproved)
 
-  if (data.layoutConfig && !skipEditStateUpdate) {
-    updateEditStateFromConfig(data.layoutConfig, editUpdaters)
+  if (config && !skipEditStateUpdate) {
+    updateEditStateFromConfig(config, editUpdaters)
   }
 }
 
-export function useLayoutData({ videoId, showAlert }: UseLayoutDataParams): UseLayoutDataReturn {
+// =============================================================================
+// Main Hook
+// =============================================================================
+
+export function useLayoutData({
+  videoId,
+  tenantId,
+  showAlert,
+}: UseLayoutDataParams): UseLayoutDataReturn {
+  // Use the new database hook
+  const db = useLayoutDatabase({
+    videoId,
+    tenantId,
+    autoAcquireLock: true,
+    onError: err => {
+      console.error('[useLayoutData] Database error:', err)
+      setError(err.message)
+    },
+  })
+
+  // Local state
   const [frames, setFrames] = useState<FrameInfo[]>([])
   const [layoutConfig, setLayoutConfig] = useState<LayoutConfig | null>(null)
-  const [layoutApproved, setLayoutApproved] = useState(false)
+  const [layoutApproved, setLayoutApprovedState] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>('analysis')
@@ -145,6 +268,21 @@ export function useLayoutData({ videoId, showAlert }: UseLayoutDataParams): UseL
   const [, setLayoutParamsEdit] = useState<LayoutParamsEdit | null>(null)
 
   const frameBoxesCache = useRef<Map<number, FrameBoxesData>>(new Map())
+
+  // Sync loading state with database
+  useEffect(() => {
+    if (db.isLoading) {
+      setLoading(true)
+    }
+  }, [db.isLoading])
+
+  // Handle database error
+  useEffect(() => {
+    if (db.error) {
+      setError(db.error.message)
+      setLoading(false)
+    }
+  }, [db.error])
 
   const boxStats = useMemo(() => {
     if (!analysisBoxes) return null
@@ -197,19 +335,20 @@ export function useLayoutData({ videoId, showAlert }: UseLayoutDataParams): UseL
     if (selectedFrameIndex !== null) setPulseStartTime(Date.now())
   }, [selectedFrameIndex])
 
+  // Load queue using database
   const loadQueue = useCallback(
     async (showLoading = true, skipEditStateUpdate = false) => {
-      if (!videoId) return
+      if (!videoId || !db.isReady) return
       if (showLoading) setError(null)
 
       try {
-        const data = await fetchLayoutQueue(videoId)
+        const data = await db.getQueue()
         processQueueResponse(
           data,
           skipEditStateUpdate,
           setFrames,
           setLayoutConfig,
-          setLayoutApproved,
+          setLayoutApprovedState,
           editUpdaters
         )
         if (showLoading) setLoading(false)
@@ -221,26 +360,28 @@ export function useLayoutData({ videoId, showAlert }: UseLayoutDataParams): UseL
         }
       }
     },
-    [videoId, editUpdaters]
+    [videoId, db.isReady, db.getQueue, editUpdaters]
   )
 
+  // Load analysis boxes using database
   const loadAnalysisBoxes = useCallback(async () => {
-    if (!videoId) return
+    if (!videoId || !db.isReady) return
     try {
-      const data = await fetchAnalysisBoxes(videoId)
-      setAnalysisBoxes(Array.isArray(data.boxes) ? data.boxes : [])
+      const data = await db.getAnalysisBoxes()
+      setAnalysisBoxes(Array.isArray(data.boxes) ? data.boxes.map(convertBoxData) : [])
     } catch (loadError) {
       console.error('Error loading analysis boxes:', loadError)
       setAnalysisBoxes([]) // Clear on error to prevent filter errors
     }
-  }, [videoId])
+  }, [videoId, db.isReady, db.getAnalysisBoxes])
 
+  // Recalculate crop region
   const recalculateCropRegion = useCallback(async () => {
-    if (!videoId) return
+    if (!videoId || !db.isReady) return
     setIsRecalculating(true)
     try {
-      await recalculatePredictions(videoId)
-      const result = await resetCropRegion(videoId)
+      await db.recalculatePredictions()
+      const result = await db.resetCropRegion()
       if (!result.success) {
         showAlert?.(
           'Recalculation Failed',
@@ -259,19 +400,49 @@ export function useLayoutData({ videoId, showAlert }: UseLayoutDataParams): UseL
     } finally {
       setIsRecalculating(false)
     }
-  }, [videoId, loadQueue, loadAnalysisBoxes, showAlert])
+  }, [
+    videoId,
+    db.isReady,
+    db.recalculatePredictions,
+    db.resetCropRegion,
+    loadQueue,
+    loadAnalysisBoxes,
+    showAlert,
+  ])
 
+  // Prefetch frame boxes when frames change
   useEffect(() => {
-    if (!videoId || frames.length === 0) return
-    void prefetchFrameBoxes(videoId, frames, frameBoxesCache.current)
-  }, [videoId, frames])
+    if (!videoId || !db.isReady || frames.length === 0) return
+    void db.prefetchFrameBoxes(frames, frameBoxesCache.current as Map<number, FrameBoxesResult>)
+  }, [videoId, db.isReady, db.prefetchFrameBoxes, frames])
 
+  // Initial load when database is ready
   useEffect(() => {
-    if (!videoId) return
+    if (!videoId || !db.isReady) return
     void loadAnalysisBoxes()
     void loadQueue(true)
-  }, [videoId, loadAnalysisBoxes, loadQueue])
+  }, [videoId, db.isReady, loadAnalysisBoxes, loadQueue])
 
+  // Subscribe to database changes for real-time updates
+  useEffect(() => {
+    if (!db.isReady) return
+
+    const unsubscribe = db.onChanges(event => {
+      if (event.type === 'boxes_changed') {
+        // Refresh boxes when they change (from server sync)
+        void loadAnalysisBoxes()
+        // Clear cache to force reload of frame boxes
+        frameBoxesCache.current.clear()
+      } else if (event.type === 'config_changed') {
+        // Refresh queue when config changes
+        void loadQueue(false, true)
+      }
+    })
+
+    return unsubscribe
+  }, [db.isReady, db.onChanges, loadAnalysisBoxes, loadQueue])
+
+  // Poll if processing error (backward compatibility)
   useEffect(() => {
     if (!error?.startsWith('Processing:')) return
     const pollInterval = setInterval(() => {
@@ -281,8 +452,9 @@ export function useLayoutData({ videoId, showAlert }: UseLayoutDataParams): UseL
     return () => clearInterval(pollInterval)
   }, [error, loadQueue])
 
+  // Load frame boxes when frame selection changes
   useEffect(() => {
-    if (!videoId || viewMode !== 'frame' || selectedFrameIndex === null) return
+    if (!videoId || !db.isReady || viewMode !== 'frame' || selectedFrameIndex === null) return
     const cached = frameBoxesCache.current.get(selectedFrameIndex)
     if (cached) {
       setCurrentFrameBoxes(cached)
@@ -293,9 +465,10 @@ export function useLayoutData({ videoId, showAlert }: UseLayoutDataParams): UseL
     const loadFrameBoxes = async () => {
       setLoadingFrame(true)
       try {
-        const data = await fetchFrameBoxes(videoId, selectedFrameIndex)
-        frameBoxesCache.current.set(selectedFrameIndex, data)
-        setCurrentFrameBoxes(data)
+        const data = await db.getFrameBoxes(selectedFrameIndex)
+        const converted = convertFrameBoxesData(data)
+        frameBoxesCache.current.set(selectedFrameIndex, converted)
+        setCurrentFrameBoxes(converted)
       } catch (err) {
         console.error('Failed to load frame boxes:', err)
         setCurrentFrameBoxes(null)
@@ -303,7 +476,7 @@ export function useLayoutData({ videoId, showAlert }: UseLayoutDataParams): UseL
       setLoadingFrame(false)
     }
     void loadFrameBoxes()
-  }, [videoId, viewMode, selectedFrameIndex])
+  }, [videoId, db.isReady, db.getFrameBoxes, viewMode, selectedFrameIndex])
 
   const handleThumbnailClick = useCallback(
     (frameIndex: number | 'analysis') => {
@@ -331,12 +504,13 @@ export function useLayoutData({ videoId, showAlert }: UseLayoutDataParams): UseL
 
   const handleBoxClick = useCallback(
     async (boxIndex: number, label: 'in' | 'out') => {
-      if (!videoId || !currentFrameBoxes) return
+      if (!videoId || !db.isReady || !db.canEdit || !currentFrameBoxes) return
       try {
         const box = currentFrameBoxes.boxes.find(b => b.boxIndex === boxIndex)
         if (!box) return
         const isNewAnnotation = box.userLabel === null
 
+        // Optimistic update
         setCurrentFrameBoxes(prev =>
           prev
             ? {
@@ -354,7 +528,7 @@ export function useLayoutData({ videoId, showAlert }: UseLayoutDataParams): UseL
             : prev
         )
 
-        await saveBoxAnnotations(videoId, currentFrameBoxes.frameIndex, [{ boxIndex, label }])
+        await db.saveAnnotations(currentFrameBoxes.frameIndex, [{ boxIndex, label }])
         frameBoxesCache.current.delete(currentFrameBoxes.frameIndex)
         setHasUnsyncedAnnotations(true)
 
@@ -365,28 +539,38 @@ export function useLayoutData({ videoId, showAlert }: UseLayoutDataParams): UseL
         }
       } catch (err) {
         console.error('Failed to save box annotation:', err)
+        // Revert optimistic update by reloading
         setSelectedFrameIndex(prev => prev)
       }
     },
-    [videoId, currentFrameBoxes, annotationsSinceRecalc, recalculateCropRegion]
+    [
+      videoId,
+      db.isReady,
+      db.canEdit,
+      db.saveAnnotations,
+      currentFrameBoxes,
+      annotationsSinceRecalc,
+      recalculateCropRegion,
+    ]
   )
 
   const handleClearAll = useCallback(async () => {
-    if (!videoId) return
+    if (!videoId || !db.isReady || !db.canEdit) return
     setIsRecalculating(true)
     try {
-      const result = await clearAllAnnotations(videoId)
+      const result = await db.clearAllAnnotations()
       console.log(`[Clear All] Deleted ${result.deletedCount} annotations`)
-      await recalculatePredictions(videoId)
-      await resetCropRegion(videoId)
+      await db.recalculatePredictions()
+      await db.resetCropRegion()
       await loadQueue(false, true)
       await loadAnalysisBoxes()
       frameBoxesCache.current.clear()
 
       if (viewMode === 'frame' && selectedFrameIndex !== null) {
-        const data = await fetchFrameBoxes(videoId, selectedFrameIndex)
-        setCurrentFrameBoxes(data)
-        frameBoxesCache.current.set(selectedFrameIndex, data)
+        const data = await db.getFrameBoxes(selectedFrameIndex)
+        const converted = convertFrameBoxesData(data)
+        setCurrentFrameBoxes(converted)
+        frameBoxesCache.current.set(selectedFrameIndex, converted)
       }
 
       setAnnotationsSinceRecalc(0)
@@ -401,7 +585,27 @@ export function useLayoutData({ videoId, showAlert }: UseLayoutDataParams): UseL
     } finally {
       setIsRecalculating(false)
     }
-  }, [videoId, viewMode, selectedFrameIndex, loadQueue, loadAnalysisBoxes, showAlert])
+  }, [videoId, db, viewMode, selectedFrameIndex, loadQueue, loadAnalysisBoxes, showAlert])
+
+  // Lock management wrappers
+  const acquireLock = useCallback(async () => {
+    await db.acquireLock()
+  }, [db.acquireLock])
+
+  const releaseLock = useCallback(async () => {
+    await db.releaseLock()
+  }, [db.releaseLock])
+
+  // Wrapper for setLayoutApproved to also call the database
+  const setLayoutApproved = useCallback(
+    (approved: boolean) => {
+      setLayoutApprovedState(approved)
+      if (approved && db.isReady && db.canEdit) {
+        void db.approveLayout()
+      }
+    },
+    [db.isReady, db.canEdit, db.approveLayout]
+  )
 
   return {
     frames,
@@ -437,5 +641,11 @@ export function useLayoutData({ videoId, showAlert }: UseLayoutDataParams): UseL
     setAnnotationsSinceRecalc,
     setLayoutApproved,
     handleClearAll,
+    // New properties for lock status
+    canEdit: db.canEdit,
+    lockState: db.lockState,
+    lockHolder: db.lockHolder ?? null,
+    acquireLock,
+    releaseLock,
   }
 }
