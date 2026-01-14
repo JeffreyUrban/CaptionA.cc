@@ -26,7 +26,6 @@ dev = [
     "pytest-cov>=6.0.0",
     "ruff>=0.8.0",
     "pyright>=1.1.390",
-    "prefect>=3.0.0",  # Required for tests that import app.main
 ]
 
 [build-system]
