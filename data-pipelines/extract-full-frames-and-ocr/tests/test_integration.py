@@ -20,7 +20,7 @@ class TestGPUFrameExtraction:
 
     def test_extract_frames_gpu_basic(self, test_video_path, tmp_path):
         """Test basic GPU frame extraction creates correct files."""
-        from full_frames.frames_gpu import extract_frames_gpu
+        from extract_full_frames_and_ocr.frames_gpu import extract_frames_gpu
 
         output_dir = tmp_path / "frames"
         output_dir.mkdir()
@@ -47,7 +47,7 @@ class TestGPUFrameExtraction:
 
     def test_extract_frames_gpu_naming_convention(self, test_video_path, tmp_path):
         """Test frame naming follows convention: frame_NNNNNNNNNN.jpg where N = time*10."""
-        from full_frames.frames_gpu import extract_frames_gpu
+        from extract_full_frames_and_ocr.frames_gpu import extract_frames_gpu
 
         output_dir = tmp_path / "frames"
         output_dir.mkdir()
@@ -78,7 +78,7 @@ class TestGPUFrameExtraction:
     @pytest.mark.parametrize("rate_hz", [0.05, 0.1, 0.2])
     def test_extract_frames_gpu_different_rates(self, test_video_path, tmp_path, rate_hz):
         """Test extraction at different frame rates."""
-        from full_frames.frames_gpu import extract_frames_gpu
+        from extract_full_frames_and_ocr.frames_gpu import extract_frames_gpu
         from gpu_video_utils import GPUVideoDecoder
 
         output_dir = tmp_path / f"frames_{rate_hz}"
@@ -110,7 +110,7 @@ class TestGPUFrameExtraction:
 
     def test_extract_frames_gpu_with_cropping(self, test_video_path, tmp_path):
         """Test GPU frame extraction with cropping."""
-        from full_frames.frames_gpu import extract_frames_gpu
+        from extract_full_frames_and_ocr.frames_gpu import extract_frames_gpu
         from gpu_video_utils import GPUVideoDecoder
         from PIL import Image
 
@@ -155,7 +155,7 @@ class TestGPUFrameExtraction:
 
     def test_extract_frames_gpu_progress_callback(self, test_video_path, tmp_path):
         """Test progress callback functionality."""
-        from full_frames.frames_gpu import extract_frames_gpu
+        from extract_full_frames_and_ocr.frames_gpu import extract_frames_gpu
 
         output_dir = tmp_path / "frames"
         output_dir.mkdir()
@@ -195,12 +195,12 @@ class TestGPUOCRIntegration:
     )
     def test_process_video_with_ocr_service(self, test_video_path, tmp_path):
         """Test end-to-end GPU extraction + OCR service processing."""
-        from full_frames.ocr_service import process_video_with_gpu_and_ocr_service
+        from extract_full_frames_and_ocr import process_video_with_gpu_and_ocr
 
         db_path = tmp_path / "ocr_results.db"
 
         # Process video with OCR
-        total_boxes = process_video_with_gpu_and_ocr_service(
+        total_boxes = process_video_with_gpu_and_ocr(
             video_path=test_video_path,
             db_path=db_path,
             rate_hz=0.1,
@@ -238,12 +238,12 @@ class TestGPUOCRIntegration:
     )
     def test_ocr_with_different_languages(self, test_video_path, tmp_path):
         """Test OCR with different language hints."""
-        from full_frames.ocr_service import process_video_with_gpu_and_ocr_service
+        from extract_full_frames_and_ocr import process_video_with_gpu_and_ocr
 
         # Test with Chinese language hint
         db_path = tmp_path / "ocr_chinese.db"
 
-        total_boxes = process_video_with_gpu_and_ocr_service(
+        total_boxes = process_video_with_gpu_and_ocr(
             video_path=test_video_path,
             db_path=db_path,
             rate_hz=0.1,
@@ -264,7 +264,7 @@ class TestGPUErrorHandling:
 
     def test_handles_invalid_video_path(self, tmp_path):
         """Test error handling for non-existent video file."""
-        from full_frames.frames_gpu import extract_frames_gpu
+        from extract_full_frames_and_ocr.frames_gpu import extract_frames_gpu
 
         output_dir = tmp_path / "frames"
         output_dir.mkdir()
@@ -280,7 +280,7 @@ class TestGPUErrorHandling:
 
     def test_handles_invalid_crop_region(self, test_video_path, tmp_path):
         """Test error handling for invalid crop region."""
-        from full_frames.frames_gpu import extract_frames_gpu
+        from extract_full_frames_and_ocr.frames_gpu import extract_frames_gpu
 
         output_dir = tmp_path / "frames"
         output_dir.mkdir()

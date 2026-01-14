@@ -1,7 +1,7 @@
 /**
  * OCR wrapper for text annotation workflow
  *
- * Wraps the Python ocr_utils package to provide OCR functionality
+ * Wraps the Python ocr package to provide OCR functionality
  * for combined images and individual frames.
  */
 

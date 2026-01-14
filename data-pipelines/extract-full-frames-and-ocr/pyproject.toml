@@ -3,23 +3,23 @@ requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [project]
-name = "full_frames"
+name = "extract_full_frames_and_ocr"
 # Version is automatically determined from git tags via hatch-vcs
 dynamic = ["version"]
-description = "Analyze the layout characteristics of burned-in captions in video"
+description = "Extract full frames from video and run OCR using GPU acceleration"
 dependencies = [
     "typer>=0.9.0",
     "rich>=13.0.0",
     "video_utils",
-    "ocr_utils",
+    "ocr",
     "caption_models",
     "frames_db",
-    "opencv-python>=4.10.0",
+    "gpu_video_utils",
 ]
 
 
 [project.scripts]
-full_frames = "full_frames.cli:app"
+extract-full-frames-and-ocr = "extract_full_frames_and_ocr.cli:app"
 
 
 [tool.hatch.version]
@@ -29,7 +29,7 @@ source = "vcs"
 root = "../.."
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/full_frames"]
+packages = ["src/extract_full_frames_and_ocr"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "docs"]
@@ -81,7 +81,7 @@ reportUnusedVariable = true
 reportDuplicateImport = true
 
 [tool.coverage.run]
-source = ["src/full_frames"]
+source = ["src/extract_full_frames_and_ocr"]
 omit = ["*/tests/*"]
 branch = true
 
@@ -96,10 +96,11 @@ exclude_lines = [
 ]
 
 [tool.hatch.build.hooks.vcs]
-version-file = "src/full_frames/_version.py"
+version-file = "src/extract_full_frames_and_ocr/_version.py"
 
 [tool.uv.sources]
 video_utils = { workspace = true }
-ocr_utils = { workspace = true }
+ocr = { workspace = true }
 caption_models = { workspace = true }
 frames_db = { workspace = true }
+gpu_video_utils = { workspace = true }

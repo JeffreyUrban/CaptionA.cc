@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .backends.base import OCRBackend
 
-# Constants matching services/ocr-service/config.py and gpu_video_utils/montage.py
+# Constants matching gpu_video_utils/montage.py
 HEIGHT_LIMIT_PX = 50000
 PIXEL_LIMIT = 50000000
 FILE_SIZE_LIMIT_MB = 15

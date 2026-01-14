@@ -4,17 +4,10 @@ from pathlib import Path
 
 import typer
 from rich.console import Console
-from rich.progress import (
-    BarColumn,
-    Progress,
-    SpinnerColumn,
-    TaskProgressColumn,
-    TextColumn,
-)
 
 from . import __version__
 from .database import get_database_path
-from .ocr_service import process_video_with_gpu_and_ocr_service
+from .pipeline import process_video_with_gpu_and_ocr
 from gpu_video_utils import GPUVideoDecoder
 
 app = typer.Typer(
@@ -79,7 +72,7 @@ def analyze(
 
     Requirements:
     - NVIDIA GPU with CUDA support
-    - OCR service running (see services/ocr-service/README.md)
+    - Google Cloud Vision API credentials configured
 
     Database Storage:
     - OCR results written to full_frame_ocr table
@@ -119,12 +112,12 @@ def analyze(
         console.print("[bold]Processing with GPU + OCR Service[/bold]")
         db_path = get_database_path(output_dir)
 
-        total_boxes = process_video_with_gpu_and_ocr_service(
+        total_boxes = process_video_with_gpu_and_ocr(
             video_path=video,
             db_path=db_path,
             rate_hz=frame_rate,
             language=language,
-            progress_callback=None,  # OCR service pipeline handles its own progress reporting
+            progress_callback=None,  # Pipeline handles its own progress reporting
         )
 
         console.print()
@@ -173,164 +166,6 @@ def analyze(
         raise typer.Exit(1) from e
     except Exception as e:
         console.print(f"[red]Error:[/red] Unexpected error: {e}")
-        raise typer.Exit(1) from e
-
-
-@app.command()
-def sample_frames(
-    video: Path = typer.Argument(
-        ...,
-        help="Path to video file",
-        exists=True,
-        dir_okay=False,
-        resolve_path=True,
-    ),
-    output_dir: Path = typer.Option(
-        Path("output/frames"),
-        "--output-dir",
-        "-o",
-        help="Directory for extracted frames",
-    ),
-    frame_rate: float = typer.Option(
-        0.1,
-        "--frame-rate",
-        "-r",
-        help="Frame sampling rate in Hz (frames per second)",
-    ),
-) -> None:
-    """Extract frames from video at specified rate.
-
-    Samples frames using FFmpeg at the specified rate (default: 0.1Hz = 1 frame every 10 seconds).
-    """
-    console.print(f"[bold]Extracting frames from {video.name}[/bold]")
-    console.print(f"Rate: {frame_rate} Hz")
-    console.print(f"Output: {output_dir}")
-    console.print()
-
-    try:
-        # Get video info
-        duration = get_video_duration(video)
-        expected_frames = int(duration * frame_rate)
-        console.print(f"Video duration: {duration:.1f}s")
-        console.print(f"Expected frames: ~{expected_frames}")
-        console.print()
-
-        # Extract frames with progress
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TaskProgressColumn(),
-            console=console,
-        ) as progress:
-            task = progress.add_task("Extracting frames...", total=expected_frames)
-
-            frames = extract_frames(
-                video,
-                output_dir,
-                frame_rate,
-                progress_callback=lambda current, total: progress.update(task, completed=current),
-            )
-
-        console.print(f"[green]✓[/green] Extracted {len(frames)} frames to {output_dir}")
-
-    except (RuntimeError, FileNotFoundError) as e:
-        console.print(f"[red]Error:[/red] {e}")
-        raise typer.Exit(1) from e
-
-
-@app.command()
-def run_ocr(
-    frames_dir: Path = typer.Argument(
-        ...,
-        help="Directory containing extracted frames",
-        exists=True,
-        file_okay=False,
-        resolve_path=True,
-    ),
-    output_dir: Path = typer.Option(
-        Path("output"),
-        "--output-dir",
-        "-o",
-        help="Directory for OCR output files",
-    ),
-    language: str = typer.Option(
-        "zh-Hans",
-        "--language",
-        "-l",
-        help="OCR language preference (e.g., 'zh-Hans' for Simplified Chinese)",
-    ),
-) -> None:
-    """Run OCR on extracted frames using macOS LiveText.
-
-    Processes all frames in the specified directory and outputs:
-    - OCR.jsonl: OCR annotations with bounding boxes
-    - OCR.png: Visualization of detected text boxes
-    """
-    console.print(f"[bold]Running OCR on frames in {frames_dir.name}[/bold]")
-    console.print(f"Language: {language}")
-    console.print(f"Output: {output_dir}")
-    console.print()
-
-    # Create output directory
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    try:
-        # Count frames
-        frame_files = sorted(frames_dir.glob("frame_*.jpg"))
-        total_frames = len(frame_files)
-
-        if total_frames == 0:
-            console.print("[red]Error:[/red] No frames found in directory")
-            raise typer.Exit(1)
-
-        console.print(f"Found {total_frames} frames")
-        console.print()
-
-        # Get dimensions from first frame
-        import cv2
-
-        first_frame_img = cv2.imread(str(frame_files[0]))
-        if first_frame_img is None:
-            console.print(f"[red]Error:[/red] Failed to read {frame_files[0]}")
-            raise typer.Exit(1)
-        height, width = first_frame_img.shape[:2]
-        console.print(f"Frame dimensions: {width}×{height}")
-        console.print()
-
-        # Process frames with OCR
-        ocr_output = output_dir / "OCR.jsonl"
-
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TaskProgressColumn(),
-            console=console,
-        ) as progress:
-            task = progress.add_task("Processing OCR...", total=total_frames)
-
-            process_frames_directory(
-                frames_dir,
-                ocr_output,
-                language,
-                progress_callback=lambda current, total: progress.update(task, completed=current),
-                keep_frames=True,  # Keep frames for standalone OCR command
-            )
-
-        console.print(f"[green]✓[/green] OCR results saved to {ocr_output}")
-
-        # Create visualization
-        console.print("Creating OCR visualization...")
-        viz_output = output_dir / "OCR.png"
-        create_ocr_visualization(ocr_output, viz_output, width, height)
-        console.print(f"[green]✓[/green] Visualization saved to {viz_output}")
-
-    except FileNotFoundError as e:
-        console.print(f"[red]Error:[/red] {e}")
-        raise typer.Exit(1) from e
-    except Exception as e:
-        console.print(f"[red]Error:[/red] {e}")
         raise typer.Exit(1) from e
 
 

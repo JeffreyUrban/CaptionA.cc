@@ -1,8 +1,8 @@
-"""Montage capacity calculation matching OCR service logic."""
+"""Montage capacity calculation for OCR batch processing."""
 
 from typing import Dict, Tuple
 
-# Constants matching services/ocr-service/config.py
+# OCR backend constraints for montage assembly
 HEIGHT_LIMIT_PX = 50000
 PIXEL_LIMIT = 50000000
 FILE_SIZE_LIMIT_MB = 15
@@ -12,9 +12,6 @@ SEPARATOR_PX = 2
 
 def calculate_montage_capacity(width: int, height: int) -> Tuple[int, Dict[str, int], str, float]:
     """Calculate maximum number of images that can be safely processed in a montage.
-
-    This function matches the logic from services/ocr-service/app.py:calculate_capacity()
-    to ensure consistency across the system.
 
     Considers ALL constraints:
     - Height limit: 50,000px total montage height

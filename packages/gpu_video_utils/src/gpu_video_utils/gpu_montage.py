@@ -1,12 +1,14 @@
 """GPU-accelerated montage assembly using PyTorch/CUDA.
 
-This module provides GPU-accelerated vertical montage creation, matching
-the logic from services/ocr-service/app.py (lines 312-368).
+This module provides vertical montage creation for OCR batch processing.
 
-Key features:
-- GPU-accelerated montage assembly for maximum throughput
-- CPU fallback for environments without CUDA
-- Same output format as the OCR service montage function
+Functions:
+- create_vertical_montage_gpu: GPU-accelerated (requires CUDA)
+- create_vertical_montage_cpu: CPU-based (from encoded image bytes)
+- create_vertical_montage_from_pil: CPU-based (from PIL Image objects)
+
+Choose the appropriate function explicitly based on your environment.
+GPU functions will fail if CUDA is unavailable.
 """
 
 from io import BytesIO
@@ -56,6 +58,7 @@ def create_vertical_montage_gpu(
 
     Raises:
         ValueError: If frames list is empty or frame_ids length doesn't match
+        RuntimeError: If CUDA is not available
         MontageValidationError: If frame dimensions don't match
 
     Example:
@@ -65,6 +68,12 @@ def create_vertical_montage_gpu(
         >>> print(f"Montage size: {len(jpeg_bytes)} bytes")
         >>> print(f"Frame 1 position: y={metadata[1]['y']}")
     """
+    if not torch.cuda.is_available():
+        raise RuntimeError(
+            "CUDA is not available. Use create_vertical_montage_cpu() or "
+            "create_vertical_montage_from_pil() for CPU-based processing."
+        )
+
     if not frames:
         raise ValueError("No frames provided")
 
@@ -153,10 +162,9 @@ def create_vertical_montage_cpu(
     separator_px: int = SEPARATOR_PX,
     jpeg_quality: int = 95,
 ) -> Tuple[bytes, List[Dict]]:
-    """Create vertical montage from PIL Images (CPU fallback).
+    """Create vertical montage from PIL Images (CPU).
 
-    This function matches the logic from services/ocr-service/app.py:create_vertical_montage()
-    and provides a CPU-based fallback for environments without GPU support.
+    CPU-based for environments without GPU support.
 
     Args:
         images: List of (id, image_bytes) tuples where image_bytes is JPEG/PNG encoded
@@ -301,61 +309,3 @@ def create_vertical_montage_from_pil(
     return buffer.getvalue(), metadata
 
 
-def tensors_to_montage_gpu(
-    frames: List[torch.Tensor],
-    frame_ids: List[str],
-    separator_px: int = SEPARATOR_PX,
-    device: str = "cuda",
-    jpeg_quality: int = 95,
-    fallback_to_cpu: bool = True,
-) -> Tuple[bytes, List[Dict]]:
-    """Create montage with automatic GPU/CPU selection.
-
-    Attempts GPU-accelerated montage assembly, falling back to CPU
-    if CUDA is unavailable or if an error occurs.
-
-    Args:
-        frames: List of tensors (H, W, C) in uint8 RGB format
-        frame_ids: List of frame identifiers
-        separator_px: Pixels between images (default: 2)
-        device: Preferred GPU device (default: "cuda")
-        jpeg_quality: JPEG encoding quality (default: 95)
-        fallback_to_cpu: If True, fall back to CPU on GPU failure (default: True)
-
-    Returns:
-        Tuple of (montage_jpeg_bytes, metadata_list)
-
-    Raises:
-        RuntimeError: If GPU fails and fallback_to_cpu is False
-    """
-    # Check if CUDA is available
-    use_gpu = torch.cuda.is_available() and device.startswith("cuda")
-
-    if use_gpu:
-        try:
-            return create_vertical_montage_gpu(
-                frames=frames,
-                frame_ids=frame_ids,
-                separator_px=separator_px,
-                device=device,
-                jpeg_quality=jpeg_quality,
-            )
-        except Exception as e:
-            if not fallback_to_cpu:
-                raise RuntimeError(f"GPU montage failed: {e}") from e
-            print(f"GPU montage failed, falling back to CPU: {e}")
-
-    # CPU fallback: convert tensors to PIL images
-    pil_images = []
-    for frame in frames:
-        # Ensure on CPU
-        if frame.device.type != "cpu":
-            frame = frame.cpu()
-        pil_images.append(Image.fromarray(frame.numpy()))
-
-    return create_vertical_montage_from_pil(
-        images=pil_images,
-        frame_ids=frame_ids,
-        separator_px=separator_px,
-        jpeg_quality=jpeg_quality,
-    )

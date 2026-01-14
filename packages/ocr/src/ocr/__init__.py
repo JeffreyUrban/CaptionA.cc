@@ -36,6 +36,7 @@ from .database import (
 from .models import BoundingBox, CharacterResult, OCRResult
 from .montage import create_vertical_montage, distribute_results_to_images
 from .processing import process_frames_with_ocr
+from .visualization import create_ocr_visualization
 
 __all__ = [
     # Models
@@ -58,4 +59,6 @@ __all__ = [
     "write_ocr_result_to_database",
     "load_ocr_for_frame",
     "load_ocr_for_frame_range",
+    # Visualization
+    "create_ocr_visualization",
 ]
