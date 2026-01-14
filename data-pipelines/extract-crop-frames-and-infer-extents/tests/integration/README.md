@@ -19,7 +19,7 @@ Integration tests are **skipped by default** because they require:
    ```bash
    export WASABI_REGION="your-region"
    export WASABI_ACCESS_KEY="your-access-key"
-   export WASABI_SECRET_KEY="your-secret-key"
+   export WASABI_SECRET_KEY="your-secret-key"  # pragma: allowlist secret
    export WASABI_BUCKET="your-bucket-name"
    export GOOGLE_APPLICATION_CREDENTIALS="/path/to/service-account.json"
    ```

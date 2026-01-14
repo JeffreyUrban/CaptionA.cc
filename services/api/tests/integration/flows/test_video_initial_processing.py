@@ -17,10 +17,10 @@ import pytest
 from unittest.mock import Mock, patch, MagicMock
 from prefect.testing.utilities import prefect_test_harness
 
-# Mock modal and captionacc_modal before importing flows (not installed in test environment)
+# Mock modal and extract_crop_frames_and_infer_extents before importing flows (not installed in test environment)
 sys.modules['modal'] = MagicMock()
-sys.modules['captionacc_modal'] = MagicMock()
-sys.modules['captionacc_modal.models'] = MagicMock()
+sys.modules['extract_crop_frames_and_infer_extents'] = MagicMock()
+sys.modules['extract_crop_frames_and_infer_extents.models'] = MagicMock()
 
 from app.flows.video_initial_processing import video_initial_processing
 
@@ -68,8 +68,8 @@ class TestVideoInitialProcessingFlow:
                     failed_ocr_count=0,
                     processing_duration_seconds=45.0,
                     full_frames_key="tenant/client/videos/video-1/full_frames/",
-                    ocr_db_key="tenant/server/videos/video-1/raw-ocr.db.gz",
-                    layout_db_key="tenant/server/videos/video-1/layout.db.gz"
+                    ocr_db_key="tenant/server/videos/video-1/raw-ocr.db.gz",  # pragma: allowlist secret
+                    layout_db_key="tenant/server/videos/video-1/layout.db.gz"  # pragma: allowlist secret
                 )
 
                 # Configure the global modal mock (sys.modules['modal'])

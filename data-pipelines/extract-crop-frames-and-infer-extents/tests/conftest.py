@@ -1,4 +1,4 @@
-"""Pytest configuration and fixtures for captionacc-modal tests."""
+"""Pytest configuration and fixtures for extract-crop-frames-and-infer-extents tests."""
 
 import pytest
 

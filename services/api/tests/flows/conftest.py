@@ -7,16 +7,16 @@ import sys
 
 import pytest
 
-# Mock modal and captionacc_modal modules before any imports
+# Mock modal and extract_crop_frames_and_infer_extents modules before any imports
 sys.modules['modal'] = MagicMock()
-sys.modules['captionacc_modal'] = MagicMock()
-sys.modules['captionacc_modal.models'] = MagicMock()
+sys.modules['extract_crop_frames_and_infer_extents'] = MagicMock()
+sys.modules['extract_crop_frames_and_infer_extents.models'] = MagicMock()
 
 from app.services.caption_service import CaptionService
 from app.services.supabase_service import SupabaseServiceImpl
 
 
-# Mock CropRegion and CropInferResult since captionacc_modal is not installed in test environment
+# Mock CropRegion and CropInferResult since extract_crop_frames_and_infer_extents is not installed in test environment
 @dataclass
 class CropRegion:
     """Normalized crop region coordinates (0.0 to 1.0)."""
@@ -45,8 +45,8 @@ class CropInferResult:
 
 
 # Register mock classes with the mocked module
-sys.modules['captionacc_modal.models'].CropRegion = CropRegion
-sys.modules['captionacc_modal.models'].CropInferResult = CropInferResult
+sys.modules['extract_crop_frames_and_infer_extents.models'].CropRegion = CropRegion
+sys.modules['extract_crop_frames_and_infer_extents.models'].CropInferResult = CropInferResult
 
 
 @dataclass
@@ -58,7 +58,7 @@ class CaptionOcrResult:
     median_frame_index: int = None
 
 
-sys.modules['captionacc_modal.models'].CaptionOcrResult = CaptionOcrResult
+sys.modules['extract_crop_frames_and_infer_extents.models'].CaptionOcrResult = CaptionOcrResult
 
 
 @dataclass
@@ -134,7 +134,7 @@ def mock_modal_result() -> CropInferResult:
             "no_change": 413,
         },
         processing_duration_seconds=12.5,
-        caption_frame_extents_db_key="test-tenant-123/server/videos/test-video-789/caption_frame_extents_v1.db",
+        caption_frame_extents_db_key="test-tenant-123/server/videos/test-video-789/caption_frame_extents_v1.db",  # pragma: allowlist secret
         cropped_frames_prefix="test-tenant-123/client/videos/test-video-789/cropped_frames_v1/",
     )
 
@@ -273,7 +273,7 @@ def expected_modal_result_dict() -> dict[str, Any]:
     return {
         "version": 1,
         "frame_count": 500,
-        "caption_frame_extents_db_key": "test-tenant-123/server/videos/test-video-789/caption_frame_extents_v1.db",
+        "caption_frame_extents_db_key": "test-tenant-123/server/videos/test-video-789/caption_frame_extents_v1.db",  # pragma: allowlist secret
         "cropped_frames_prefix": "test-tenant-123/client/videos/test-video-789/cropped_frames_v1/",
         "label_counts": {
             "caption_start": 45,

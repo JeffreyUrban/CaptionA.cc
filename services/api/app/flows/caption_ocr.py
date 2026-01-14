@@ -116,7 +116,7 @@ async def caption_ocr(
         # Step 2: Call Modal generate_caption_ocr function
         logger.info("Looking up Modal function")
         ocr_fn = modal.Function.from_name(
-            "captionacc-processing",
+            "extract-crop-frames-and-infer-extents",
             "generate_caption_ocr"
         )
 

@@ -74,7 +74,7 @@ def test_ids():
 @pytest.fixture
 def crop_region():
     """Return the crop region for test fixture videos."""
-    from captionacc_modal.models import CropRegion
+    from extract_crop_frames_and_infer_extents.models import CropRegion
 
     return CropRegion(
         crop_left=0.1859398879,
@@ -215,7 +215,7 @@ def test_pipelined_crop_and_infer(
 
     # Look up deployed Modal function
     crop_and_infer_fn = modal.Function.from_name(
-        app_name="captionacc-processing", name="crop_and_infer_caption_frame_extents"
+        app_name="extract-crop-frames-and-infer-extents", name="crop_and_infer_caption_frame_extents"
     )
 
     # Call Modal function

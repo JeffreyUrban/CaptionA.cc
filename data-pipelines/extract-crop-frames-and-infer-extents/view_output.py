@@ -24,7 +24,7 @@ def run_test_and_view():
 
     # Import Modal Lookup to access deployed function
     import modal
-    from captionacc_modal.models import CropRegion
+    from extract_crop_frames_and_infer_extents.models import CropRegion
 
     # Get Wasabi service
     sys.path.insert(0, str(Path(__file__).parent.parent.parent / "services" / "api"))
@@ -146,7 +146,7 @@ def run_test_and_view():
         # Run Modal function
         print("[3/4] Running Modal function...")
         crop_and_infer_fn = modal.Function.from_name(
-            app_name="captionacc-processing",
+            app_name="extract-crop-frames-and-infer-extents",
             name="crop_and_infer_sequential"
         )
 

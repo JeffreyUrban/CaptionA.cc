@@ -57,7 +57,7 @@ def extract_frames_and_ocr_task(
 
     # Look up the deployed Modal function
     extract_fn = modal.Function.from_name(
-        "captionacc-processing",
+        "extract-crop-frames-and-infer-extents",
         "extract_frames_and_ocr"
     )
 

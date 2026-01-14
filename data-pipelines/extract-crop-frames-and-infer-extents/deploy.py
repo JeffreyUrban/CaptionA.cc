@@ -1,12 +1,12 @@
 """
-Modal deployment entry point for CaptionA.cc processing functions.
+Modal deployment entry point for extract-crop-frames-and-infer-extents.
 
 Run as `modal deploy deploy.py`
 
 This file imports and exposes the Modal app for deployment.
 """
 
-from captionacc_modal.app import app
+from extract_crop_frames_and_infer_extents.app import app
 
 if __name__ == "__main__":
     # This allows Modal CLI to discover the app

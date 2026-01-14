@@ -172,7 +172,7 @@ def mock_modal_result(
         ... )
 
     Notes:
-        - Result structures match data-pipelines/captionacc-modal/src/captionacc_modal/models.py
+        - Result structures match data-pipelines/extract-crop-frames-and-infer-extents/src/extract_crop_frames_and_infer_extents/models.py
         - Default values are reasonable for typical test scenarios
         - All Wasabi keys and prefixes use placeholder paths (update as needed)
         - ExtractResult is the most common result type for initial video processing
@@ -397,7 +397,7 @@ def validate_modal_result(result: dict[str, Any], result_type: str) -> bool:
 
     Notes:
         - Only checks for presence of required fields, not their types or values
-        - Follows data models in data-pipelines/captionacc-modal/src/captionacc_modal/models.py
+        - Follows data models in data-pipelines/extract-crop-frames-and-infer-extents/src/extract_crop_frames_and_infer_extents/models.py
     """
     if result_type == "extract":
         required_fields = {

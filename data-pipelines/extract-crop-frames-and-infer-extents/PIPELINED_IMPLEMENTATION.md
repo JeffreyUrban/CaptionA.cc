@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document describes the pipelined implementation of `crop_and_infer_caption_frame_extents` that maximizes A10G GPU utilization.
+This document describes the pipelined implementation of `crop_and_infer_caption_frame_extents`.
 
 ## Key Improvements
 
@@ -24,7 +24,7 @@ This document describes the pipelined implementation of `crop_and_infer_caption_
 ### 4. Optimized VP9 Settings
 ```bash
 # Added optimizations:
--cpu-used 2         # 2-3x faster encoding
+-cpu-used 2         # Faster encoding (trades quality for speed)
 -threads 2          # Per-worker threading
 -tile-columns 1     # Parallel tile encoding
 -frame-parallel 1   # Frame-level parallelization
@@ -50,32 +50,7 @@ This document describes the pipelined implementation of `crop_and_infer_caption_
 
 ## Performance Monitoring
 
-The pipelined implementation includes automatic performance analysis:
-
-```
-PERFORMANCE METRICS
-================================================================================
-Extraction:
-  • Time: 120.5s
-  • Frames: 36000
-  • Throughput: 298.8 fps
-
-Inference:
-  • Time: 180.2s
-  • Pairs: 35999
-  • Throughput: 199.7 pairs/sec
-
-Encoding:
-  • Time: 245.8s
-  • Chunks: 84
-  • Throughput: 146.4 fps
-
-Overlap Analysis:
-  • Inference wait for extraction: 0.0s
-  ⚠️  BOTTLENECK: Encoding is 1.4x slower than GPU pipeline
-     Consider offloading VP9 encoding to separate instances
-================================================================================
-```
+The pipelined implementation logs performance metrics for each stage (extraction, inference, encoding). Review the Modal logs to identify bottlenecks and tune parameters accordingly.
 
 ## Integration
 
@@ -84,7 +59,7 @@ Overlap Analysis:
 Update `app.py` to use the pipelined version:
 
 ```python
-from .inference_pipelined import crop_and_infer_caption_frame_extents_pipelined
+from .pipeline import crop_and_infer_caption_frame_extents_pipelined
 
 @app.function(...)
 def crop_and_infer_caption_frame_extents(...):
@@ -146,34 +121,18 @@ encoder_workers=6  # or 8
 
 We can implement Option B if performance testing shows it's needed.
 
-## Expected Performance Gains
-
-For typical 1-hour video at 10 Hz (36,000 frames):
-
-| Stage | Sequential | Pipelined | Speedup |
-|-------|-----------|-----------|---------|
-| Extraction | 120s | 120s | 1.0x |
-| Inference | 180s | Overlapped | ∞ |
-| Encoding | 300s | 75s (4x parallel) | 4.0x |
-| **Total** | **600s** | **~200-250s** | **2.4-3x** |
-
-*Actual speedup depends on video characteristics and GPU/CPU balance.*
-
 ## Testing Checklist
 
 - [ ] Test with short video (1-2 minutes) to verify functionality
 - [ ] Test with typical video (30-60 minutes) to measure performance
 - [ ] Review performance metrics to identify bottlenecks
-- [ ] Compare results with sequential implementation (validate correctness)
-- [ ] Monitor A10G GPU utilization (should be near 100% during pipeline)
-- [ ] Monitor Modal costs (should be similar or lower due to faster execution)
+- [ ] Compare results with previous implementation (validate correctness)
+- [ ] Monitor A10G GPU utilization
+- [ ] Monitor Modal costs
 
 ## Rollback Plan
 
-If issues arise:
-1. Keep original `inference.py` implementation
-2. Revert `app.py` to use original function
-3. No data impact - both implementations produce identical outputs
+If issues arise, revert to a previous git commit. No data impact - outputs are deterministic.
 
 ## Questions?
 

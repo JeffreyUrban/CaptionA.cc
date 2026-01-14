@@ -1,12 +1,12 @@
 # CaptionAcc Modal Tests
 
-This directory contains tests for the captionacc-modal package, which provides Modal serverless functions for CaptionA.cc video processing with GPU-accelerated pipelined inference.
+This directory contains tests for the extract-crop-frames-and-infer-extents package, which provides Modal serverless functions for CaptionA.cc video processing with GPU-accelerated pipelined inference.
 
 ## Quick Start
 
 ```bash
 # Install dependencies
-cd data-pipelines/captionacc-modal
+cd data-pipelines/extract-crop-frames-and-infer-extents
 uv pip install -e ".[dev]"
 
 # Run tests (short video, default batch_size=64)
@@ -50,12 +50,12 @@ tests/
 - **Wasabi credentials**: Must be configured in your environment (see services/api/.env)
 - **Test fixtures**: Videos must exist in Wasabi at:
   - `test-fixtures/videos/short-test.mp4` (18s, ~184 frames) - Quick validation
-  - `test-fixtures/videos/car-teardown-comparison-08.mp4` (55.5 MB, ~9 min at 10 Hz = 5,400 frames) - Performance testing
+  - `test-fixtures/videos/car-teardown-comparison-08.mp4` - Performance testing
 
 ### Installation
 ```bash
 # Install the package with dev dependencies
-cd data-pipelines/captionacc-modal
+cd data-pipelines/extract-crop-frames-and-infer-extents
 uv pip install -e ".[dev]"
 ```
 
@@ -265,7 +265,7 @@ For continuous integration, you can:
 ### Common Issues
 
 **"Modal function not found"**
-- Ensure the Modal app is deployed: `modal deploy data-pipelines/captionacc-modal/src/captionacc_modal/app.py`
+- Ensure the Modal app is deployed: `modal deploy data-pipelines/extract-crop-frames-and-infer-extents/src/extract_crop_frames_and_infer_extents/app.py`
 - Check deployment at: https://modal.com/apps
 
 **"Test fixture video not found"**
