@@ -803,7 +803,7 @@ version-file = "{source_path}/_version.py"
 [tool.uv.sources]
 # Add workspace dependencies here, for example:
 # video_utils = { workspace = true }
-# ocr_utils = { workspace = true }
+# ocr = { workspace = true }
 """
         # Append after [tool.uv]
         content = content.rstrip() + "\n" + uv_sources_template + "\n"

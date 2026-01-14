@@ -18,10 +18,10 @@ import pytest
 from prefect.exceptions import PrefectException
 from prefect.testing.utilities import prefect_test_harness
 
-# Mock the modal and captionacc_modal modules before importing flows
+# Mock the modal and extract_crop_frames_and_infer_extents modules before importing flows
 sys.modules["modal"] = MagicMock()
-sys.modules["captionacc_modal"] = MagicMock()
-sys.modules["captionacc_modal.models"] = MagicMock()
+sys.modules["extract_crop_frames_and_infer_extents"] = MagicMock()
+sys.modules["extract_crop_frames_and_infer_extents.models"] = MagicMock()
 
 from app.flows.video_initial_processing import (
     extract_frames_and_ocr_task,
@@ -33,7 +33,7 @@ from app.flows.video_initial_processing import (
 
 # Mock ExtractResult to avoid importing from Modal package
 class MockExtractResult:
-    """Mock of ExtractResult from captionacc_modal.models."""
+    """Mock of ExtractResult from extract_crop_frames_and_infer_extents.models."""
 
     def __init__(
         self,

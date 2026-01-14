@@ -16,7 +16,6 @@ dependencies = [
     "supabase>=2.0.0",        # Supabase client for video_database_state
     "prefect>=3.0.0",         # Workflow orchestration
     "modal>=0.63.0",          # Serverless compute for video processing
-    "captionacc-modal",       # Modal function models and types
 ]
 
 [project.optional-dependencies]

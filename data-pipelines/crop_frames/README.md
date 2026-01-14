@@ -119,8 +119,7 @@ crop_frames extract-frames video.mp4 ./frames \
   --crop "100,200,700,250" \
   --rate 10
 
-# 2. Process frames (e.g., OCR)
-ocr_utils run ./frames
+# 2. Process frames with OCR (using the ocr package)
 ```
 
 ### Workflow 2: Extract and Resize
@@ -133,8 +132,7 @@ crop_frames extract-frames video.mp4 ./frames \
   --crop "100,200,700,250" \
   --resize-width 480 --resize-height 48
 
-# 2. Process resized frames
-ocr_utils run ./frames/resized
+# 2. Process resized frames with OCR (using the ocr package)
 ```
 
 ### Workflow 3: Batch Resize Multiple Sizes
@@ -229,11 +227,11 @@ Crop coordinates must be provided as pixel coordinates. To determine them:
    ffplay -i video.mp4 -vf "crop=w:h:x:y"
    ```
 
-The `full_frames` pipeline is recommended for automated subtitle region detection.
+The `extract_full_frames_and_ocr` pipeline is recommended for automated subtitle region detection.
 
 ## See Also
 
-- `full_frames` - Automated subtitle region detection
-- `ocr_utils` - OCR processing for extracted frames
+- `extract_full_frames_and_ocr` - Full frame extraction with GPU and OCR
+- `ocr` - OCR processing with pluggable backends
 - `video_utils` - Shared video processing utilities
 - `image_utils` - Shared image processing utilities

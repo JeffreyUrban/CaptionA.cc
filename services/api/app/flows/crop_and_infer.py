@@ -19,7 +19,7 @@ from prefect.artifacts import create_table_artifact
 
 from ..config import get_settings
 from ..services.supabase_service import SupabaseServiceImpl
-from captionacc_modal.models import CropRegion
+from extract_crop_frames_and_infer_extents.models import CropRegion
 
 
 @task(
@@ -136,7 +136,7 @@ async def call_modal_crop_and_infer(
 
     # Lookup the deployed Modal function
     crop_infer_fn = modal.Function.from_name(
-        "captionacc-processing",
+        "extract-crop-frames-and-infer-extents",
         "crop_and_infer_caption_frame_extents"
     )
 
