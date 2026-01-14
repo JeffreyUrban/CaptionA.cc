@@ -44,25 +44,25 @@ supabase secrets set GATEWAY_JWT_SECRET="$SECRET"
 ### A. Set Secrets
 
 ```bash
-cd services/prefect-service
+cd infrastructure/traefik-prefect
 
 # Set the SAME JWT secret from Supabase
 fly secrets set \
   GATEWAY_JWT_SECRET="<secret-from-step-1b>" \
-  -a prefect-service
+  -a traefik-prefect
 
 # Set Prefect database connection
 # Get from: Supabase Dashboard → Settings → Database → Connection string (postgres role, not pgbouncer)
 fly secrets set \
   PREFECT_API_DATABASE_CONNECTION_URL="postgresql://postgres.PROJECT:PASSWORD@aws-0-us-east-1.pooler.supabase.com:6543/postgres" \  # pragma: allowlist secret
-  -a prefect-service
+  -a traefik-prefect
 ```
 
 ### B. Deploy
 
 ```bash
 # First deployment
-fly deploy -a prefect-service
+fly deploy -a traefik-prefect
 
 # This will:
 # 1. Build multi-stage Docker image (Traefik + Prefect)
@@ -74,14 +74,14 @@ fly deploy -a prefect-service
 
 ```bash
 # Check gateway health
-curl https://prefect-service.fly.dev/ping
+curl https://traefik-prefect.fly.dev/ping
 # Should return: OK
 
 # Check deployment status
-fly status -a prefect-service
+fly status -a traefik-prefect
 
 # View logs
-fly logs -a prefect-service
+fly logs -a traefik-prefect
 ```
 
 ## Step 3: Generate Service Tokens
@@ -137,13 +137,13 @@ Update services to use the new authenticated gateway:
 ```bash
 # Update API service
 fly secrets set \
-  PREFECT_API_URL="https://prefect-service.fly.dev/captionacc/prefect/api" \
+  PREFECT_API_URL="https://traefik-prefect.fly.dev/captionacc/prefect/api" \
   PREFECT_AUTH_TOKEN="<token-from-step-3>" \
   -a captionacc-api
 
 # Update Orchestrator service
 fly secrets set \
-  PREFECT_API_URL="https://prefect-service.fly.dev/captionacc/prefect/api" \
+  PREFECT_API_URL="https://traefik-prefect.fly.dev/captionacc/prefect/api" \
   PREFECT_AUTH_TOKEN="<token-from-step-3>" \
   -a captionacc-orchestrator
 ```
@@ -153,14 +153,14 @@ fly secrets set \
 ```bash
 # Set Modal secrets
 modal secret create PREFECT_AUTH_TOKEN="<token-from-step-3>"
-modal secret create PREFECT_API_URL="https://prefect-service.fly.dev/captionacc/prefect/api"
+modal secret create PREFECT_API_URL="https://traefik-prefect.fly.dev/captionacc/prefect/api"
 ```
 
 ### For Web App
 
 ```bash
 fly secrets set \
-  NEXT_PUBLIC_PREFECT_API_URL="https://prefect-service.fly.dev/captionacc/prefect/api" \
+  NEXT_PUBLIC_PREFECT_API_URL="https://traefik-prefect.fly.dev/captionacc/prefect/api" \
   PREFECT_AUTH_TOKEN="<token-from-step-3>" \
   -a captionacc-web
 ```
@@ -171,11 +171,11 @@ fly secrets set \
 
 ```bash
 # Should fail without token
-curl https://prefect-service.fly.dev/captionacc/prefect/api/health
+curl https://traefik-prefect.fly.dev/captionacc/prefect/api/health
 # Expected: 401 Unauthorized
 
 # Should succeed with token
-curl https://prefect-service.fly.dev/captionacc/prefect/api/health \
+curl https://traefik-prefect.fly.dev/captionacc/prefect/api/health \
   -H "Authorization: Bearer <token>"
 # Expected: {"status": "ok"}
 ```
@@ -215,7 +215,7 @@ if __name__ == "__main__":
 
 ```bash
 # SSH into container
-fly ssh console -a prefect-service
+fly ssh console -a traefik-prefect
 
 # Check supervisor status
 supervisorctl status
@@ -234,7 +234,7 @@ Prefect may still be starting (takes 30-60s on cold start):
 
 ```bash
 # Watch logs
-fly logs -a prefect-service -f
+fly logs -a traefik-prefect -f
 
 # Wait for "Prefect server started" message
 ```
@@ -243,7 +243,7 @@ fly logs -a prefect-service -f
 
 ```bash
 # Verify secrets are set
-fly secrets list -a prefect-service
+fly secrets list -a traefik-prefect
 
 # Should see:
 # GATEWAY_JWT_SECRET
@@ -257,11 +257,11 @@ supabase secrets list
 
 ```bash
 # Check memory usage
-fly status -a prefect-service
+fly status -a traefik-prefect
 
 # If consistently above 800MB, increase memory:
 # Edit fly.toml: memory = "2048mb"
-fly deploy -a prefect-service
+fly deploy -a traefik-prefect
 ```
 
 ## Monitoring
@@ -270,10 +270,10 @@ fly deploy -a prefect-service
 
 ```bash
 # Gateway
-curl https://prefect-service.fly.dev/ping
+curl https://traefik-prefect.fly.dev/ping
 
 # Prefect (authenticated)
-curl https://prefect-service.fly.dev/captionacc/prefect/api/health \
+curl https://traefik-prefect.fly.dev/captionacc/prefect/api/health \
   -H "Authorization: Bearer <token>"
 ```
 
@@ -281,18 +281,18 @@ curl https://prefect-service.fly.dev/captionacc/prefect/api/health \
 
 ```bash
 # Combined logs
-fly logs -a prefect-service
+fly logs -a traefik-prefect
 
 # Filter by service
-fly logs -a prefect-service | grep "traefik"
-fly logs -a prefect-service | grep "prefect"
+fly logs -a traefik-prefect | grep "traefik"
+fly logs -a traefik-prefect | grep "prefect"
 ```
 
 ### Metrics
 
 ```bash
 # Prometheus metrics
-curl https://prefect-service.fly.dev/metrics
+curl https://traefik-prefect.fly.dev/metrics
 ```
 
 ## Next Steps
@@ -305,36 +305,36 @@ curl https://prefect-service.fly.dev/metrics
 ## Quick Reference
 
 ### URLs
-- **Gateway Health**: `https://prefect-service.fly.dev/ping`
-- **Prefect API**: `https://prefect-service.fly.dev/captionacc/prefect/api/*`
-- **Prefect UI**: `https://prefect-service.fly.dev/captionacc/prefect/` (requires auth)
-- **Metrics**: `https://prefect-service.fly.dev/metrics`
+- **Gateway Health**: `https://traefik-prefect.fly.dev/ping`
+- **Prefect API**: `https://traefik-prefect.fly.dev/captionacc/prefect/api/*`
+- **Prefect UI**: `https://traefik-prefect.fly.dev/captionacc/prefect/` (requires auth)
+- **Metrics**: `https://traefik-prefect.fly.dev/metrics`
 
 ### Environment Variables (Client Services)
 ```bash
-PREFECT_API_URL="https://prefect-service.fly.dev/captionacc/prefect/api"
+PREFECT_API_URL="https://traefik-prefect.fly.dev/captionacc/prefect/api"
 PREFECT_AUTH_TOKEN="<your-jwt-token>"
 ```
 
 ### Common Commands
 ```bash
 # Deploy
-fly deploy -a prefect-service
+fly deploy -a traefik-prefect
 
 # View logs
-fly logs -a prefect-service
+fly logs -a traefik-prefect
 
 # SSH into container
-fly ssh console -a prefect-service
+fly ssh console -a traefik-prefect
 
 # Check status
-fly status -a prefect-service
+fly status -a traefik-prefect
 
 # Scale memory
-fly scale memory 2048 -a prefect-service
+fly scale memory 2048 -a traefik-prefect
 
 # Restart
-fly apps restart prefect-service
+fly apps restart traefik-prefect
 ```
 
 ## Support
@@ -342,5 +342,5 @@ fly apps restart prefect-service
 For issues, see:
 - **README.md**: Full documentation
 - **services/api-gateway/README.md**: Gateway standalone documentation
-- **Fly.io logs**: `fly logs -a prefect-service`
+- **Fly.io logs**: `fly logs -a traefik-prefect`
 - **Supabase dashboard**: Check Edge Function logs

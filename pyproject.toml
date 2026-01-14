@@ -25,8 +25,7 @@ members = [
 ]
 exclude = [
     "apps/captionacc-web",
-    "services/prefect-service",  # Standalone Docker service for Fly.io, not a workspace package
-    "services/api-gateway",  # Traefik configuration (not a Python package)
+    "infrastructure/traefik-prefect",  # Standalone Docker service for Fly.io, not a workspace package
     "data-pipelines/docs",  # Documentation directory, not a Python package
     "data-pipelines/caption_boundaries",  # Incomplete package, missing pyproject.toml
     "**/__pycache__",  # Exclude all pycache directories

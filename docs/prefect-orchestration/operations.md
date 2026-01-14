@@ -8,8 +8,8 @@ Monitoring, debugging, and recovery procedures for Prefect orchestration.
 
 | Dashboard | URL | Purpose |
 |-----------|-----|---------|
-| Prefect UI | https://captionacc-prefect.fly.dev | Flow runs, work pools, logs |
-| Fly.io | https://fly.io/apps/captionacc-prefect | Machine status, metrics |
+| Prefect UI | https://traefik-prefect.fly.dev | Flow runs, work pools, logs |
+| Fly.io | https://fly.io/apps/traefik-prefect | Machine status, metrics |
 | Modal | https://modal.com/apps | Function invocations, GPU usage |
 | Supabase | Project dashboard | Video status, database state |
 
@@ -27,13 +27,13 @@ Monitoring, debugging, and recovery procedures for Prefect orchestration.
 
 ```bash
 # Prefect server health
-curl https://captionacc-prefect.fly.dev/api/health
+curl https://traefik-prefect.fly.dev/api/health
 
 # Check worker status
-curl https://captionacc-prefect.fly.dev/api/work_pools/captionacc-workers/workers
+curl https://traefik-prefect.fly.dev/api/work_pools/captionacc-workers/workers
 
 # Fly.io machine status
-fly status --app captionacc-prefect
+fly status --app traefik-prefect
 ```
 
 ---
@@ -53,11 +53,11 @@ fly status --app captionacc-prefect
 
 ```bash
 # Check worker status
-fly ssh console --app captionacc-prefect
+fly ssh console --app traefik-prefect
 ps aux | grep prefect
 
 # Restart worker if needed
-fly apps restart captionacc-prefect
+fly apps restart traefik-prefect
 
 # Check work pool status via Prefect UI
 # Work Pools → captionacc-workers → Status
@@ -106,19 +106,19 @@ prefect deployment run "captionacc-video-initial-processing" \
 
 ```bash
 # Check if machine is running
-fly status --app captionacc-prefect
+fly status --app traefik-prefect
 
 # Wake machine with health check
-curl https://captionacc-prefect.fly.dev/api/health
+curl https://traefik-prefect.fly.dev/api/health
 
 # Verify webhook in Supabase Dashboard
 # Database → Webhooks → videos table
 
 # Check Prefect logs for webhook receipt
-fly logs --app captionacc-prefect | grep webhook
+fly logs --app traefik-prefect | grep webhook
 
 # Manually trigger if needed
-curl -X POST https://captionacc-prefect.fly.dev/webhooks/supabase \
+curl -X POST https://traefik-prefect.fly.dev/webhooks/supabase \
   -H "Authorization: Bearer $WEBHOOK_SECRET" \
   -H "Content-Type: application/json" \
   -d '{"type":"INSERT","table":"videos","record":{...}}'
@@ -163,7 +163,7 @@ WHERE id = 'xxx';
 
 ```bash
 # SSH into machine
-fly ssh console --app captionacc-prefect
+fly ssh console --app traefik-prefect
 
 # Check volume usage
 df -h /data
@@ -174,7 +174,7 @@ rm /data/prefect.db
 
 # Restart (will recreate database)
 # Note: Loses flow run history
-fly apps restart captionacc-prefect
+fly apps restart traefik-prefect
 ```
 
 ---
@@ -228,17 +228,17 @@ If Prefect infrastructure needs complete rebuild:
 
 ```bash
 # 1. Export any important data from logs
-fly logs --app captionacc-prefect > prefect-logs-backup.txt
+fly logs --app traefik-prefect > prefect-logs-backup.txt
 
 # 2. Destroy and recreate volume (loses history)
 fly volumes destroy prefect_data
 fly volumes create prefect_data --size 1 --region iad
 
 # 3. Redeploy
-fly deploy --app captionacc-prefect
+fly deploy --app traefik-prefect
 
 # 4. Verify
-curl https://captionacc-prefect.fly.dev/api/health
+curl https://traefik-prefect.fly.dev/api/health
 
 # 5. Check for stuck videos in Supabase and reprocess
 SELECT id, status, caption_status FROM videos
@@ -260,7 +260,7 @@ cd services/prefect
 fly deploy
 
 # 3. Verify deployment
-curl https://captionacc-prefect.fly.dev/api/health
+curl https://traefik-prefect.fly.dev/api/health
 
 # 4. Check worker connected
 # Prefect UI → Work Pools → captionacc-workers
@@ -270,10 +270,10 @@ curl https://captionacc-prefect.fly.dev/api/health
 
 ```bash
 # List recent deployments
-fly releases --app captionacc-prefect
+fly releases --app traefik-prefect
 
 # Rollback to previous version
-fly deploy --image registry.fly.io/captionacc-prefect:v123
+fly deploy --image registry.fly.io/traefik-prefect:v123
 ```
 
 ### Updating Flow Definitions
@@ -305,10 +305,10 @@ prefect flow-run logs <flow-run-id>
 
 ```bash
 # Real-time logs
-fly logs --app captionacc-prefect
+fly logs --app traefik-prefect
 
 # Historical logs
-fly logs --app captionacc-prefect --since 1h
+fly logs --app traefik-prefect --since 1h
 ```
 
 ### View Modal Logs
@@ -324,7 +324,7 @@ modal logs <function-name>
 ### SSH into Prefect Machine
 
 ```bash
-fly ssh console --app captionacc-prefect
+fly ssh console --app traefik-prefect
 
 # Check processes
 ps aux
@@ -343,7 +343,7 @@ env | grep PREFECT
 import requests
 
 response = requests.post(
-    "https://captionacc-prefect.fly.dev/webhooks/supabase",
+    "https://traefik-prefect.fly.dev/webhooks/supabase",
     headers={
         "Authorization": "Bearer {webhook_secret}",
         "Content-Type": "application/json"
@@ -410,7 +410,7 @@ action:
 ```bash
 # Create alert for machine restarts
 fly monitoring alerts create \
-  --app captionacc-prefect \
+  --app traefik-prefect \
   --type machine_restart \
   --threshold 3 \
   --window 1h \
