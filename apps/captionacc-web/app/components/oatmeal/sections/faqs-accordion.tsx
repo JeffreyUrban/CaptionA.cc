@@ -14,7 +14,7 @@ export function Faq({
   ...props
 }: { question: ReactNode; answer: ReactNode } & ComponentProps<'div'>) {
   const autoId = useId()
-  id = id || autoId
+  id = id ?? autoId
 
   return (
     <div id={id} {...props}>

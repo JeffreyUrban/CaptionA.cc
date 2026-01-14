@@ -5,7 +5,7 @@
  * Direct HTTP calls to Prefect server - no subprocess spawning needed.
  */
 
-const PREFECT_API_URL = process.env['PREFECT_API_URL'] || 'https://prefect-service.fly.dev/api'
+const PREFECT_API_URL = process.env['PREFECT_API_URL'] ?? 'https://prefect-service.fly.dev/api'
 
 function log(message: string) {
   const timestamp = new Date().toISOString()

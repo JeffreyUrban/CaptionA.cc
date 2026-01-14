@@ -19,10 +19,10 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 const execFileAsync = promisify(execFile)
 
 // Environment configuration
-const WASABI_REGION = process.env['WASABI_REGION'] || 'us-east-1'
+const WASABI_REGION = process.env['WASABI_REGION'] ?? 'us-east-1'
 const WASABI_ENDPOINT = `https://s3.${WASABI_REGION}.wasabisys.com`
-const WASABI_BUCKET = process.env['WASABI_BUCKET'] || 'caption-acc-prod'
-const ENVIRONMENT = process.env['ENVIRONMENT'] || 'dev'
+const WASABI_BUCKET = process.env['WASABI_BUCKET'] ?? 'caption-acc-prod'
+const ENVIRONMENT = process.env['ENVIRONMENT'] ?? 'dev'
 
 // Initialize S3 client with READ-ONLY credentials
 const s3Client = new S3Client({
@@ -30,9 +30,9 @@ const s3Client = new S3Client({
   endpoint: WASABI_ENDPOINT,
   credentials: {
     accessKeyId:
-      process.env['WASABI_ACCESS_KEY_READONLY'] || process.env['WASABI_ACCESS_KEY'] || '',
+      process.env['WASABI_ACCESS_KEY_READONLY'] ?? process.env['WASABI_ACCESS_KEY'] ?? '',
     secretAccessKey:
-      process.env['WASABI_SECRET_KEY_READONLY'] || process.env['WASABI_SECRET_KEY'] || '',
+      process.env['WASABI_SECRET_KEY_READONLY'] ?? process.env['WASABI_SECRET_KEY'] ?? '',
   },
   forcePathStyle: true, // Required for Wasabi - use path-style URLs instead of virtual-hosted-style
 })

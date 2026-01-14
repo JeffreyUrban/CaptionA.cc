@@ -11,7 +11,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const path = url.searchParams.get('path')
 
   // Handle missing or empty path (treat as root directory)
-  const targetPath = path || ''
+  const targetPath = path ?? ''
 
   // Get all videos and count how many are direct children of this path
   const allVideos = await getAllVideos()

@@ -40,8 +40,8 @@ export async function loader({ request: _request }: LoaderFunctionArgs) {
   const health: HealthResponse = {
     status: 'healthy',
     timestamp: new Date().toISOString(),
-    environment: process.env['ENVIRONMENT'] || 'development',
-    version: process.env['APP_VERSION'] || 'dev',
+    environment: process.env['ENVIRONMENT'] ?? 'development',
+    version: process.env['APP_VERSION'] ?? 'dev',
     components: {
       supabase: { status: 'healthy' },
       wasabi: { status: 'healthy' },

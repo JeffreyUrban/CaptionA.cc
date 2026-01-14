@@ -24,7 +24,7 @@ export function WaitlistForm() {
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Get access key from environment variable
-  const accessKey = import.meta.env['VITE_WEB3FORMS_ACCESS_KEY'] || ''
+  const accessKey = import.meta.env['VITE_WEB3FORMS_ACCESS_KEY'] ?? ''
 
   const { submit: onSubmit } = useWeb3Forms({
     access_key: accessKey,

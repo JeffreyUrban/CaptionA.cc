@@ -181,7 +181,7 @@ export function UploadPreviewModal({
               </label>
               <select
                 id="target-folder"
-                value={targetFolder || ''}
+                value={targetFolder ?? ''}
                 onChange={e => setTargetFolder(e.target.value || null)}
                 className="block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm focus:border-teal-500 focus:ring-teal-500 sm:text-sm"
               >

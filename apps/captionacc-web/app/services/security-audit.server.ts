@@ -50,17 +50,17 @@ export async function logSecurityEvent(event: SecurityAuditEvent): Promise<void>
     await supabase.from('security_audit_log').insert({
       event_type: event.eventType,
       severity: event.severity,
-      user_id: event.userId || null,
-      tenant_id: event.tenantId || null,
-      resource_type: event.resourceType || null,
-      resource_id: event.resourceId || null,
-      target_tenant_id: event.targetTenantId || null,
-      ip_address: event.ipAddress || null,
-      user_agent: event.userAgent || null,
-      request_path: event.requestPath || null,
-      request_method: event.requestMethod || null,
-      error_message: event.errorMessage || null,
-      metadata: (event.metadata as Json) || null,
+      user_id: event.userId ?? null,
+      tenant_id: event.tenantId ?? null,
+      resource_type: event.resourceType ?? null,
+      resource_id: event.resourceId ?? null,
+      target_tenant_id: event.targetTenantId ?? null,
+      ip_address: event.ipAddress ?? null,
+      user_agent: event.userAgent ?? null,
+      request_path: event.requestPath ?? null,
+      request_method: event.requestMethod ?? null,
+      error_message: event.errorMessage ?? null,
+      metadata: (event.metadata as Json) ?? null,
     })
 
     // Log critical events to console for immediate visibility
@@ -93,8 +93,8 @@ export function extractRequestMetadata(request: Request): {
 
   return {
     ipAddress:
-      request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || undefined,
-    userAgent: request.headers.get('user-agent') || undefined,
+      request.headers.get('x-forwarded-for') ?? request.headers.get('x-real-ip') ?? undefined,
+    userAgent: request.headers.get('user-agent') ?? undefined,
     requestPath: url.pathname,
     requestMethod: request.method,
   }

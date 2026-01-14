@@ -42,6 +42,6 @@ export async function loader({ params }: LoaderFunctionArgs) {
     type: status.type,
     startedAt: status.startedAt.toISOString(),
     estimatedCompletionAt: status.estimatedCompletionAt.toISOString(),
-    progress: status.progress || null,
+    progress: status.progress ?? null,
   })
 }

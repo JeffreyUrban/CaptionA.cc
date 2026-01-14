@@ -39,9 +39,9 @@ export async function loader({ request: _request }: LoaderFunctionArgs) {
   const videoList =
     videos?.map(v => ({
       videoId: v.id,
-      displayPath: v.display_path || v.filename || v.id,
-      isDemo: v.is_demo || false,
-    })) || []
+      displayPath: v.display_path ?? v.filename ?? v.id,
+      isDemo: v.is_demo ?? false,
+    })) ?? []
 
   return jsonResponse({ videos: videoList })
 }
