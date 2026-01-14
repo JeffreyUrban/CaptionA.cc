@@ -1,0 +1,39 @@
+# Multi-stage Dockerfile: Traefik + Prefect on same machine
+# This combines the API gateway with Prefect server for optimal performance
+
+# Stage 1: Get Traefik
+FROM traefik:v3.2 AS traefik
+
+# Stage 2: Build final image with both services
+FROM prefecthq/prefect:3-python3.11
+
+# Install supervisor for process management
+USER root
+RUN apt-get update && \
+    apt-get install -y supervisor wget curl && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy Traefik binary from official image
+COPY --from=traefik /usr/local/bin/traefik /usr/local/bin/traefik
+
+# Copy Traefik configuration
+COPY gateway/traefik.yml /etc/traefik/traefik.yml
+COPY gateway/dynamic /etc/traefik/dynamic
+
+# Create supervisor configuration
+RUN mkdir -p /var/log/supervisor
+
+COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
+# Expose ports
+# 8080: Traefik HTTP (public)
+# 8443: Traefik HTTPS (public)
+# 4200: Prefect API (internal only, accessed via Traefik)
+EXPOSE 8080 8443
+
+# Health check (check Traefik gateway)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/ping || exit 1
+
+# Run supervisor to manage both processes
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
