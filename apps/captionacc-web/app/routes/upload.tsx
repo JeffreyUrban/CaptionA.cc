@@ -97,7 +97,7 @@ export default function UploadPage() {
   // On mount: mark that user visited upload page (hides notification badge)
   useEffect(() => {
     visitedUploadPage()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Run only once on mount to mark page as visited; visitedUploadPage is stable
   }, [])
 
   // Helper to check if file is a supported video format

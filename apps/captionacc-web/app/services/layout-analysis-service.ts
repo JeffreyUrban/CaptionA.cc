@@ -5,6 +5,8 @@
  * layout parameters, and anchor types for caption detection.
  */
 
+import type { CanvasRenderingContext2D as NodeCanvasContext } from 'canvas'
+
 import type { TextAnchor } from '~/types/enums'
 import { predictBoxLabel } from '~/utils/box-prediction'
 import { getAnnotationDatabase, getWritableDatabase } from '~/utils/database'
@@ -1300,8 +1302,7 @@ function applyFillDarkening(
  * Apply normalized darkening to image data.
  */
 function applyNormalizedDarkening(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ctx: any, // Canvas context from node-canvas (different type than DOM CanvasRenderingContext2D)
+  ctx: NodeCanvasContext,
   croppedWidth: number,
   croppedHeight: number,
   edgeCount: Uint16Array,
@@ -1327,8 +1328,7 @@ function applyNormalizedDarkening(
  * Draw colored layout annotations (anchor line, vertical position line).
  */
 function drawLayoutAnnotations(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ctx: any, // Canvas context from node-canvas (different type than DOM CanvasRenderingContext2D)
+  ctx: NodeCanvasContext,
   layoutParams: {
     anchorType: 'left' | 'center' | 'right'
     anchorPosition: number

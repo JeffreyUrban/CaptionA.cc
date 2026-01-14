@@ -127,7 +127,7 @@ export function useBoundaryWorkflowState({
       setIsInitialized(true)
     }
     void loadInitial()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Only run when videoId changes to load initial state; annotationData is intentionally excluded to prevent loops
   }, [videoId])
 
   // Frame loader hook (only starts after initial position is set)
