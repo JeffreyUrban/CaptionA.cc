@@ -7,4 +7,6 @@ except ImportError:
     # Fallback for development installs without build
     __version__ = "0.0.0.dev0+unknown"
 
-__all__ = ["__version__"]
+from .pipeline import process_video_with_gpu_and_ocr
+
+__all__ = ["__version__", "process_video_with_gpu_and_ocr"]

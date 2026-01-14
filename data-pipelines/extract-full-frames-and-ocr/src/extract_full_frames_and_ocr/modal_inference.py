@@ -24,7 +24,7 @@ def get_full_frames_image():
     if not modal:
         return None
 
-    # Get repo root - this file is in data-pipelines/full_frames/src/full_frames/
+    # Get repo root - this file is in data-pipelines/extract-full-frames-and-ocr/src/extract_full_frames_and_ocr/
     from pathlib import Path
     repo_root = Path(__file__).parent.parent.parent.parent.parent
 
@@ -46,9 +46,9 @@ def get_full_frames_image():
         .env({"PYTHONPATH": "/root"})
         # Add local packages
         .add_local_dir(repo_root / "packages" / "gpu_video_utils" / "src" / "gpu_video_utils", remote_path="/root/gpu_video_utils")
-        .add_local_dir(repo_root / "packages" / "ocr_utils" / "src" / "ocr_utils", remote_path="/root/ocr_utils")
+        .add_local_dir(repo_root / "packages" / "ocr" / "src" / "ocr", remote_path="/root/ocr")
         .add_local_dir(repo_root / "packages" / "frames_db" / "src" / "frames_db", remote_path="/root/frames_db")
-        .add_local_dir(repo_root / "data-pipelines" / "full_frames" / "src" / "full_frames", remote_path="/root/full_frames")
+        .add_local_dir(repo_root / "data-pipelines" / "extract-full-frames-and-ocr" / "src" / "extract_full_frames_and_ocr", remote_path="/root/extract_full_frames_and_ocr")
     )
 
 
@@ -85,7 +85,7 @@ def extract_frames_and_ocr_impl(
         - {tenant_id}/client/videos/{video_id}/full_frames/frame_NNNNNNNNNN.jpg
         - {tenant_id}/server/videos/{video_id}/fullOCR.db
     """
-    from full_frames.ocr_google_vision import process_video_with_gpu_and_google_vision
+    from extract_full_frames_and_ocr.pipeline import process_video_with_gpu_and_ocr
     import boto3
     import os
 
@@ -125,7 +125,7 @@ def extract_frames_and_ocr_impl(
         print("[2/4] Processing video with GPU + Google Vision OCR...")
         db_path = tmp_path / "fullOCR.db"
 
-        total_boxes = process_video_with_gpu_and_google_vision(
+        total_boxes = process_video_with_gpu_and_ocr(
             video_path=video_path,
             db_path=db_path,
             rate_hz=rate_hz,

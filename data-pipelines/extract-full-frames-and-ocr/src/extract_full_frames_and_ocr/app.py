@@ -11,7 +11,7 @@ except ImportError:
 
 # Create Modal app
 if modal:
-    app = modal.App("full-frame-ocr")
+    app = modal.App("extract-full-frames-and-ocr")
 
     # Import image builder and implementation
     from .modal_inference import get_full_frames_image, extract_frames_and_ocr_impl

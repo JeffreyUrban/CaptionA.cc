@@ -118,7 +118,7 @@ def test_full_frames_gpu_ocr_pipeline(setup_test_video):
 
     # Look up deployed Modal function
     extract_fn = modal.Function.from_name(
-        app_name="full-frame-ocr", name="extract_frames_and_ocr"
+        app_name="extract-full-frames-and-ocr", name="extract_frames_and_ocr"
     )
 
     # Call Modal function
@@ -199,7 +199,7 @@ def test_different_rates_and_languages(setup_test_video, rate_hz, language):
 
     # Look up deployed Modal function
     extract_fn = modal.Function.from_name(
-        app_name="full-frame-ocr", name="extract_frames_and_ocr"
+        app_name="extract-full-frames-and-ocr", name="extract_frames_and_ocr"
     )
 
     # Call Modal function
