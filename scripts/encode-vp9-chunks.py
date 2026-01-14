@@ -82,7 +82,7 @@ def write_frames_to_temp_dir(frames: list[tuple[int, bytes, int, int]], temp_dir
 
     width, height = None, None
 
-    for i, (frame_index, image_data, w, h) in enumerate(frames):
+    for i, (_frame_index, image_data, w, h) in enumerate(frames):
         if width is None:
             width, height = w, h
 
@@ -93,14 +93,14 @@ def write_frames_to_temp_dir(frames: list[tuple[int, bytes, int, int]], temp_dir
     return width, height
 
 
-def encode_chunk(input_dir: Path, output_path: Path, width: int, height: int) -> None:
+def encode_chunk(input_dir: Path, output_path: Path, _width: int, _height: int) -> None:
     """Encode frames into VP9 WebM chunk using ffmpeg.
 
     Args:
         input_dir: Directory containing frame_*.jpg files
         output_path: Output .webm file path
-        width: Frame width
-        height: Frame height
+        _width: Frame width (unused - ffmpeg auto-detects)
+        _height: Frame height (unused - ffmpeg auto-detects)
     """
     # VP9 encoding parameters:
     # -c:v libvpx-vp9: VP9 codec
@@ -479,63 +479,67 @@ def main():
 
     video_id = args.video_id
 
+    # TODO: Cropping database has been replaced with modulo chunks on Wasabi
+    # This script is incomplete and needs to be updated to work with the new system
+    print(f"❌ This script is a stub and needs implementation for video: {video_id}")
+    print("TODO: Update to fetch frames from Wasabi instead of local database")
+    return 1
+
     # Find database path
-    video_id_prefix = video_id[:2]
-    db_path = "/path/to/db"  # TODO: Cropping database has been replaced with modulo chunks on Wasabi
+    # db_path = Path("/path/to/db")
+    # if not db_path.exists():
+    #     print(f"❌ Database not found: {db_path}")
+    #     return 1
+    #
+    # # Get frames from database
+    # frames = get_frames_from_db(db_path)
+    # if not frames:
+    #     print("❌ No frames found in database")
+    #     return 1
 
-    if not db_path.exists():
-        print(f"❌ Database not found: {db_path}")
-        return 1
-
-    # Get frames from database
-    frames = get_frames_from_db(db_path)
-    if not frames:
-        print("❌ No frames found in database")
-        return 1
-
-    # Organize by modulo
-    modulo_frames = organize_frames_by_modulo(frames)
-
-    # Set up output directories
-    output_base = Path(args.output_dir) / video_id
-    output_base.mkdir(parents=True, exist_ok=True)
-
-    # Encode chunks for each modulo level
-    modulo_chunks = {}
-
-    for modulo in [16, 4, 1]:
-        modulo_output_dir = output_base / f"modulo_{modulo}"
-        chunk_paths = encode_modulo_chunks(modulo, modulo_frames[modulo], modulo_output_dir)
-
-        if args.upload:
-            print(f"\n☁️  Uploading modulo_{modulo} chunks to Wasabi...")
-            urls = []
-            for chunk_path in chunk_paths:
-                s3_key = f"dev/users/default_user/videos/{video_id}/cropped_frames/modulo_{modulo}/{chunk_path.name}"
-                url = upload_to_wasabi(chunk_path, s3_key)
-                urls.append(url)
-                print(f"   ✅ {s3_key}")
-
-            modulo_chunks[modulo] = urls
-        else:
-            modulo_chunks[modulo] = [str(p.relative_to(output_base.parent)) for p in chunk_paths]
-
-    # Calculate total size
-    total_size_mb = sum(sum(p.stat().st_size for p in output_base.glob(f"modulo_{m}/*.webm")) for m in [16, 4, 1]) / (
-        1024 * 1024
-    )
-
-    print("\n📊 Summary:")
-    print(f"   Total size: {total_size_mb:.1f} MB")
-    print(f"   Duplication ratio: {total_size_mb / (sum(len(f[1]) for f in frames) / 1024 / 1024):.2f}x")
-
-    # Generate test page
-    test_page_path = output_base / "test.html"
-    generate_test_page(video_id, modulo_chunks, test_page_path)
-
-    print(f"\n🎉 Done! Open {test_page_path} in a browser to test performance.")
-
-    return 0
+    # # Organize by modulo
+    # modulo_frames = organize_frames_by_modulo(frames)
+    #
+    # # Set up output directories
+    # output_base = Path(args.output_dir) / video_id
+    # output_base.mkdir(parents=True, exist_ok=True)
+    #
+    # # Encode chunks for each modulo level
+    # modulo_chunks = {}
+    #
+    # for modulo in [16, 4, 1]:
+    #     modulo_output_dir = output_base / f"modulo_{modulo}"
+    #     chunk_paths = encode_modulo_chunks(modulo, modulo_frames[modulo], modulo_output_dir)
+    #
+    #     if args.upload:
+    #         print(f"\n☁️  Uploading modulo_{modulo} chunks to Wasabi...")
+    #         urls = []
+    #         for chunk_path in chunk_paths:
+    #             s3_key = f"dev/users/default_user/videos/{video_id}/cropped_frames/modulo_{modulo}/{chunk_path.name}"
+    #             url = upload_to_wasabi(chunk_path, s3_key)
+    #             urls.append(url)
+    #             print(f"   ✅ {s3_key}")
+    #
+    #         modulo_chunks[modulo] = urls
+    #     else:
+    #         modulo_chunks[modulo] = [str(p.relative_to(output_base.parent)) for p in chunk_paths]
+    #
+    # # Calculate total size
+    # total_size_mb = sum(sum(p.stat().st_size for p in output_base.glob(f"modulo_{m}/*.webm")) for m in [16, 4, 1]) / (
+    #     1024 * 1024
+    # )
+    #
+    # print("\n📊 Summary:")
+    # print(f"   Total size: {total_size_mb:.1f} MB")
+    # print(f"   Duplication ratio: {total_size_mb / (sum(len(f[1]) for f in frames) / 1024 / 1024):.2f}x")
+    #
+    # # Generate test page
+    # test_page_path = output_base / "test.html"
+    # generate_test_page(video_id, modulo_chunks, test_page_path)
+    #
+    # print(f"\n🎉 Done! Open {test_page_path} in a browser to test performance.")
+    #
+    # return 0
 
 
 if __name__ == "__main__":

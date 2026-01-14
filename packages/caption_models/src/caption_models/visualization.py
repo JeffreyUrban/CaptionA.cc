@@ -9,7 +9,7 @@ from caption_models.models import SubtitleRegion
 
 def create_analysis_visualization(
     region: SubtitleRegion,
-    ocr_annotations: list[dict],
+    _ocr_annotations: list[dict],
     output_image: Path,
 ) -> None:
     """Create visualization of subtitle region analysis.
@@ -18,7 +18,7 @@ def create_analysis_visualization(
 
     Args:
         region: Analyzed subtitle region
-        ocr_annotations: OCR annotations for drawing boxes
+        _ocr_annotations: OCR annotations for drawing boxes (unused - uses pre-rendered OCR.png)
         output_image: Path to save visualization
     """
     # Load the OCR.png visualization

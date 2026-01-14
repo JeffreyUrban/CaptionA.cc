@@ -11,7 +11,7 @@ except ImportError:
     raise ImportError(
         "PyNvVideoCodec is required for GPU video processing. "
         "Install with: pip install nvidia-pynvvideocodec"
-    )
+    ) from None
 
 
 class GPUDecoderError(Exception):

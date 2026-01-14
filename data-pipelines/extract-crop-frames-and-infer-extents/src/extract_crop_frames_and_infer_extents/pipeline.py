@@ -783,12 +783,8 @@ def crop_and_infer_caption_frame_extents_pipelined(
 
         while frame_idx < num_output_frames:
             # Determine how many NEW frames to extract this batch
-            if prev_batch_last_frame_gpu is None:
-                # First batch: extract (batch_size/2 + 1) frames
-                frames_to_extract = frames_first_batch
-            else:
-                # Subsequent batches: extract (batch_size/2) new frames
-                frames_to_extract = frames_per_subsequent
+            # First batch: extract (batch_size/2 + 1) frames, subsequent: extract (batch_size/2) new frames
+            frames_to_extract = frames_first_batch if prev_batch_last_frame_gpu is None else frames_per_subsequent
 
             # Don't exceed total frames
             frames_to_extract = min(frames_to_extract, num_output_frames - frame_idx)

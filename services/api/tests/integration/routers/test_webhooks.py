@@ -76,9 +76,10 @@ class TestWebhooksRouter:
 
     def test_webhook_auth_invalid(self, client, mock_settings):
         """Test webhook with invalid auth."""
+        # pragma: allowlist secret
         response = client.post(
             "/webhooks/supabase/videos",
-            headers={"Authorization": "Bearer wrong-secret"  # pragma: allowlist secret},
+            headers={"Authorization": "Bearer wrong-secret"},
             json={"type": "INSERT", "table": "videos", "record": {}},
         )
 

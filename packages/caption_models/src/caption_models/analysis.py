@@ -37,7 +37,7 @@ def box_overlap_fraction(box1, box2):
     return intersection_area / (box1_area + 1e-6)
 
 
-def determine_anchor_type(boxes, region_bounds):
+def determine_anchor_type(boxes, _region_bounds):
     """Determine if boxes are left, center, or right anchored based on location.
 
     Checks which edge has consistency on its respective side:

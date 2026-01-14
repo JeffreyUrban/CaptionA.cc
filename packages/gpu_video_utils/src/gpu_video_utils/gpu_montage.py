@@ -121,7 +121,7 @@ def create_vertical_montage_gpu(
     metadata: list[dict] = []
     y_offset = 0
 
-    for i, (frame, frame_id) in enumerate(zip(frames, frame_ids, strict=False)):
+    for _i, (frame, frame_id) in enumerate(zip(frames, frame_ids, strict=False)):
         # Ensure frame is on correct device
         if frame.device.type != device.split(":")[0]:
             frame = frame.to(device)
