@@ -2,7 +2,7 @@ interface Annotation {
   id: number
   start_frame_index: number
   end_frame_index: number
-  caption_frame_extents_state: 'predicted' | 'confirmed' | 'gap'
+  caption_frame_extents_state: 'predicted' | 'confirmed' | 'gap' | 'issue'
 }
 
 interface AnnotationInfoPanelProps {

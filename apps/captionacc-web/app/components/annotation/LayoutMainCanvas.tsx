@@ -3,6 +3,8 @@
  * Handles rendering of frame/analysis views with overlays.
  */
 
+import { useState, useEffect } from 'react'
+
 import {
   RECALC_THRESHOLD,
   type FrameBoxesData,
@@ -10,8 +12,10 @@ import {
   type BoxData,
   type ViewMode,
 } from '~/types/layout'
+import { generateSignedUrl, isS3Url } from '~/utils/s3-image-url-helper'
 
 interface LayoutMainCanvasProps {
+  videoId: string
   viewMode: ViewMode
   layoutConfig: LayoutConfig | null
   layoutApproved: boolean
@@ -93,6 +97,7 @@ function AnalysisViewContent({
  * Frame view canvas content
  */
 function FrameViewContent({
+  videoId,
   currentFrameBoxes,
   annotationsSinceRecalc,
   selectionPadding,
@@ -104,6 +109,7 @@ function FrameViewContent({
   onContextMenu,
 }: Pick<
   LayoutMainCanvasProps,
+  | 'videoId'
   | 'annotationsSinceRecalc'
   | 'selectionPadding'
   | 'imageRef'
@@ -116,6 +122,23 @@ function FrameViewContent({
   currentFrameBoxes: FrameBoxesData
 }) {
   const allBoxesAnnotated = currentFrameBoxes.boxes.every(box => box.userLabel !== null)
+  const [signedImageUrl, setSignedImageUrl] = useState<string | null>(null)
+  const [loadingUrl, setLoadingUrl] = useState(false)
+
+  // Convert S3 URL to signed URL if needed
+  useEffect(() => {
+    async function convertUrl() {
+      if (isS3Url(currentFrameBoxes.imageUrl)) {
+        setLoadingUrl(true)
+        const url = await generateSignedUrl(videoId, currentFrameBoxes.imageUrl)
+        setSignedImageUrl(url)
+        setLoadingUrl(false)
+      } else {
+        setSignedImageUrl(currentFrameBoxes.imageUrl)
+      }
+    }
+    void convertUrl()
+  }, [videoId, currentFrameBoxes.imageUrl])
 
   return (
     <div
@@ -132,12 +155,18 @@ function FrameViewContent({
           outline: allBoxesAnnotated ? '3px solid #10b981' : 'none',
         }}
       >
-        <img
-          ref={imageRef}
-          src={currentFrameBoxes.imageUrl}
-          alt={`Frame ${currentFrameBoxes.frameIndex}`}
-          className="max-w-full max-h-full object-contain block"
-        />
+        {loadingUrl || !signedImageUrl ? (
+          <div className="bg-gray-200 animate-pulse w-full h-64 flex items-center justify-center">
+            Loading image...
+          </div>
+        ) : (
+          <img
+            ref={imageRef}
+            src={signedImageUrl}
+            alt={`Frame ${currentFrameBoxes.frameIndex}`}
+            className="max-w-full max-h-full object-contain block"
+          />
+        )}
         <canvas
           ref={canvasRef}
           className="absolute left-0 top-0"
@@ -161,6 +190,7 @@ function EmptyState({ loadingFrame }: { loadingFrame: boolean }) {
 }
 
 export function LayoutMainCanvas({
+  videoId,
   viewMode,
   layoutConfig,
   layoutApproved,
@@ -196,6 +226,7 @@ export function LayoutMainCanvas({
         />
       ) : viewMode === 'frame' && currentFrameBoxes ? (
         <FrameViewContent
+          videoId={videoId}
           currentFrameBoxes={currentFrameBoxes}
           annotationsSinceRecalc={annotationsSinceRecalc}
           selectionPadding={selectionPadding}

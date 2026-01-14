@@ -1,9 +1,12 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 
 import { getTextStyle, type TextAnchor, type TextStyle } from '~/types/text-annotation'
+import { useCaptionsDatabase } from './useCaptionsDatabase'
 
 interface UseTextAnnotationPreferencesParams {
   videoId: string
+  /** Tenant ID for database initialization */
+  tenantId?: string
 }
 
 interface UseTextAnnotationPreferencesReturn {
@@ -27,14 +30,19 @@ interface UseTextAnnotationPreferencesReturn {
   handleTextSizeChange: (newPercent: number) => Promise<void>
   handlePaddingScaleChange: (newScale: number) => Promise<void>
   handleTextAnchorChange: (newAnchor: TextAnchor) => Promise<void>
+
+  // Database status
+  isReady: boolean
 }
 
 /**
  * Custom hook for managing text display preferences.
- * Handles loading/saving preferences and computing text styles.
+ * Handles loading/saving preferences from captions.db and computing text styles.
+ * Uses CR-SQLite local database with WebSocket sync.
  */
 export function useTextAnnotationPreferences({
   videoId,
+  tenantId,
 }: UseTextAnnotationPreferencesParams): UseTextAnnotationPreferencesReturn {
   // Text size preference (as percentage of image width)
   const [textSizePercent, setTextSizePercent] = useState<number>(3.0)
@@ -49,39 +57,71 @@ export function useTextAnnotationPreferences({
   // Collapsible section state
   const [textControlsExpanded, setTextControlsExpanded] = useState(false)
 
-  // Load preferences
+  // Track if initial load has been done
+  const initialLoadDoneRef = useRef(false)
+
+  // Use the captions database hook (preferences are stored in captions.db)
+  const captionsDb = useCaptionsDatabase({
+    videoId,
+    tenantId,
+    // Preferences don't require edit lock
+    autoAcquireLock: false,
+  })
+
+  // Load preferences from database when ready
   useEffect(() => {
-    if (!videoId) return
+    if (!captionsDb.isReady || !videoId || initialLoadDoneRef.current) return
 
     const loadPreferences = async () => {
       try {
-        const response = await fetch(`/api/preferences/${encodeURIComponent(videoId)}`)
-        const data = await response.json()
+        const prefs = await captionsDb.getPreferences()
 
-        if (data.text_size) {
+        if (prefs.textSize) {
           const percent =
-            typeof data.text_size === 'number' ? data.text_size : parseFloat(data.text_size) || 3.0
+            typeof prefs.textSize === 'number'
+              ? prefs.textSize
+              : parseFloat(String(prefs.textSize)) || 3.0
           setTextSizePercent(percent)
         }
 
-        if (data.padding_scale !== undefined) {
+        if (prefs.paddingScale !== undefined) {
           const scale =
-            typeof data.padding_scale === 'number'
-              ? data.padding_scale
-              : parseFloat(data.padding_scale) || 0.75
+            typeof prefs.paddingScale === 'number'
+              ? prefs.paddingScale
+              : parseFloat(String(prefs.paddingScale)) || 0.75
           setPaddingScale(scale)
         }
 
-        if (data.text_anchor) {
-          setTextAnchor(data.text_anchor as TextAnchor)
+        if (prefs.textAnchor) {
+          setTextAnchor(prefs.textAnchor)
         }
+
+        initialLoadDoneRef.current = true
       } catch (error) {
         console.error('Failed to load preferences:', error)
       }
     }
 
     void loadPreferences()
-  }, [videoId])
+  }, [captionsDb.isReady, videoId, captionsDb])
+
+  // Subscribe to preference changes (from other tabs/users)
+  useEffect(() => {
+    if (!captionsDb.isReady) return
+
+    const unsubscribe = captionsDb.onChanges(event => {
+      if (event.type === 'preferences_changed') {
+        // Reload preferences when they change
+        void captionsDb.getPreferences().then(prefs => {
+          setTextSizePercent(prefs.textSize)
+          setPaddingScale(prefs.paddingScale)
+          setTextAnchor(prefs.textAnchor)
+        })
+      }
+    })
+
+    return unsubscribe
+  }, [captionsDb.isReady, captionsDb])
 
   // Callback ref to track image width and update text size
   const imageContainerRef = useCallback(
@@ -103,40 +143,36 @@ export function useTextAnnotationPreferences({
     [textSizePercent]
   )
 
-  // Save preference helper
-  const savePreference = useCallback(
-    async (preferences: Record<string, unknown>) => {
-      if (!videoId) return
-
-      try {
-        await fetch(`/api/preferences/${encodeURIComponent(videoId)}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(preferences),
-        })
-      } catch (error) {
-        console.error('Failed to save preference:', error)
-      }
-    },
-    [videoId]
-  )
-
   // Handle text size change
   const handleTextSizeChange = useCallback(
     async (newPercent: number) => {
       setTextSizePercent(newPercent)
-      await savePreference({ text_size: newPercent })
+
+      if (!captionsDb.isReady) return
+
+      try {
+        await captionsDb.updatePreferences({ textSize: newPercent })
+      } catch (error) {
+        console.error('Failed to save text size preference:', error)
+      }
     },
-    [savePreference]
+    [captionsDb]
   )
 
   // Handle padding scale change
   const handlePaddingScaleChange = useCallback(
     async (newScale: number) => {
       setPaddingScale(newScale)
-      await savePreference({ padding_scale: newScale })
+
+      if (!captionsDb.isReady) return
+
+      try {
+        await captionsDb.updatePreferences({ paddingScale: newScale })
+      } catch (error) {
+        console.error('Failed to save padding scale preference:', error)
+      }
     },
-    [savePreference]
+    [captionsDb]
   )
 
   // Handle text anchor change
@@ -159,12 +195,18 @@ export function useTextAnnotationPreferences({
         setPaddingScale(0.75)
       }
 
-      await savePreference({
-        text_anchor: newAnchor,
-        padding_scale: newPaddingScale,
-      })
+      if (!captionsDb.isReady) return
+
+      try {
+        await captionsDb.updatePreferences({
+          textAnchor: newAnchor,
+          paddingScale: newPaddingScale,
+        })
+      } catch (error) {
+        console.error('Failed to save text anchor preference:', error)
+      }
     },
-    [textAnchor, paddingScale, savePreference]
+    [textAnchor, paddingScale, captionsDb]
   )
 
   // Compute text style
@@ -182,5 +224,6 @@ export function useTextAnnotationPreferences({
     handleTextSizeChange,
     handlePaddingScaleChange,
     handleTextAnchorChange,
+    isReady: captionsDb.isReady,
   }
 }

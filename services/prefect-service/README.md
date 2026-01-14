@@ -1,130 +1,291 @@
-# Prefect Server - Scale-to-Zero Deployment
+# Prefect Service with Integrated API Gateway
 
-Lightweight Prefect server that coordinates workflows across all projects.
+**Combined deployment**: Traefik API Gateway + Prefect Server on a single Fly.io machine.
 
 ## Architecture
 
-- **Instance Size**: 512MB RAM, shared-cpu-1x
-- **Scaling**: 0-1 instances (auto-start on HTTP requests)
-- **Backend**: Embedded SQLite (Supabase PostgreSQL optional)
-- **Cost**: $0 when idle, ~$4/month if running 24/7
+```
+┌─────────────────────────────────────────────────────────────┐
+│  prefect-service.fly.dev (1GB Fly.io machine)               │
+│                                                              │
+│  ┌────────────────────────────────────────┐                 │
+│  │ Traefik Gateway (supervisor process 1) │                 │
+│  │ - Port 8080 (HTTP → HTTPS redirect)    │ ← Public        │
+│  │ - Port 8443 (HTTPS)                    │ ← Public        │
+│  │ - JWT authentication                   │                 │
+│  │ - Routes:                               │                 │
+│  │   /captionacc/prefect/* → localhost:4200│                 │
+│  │   /captionacc/api/* → api.internal:8000 │ (future)       │
+│  └────────────────┬───────────────────────┘                 │
+│                   │ (localhost)                             │
+│                   ▼                                          │
+│  ┌────────────────────────────────────────┐                 │
+│  │ Prefect Server (supervisor process 2)  │                 │
+│  │ - Port 4200 (internal only)            │                 │
+│  │ - Orchestration engine                 │                 │
+│  │ - Web UI                                │                 │
+│  └────────────────────────────────────────┘                 │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## Why Combined?
+
+### ✅ Benefits
+- **Zero network latency**: Traefik → Prefect uses localhost
+- **Simplified deployment**: One Fly.io app instead of two
+- **Lower operational complexity**: Single service to monitor
+- **Still routes to other services**: Can proxy to API, orchestrator, etc. on other machines
+- **Cost effective**: ~$6/month for gateway + orchestration
+
+### ✅ Still Generic
+- Traefik can route to services on other Fly.io machines via internal DNS
+- Gateway configuration is in `gateway/dynamic/*.yml` files
+- Easy to add new routes for other projects or services
+
+## Directory Structure
+
+```
+services/prefect-service/
+├── Dockerfile.combined         # Multi-stage: Traefik + Prefect
+├── supervisord.conf           # Process manager (runs both)
+├── fly.toml                   # Fly.io deployment config
+├── gateway/                   # Traefik configuration
+│   ├── traefik.yml           # Static config
+│   └── dynamic/
+│       └── captionacc.yml    # CaptionA.cc routes
+├── docker-compose.yml        # Local development (optional)
+└── README.md                 # This file
+```
 
 ## Deployment
 
-### 1. Create Fly.io App
+### 1. Set Secrets
+
+```bash
+# Generate a strong JWT signing secret
+SECRET=$(openssl rand -base64 32)
+
+# Set Fly.io secrets
+fly secrets set \
+  GATEWAY_JWT_SECRET="$SECRET" \
+  PREFECT_API_DATABASE_CONNECTION_URL="your-supabase-postgres-url" \
+  -a prefect-service
+```
+
+**Important**: Use the same `GATEWAY_JWT_SECRET` in your Supabase Edge Function!
+
+### 2. Deploy to Fly.io
 
 ```bash
 cd services/prefect-service
-fly apps create prefect --org personal
+
+# Deploy
+fly deploy -a prefect-service
+
+# Verify deployment
+curl https://prefect-service.fly.dev/ping
+# Should return: OK
 ```
 
-### 2. Configure Supabase Backend
+### 3. Generate Service Tokens
 
-Get your Supabase connection string with `postgres` role (not `pgbouncer`):
-
-```
-postgresql://postgres.[PROJECT-REF]:[PASSWORD]@aws-0-us-east-1.pooler.supabase.com:6543/postgres
-```
-
-Set as Fly secret:
+Use the Supabase Edge Function to generate JWT tokens:
 
 ```bash
-fly secrets set \
-  PREFECT_API_DATABASE_CONNECTION_URL="postgresql://postgres.[PROJECT-REF]:[PASSWORD]@aws-0-us-east-1.pooler.supabase.com:6543/postgres" \
-  -a prefect
+# Set environment variables
+export SUPABASE_URL="https://your-project.supabase.co"
+export SUPABASE_SERVICE_ROLE_KEY="your-service-role-key"
+
+# Generate tokens (use the helper script from api-gateway service)
+python ../api-gateway/generate-token.py \
+  --project captionacc \
+  --service modal \
+  --description "Modal GPU workers"
+
+python ../api-gateway/generate-token.py \
+  --project captionacc \
+  --service api \
+  --description "CaptionA.cc API service"
 ```
 
-### 3. Deploy
+### 4. Use the Gateway
+
+**Access Prefect via gateway:**
+```bash
+curl https://prefect-service.fly.dev/captionacc/prefect/api/health \
+  -H "Authorization: Bearer <your-jwt-token>"
+```
+
+**Client configuration:**
+```bash
+# For services that need to access Prefect
+export PREFECT_API_URL="https://prefect-service.fly.dev/captionacc/prefect/api"
+export PREFECT_AUTH_TOKEN="<your-jwt-token>"
+```
+
+## Local Development
+
+For local testing, you can use Docker Compose:
 
 ```bash
-fly deploy -a prefect
+# Set environment variables
+export GATEWAY_JWT_SECRET="your-secret"  # pragma: allowlist secret
+export PREFECT_API_DATABASE_CONNECTION_URL="sqlite+aiosqlite:////data/prefect.db"
+
+# Start both services
+docker-compose up
+
+# Access locally
+curl http://localhost:8080/captionacc/prefect/api/health \
+  -H "Authorization: Bearer <token>"
 ```
 
-### 4. Verify
+## Adding Routes to Other Services
 
+To route to services on other Fly.io machines, edit `gateway/dynamic/captionacc.yml`:
+
+```yaml
+http:
+  routers:
+    # New route to API service (different machine)
+    captionacc-api:
+      rule: "PathPrefix(`/captionacc/api`)"
+      service: captionacc-api-service
+      middlewares:
+        - captionacc-api-auth
+        - captionacc-api-strip-prefix
+      entryPoints:
+        - websecure
+
+  middlewares:
+    captionacc-api-auth:
+      plugin:
+        jwt:
+          Keys:
+            - "{{env `GATEWAY_JWT_SECRET`}}"
+          Required: true
+          PayloadFields: [exp, iat, jti, project, service]
+
+    captionacc-api-strip-prefix:
+      stripPrefix:
+        prefixes: ["/captionacc/api"]
+
+  services:
+    # API service on different Fly.io machine
+    captionacc-api-service:
+      loadBalancer:
+        servers:
+          - url: "http://captionacc-api.internal:8000"  # Fly.io 6PN
+```
+
+Then redeploy:
 ```bash
-# Check health
-curl https://prefect.fly.dev/api/health
-
-# View Prefect UI
-open https://prefect.fly.dev/
+fly deploy -a prefect-service
 ```
-
-## Connecting Flow Server
-
-The flow server runs locally and connects to the Prefect server on Fly.io:
-
-```bash
-# Configure Prefect to use self-hosted server
-prefect profile create self-hosted
-prefect profile use self-hosted
-prefect config set PREFECT_API_URL="https://prefect-service.fly.dev/api"
-
-# Start the flow server (registers deployments and executes flows)
-cd /Users/jurban/PycharmProjects/CaptionA.cc-claude3
-uv run python services/orchestrator/serve_flows.py
-```
-
-The `serve_flows.py` script:
-1. Registers all flow deployments with the Prefect server
-2. Runs a worker process that executes flows when triggered
-3. Must stay running to process flow executions
-
-## Architecture Notes
-
-- **No Work Pools Needed**: The `serve()` approach combines deployment registration + worker execution in one process
-- **Simple Setup**: Just run `serve_flows.py` - it handles both registration and execution
-- **Multi-Project Usage**: Each project can run its own `serve_flows.py` connected to the same Prefect server
-- **Flow Isolation**: Use tags to organize flows by project (e.g., `tags=["captionacc", "upload"]`)
 
 ## Monitoring
 
-- **Prefect UI**: https://prefect.fly.dev/
-- **Fly.io Dashboard**: https://fly.io/apps/prefect
-- **Logs**: `fly logs -a prefect`
-
-## Scaling Configuration
-
-```toml
-# Current: Scale to zero
-min_machines_running = 0
-
-# To keep always-on (instant response):
-min_machines_running = 1
+### Health Check
+```bash
+curl https://prefect-service.fly.dev/ping
 ```
 
-## Cost Analysis
+### Logs
+```bash
+# View combined logs (both Traefik and Prefect)
+fly logs -a prefect-service
 
-**With auto-scale (0-1 instances, 512MB):**
-- Idle (powered down): $0/month
-- Light usage (2 hours/day): ~$0.50/month
-- Medium usage (8 hours/day): ~$2/month
-- Always-on (24/7): ~$4/month
+# Filter by service
+fly logs -a prefect-service | grep traefik
+fly logs -a prefect-service | grep prefect
+```
 
-**Cold start:** ~2-5 seconds when waking from sleep
+### Metrics (Prometheus)
+```bash
+curl https://prefect-service.fly.dev/metrics
+```
+
+## Scaling
+
+The combined service can still scale to zero when idle:
+
+```toml
+# In fly.toml
+[http_service]
+  min_machines_running = 0  # Scale to zero
+  auto_stop_machines = true
+  auto_start_machines = true
+```
+
+Prefect workers (API service) can wake this machine via HTTP requests.
+
+## Resource Usage
+
+Expected memory usage on 1GB machine:
+- **Traefik**: ~150-200MB
+- **Prefect**: ~300-500MB
+- **System**: ~100MB
+- **Total**: ~600-800MB (comfortable margin)
 
 ## Troubleshooting
 
-### Server Won't Start
+### "Connection refused" to Prefect
+- Check both processes are running: `fly ssh console -a prefect-service`
+- Inside container: `supervisorctl status`
+- Should see: `traefik RUNNING` and `prefect RUNNING`
 
-Check database connection:
-```bash
-fly ssh console -a prefect
-prefect config view
-```
+### "401 Unauthorized"
+- Verify JWT token is valid
+- Check `GATEWAY_JWT_SECRET` matches between Supabase and Fly.io
+- Generate new token if needed
 
-### Workers Can't Connect
+### "502 Bad Gateway"
+- Prefect might be starting up (can take 30-60s on cold start)
+- Check Prefect health: `curl http://localhost:4200/api/health` (from inside container)
 
-Verify PREFECT_API_URL is set correctly:
-```bash
-fly ssh console -a captionacc-orchestrator
-echo $PREFECT_API_URL
-# Should be: https://prefect.fly.dev/api
-```
+### High memory usage
+- Check `fly status -a prefect-service`
+- Consider increasing to 2GB if needed: Edit `fly.toml` → `memory = "2048mb"`
 
-### Memory Issues (OOM)
+## Cost
 
-If server crashes with 256MB, increase memory:
-```bash
-fly scale memory 512 -a prefect
-```
+**Expected cost**: ~$6-7/month
+
+- 1GB shared-cpu-1x: ~$6/month running 24/7
+- With scale-to-zero: ~$3-4/month (if mostly idle)
+- Egress: Minimal (internal Fly.io traffic is free)
+
+## Extracting to Separate Services Later
+
+If you need to separate Traefik and Prefect in the future:
+
+1. Copy `gateway/` directory to new `services/api-gateway/`
+2. Create new `api-gateway` Fly.io app
+3. Update `gateway/dynamic/captionacc.yml` to use `http://prefect-service.internal:4200`
+4. Deploy both separately
+5. Update client URLs to point to new `api-gateway.fly.dev`
+
+The configuration is designed to make this easy!
+
+## Related Documentation
+
+- **Supabase Edge Function**: `supabase/functions/generate-gateway-token/`
+- **Supabase Migration**: `supabase/migrations/20260113000000_gateway_tokens.sql`
+- **Token Generation Script**: `services/api-gateway/generate-token.py`
+- **API Gateway Documentation**: `services/api-gateway/README.md` (standalone deployment)
+
+## Security
+
+- **JWT Authentication**: All routes require valid JWT token
+- **Token Validation**: Local (no database round-trip, ~1ms overhead)
+- **Token Audit**: All issued tokens logged in Supabase `gateway_tokens` table
+- **HTTPS Only**: Force HTTPS enabled
+- **Secrets Management**: Via Fly.io secrets (never in code)
+
+## Support
+
+For issues:
+1. Check logs: `fly logs -a prefect-service`
+2. Check process status: `fly ssh console -a prefect-service` → `supervisorctl status`
+3. Verify secrets are set: `fly secrets list -a prefect-service`
+4. Test gateway health: `curl https://prefect-service.fly.dev/ping`

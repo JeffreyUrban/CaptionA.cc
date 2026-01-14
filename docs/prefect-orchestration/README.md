@@ -62,7 +62,7 @@ Prefect: trigger on caption frame extents confirmation
              captions.db: caption_ocr = result
 ```
 
-**Trigger**: API call when TBD (likely want to batch or ride-along with other jobs on Modal)
+**Trigger**: API call when user requests caption OCR (per-caption on-demand)
 
 ## Architecture Diagram
 
@@ -131,9 +131,12 @@ See [Infrastructure](./infrastructure.md) for deployment details.
 
 ## Related Documentation
 
+- [Architecture & Design](./ARCHITECTURE.md) - Design decisions, patterns, and rationale
 - [Flows Reference](./flows.md) - Flow definitions, parameters, state transitions
 - [Infrastructure](./infrastructure.md) - Fly.io setup, worker configuration
 - [Modal Integration](./modal-integration.md) - Modal function contracts, error handling
 - [Operations](./operations.md) - Monitoring, debugging, recovery procedures
+- [Test Plan](./TEST_PLAN.md) - Comprehensive testing strategy
+- [Quick Start](./QUICKSTART.md) - Getting started guide
 - [Data Architecture](../data-architecture/README.md) - Storage and database schemas
 - [API Architecture](../api-architecture/architecture-decisions.md) - API design decisions

@@ -3,12 +3,16 @@
  *
  * Main coordinator component for the layout annotation workflow.
  * Uses extracted hooks for data/canvas management and extracted components for UI.
+ *
+ * Updated to use CR-SQLite database with lock management.
  */
 
 import { useState, useEffect, useMemo } from 'react'
 import { useSearchParams, useNavigate } from 'react-router'
 
 import { AppLayout } from '~/components/AppLayout'
+import { DatabaseLockBanner, DatabaseLockBadge } from '~/components/annotation/DatabaseLockBanner'
+import { LockAcquisitionModal } from '~/components/annotation/LockAcquisitionModal'
 import { LayoutAlertModal } from '~/components/annotation/LayoutAlertModal'
 import { LayoutApprovalModal } from '~/components/annotation/LayoutApprovalModal'
 import { LayoutConfirmModal } from '~/components/annotation/LayoutConfirmModal'
@@ -22,6 +26,8 @@ import { useLayoutCanvas, SELECTION_PADDING } from '~/hooks/useLayoutCanvas'
 import { useLayoutData } from '~/hooks/useLayoutData'
 import { useProcessingStatus } from '~/hooks/useProcessingStatus'
 import { useVideoTouched } from '~/hooks/useVideoTouched'
+import { useDownloadProgress, useSyncStatus } from '~/stores/database-store'
+import { DATABASE_NAMES } from '~/config'
 import { RECALC_THRESHOLD, type KeyboardShortcutContext } from '~/types/layout'
 import { generateAnalysisThumbnail } from '~/utils/layout-canvas-helpers'
 import { dispatchKeyboardShortcut } from '~/utils/layout-keyboard-handlers'
@@ -44,9 +50,14 @@ export default function AnnotateLayout() {
   // Track background processing status
   const processingStatus = useProcessingStatus(videoId)
 
+  // Get download progress and sync status from the database store
+  const downloadProgress = useDownloadProgress(videoId, DATABASE_NAMES.LAYOUT)
+  const syncStatus = useSyncStatus(videoId, DATABASE_NAMES.LAYOUT)
+
   // Modal state
   const [showApproveModal, setShowApproveModal] = useState(false)
   const [showClearConfirmModal, setShowClearConfirmModal] = useState(false)
+  const [showLockModal, setShowLockModal] = useState(true) // Show on initial load
   const [alertModal, setAlertModal] = useState<{
     title: string
     message: string
@@ -56,7 +67,7 @@ export default function AnnotateLayout() {
   // Frame view toggle state
   const [showCropRegionInFrame, setShowCropRegionInFrame] = useState(false)
 
-  // Data management hook
+  // Data management hook (now includes lock state)
   const {
     frames,
     layoutConfig,
@@ -89,10 +100,28 @@ export default function AnnotateLayout() {
     setAnnotationsSinceRecalc,
     setLayoutApproved,
     handleClearAll,
+    // Lock status from database hook
+    canEdit,
+    lockState,
+    lockHolder,
+    acquireLock,
+    releaseLock,
   } = useLayoutData({
     videoId,
     showAlert: (title, message, type) => setAlertModal({ title, message, type }),
   })
+
+  // Close lock modal when we have a definitive state
+  useEffect((): (() => void) | void => {
+    if (lockState === 'granted' || lockState === 'released') {
+      // Small delay to show success
+      const timer = setTimeout(() => {
+        setShowLockModal(false)
+      }, 300)
+      return () => clearTimeout(timer)
+    }
+    // Keep modal open for user decision if denied
+  }, [lockState])
 
   // Canvas interaction hook
   const {
@@ -161,9 +190,10 @@ export default function AnnotateLayout() {
     ]
   )
 
-  // Keyboard shortcuts
+  // Keyboard shortcuts (disabled when not allowed to edit and in edit mode)
   useKeyboardShortcuts(
     e => {
+      // Only dispatch shortcuts if we can edit or if it's a navigation shortcut
       if (dispatchKeyboardShortcut(e.key, keyboardContext)) {
         e.preventDefault()
       }
@@ -180,11 +210,28 @@ export default function AnnotateLayout() {
 
   // Handle clear all with confirmation
   const handleClearAllWithConfirmation = () => {
+    if (!canEdit) {
+      setAlertModal({
+        title: 'Cannot Edit',
+        message: 'You do not have editing access. Another user may be editing.',
+        type: 'error',
+      })
+      return
+    }
     setShowClearConfirmModal(true)
   }
 
-  // Show error screen if there's an error
-  if (error) {
+  // Handle lock modal actions
+  const handleLockRetry = () => {
+    void acquireLock()
+  }
+
+  const handleContinueReadOnly = () => {
+    setShowLockModal(false)
+  }
+
+  // Show error screen if there's an error (not lock-related)
+  if (error && lockState !== 'denied' && lockState !== 'loading') {
     return (
       <AppLayout>
         <LayoutErrorScreen error={error} onRetry={handleRetry} />
@@ -198,13 +245,26 @@ export default function AnnotateLayout() {
         className="flex flex-col gap-4 p-4 overflow-hidden"
         style={{ height: 'calc(100vh - 4rem)' }}
       >
+        {/* Lock Banner */}
+        <DatabaseLockBanner
+          lockState={lockState}
+          lockHolder={lockHolder}
+          canEdit={canEdit}
+          syncStatus={syncStatus}
+          onRequestLock={acquireLock}
+          onReleaseLock={releaseLock}
+        />
+
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
               Caption Layout Annotation
             </h1>
-            <div className="text-sm text-gray-600 dark:text-gray-400">Video: {videoId}</div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600 dark:text-gray-400">Video: {videoId}</span>
+              <DatabaseLockBadge lockState={lockState} canEdit={canEdit} syncStatus={syncStatus} />
+            </div>
           </div>
         </div>
 
@@ -214,6 +274,7 @@ export default function AnnotateLayout() {
           <div className="flex min-h-0 w-2/3 flex-col gap-4">
             {/* Main canvas */}
             <LayoutMainCanvas
+              videoId={videoId}
               viewMode={viewMode}
               layoutConfig={layoutConfig}
               layoutApproved={layoutApproved}
@@ -226,9 +287,9 @@ export default function AnnotateLayout() {
               imageRef={imageRef}
               canvasRef={canvasRef}
               interactionAreaRef={interactionAreaRef}
-              onMouseDown={handleCanvasClick}
+              onMouseDown={canEdit ? handleCanvasClick : e => e.preventDefault()}
               onMouseMove={handleCanvasMouseMove}
-              onContextMenu={handleCanvasContextMenu}
+              onContextMenu={canEdit ? handleCanvasContextMenu : e => e.preventDefault()}
             />
 
             {/* Processing status indicator */}
@@ -236,6 +297,7 @@ export default function AnnotateLayout() {
 
             {/* Thumbnail panel */}
             <LayoutThumbnailGrid
+              videoId={videoId}
               frames={frames}
               viewMode={viewMode}
               selectedFrameIndex={selectedFrameIndex}
@@ -259,11 +321,29 @@ export default function AnnotateLayout() {
             recalcThreshold={RECALC_THRESHOLD}
             showCropRegionInFrame={showCropRegionInFrame}
             onToggleCropRegion={setShowCropRegionInFrame}
-            onApprove={() => setShowApproveModal(true)}
-            onClearAll={handleClearAllWithConfirmation}
+            onApprove={canEdit ? () => setShowApproveModal(true) : () => {}}
+            onClearAll={canEdit ? handleClearAllWithConfirmation : () => {}}
           />
         </div>
       </div>
+
+      {/* Lock Acquisition Modal (shown on initial load) */}
+      {showLockModal &&
+        (lockState === 'loading' ||
+          lockState === 'checking' ||
+          lockState === 'acquiring' ||
+          lockState === 'denied' ||
+          error) && (
+          <LockAcquisitionModal
+            isOpen={showLockModal}
+            lockState={lockState}
+            lockHolder={lockHolder}
+            error={error}
+            downloadProgress={downloadProgress}
+            onRetry={handleLockRetry}
+            onContinueReadOnly={handleContinueReadOnly}
+          />
+        )}
 
       {/* Layout Approval Confirmation Modal */}
       {showApproveModal && (
@@ -282,7 +362,7 @@ export default function AnnotateLayout() {
       {showClearConfirmModal && (
         <LayoutConfirmModal
           title="Clear All Annotations"
-          message={`Clear all layout annotations? This will:\n\n• Delete all user annotations\n• Reset predictions to seed model\n• Recalculate crop region\n\nThis action cannot be undone.`}
+          message={`Clear all layout annotations? This will:\n\n- Delete all user annotations\n- Reset predictions to seed model\n- Recalculate crop region\n\nThis action cannot be undone.`}
           confirmLabel="Clear All"
           cancelLabel="Cancel"
           confirmType="danger"

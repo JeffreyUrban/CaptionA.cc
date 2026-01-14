@@ -1,14 +1,20 @@
 /**
  * Hook for managing annotation data and operations in the Caption Frame Extents Annotation workflow.
  * Handles CRUD operations, marking caption frame extents, and navigation between annotations.
+ *
+ * Uses CR-SQLite local database with WebSocket sync instead of REST API calls.
  */
 
-import { useCallback, useRef } from 'react'
+import { useCallback, useRef, useEffect } from 'react'
 
 import type { Annotation } from '~/types/caption-frame-extents'
+import { useCaptionsDatabase } from './useCaptionsDatabase'
+import type { CaptionAnnotationData, CaptionFrameExtentState } from '~/services/database-queries'
 
 interface UseCaptionFrameExtentsAnnotationDataParams {
   videoId: string
+  /** Tenant ID for database initialization */
+  tenantId?: string
   jumpRequestedRef: React.RefObject<boolean> // Signal to frame loader when navigation is a jump
   jumpTargetRef: React.RefObject<number | null> // Pending jump destination
   updateProgress: () => Promise<void>
@@ -57,6 +63,26 @@ interface UseCaptionFrameExtentsAnnotationDataReturn {
   markStart: (frameIndex: number, markedEnd: number | null) => void
   markEnd: (frameIndex: number, markedStart: number | null) => void
   clearMarks: () => void
+
+  // Database state
+  isReady: boolean
+  canEdit: boolean
+}
+
+/**
+ * Convert database annotation to UI annotation format.
+ */
+function toUIAnnotation(dbAnnotation: CaptionAnnotationData): Annotation {
+  return {
+    id: dbAnnotation.id,
+    start_frame_index: dbAnnotation.start_frame_index,
+    end_frame_index: dbAnnotation.end_frame_index,
+    state: dbAnnotation.caption_frame_extents_state,
+    pending: dbAnnotation.caption_frame_extents_pending === 1,
+    text: dbAnnotation.text,
+    created_at: dbAnnotation.created_at,
+    updated_at: dbAnnotation.caption_frame_extents_updated_at ?? undefined,
+  }
 }
 
 /**
@@ -64,6 +90,7 @@ interface UseCaptionFrameExtentsAnnotationDataReturn {
  */
 export function useCaptionFrameExtentsAnnotationData({
   videoId,
+  tenantId,
   jumpRequestedRef,
   jumpTargetRef,
   updateProgress,
@@ -85,33 +112,44 @@ export function useCaptionFrameExtentsAnnotationData({
   const highestQueriedFrameRef = useRef<number>(0) // Track where we've queried up to
   const isLoadingInitialRef = useRef<boolean>(false) // Prevent concurrent initial loads
 
+  // Use the captions database hook
+  const captionsDb = useCaptionsDatabase({
+    videoId,
+    tenantId,
+    autoAcquireLock: true,
+  })
+
   // Refill annotation cache with next batch of workable annotations
   const refillCache = useCallback(async () => {
-    const encodedVideoId = encodeURIComponent(videoId)
+    if (!captionsDb.isReady) return
+
     const startFrame = highestQueriedFrameRef.current + 1
 
     try {
-      const response = await fetch(
-        `/api/annotations/${encodedVideoId}?start=${startFrame}&end=999999&workable=true&limit=20`
-      )
-      const data = await response.json()
+      const result = await captionsDb.getFrameExtentsQueue({
+        startFrame,
+        workable: true,
+        limit: 20,
+      })
 
-      if (data.annotations && data.annotations.length > 0) {
-        // Filter out any already in stack and add to cache
-        const newAnnotations = data.annotations.filter(
-          (a: Annotation) => !navigationStackRef.current.includes(a.id)
-        )
+      if (result.annotations && result.annotations.length > 0) {
+        // Convert to UI format and filter out any already in stack
+        const newAnnotations = result.annotations
+          .map(toUIAnnotation)
+          .filter(a => !navigationStackRef.current.includes(a.id))
 
         annotationCacheRef.current.push(...newAnnotations)
 
         // Update highest queried frame
-        const lastAnnotation = data.annotations[data.annotations.length - 1]
-        highestQueriedFrameRef.current = lastAnnotation.end_frame_index
+        const lastAnnotation = result.annotations[result.annotations.length - 1]
+        if (lastAnnotation) {
+          highestQueriedFrameRef.current = lastAnnotation.end_frame_index
+        }
       }
     } catch (error) {
       console.error('Failed to refill cache:', error)
     }
-  }, [videoId])
+  }, [captionsDb])
 
   // Helper to check navigation availability (cache-based)
   const checkNavigationAvailability = useCallback(() => {
@@ -127,7 +165,7 @@ export function useCaptionFrameExtentsAnnotationData({
 
   // Load initial annotation on mount
   const loadInitialAnnotation = useCallback(async () => {
-    if (!videoId) return null
+    if (!videoId || !captionsDb.isReady) return null
 
     // Skip if already loading or loaded (prevent React Strict Mode double-mount)
     if (isLoadingInitialRef.current) {
@@ -174,25 +212,21 @@ export function useCaptionFrameExtentsAnnotationData({
       isLoadingInitialRef.current = false
     }
     return null
-  }, [videoId, refillCache, checkNavigationAvailability])
+  }, [videoId, captionsDb.isReady, refillCache, checkNavigationAvailability])
 
   // Load annotations for visible range
   const loadAnnotationsForRange = useCallback(
     async (startFrame: number, endFrame: number) => {
-      if (!videoId) return
-      const encodedVideoId = encodeURIComponent(videoId)
+      if (!videoId || !captionsDb.isReady) return
 
       try {
-        const response = await fetch(
-          `/api/annotations/${encodedVideoId}?start=${startFrame}&end=${endFrame}`
-        )
-        const data = await response.json()
-        annotationsRef.current = data.annotations ?? []
+        const annotations = await captionsDb.getAnnotationsForRange(startFrame, endFrame)
+        annotationsRef.current = annotations.map(toUIAnnotation)
       } catch (error) {
         console.error('Failed to load annotations:', error)
       }
     },
-    [videoId]
+    [videoId, captionsDb]
   )
 
   // Save annotation
@@ -200,15 +234,13 @@ export function useCaptionFrameExtentsAnnotationData({
     async (
       start: number,
       end: number,
-      currentFrameIndexRef: React.RefObject<number>,
-      visibleFramePositions: number[]
+      _currentFrameIndexRef: React.RefObject<number>,
+      _visibleFramePositions: number[]
     ) => {
       const activeAnnotation = activeAnnotationRef.current
-      if (!activeAnnotation || start === null || end === null) return
+      if (!activeAnnotation || start === null || end === null || !captionsDb.isReady) return
 
       try {
-        const encodedVideoId = encodeURIComponent(videoId)
-
         console.log('[saveAnnotation] Saving current annotation:', {
           id: activeAnnotation.id,
           old_start: activeAnnotation.start_frame_index,
@@ -217,25 +249,19 @@ export function useCaptionFrameExtentsAnnotationData({
           new_end: end,
         })
 
+        // Determine the new state
+        const newState: CaptionFrameExtentState =
+          activeAnnotation.state === 'gap' ? 'confirmed' : activeAnnotation.state
+
         // Save the annotation with overlap resolution
-        const saveResponse = await fetch(`/api/annotations/${encodedVideoId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            id: activeAnnotation.id,
-            start_frame_index: start,
-            end_frame_index: end,
-            caption_frame_extents_state:
-              activeAnnotation.state === 'gap' ? 'confirmed' : activeAnnotation.state,
-          }),
-        })
+        const result = await captionsDb.updateFrameExtents(
+          activeAnnotation.id,
+          start,
+          end,
+          newState
+        )
 
-        if (!saveResponse.ok) {
-          throw new Error('Failed to save annotation')
-        }
-
-        const saveData = await saveResponse.json()
-        const createdGaps = saveData.createdGaps ?? []
+        const createdGaps = result.createdGaps.map(toUIAnnotation)
 
         // Update progress from database
         await updateProgress()
@@ -249,14 +275,12 @@ export function useCaptionFrameExtentsAnnotationData({
         // Check if any created gaps are not in the navigation stack (unvisited)
         if (createdGaps.length > 0) {
           const unvisitedGaps = createdGaps.filter(
-            (gap: Annotation) => !navigationStackRef.current.includes(gap.id)
+            gap => !navigationStackRef.current.includes(gap.id)
           )
 
           if (unvisitedGaps.length > 0) {
             // Sort by start_frame_index and select the first one
-            unvisitedGaps.sort(
-              (a: Annotation, b: Annotation) => a.start_frame_index - b.start_frame_index
-            )
+            unvisitedGaps.sort((a, b) => a.start_frame_index - b.start_frame_index)
             const firstGap = unvisitedGaps[0]
             if (firstGap) {
               selectedAnnotation = firstGap
@@ -310,8 +334,14 @@ export function useCaptionFrameExtentsAnnotationData({
         console.error('Failed to save annotation:', error)
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- jumpRequestedRef and jumpTargetRef are refs and don't need to be in dependencies
-    [videoId, updateProgress, refillCache, checkNavigationAvailability]
+    [
+      captionsDb,
+      updateProgress,
+      refillCache,
+      checkNavigationAvailability,
+      jumpRequestedRef,
+      jumpTargetRef,
+    ]
   )
 
   // Mark annotation as issue (unclean start or end of caption)
@@ -319,15 +349,13 @@ export function useCaptionFrameExtentsAnnotationData({
     async (
       start: number,
       end: number,
-      currentFrameIndexRef: React.RefObject<number>,
-      visibleFramePositions: number[]
+      _currentFrameIndexRef: React.RefObject<number>,
+      _visibleFramePositions: number[]
     ) => {
       const activeAnnotation = activeAnnotationRef.current
-      if (!activeAnnotation || start === null || end === null) return
+      if (!activeAnnotation || start === null || end === null || !captionsDb.isReady) return
 
       try {
-        const encodedVideoId = encodeURIComponent(videoId)
-
         console.log('[markAsIssue] Marking current annotation as issue:', {
           id: activeAnnotation.id,
           old_start: activeAnnotation.start_frame_index,
@@ -337,23 +365,9 @@ export function useCaptionFrameExtentsAnnotationData({
         })
 
         // Save the annotation with 'issue' state
-        const saveResponse = await fetch(`/api/annotations/${encodedVideoId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            id: activeAnnotation.id,
-            start_frame_index: start,
-            end_frame_index: end,
-            caption_frame_extents_state: 'issue',
-          }),
-        })
+        const result = await captionsDb.updateFrameExtents(activeAnnotation.id, start, end, 'issue')
 
-        if (!saveResponse.ok) {
-          throw new Error('Failed to mark annotation as issue')
-        }
-
-        const saveData = await saveResponse.json()
-        const createdGaps = saveData.createdGaps ?? []
+        const createdGaps = result.createdGaps.map(toUIAnnotation)
 
         // Update progress from database
         await updateProgress()
@@ -367,14 +381,12 @@ export function useCaptionFrameExtentsAnnotationData({
         // Check if any created gaps are not in the navigation stack (unvisited)
         if (createdGaps.length > 0) {
           const unvisitedGaps = createdGaps.filter(
-            (gap: Annotation) => !navigationStackRef.current.includes(gap.id)
+            gap => !navigationStackRef.current.includes(gap.id)
           )
 
           if (unvisitedGaps.length > 0) {
             // Sort by start_frame_index and select the first one
-            unvisitedGaps.sort(
-              (a: Annotation, b: Annotation) => a.start_frame_index - b.start_frame_index
-            )
+            unvisitedGaps.sort((a, b) => a.start_frame_index - b.start_frame_index)
             const firstGap = unvisitedGaps[0]
             if (firstGap) {
               selectedAnnotation = firstGap
@@ -428,27 +440,24 @@ export function useCaptionFrameExtentsAnnotationData({
         console.error('Failed to mark annotation as issue:', error)
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- jumpRequestedRef and jumpTargetRef are refs and don't need to be in dependencies
-    [videoId, updateProgress, refillCache, checkNavigationAvailability]
+    [
+      captionsDb,
+      updateProgress,
+      refillCache,
+      checkNavigationAvailability,
+      jumpRequestedRef,
+      jumpTargetRef,
+    ]
   )
 
   // Delete annotation
   const deleteAnnotation = useCallback(
     async (_currentFrameIndexRef: React.RefObject<number>) => {
       const activeAnnotation = activeAnnotationRef.current
-      if (!activeAnnotation) return
+      if (!activeAnnotation || !captionsDb.isReady) return
 
       try {
-        const encodedVideoId = encodeURIComponent(videoId)
-
-        const response = await fetch(
-          `/api/annotations/${encodedVideoId}/${activeAnnotation.id}/delete`,
-          { method: 'POST' }
-        )
-
-        if (!response.ok) {
-          throw new Error('Failed to delete annotation')
-        }
+        await captionsDb.deleteAnnotation(activeAnnotation.id)
 
         // Update progress from database
         await updateProgress()
@@ -484,8 +493,14 @@ export function useCaptionFrameExtentsAnnotationData({
         console.error('Failed to delete annotation:', error)
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- jumpRequestedRef and jumpTargetRef are refs and don't need to be in dependencies
-    [videoId, updateProgress, refillCache, checkNavigationAvailability]
+    [
+      captionsDb,
+      updateProgress,
+      refillCache,
+      checkNavigationAvailability,
+      jumpRequestedRef,
+      jumpTargetRef,
+    ]
   )
 
   // Navigate to previous/next annotation with stack-based navigation
@@ -501,7 +516,7 @@ export function useCaptionFrameExtentsAnnotationData({
       // Signal workflow activity for opportunistic image regeneration
       window.dispatchEvent(new CustomEvent('annotation-navigated'))
 
-      if (!activeAnnotation) return
+      if (!activeAnnotation || !captionsDb.isReady) return
 
       if (direction === 'prev') {
         // Prev: pop from stack and go to new top (session-based only)
@@ -516,17 +531,14 @@ export function useCaptionFrameExtentsAnnotationData({
           )
 
           try {
-            const encodedVideoId = encodeURIComponent(videoId)
-            const response = await fetch(`/api/annotations/${encodedVideoId}?start=0&end=999999`)
-            const data = await response.json()
-            const annotation = data.annotations?.find((a: Annotation) => a.id === prevAnnotationId)
-
+            const annotation = await captionsDb.getAnnotation(prevAnnotationId!)
             if (annotation) {
-              activeAnnotationRef.current = annotation
-              jumpTargetRef.current = annotation.start_frame_index
+              const uiAnnotation = toUIAnnotation(annotation)
+              activeAnnotationRef.current = uiAnnotation
+              jumpTargetRef.current = uiAnnotation.start_frame_index
               jumpRequestedRef.current = true // Signal frame loader to jump to new position
-              markedStartRef.current = annotation.start_frame_index
-              markedEndRef.current = annotation.end_frame_index
+              markedStartRef.current = uiAnnotation.start_frame_index
+              markedEndRef.current = uiAnnotation.end_frame_index
 
               // Check navigation availability
               checkNavigationAvailability()
@@ -569,8 +581,7 @@ export function useCaptionFrameExtentsAnnotationData({
         }
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- jumpTargetRef is a ref and doesn't need to be in dependencies
-    [videoId, refillCache, checkNavigationAvailability]
+    [captionsDb, refillCache, checkNavigationAvailability, jumpRequestedRef, jumpTargetRef]
   )
 
   // Jump to frame and load annotation containing it
@@ -580,21 +591,19 @@ export function useCaptionFrameExtentsAnnotationData({
       totalFrames: number,
       _currentFrameIndexRef: React.RefObject<number>
     ): Promise<boolean> => {
+      if (!captionsDb.isReady) return false
+
       if (isNaN(frameNumber) || frameNumber < 0 || frameNumber >= totalFrames) {
         alert(`Invalid frame number. Must be between 0 and ${totalFrames - 1}`)
         return false
       }
 
       try {
-        const encodedVideoId = encodeURIComponent(videoId)
         // Query for annotations containing this frame
-        const response = await fetch(
-          `/api/annotations/${encodedVideoId}?start=${frameNumber}&end=${frameNumber}`
-        )
-        const data = await response.json()
+        const annotations = await captionsDb.getAnnotationsForRange(frameNumber, frameNumber)
 
-        if (data.annotations && data.annotations.length > 0) {
-          const annotation = data.annotations[0]
+        if (annotations.length > 0) {
+          const annotation = toUIAnnotation(annotations[0]!)
           activeAnnotationRef.current = annotation
           jumpTargetRef.current = frameNumber // Set pending jump target
           markedStartRef.current = annotation.start_frame_index
@@ -613,22 +622,19 @@ export function useCaptionFrameExtentsAnnotationData({
         return false
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- jumpTargetRef is a ref and doesn't need to be in dependencies
-    [videoId, checkNavigationAvailability]
+    [captionsDb, checkNavigationAvailability, jumpTargetRef]
   )
 
   // Activate annotation at current frame
   const activateAnnotationAtFrame = useCallback(
     async (frameIndex: number) => {
-      try {
-        const encodedVideoId = encodeURIComponent(videoId)
-        const response = await fetch(
-          `/api/annotations/${encodedVideoId}?start=${frameIndex}&end=${frameIndex}`
-        )
-        const data = await response.json()
+      if (!captionsDb.isReady) return
 
-        if (data.annotations && data.annotations.length > 0) {
-          const annotation = data.annotations[0]
+      try {
+        const annotations = await captionsDb.getAnnotationsForRange(frameIndex, frameIndex)
+
+        if (annotations.length > 0) {
+          const annotation = toUIAnnotation(annotations[0]!)
           activeAnnotationRef.current = annotation
           markedStartRef.current = annotation.start_frame_index
           markedEndRef.current = annotation.end_frame_index
@@ -638,7 +644,7 @@ export function useCaptionFrameExtentsAnnotationData({
         console.error('Failed to activate current frame annotation:', error)
       }
     },
-    [videoId, checkNavigationAvailability]
+    [captionsDb, checkNavigationAvailability]
   )
 
   // Marking functions
@@ -691,5 +697,9 @@ export function useCaptionFrameExtentsAnnotationData({
     markStart,
     markEnd,
     clearMarks,
+
+    // Database state
+    isReady: captionsDb.isReady,
+    canEdit: captionsDb.canEdit,
   }
 }

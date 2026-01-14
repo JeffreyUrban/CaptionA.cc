@@ -38,7 +38,8 @@ const supabaseUrl = import.meta.env['VITE_SUPABASE_URL'] || LOCAL_SUPABASE_URL
 const supabaseAnonKey = import.meta.env['VITE_SUPABASE_ANON_KEY'] || LOCAL_SUPABASE_ANON_KEY
 
 // Both local and remote use captionacc_production schema for consistency
-const supabaseSchema = import.meta.env['VITE_SUPABASE_SCHEMA'] || 'captionacc_production'
+// Exported for use in realtime channel subscriptions
+export const supabaseSchema = import.meta.env['VITE_SUPABASE_SCHEMA'] || 'captionacc_production'
 
 if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY environment variables')

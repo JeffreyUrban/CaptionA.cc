@@ -2,33 +2,27 @@
 
 Modal provides GPU compute for heavy processing tasks. Prefect orchestrates Modal function calls and handles results.
 
-## Architecture
+---
+
+## Integration Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                         Prefect ↔ Modal Integration                          │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│   Prefect (Fly.io)                        Modal (GPU Cloud)                 │
-│   ────────────────                        ─────────────────                 │
-│                                                                              │
-│   ┌─────────────────┐                     ┌─────────────────┐              │
-│   │  Prefect Flow   │                     │  Modal Function │              │
-│   │                 │  1. .remote() call  │                 │              │
-│   │  @flow          │ ───────────────────►│  @app.function  │              │
-│   │  def process(): │                     │  def extract(): │              │
-│   │    result =     │                     │    # GPU work   │              │
-│   │    modal_fn()   │  2. Return result   │    return {...} │              │
-│   │                 │ ◄───────────────────│                 │              │
-│   └─────────────────┘                     └─────────────────┘              │
-│                                                                              │
-│   Modal SDK handles:                      Modal provides:                   │
-│   - Authentication                        - GPU instances                   │
-│   - Retries                               - Auto-scaling                    │
-│   - Timeouts                              - Wasabi access                   │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
+Prefect Flow (API Service)         Modal Functions (GPU Cloud)
+──────────────────────              ───────────────────────────
+
+@flow                               @app.function(gpu="T4")
+def my_flow():                      def extract_frames(...):
+    result = modal_fn.remote()  →       # GPU work
+    use(result)                 ←       return result
 ```
+
+**Key Points:**
+- Flows call Modal functions via `.remote()` (blocks until complete)
+- Modal SDK handles authentication, retries, timeouts
+- Results are strongly typed (Python dataclasses)
+- Exceptions propagate to flow for handling
+
+---
 
 ## Modal Functions
 
@@ -36,269 +30,151 @@ Modal provides GPU compute for heavy processing tasks. Prefect orchestrates Moda
 
 Extracts frames from video and runs OCR on each frame.
 
-#### Function Signature
+**Configuration:**
+- GPU: T4
+- Timeout: 30 minutes
+- Retries: 0 (flow handles)
 
+**Parameters:**
 ```python
-@app.function(
-    gpu="T4",
-    timeout=1800,  # 30 minutes
-    retries=0,
-    secrets=[modal.Secret.from_name("wasabi"), modal.Secret.from_name("google-vision")]
-)
-def extract_frames_and_ocr(
-    video_key: str,
-    tenant_id: str,
-    video_id: str,
-    frame_rate: float = 0.1
-) -> ExtractResult:
-    ...
+video_key: str        # Wasabi S3 key
+tenant_id: str        # Tenant UUID
+video_id: str         # Video UUID
+frame_rate: float     # Frames/second (default: 0.1)
 ```
 
-#### Parameters
+**Returns:** `ExtractResult`
+- `frame_count`, `duration`, `frame_width`, `frame_height`
+- `video_codec`, `bitrate`
+- `ocr_box_count`, `failed_ocr_count`
+- `processing_duration_seconds`
+- Wasabi keys: `full_frames_key`, `ocr_db_key`, `layout_db_key`
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `video_key` | str | Wasabi S3 key for video file |
-| `tenant_id` | str | Tenant UUID for path scoping |
-| `video_id` | str | Video UUID |
-| `frame_rate` | float | Frames per second to extract (default: 0.1 = 1 per 10s) |
-
-#### Return Value
-
-```python
-@dataclass
-class ExtractResult:
-    frame_count: int          # Number of frames extracted
-    duration: float           # Video duration in seconds
-    ocr_box_count: int        # Total OCR detections
-    full_frames_key: str      # Wasabi path to frames directory
-    ocr_db_key: str           # Wasabi path to raw-ocr.db.gz
-    layout_db_key: str        # Wasabi path to layout.db.gz
-```
-
-#### Wasabi Outputs
-
-| Output | Path | Description |
-|--------|------|-------------|
-| Frames | `{tenant}/client/videos/{id}/full_frames/frame_{NNNNNN}.jpg` | JPEG frames |
-| OCR DB | `{tenant}/server/videos/{id}/raw-ocr.db.gz` | Full OCR results |
-| Layout DB | `{tenant}/client/videos/{id}/layout.db.gz` | Initial box data |
-
-#### Processing Steps
-
-1. Download video from Wasabi
-2. Extract frames using FFmpeg (GPU-accelerated)
-3. Generate thumbnails (resized frames)
-4. Run Google Vision OCR on each frame
-5. Create raw-ocr.db with full results
-6. Create layout.db with box positions
-7. Upload all outputs to Wasabi
-8. Return result summary
+**Outputs to Wasabi:**
+- `{tenant}/client/videos/{id}/full_frames/frame_*.jpg`
+- `{tenant}/server/videos/{id}/raw-ocr.db.gz`
+- `{tenant}/client/videos/{id}/layout.db.gz`
 
 ---
 
 ### 2. crop_and_infer_caption_frame_extents
 
-Crops frames to crop region, encodes as WebM, and runs caption frame extents inference.
+Crops frames to caption region, encodes as WebM, runs inference.
 
-#### Function Signature
+**Configuration:**
+- GPU: A10G (needs more VRAM)
+- Timeout: 60 minutes
+- Retries: 0 (flow handles)
 
+**Parameters:**
 ```python
-@app.function(
-    gpu="A10G",
-    timeout=3600,  # 60 minutes
-    retries=0,
-    secrets=[modal.Secret.from_name("wasabi")]
-)
-def crop_and_infer_caption_frame_extents(
-    video_key: str,
-    tenant_id: str,
-    video_id: str,
-    crop_region: CropRegion,
-    frame_rate: float = 10.0
-) -> CropInferResult:
-    ...
+video_key: str        # Wasabi S3 key
+tenant_id: str        # Tenant UUID
+video_id: str         # Video UUID
+crop_region: CropRegion  # Normalized coordinates (0-1)
+frame_rate: float     # Frames/second (default: 10.0)
 ```
 
-#### Parameters
+**Returns:** `CropInferResult`
+- `version`, `frame_count`
+- `label_counts: dict[str, int]`  # e.g., {"caption_start": 45, "no_change": 1200}
+- `processing_duration_seconds`
+- Wasabi keys: `caption_frame_extents_db_key`, `cropped_frames_prefix`
 
-| Parameter | Type | Description                       |
-|-----------|------|-----------------------------------|
-| `video_key` | str | Wasabi S3 key for video file      |
-| `tenant_id` | str | Tenant UUID                       |
-| `video_id` | str | Video UUID                        |
-| `crop_region` | CropRegion | Normalized crop region (0-1)      |
-| `frame_rate` | float | Frames per second (default: 10.0) |
+**Outputs to Wasabi:**
+- `{tenant}/client/videos/{id}/cropped_frames_v{N}/modulo_{M}/chunk_*.webm`
+- `{tenant}/server/videos/{id}/caption_frame_extents.db`
 
-```python
-@dataclass
-class CropRegion:
-    crop_left: float    # 0-1
-    crop_top: float     # 0-1
-    crop_right: float   # 0-1
-    crop_bottom: float  # 0-1
-```
-
-#### Return Value
-
-```python
-@dataclass
-class CropInferResult:
-    version: int              # Cropped frames version number
-    caption_frame_extents_db_key: str     # Wasabi path to caption_frame_extents.db
-    cropped_frames_prefix: str  # Wasabi prefix for chunks
-```
-
-#### Wasabi Outputs
-
-| Output | Path | Description |
-|--------|------|-------------|
-| WebM chunks | `{tenant}/client/videos/{id}/cropped_frames_v{N}/modulo_{M}/chunk_{NNNN}.webm` | VP9 video chunks |
-| Inference DB | `{tenant}/server/videos/{id}/caption_frame_extents.db` | Raw predictions |
-
-#### Processing Steps
-
-1. Download video from Wasabi
-2. Crop and extract frames at 10Hz using FFmpeg
-3. Encode frames as VP9 WebM chunks (modulo hierarchy)
-4. Generate frame pairs for inference
-5. Run caption frame extents inference model on pairs
-6. Store predictions in caption_frame_extents.db
-7. Upload chunks and DB to Wasabi
-8. Return result summary
-
-#### Modulo Hierarchy
-
-Chunks are organized by sampling level for progressive loading:
-
-```
-cropped_frames_v1/
-├── modulo_16/   # Every 16th frame (coarse preview)
-├── modulo_4/    # Every 4th frame (medium detail)
-└── modulo_1/    # Every frame (full detail)
-```
+**Modulo Hierarchy:** Progressive loading
+- `modulo_16/` - Every 16th frame (coarse preview)
+- `modulo_4/` - Every 4th frame (medium detail)
+- `modulo_1/` - Every frame (full detail)
 
 ---
 
 ### 3. generate_caption_ocr
 
-Generates a median frame from a range and runs OCR.
+Generates median frame from caption range and runs OCR.
 
-#### Function Signature
+**Configuration:**
+- GPU: T4
+- Timeout: 5 minutes
+- Retries: 1
 
+**Parameters:**
 ```python
-@app.function(
-    gpu="T4",
-    timeout=300,  # 5 minutes
-    retries=1,
-    secrets=[modal.Secret.from_name("wasabi"), modal.Secret.from_name("google-vision")]
-)
-def generate_caption_ocr(
-    chunks_prefix: str,
-    start_frame: int,
-    end_frame: int
-) -> CaptionOcrResult:
-    ...
+chunks_prefix: str    # Wasabi prefix to cropped_frames_v{N}/
+start_frame: int      # Caption start (inclusive)
+end_frame: int        # Caption end (exclusive)
 ```
 
-#### Parameters
+**Returns:** `CaptionOcrResult`
+- `ocr_text`, `confidence`
+- `frame_count`  # Frames used in median
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `chunks_prefix` | str | Wasabi prefix for cropped_frames_v{N}/ |
-| `start_frame` | int | Start frame index (inclusive) |
-| `end_frame` | int | End frame index (exclusive) |
-
-#### Return Value
-
-```python
-@dataclass
-class CaptionOcrResult:
-    ocr_text: str         # Extracted text
-    confidence: float     # OCR confidence (0-1)
-    frame_count: int      # Frames used in median
-```
-
-#### Processing Steps
-
-1. Download relevant WebM chunks from Wasabi
-2. Extract frames in range
-3. Compute per-pixel median across frames
-4. Run Google Vision OCR on median frame
-5. Return OCR text result
+**Processing:**
+1. Downloads WebM chunks from range
+2. Extracts frames
+3. Computes per-pixel median
+4. Runs Google Vision OCR on median frame
 
 ---
 
-## Prefect Integration
-
-### Calling Modal from Prefect
+## Calling from Prefect Flows
 
 ```python
 import modal
 
-# Import Modal stub
+# Get Modal app handle
 modal_app = modal.App.lookup("captionacc-processing")
 
-@flow(name="captionacc-video-initial-processing")
-def captionacc_video_initial_processing(video_id: str, tenant_id: str, storage_key: str):
-    # Get Modal function handle
-    extract_fn = modal_app.functions["extract_frames_and_ocr"]
+# Get function handles
+extract_fn = modal_app.functions["extract_frames_and_ocr"]
+crop_infer_fn = modal_app.functions["crop_and_infer_caption_frame_extents"]
+caption_ocr_fn = modal_app.functions["generate_caption_ocr"]
 
-    # Call Modal function (blocks until complete)
-    result = extract_fn.remote(
-        video_key=storage_key,
-        tenant_id=tenant_id,
-        video_id=video_id,
-        frame_rate=0.1
-    )
+# Call function (blocks until complete)
+result: ExtractResult = extract_fn.remote(
+    video_key="tenant-123/client/videos/video-456/video.mp4",
+    tenant_id="tenant-123",
+    video_id="video-456",
+    frame_rate=0.1
+)
 
-    # Use result
-    update_video_metadata(
-        video_id=video_id,
-        frame_count=result.frame_count,
-        duration_seconds=result.duration
-    )
+# Use typed result
+print(f"Extracted {result.frame_count} frames")
+print(f"OCR boxes: {result.ocr_box_count}")
 ```
 
-### Error Handling
+---
+
+## Error Handling
+
+### Modal Function Exceptions
 
 ```python
 from modal.exception import TimeoutError as ModalTimeout
 
-@flow(name="captionacc-video-initial-processing")
-def captionacc_video_initial_processing(video_id: str, tenant_id: str, storage_key: str):
-    try:
-        result = extract_fn.remote(...)
+try:
+    result = extract_fn.remote(...)
 
-    except ModalTimeout:
-        # Modal function exceeded timeout
-        update_video_status(video_id, status="error", error="Processing timeout")
-        raise
+except ModalTimeout:
+    # Modal function exceeded timeout
+    supabase.update_video_status(video_id, status="error",
+                                 error_message="Processing timeout")
+    raise
 
-    except modal.exception.RemoteError as e:
-        # Modal function raised an exception
-        update_video_status(video_id, status="error", error=str(e))
-        raise
-
-    except Exception as e:
-        # Network or other error
-        update_video_status(video_id, status="error", error=f"Modal error: {e}")
-        raise
+except modal.exception.RemoteError as e:
+    # Modal function raised an exception
+    supabase.update_video_status(video_id, status="error",
+                                 error_message=str(e))
+    raise
 ```
 
-### Retry Configuration
-
-Modal functions handle retries internally. Prefect should not retry Modal calls:
-
-```python
-@task(retries=0)  # No Prefect retries for Modal calls
-def call_modal_extract(video_key: str, tenant_id: str, video_id: str):
-    return extract_fn.remote(
-        video_key=video_key,
-        tenant_id=tenant_id,
-        video_id=video_id
-    )
-```
+**Error Strategy:**
+- Modal functions fail-fast (no partial results)
+- Flows handle retries (Prefect retry logic)
+- Status updates on error (user sees failure)
 
 ---
 
@@ -309,7 +185,7 @@ def call_modal_extract(video_key: str, tenant_id: str, video_id: str):
 | Function | GPU | Rationale |
 |----------|-----|-----------|
 | extract_frames_and_ocr | T4 | FFmpeg decode, sufficient for OCR |
-| crop_and_infer_caption_frame_extents | A10G | Inference model needs more VRAM |
+| crop_and_infer | A10G | Inference model needs more VRAM |
 | generate_caption_ocr | T4 | Small workload, T4 sufficient |
 
 ### Timeouts
@@ -317,7 +193,7 @@ def call_modal_extract(video_key: str, tenant_id: str, video_id: str):
 | Function | Timeout | Rationale |
 |----------|---------|-----------|
 | extract_frames_and_ocr | 30 min | Long videos (2+ hours) |
-| crop_and_infer_caption_frame_extents | 60 min | Many frames + inference |
+| crop_and_infer | 60 min | Many frames + inference |
 | generate_caption_ocr | 5 min | Single frame operation |
 
 ### Scaling
@@ -338,43 +214,46 @@ Modal auto-scales based on demand:
 | T4 | ~$0.60 | Frame extraction, OCR |
 | A10G | ~$1.10 | Inference |
 
-### Per-Video Estimates
+### Per-Video Costs (1-hour video)
 
 | Operation | Duration | GPU | Cost |
 |-----------|----------|-----|------|
-| Initial processing (1hr video) | ~5 min | T4 | ~$0.05 |
-| Crop + infer (1hr video) | ~15 min | A10G | ~$0.28 |
+| Initial processing | ~5 min | T4 | ~$0.05 |
+| Crop + infer | ~15 min | A10G | ~$0.28 |
 | Median OCR | ~30 sec | T4 | ~$0.01 |
-
-**Total per video: ~$0.34** (for a 1-hour video)
+| **Total** | | | **~$0.34** |
 
 ---
 
 ## Secrets Configuration
 
-### Modal Secrets
-
 ```bash
-# Create Wasabi secret
+# Create Modal secrets
 modal secret create wasabi \
   WASABI_ACCESS_KEY=xxx \
   WASABI_SECRET_KEY=xxx \
   WASABI_BUCKET=caption-acc-prod \
   WASABI_REGION=us-east-1
 
-# Create Google Vision secret
 modal secret create google-vision \
   GOOGLE_APPLICATION_CREDENTIALS_JSON='{"type":"service_account",...}'
 ```
 
-### Prefect Secrets
+---
 
-Prefect needs Modal credentials to call functions:
+## Deployment
 
 ```bash
-# Set in Fly.io
-fly secrets set MODAL_TOKEN_ID=xxx
-fly secrets set MODAL_TOKEN_SECRET=xxx
+cd data-pipelines/captionacc-modal
+
+# Deploy all functions
+modal deploy src/captionacc_modal/extract.py
+modal deploy src/captionacc_modal/inference.py
+modal deploy src/captionacc_modal/ocr.py
+
+# Verify deployment
+modal app list
+# Should show: captionacc-processing with 3 functions
 ```
 
 ---
@@ -383,60 +262,68 @@ fly secrets set MODAL_TOKEN_SECRET=xxx
 
 ### Modal Dashboard
 
+Monitor at: https://modal.com/apps
+
+**Metrics:**
 - Function invocations
 - GPU utilization
 - Error rates
 - Cost tracking
 
-### Prefect Integration
+### From Prefect Flows
 
-Log Modal call details in Prefect:
+Log Modal call details:
 
 ```python
 from prefect import get_run_logger
 
 @flow
-def captionacc_video_initial_processing(...):
+def my_flow(...):
     logger = get_run_logger()
 
     logger.info(f"Calling Modal extract_frames_and_ocr for video {video_id}")
     result = extract_fn.remote(...)
-    logger.info(f"Modal complete: {result.frame_count} frames extracted")
+    logger.info(f"Modal complete: {result.frame_count} frames, "
+                f"{result.processing_duration_seconds:.1f}s")
 ```
 
 ---
 
-## Testing
+## Troubleshooting
 
-### Local Testing
+### Function Not Found
 
-```python
-# Test Modal function locally (no GPU)
-if __name__ == "__main__":
-    with modal.enable_local_mode():
-        result = extract_frames_and_ocr(
-            video_key="test/video.mp4",
-            tenant_id="test-tenant",
-            video_id="test-video"
-        )
-        print(result)
+```bash
+# Verify Modal functions are deployed
+modal app list
+
+# Redeploy if needed
+modal deploy src/captionacc_modal/extract.py
 ```
 
-### Integration Testing
+### Authentication Errors
 
-```python
-# Test from Prefect flow
-def test_captionacc_video_processing_flow():
-    result = captionacc_video_initial_processing(
-        video_id="test-video-id",
-        tenant_id="test-tenant-id",
-        storage_key="test/videos/test.mp4"
-    )
-    assert result["frame_count"] > 0
+```bash
+# Check Modal token is configured
+modal token list
+
+# Set token if needed
+modal token set --token-id xxx --token-secret xxx
 ```
+
+### Timeout Issues
+
+**Symptoms:** ModalTimeout exception
+
+**Solutions:**
+1. Check video size (very long videos may need higher timeout)
+2. Verify GPU is available (not at capacity)
+3. Check Modal dashboard for function logs
+
+---
 
 ## Related Documentation
 
-- [README](./README.md) - Architecture overview
-- [Flows](./flows.md) - Flow specifications
-- [Data Architecture](../data-architecture/README.md) - Storage paths and schemas
+- [Architecture & Design](./ARCHITECTURE.md) - Why Modal, integration patterns
+- [Flows Reference](./flows.md) - How flows call Modal functions
+- [Data Architecture](../data-architecture/README.md) - Wasabi storage paths

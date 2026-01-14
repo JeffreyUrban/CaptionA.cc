@@ -1,97 +1,75 @@
-# Prefect Orchestration - Quick Start Guide
+# Quick Start Guide
 
-**Get the system running in 15 minutes**
-
----
+Get the Prefect orchestration system running in your development environment.
 
 ## Prerequisites
 
-- [ ] Python 3.11+ installed
-- [ ] Modal account with API token configured
-- [ ] Prefect server running at https://prefect-service.fly.dev/api
-- [ ] Supabase database access
-- [ ] Wasabi S3 credentials
-- [ ] Google Vision API credentials
+- Python 3.11+
+- Modal account with API token configured (`modal token list`)
+- Prefect server running at `https://prefect-service.fly.dev/api`
+- Environment variables configured (see below)
 
----
+## Environment Setup
 
-## Step 1: Environment Setup (2 minutes)
-
-### Configure API Service
+Create `/services/api/.env` with required variables:
 
 ```bash
-cd /Users/jurban/PycharmProjects/CaptionA.cc-claude1/services/api
-
-# Create/update .env file
-cat >> .env << 'EOF'
-
-# Webhook Secret (generate a random string)
+# Webhook Authentication
 WEBHOOK_SECRET=your-random-secret-key-here
 
 # Prefect (already configured)
 PREFECT_API_URL=https://prefect-service.fly.dev/api
 
-# These should already be set, verify:
+# Supabase (verify these are set)
 SUPABASE_URL=https://stbnsczvywpwjzbpfehp.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=sb_secret_uUzm92wuXmVT4rW7wixIkw_KgMauN6O
-WASABI_ACCESS_KEY_READWRITE=7YM79I60WEISWCDC8E7X
-WASABI_SECRET_KEY_READWRITE=Y5UnBDSPVOn012MbtGViDYwsvvhZaor3AOPQz8Ry
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+
+# Wasabi (verify these are set)
+WASABI_ACCESS_KEY_READWRITE=your-access-key
+WASABI_SECRET_KEY_READWRITE=your-secret-key
 WASABI_BUCKET=caption-acc-prod
-EOF
 ```
 
-### Install Dependencies
+## Installation
 
 ```bash
-# API service dependencies
+# Install API service dependencies
 cd services/api
 pip install -e .
 
-# Modal dependencies
+# Install Modal dependencies
 cd ../../data-pipelines/captionacc-modal
 pip install -e .
 ```
 
----
-
-## Step 2: Deploy Modal Functions (3 minutes)
+## Deploy Modal Functions
 
 ```bash
-cd /Users/jurban/PycharmProjects/CaptionA.cc-claude1/data-pipelines/captionacc-modal
-
-# Verify Modal is configured
-modal token list
+cd data-pipelines/captionacc-modal
 
 # Deploy all three functions
 modal deploy src/captionacc_modal/extract.py
 modal deploy src/captionacc_modal/inference.py
 modal deploy src/captionacc_modal/ocr.py
-```
 
-**Verify deployment:**
-```bash
+# Verify deployment
 modal app list
 # Should show: captionacc-modal with 3 functions
 ```
 
----
-
-## Step 3: Register Flows with Prefect (2 minutes)
+## Register Flows with Prefect
 
 ```bash
-cd /Users/jurban/PycharmProjects/CaptionA.cc-claude1/services/api
+cd services/api
 
 # Set Prefect API URL
 export PREFECT_API_URL=https://prefect-service.fly.dev/api
-
-# Make script executable (if not already)
-chmod +x scripts/register_flows.sh
 
 # Register all flows
 ./scripts/register_flows.sh
 ```
 
-**Expected output:**
+Expected output:
 ```
 ✓ Checking Prefect installation...
 ✓ Connecting to Prefect server...
@@ -105,23 +83,16 @@ Registering flows...
 Summary: 3 flows registered successfully
 ```
 
-**Verify in Prefect UI:**
-- Visit: https://prefect-service.fly.dev
-- Navigate to Deployments
-- Should see 3 deployments with "production" name
-
----
-
-## Step 4: Start API Service (1 minute)
+## Start API Service
 
 ```bash
-cd /Users/jurban/PycharmProjects/CaptionA.cc-claude1/services/api
+cd services/api
 
-# Start API with Prefect worker
+# Start API with Prefect worker (runs automatically)
 uvicorn app.main:app --reload --port 8000
 ```
 
-**Verify in logs:**
+Verify in logs:
 ```
 INFO - Starting API service in development mode
 INFO - Starting Prefect worker for work pool 'captionacc-workers'
@@ -130,19 +101,13 @@ INFO - Loaded flows: caption_ocr, crop_and_infer, video_initial_processing
 INFO - Prefect worker started successfully
 ```
 
-**Keep this terminal open** - worker needs to stay running.
+## Test the System
 
----
-
-## Step 5: Test Webhook Endpoint (2 minutes)
-
-Open a new terminal:
+### Test Webhook Endpoint
 
 ```bash
-# Set your webhook secret
-export WEBHOOK_SECRET="your-random-secret-key-here"
+export WEBHOOK_SECRET="your-random-secret-key-here"  # pragma: allowlist secret
 
-# Test webhook
 curl -X POST http://localhost:8000/webhooks/supabase/videos \
   -H "Authorization: Bearer ${WEBHOOK_SECRET}" \
   -H "Content-Type: application/json" \
@@ -158,7 +123,7 @@ curl -X POST http://localhost:8000/webhooks/supabase/videos \
   }'
 ```
 
-**Expected response:**
+Expected response:
 ```json
 {
   "success": true,
@@ -168,180 +133,84 @@ curl -X POST http://localhost:8000/webhooks/supabase/videos \
 }
 ```
 
----
-
-## Step 6: Configure Supabase Webhook (3 minutes)
-
-1. **Go to Supabase Dashboard:**
-   - URL: https://supabase.com/dashboard/project/stbnsczvywpwjzbpfehp
-
-2. **Navigate to Database → Webhooks**
-
-3. **Click "Enable Webhooks"** (if not already enabled)
-
-4. **Create New Webhook:**
-   - Name: `prefect-video-processing`
-   - URL: `http://localhost:8000/webhooks/supabase/videos` (for local testing)
-   - Method: `POST`
-   - Headers: `Authorization: Bearer {your-webhook-secret}`
-   - Events: `INSERT`
-   - Table: `videos`
-   - Schema: `captionacc_production`
-
-5. **Click "Create"**
-
----
-
-## Step 7: Test Complete Flow (2 minutes)
-
-### Option A: Via Supabase (recommended)
-
-Insert a test video record in Supabase:
-
-```sql
--- In Supabase SQL Editor
-INSERT INTO captionacc_production.videos (
-  id,
-  tenant_id,
-  storage_key,
-  status,
-  uploaded_at
-) VALUES (
-  'test-video-' || gen_random_uuid()::text,
-  'test-tenant-456',
-  'test-tenant-456/client/videos/test/video.mp4',
-  'uploading',
-  NOW()
-);
-```
-
-### Option B: Via API
-
-```bash
-curl -X POST http://localhost:8000/webhooks/supabase/videos \
-  -H "Authorization: Bearer ${WEBHOOK_SECRET}" \
-  -H "Content-Type: application/json" \
-  -d "{
-    \"type\": \"INSERT\",
-    \"table\": \"videos\",
-    \"record\": {
-      \"id\": \"test-video-$(uuidgen)\",
-      \"tenant_id\": \"test-tenant-456\",
-      \"storage_key\": \"test-tenant-456/client/videos/test/video.mp4\",
-      \"created_at\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"
-    }
-  }"
-```
-
 ### Monitor Flow Execution
 
-1. **Check API logs:**
-   ```
-   INFO - [Worker] Polling for flow runs from work pool 'captionacc-workers'...
-   INFO - [Worker] Submitting flow run '...' for execution
-   ```
+1. **Prefect UI:** Visit https://prefect-service.fly.dev
+2. **Flow Runs:** Check the latest flow run
+3. **Logs:** View execution logs and status
 
-2. **Check Prefect UI:**
-   - Visit: https://prefect-service.fly.dev
-   - Navigate to Flow Runs
-   - Click on latest run
-   - View logs and status
+## Configure Supabase Webhook
 
-3. **Check video status in Supabase:**
-   ```sql
-   SELECT id, status, created_at, updated_at
-   FROM captionacc_production.videos
-   WHERE id = 'test-video-...';
-   ```
+Once testing is complete, configure the webhook in Supabase:
 
----
-
-## Verification Checklist
-
-After completing all steps, verify:
-
-- [ ] **API service running** - http://localhost:8000/health returns 200
-- [ ] **Prefect worker connected** - Logs show "Prefect worker started successfully"
-- [ ] **Modal functions deployed** - `modal app list` shows functions
-- [ ] **Flows registered** - Prefect UI shows 3 deployments
-- [ ] **Webhook endpoint working** - Test curl returns 202
-- [ ] **Supabase webhook configured** - Dashboard shows active webhook
-- [ ] **Flow execution working** - Prefect UI shows flow runs
-
----
+1. Go to Supabase Dashboard → Database → Webhooks
+2. Create new webhook:
+   - **Name:** prefect-video-processing
+   - **URL:** `http://localhost:8000/webhooks/supabase/videos` (for local testing)
+   - **Method:** POST
+   - **Headers:** `Authorization: Bearer {your-webhook-secret}`
+   - **Events:** INSERT
+   - **Table:** videos
+   - **Schema:** captionacc_production
 
 ## Troubleshooting
 
-### "PREFECT_API_URL not configured"
+### Worker Not Starting
 
-**Problem:** Environment variable not set.
-
-**Solution:**
 ```bash
+# Check Prefect API URL is set
+echo $PREFECT_API_URL
+
+# If not set, add to .env
 echo "PREFECT_API_URL=https://prefect-service.fly.dev/api" >> services/api/.env
+
 # Restart API service
 ```
 
-### "Unauthorized" from webhook
+### Webhook Returns 401
 
-**Problem:** Webhook secret mismatch.
-
-**Solution:**
 ```bash
-# Check what's in .env
+# Verify webhook secret matches
 grep WEBHOOK_SECRET services/api/.env
 
-# Make sure curl uses same secret
-export WEBHOOK_SECRET="same-value-as-in-env"
+# Ensure curl uses the same secret
+export WEBHOOK_SECRET="same-value-as-in-env"  # pragma: allowlist secret
 ```
 
-### "Modal function not found"
+### Modal Function Not Found
 
-**Problem:** Functions not deployed.
-
-**Solution:**
 ```bash
-# Redeploy all functions
+# Verify Modal functions are deployed
+modal app list
+
+# Redeploy if needed
 cd data-pipelines/captionacc-modal
 modal deploy src/captionacc_modal/extract.py
-modal deploy src/captionacc_modal/inference.py
-modal deploy src/captionacc_modal/ocr.py
 ```
 
-### Worker not starting
+### Flow Stuck in "Scheduled"
 
-**Problem:** Prefect server unreachable.
-
-**Solution:**
 ```bash
-# Test Prefect server
-curl https://prefect-service.fly.dev/api/health
-
-# If fails, check network/VPN
-# If succeeds, check PREFECT_API_URL in .env
-```
-
-### Flow stuck in "Scheduled"
-
-**Problem:** Worker not polling or crashed.
-
-**Solution:**
-```bash
-# Check if worker process is running
+# Check worker is running
 ps aux | grep "prefect worker"
 
 # Check API logs for worker output
-# Look for: [Worker] log lines
+# Look for: "[Worker] ..." log lines
 
-# If missing, restart API service
+# Restart API service if worker crashed
 ```
 
----
+## Next Steps
 
-## Quick Commands Reference
+- Read [Architecture & Design](./ARCHITECTURE.md) for system design details
+- Review [Flows Reference](./flows.md) for flow specifications
+- Check [Operations Guide](./operations.md) for monitoring and maintenance
+- See [Test Plan](./TEST_PLAN.md) for testing strategies
+
+## Quick Reference
 
 ```bash
-# Start API service
+# Start API service with worker
 cd services/api && uvicorn app.main:app --reload --port 8000
 
 # Test webhook
@@ -360,84 +229,6 @@ prefect flow-run ls --limit 10
 # Check Modal apps
 modal app list
 
-# Redeploy Modal function
-modal deploy data-pipelines/captionacc-modal/src/captionacc_modal/extract.py
-
 # Re-register flows
 cd services/api && ./scripts/register_flows.sh
 ```
-
----
-
-## Next Steps
-
-Once the system is running:
-
-1. **Test with real video:**
-   - Upload actual video file to Wasabi
-   - Insert video record in Supabase
-   - Monitor complete processing flow
-
-2. **Test layout approval:**
-   - Use web app to draw crop region
-   - Click "Approve Layout"
-   - Verify crop_and_infer flow executes
-
-3. **Test caption OCR:**
-   - Select caption in web app
-   - Request OCR
-   - Verify caption_ocr flow executes
-
-4. **Review logs and metrics:**
-   - Check Prefect UI for flow run history
-   - Review API logs for errors
-   - Monitor performance metrics
-
-5. **Read full documentation:**
-   - Architecture: `/docs/prefect-orchestration/IMPLEMENTATION_COMPLETE.md`
-   - Testing: `/docs/prefect-orchestration/TEST_PLAN.md`
-   - Design decisions: `/docs/prefect-orchestration/INTERFACE_DECISIONS.md`
-
----
-
-## Production Deployment
-
-For production deployment:
-
-1. **Update webhook URL:**
-   - Change from `http://localhost:8000` to production domain
-   - Update in Supabase webhook configuration
-
-2. **Set production secrets:**
-   - Generate strong webhook secret
-   - Use production Prefect API key if required
-   - Verify all credentials are production values
-
-3. **Deploy API service:**
-   - Deploy to production environment (Fly.io/Railway/etc.)
-   - Ensure environment variables are set
-   - Verify worker starts successfully
-
-4. **Monitor first production runs:**
-   - Watch Prefect UI closely
-   - Monitor API logs
-   - Check video processing completes successfully
-
-5. **Setup alerts:**
-   - Configure Prefect notifications for flow failures
-   - Setup API monitoring (uptime, errors)
-   - Create dashboards for key metrics
-
----
-
-## Support
-
-If you encounter issues:
-
-1. **Check logs:** API service logs show detailed error messages
-2. **Check Prefect UI:** https://prefect-service.fly.dev for flow status
-3. **Check documentation:** `/docs/prefect-orchestration/`
-4. **Review test plan:** Includes troubleshooting for common issues
-
-**System Status:** ✅ Implementation Complete - Ready for Testing
-

@@ -1,36 +1,37 @@
 /**
- * Hook for subscribing to real-time video stats updates via Server-Sent Events (SSE).
+ * Hook for subscribing to real-time video updates via Supabase Realtime.
  *
- * Connects to the SSE endpoint and triggers stats refetch when updates are received.
+ * Connects to Supabase realtime channel and triggers stats refetch when video records are updated.
  */
 
 import { useEffect, useRef } from 'react'
+import type { RealtimeChannel } from '@supabase/supabase-js'
 
-interface VideoStatsUpdateEvent {
-  videoId: string
-  flowName: string
-  status: 'complete' | 'error'
-  timestamp: string
-}
+import { supabase, supabaseSchema } from '~/services/supabase-client'
 
-interface UseVideoStatsSSEOptions {
-  /** Callback when a video stats update is received */
+interface UseVideoStatsRealtimeOptions {
+  /** Callback when a video is updated */
   onUpdate: (videoId: string) => void
-  /** Whether SSE is enabled (default: true) */
+  /** Whether realtime subscription is enabled (default: true) */
   enabled?: boolean
+  /** Optional tenant ID to filter updates (if not provided, listens to all videos) */
+  tenantId?: string
 }
 
 /**
- * Subscribe to real-time video stats updates via SSE.
+ * Subscribe to real-time video updates via Supabase Realtime.
  *
- * When a Prefect flow completes, the webhook broadcasts an event,
- * and this hook triggers a refetch for the affected video.
+ * When a video record is updated in the database (e.g., after processing completes),
+ * this hook triggers a refetch for the affected video.
  */
-export function useVideoStatsSSE({ onUpdate, enabled = true }: UseVideoStatsSSEOptions) {
-  const eventSourceRef = useRef<EventSource | null>(null)
+export function useVideoStatsSSE({
+  onUpdate,
+  enabled = true,
+  tenantId,
+}: UseVideoStatsRealtimeOptions) {
+  const channelRef = useRef<RealtimeChannel | null>(null)
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const reconnectAttemptsRef = useRef(0)
-  const isConnectingRef = useRef(false)
 
   useEffect(() => {
     if (!enabled) return
@@ -38,75 +39,90 @@ export function useVideoStatsSSE({ onUpdate, enabled = true }: UseVideoStatsSSEO
     // Only run on client side
     if (typeof window === 'undefined') return
 
-    // Prevent duplicate connections (React StrictMode causes double-mount in dev)
-    if (isConnectingRef.current || eventSourceRef.current) {
-      console.log('[SSE] Already connected or connecting, skipping duplicate connection')
+    // Prevent duplicate subscriptions
+    if (channelRef.current) {
+      console.log('[Realtime] Already subscribed, skipping duplicate subscription')
       return
     }
 
-    const connect = () => {
-      // Prevent concurrent connection attempts
-      if (isConnectingRef.current) return
+    const subscribe = () => {
+      console.log('[Realtime] Subscribing to video updates...')
 
-      isConnectingRef.current = true
-      console.log('[SSE] Connecting to video stats updates...')
-
-      const eventSource = new EventSource('/api/events/video-stats')
-      eventSourceRef.current = eventSource
-
-      eventSource.addEventListener('video-stats-updated', event => {
-        try {
-          const data = JSON.parse(event.data) as VideoStatsUpdateEvent
-          console.log('[SSE] Video stats updated:', data)
-
-          // Trigger refetch for this video
-          onUpdate(data.videoId)
-
-          // Reset reconnect attempts on successful message
-          reconnectAttemptsRef.current = 0
-        } catch (error) {
-          console.error('[SSE] Failed to parse event data:', error)
-        }
-      })
-
-      eventSource.onopen = () => {
-        console.log('[SSE] Connected')
-        reconnectAttemptsRef.current = 0
-        isConnectingRef.current = false
+      // Build filter for tenant-scoped updates if tenantId is provided
+      const filter: {
+        event: 'UPDATE'
+        schema: string
+        table: 'videos'
+        filter?: string
+      } = {
+        event: 'UPDATE',
+        schema: supabaseSchema,
+        table: 'videos',
       }
 
-      eventSource.onerror = error => {
-        console.error('[SSE] Connection error:', error)
-        eventSource.close()
-        isConnectingRef.current = false
-
-        // Exponential backoff reconnect (1s, 2s, 4s, 8s, max 30s)
-        const attempts = reconnectAttemptsRef.current
-        const delay = Math.min(1000 * Math.pow(2, attempts), 30000)
-
-        console.log(`[SSE] Reconnecting in ${delay}ms (attempt ${attempts + 1})...`)
-
-        reconnectTimeoutRef.current = setTimeout(() => {
-          reconnectAttemptsRef.current++
-          connect()
-        }, delay)
+      if (tenantId) {
+        filter.filter = `tenant_id=eq.${tenantId}`
       }
+
+      const channel = supabase
+        .channel('video-stats-updates')
+        .on('postgres_changes', filter, payload => {
+          const newRecord = payload.new as Record<string, unknown> | undefined
+          const videoId = newRecord?.['id'] as string | undefined
+          if (videoId) {
+            console.log('[Realtime] Video updated:', videoId)
+            onUpdate(videoId)
+            // Reset reconnect attempts on successful message
+            reconnectAttemptsRef.current = 0
+          }
+        })
+        .subscribe(status => {
+          if (status === 'SUBSCRIBED') {
+            console.log('[Realtime] Subscribed to video updates')
+            reconnectAttemptsRef.current = 0
+          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            console.error('[Realtime] Subscription error:', status)
+            handleReconnect()
+          } else if (status === 'CLOSED') {
+            console.log('[Realtime] Channel closed')
+          }
+        })
+
+      channelRef.current = channel
     }
 
-    connect()
+    const handleReconnect = () => {
+      // Clean up existing channel
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current)
+        channelRef.current = null
+      }
+
+      // Exponential backoff reconnect (1s, 2s, 4s, 8s, max 30s)
+      const attempts = reconnectAttemptsRef.current
+      const delay = Math.min(1000 * Math.pow(2, attempts), 30000)
+
+      console.log(`[Realtime] Reconnecting in ${delay}ms (attempt ${attempts + 1})...`)
+
+      reconnectTimeoutRef.current = setTimeout(() => {
+        reconnectAttemptsRef.current++
+        subscribe()
+      }, delay)
+    }
+
+    subscribe()
 
     // Cleanup on unmount
     return () => {
-      console.log('[SSE] Disconnecting...')
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close()
-        eventSourceRef.current = null
+      console.log('[Realtime] Unsubscribing from video updates...')
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current)
+        channelRef.current = null
       }
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current)
         reconnectTimeoutRef.current = null
       }
-      isConnectingRef.current = false
     }
-  }, [enabled, onUpdate])
+  }, [enabled, onUpdate, tenantId])
 }
