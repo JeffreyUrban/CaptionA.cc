@@ -14,7 +14,6 @@ dependencies = [
     "caption_boundaries",
     "caption_text",
     "full_frames",
-    "orchestrator",
 ]
 
 [tool.uv.workspace]
@@ -50,7 +49,6 @@ crop_frames = { workspace = true }
 caption-boundaries = { workspace = true }
 caption-text = { workspace = true }
 full-frames = { workspace = true }
-orchestrator = { workspace = true }
 vp9-utils = { workspace = true }
 frames-db = { workspace = true }
 
@@ -99,7 +97,6 @@ testpaths = [
     "data-pipelines/caption_text/tests",
     "packages/frames_db/tests",
     "packages/video_utils/tests",
-    "services/orchestrator/tests",
 ]
 # Skip directories with incomplete/skeleton tests
 # These can be re-enabled once the modules are properly implemented
