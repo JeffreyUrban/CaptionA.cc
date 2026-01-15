@@ -518,7 +518,8 @@ class TestGetVideoMetadata:
         assert metadata["duration_seconds"] == 120.5
         assert metadata["current_cropped_frames_version"] == 1
         assert (
-            metadata["captions_db_key"] == "captions/video-123.db"  # pragma: allowlist secret
+            metadata["captions_db_key"]
+            == "captions/video-123.db"  # pragma: allowlist secret
         )
         assert metadata["prefect_flow_run_id"] == "flow-run-456"
 
