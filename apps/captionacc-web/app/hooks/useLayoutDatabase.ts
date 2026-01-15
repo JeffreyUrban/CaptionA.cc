@@ -15,29 +15,27 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 
 import { DATABASE_NAMES } from '~/config'
-import {
-  useDatabaseStore,
-  useDatabaseInstance,
-  useLockStatus,
-  useSyncStatus,
-  useDatabaseError,
-  useDownloadProgress,
-} from '~/stores/database-store'
+import type { DatabaseError } from '~/services/database-errors'
+import type { DownloadProgress } from '~/services/database-loader'
+import type { LockStatus, LockState } from '~/services/database-lock'
+import type {
+  LayoutQueueResult,
+  BoxDataResult,
+  FrameBoxesResult,
+} from '~/services/database-queries'
 import {
   LayoutSyncService,
   getLayoutSyncService,
   removeLayoutSyncService,
   type LayoutSyncEvent,
 } from '~/services/layout-sync-service'
-import type { LockStatus, LockState } from '~/services/database-lock'
-import type { DownloadProgress } from '~/services/database-loader'
-import type { DatabaseError } from '~/services/database-errors'
-import type {
-  LayoutQueueResult,
-  BoxDataResult,
-  FrameBoxesResult,
-  LayoutConfigResult,
-} from '~/services/database-queries'
+import {
+  useDatabaseInstance,
+  useLockStatus,
+  useSyncStatus,
+  useDatabaseError,
+  useDownloadProgress,
+} from '~/stores/database-store'
 import type { BoxLabel } from '~/types/enums'
 
 // =============================================================================
@@ -144,6 +142,7 @@ export interface UseLayoutDatabaseReturn {
 /**
  * React hook for layout database operations.
  */
+// eslint-disable-next-line max-lines-per-function -- Database hook with complete API surface; splitting would duplicate state management
 export function useLayoutDatabase({
   videoId,
   tenantId: providedTenantId,

@@ -13,10 +13,8 @@
  * - Provide API compatible with existing caption annotation hooks
  */
 
-import { DATABASE_NAMES, type DatabaseName } from '~/config'
-import { useDatabaseStore, type DatabaseInstance } from '~/stores/database-store'
 import { CRSQLiteDatabase } from './crsqlite-client'
-import { type LockStatus, type LockState, type LockHolder } from './database-lock'
+import { type LockStatus } from './database-lock'
 import {
   getTextAnnotationQueue,
   getCaptionFrameExtentsQueue,
@@ -39,6 +37,9 @@ import {
   type TextStatus,
 } from './database-queries'
 import { subscribeToTable, type SubscriptionResult } from './database-subscriptions'
+
+import { DATABASE_NAMES, type DatabaseName } from '~/config'
+import { useDatabaseStore } from '~/stores/database-store'
 
 // =============================================================================
 // Types
@@ -292,16 +293,16 @@ export class CaptionSyncService {
    * Returns annotations needing text entry.
    */
   async fetchTextAnnotationQueue(): Promise<CaptionQueueResult> {
-    this.ensureReady()
-    return getTextAnnotationQueue(this.database!)
+    const db = this.ensureReady()
+    return getTextAnnotationQueue(db)
   }
 
   /**
    * Fetch a single annotation by ID.
    */
   async fetchAnnotation(annotationId: number): Promise<CaptionAnnotationData | null> {
-    this.ensureReady()
-    return getCaptionAnnotation(this.database!, annotationId)
+    const db = this.ensureReady()
+    return getCaptionAnnotation(db, annotationId)
   }
 
   /**
@@ -313,10 +314,10 @@ export class CaptionSyncService {
     textStatus: TextStatus,
     textNotes: string
   ): Promise<void> {
-    this.ensureReady()
+    const db = this.ensureReady()
     this.ensureCanEdit()
 
-    await updateCaptionAnnotationText(this.database!, annotationId, text, textStatus, textNotes)
+    await updateCaptionAnnotationText(db, annotationId, text, textStatus, textNotes)
     this.emitEvent({ type: 'annotations_changed', videoId: this.videoId, data: { annotationId } })
   }
 
@@ -329,8 +330,8 @@ export class CaptionSyncService {
     pending: number
     progress: number
   }> {
-    this.ensureReady()
-    return getCaptionWorkflowProgress(this.database!)
+    const db = this.ensureReady()
+    return getCaptionWorkflowProgress(db)
   }
 
   // ===========================================================================
@@ -347,8 +348,8 @@ export class CaptionSyncService {
     workable?: boolean
     limit?: number
   }): Promise<CaptionFrameExtentsQueueResult> {
-    this.ensureReady()
-    return getCaptionFrameExtentsQueue(this.database!, options)
+    const db = this.ensureReady()
+    return getCaptionFrameExtentsQueue(db, options)
   }
 
   /**
@@ -358,8 +359,8 @@ export class CaptionSyncService {
     startFrame: number,
     endFrame: number
   ): Promise<CaptionAnnotationData[]> {
-    this.ensureReady()
-    return getCaptionAnnotationsForRange(this.database!, startFrame, endFrame)
+    const db = this.ensureReady()
+    return getCaptionAnnotationsForRange(db, startFrame, endFrame)
   }
 
   /**
@@ -372,25 +373,19 @@ export class CaptionSyncService {
     endFrameIndex: number,
     state: CaptionFrameExtentState
   ): Promise<{ createdGaps: CaptionAnnotationData[] }> {
-    this.ensureReady()
+    const db = this.ensureReady()
     this.ensureCanEdit()
 
     // Resolve overlaps first (creates gaps for uncovered frames)
     const createdGaps = await resolveFrameExtentOverlaps(
-      this.database!,
+      db,
       annotationId,
       startFrameIndex,
       endFrameIndex
     )
 
     // Update the annotation
-    await updateCaptionFrameExtents(
-      this.database!,
-      annotationId,
-      startFrameIndex,
-      endFrameIndex,
-      state
-    )
+    await updateCaptionFrameExtents(db, annotationId, startFrameIndex, endFrameIndex, state)
 
     this.emitEvent({
       type: 'annotations_changed',
@@ -409,10 +404,10 @@ export class CaptionSyncService {
     endFrameIndex: number,
     state: CaptionFrameExtentState = 'gap'
   ): Promise<void> {
-    this.ensureReady()
+    const db = this.ensureReady()
     this.ensureCanEdit()
 
-    await createCaptionAnnotation(this.database!, startFrameIndex, endFrameIndex, state)
+    await createCaptionAnnotation(db, startFrameIndex, endFrameIndex, state)
     this.emitEvent({ type: 'annotations_changed', videoId: this.videoId })
   }
 
@@ -420,10 +415,10 @@ export class CaptionSyncService {
    * Delete an annotation.
    */
   async deleteAnnotation(annotationId: number): Promise<void> {
-    this.ensureReady()
+    const db = this.ensureReady()
     this.ensureCanEdit()
 
-    await deleteCaptionAnnotation(this.database!, annotationId)
+    await deleteCaptionAnnotation(db, annotationId)
     this.emitEvent({ type: 'annotations_changed', videoId: this.videoId, data: { annotationId } })
   }
 
@@ -436,8 +431,8 @@ export class CaptionSyncService {
     pending: number
     progress: number
   }> {
-    this.ensureReady()
-    return getCaptionFrameExtentsWorkflowProgress(this.database!)
+    const db = this.ensureReady()
+    return getCaptionFrameExtentsWorkflowProgress(db)
   }
 
   // ===========================================================================
@@ -448,17 +443,17 @@ export class CaptionSyncService {
    * Get video preferences.
    */
   async getPreferences(): Promise<VideoPreferencesResult> {
-    this.ensureReady()
-    return getVideoPreferences(this.database!)
+    const db = this.ensureReady()
+    return getVideoPreferences(db)
   }
 
   /**
    * Update video preferences.
    */
   async updatePreferences(preferences: Partial<VideoPreferencesResult>): Promise<void> {
-    this.ensureReady()
+    const db = this.ensureReady()
     // Preferences can be updated even without edit lock
-    await updateVideoPreferences(this.database!, preferences)
+    await updateVideoPreferences(db, preferences)
     this.emitEvent({ type: 'preferences_changed', videoId: this.videoId, data: preferences })
   }
 
@@ -500,11 +495,13 @@ export class CaptionSyncService {
 
   /**
    * Ensure service is ready for operations.
+   * Returns the database instance if ready, throws otherwise.
    */
-  private ensureReady(): void {
+  private ensureReady(): CRSQLiteDatabase {
     if (!this.initialized || !this.database) {
       throw new Error('Caption sync service not initialized')
     }
+    return this.database
   }
 
   /**

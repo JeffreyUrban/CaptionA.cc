@@ -96,6 +96,7 @@ export type RecoveryStrategy =
 /**
  * Get the recommended recovery strategy for an error.
  */
+// eslint-disable-next-line complexity -- Error code mapping requires explicit handling of all error types
 export function getRecoveryStrategy(error: DatabaseError): RecoveryStrategy {
   if (!error.recoverable) {
     return 'none'
@@ -182,6 +183,7 @@ export function createDatabaseError(
 /**
  * Check if an error code is recoverable by default.
  */
+// eslint-disable-next-line complexity -- Error code classification requires explicit handling of all error types
 function isRecoverableByDefault(code: DatabaseErrorCode): boolean {
   switch (code) {
     // Generally recoverable

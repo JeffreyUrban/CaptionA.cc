@@ -19,6 +19,7 @@ interface CaptionFrameExtentsFrameStackProps {
   onMarkEnd: (framePosition: number) => void
 }
 
+// eslint-disable-next-line max-lines-per-function -- Frame rendering component with complex visual state logic
 export function CaptionFrameExtentsFrameStack({
   visibleFramePositions,
   frames,
@@ -43,6 +44,7 @@ export function CaptionFrameExtentsFrameStack({
       onMouseDown={onDragStart}
     >
       <div className="flex h-full flex-1 flex-col justify-center gap-1 overflow-hidden p-4">
+        {/* eslint-disable-next-line complexity, max-lines-per-function -- Frame slot renderer with visual states, border logic, and marking indicators */}
         {visibleFramePositions.map((framePosition, slotIndex) => {
           // Skip out-of-bounds positions (show visual gaps at caption frame extents)
           if (framePosition < 0 || framePosition >= totalFrames) {
@@ -106,8 +108,7 @@ export function CaptionFrameExtentsFrameStack({
 
           // Find the primary annotation to display (prefer active annotation)
           const primaryAnnotation =
-            frameAnnotations.find(ann => activeAnnotation && ann.id === activeAnnotation.id) ??
-            frameAnnotations[0]
+            frameAnnotations.find(ann => ann.id === activeAnnotation?.id) ?? frameAnnotations[0]
 
           // Determine border classes
           let borderClasses = ''

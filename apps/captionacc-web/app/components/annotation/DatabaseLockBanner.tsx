@@ -12,8 +12,6 @@
 
 import { useEffect, useState } from 'react'
 
-import type { LockState } from '~/services/database-lock'
-
 // =============================================================================
 // Types
 // =============================================================================
@@ -38,7 +36,6 @@ export interface LockHolderInfo {
 export interface DatabaseLockBannerProps {
   lockState: LockDisplayState
   lockHolder: LockHolderInfo | null
-  canEdit: boolean
   syncStatus?: {
     connected: boolean
     syncing: boolean
@@ -53,10 +50,10 @@ export interface DatabaseLockBannerProps {
 // Component
 // =============================================================================
 
+// eslint-disable-next-line max-lines-per-function -- UI component with multiple helper functions for rendering different states
 export function DatabaseLockBanner({
   lockState,
   lockHolder,
-  canEdit,
   syncStatus,
   onRequestLock,
   onReleaseLock,
@@ -209,7 +206,7 @@ export function DatabaseLockBanner({
         return 'Editing enabled'
       case 'denied':
         if (lockHolder) {
-          const holderName = lockHolder.displayName || lockHolder.userId
+          const holderName = lockHolder.displayName ?? lockHolder.userId
           return `Read-only: ${holderName} is currently editing`
         }
         return 'Read-only: Another user is editing'
@@ -310,7 +307,6 @@ export function DatabaseLockBanner({
 
 export interface DatabaseLockBadgeProps {
   lockState: LockDisplayState
-  canEdit: boolean
   syncStatus?: {
     connected: boolean
     syncing: boolean
@@ -321,7 +317,7 @@ export interface DatabaseLockBadgeProps {
 /**
  * Compact badge version for use in headers/toolbars.
  */
-export function DatabaseLockBadge({ lockState, canEdit, syncStatus }: DatabaseLockBadgeProps) {
+export function DatabaseLockBadge({ lockState, syncStatus }: DatabaseLockBadgeProps) {
   const getBadgeStyle = () => {
     if (!syncStatus?.connected) {
       return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-100'

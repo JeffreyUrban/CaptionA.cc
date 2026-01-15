@@ -13,10 +13,8 @@
  * - server_processing: Server has lock for ML (read-only)
  */
 
-import { type DatabaseName, buildLockUrl, buildDatabaseStateUrl, API_CONFIG } from '~/config'
 import {
   lockDeniedError,
-  lockExpiredError,
   lockAcquireError,
   lockReleaseError,
   sessionTransferredError,
@@ -25,6 +23,8 @@ import {
   logDatabaseError,
   type DatabaseError,
 } from './database-errors'
+
+import { type DatabaseName, buildLockUrl, buildDatabaseStateUrl } from '~/config'
 
 // =============================================================================
 // Types
@@ -121,7 +121,7 @@ export class DatabaseLockManager {
     // Listen for beforeunload to release locks
     if (typeof window !== 'undefined') {
       window.addEventListener('beforeunload', () => {
-        this.releaseAllLocks()
+        void this.releaseAllLocks()
       })
     }
   }
@@ -265,6 +265,7 @@ export class DatabaseLockManager {
   /**
    * Acquire a lock for a database.
    */
+  // eslint-disable-next-line complexity -- Lock acquisition handles multiple states: granted, denied, transfer, server_processing
   async acquireLock(videoId: string, dbName: DatabaseName): Promise<LockStatus> {
     const lockKey = this.createLockKey(videoId, dbName)
 
@@ -313,7 +314,7 @@ export class DatabaseLockManager {
         if (holder?.isCurrentUser) {
           throw sessionTransferredError(holder.tabId)
         } else {
-          throw lockDeniedError(holder?.displayName || holder?.userId)
+          throw lockDeniedError(holder?.displayName ?? holder?.userId)
         }
       }
 
@@ -321,7 +322,7 @@ export class DatabaseLockManager {
       const grantedStatus: LockStatus = {
         state: 'granted',
         holder: {
-          userId: this.currentUserId || '',
+          userId: this.currentUserId ?? '',
           isCurrentUser: true,
           tabId: this.currentTabId,
         },
@@ -431,7 +432,7 @@ export class DatabaseLockManager {
     // Check lock status periodically
     const checkInterval = 30000 // 30 seconds
 
-    const intervalId = setInterval(async () => {
+    const intervalId = setInterval(() => {
       const now = new Date()
       const timeUntilExpiry = expiresAt.getTime() - now.getTime()
 
@@ -559,9 +560,7 @@ let lockManager: DatabaseLockManager | null = null
  * Get the global lock manager instance.
  */
 export function getLockManager(): DatabaseLockManager {
-  if (!lockManager) {
-    lockManager = new DatabaseLockManager()
-  }
+  lockManager ??= new DatabaseLockManager()
   return lockManager
 }
 

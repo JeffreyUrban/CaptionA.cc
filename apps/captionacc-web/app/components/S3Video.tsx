@@ -9,11 +9,9 @@
  * - TypeScript type safety
  */
 
-import { useState, useEffect, useRef } from 'react'
-import type { VideoHTMLAttributes } from 'react'
+import { useState, useEffect, useRef, type VideoHTMLAttributes } from 'react'
 
-import { getVideoResourceUrl } from '~/services/s3-client'
-import type { S3PathParams } from '~/services/s3-client'
+import { getVideoResourceUrl, type S3PathParams } from '~/services/s3-client'
 
 // ============================================================================
 // Types

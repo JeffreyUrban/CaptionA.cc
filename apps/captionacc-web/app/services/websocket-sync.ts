@@ -10,7 +10,7 @@
  * - To server: sync
  */
 
-import { type DatabaseName, WEBSOCKET_CONFIG, buildWebSocketUrl } from '~/config'
+import { type CRSQLiteChange } from './crsqlite-client'
 import {
   websocketClosedError,
   websocketError,
@@ -20,8 +20,9 @@ import {
   logDatabaseError,
   type DatabaseError,
 } from './database-errors'
-import { type CRSQLiteChange } from './crsqlite-client'
 import { getLockManager, type LockHolder, type LockState } from './database-lock'
+
+import { type DatabaseName, WEBSOCKET_CONFIG, buildWebSocketUrl } from '~/config'
 
 // =============================================================================
 // Types
@@ -394,7 +395,7 @@ export class WebSocketSyncManager {
    * Send a message to the server.
    */
   private sendMessage(message: SyncMessage): void {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+    if (this.ws?.readyState !== WebSocket.OPEN) {
       this.messageQueue.push(message)
       return
     }
@@ -605,16 +606,14 @@ export class WebSocketSyncManager {
       `[WebSocketSync] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts + 1})`
     )
 
-    this.reconnectTimeout = setTimeout(async () => {
+    this.reconnectTimeout = setTimeout(() => {
       this.reconnectTimeout = null
       this.reconnectAttempts++
 
-      try {
-        await this.connect()
-      } catch {
+      this.connect().catch(() => {
         // Connection failed, schedule another attempt
         this.scheduleReconnect()
-      }
+      })
     }, delay)
   }
 
@@ -635,7 +634,7 @@ export class WebSocketSyncManager {
     this.stopHeartbeat()
 
     this.heartbeatInterval = setInterval(() => {
-      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      if (this.ws?.readyState === WebSocket.OPEN) {
         // Send ping (empty message)
         try {
           this.ws.send(JSON.stringify({ type: 'ping' }))

@@ -13,9 +13,9 @@ import { useCaptionFrameExtentsKeyboardShortcuts } from './useCaptionFrameExtent
 import { useVideoMetadata } from './useVideoMetadata'
 import { useVideoTouched } from './useVideoTouched'
 import { useWorkflowProgress } from './useWorkflowProgress'
-import { supabase } from '~/services/supabase-client'
 
 import type { CaptionFrameExtentsDisplayState, Annotation } from '~/caption-frame-extents'
+import { supabase } from '~/services/supabase-client'
 import {
   calculateFrameOpacity,
   calculateVisibleFramePositions,
@@ -74,6 +74,7 @@ interface useCaptionFrameExtentsWorkflowStateReturn {
   canEdit: boolean
 }
 
+// eslint-disable-next-line max-lines-per-function -- Workflow orchestration hook managing metadata, frames, annotations; refactoring would split cohesive state
 export function useCaptionFrameExtentsWorkflowState({
   videoId,
 }: useCaptionFrameExtentsWorkflowStateParams): useCaptionFrameExtentsWorkflowStateReturn {

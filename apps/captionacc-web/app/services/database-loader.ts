@@ -12,7 +12,6 @@
 
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3'
 
-import { type DatabaseName, WASABI_CONFIG, buildStorageKey } from '~/config'
 import {
   downloadError,
   decompressError,
@@ -21,6 +20,8 @@ import {
   logDatabaseError,
   type DatabaseError,
 } from './database-errors'
+
+import { type DatabaseName, WASABI_CONFIG, buildStorageKey } from '~/config'
 
 // =============================================================================
 // Types
@@ -124,7 +125,7 @@ export async function getS3Credentials(forceRefresh = false): Promise<S3Credenti
       expiration: data.expiration ? new Date(data.expiration) : undefined,
     }
 
-    credentialsExpiry = cachedCredentials.expiration || new Date(Date.now() + 60 * 60 * 1000)
+    credentialsExpiry = cachedCredentials.expiration ?? new Date(Date.now() + 60 * 60 * 1000)
 
     console.log('[DatabaseLoader] Credentials refreshed, expires:', credentialsExpiry)
     return cachedCredentials
@@ -234,7 +235,7 @@ export async function downloadDatabase(
     }
 
     // Get content length for progress tracking
-    const totalBytes = response.ContentLength || null
+    const totalBytes = response.ContentLength ?? null
 
     // Convert response to stream
     const responseStream = response.Body as ReadableStream<Uint8Array>

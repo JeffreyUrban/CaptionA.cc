@@ -15,13 +15,13 @@
  */
 export const API_CONFIG = {
   /** Base URL for Python API (FastAPI backend) */
-  PYTHON_API_URL: import.meta.env.VITE_API_URL || 'https://api.captiona.cc/v1',
+  PYTHON_API_URL: import.meta.env['VITE_API_URL'] ?? 'https://api.captiona.cc/v1',
 
   /** Supabase project URL */
-  SUPABASE_URL: import.meta.env.VITE_SUPABASE_URL,
+  SUPABASE_URL: import.meta.env['VITE_SUPABASE_URL'],
 
   /** Supabase anonymous key for client-side auth */
-  SUPABASE_ANON_KEY: import.meta.env.VITE_SUPABASE_ANON_KEY,
+  SUPABASE_ANON_KEY: import.meta.env['VITE_SUPABASE_ANON_KEY'],
 } as const
 
 // =============================================================================

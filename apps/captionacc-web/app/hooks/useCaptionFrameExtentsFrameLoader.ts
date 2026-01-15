@@ -36,8 +36,8 @@
 
 import { useEffect, useRef } from 'react'
 
+import { getObjectUrl, buildS3Path } from '~/services/s3-client'
 import type { Annotation, Frame } from '~/types/caption-frame-extents'
-import { getObjectUrl, buildS3Path, getCurrentTenantId } from '~/services/s3-client'
 
 interface UseCaptionFrameExtentsFrameLoaderParams {
   videoId: string
@@ -558,6 +558,7 @@ function buildNextAnnotationQueue(
 /**
  * Hook for loading frames with hierarchical priority queue.
  */
+// eslint-disable-next-line max-lines-per-function -- Frame loader with jump handling, progressive loading, and preloading logic; splitting would break cohesion
 export function useCaptionFrameExtentsFrameLoader({
   videoId,
   tenantId,
@@ -812,11 +813,13 @@ export function useCaptionFrameExtentsFrameLoader({
       cancelled = true
       clearInterval(pollInterval)
     }
-    // Note: currentFrameIndexRef is NOT in dependencies - we read from it via polling
-    // This allows continuous monitoring without effect re-triggering
-    // nextAnnotation and activeAnnotation ARE in deps:
-    // - nextAnnotation: triggers immediate preload when next annotation changes
-    // - activeAnnotation: updates cache pinning to protect current annotation frames
+    // INTENTIONAL: Ref dependencies are omitted because they are read via polling, not React reactivity.
+    // Including them would cause the effect to re-run unnecessarily and break the polling pattern.
+    // - currentFrameIndexRef: read via polling every 100ms to detect frame changes
+    // - framesRef: written to directly by loading functions, read by RAF loop in parent
+    // - jumpRequestedRef/jumpTargetRef: flags read/written synchronously during jump operations
+    // nextAnnotation and activeAnnotation ARE in deps for cache pinning and preload triggering.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     totalFrames,
     videoId,

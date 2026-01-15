@@ -16,22 +16,14 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 
 import { DATABASE_NAMES } from '~/config'
 import {
-  useDatabaseStore,
-  useDatabaseInstance,
-  useLockStatus,
-  useSyncStatus,
-  useDatabaseError,
-  useDownloadProgress,
-} from '~/stores/database-store'
-import {
   CaptionSyncService,
   getCaptionSyncService,
   removeCaptionSyncService,
   type CaptionSyncEvent,
 } from '~/services/caption-sync-service'
-import type { LockStatus, LockState } from '~/services/database-lock'
-import type { DownloadProgress } from '~/services/database-loader'
 import type { DatabaseError } from '~/services/database-errors'
+import type { DownloadProgress } from '~/services/database-loader'
+import type { LockStatus, LockState } from '~/services/database-lock'
 import type {
   CaptionQueueResult,
   CaptionFrameExtentsQueueResult,
@@ -40,6 +32,13 @@ import type {
   CaptionFrameExtentState,
   TextStatus,
 } from '~/services/database-queries'
+import {
+  useDatabaseInstance,
+  useLockStatus,
+  useSyncStatus,
+  useDatabaseError,
+  useDownloadProgress,
+} from '~/stores/database-store'
 
 // =============================================================================
 // Types
@@ -173,6 +172,7 @@ export interface UseCaptionsDatabaseReturn {
 /**
  * React hook for caption database operations.
  */
+// eslint-disable-next-line max-lines-per-function -- Database hook with complete API surface; splitting would duplicate state management
 export function useCaptionsDatabase({
   videoId,
   tenantId: providedTenantId,

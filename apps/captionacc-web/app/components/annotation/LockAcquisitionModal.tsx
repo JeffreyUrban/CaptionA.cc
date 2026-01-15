@@ -44,6 +44,7 @@ export interface LockAcquisitionModalProps {
 // Component
 // =============================================================================
 
+// eslint-disable-next-line max-lines-per-function -- UI component with multiple render states and helper functions
 export function LockAcquisitionModal({
   isOpen,
   lockState,
@@ -55,7 +56,7 @@ export function LockAcquisitionModal({
   onClose,
 }: LockAcquisitionModalProps) {
   // Track retry count for exponential backoff display
-  const [retryCount, setRetryCount] = useState(0)
+  const [_retryCount, setRetryCount] = useState(0)
 
   // Auto-close on success
   useEffect((): (() => void) | void => {
@@ -73,6 +74,7 @@ export function LockAcquisitionModal({
   }
 
   // Determine what content to show
+  // eslint-disable-next-line max-lines-per-function -- Content renderer with multiple state branches for modal UI
   const renderContent = (): React.ReactNode => {
     // Error state
     if (error) {
@@ -120,7 +122,7 @@ export function LockAcquisitionModal({
 
     // Lock denied state
     if (lockState === 'denied') {
-      const holderName = lockHolder?.displayName || lockHolder?.userId || 'Another user'
+      const holderName = lockHolder?.displayName ?? lockHolder?.userId ?? 'Another user'
 
       return (
         <div className="text-center">
