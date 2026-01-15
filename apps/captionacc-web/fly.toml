@@ -11,10 +11,25 @@ primary_region = 'ewr'
 [env]
   NODE_ENV = "production"
   ENVIRONMENT = "production"
-  # Schema is set in secrets, but can be overridden here for staging
-  # VITE_SUPABASE_SCHEMA = "captionacc_staging"  # Uncomment for staging deployments
-  # Supabase credentials are set via secrets (not here for security)
-  # Use: flyctl secrets set VITE_SUPABASE_URL=... VITE_SUPABASE_SCHEMA=... VITE_SUPABASE_ANON_KEY=... VITE_SUPABASE_SERVICE_ROLE_KEY=...
+
+  # Public Vite environment variables (embedded in client bundle at build time)
+  # These are REQUIRED for the app to work - they're not secrets
+  # The anon key is designed to be public (RLS policies protect data)
+  VITE_SUPABASE_URL = "https://stbnsczvywpwjzbpfehp.supabase.co"  # pragma: allowlist secret
+  VITE_SUPABASE_SCHEMA = "captionacc_production"
+  VITE_SUPABASE_ANON_KEY = "sb_publishable_nJJjrTJfnlqPtEpWWnuyjw_tzqgZ8uf"  # pragma: allowlist secret
+
+  # Umami analytics (public, embedded in client bundle)
+  # Routed through Traefik gateway
+  VITE_UMAMI_SRC = "https://banchelabs-gateway.fly.dev/umami/script.js"
+  VITE_UMAMI_WEBSITE_ID = "1df05312-93bf-4de5-9a0d-3dae1ee1620e"  # pragma: allowlist secret
+
+  # Server-side secrets (keep as secrets, not here):
+  # - VITE_SUPABASE_SERVICE_ROLE_KEY (server-side only, never exposed to client)
+  # - WASABI_ACCESS_KEY_READONLY
+  # - WASABI_SECRET_KEY_READONLY
+  # - WASABI_BUCKET
+  # - WASABI_REGION
 
 [http_service]
   internal_port = 3000

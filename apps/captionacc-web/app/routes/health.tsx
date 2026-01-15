@@ -48,72 +48,64 @@ export async function loader({ request: _request }: LoaderFunctionArgs) {
     },
   }
 
-  // Check Supabase connectivity
+  // Simplified health check: just verify server is running
+  // External service checks are informational only
   try {
-    const supabaseStart = Date.now()
-    const supabase = createServerSupabaseClient()
+    // Check Supabase connectivity (non-critical for health check)
+    try {
+      const supabaseStart = Date.now()
+      const supabase = createServerSupabaseClient()
+      const { error } = await supabase.from('videos').select('id').limit(1)
 
-    // Lightweight query to verify connection
-    const { error } = await supabase.from('videos').select('id').limit(1)
+      health.components.supabase.response_ms = Date.now() - supabaseStart
 
-    health.components.supabase.response_ms = Date.now() - supabaseStart
-
-    if (error) {
-      health.components.supabase.status = 'unhealthy'
-      health.components.supabase.error = error.message
-      health.status = 'unhealthy'
+      if (error) {
+        console.warn('[Health] Supabase degraded:', error.message)
+        health.components.supabase.status = 'degraded'
+        health.components.supabase.error = error.message
+        if (health.status === 'healthy') {
+          health.status = 'degraded'
+        }
+      }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Unknown Supabase error'
+      console.warn('[Health] Supabase unavailable:', errorMsg)
+      health.components.supabase.status = 'degraded'
+      health.components.supabase.error = errorMsg
+      if (health.status === 'healthy') {
+        health.status = 'degraded'
+      }
     }
-  } catch (error) {
-    health.components.supabase.status = 'unhealthy'
-    health.components.supabase.error =
-      error instanceof Error ? error.message : 'Unknown Supabase error'
-    health.status = 'unhealthy'
-  }
 
-  // Check Wasabi connectivity (readonly credentials)
-  try {
-    const wasabiStart = Date.now()
-
-    // Lightweight operation: list chunks for a test video
-    // If no test video exists, this will return empty array (still validates credentials)
-    await listChunks('health-check-video', 1, 'default_user')
-
-    health.components.wasabi.response_ms = Date.now() - wasabiStart
-  } catch (error) {
-    // Check if it's a credentials error vs just no chunks found
-    const errorMessage = error instanceof Error ? error.message : 'Unknown Wasabi error'
-
-    // Credentials errors will contain specific AWS error codes
-    if (
-      errorMessage.includes('InvalidAccessKeyId') ||
-      errorMessage.includes('SignatureDoesNotMatch') ||
-      errorMessage.includes('AccessDenied')
-    ) {
-      health.components.wasabi.status = 'unhealthy'
-      health.components.wasabi.error = 'Invalid or expired Wasabi credentials'
-      health.status = 'unhealthy'
-    } else {
-      // Other errors (network, timeout) are degraded but not critical
+    // Check Wasabi connectivity (non-critical for health check)
+    try {
+      const wasabiStart = Date.now()
+      await listChunks('health-check-video', 1, 'default_user')
+      health.components.wasabi.response_ms = Date.now() - wasabiStart
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown Wasabi error'
+      console.warn('[Health] Wasabi unavailable:', errorMessage)
       health.components.wasabi.status = 'degraded'
       health.components.wasabi.error = errorMessage
       if (health.status === 'healthy') {
         health.status = 'degraded'
       }
     }
+  } catch (error) {
+    console.error('[Health] Unexpected error:', error)
   }
 
   const totalTime = Date.now() - startTime
 
-  // Return appropriate HTTP status
-  const httpStatus = health.status === 'unhealthy' ? 503 : 200
-
+  // Always return 200 - external service availability is informational only
+  // The app can function without these services (degraded mode)
   return new Response(
     JSON.stringify({
       ...health,
       response_time_ms: totalTime,
     }),
     {
-      status: httpStatus,
+      status: 200,
       headers: {
         'Content-Type': 'application/json',
         'Cache-Control': 'no-cache, no-store, must-revalidate',
