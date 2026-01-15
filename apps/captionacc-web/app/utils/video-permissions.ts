@@ -170,7 +170,7 @@ export async function requireAnnotatePermission(request: Request, videoId: strin
   } = await supabase.auth.getUser()
 
   if (!user) {
-    throw redirect('/auth/login')
+    throw redirect('/login')
   }
 
   const permissions = await getVideoPermissions(user.id, videoId)

@@ -45,11 +45,11 @@ export function headers() {
   // TODO: Restrict localhost to specific ports in production (currently allows all for dev)
   const csp = [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
+    "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://banchelabs-gateway.fly.dev",
     "style-src 'self' 'unsafe-inline'",
     "font-src 'self'",
     "img-src 'self' data: https:",
-    "connect-src 'self' http://localhost:* https://*.supabase.co wss://*.supabase.co",
+    "connect-src 'self' http://localhost:* https://*.supabase.co wss://*.supabase.co https://banchelabs-gateway.fly.dev",
   ].join('; ')
 
   return {

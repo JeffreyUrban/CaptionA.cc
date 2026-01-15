@@ -29,7 +29,7 @@ import { useTreeNavigation } from '~/hooks/useTreeNavigation'
 import { useVideoDragDrop } from '~/hooks/useVideoDragDrop'
 import { useVideoOperations } from '~/hooks/useVideoOperations'
 import { useVideoStats } from '~/hooks/useVideoStats'
-import { createServerSupabaseClient } from '~/services/supabase-client'
+import { supabase } from '~/services/supabase-client'
 import {
   buildVideoTree,
   calculateVideoCounts,
@@ -43,8 +43,6 @@ import {
 // =============================================================================
 
 export async function loader() {
-  const supabase = createServerSupabaseClient()
-
   // Get authenticated user
   const {
     data: { user },
@@ -52,7 +50,7 @@ export async function loader() {
   } = await supabase.auth.getUser()
 
   if (!user || error) {
-    throw redirect('/auth/login')
+    throw redirect('/login')
   }
 
   // Query videos table - RLS automatically filters by tenant/user
