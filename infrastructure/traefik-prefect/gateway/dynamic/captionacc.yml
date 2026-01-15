@@ -1,0 +1,118 @@
+# CaptionA.cc Project Dynamic Configuration
+# Routes and services specific to the CaptionA.cc project
+
+http:
+  # Routers
+  routers:
+    # CaptionA.cc Prefect API
+    traefik-prefect:
+      rule: "PathPrefix(`/captionacc/prefect`)"
+      service: traefik-prefect
+      middlewares:
+        - traefik-prefect-retry
+        - traefik-prefect-auth
+        - traefik-prefect-strip-prefix
+      entryPoints:
+        - websecure
+      tls: {}
+
+    # Example: Future API service (on different machine)
+    # captionacc-api:
+    #   rule: "PathPrefix(`/captionacc/api`)"
+    #   service: captionacc-api-service
+    #   middlewares:
+    #     - captionacc-api-auth
+    #     - captionacc-api-strip-prefix
+    #   entryPoints:
+    #     - websecure
+    #   tls: {}
+
+  # Middlewares
+  middlewares:
+    # Retry middleware for cold starts (Prefect takes ~15-30s to start)
+    traefik-prefect-retry:
+      retry:
+        attempts: 5
+        initialInterval: 2s
+
+    # JWT Authentication for Prefect
+    traefik-prefect-auth:
+      plugin:
+        jwt:
+          # JWT signing secret from environment variable (symmetric key)
+          Keys:
+            - "{{env `GATEWAY_JWT_SECRET`}}"
+
+          # Require JWT to be present
+          Required: true
+
+          # Validate standard JWT claims
+          PayloadFields:
+            - exp
+            - iat
+            - jti
+            - project
+            - service
+
+          # Forward JWT claims as headers to backend
+          JwtHeaders:
+            X-Gateway-Project: project
+            X-Gateway-Service: service
+            X-Gateway-JTI: jti
+
+    # Strip /captionacc/prefect prefix before forwarding
+    traefik-prefect-strip-prefix:
+      stripPrefix:
+        prefixes:
+          - "/captionacc/prefect"
+
+    # Example: Future API middleware
+    # captionacc-api-auth:
+    #   plugin:
+    #     jwt:
+    #       Keys:
+    #         - "{{env `GATEWAY_JWT_SECRET`}}"
+    #       Required: true
+    #       PayloadFields:
+    #         - exp
+    #         - iat
+    #         - jti
+    #         - project
+    #         - service
+    #       JwtHeaders:
+    #         X-Gateway-Project: project
+    #         X-Gateway-Service: service
+    #         X-Gateway-JTI: jti
+    #
+    # captionacc-api-strip-prefix:
+    #   stripPrefix:
+    #     prefixes:
+    #       - "/captionacc/api"
+
+  # Services (Backend targets)
+  services:
+    # Prefect on SAME machine (localhost)
+    traefik-prefect:
+      loadBalancer:
+        servers:
+          # Localhost - Prefect container on same machine
+          - url: "http://localhost:4200"
+
+        # Health check
+        healthCheck:
+          path: /api/health
+          interval: 30s
+          timeout: 5s
+          scheme: http
+
+    # Example: Future API service (on different Fly.io machine)
+    # captionacc-api-service:
+    #   loadBalancer:
+    #     servers:
+    #       # Fly.io internal DNS (6PN private network)
+    #       - url: "http://captionacc-api.internal:8000"
+    #     healthCheck:
+    #       path: /health
+    #       interval: 30s
+    #       timeout: 5s
+    #       scheme: http

@@ -1,0 +1,100 @@
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ocr"
+dynamic = ["version"]
+description = "OCR processing library with pluggable backends (Google Vision, macOS LiveText)"
+authors = [
+    {name = "Jeffrey Urban"}
+]
+requires-python = ">=3.13,<3.14"
+keywords = [
+    "ocr",
+    "google-vision",
+    "livetext",
+    "text-recognition"
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Scientific/Engineering :: Image Recognition",
+    "Topic :: Utilities",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.14"
+]
+dependencies = [
+    "pydantic>=2.0.0",
+    "Pillow>=10.0.0",
+]
+
+[project.optional-dependencies]
+google = [
+    "google-cloud-vision>=3.0.0",
+]
+livetext = [
+    "ocrmac>=1.0.0",
+]
+cli = [
+    "typer>=0.9.0",
+    "rich>=13.0.0",
+    "video_utils",
+]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "ruff>=0.1.9",
+    "pyright>=1.1.0"
+]
+
+[project.scripts]
+ocr = "ocr.cli:app"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.version.raw-options]
+root = "../.."
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ocr"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+markers = [
+    "unit: Unit tests for individual components",
+    "integration: Integration tests requiring OCR backends"
+]
+
+[tool.coverage.run]
+source = ["src/ocr"]
+omit = ["*/tests/*"]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:"
+]
+
+# Inherits workspace config from root pyproject.toml
+# Only project-specific overrides here
+[tool.ruff.lint]
+extend-ignore = [
+    "B008",  # Allow function calls in argument defaults (Typer idiom)
+]
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/ocr/_version.py"
+
+[tool.uv.sources]
+video_utils = { workspace = true }
