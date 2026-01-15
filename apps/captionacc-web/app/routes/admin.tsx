@@ -585,7 +585,7 @@ function DatabaseAdministration({
 }
 
 // Loader to get schema versions (server-side only)
-export async function loader() {
+export async function clientLoader() {
   // Note: With localStorage auth, server-side auth checks are not possible
   // Admin protection is enforced at API endpoints (which check Authorization header)
   // Client-side: AppLayout checks admin status and shows/hides admin nav link

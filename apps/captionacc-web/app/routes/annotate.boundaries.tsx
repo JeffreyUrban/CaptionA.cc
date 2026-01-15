@@ -10,7 +10,7 @@ import { useImageRegeneration } from '~/hooks/useImageRegeneration'
 import { getAnnotationBorderColor, getEffectiveState } from '~/utils/boundary-helpers'
 
 // Loader function to expose environment variables
-export async function loader() {
+export async function clientLoader() {
   return {
     defaultVideoId: process.env['DEFAULT_VIDEO_ID'] ?? '',
   }

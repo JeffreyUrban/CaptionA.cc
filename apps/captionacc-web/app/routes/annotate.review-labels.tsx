@@ -12,7 +12,7 @@ import { useReviewLabelsKeyboardShortcuts } from '~/hooks/useReviewLabelsKeyboar
 import type { FrameInfo, LayoutConfig, FrameBoxesData, ViewMode } from '~/types/review-labels'
 
 // Loader function to expose environment variables
-export async function loader() {
+export async function clientLoader() {
   return {
     defaultVideoId: process.env['DEFAULT_VIDEO_ID'] ?? '',
   }

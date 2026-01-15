@@ -17,7 +17,7 @@ import { useVideoTouched } from '~/hooks/useVideoTouched'
 import type { Frame } from '~/types/boundaries'
 
 // Loader function to expose environment variables
-export async function loader() {
+export async function clientLoader() {
   return {
     defaultVideoId: process.env['DEFAULT_VIDEO_ID'] ?? '',
   }

@@ -26,7 +26,7 @@ interface FrameWithBoxes {
   boxes: OcrBox[]
 }
 
-export async function loader({ request }: LoaderFunctionArgs) {
+export async function clientLoader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url)
   const videoId = url.searchParams.get('videoId')
 

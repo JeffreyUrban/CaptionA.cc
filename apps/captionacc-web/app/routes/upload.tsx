@@ -38,7 +38,7 @@ import {
 // Loader
 // ============================================================================
 
-export async function loader({ request }: LoaderFunctionArgs) {
+export async function clientLoader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url)
   const preselectedFolder = url.searchParams.get('folder')
 

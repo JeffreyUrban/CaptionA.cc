@@ -42,7 +42,7 @@ import {
 // Loader
 // =============================================================================
 
-export async function loader() {
+export async function clientLoader() {
   // Get authenticated user
   const {
     data: { user },

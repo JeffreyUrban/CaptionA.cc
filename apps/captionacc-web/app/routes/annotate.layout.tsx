@@ -27,7 +27,7 @@ import { generateAnalysisThumbnail } from '~/utils/layout-canvas-helpers'
 import { dispatchKeyboardShortcut } from '~/utils/layout-keyboard-handlers'
 
 // Loader function to expose environment variables
-export async function loader() {
+export async function clientLoader() {
   return {
     defaultVideoId: process.env['DEFAULT_VIDEO_ID'] ?? '',
   }
