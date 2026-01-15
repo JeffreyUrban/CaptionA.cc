@@ -180,7 +180,8 @@ def extract_frames_gpu(
 
         # Periodic logging (every 100 frames or at the end)
         if (frame_idx + 1) % 100 == 0 or (frame_idx + 1) == num_output_frames:
-            print(f"Extracted {frame_idx + 1}/{num_output_frames} frames ({((frame_idx + 1) / num_output_frames * 100):.1f}%)")
+            progress_pct = (frame_idx + 1) / num_output_frames * 100
+            print(f"Extracted {frame_idx + 1}/{num_output_frames} frames ({progress_pct:.1f}%)")
 
     decoder.close()
     return frames

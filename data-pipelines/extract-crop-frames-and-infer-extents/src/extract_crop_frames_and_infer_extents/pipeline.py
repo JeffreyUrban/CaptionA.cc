@@ -771,7 +771,10 @@ def crop_and_infer_caption_frame_extents_pipelined(
         frames_first_batch = pairs_per_batch + 1  # Need N+1 frames for N consecutive pairs
         frames_per_subsequent = pairs_per_batch  # Add N new frames (plus 1 reused = N+1 total)
 
-        print(f"    Batch config: {inference_batch_size} images/batch = {pairs_per_batch} pairs = {frames_first_batch} frames (first) / {frames_per_subsequent} frames (subsequent)")
+        print(
+            f"    Batch config: {inference_batch_size} images/batch = {pairs_per_batch} pairs = "
+            f"{frames_first_batch} frames (first) / {frames_per_subsequent} frames (subsequent)"
+        )
 
         # Track last frame from previous batch for continuity
         prev_batch_last_frame_gpu = None
@@ -915,7 +918,10 @@ def crop_and_infer_caption_frame_extents_pipelined(
 
         frame_count = len(frames_saved)
         pipeline_duration = time.time() - pipeline_start
-        print(f"  GPU processing complete: {frame_count} frames, {len(pair_results)} pairs in {pipeline_duration:.2f}s\n")
+        print(
+            f"  GPU processing complete: {frame_count} frames, {len(pair_results)} pairs "
+            f"in {pipeline_duration:.2f}s\n"
+        )
 
         # Step 6: Wait for parallel VP9 encoding and uploads to complete
         print("[6/7] Waiting for parallel VP9 encoding and Wasabi uploads to complete...")
