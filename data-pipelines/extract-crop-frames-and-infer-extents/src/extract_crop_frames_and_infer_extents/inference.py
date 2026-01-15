@@ -115,8 +115,10 @@ def crop_and_infer_caption_frame_extents_impl(
     print(f"Video: {video_key}")
     print(f"Tenant: {tenant_id}")
     print(f"Video ID: {video_id}")
-    print(f"Crop Region: L={crop_region.crop_left}, T={crop_region.crop_top}, "
-          f"R={crop_region.crop_right}, B={crop_region.crop_bottom}")
+    print(
+        f"Crop Region: L={crop_region.crop_left}, T={crop_region.crop_top}, "
+        f"R={crop_region.crop_right}, B={crop_region.crop_bottom}"
+    )
     print(f"Frame Rate: {frame_rate} Hz")
     print(f"{'=' * 80}\n")
 
@@ -150,8 +152,7 @@ def crop_and_infer_caption_frame_extents_impl(
         crop_height = crop_bottom_px - crop_top_px
 
         print(f"  Video dimensions: {frame_width}x{frame_height}")
-        print(f"  Crop region (px): x={crop_left_px}, y={crop_top_px}, "
-              f"w={crop_width}, h={crop_height}\n")
+        print(f"  Crop region (px): x={crop_left_px}, y={crop_top_px}, w={crop_width}, h={crop_height}\n")
 
         # Step 3: Extract cropped frames
         print(f"[3/8] Extracting cropped frames at {frame_rate} Hz...")
@@ -168,7 +169,7 @@ def crop_and_infer_caption_frame_extents_impl(
         stream.output(
             str(output_pattern),
             format="image2",
-            **{"q:v": 6}  # JPEG quality
+            **{"q:v": 6},  # JPEG quality
         ).overwrite_output().run(capture_stdout=True, capture_stderr=True)
 
         frame_files = sorted(frames_dir.glob("frame_*.jpg"))
@@ -247,13 +248,20 @@ def crop_and_infer_caption_frame_extents_impl(
                     subprocess.run(
                         [
                             "ffmpeg",
-                            "-f", "concat",
-                            "-safe", "0",
-                            "-i", filelist_path,
-                            "-c:v", "libvpx-vp9",
-                            "-crf", "30",
-                            "-b:v", "0",
-                            "-row-mt", "1",
+                            "-f",
+                            "concat",
+                            "-safe",
+                            "0",
+                            "-i",
+                            filelist_path,
+                            "-c:v",
+                            "libvpx-vp9",
+                            "-crf",
+                            "30",
+                            "-b:v",
+                            "0",
+                            "-row-mt",
+                            "1",
                             "-y",
                             str(chunk_output),
                         ],
@@ -284,13 +292,14 @@ def crop_and_infer_caption_frame_extents_impl(
         # Download and decompress layout.db.gz for OCR visualization
         import gzip
         import shutil
+
         layout_db_gz_path = tmp_path / "layout.db.gz"
         layout_db_path = tmp_path / "layout.db"
         layout_storage_key = f"{tenant_id}/client/videos/{video_id}/layout.db.gz"
         wasabi.download_file(layout_storage_key, layout_db_gz_path)
 
         # Decompress the layout.db.gz file
-        with gzip.open(layout_db_gz_path, 'rb') as f_in, open(layout_db_path, 'wb') as f_out:
+        with gzip.open(layout_db_gz_path, "rb") as f_in, open(layout_db_path, "wb") as f_out:
             shutil.copyfileobj(f_in, f_out)
 
         # Load inference model
@@ -338,7 +347,7 @@ def crop_and_infer_caption_frame_extents_impl(
             pair_results = []
 
             for i in range(0, len(frame_pairs), batch_size):
-                batch = frame_pairs[i:i + batch_size]
+                batch = frame_pairs[i : i + batch_size]
 
                 # Prepare bidirectional pairs
                 bidirectional_pairs = []
@@ -397,6 +406,7 @@ def crop_and_infer_caption_frame_extents_impl(
         db_start = time.time()
 
         import uuid
+
         run_id = str(uuid.uuid4())
         started_at = datetime.fromtimestamp(job_start)
         completed_at = datetime.now()

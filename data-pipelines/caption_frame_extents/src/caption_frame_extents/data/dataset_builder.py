@@ -115,7 +115,9 @@ def get_video_layout_metadata(db_path: Path) -> dict:
         conn.close()
 
 
-def extract_frame_pairs_from_captions(db_path: Path, caption_frame_extents_states: list[str] | None = None) -> list[dict]:
+def extract_frame_pairs_from_captions(
+    db_path: Path, caption_frame_extents_states: list[str] | None = None
+) -> list[dict]:
     """Extract frame pairs from caption frame extents.
 
     Creates training samples by comparing consecutive frames within and across
@@ -249,7 +251,9 @@ def extract_frame_pairs_from_captions(db_path: Path, caption_frame_extents_state
         conn.close()
 
 
-def _copy_frames_for_video(db, video_conn, video_hash: str, video_samples: list[dict]) -> None:
+def _copy_frames_for_video(
+    db, video_conn, video_hash: str, video_samples: list[dict]
+) -> None:
     """Copy frames needed by samples from video DB to training DB.
 
     Args:
@@ -271,7 +275,10 @@ def _copy_frames_for_video(db, video_conn, video_hash: str, video_samples: list[
     for frame_index in frames_needed:
         existing = (
             db.query(TrainingFrame)
-            .filter(TrainingFrame.video_hash == video_hash, TrainingFrame.frame_index == frame_index)
+            .filter(
+                TrainingFrame.video_hash == video_hash,
+                TrainingFrame.frame_index == frame_index,
+            )
             .first()
         )
         if existing:
@@ -312,7 +319,9 @@ def _copy_frames_for_video(db, video_conn, video_hash: str, video_samples: list[
         db.add(training_frame)
 
 
-def _copy_ocr_viz_for_video(db, video_conn, video_hash: str, has_samples: bool, variant: str = "boundaries") -> bool:
+def _copy_ocr_viz_for_video(
+    db, video_conn, video_hash: str, has_samples: bool, variant: str = "boundaries"
+) -> bool:
     """Copy OCR visualization from video DB to training DB.
 
     Only processes videos that have training samples.
@@ -337,7 +346,10 @@ def _copy_ocr_viz_for_video(db, video_conn, video_hash: str, has_samples: bool, 
     # Check if visualization already exists
     existing = (
         db.query(TrainingOCRVisualization)
-        .filter(TrainingOCRVisualization.video_hash == video_hash, TrainingOCRVisualization.variant == variant)
+        .filter(
+            TrainingOCRVisualization.video_hash == video_hash,
+            TrainingOCRVisualization.variant == variant,
+        )
         .first()
     )
 
@@ -346,7 +358,9 @@ def _copy_ocr_viz_for_video(db, video_conn, video_hash: str, has_samples: bool, 
 
     # Try to copy from video DB
     cursor = video_conn.cursor()
-    cursor.execute("SELECT ocr_visualization_image FROM video_layout_config WHERE id = 1")
+    cursor.execute(
+        "SELECT ocr_visualization_image FROM video_layout_config WHERE id = 1"
+    )
 
     row = cursor.fetchone()
     if not row or not row[0]:
@@ -354,7 +368,9 @@ def _copy_ocr_viz_for_video(db, video_conn, video_hash: str, has_samples: bool, 
         return False
 
     # Create training OCR visualization record
-    training_ocr_viz = TrainingOCRVisualization(video_hash=video_hash, variant=variant, image_data=row[0])
+    training_ocr_viz = TrainingOCRVisualization(
+        video_hash=video_hash, variant=variant, image_data=row[0]
+    )
     db.add(training_ocr_viz)
     return True
 
@@ -396,8 +412,12 @@ def create_training_dataset(
 
     # Check if dataset already exists (fail fast)
     if dataset_db_path.exists():
-        console.print(f"[red]✗ Dataset '{name}' already exists at {dataset_db_path}[/red]")
-        console.print("[yellow]Delete the existing dataset or choose a different name:[/yellow]")
+        console.print(
+            f"[red]✗ Dataset '{name}' already exists at {dataset_db_path}[/red]"
+        )
+        console.print(
+            "[yellow]Delete the existing dataset or choose a different name:[/yellow]"
+        )
         console.print(f"  rm {dataset_db_path}")
         raise ValueError(f"Dataset '{name}' already exists")
 
@@ -435,13 +455,17 @@ def create_training_dataset(
         try:
             layout_meta = get_video_layout_metadata(video_db_path)
         except Exception as e:
-            skipped_videos.append((video_db_path, f"Failed to get layout metadata: {e}"))
+            skipped_videos.append(
+                (video_db_path, f"Failed to get layout metadata: {e}")
+            )
             continue
 
         # Extract frame pairs based on split strategy
         try:
             # Extract only confirmed annotations (default)
-            pairs = extract_frame_pairs_from_captions(video_db_path, caption_frame_extents_states=["confirmed"])
+            pairs = extract_frame_pairs_from_captions(
+                video_db_path, caption_frame_extents_states=["confirmed"]
+            )
         except Exception as e:
             skipped_videos.append((video_db_path, f"Failed to extract pairs: {e}"))
             continue
@@ -460,7 +484,9 @@ def create_training_dataset(
                     "label": pair["label"],
                     "crop_region_version": layout_meta["crop_region_version"],
                     "source_caption_annotation_id": pair["caption_id"],
-                    "caption_frame_extents_state": pair["caption_frame_extents_state"],  # Include caption frame extents state for split logic
+                    "caption_frame_extents_state": pair[
+                        "caption_frame_extents_state"
+                    ],  # Include caption frame extents state for split logic
                 }
             )
 
@@ -492,7 +518,9 @@ def create_training_dataset(
     if not all_samples:
         raise ValueError("No valid samples found in any video")
 
-    console.print(f"\n[green]✓[/green] Extracted {len(all_samples)} frame pairs from {len(video_hashes)} videos")
+    console.print(
+        f"\n[green]✓[/green] Extracted {len(all_samples)} frame pairs from {len(video_hashes)} videos"
+    )
     console.print("[cyan]Label distribution:[/cyan]")
     for label, count in sorted(label_counts.items()):
         console.print(f"  {label}: {count}")
@@ -511,7 +539,11 @@ def create_training_dataset(
     duplicates_removed = 0
 
     for sample in all_samples:
-        pair_key = (sample["video_hash"], sample["frame1_index"], sample["frame2_index"])
+        pair_key = (
+            sample["video_hash"],
+            sample["frame1_index"],
+            sample["frame2_index"],
+        )
         if pair_key not in seen_pairs:
             seen_pairs.add(pair_key)
             deduplicated_samples.append(sample)
@@ -521,7 +553,9 @@ def create_training_dataset(
     all_samples = deduplicated_samples
 
     if duplicates_removed > 0:
-        console.print(f"[yellow]⚠[/yellow] Removed {duplicates_removed} duplicate frame pairs")
+        console.print(
+            f"[yellow]⚠[/yellow] Removed {duplicates_removed} duplicate frame pairs"
+        )
 
     # Split data
     import random
@@ -534,7 +568,10 @@ def create_training_dataset(
 
         labels = [s["label"] for s in all_samples]
         train_indices, val_indices = train_test_split(
-            list(range(len(all_samples))), test_size=(1 - train_split_ratio), stratify=labels, random_state=random_seed
+            list(range(len(all_samples))),
+            test_size=(1 - train_split_ratio),
+            stratify=labels,
+            random_state=random_seed,
         )
 
         for idx in train_indices:
@@ -544,7 +581,9 @@ def create_training_dataset(
 
     else:
         # Show-based split not implemented yet
-        raise NotImplementedError(f"Split strategy '{split_strategy}' not yet implemented")
+        raise NotImplementedError(
+            f"Split strategy '{split_strategy}' not yet implemented"
+        )
 
     # Calculate quality metadata
     # Note: OCR confidence tracking removed - samples have no OCR metadata
@@ -606,7 +645,9 @@ def create_training_dataset(
     # IMPORTANT: Only include samples from videos with OCR visualizations
     # Use a single database session for all videos to avoid creating too many engines
     # Process in batches to limit simultaneous open connections
-    console.print(f"\n[cyan]Consolidating {len(samples_by_video)} videos to training database...[/cyan]")
+    console.print(
+        f"\n[cyan]Consolidating {len(samples_by_video)} videos to training database...[/cyan]"
+    )
 
     BATCH_SIZE = 50  # Maximum simultaneous connections to video databases
     video_hashes = list(samples_by_video.keys())
@@ -623,12 +664,16 @@ def create_training_dataset(
 
             batch_num = batch_start // BATCH_SIZE + 1
             total_batches = (len(video_hashes) + BATCH_SIZE - 1) // BATCH_SIZE
-            for video_hash in track(batch_hashes, description=f"Copying batch {batch_num}/{total_batches}"):
+            for video_hash in track(
+                batch_hashes, description=f"Copying batch {batch_num}/{total_batches}"
+            ):
                 video_samples = samples_by_video[video_hash]
                 video_db_path = video_db_map.get(video_hash)
 
                 if not video_db_path:
-                    console.print(f"[yellow]⚠ Could not find video DB for {video_hash}, skipping[/yellow]")
+                    console.print(
+                        f"[yellow]⚠ Could not find video DB for {video_hash}, skipping[/yellow]"
+                    )
                     continue
 
                 # Open video database once for all operations
@@ -638,7 +683,9 @@ def create_training_dataset(
                     _copy_frames_for_video(db, video_conn, video_hash, video_samples)
 
                     # Copy OCR visualization for this video (only if has samples)
-                    has_ocr_viz = _copy_ocr_viz_for_video(db, video_conn, video_hash, has_samples=True)
+                    has_ocr_viz = _copy_ocr_viz_for_video(
+                        db, video_conn, video_hash, has_samples=True
+                    )
 
                     if has_ocr_viz:
                         videos_with_ocr_viz.add(video_hash)
@@ -658,7 +705,9 @@ def create_training_dataset(
                             label=sample_data["label"],
                             split=sample_data["split"],
                             crop_region_version=sample_data["crop_region_version"],
-                            source_caption_annotation_id=sample_data["source_caption_annotation_id"],
+                            source_caption_annotation_id=sample_data[
+                                "source_caption_annotation_id"
+                            ],
                         )
                         db.add(sample)
 
@@ -669,7 +718,9 @@ def create_training_dataset(
 
                     existing = (
                         db.query(VideoRegistry)
-                        .filter(VideoRegistry.video_hash == video_record_data["video_hash"])
+                        .filter(
+                            VideoRegistry.video_hash == video_record_data["video_hash"]
+                        )
                         .first()
                     )
 
@@ -693,17 +744,27 @@ def create_training_dataset(
 
     # Calculate actual inserted counts (only videos with OCR viz)
     with next(get_dataset_db(dataset_db_path)) as db:
-        actual_train_count = db.query(TrainingSample).filter(TrainingSample.split == "train").count()
-        actual_val_count = db.query(TrainingSample).filter(TrainingSample.split == "val").count()
+        actual_train_count = (
+            db.query(TrainingSample).filter(TrainingSample.split == "train").count()
+        )
+        actual_val_count = (
+            db.query(TrainingSample).filter(TrainingSample.split == "val").count()
+        )
 
     console.print(f"  Train samples: {actual_train_count}")
     console.print(f"  Val samples: {actual_val_count}")
 
     # Report excluded samples due to missing OCR visualization
     if videos_without_ocr_viz:
-        excluded_sample_count = sum(len(samples_by_video[vh]) for vh in videos_without_ocr_viz)
-        console.print("\n[yellow]⚠ Excluded samples (missing OCR visualization):[/yellow]")
-        console.print(f"  Videos excluded: {len(videos_without_ocr_viz)} / {len(samples_by_video)}")
+        excluded_sample_count = sum(
+            len(samples_by_video[vh]) for vh in videos_without_ocr_viz
+        )
+        console.print(
+            "\n[yellow]⚠ Excluded samples (missing OCR visualization):[/yellow]"
+        )
+        console.print(
+            f"  Videos excluded: {len(videos_without_ocr_viz)} / {len(samples_by_video)}"
+        )
         console.print(f"  Samples excluded: {excluded_sample_count}")
         console.print(f"  Videos with complete data: {len(videos_with_ocr_viz)}")
 

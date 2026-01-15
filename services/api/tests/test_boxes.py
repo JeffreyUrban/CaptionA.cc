@@ -6,9 +6,13 @@ from httpx import AsyncClient
 class TestGetBoxes:
     """Tests for GET /{video_id}/boxes endpoint."""
 
-    async def test_get_boxes_with_labels(self, boxes_client: AsyncClient, test_video_id: str):
+    async def test_get_boxes_with_labels(
+        self, boxes_client: AsyncClient, test_video_id: str
+    ):
         """Should return boxes with merged OCR and label data."""
-        response = await boxes_client.get(f"/videos/{test_video_id}/boxes", params={"frame": 0})
+        response = await boxes_client.get(
+            f"/videos/{test_video_id}/boxes", params={"frame": 0}
+        )
         assert response.status_code == 200
 
         data = response.json()
@@ -33,7 +37,9 @@ class TestGetBoxes:
         self, boxes_client: AsyncClient, test_video_id: str
     ):
         """Should return model predictions when no user labels."""
-        response = await boxes_client.get(f"/videos/{test_video_id}/boxes", params={"frame": 1})
+        response = await boxes_client.get(
+            f"/videos/{test_video_id}/boxes", params={"frame": 1}
+        )
         assert response.status_code == 200
 
         data = response.json()
@@ -67,9 +73,13 @@ class TestGetBoxes:
             assert box["userLabel"] is None
             assert box["modelPrediction"] is None
 
-    async def test_get_boxes_includes_bbox(self, boxes_client: AsyncClient, test_video_id: str):
+    async def test_get_boxes_includes_bbox(
+        self, boxes_client: AsyncClient, test_video_id: str
+    ):
         """Should include bounding box data."""
-        response = await boxes_client.get(f"/videos/{test_video_id}/boxes", params={"frame": 0})
+        response = await boxes_client.get(
+            f"/videos/{test_video_id}/boxes", params={"frame": 0}
+        )
         assert response.status_code == 200
 
         data = response.json()
@@ -118,7 +128,9 @@ class TestUpdateBoxes:
         assert data["updated"] == 2
         assert data["frame"]["frameIndex"] == 2
 
-    async def test_update_single_box(self, boxes_client: AsyncClient, test_video_id: str):
+    async def test_update_single_box(
+        self, boxes_client: AsyncClient, test_video_id: str
+    ):
         """Should update a single box."""
         response = await boxes_client.put(
             f"/videos/{test_video_id}/boxes",

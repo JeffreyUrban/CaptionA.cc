@@ -1,6 +1,8 @@
 """Inference pipeline for caption caption frame extents detection."""
 
-from caption_frame_extents.inference.batch_predictor import BatchCaptionFrameExtentsPredictor
+from caption_frame_extents.inference.batch_predictor import (
+    BatchCaptionFrameExtentsPredictor,
+)
 from caption_frame_extents.inference.caption_frame_extents_db import (
     PairResult,
     compute_model_version_hash,

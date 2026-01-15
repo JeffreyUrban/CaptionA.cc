@@ -122,7 +122,9 @@ def analyze(
 
         console.print()
         console.print("  [green]✓[/green] GPU extraction complete")
-        console.print(f"  [green]✓[/green] OCR processing complete ({total_boxes} text boxes)")
+        console.print(
+            f"  [green]✓[/green] OCR processing complete ({total_boxes} text boxes)"
+        )
         console.print(f"  [green]✓[/green] Results saved to: {db_path}")
         console.print()
 

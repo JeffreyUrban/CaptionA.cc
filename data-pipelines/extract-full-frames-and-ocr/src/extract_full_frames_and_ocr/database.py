@@ -59,7 +59,9 @@ def load_ocr_annotations_from_database(db_path: Path) -> list[dict]:
         cursor = conn.cursor()
 
         # Get all unique frame indices
-        cursor.execute("SELECT DISTINCT frame_index FROM full_frame_ocr ORDER BY frame_index")
+        cursor.execute(
+            "SELECT DISTINCT frame_index FROM full_frame_ocr ORDER BY frame_index"
+        )
         frame_indices = [row[0] for row in cursor.fetchall()]
 
         annotations = []
@@ -81,7 +83,12 @@ def load_ocr_annotations_from_database(db_path: Path) -> list[dict]:
                 boxes.append([text, confidence, [x, y, width, height]])
 
             # Create annotation entry in same format as JSONL
-            annotations.append({"image_path": f"full_frames/frame_{frame_index:010d}.jpg", "annotations": boxes})
+            annotations.append(
+                {
+                    "image_path": f"full_frames/frame_{frame_index:010d}.jpg",
+                    "annotations": boxes,
+                }
+            )
 
         return annotations
 
@@ -151,5 +158,3 @@ def write_frames_to_database(
             frame_file.unlink()
 
     return count
-
-

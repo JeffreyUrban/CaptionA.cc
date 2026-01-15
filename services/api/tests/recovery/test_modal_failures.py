@@ -139,10 +139,15 @@ class TestModalFailureRecovery:
             side_effect=[timeout_error, MockExtractResult(frame_count=50)]
         )
 
-        with patch("modal.App.lookup", return_value=mock_app), patch(
-            "app.services.supabase_service.SupabaseServiceImpl",
-            return_value=mock_supabase_service,
-        ), patch.dict(os.environ, {"SUPABASE_URL": "https://test.supabase.co"}), prefect_test_harness():
+        with (
+            patch("modal.App.lookup", return_value=mock_app),
+            patch(
+                "app.services.supabase_service.SupabaseServiceImpl",
+                return_value=mock_supabase_service,
+            ),
+            patch.dict(os.environ, {"SUPABASE_URL": "https://test.supabase.co"}),
+            prefect_test_harness(),
+        ):
             # First attempt - should fail with timeout
             with pytest.raises(RuntimeError) as exc_info:
                 extract_frames_and_ocr_task(
@@ -193,10 +198,15 @@ class TestModalFailureRecovery:
             side_effect=[gpu_error, MockExtractResult(frame_count=75)]
         )
 
-        with patch("modal.App.lookup", return_value=mock_app), patch(
-            "app.services.supabase_service.SupabaseServiceImpl",
-            return_value=mock_supabase_service,
-        ), patch.dict(os.environ, {"SUPABASE_URL": "https://test.supabase.co"}), prefect_test_harness():
+        with (
+            patch("modal.App.lookup", return_value=mock_app),
+            patch(
+                "app.services.supabase_service.SupabaseServiceImpl",
+                return_value=mock_supabase_service,
+            ),
+            patch.dict(os.environ, {"SUPABASE_URL": "https://test.supabase.co"}),
+            prefect_test_harness(),
+        ):
             # First attempt - should fail with GPU error
             with pytest.raises(RuntimeError) as exc_info:
                 extract_frames_and_ocr_task(
@@ -248,10 +258,15 @@ class TestModalFailureRecovery:
             )
         )
 
-        with patch("modal.App.lookup", return_value=mock_app), patch(
-            "app.services.supabase_service.SupabaseServiceImpl",
-            return_value=mock_supabase_service,
-        ), patch.dict(os.environ, {"SUPABASE_URL": "https://test.supabase.co"}), prefect_test_harness():
+        with (
+            patch("modal.App.lookup", return_value=mock_app),
+            patch(
+                "app.services.supabase_service.SupabaseServiceImpl",
+                return_value=mock_supabase_service,
+            ),
+            patch.dict(os.environ, {"SUPABASE_URL": "https://test.supabase.co"}),
+            prefect_test_harness(),
+        ):
             # Call the task
             result = extract_frames_and_ocr_task(
                 video_key=test_storage_key,
@@ -296,10 +311,15 @@ class TestModalFailureRecovery:
         # First call: timeout
         timeout_error = TimeoutError("Modal function timed out after 1800 seconds")
 
-        with patch("modal.App.lookup", return_value=mock_app), patch(
-            "app.services.supabase_service.SupabaseServiceImpl",
-            return_value=mock_supabase_service,
-        ), patch.dict(os.environ, {"SUPABASE_URL": "https://test.supabase.co"}), prefect_test_harness():
+        with (
+            patch("modal.App.lookup", return_value=mock_app),
+            patch(
+                "app.services.supabase_service.SupabaseServiceImpl",
+                return_value=mock_supabase_service,
+            ),
+            patch.dict(os.environ, {"SUPABASE_URL": "https://test.supabase.co"}),
+            prefect_test_harness(),
+        ):
             # First attempt - should fail
             mock_function.remote = Mock(side_effect=timeout_error)
 
@@ -338,10 +358,15 @@ class TestModalFailureRecovery:
             side_effect=[network_error, MockExtractResult(frame_count=60)]
         )
 
-        with patch("modal.App.lookup", return_value=mock_app), patch(
-            "app.services.supabase_service.SupabaseServiceImpl",
-            return_value=mock_supabase_service,
-        ), patch.dict(os.environ, {"SUPABASE_URL": "https://test.supabase.co"}), prefect_test_harness():
+        with (
+            patch("modal.App.lookup", return_value=mock_app),
+            patch(
+                "app.services.supabase_service.SupabaseServiceImpl",
+                return_value=mock_supabase_service,
+            ),
+            patch.dict(os.environ, {"SUPABASE_URL": "https://test.supabase.co"}),
+            prefect_test_harness(),
+        ):
             # First attempt - should fail with network error
             with pytest.raises(RuntimeError) as exc_info:
                 extract_frames_and_ocr_task(
@@ -385,10 +410,15 @@ class TestModalFailureRecovery:
         # Simulate Modal app lookup failure
         lookup_error = ValueError("Modal app 'captionacc' not found")
 
-        with patch("modal.App.lookup", side_effect=lookup_error), patch(
-            "app.services.supabase_service.SupabaseServiceImpl",
-            return_value=mock_supabase_service,
-        ), patch.dict(os.environ, {"SUPABASE_URL": "https://test.supabase.co"}), prefect_test_harness():
+        with (
+            patch("modal.App.lookup", side_effect=lookup_error),
+            patch(
+                "app.services.supabase_service.SupabaseServiceImpl",
+                return_value=mock_supabase_service,
+            ),
+            patch.dict(os.environ, {"SUPABASE_URL": "https://test.supabase.co"}),
+            prefect_test_harness(),
+        ):
             with pytest.raises(ValueError) as exc_info:
                 extract_frames_and_ocr_task(
                     video_key=test_storage_key,
@@ -419,10 +449,14 @@ class TestModalFailureRecovery:
             ]
         )
 
-        with patch(
-            "app.services.supabase_service.SupabaseServiceImpl",
-            return_value=mock_supabase_service,
-        ), patch.dict(os.environ, {"SUPABASE_URL": "https://test.supabase.co"}), prefect_test_harness():
+        with (
+            patch(
+                "app.services.supabase_service.SupabaseServiceImpl",
+                return_value=mock_supabase_service,
+            ),
+            patch.dict(os.environ, {"SUPABASE_URL": "https://test.supabase.co"}),
+            prefect_test_harness(),
+        ):
             # Should eventually succeed after retries
             update_video_status_task(video_id=test_video_id, status="processing")
 
@@ -451,10 +485,15 @@ class TestModalFailureRecovery:
         modal_error = RuntimeError("Modal processing error")
         mock_function.remote = Mock(side_effect=modal_error)
 
-        with patch("modal.App.lookup", return_value=mock_app), patch(
-            "app.services.supabase_service.SupabaseServiceImpl",
-            return_value=mock_supabase_service,
-        ), patch.dict(os.environ, {"SUPABASE_URL": "https://test.supabase.co"}), prefect_test_harness():
+        with (
+            patch("modal.App.lookup", return_value=mock_app),
+            patch(
+                "app.services.supabase_service.SupabaseServiceImpl",
+                return_value=mock_supabase_service,
+            ),
+            patch.dict(os.environ, {"SUPABASE_URL": "https://test.supabase.co"}),
+            prefect_test_harness(),
+        ):
             # Should fail immediately without retry
             with pytest.raises(RuntimeError) as exc_info:
                 extract_frames_and_ocr_task(
@@ -492,12 +531,19 @@ class TestModalFailureRecovery:
             # Fail for metadata update specifically
             raise ConnectionError("Database connection lost during metadata update")
 
-        mock_supabase_service.update_video_metadata = Mock(side_effect=update_side_effect)
+        mock_supabase_service.update_video_metadata = Mock(
+            side_effect=update_side_effect
+        )
 
-        with patch("modal.App.lookup", return_value=mock_app), patch(
-            "app.services.supabase_service.SupabaseServiceImpl",
-            return_value=mock_supabase_service,
-        ), patch.dict(os.environ, {"SUPABASE_URL": "https://test.supabase.co"}), prefect_test_harness():
+        with (
+            patch("modal.App.lookup", return_value=mock_app),
+            patch(
+                "app.services.supabase_service.SupabaseServiceImpl",
+                return_value=mock_supabase_service,
+            ),
+            patch.dict(os.environ, {"SUPABASE_URL": "https://test.supabase.co"}),
+            prefect_test_harness(),
+        ):
             # Call just the metadata update task
             with pytest.raises(ConnectionError):
                 update_video_metadata_task(
@@ -534,10 +580,15 @@ class TestModalFailureRecovery:
         incomplete_result = IncompleteResult()
         mock_function.remote = Mock(return_value=incomplete_result)
 
-        with patch("modal.App.lookup", return_value=mock_app), patch(
-            "app.services.supabase_service.SupabaseServiceImpl",
-            return_value=mock_supabase_service,
-        ), patch.dict(os.environ, {"SUPABASE_URL": "https://test.supabase.co"}), prefect_test_harness():
+        with (
+            patch("modal.App.lookup", return_value=mock_app),
+            patch(
+                "app.services.supabase_service.SupabaseServiceImpl",
+                return_value=mock_supabase_service,
+            ),
+            patch.dict(os.environ, {"SUPABASE_URL": "https://test.supabase.co"}),
+            prefect_test_harness(),
+        ):
             # Should raise error when trying to access missing fields
             with pytest.raises(AttributeError):
                 extract_frames_and_ocr_task(
@@ -574,10 +625,15 @@ class TestModalFailureRecovery:
             )
         )
 
-        with patch("modal.App.lookup", return_value=mock_app), patch(
-            "app.services.supabase_service.SupabaseServiceImpl",
-            return_value=mock_supabase_service,
-        ), patch.dict(os.environ, {"SUPABASE_URL": "https://test.supabase.co"}), prefect_test_harness():
+        with (
+            patch("modal.App.lookup", return_value=mock_app),
+            patch(
+                "app.services.supabase_service.SupabaseServiceImpl",
+                return_value=mock_supabase_service,
+            ),
+            patch.dict(os.environ, {"SUPABASE_URL": "https://test.supabase.co"}),
+            prefect_test_harness(),
+        ):
             result = extract_frames_and_ocr_task(
                 video_key=test_storage_key,
                 tenant_id=test_tenant_id,
@@ -617,10 +673,15 @@ class TestModalFailureRecovery:
             )
         )
 
-        with patch("modal.App.lookup", return_value=mock_app), patch(
-            "app.services.supabase_service.SupabaseServiceImpl",
-            return_value=mock_supabase_service,
-        ), patch.dict(os.environ, {"SUPABASE_URL": "https://test.supabase.co"}), prefect_test_harness():
+        with (
+            patch("modal.App.lookup", return_value=mock_app),
+            patch(
+                "app.services.supabase_service.SupabaseServiceImpl",
+                return_value=mock_supabase_service,
+            ),
+            patch.dict(os.environ, {"SUPABASE_URL": "https://test.supabase.co"}),
+            prefect_test_harness(),
+        ):
             result = extract_frames_and_ocr_task(
                 video_key=test_storage_key,
                 tenant_id=test_tenant_id,

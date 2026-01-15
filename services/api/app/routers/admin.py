@@ -70,7 +70,9 @@ async def list_databases(
         paginator = s3_client.get_paginator("list_objects_v2")
 
         try:
-            for page in paginator.paginate(Bucket=settings.wasabi_bucket, Delimiter="/"):
+            for page in paginator.paginate(
+                Bucket=settings.wasabi_bucket, Delimiter="/"
+            ):
                 # Get tenant prefixes
                 for prefix in page.get("CommonPrefixes", []):
                     tenant_id = prefix["Prefix"].rstrip("/")
@@ -276,7 +278,9 @@ async def force_sync_database(
 @router.post("/locks/cleanup", response_model=StaleLocksCleanedResponse)
 async def cleanup_stale_locks(
     admin: Admin,
-    stale_minutes: int = Query(30, description="Minutes of inactivity before lock is stale"),
+    stale_minutes: int = Query(
+        30, description="Minutes of inactivity before lock is stale"
+    ),
 ):
     """
     Manually release stale locks.
@@ -311,9 +315,7 @@ async def cleanup_stale_locks(
 @router.get("/security", response_model=SecurityAuditResponse)
 async def get_security_audit(
     admin: Admin,
-    view: SecurityAuditView = Query(
-        SecurityAuditView.RECENT, description="View type"
-    ),
+    view: SecurityAuditView = Query(SecurityAuditView.RECENT, description="View type"),
     hours: int = Query(24, description="Time window in hours", ge=1, le=720),
 ):
     """

@@ -28,11 +28,18 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from video_utils import get_video_metadata
 
-from caption_frame_extents.database import TrainingDataset, TrainingSample, VideoRegistry, init_dataset_db
+from caption_frame_extents.database import (
+    TrainingDataset,
+    TrainingSample,
+    VideoRegistry,
+    init_dataset_db,
+)
 from caption_frame_extents.database.storage import create_dataset_session
 
 
-def find_videos_with_confirmed_caption_frame_extents(data_dir: Path, min_confirmed: int = 5) -> list[Path]:
+def find_videos_with_confirmed_caption_frame_extents(
+    data_dir: Path, min_confirmed: int = 5
+) -> list[Path]:
     """Find all video databases with confirmed caption frame extents.
 
     Args:
@@ -65,7 +72,9 @@ def find_videos_with_confirmed_caption_frame_extents(data_dir: Path, min_confirm
     # Sort by number of confirmed caption frame extents (descending)
     video_dbs.sort(key=lambda x: x[1], reverse=True)
 
-    print(f"\nFound {len(video_dbs)} videos with >={min_confirmed} confirmed caption frame extents:")
+    print(
+        f"\nFound {len(video_dbs)} videos with >={min_confirmed} confirmed caption frame extents:"
+    )
     for db_path, count in video_dbs[:10]:
         rel_path = db_path.parent.parent.name + "/" + db_path.parent.name
         print(f"  {rel_path}: {count} confirmed")
@@ -125,7 +134,9 @@ def get_cropped_frame_indices(db_path: Path) -> list[int]:
     return frames
 
 
-def label_frame_pair(frame1: int, frame2: int, captions: list[tuple[int, int]]) -> str | None:
+def label_frame_pair(
+    frame1: int, frame2: int, captions: list[tuple[int, int]]
+) -> str | None:
     """Determine label for a frame pair based on caption frame extents.
 
     Args:
@@ -248,7 +259,9 @@ def create_training_dataset(
 
         print(f"\nExtracting samples from {len(video_dbs)} videos...")
         for i, db_path in enumerate(video_dbs, 1):
-            print(f"[{i}/{len(video_dbs)}] Processing {db_path.parent.parent.name}/{db_path.parent.name}...")
+            print(
+                f"[{i}/{len(video_dbs)}] Processing {db_path.parent.parent.name}/{db_path.parent.name}..."
+            )
 
             # Get video hash
             video_path = None
@@ -334,7 +347,11 @@ def create_training_dataset(
             video_path = Path(video_path_str)
 
             # Check if already registered
-            existing = db.query(VideoRegistry).filter(VideoRegistry.video_hash == video_hash).first()
+            existing = (
+                db.query(VideoRegistry)
+                .filter(VideoRegistry.video_hash == video_hash)
+                .first()
+            )
             if not existing:
                 video_metadata = get_video_metadata(video_path)
                 registry_entry = VideoRegistry(
@@ -371,8 +388,12 @@ def create_training_dataset(
         train_count = sum(1 for s in all_samples[:train_size])
         val_count = len(all_samples) - train_count
 
-        print(f"  ✓ Train: {train_count} samples ({train_count / len(all_samples) * 100:.1f}%)")
-        print(f"  ✓ Val: {val_count} samples ({val_count / len(all_samples) * 100:.1f}%)")
+        print(
+            f"  ✓ Train: {train_count} samples ({train_count / len(all_samples) * 100:.1f}%)"
+        )
+        print(
+            f"  ✓ Val: {val_count} samples ({val_count / len(all_samples) * 100:.1f}%)"
+        )
 
         print("\n✅ Dataset created successfully!")
         print(f"   Dataset ID: {dataset.id}")
@@ -386,12 +407,16 @@ def create_training_dataset(
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Create training dataset from confirmed caption frame extents")
+    parser = argparse.ArgumentParser(
+        description="Create training dataset from confirmed caption frame extents"
+    )
 
     # Default paths
     script_dir = Path(__file__).parent.parent
     default_data_dir = script_dir.parent.parent / "local" / "data"
-    default_training_db = script_dir.parent.parent / "local" / "caption_frame_extents_training.db"
+    default_training_db = (
+        script_dir.parent.parent / "local" / "caption_frame_extents_training.db"
+    )
 
     parser.add_argument(
         "--data-dir",
@@ -447,10 +472,14 @@ def main():
     print("=" * 60)
 
     # Find videos
-    video_dbs = find_videos_with_confirmed_caption_frame_extents(args.data_dir, args.min_confirmed)
+    video_dbs = find_videos_with_confirmed_caption_frame_extents(
+        args.data_dir, args.min_confirmed
+    )
 
     if not video_dbs:
-        print(f"\n❌ No videos found with >= {args.min_confirmed} confirmed caption frame extents")
+        print(
+            f"\n❌ No videos found with >= {args.min_confirmed} confirmed caption frame extents"
+        )
         return 1
 
     # Limit videos if requested

@@ -192,7 +192,11 @@ class TestBoxLabels:
 
         # Verify only one label exists for this position
         labels = seeded_repo.list_box_labels(frame_index=0)
-        user_labels = [label for label in labels if label.labelSource == LabelSource.USER and label.boxIndex == 0]
+        user_labels = [
+            label
+            for label in labels
+            if label.labelSource == LabelSource.USER and label.boxIndex == 0
+        ]
         assert len(user_labels) == 1
 
     def test_create_box_labels_batch(self, repo: LayoutRepository):

@@ -55,7 +55,7 @@ def mock_env_vars() -> Generator[dict[str, str], None, None]:
         "WASABI_SECRET_KEY": "test-secret-key",  # pragma: allowlist secret
         "WASABI_BUCKET": "test-bucket",
         "MODAL_TOKEN_ID": "test-modal-token-id",
-        "MODAL_TOKEN_SECRET": "test-modal-token-secret"  # pragma: allowlist secret,
+        "MODAL_TOKEN_SECRET": "test-modal-token-secret",  # pragma: allowlist secret,
     }
 
     os.environ.update(test_env)
@@ -285,7 +285,9 @@ def mock_supabase_service(
     mock_service.update_video_metadata = Mock(return_value=None)
     mock_service.acquire_server_lock = Mock(return_value=True)
     mock_service.release_server_lock = Mock(return_value=None)
-    mock_service.get_tenant_tier = Mock(return_value=mock_tenant_record["subscription_tier"])
+    mock_service.get_tenant_tier = Mock(
+        return_value=mock_tenant_record["subscription_tier"]
+    )
     mock_service.get_video_metadata = Mock(return_value=mock_video_record)
 
     return mock_service
@@ -323,6 +325,7 @@ class MockExtractResult:
             assert mock_extract_result.frame_count == 1000
             assert mock_extract_result.ocr_box_count > 0
     """
+
     frame_count: int = 1000
     duration: float = 100.0
     frame_width: int = 1920
@@ -358,11 +361,14 @@ class MockCropInferResult:
             assert mock_crop_infer_result.version == 1
             assert "caption_start" in mock_crop_infer_result.label_counts
     """
+
     version: int = 1
     frame_count: int = 1000
     label_counts: Optional[dict[str, int]] = None
     processing_duration_seconds: float = 180.0
-    caption_frame_extents_db_key: str = "tenant-456/server/videos/video-123/caption_frame_extents.db"
+    caption_frame_extents_db_key: str = (
+        "tenant-456/server/videos/video-123/caption_frame_extents.db"
+    )
     cropped_frames_prefix: str = "tenant-456/client/videos/video-123/cropped_frames_v1/"
 
     def __post_init__(self):
@@ -394,6 +400,7 @@ class MockCaptionOcrResult:
             assert mock_caption_ocr_result.confidence > 0.8
             assert len(mock_caption_ocr_result.ocr_text) > 0
     """
+
     ocr_text: str = "Sample caption text"
     confidence: float = 0.95
     frame_count: int = 50
@@ -697,15 +704,8 @@ def pytest_configure(config):
         slow: Mark test as slow-running (>1 second)
         external: Mark test as requiring external services (skip in CI)
     """
+    config.addinivalue_line("markers", "integration: mark test as an integration test")
+    config.addinivalue_line("markers", "slow: mark test as slow-running (>1 second)")
     config.addinivalue_line(
-        "markers",
-        "integration: mark test as an integration test"
-    )
-    config.addinivalue_line(
-        "markers",
-        "slow: mark test as slow-running (>1 second)"
-    )
-    config.addinivalue_line(
-        "markers",
-        "external: mark test as requiring external services (skip in CI)"
+        "markers", "external: mark test as requiring external services (skip in CI)"
     )

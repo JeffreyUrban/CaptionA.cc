@@ -41,7 +41,9 @@ async def update_preferences(video_id: str, body: VideoPreferencesUpdate, auth: 
     db_manager = get_layout_database_manager()
 
     try:
-        async with db_manager.get_database(auth.tenant_id, video_id, writable=True) as conn:
+        async with db_manager.get_database(
+            auth.tenant_id, video_id, writable=True
+        ) as conn:
             repo = LayoutRepository(conn)
             preferences = repo.update_preferences(body)
             return VideoPreferencesResponse(preferences=preferences)

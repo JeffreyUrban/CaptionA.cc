@@ -15,7 +15,9 @@ from rich.console import Console
 console = Console(stderr=True)
 
 
-def get_frames_in_chunk(chunk_start_frame: int, modulo: int, frames_per_chunk: int = 32) -> list[int]:
+def get_frames_in_chunk(
+    chunk_start_frame: int, modulo: int, frames_per_chunk: int = 32
+) -> list[int]:
     """Get the list of frame indices contained in a chunk.
 
     Non-duplicating storage scheme - each chunk contains exactly frames_per_chunk frames
@@ -53,7 +55,9 @@ def get_frames_in_chunk(chunk_start_frame: int, modulo: int, frames_per_chunk: i
     return frames
 
 
-def calculate_frame_offset(frame_index: int, modulo: int, chunk_start_frame: int | None = None) -> int:
+def calculate_frame_offset(
+    frame_index: int, modulo: int, chunk_start_frame: int | None = None
+) -> int:
     """Calculate frame position within a VP9 chunk.
 
     Uses non-duplicating strategy:
@@ -74,7 +78,9 @@ def calculate_frame_offset(frame_index: int, modulo: int, chunk_start_frame: int
         frames = get_frames_in_chunk(chunk_start_frame, modulo)
         if frame_index in frames:
             return frames.index(frame_index)
-        raise ValueError(f"Frame {frame_index} not found in chunk starting at {chunk_start_frame}")
+        raise ValueError(
+            f"Frame {frame_index} not found in chunk starting at {chunk_start_frame}"
+        )
 
     # Legacy: try to calculate chunk_start (only works for modulo_16)
     if modulo == 16:
@@ -84,7 +90,9 @@ def calculate_frame_offset(frame_index: int, modulo: int, chunk_start_frame: int
         if frame_index in frames:
             return frames.index(frame_index)
 
-    raise ValueError(f"Cannot auto-detect chunk for frame {frame_index} modulo {modulo}. Provide chunk_start_frame.")
+    raise ValueError(
+        f"Cannot auto-detect chunk for frame {frame_index} modulo {modulo}. Provide chunk_start_frame."
+    )
 
 
 def determine_modulo_for_frame(frame_index: int) -> int:
@@ -264,7 +272,9 @@ def download_and_extract_chunks_parallel(
                     msg = f"  Processed {completed}/{len(chunk_infos)} chunks, {len(all_frames)} frames"
                     console.print(f"[cyan]{msg}[/cyan]")
             except Exception as e:
-                console.print(f"[red]  Failed chunk {info[1]} (modulo_{info[2]}): {e}[/red]")
+                console.print(
+                    f"[red]  Failed chunk {info[1]} (modulo_{info[2]}): {e}[/red]"
+                )
 
     return all_frames
 
@@ -394,12 +404,16 @@ def batch_extract_frames(
 
         frames_by_chunk[(chunk_index, modulo)].append(frame_idx)
 
-    console.print(f"[cyan]Extracting {len(frame_indices)} frames from {len(frames_by_chunk)} chunks[/cyan]")
+    console.print(
+        f"[cyan]Extracting {len(frame_indices)} frames from {len(frames_by_chunk)} chunks[/cyan]"
+    )
 
     # Process each chunk
     for (chunk_index, modulo), chunk_frames in frames_by_chunk.items():
         if chunk_index not in signed_urls:
-            console.print(f"[yellow]⚠ Missing signed URL for chunk {chunk_index}[/yellow]")
+            console.print(
+                f"[yellow]⚠ Missing signed URL for chunk {chunk_index}[/yellow]"
+            )
             continue
 
         signed_url = signed_urls[chunk_index]
@@ -415,6 +429,8 @@ def batch_extract_frames(
     if cache:
         cache.clear()
 
-    console.print(f"[green]✓ Extracted {len(results)}/{len(frame_indices)} frames[/green]")
+    console.print(
+        f"[green]✓ Extracted {len(results)}/{len(frame_indices)} frames[/green]"
+    )
 
     return results

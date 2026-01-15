@@ -51,14 +51,11 @@ def extract_frames_and_ocr_task(
     """Call Modal extract_frames_and_ocr function remotely."""
     import modal
 
-    logger.info(
-        f"Starting frame extraction for video {video_id} at {frame_rate} fps"
-    )
+    logger.info(f"Starting frame extraction for video {video_id} at {frame_rate} fps")
 
     # Look up the deployed Modal function
     extract_fn = modal.Function.from_name(
-        "extract-crop-frames-and-infer-extents",
-        "extract_frames_and_ocr"
+        "extract-crop-frames-and-infer-extents", "extract_frames_and_ocr"
     )
 
     # Call the Modal function remotely
@@ -113,9 +110,7 @@ def update_video_metadata_task(
         f"{frame_count} frames, {duration:.1f}s duration"
     )
     supabase.update_video_metadata(
-        video_id=video_id,
-        frame_count=frame_count,
-        duration_seconds=duration
+        video_id=video_id, frame_count=frame_count, duration_seconds=duration
     )
 
 

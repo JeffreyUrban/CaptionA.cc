@@ -51,23 +51,27 @@ class MockDatabaseStateRepository:
         now = datetime.now(timezone.utc)
         if key not in self.states:
             await self.get_or_create_state(video_id, db_name, tenant_id)
-        self.states[key].update({
-            "lock_holder_user_id": user_id,
-            "lock_type": "client",
-            "locked_at": now.isoformat(),
-            "active_connection_id": connection_id,
-        })
+        self.states[key].update(
+            {
+                "lock_holder_user_id": user_id,
+                "lock_type": "client",
+                "locked_at": now.isoformat(),
+                "active_connection_id": connection_id,
+            }
+        )
         return self.states[key]
 
     async def release_lock(self, video_id: str, db_name: str):
         key = f"{video_id}/{db_name}"
         if key in self.states:
-            self.states[key].update({
-                "lock_holder_user_id": None,
-                "lock_type": None,
-                "locked_at": None,
-                "active_connection_id": None,
-            })
+            self.states[key].update(
+                {
+                    "lock_holder_user_id": None,
+                    "lock_type": None,
+                    "locked_at": None,
+                    "active_connection_id": None,
+                }
+            )
         return self.states.get(key, {})
 
 
@@ -133,15 +137,19 @@ async def sync_client(
 
     app.dependency_overrides[get_auth_context] = lambda: auth_context
 
-    with patch(
-        "app.routers.sync.DatabaseStateRepository",
-        return_value=mock_state_repo,
-    ), patch(
-        "app.routers.sync.get_websocket_manager",
-        return_value=mock_ws_manager,
-    ), patch(
-        "app.routers.sync.get_crsqlite_manager",
-        return_value=mock_cr_manager,
+    with (
+        patch(
+            "app.routers.sync.DatabaseStateRepository",
+            return_value=mock_state_repo,
+        ),
+        patch(
+            "app.routers.sync.get_websocket_manager",
+            return_value=mock_ws_manager,
+        ),
+        patch(
+            "app.routers.sync.get_crsqlite_manager",
+            return_value=mock_cr_manager,
+        ),
     ):
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
@@ -163,15 +171,19 @@ async def sync_client_with_working_copy(
 
     app.dependency_overrides[get_auth_context] = lambda: auth_context
 
-    with patch(
-        "app.routers.sync.DatabaseStateRepository",
-        return_value=mock_state_repo,
-    ), patch(
-        "app.routers.sync.get_websocket_manager",
-        return_value=mock_ws_manager,
-    ), patch(
-        "app.routers.sync.get_crsqlite_manager",
-        return_value=mock_cr_manager_with_working_copy,
+    with (
+        patch(
+            "app.routers.sync.DatabaseStateRepository",
+            return_value=mock_state_repo,
+        ),
+        patch(
+            "app.routers.sync.get_websocket_manager",
+            return_value=mock_ws_manager,
+        ),
+        patch(
+            "app.routers.sync.get_crsqlite_manager",
+            return_value=mock_cr_manager_with_working_copy,
+        ),
     ):
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:

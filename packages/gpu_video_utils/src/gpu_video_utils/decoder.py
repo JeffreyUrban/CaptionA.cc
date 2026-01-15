@@ -9,23 +9,25 @@ try:
     import PyNvVideoCodec as nvvc
 except ImportError:
     raise ImportError(
-        "PyNvVideoCodec is required for GPU video processing. "
-        "Install with: pip install nvidia-pynvvideocodec"
+        "PyNvVideoCodec is required for GPU video processing. Install with: pip install nvidia-pynvvideocodec"
     ) from None
 
 
 class GPUDecoderError(Exception):
     """Base exception for GPU decoder errors."""
+
     pass
 
 
 class GPUDecodeError(GPUDecoderError):
     """Raised when frame decoding fails."""
+
     pass
 
 
 class GPUResourceError(GPUDecoderError):
     """Raised when GPU resources are unavailable."""
+
     pass
 
 
@@ -81,16 +83,16 @@ class GPUVideoDecoder:
                 last_error = e
                 if attempt < self.max_retries - 1:
                     # Exponential backoff: 0.1s, 0.2s, 0.4s
-                    wait_time = 0.1 * (2 ** attempt)
-                    print(f"GPU decoder initialization failed (attempt {attempt + 1}/{self.max_retries}), "
-                          f"retrying in {wait_time:.1f}s: {e}")
+                    wait_time = 0.1 * (2**attempt)
+                    print(
+                        f"GPU decoder initialization failed (attempt {attempt + 1}/{self.max_retries}), "
+                        f"retrying in {wait_time:.1f}s: {e}"
+                    )
                     time.sleep(wait_time)
                 else:
                     print(f"GPU decoder initialization failed after {self.max_retries} attempts")
 
-        raise GPUResourceError(
-            f"Failed to initialize GPU decoder after {self.max_retries} attempts: {last_error}"
-        )
+        raise GPUResourceError(f"Failed to initialize GPU decoder after {self.max_retries} attempts: {last_error}")
 
     def __len__(self) -> int:
         """Return total number of frames in video."""
@@ -107,6 +109,7 @@ class GPUVideoDecoder:
             # Probe first frame to get dimensions and infer FPS
             # PyNvVideoCodec doesn't expose FPS directly, so we'll need to use ffprobe
             import ffmpeg
+
             probe = ffmpeg.probe(str(self.video_path))
             video_stream = next(s for s in probe["streams"] if s["codec_type"] == "video")
 
@@ -142,9 +145,7 @@ class GPUVideoDecoder:
             GPUDecodeError: If frame cannot be decoded after retries
         """
         if frame_index < 0 or frame_index >= self._total_frames:
-            raise ValueError(
-                f"Frame index {frame_index} out of bounds [0, {self._total_frames})"
-            )
+            raise ValueError(f"Frame index {frame_index} out of bounds [0, {self._total_frames})")
 
         last_error = None
 
@@ -165,9 +166,11 @@ class GPUVideoDecoder:
                 last_error = e
                 if attempt < self.max_retries - 1:
                     # Short retry delay for decode errors
-                    wait_time = 0.05 * (2 ** attempt)
-                    print(f"Frame decode failed at index {frame_index} (attempt {attempt + 1}/{self.max_retries}), "
-                          f"retrying in {wait_time:.3f}s: {e}")
+                    wait_time = 0.05 * (2**attempt)
+                    print(
+                        f"Frame decode failed at index {frame_index} (attempt {attempt + 1}/{self.max_retries}), "
+                        f"retrying in {wait_time:.3f}s: {e}"
+                    )
                     time.sleep(wait_time)
 
         raise GPUDecodeError(

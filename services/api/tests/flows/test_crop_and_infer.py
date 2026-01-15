@@ -45,11 +45,15 @@ class TestCropAndInferLockManagement:
         # Configure mock Modal to return result
         mock_modal_function.remote.aio.return_value = mock_modal_result
 
-        with patch("app.flows.crop_and_infer.get_settings", return_value=mock_settings), \
-             patch("app.flows.crop_and_infer.SupabaseServiceImpl", return_value=mock_supabase_service), \
-             patch("modal.App.lookup", return_value=mock_modal_app), \
-             patch("app.flows.crop_and_infer.create_table_artifact"):
-
+        with (
+            patch("app.flows.crop_and_infer.get_settings", return_value=mock_settings),
+            patch(
+                "app.flows.crop_and_infer.SupabaseServiceImpl",
+                return_value=mock_supabase_service,
+            ),
+            patch("modal.App.lookup", return_value=mock_modal_app),
+            patch("app.flows.crop_and_infer.create_table_artifact"),
+        ):
             # Execute flow
             await crop_and_infer(
                 video_id=test_video_id,
@@ -67,15 +71,14 @@ class TestCropAndInferLockManagement:
             # Verify lock was acquired BEFORE status update
             all_calls = mock_supabase_service.method_calls
             lock_acquire_idx = next(
-                i for i, c in enumerate(all_calls)
-                if c[0] == "acquire_server_lock"
+                i for i, c in enumerate(all_calls) if c[0] == "acquire_server_lock"
             )
             status_update_idx = next(
-                i for i, c in enumerate(all_calls)
-                if c[0] == "update_video_status"
+                i for i, c in enumerate(all_calls) if c[0] == "update_video_status"
             )
-            assert lock_acquire_idx < status_update_idx, \
+            assert lock_acquire_idx < status_update_idx, (
                 "Lock must be acquired BEFORE status update"
+            )
 
     @pytest.mark.asyncio
     async def test_lock_released_in_finally_block(
@@ -92,11 +95,15 @@ class TestCropAndInferLockManagement:
         """Verify lock released in finally block on SUCCESS path."""
         mock_modal_function.remote.aio.return_value = mock_modal_result
 
-        with patch("app.flows.crop_and_infer.get_settings", return_value=mock_settings), \
-             patch("app.flows.crop_and_infer.SupabaseServiceImpl", return_value=mock_supabase_service), \
-             patch("modal.App.lookup", return_value=mock_modal_app), \
-             patch("app.flows.crop_and_infer.create_table_artifact"):
-
+        with (
+            patch("app.flows.crop_and_infer.get_settings", return_value=mock_settings),
+            patch(
+                "app.flows.crop_and_infer.SupabaseServiceImpl",
+                return_value=mock_supabase_service,
+            ),
+            patch("modal.App.lookup", return_value=mock_modal_app),
+            patch("app.flows.crop_and_infer.create_table_artifact"),
+        ):
             # Execute flow successfully
             await crop_and_infer(
                 video_id=test_video_id,
@@ -123,13 +130,19 @@ class TestCropAndInferLockManagement:
     ):
         """Verify lock released in finally block even when exception occurs."""
         # Configure Modal to raise exception
-        mock_modal_function.remote.aio.side_effect = Exception("Modal processing failed")
+        mock_modal_function.remote.aio.side_effect = Exception(
+            "Modal processing failed"
+        )
 
-        with patch("app.flows.crop_and_infer.get_settings", return_value=mock_settings), \
-             patch("app.flows.crop_and_infer.SupabaseServiceImpl", return_value=mock_supabase_service), \
-             patch("modal.App.lookup", return_value=mock_modal_app), \
-             patch("app.flows.crop_and_infer.create_table_artifact"):
-
+        with (
+            patch("app.flows.crop_and_infer.get_settings", return_value=mock_settings),
+            patch(
+                "app.flows.crop_and_infer.SupabaseServiceImpl",
+                return_value=mock_supabase_service,
+            ),
+            patch("modal.App.lookup", return_value=mock_modal_app),
+            patch("app.flows.crop_and_infer.create_table_artifact"),
+        ):
             # Execute flow - should raise exception
             with pytest.raises(Exception, match="Modal processing failed"):
                 await crop_and_infer(
@@ -157,11 +170,17 @@ class TestCropAndInferLockManagement:
         # Configure lock acquisition to fail
         mock_supabase_service.acquire_server_lock.return_value = False
 
-        with patch("app.flows.crop_and_infer.get_settings", return_value=mock_settings), \
-             patch("app.flows.crop_and_infer.SupabaseServiceImpl", return_value=mock_supabase_service):
-
+        with (
+            patch("app.flows.crop_and_infer.get_settings", return_value=mock_settings),
+            patch(
+                "app.flows.crop_and_infer.SupabaseServiceImpl",
+                return_value=mock_supabase_service,
+            ),
+        ):
             # Execute flow - should raise exception immediately
-            with pytest.raises(Exception, match="Lock on 'layout' database could not be acquired"):
+            with pytest.raises(
+                Exception, match="Lock on 'layout' database could not be acquired"
+            ):
                 await crop_and_infer(
                     video_id=test_video_id,
                     tenant_id=test_tenant_id,
@@ -187,13 +206,19 @@ class TestCropAndInferLockManagement:
         mock_modal_function.remote.aio.return_value = mock_modal_result
 
         # Configure lock release to fail
-        mock_supabase_service.release_server_lock.side_effect = Exception("Failed to release lock")
+        mock_supabase_service.release_server_lock.side_effect = Exception(
+            "Failed to release lock"
+        )
 
-        with patch("app.flows.crop_and_infer.get_settings", return_value=mock_settings), \
-             patch("app.flows.crop_and_infer.SupabaseServiceImpl", return_value=mock_supabase_service), \
-             patch("modal.App.lookup", return_value=mock_modal_app), \
-             patch("app.flows.crop_and_infer.create_table_artifact"):
-
+        with (
+            patch("app.flows.crop_and_infer.get_settings", return_value=mock_settings),
+            patch(
+                "app.flows.crop_and_infer.SupabaseServiceImpl",
+                return_value=mock_supabase_service,
+            ),
+            patch("modal.App.lookup", return_value=mock_modal_app),
+            patch("app.flows.crop_and_infer.create_table_artifact"),
+        ):
             # Execute flow - should NOT raise exception despite lock release failure
             result = await crop_and_infer(
                 video_id=test_video_id,
@@ -223,11 +248,15 @@ class TestCropAndInferLockManagement:
         """Verify lock is acquired on 'layout' database specifically."""
         mock_modal_function.remote.aio.return_value = mock_modal_result
 
-        with patch("app.flows.crop_and_infer.get_settings", return_value=mock_settings), \
-             patch("app.flows.crop_and_infer.SupabaseServiceImpl", return_value=mock_supabase_service), \
-             patch("modal.App.lookup", return_value=mock_modal_app), \
-             patch("app.flows.crop_and_infer.create_table_artifact"):
-
+        with (
+            patch("app.flows.crop_and_infer.get_settings", return_value=mock_settings),
+            patch(
+                "app.flows.crop_and_infer.SupabaseServiceImpl",
+                return_value=mock_supabase_service,
+            ),
+            patch("modal.App.lookup", return_value=mock_modal_app),
+            patch("app.flows.crop_and_infer.create_table_artifact"),
+        ):
             await crop_and_infer(
                 video_id=test_video_id,
                 tenant_id=test_tenant_id,
@@ -254,11 +283,15 @@ class TestCropAndInferLockManagement:
         """Verify lock uses correct video_id."""
         mock_modal_function.remote.aio.return_value = mock_modal_result
 
-        with patch("app.flows.crop_and_infer.get_settings", return_value=mock_settings), \
-             patch("app.flows.crop_and_infer.SupabaseServiceImpl", return_value=mock_supabase_service), \
-             patch("modal.App.lookup", return_value=mock_modal_app), \
-             patch("app.flows.crop_and_infer.create_table_artifact"):
-
+        with (
+            patch("app.flows.crop_and_infer.get_settings", return_value=mock_settings),
+            patch(
+                "app.flows.crop_and_infer.SupabaseServiceImpl",
+                return_value=mock_supabase_service,
+            ),
+            patch("modal.App.lookup", return_value=mock_modal_app),
+            patch("app.flows.crop_and_infer.create_table_artifact"),
+        ):
             await crop_and_infer(
                 video_id=test_video_id,
                 tenant_id=test_tenant_id,
@@ -288,16 +321,23 @@ class TestCropAndInferLockManagement:
         mock_supabase_2.acquire_server_lock.return_value = False
 
         with patch("app.flows.crop_and_infer.get_settings", return_value=mock_settings):
-
             # First flow succeeds
-            with patch("app.flows.crop_and_infer.SupabaseServiceImpl", return_value=mock_supabase_1):
+            with patch(
+                "app.flows.crop_and_infer.SupabaseServiceImpl",
+                return_value=mock_supabase_1,
+            ):
                 # This represents the lock being acquired successfully
                 acquire_server_lock(test_video_id, "layout")
                 mock_supabase_1.acquire_server_lock.assert_called_once()
 
             # Second flow fails (lock already held)
-            with patch("app.flows.crop_and_infer.SupabaseServiceImpl", return_value=mock_supabase_2):
-                with pytest.raises(Exception, match="Lock on 'layout' database could not be acquired"):
+            with patch(
+                "app.flows.crop_and_infer.SupabaseServiceImpl",
+                return_value=mock_supabase_2,
+            ):
+                with pytest.raises(
+                    Exception, match="Lock on 'layout' database could not be acquired"
+                ):
                     acquire_server_lock(test_video_id, "layout")
 
     @pytest.mark.asyncio
@@ -312,9 +352,13 @@ class TestCropAndInferLockManagement:
         """Verify caption status NOT changed if lock acquisition fails."""
         mock_supabase_service.acquire_server_lock.return_value = False
 
-        with patch("app.flows.crop_and_infer.get_settings", return_value=mock_settings), \
-             patch("app.flows.crop_and_infer.SupabaseServiceImpl", return_value=mock_supabase_service):
-
+        with (
+            patch("app.flows.crop_and_infer.get_settings", return_value=mock_settings),
+            patch(
+                "app.flows.crop_and_infer.SupabaseServiceImpl",
+                return_value=mock_supabase_service,
+            ),
+        ):
             with pytest.raises(Exception):
                 await crop_and_infer(
                     video_id=test_video_id,
@@ -338,13 +382,19 @@ class TestCropAndInferLockManagement:
     ):
         """Verify lock released even if Modal function times out or hangs."""
         # Simulate Modal timeout
-        mock_modal_function.remote.aio.side_effect = TimeoutError("Modal function timed out")
+        mock_modal_function.remote.aio.side_effect = TimeoutError(
+            "Modal function timed out"
+        )
 
-        with patch("app.flows.crop_and_infer.get_settings", return_value=mock_settings), \
-             patch("app.flows.crop_and_infer.SupabaseServiceImpl", return_value=mock_supabase_service), \
-             patch("modal.App.lookup", return_value=mock_modal_app), \
-             patch("app.flows.crop_and_infer.create_table_artifact"):
-
+        with (
+            patch("app.flows.crop_and_infer.get_settings", return_value=mock_settings),
+            patch(
+                "app.flows.crop_and_infer.SupabaseServiceImpl",
+                return_value=mock_supabase_service,
+            ),
+            patch("modal.App.lookup", return_value=mock_modal_app),
+            patch("app.flows.crop_and_infer.create_table_artifact"),
+        ):
             with pytest.raises(TimeoutError):
                 await crop_and_infer(
                     video_id=test_video_id,
@@ -377,11 +427,15 @@ class TestCropAndInferSuccess:
         """Verify caption_status updated to 'processing' at start."""
         mock_modal_function.remote.aio.return_value = mock_modal_result
 
-        with patch("app.flows.crop_and_infer.get_settings", return_value=mock_settings), \
-             patch("app.flows.crop_and_infer.SupabaseServiceImpl", return_value=mock_supabase_service), \
-             patch("modal.App.lookup", return_value=mock_modal_app), \
-             patch("app.flows.crop_and_infer.create_table_artifact"):
-
+        with (
+            patch("app.flows.crop_and_infer.get_settings", return_value=mock_settings),
+            patch(
+                "app.flows.crop_and_infer.SupabaseServiceImpl",
+                return_value=mock_supabase_service,
+            ),
+            patch("modal.App.lookup", return_value=mock_modal_app),
+            patch("app.flows.crop_and_infer.create_table_artifact"),
+        ):
             await crop_and_infer(
                 video_id=test_video_id,
                 tenant_id=test_tenant_id,
@@ -390,11 +444,13 @@ class TestCropAndInferSuccess:
 
             # Verify "processing" status was set
             processing_calls = [
-                c for c in mock_supabase_service.update_video_status.call_args_list
+                c
+                for c in mock_supabase_service.update_video_status.call_args_list
                 if c[1].get("caption_status") == "processing"
             ]
-            assert len(processing_calls) == 1, \
+            assert len(processing_calls) == 1, (
                 "caption_status should be set to 'processing' exactly once"
+            )
 
     @pytest.mark.asyncio
     async def test_modal_called_with_crop_region(
@@ -411,11 +467,15 @@ class TestCropAndInferSuccess:
         """Verify Modal function called with CropRegion dataclass."""
         mock_modal_function.remote.aio.return_value = mock_modal_result
 
-        with patch("app.flows.crop_and_infer.get_settings", return_value=mock_settings), \
-             patch("app.flows.crop_and_infer.SupabaseServiceImpl", return_value=mock_supabase_service), \
-             patch("modal.App.lookup", return_value=mock_modal_app), \
-             patch("app.flows.crop_and_infer.create_table_artifact"):
-
+        with (
+            patch("app.flows.crop_and_infer.get_settings", return_value=mock_settings),
+            patch(
+                "app.flows.crop_and_infer.SupabaseServiceImpl",
+                return_value=mock_supabase_service,
+            ),
+            patch("modal.App.lookup", return_value=mock_modal_app),
+            patch("app.flows.crop_and_infer.create_table_artifact"),
+        ):
             await crop_and_infer(
                 video_id=test_video_id,
                 tenant_id=test_tenant_id,
@@ -435,7 +495,10 @@ class TestCropAndInferSuccess:
             assert crop_region.crop_bottom == 0.8
 
             # Verify other parameters
-            assert call_kwargs["video_key"] == f"{test_tenant_id}/client/videos/{test_video_id}/video.mp4"
+            assert (
+                call_kwargs["video_key"]
+                == f"{test_tenant_id}/client/videos/{test_video_id}/video.mp4"
+            )
             assert call_kwargs["tenant_id"] == test_tenant_id
             assert call_kwargs["video_id"] == test_video_id
             assert call_kwargs["frame_rate"] == 10.0
@@ -455,11 +518,15 @@ class TestCropAndInferSuccess:
         """Verify cropped_frames_version returned from Modal and used correctly."""
         mock_modal_function.remote.aio.return_value = mock_modal_result
 
-        with patch("app.flows.crop_and_infer.get_settings", return_value=mock_settings), \
-             patch("app.flows.crop_and_infer.SupabaseServiceImpl", return_value=mock_supabase_service), \
-             patch("modal.App.lookup", return_value=mock_modal_app), \
-             patch("app.flows.crop_and_infer.create_table_artifact"):
-
+        with (
+            patch("app.flows.crop_and_infer.get_settings", return_value=mock_settings),
+            patch(
+                "app.flows.crop_and_infer.SupabaseServiceImpl",
+                return_value=mock_supabase_service,
+            ),
+            patch("modal.App.lookup", return_value=mock_modal_app),
+            patch("app.flows.crop_and_infer.create_table_artifact"),
+        ):
             result = await crop_and_infer(
                 video_id=test_video_id,
                 tenant_id=test_tenant_id,
@@ -490,11 +557,15 @@ class TestCropAndInferSuccess:
         """Verify Prefect artifacts created for observability."""
         mock_modal_function.remote.aio.return_value = mock_modal_result
 
-        with patch("app.flows.crop_and_infer.get_settings", return_value=mock_settings), \
-             patch("app.flows.crop_and_infer.SupabaseServiceImpl", return_value=mock_supabase_service), \
-             patch("modal.App.lookup", return_value=mock_modal_app), \
-             patch("app.flows.crop_and_infer.create_table_artifact") as mock_artifact:
-
+        with (
+            patch("app.flows.crop_and_infer.get_settings", return_value=mock_settings),
+            patch(
+                "app.flows.crop_and_infer.SupabaseServiceImpl",
+                return_value=mock_supabase_service,
+            ),
+            patch("modal.App.lookup", return_value=mock_modal_app),
+            patch("app.flows.crop_and_infer.create_table_artifact") as mock_artifact,
+        ):
             await crop_and_infer(
                 video_id=test_video_id,
                 tenant_id=test_tenant_id,
@@ -528,11 +599,15 @@ class TestCropAndInferSuccess:
         """Verify process_inference_results called with correct parameters."""
         mock_modal_function.remote.aio.return_value = mock_modal_result
 
-        with patch("app.flows.crop_and_infer.get_settings", return_value=mock_settings), \
-             patch("app.flows.crop_and_infer.SupabaseServiceImpl", return_value=mock_supabase_service), \
-             patch("modal.App.lookup", return_value=mock_modal_app), \
-             patch("app.flows.crop_and_infer.create_table_artifact"):
-
+        with (
+            patch("app.flows.crop_and_infer.get_settings", return_value=mock_settings),
+            patch(
+                "app.flows.crop_and_infer.SupabaseServiceImpl",
+                return_value=mock_supabase_service,
+            ),
+            patch("modal.App.lookup", return_value=mock_modal_app),
+            patch("app.flows.crop_and_infer.create_table_artifact"),
+        ):
             await crop_and_infer(
                 video_id=test_video_id,
                 tenant_id=test_tenant_id,
@@ -561,11 +636,15 @@ class TestCropAndInferSuccess:
         """Verify video metadata updated with cropped_frames_version."""
         mock_modal_function.remote.aio.return_value = mock_modal_result
 
-        with patch("app.flows.crop_and_infer.get_settings", return_value=mock_settings), \
-             patch("app.flows.crop_and_infer.SupabaseServiceImpl", return_value=mock_supabase_service), \
-             patch("modal.App.lookup", return_value=mock_modal_app), \
-             patch("app.flows.crop_and_infer.create_table_artifact"):
-
+        with (
+            patch("app.flows.crop_and_infer.get_settings", return_value=mock_settings),
+            patch(
+                "app.flows.crop_and_infer.SupabaseServiceImpl",
+                return_value=mock_supabase_service,
+            ),
+            patch("modal.App.lookup", return_value=mock_modal_app),
+            patch("app.flows.crop_and_infer.create_table_artifact"),
+        ):
             await crop_and_infer(
                 video_id=test_video_id,
                 tenant_id=test_tenant_id,
@@ -593,11 +672,15 @@ class TestCropAndInferSuccess:
         """Verify caption_status set to 'ready' on successful completion."""
         mock_modal_function.remote.aio.return_value = mock_modal_result
 
-        with patch("app.flows.crop_and_infer.get_settings", return_value=mock_settings), \
-             patch("app.flows.crop_and_infer.SupabaseServiceImpl", return_value=mock_supabase_service), \
-             patch("modal.App.lookup", return_value=mock_modal_app), \
-             patch("app.flows.crop_and_infer.create_table_artifact"):
-
+        with (
+            patch("app.flows.crop_and_infer.get_settings", return_value=mock_settings),
+            patch(
+                "app.flows.crop_and_infer.SupabaseServiceImpl",
+                return_value=mock_supabase_service,
+            ),
+            patch("modal.App.lookup", return_value=mock_modal_app),
+            patch("app.flows.crop_and_infer.create_table_artifact"),
+        ):
             await crop_and_infer(
                 video_id=test_video_id,
                 tenant_id=test_tenant_id,
@@ -606,11 +689,13 @@ class TestCropAndInferSuccess:
 
             # Verify "ready" status was set
             ready_calls = [
-                c for c in mock_supabase_service.update_video_status.call_args_list
+                c
+                for c in mock_supabase_service.update_video_status.call_args_list
                 if c[1].get("caption_status") == "ready"
             ]
-            assert len(ready_calls) == 1, \
+            assert len(ready_calls) == 1, (
                 "caption_status should be set to 'ready' exactly once"
+            )
 
     @pytest.mark.asyncio
     async def test_flow_returns_correct_structure(
@@ -627,11 +712,15 @@ class TestCropAndInferSuccess:
         """Verify flow returns expected dictionary structure."""
         mock_modal_function.remote.aio.return_value = mock_modal_result
 
-        with patch("app.flows.crop_and_infer.get_settings", return_value=mock_settings), \
-             patch("app.flows.crop_and_infer.SupabaseServiceImpl", return_value=mock_supabase_service), \
-             patch("modal.App.lookup", return_value=mock_modal_app), \
-             patch("app.flows.crop_and_infer.create_table_artifact"):
-
+        with (
+            patch("app.flows.crop_and_infer.get_settings", return_value=mock_settings),
+            patch(
+                "app.flows.crop_and_infer.SupabaseServiceImpl",
+                return_value=mock_supabase_service,
+            ),
+            patch("modal.App.lookup", return_value=mock_modal_app),
+            patch("app.flows.crop_and_infer.create_table_artifact"),
+        ):
             result = await crop_and_infer(
                 video_id=test_video_id,
                 tenant_id=test_tenant_id,
@@ -662,9 +751,13 @@ class TestCropAndInferSuccess:
             "crop_bottom": 0.8,
         }
 
-        with patch("app.flows.crop_and_infer.get_settings", return_value=mock_settings), \
-             patch("app.flows.crop_and_infer.SupabaseServiceImpl", return_value=mock_supabase_service):
-
+        with (
+            patch("app.flows.crop_and_infer.get_settings", return_value=mock_settings),
+            patch(
+                "app.flows.crop_and_infer.SupabaseServiceImpl",
+                return_value=mock_supabase_service,
+            ),
+        ):
             # Should raise validation error from CropRegion dataclass
             with pytest.raises(AssertionError, match="Invalid horizontal crop"):
                 await crop_and_infer(
@@ -678,10 +771,12 @@ class TestCropAndInferSuccess:
         # Import the task to check its configuration
 
         # Verify retry configuration
-        assert process_inference_results.retries == 2, \
+        assert process_inference_results.retries == 2, (
             "process_inference_results should have 2 retries"
-        assert process_inference_results.retry_delay_seconds == 10, \
+        )
+        assert process_inference_results.retry_delay_seconds == 10, (
             "process_inference_results should have 10s retry delay"
+        )
 
 
 class TestCropAndInferErrors:
@@ -702,11 +797,15 @@ class TestCropAndInferErrors:
         # Configure Modal to fail
         mock_modal_function.remote.aio.side_effect = Exception("GPU out of memory")
 
-        with patch("app.flows.crop_and_infer.get_settings", return_value=mock_settings), \
-             patch("app.flows.crop_and_infer.SupabaseServiceImpl", return_value=mock_supabase_service), \
-             patch("modal.App.lookup", return_value=mock_modal_app), \
-             patch("app.flows.crop_and_infer.create_table_artifact"):
-
+        with (
+            patch("app.flows.crop_and_infer.get_settings", return_value=mock_settings),
+            patch(
+                "app.flows.crop_and_infer.SupabaseServiceImpl",
+                return_value=mock_supabase_service,
+            ),
+            patch("modal.App.lookup", return_value=mock_modal_app),
+            patch("app.flows.crop_and_infer.create_table_artifact"),
+        ):
             with pytest.raises(Exception, match="GPU out of memory"):
                 await crop_and_infer(
                     video_id=test_video_id,
@@ -716,11 +815,13 @@ class TestCropAndInferErrors:
 
             # Verify "error" status was set
             error_calls = [
-                c for c in mock_supabase_service.update_video_status.call_args_list
+                c
+                for c in mock_supabase_service.update_video_status.call_args_list
                 if c[1].get("caption_status") == "error"
             ]
-            assert len(error_calls) == 1, \
+            assert len(error_calls) == 1, (
                 "caption_status should be set to 'error' on failure"
+            )
 
     @pytest.mark.asyncio
     async def test_lock_always_released_on_error(
@@ -737,11 +838,15 @@ class TestCropAndInferErrors:
         # Configure Modal to fail
         mock_modal_function.remote.aio.side_effect = RuntimeError("Unexpected error")
 
-        with patch("app.flows.crop_and_infer.get_settings", return_value=mock_settings), \
-             patch("app.flows.crop_and_infer.SupabaseServiceImpl", return_value=mock_supabase_service), \
-             patch("modal.App.lookup", return_value=mock_modal_app), \
-             patch("app.flows.crop_and_infer.create_table_artifact"):
-
+        with (
+            patch("app.flows.crop_and_infer.get_settings", return_value=mock_settings),
+            patch(
+                "app.flows.crop_and_infer.SupabaseServiceImpl",
+                return_value=mock_supabase_service,
+            ),
+            patch("modal.App.lookup", return_value=mock_modal_app),
+            patch("app.flows.crop_and_infer.create_table_artifact"),
+        ):
             with pytest.raises(RuntimeError):
                 await crop_and_infer(
                     video_id=test_video_id,
@@ -770,11 +875,15 @@ class TestCropAndInferErrors:
         """Verify error handling when inference result processing fails."""
         mock_modal_function.remote.aio.return_value = mock_modal_result
 
-        with patch("app.flows.crop_and_infer.get_settings", return_value=mock_settings), \
-             patch("app.flows.crop_and_infer.SupabaseServiceImpl", return_value=mock_supabase_service), \
-             patch("modal.App.lookup", return_value=mock_modal_app), \
-             patch("app.flows.crop_and_infer.create_table_artifact"):
-
+        with (
+            patch("app.flows.crop_and_infer.get_settings", return_value=mock_settings),
+            patch(
+                "app.flows.crop_and_infer.SupabaseServiceImpl",
+                return_value=mock_supabase_service,
+            ),
+            patch("modal.App.lookup", return_value=mock_modal_app),
+            patch("app.flows.crop_and_infer.create_table_artifact"),
+        ):
             # Note: Currently process_inference_results is a TODO, so this test
             # would need updating once the actual API endpoint is implemented
             # For now, we verify the flow handles the call correctly
@@ -804,13 +913,19 @@ class TestCropAndInferErrors:
         mock_modal_function.remote.aio.return_value = mock_modal_result
 
         # Configure metadata update to fail
-        mock_supabase_service.update_video_metadata.side_effect = Exception("Database connection lost")
+        mock_supabase_service.update_video_metadata.side_effect = Exception(
+            "Database connection lost"
+        )
 
-        with patch("app.flows.crop_and_infer.get_settings", return_value=mock_settings), \
-             patch("app.flows.crop_and_infer.SupabaseServiceImpl", return_value=mock_supabase_service), \
-             patch("modal.App.lookup", return_value=mock_modal_app), \
-             patch("app.flows.crop_and_infer.create_table_artifact"):
-
+        with (
+            patch("app.flows.crop_and_infer.get_settings", return_value=mock_settings),
+            patch(
+                "app.flows.crop_and_infer.SupabaseServiceImpl",
+                return_value=mock_supabase_service,
+            ),
+            patch("modal.App.lookup", return_value=mock_modal_app),
+            patch("app.flows.crop_and_infer.create_table_artifact"),
+        ):
             # Metadata update failure should propagate (task retries will handle it)
             with pytest.raises(Exception, match="Database connection lost"):
                 await crop_and_infer(
@@ -857,11 +972,17 @@ class TestCropAndInferErrors:
     ):
         """Verify graceful handling when layout database doesn't exist."""
         # Simulate database not found error during lock acquisition
-        mock_supabase_service.acquire_server_lock.side_effect = Exception("Database 'layout' not found")
+        mock_supabase_service.acquire_server_lock.side_effect = Exception(
+            "Database 'layout' not found"
+        )
 
-        with patch("app.flows.crop_and_infer.get_settings", return_value=mock_settings), \
-             patch("app.flows.crop_and_infer.SupabaseServiceImpl", return_value=mock_supabase_service):
-
+        with (
+            patch("app.flows.crop_and_infer.get_settings", return_value=mock_settings),
+            patch(
+                "app.flows.crop_and_infer.SupabaseServiceImpl",
+                return_value=mock_supabase_service,
+            ),
+        ):
             with pytest.raises(Exception, match="Database 'layout' not found"):
                 await crop_and_infer(
                     video_id=test_video_id,
@@ -888,13 +1009,18 @@ class TestCropAndInferErrors:
         def status_side_effect(*args, **kwargs):
             if kwargs.get("caption_status") == "error":
                 raise Exception("Status update failed")
+
         mock_supabase_service.update_video_status.side_effect = status_side_effect
 
-        with patch("app.flows.crop_and_infer.get_settings", return_value=mock_settings), \
-             patch("app.flows.crop_and_infer.SupabaseServiceImpl", return_value=mock_supabase_service), \
-             patch("modal.App.lookup", return_value=mock_modal_app), \
-             patch("app.flows.crop_and_infer.create_table_artifact"):
-
+        with (
+            patch("app.flows.crop_and_infer.get_settings", return_value=mock_settings),
+            patch(
+                "app.flows.crop_and_infer.SupabaseServiceImpl",
+                return_value=mock_supabase_service,
+            ),
+            patch("modal.App.lookup", return_value=mock_modal_app),
+            patch("app.flows.crop_and_infer.create_table_artifact"),
+        ):
             # Should raise original Modal error, not status update error
             with pytest.raises(Exception, match="Modal failed"):
                 await crop_and_infer(

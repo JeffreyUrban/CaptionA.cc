@@ -53,6 +53,7 @@ def test_video_bytes(request, wasabi_service):
 
     # Download video
     import tempfile
+
     with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as f:
         local_path = Path(f.name)
 
@@ -75,10 +76,7 @@ class TestGPUVideoUtilsModal:
         import modal
 
         # Look up deployed Modal function
-        test_fn = modal.Function.from_name(
-            app_name="gpu-video-utils-tests",
-            name="test_decoder_basic"
-        )
+        test_fn = modal.Function.from_name(app_name="gpu-video-utils-tests", name="test_decoder_basic")
 
         print("\n" + "=" * 80)
         print("GPU DECODER BASIC TEST")
@@ -112,10 +110,7 @@ class TestGPUVideoUtilsModal:
         """Test frame extraction on Modal GPU."""
         import modal
 
-        test_fn = modal.Function.from_name(
-            app_name="gpu-video-utils-tests",
-            name="test_frame_extraction"
-        )
+        test_fn = modal.Function.from_name(app_name="gpu-video-utils-tests", name="test_frame_extraction")
 
         print("\n" + "=" * 80)
         print("GPU FRAME EXTRACTION TEST")
@@ -124,10 +119,7 @@ class TestGPUVideoUtilsModal:
         print("Running on Modal A10G GPU...\n")
 
         # Call Modal function
-        result_call = test_fn.spawn(
-            video_bytes=test_video_bytes,
-            frame_rate_hz=0.1
-        )
+        result_call = test_fn.spawn(video_bytes=test_video_bytes, frame_rate_hz=0.1)
         result = result_call.get()
 
         print("Results:")
@@ -141,8 +133,9 @@ class TestGPUVideoUtilsModal:
 
         # Assertions
         assert result["success"], "Test should succeed"
-        assert result["tensor_count"] == result["pil_count"] == result["jpeg_count"], \
+        assert result["tensor_count"] == result["pil_count"] == result["jpeg_count"], (
             "All formats should extract same number of frames"
+        )
         assert result["tensor_count"] > 0, "Should extract frames"
         assert result["first_tensor_gpu"] == "cuda", "Tensors should be on GPU"
         assert result["first_jpeg_size_bytes"] > 0, "JPEG should have content"
@@ -154,10 +147,7 @@ class TestGPUVideoUtilsModal:
         """Test GPU cropping on Modal."""
         import modal
 
-        test_fn = modal.Function.from_name(
-            app_name="gpu-video-utils-tests",
-            name="test_frame_extraction_with_crop"
-        )
+        test_fn = modal.Function.from_name(app_name="gpu-video-utils-tests", name="test_frame_extraction_with_crop")
 
         print("\n" + "=" * 80)
         print("GPU CROPPING TEST")
@@ -189,10 +179,7 @@ class TestGPUVideoUtilsModal:
         """Test error handling and retry logic on Modal."""
         import modal
 
-        test_fn = modal.Function.from_name(
-            app_name="gpu-video-utils-tests",
-            name="test_error_handling"
-        )
+        test_fn = modal.Function.from_name(app_name="gpu-video-utils-tests", name="test_error_handling")
 
         print("\n" + "=" * 80)
         print("GPU ERROR HANDLING TEST")
@@ -221,10 +208,7 @@ class TestGPUVideoUtilsModal:
         """Test montage batching on Modal."""
         import modal
 
-        test_fn = modal.Function.from_name(
-            app_name="gpu-video-utils-tests",
-            name="test_montage_batching"
-        )
+        test_fn = modal.Function.from_name(app_name="gpu-video-utils-tests", name="test_montage_batching")
 
         print("\n" + "=" * 80)
         print("GPU MONTAGE BATCHING TEST")
@@ -240,17 +224,18 @@ class TestGPUVideoUtilsModal:
         print(f"  • Number of batches: {result['num_batches']}")
         print(f"  • Max batch size: {result['max_batch_size']}")
         print("  • Batch details:")
-        for i, batch in enumerate(result['batch_info'][:3]):  # Show first 3
-            print(f"    - Batch {i}: {batch['num_frames']} frames, "
-                  f"indices {batch['first_index']}-{batch['last_index']}, "
-                  f"all JPEG: {batch['all_jpeg']}")
+        for i, batch in enumerate(result["batch_info"][:3]):  # Show first 3
+            print(
+                f"    - Batch {i}: {batch['num_frames']} frames, "
+                f"indices {batch['first_index']}-{batch['last_index']}, "
+                f"all JPEG: {batch['all_jpeg']}"
+            )
 
         # Assertions
         assert result["success"], "Test should succeed"
         assert result["num_batches"] > 0, "Should create batches"
         assert result["max_batch_size"] <= 10, "Batch size should respect limit"
-        assert all(b["all_jpeg"] for b in result["batch_info"]), \
-            "All frames should be JPEG encoded"
+        assert all(b["all_jpeg"] for b in result["batch_info"]), "All frames should be JPEG encoded"
 
         print("\n✓ Test passed!")
         print("=" * 80 + "\n")

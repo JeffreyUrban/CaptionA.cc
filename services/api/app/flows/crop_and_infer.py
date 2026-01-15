@@ -41,7 +41,9 @@ def acquire_server_lock(video_id: str, database_name: str) -> None:
     Raises:
         Exception: If lock is already held by another process
     """
-    print(f"[Lock] Attempting to acquire lock on {database_name} database for video {video_id}")
+    print(
+        f"[Lock] Attempting to acquire lock on {database_name} database for video {video_id}"
+    )
 
     settings = get_settings()
     supabase = SupabaseServiceImpl(
@@ -136,8 +138,7 @@ async def call_modal_crop_and_infer(
 
     # Lookup the deployed Modal function
     crop_infer_fn = modal.Function.from_name(
-        "extract-crop-frames-and-infer-extents",
-        "crop_and_infer_caption_frame_extents"
+        "extract-crop-frames-and-infer-extents", "crop_and_infer_caption_frame_extents"
     )
 
     # Call the Modal function remotely
@@ -277,9 +278,7 @@ def update_caption_status(video_id: str, status: str) -> None:
     retries=0,  # No automatic retries for the entire flow
 )
 async def crop_and_infer(
-    video_id: str,
-    tenant_id: str,
-    crop_region: dict
+    video_id: str, tenant_id: str, crop_region: dict
 ) -> dict[str, Any]:
     """
     Crops frames, runs inference, creates captions.db.
@@ -353,7 +352,9 @@ async def crop_and_infer(
                 "Tenant ID": [tenant_id],
                 "Version": [f"v{modal_result['version']}"],
                 "Frame Count": [modal_result["frame_count"]],
-                "Processing Time": [f"{modal_result['processing_duration_seconds']:.2f}s"],
+                "Processing Time": [
+                    f"{modal_result['processing_duration_seconds']:.2f}s"
+                ],
                 "Status": ["Ready"],
             },
             description=f"Crop and infer results for video {video_id}",

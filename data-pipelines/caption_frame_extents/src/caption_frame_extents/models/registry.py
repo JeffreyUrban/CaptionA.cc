@@ -110,7 +110,9 @@ def validate_model(model: nn.Module) -> None:
     # Check num_classes (if model exposes it)
     if hasattr(model, "num_classes"):
         if model.num_classes != 5:
-            raise ValueError(f"Model must output 5 classes for caption frame extents detection, got {model.num_classes}")
+            raise ValueError(
+                f"Model must output 5 classes for caption frame extents detection, got {model.num_classes}"
+            )
 
 
 def list_architectures() -> list[str]:

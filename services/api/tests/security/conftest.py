@@ -232,15 +232,20 @@ async def webhook_client(
 
     Use the mock_trigger_prefect_flow fixture to verify flow trigger calls in tests.
     """
-    with patch("app.routers.webhooks.get_settings") as mock_settings, patch(
-        "app.routers.webhooks.trigger_prefect_flow",
-        mock_trigger_prefect_flow,
+    with (
+        patch("app.routers.webhooks.get_settings") as mock_settings,
+        patch(
+            "app.routers.webhooks.trigger_prefect_flow",
+            mock_trigger_prefect_flow,
+        ),
     ):
         # Configure mock settings
         mock_settings_instance = mock_settings.return_value
         mock_settings_instance.webhook_secret = webhook_secret
         mock_settings_instance.prefect_api_url = "http://test-prefect-api"
-        mock_settings_instance.prefect_api_key = "test-api-key"  # pragma: allowlist secret
+        mock_settings_instance.prefect_api_key = (
+            "test-api-key"  # pragma: allowlist secret
+        )
 
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:

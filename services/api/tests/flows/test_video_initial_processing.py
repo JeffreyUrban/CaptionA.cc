@@ -6,6 +6,7 @@ Tests cover:
 2. Error scenarios - Modal failures, Supabase errors, timeouts, retries
 3. Concurrency scenarios - multiple videos, idempotency, tenant isolation
 """
+
 import asyncio
 from unittest.mock import Mock, patch
 
@@ -47,7 +48,9 @@ def mock_supabase_service() -> Mock:
 def mock_env_vars(monkeypatch):
     """Mock environment variables for all tests."""
     monkeypatch.setenv("SUPABASE_URL", "https://test.supabase.co")
-    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "test-key")  # pragma: allowlist secret
+    monkeypatch.setenv(
+        "SUPABASE_SERVICE_ROLE_KEY", "test-key"
+    )  # pragma: allowlist secret
     monkeypatch.setenv("SUPABASE_SCHEMA", "captionacc_test")
 
 
@@ -73,10 +76,13 @@ class TestVideoInitialProcessingSuccess:
         This test ensures the flow properly updates video status at each stage.
         """
         with prefect_test_harness():
-            with patch(
-                "app.services.supabase_service.SupabaseServiceImpl",
-                return_value=mock_supabase_service,
-            ), patch("modal.App") as mock_modal_app:
+            with (
+                patch(
+                    "app.services.supabase_service.SupabaseServiceImpl",
+                    return_value=mock_supabase_service,
+                ),
+                patch("modal.App") as mock_modal_app,
+            ):
                 # Setup Modal mock
                 mock_app = Mock()
                 mock_function = Mock()
@@ -121,10 +127,13 @@ class TestVideoInitialProcessingSuccess:
         Ensures correct parameters are passed to the Modal remote function.
         """
         with prefect_test_harness():
-            with patch(
-                "app.services.supabase_service.SupabaseServiceImpl",
-                return_value=mock_supabase_service,
-            ), patch("modal.App") as mock_modal_app:
+            with (
+                patch(
+                    "app.services.supabase_service.SupabaseServiceImpl",
+                    return_value=mock_supabase_service,
+                ),
+                patch("modal.App") as mock_modal_app,
+            ):
                 # Setup Modal mock
                 mock_app = Mock()
                 mock_function = Mock()
@@ -136,7 +145,9 @@ class TestVideoInitialProcessingSuccess:
                     video_initial_processing,
                 )
 
-                storage_key = f"{test_tenant_id}/client/videos/{test_video_id}/video.mp4"
+                storage_key = (
+                    f"{test_tenant_id}/client/videos/{test_video_id}/video.mp4"
+                )
 
                 await video_initial_processing(
                     video_id=test_video_id,
@@ -166,10 +177,13 @@ class TestVideoInitialProcessingSuccess:
         Ensures video metadata is properly updated after successful processing.
         """
         with prefect_test_harness():
-            with patch(
-                "app.services.supabase_service.SupabaseServiceImpl",
-                return_value=mock_supabase_service,
-            ), patch("modal.App") as mock_modal_app:
+            with (
+                patch(
+                    "app.services.supabase_service.SupabaseServiceImpl",
+                    return_value=mock_supabase_service,
+                ),
+                patch("modal.App") as mock_modal_app,
+            ):
                 # Setup Modal mock
                 mock_app = Mock()
                 mock_function = Mock()
@@ -207,10 +221,13 @@ class TestVideoInitialProcessingSuccess:
         Checks that the flow returns the expected dictionary structure.
         """
         with prefect_test_harness():
-            with patch(
-                "app.services.supabase_service.SupabaseServiceImpl",
-                return_value=mock_supabase_service,
-            ), patch("modal.App") as mock_modal_app:
+            with (
+                patch(
+                    "app.services.supabase_service.SupabaseServiceImpl",
+                    return_value=mock_supabase_service,
+                ),
+                patch("modal.App") as mock_modal_app,
+            ):
                 # Setup Modal mock
                 mock_app = Mock()
                 mock_function = Mock()
@@ -249,10 +266,13 @@ class TestVideoInitialProcessingSuccess:
         Ensures the flow marks the video as active when everything succeeds.
         """
         with prefect_test_harness():
-            with patch(
-                "app.services.supabase_service.SupabaseServiceImpl",
-                return_value=mock_supabase_service,
-            ), patch("modal.App") as mock_modal_app:
+            with (
+                patch(
+                    "app.services.supabase_service.SupabaseServiceImpl",
+                    return_value=mock_supabase_service,
+                ),
+                patch("modal.App") as mock_modal_app,
+            ):
                 # Setup Modal mock
                 mock_app = Mock()
                 mock_function = Mock()
@@ -290,10 +310,13 @@ class TestVideoInitialProcessingSuccess:
         the result contains processing metrics.
         """
         with prefect_test_harness():
-            with patch(
-                "app.services.supabase_service.SupabaseServiceImpl",
-                return_value=mock_supabase_service,
-            ), patch("modal.App") as mock_modal_app:
+            with (
+                patch(
+                    "app.services.supabase_service.SupabaseServiceImpl",
+                    return_value=mock_supabase_service,
+                ),
+                patch("modal.App") as mock_modal_app,
+            ):
                 # Setup Modal mock
                 mock_app = Mock()
                 mock_function = Mock()
@@ -331,10 +354,13 @@ class TestVideoInitialProcessingSuccess:
         Ensures tenant isolation is maintained in all operations.
         """
         with prefect_test_harness():
-            with patch(
-                "app.services.supabase_service.SupabaseServiceImpl",
-                return_value=mock_supabase_service,
-            ), patch("modal.App") as mock_modal_app:
+            with (
+                patch(
+                    "app.services.supabase_service.SupabaseServiceImpl",
+                    return_value=mock_supabase_service,
+                ),
+                patch("modal.App") as mock_modal_app,
+            ):
                 # Setup Modal mock
                 mock_app = Mock()
                 mock_function = Mock()
@@ -346,7 +372,9 @@ class TestVideoInitialProcessingSuccess:
                     video_initial_processing,
                 )
 
-                storage_key = f"{test_tenant_id}/client/videos/{test_video_id}/video.mp4"
+                storage_key = (
+                    f"{test_tenant_id}/client/videos/{test_video_id}/video.mp4"
+                )
 
                 await video_initial_processing(
                     video_id=test_video_id,
@@ -389,10 +417,13 @@ class TestVideoInitialProcessingSuccess:
         mock_supabase_service.update_video_metadata.side_effect = track_metadata_update
 
         with prefect_test_harness():
-            with patch(
-                "app.services.supabase_service.SupabaseServiceImpl",
-                return_value=mock_supabase_service,
-            ), patch("modal.App") as mock_modal_app:
+            with (
+                patch(
+                    "app.services.supabase_service.SupabaseServiceImpl",
+                    return_value=mock_supabase_service,
+                ),
+                patch("modal.App") as mock_modal_app,
+            ):
                 # Setup Modal mock
                 mock_app = Mock()
                 mock_function = Mock()
@@ -439,10 +470,13 @@ class TestVideoInitialProcessingErrors:
         Ensures timeouts are properly caught and status is updated to error.
         """
         with prefect_test_harness():
-            with patch(
-                "app.services.supabase_service.SupabaseServiceImpl",
-                return_value=mock_supabase_service,
-            ), patch("modal.App") as mock_modal_app:
+            with (
+                patch(
+                    "app.services.supabase_service.SupabaseServiceImpl",
+                    return_value=mock_supabase_service,
+                ),
+                patch("modal.App") as mock_modal_app,
+            ):
                 # Setup Modal mock to raise timeout
                 mock_app = Mock()
                 mock_function = Mock()
@@ -467,10 +501,14 @@ class TestVideoInitialProcessingErrors:
                 # Verify error status was set
                 status_calls = mock_supabase_service.update_video_status.call_args_list
                 error_calls = [
-                    call for call in status_calls if call.kwargs.get("status") == "error"
+                    call
+                    for call in status_calls
+                    if call.kwargs.get("status") == "error"
                 ]
                 assert len(error_calls) >= 1
-                assert "Frame extraction failed" in error_calls[0].kwargs["error_message"]
+                assert (
+                    "Frame extraction failed" in error_calls[0].kwargs["error_message"]
+                )
 
     @pytest.mark.asyncio
     async def test_supabase_update_retry_logic(
@@ -498,10 +536,13 @@ class TestVideoInitialProcessingErrors:
         mock_supabase.update_video_metadata = Mock(return_value=None)
 
         with prefect_test_harness():
-            with patch(
-                "app.services.supabase_service.SupabaseServiceImpl",
-                return_value=mock_supabase,
-            ), patch("modal.App") as mock_modal_app:
+            with (
+                patch(
+                    "app.services.supabase_service.SupabaseServiceImpl",
+                    return_value=mock_supabase,
+                ),
+                patch("modal.App") as mock_modal_app,
+            ):
                 # Setup Modal mock
                 mock_app = Mock()
                 mock_function = Mock()
@@ -547,10 +588,13 @@ class TestVideoInitialProcessingErrors:
         )
 
         with prefect_test_harness():
-            with patch(
-                "app.services.supabase_service.SupabaseServiceImpl",
-                return_value=mock_supabase_service,
-            ), patch("modal.App") as mock_modal_app:
+            with (
+                patch(
+                    "app.services.supabase_service.SupabaseServiceImpl",
+                    return_value=mock_supabase_service,
+                ),
+                patch("modal.App") as mock_modal_app,
+            ):
                 # Setup Modal mock
                 mock_app = Mock()
                 mock_function = Mock()
@@ -590,10 +634,13 @@ class TestVideoInitialProcessingErrors:
         error_message = "Modal processing failed: Out of GPU memory"
 
         with prefect_test_harness():
-            with patch(
-                "app.services.supabase_service.SupabaseServiceImpl",
-                return_value=mock_supabase_service,
-            ), patch("modal.App") as mock_modal_app:
+            with (
+                patch(
+                    "app.services.supabase_service.SupabaseServiceImpl",
+                    return_value=mock_supabase_service,
+                ),
+                patch("modal.App") as mock_modal_app,
+            ):
                 # Setup Modal mock to raise specific error
                 mock_app = Mock()
                 mock_function = Mock()
@@ -634,10 +681,13 @@ class TestVideoInitialProcessingErrors:
         Verifies that any Modal exception is caught and processed correctly.
         """
         with prefect_test_harness():
-            with patch(
-                "app.services.supabase_service.SupabaseServiceImpl",
-                return_value=mock_supabase_service,
-            ), patch("modal.App") as mock_modal_app:
+            with (
+                patch(
+                    "app.services.supabase_service.SupabaseServiceImpl",
+                    return_value=mock_supabase_service,
+                ),
+                patch("modal.App") as mock_modal_app,
+            ):
                 # Setup Modal mock to raise generic exception
                 mock_app = Mock()
                 mock_function = Mock()
@@ -685,10 +735,13 @@ class TestVideoInitialProcessingErrors:
         )
 
         with prefect_test_harness():
-            with patch(
-                "app.services.supabase_service.SupabaseServiceImpl",
-                return_value=mock_supabase_service,
-            ), patch("modal.App") as mock_modal_app:
+            with (
+                patch(
+                    "app.services.supabase_service.SupabaseServiceImpl",
+                    return_value=mock_supabase_service,
+                ),
+                patch("modal.App") as mock_modal_app,
+            ):
                 # Setup Modal mock (won't be reached)
                 mock_app = Mock()
                 mock_modal_app.lookup = Mock(return_value=mock_app)
@@ -768,10 +821,13 @@ class TestVideoInitialProcessingErrors:
         )
 
         with prefect_test_harness():
-            with patch(
-                "app.services.supabase_service.SupabaseServiceImpl",
-                return_value=mock_supabase_service,
-            ), patch("modal.App") as mock_modal_app:
+            with (
+                patch(
+                    "app.services.supabase_service.SupabaseServiceImpl",
+                    return_value=mock_supabase_service,
+                ),
+                patch("modal.App") as mock_modal_app,
+            ):
                 # Setup Modal mock with partial result
                 mock_app = Mock()
                 mock_function = Mock()
@@ -825,10 +881,13 @@ class TestVideoInitialProcessingConcurrency:
         mock_supabase.update_video_metadata = Mock(return_value=None)
 
         with prefect_test_harness():
-            with patch(
-                "app.services.supabase_service.SupabaseServiceImpl",
-                return_value=mock_supabase,
-            ), patch("modal.App") as mock_modal_app:
+            with (
+                patch(
+                    "app.services.supabase_service.SupabaseServiceImpl",
+                    return_value=mock_supabase,
+                ),
+                patch("modal.App") as mock_modal_app,
+            ):
                 # Setup Modal mock
                 mock_app = Mock()
                 mock_function = Mock()
@@ -886,10 +945,13 @@ class TestVideoInitialProcessingConcurrency:
         mock_supabase.update_video_metadata = Mock(return_value=None)
 
         with prefect_test_harness():
-            with patch(
-                "app.services.supabase_service.SupabaseServiceImpl",
-                return_value=mock_supabase,
-            ), patch("modal.App") as mock_modal_app:
+            with (
+                patch(
+                    "app.services.supabase_service.SupabaseServiceImpl",
+                    return_value=mock_supabase,
+                ),
+                patch("modal.App") as mock_modal_app,
+            ):
                 # Setup Modal mock
                 mock_app = Mock()
                 mock_function = Mock()
@@ -919,7 +981,9 @@ class TestVideoInitialProcessingConcurrency:
                 assert result1["frame_count"] == result2["frame_count"]
 
                 # Verify status was updated at least twice (once per run)
-                assert mock_supabase.update_video_status.call_count >= 4  # 2 runs x 2 updates
+                assert (
+                    mock_supabase.update_video_status.call_count >= 4
+                )  # 2 runs x 2 updates
 
     @pytest.mark.asyncio
     async def test_tenant_isolation(
@@ -940,10 +1004,13 @@ class TestVideoInitialProcessingConcurrency:
         mock_supabase.update_video_metadata = Mock(return_value=None)
 
         with prefect_test_harness():
-            with patch(
-                "app.services.supabase_service.SupabaseServiceImpl",
-                return_value=mock_supabase,
-            ), patch("modal.App") as mock_modal_app:
+            with (
+                patch(
+                    "app.services.supabase_service.SupabaseServiceImpl",
+                    return_value=mock_supabase,
+                ),
+                patch("modal.App") as mock_modal_app,
+            ):
                 # Setup Modal mock
                 mock_app = Mock()
                 mock_function = Mock()
@@ -999,10 +1066,13 @@ class TestVideoInitialProcessingConcurrency:
         mock_supabase.update_video_metadata = Mock(return_value=None)
 
         with prefect_test_harness():
-            with patch(
-                "app.services.supabase_service.SupabaseServiceImpl",
-                return_value=mock_supabase,
-            ), patch("modal.App") as mock_modal_app:
+            with (
+                patch(
+                    "app.services.supabase_service.SupabaseServiceImpl",
+                    return_value=mock_supabase,
+                ),
+                patch("modal.App") as mock_modal_app,
+            ):
                 # Setup Modal mock
                 mock_app = Mock()
                 mock_function = Mock()
@@ -1037,4 +1107,6 @@ class TestVideoInitialProcessingConcurrency:
                 assert video_id_2 in video_ids_updated
 
                 # Verify each got the same duration
-                assert all(call.kwargs["duration_seconds"] == 10.0 for call in metadata_calls)
+                assert all(
+                    call.kwargs["duration_seconds"] == 10.0 for call in metadata_calls
+                )

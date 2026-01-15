@@ -86,9 +86,15 @@ class InferenceRun:
             file_size_bytes=data.get("file_size_bytes"),
             total_pairs=data["total_pairs"],
             processing_time_seconds=data.get("processing_time_seconds"),
-            started_at=datetime.fromisoformat(data["started_at"].replace("Z", "+00:00")),
-            completed_at=datetime.fromisoformat(data["completed_at"].replace("Z", "+00:00")),
-            created_at=datetime.fromisoformat(data["created_at"].replace("Z", "+00:00")),
+            started_at=datetime.fromisoformat(
+                data["started_at"].replace("Z", "+00:00")
+            ),
+            completed_at=datetime.fromisoformat(
+                data["completed_at"].replace("Z", "+00:00")
+            ),
+            created_at=datetime.fromisoformat(
+                data["created_at"].replace("Z", "+00:00")
+            ),
         )
 
 
@@ -123,12 +129,16 @@ class InferenceJob:
             started_at=datetime.fromisoformat(data["started_at"].replace("Z", "+00:00"))
             if data["started_at"]
             else None,
-            completed_at=datetime.fromisoformat(data["completed_at"].replace("Z", "+00:00"))
+            completed_at=datetime.fromisoformat(
+                data["completed_at"].replace("Z", "+00:00")
+            )
             if data["completed_at"]
             else None,
             error_message=data.get("error_message"),
             inference_run_id=data.get("inference_run_id"),
-            created_at=datetime.fromisoformat(data["created_at"].replace("Z", "+00:00")),
+            created_at=datetime.fromisoformat(
+                data["created_at"].replace("Z", "+00:00")
+            ),
         )
 
 
@@ -260,14 +270,20 @@ class CaptionFrameExtentsInferenceRunRepository:
             "model_checkpoint_path": model_checkpoint_path,
         }
 
-        response = self.client.table("caption_frame_extents_inference_runs").insert(data).execute()
+        response = (
+            self.client.table("caption_frame_extents_inference_runs")
+            .insert(data)
+            .execute()
+        )
 
         if not response.data:
             raise ValueError("Failed to register inference run")
 
         # Supabase insert returns a list of dicts
         data_list = cast(list[InferenceRunRow], response.data)
-        console.print(f"[green]✓ Registered inference run in Supabase: {run_id}[/green]")
+        console.print(
+            f"[green]✓ Registered inference run in Supabase: {run_id}[/green]"
+        )
         return InferenceRun.from_dict(data_list[0])
 
     def get_runs_for_video(
@@ -297,7 +313,10 @@ class CaptionFrameExtentsInferenceRunRepository:
             query = query.limit(limit)
 
         response = query.execute()
-        return [InferenceRun.from_dict(row) for row in cast(list[InferenceRunRow], response.data)]
+        return [
+            InferenceRun.from_dict(row)
+            for row in cast(list[InferenceRunRow], response.data)
+        ]
 
     def get_runs_for_model(
         self,
@@ -326,7 +345,10 @@ class CaptionFrameExtentsInferenceRunRepository:
             query = query.limit(limit)
 
         response = query.execute()
-        return [InferenceRun.from_dict(row) for row in cast(list[InferenceRunRow], response.data)]
+        return [
+            InferenceRun.from_dict(row)
+            for row in cast(list[InferenceRunRow], response.data)
+        ]
 
     def get_runs_for_tenant(
         self,
@@ -355,7 +377,10 @@ class CaptionFrameExtentsInferenceRunRepository:
             query = query.limit(limit)
 
         response = query.execute()
-        return [InferenceRun.from_dict(row) for row in cast(list[InferenceRunRow], response.data)]
+        return [
+            InferenceRun.from_dict(row)
+            for row in cast(list[InferenceRunRow], response.data)
+        ]
 
     # Job queue methods
 
@@ -388,7 +413,11 @@ class CaptionFrameExtentsInferenceRunRepository:
             "priority": priority,
         }
 
-        response = self.client.table("caption_frame_extents_inference_jobs").insert(data).execute()
+        response = (
+            self.client.table("caption_frame_extents_inference_jobs")
+            .insert(data)
+            .execute()
+        )
 
         if not response.data:
             raise ValueError("Failed to create inference job")
@@ -430,7 +459,12 @@ class CaptionFrameExtentsInferenceRunRepository:
         if inference_run_id:
             data["inference_run_id"] = inference_run_id
 
-        response = self.client.table("caption_frame_extents_inference_jobs").update(data).eq("id", job_id).execute()
+        response = (
+            self.client.table("caption_frame_extents_inference_jobs")
+            .update(data)
+            .eq("id", job_id)
+            .execute()
+        )
 
         if not response.data:
             raise ValueError(f"Failed to update job {job_id}")
@@ -494,4 +528,7 @@ class CaptionFrameExtentsInferenceRunRepository:
             .execute()
         )
 
-        return [InferenceJob.from_dict(row) for row in cast(list[InferenceJobRow], response.data)]
+        return [
+            InferenceJob.from_dict(row)
+            for row in cast(list[InferenceJobRow], response.data)
+        ]

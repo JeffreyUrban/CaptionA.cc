@@ -1,6 +1,5 @@
 """Montage capacity calculation for OCR batch processing."""
 
-
 # OCR backend constraints for montage assembly
 HEIGHT_LIMIT_PX = 50000
 PIXEL_LIMIT = 50000000

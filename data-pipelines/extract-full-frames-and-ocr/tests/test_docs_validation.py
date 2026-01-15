@@ -65,7 +65,9 @@ def extract_code_blocks(content: str):
     return code_blocks
 
 
-@pytest.mark.parametrize("md_file", get_markdown_files(), ids=lambda p: str(p.relative_to("docs")))
+@pytest.mark.parametrize(
+    "md_file", get_markdown_files(), ids=lambda p: str(p.relative_to("docs"))
+)
 def test_code_block_line_length(md_file):
     """Test that code block lines don't exceed maximum length."""
     content = md_file.read_text()
@@ -85,11 +87,15 @@ def test_code_block_line_length(md_file):
     if long_lines:
         message = f"\n\n{md_file} has code block lines exceeding {MAX_LINE_LENGTH} characters:\n"
         for line_num, length, preview, block_type in long_lines:
-            message += f"  Line {line_num} ({block_type}): {length} chars - {preview}...\n"
+            message += (
+                f"  Line {line_num} ({block_type}): {length} chars - {preview}...\n"
+            )
         pytest.fail(message)
 
 
-@pytest.mark.parametrize("md_file", get_markdown_files(), ids=lambda p: str(p.relative_to("docs")))
+@pytest.mark.parametrize(
+    "md_file", get_markdown_files(), ids=lambda p: str(p.relative_to("docs"))
+)
 def test_tree_structure_line_length(md_file):
     """Test that tree structures (fixtures/) don't have overly long lines."""
     content = md_file.read_text()

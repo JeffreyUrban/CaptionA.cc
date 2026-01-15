@@ -124,7 +124,9 @@ def mock_database_manager(captions_db: Path):
             self.db_path = db_path
 
         @asynccontextmanager
-        async def get_database(self, tenant_id: str, video_id: str, writable: bool = False):
+        async def get_database(
+            self, tenant_id: str, video_id: str, writable: bool = False
+        ):
             conn = sqlite3.connect(str(self.db_path))
             conn.row_factory = sqlite3.Row
             try:
@@ -154,7 +156,9 @@ def mock_seeded_database_manager(seeded_captions_db: Path):
             self.db_path = db_path
 
         @asynccontextmanager
-        async def get_database(self, tenant_id: str, video_id: str, writable: bool = False):
+        async def get_database(
+            self, tenant_id: str, video_id: str, writable: bool = False
+        ):
             conn = sqlite3.connect(str(self.db_path))
             conn.row_factory = sqlite3.Row
             try:
@@ -308,7 +312,9 @@ def mock_layout_database_manager(layout_db: Path):
             self.db_path = db_path
 
         @asynccontextmanager
-        async def get_database(self, tenant_id: str, video_id: str, writable: bool = False):
+        async def get_database(
+            self, tenant_id: str, video_id: str, writable: bool = False
+        ):
             conn = sqlite3.connect(str(self.db_path))
             conn.row_factory = sqlite3.Row
             try:
@@ -338,7 +344,9 @@ def mock_seeded_layout_database_manager(seeded_layout_db: Path):
             self.db_path = db_path
 
         @asynccontextmanager
-        async def get_database(self, tenant_id: str, video_id: str, writable: bool = False):
+        async def get_database(
+            self, tenant_id: str, video_id: str, writable: bool = False
+        ):
             conn = sqlite3.connect(str(self.db_path))
             conn.row_factory = sqlite3.Row
             try:
@@ -449,7 +457,9 @@ def mock_ocr_database_manager(ocr_db: Path):
             self.db_path = db_path
 
         @asynccontextmanager
-        async def get_database(self, tenant_id: str, video_id: str, writable: bool = False):
+        async def get_database(
+            self, tenant_id: str, video_id: str, writable: bool = False
+        ):
             conn = sqlite3.connect(str(self.db_path))
             conn.row_factory = sqlite3.Row
             try:
@@ -470,7 +480,9 @@ def mock_seeded_ocr_database_manager(seeded_ocr_db: Path):
             self.db_path = db_path
 
         @asynccontextmanager
-        async def get_database(self, tenant_id: str, video_id: str, writable: bool = False):
+        async def get_database(
+            self, tenant_id: str, video_id: str, writable: bool = False
+        ):
             conn = sqlite3.connect(str(self.db_path))
             conn.row_factory = sqlite3.Row
             try:
@@ -523,7 +535,9 @@ def mock_seeded_boxes_layout_manager(seeded_boxes_layout_db: Path):
             self.db_path = db_path
 
         @asynccontextmanager
-        async def get_database(self, tenant_id: str, video_id: str, writable: bool = False):
+        async def get_database(
+            self, tenant_id: str, video_id: str, writable: bool = False
+        ):
             conn = sqlite3.connect(str(self.db_path))
             conn.row_factory = sqlite3.Row
             try:
@@ -532,7 +546,9 @@ def mock_seeded_boxes_layout_manager(seeded_boxes_layout_db: Path):
                 conn.close()
 
         @asynccontextmanager
-        async def get_or_create_database(self, tenant_id: str, video_id: str, writable: bool = False):
+        async def get_or_create_database(
+            self, tenant_id: str, video_id: str, writable: bool = False
+        ):
             conn = sqlite3.connect(str(self.db_path))
             conn.row_factory = sqlite3.Row
             try:
@@ -555,12 +571,15 @@ async def boxes_client(
 
     app.dependency_overrides[get_auth_context] = lambda: auth_context
 
-    with patch(
-        "app.routers.boxes.get_ocr_database_manager",
-        return_value=mock_seeded_ocr_database_manager,
-    ), patch(
-        "app.routers.boxes.get_layout_database_manager",
-        return_value=mock_seeded_boxes_layout_manager,
+    with (
+        patch(
+            "app.routers.boxes.get_ocr_database_manager",
+            return_value=mock_seeded_ocr_database_manager,
+        ),
+        patch(
+            "app.routers.boxes.get_layout_database_manager",
+            return_value=mock_seeded_boxes_layout_manager,
+        ),
     ):
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
@@ -585,16 +604,21 @@ async def boxes_client_no_labels(
     # Use empty layout manager that raises FileNotFoundError
     class NoLayoutManager:
         @asynccontextmanager
-        async def get_database(self, tenant_id: str, video_id: str, writable: bool = False):
+        async def get_database(
+            self, tenant_id: str, video_id: str, writable: bool = False
+        ):
             raise FileNotFoundError("No layout database")
             yield  # noqa: B901 - required for async context manager
 
-    with patch(
-        "app.routers.boxes.get_ocr_database_manager",
-        return_value=mock_seeded_ocr_database_manager,
-    ), patch(
-        "app.routers.boxes.get_layout_database_manager",
-        return_value=NoLayoutManager(),
+    with (
+        patch(
+            "app.routers.boxes.get_ocr_database_manager",
+            return_value=mock_seeded_ocr_database_manager,
+        ),
+        patch(
+            "app.routers.boxes.get_layout_database_manager",
+            return_value=NoLayoutManager(),
+        ),
     ):
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
@@ -692,12 +716,15 @@ async def stats_client(
 
     app.dependency_overrides[get_auth_context] = lambda: auth_context
 
-    with patch(
-        "app.routers.stats.get_ocr_database_manager",
-        return_value=mock_seeded_ocr_database_manager,
-    ), patch(
-        "app.routers.stats.get_database_manager",
-        return_value=mock_seeded_database_manager,
+    with (
+        patch(
+            "app.routers.stats.get_ocr_database_manager",
+            return_value=mock_seeded_ocr_database_manager,
+        ),
+        patch(
+            "app.routers.stats.get_database_manager",
+            return_value=mock_seeded_database_manager,
+        ),
     ):
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:

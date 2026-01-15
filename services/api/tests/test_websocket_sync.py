@@ -70,20 +70,24 @@ class MockWebSocketManager:
         return True
 
     async def send_error(self, connection_id: str, code: str, message: str) -> None:
-        self._errors.append({
-            "connection_id": connection_id,
-            "code": code,
-            "message": message,
-        })
+        self._errors.append(
+            {
+                "connection_id": connection_id,
+                "code": code,
+                "message": message,
+            }
+        )
 
     async def send_ack(
         self, connection_id: str, server_version: int, applied_count: int
     ) -> None:
-        self._acks.append({
-            "connection_id": connection_id,
-            "server_version": server_version,
-            "applied_count": applied_count,
-        })
+        self._acks.append(
+            {
+                "connection_id": connection_id,
+                "server_version": server_version,
+                "applied_count": applied_count,
+            }
+        )
 
     def update_activity(self, _connection_id: str) -> None:
         pass
@@ -97,9 +101,7 @@ class MockCRSqliteManager:
         self._applied_changes: list = []
         self._version = 0
 
-    def has_working_copy(
-        self, _tenant_id: str, _video_id: str, _db_name: str
-    ) -> bool:
+    def has_working_copy(self, _tenant_id: str, _video_id: str, _db_name: str) -> bool:
         return self._has_working_copy
 
     async def download_from_wasabi(
@@ -183,9 +185,7 @@ class TestWebSocketSync:
                 ):
                     pass
 
-    def test_websocket_auth_missing_claims(
-        self, app: FastAPI, test_video_id: str
-    ):
+    def test_websocket_auth_missing_claims(self, app: FastAPI, test_video_id: str):
         """Should close connection when token missing required claims."""
         with patch("app.routers.websocket_sync.jwt.decode") as mock_decode:
             # Missing tenant_id

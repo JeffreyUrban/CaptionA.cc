@@ -66,7 +66,9 @@ class LoRALayer(nn.Module):
             # B: 1x1 conv with same stride/padding as original to match spatial dims
             # Cast stride to tuple[int, int] for type checker (Conv2d.stride is always 2-tuple)
             stride_tuple = tuple(self.stride)  # Convert to regular tuple
-            stride_2d: tuple[int, int] = (stride_tuple[0], stride_tuple[1]) if len(stride_tuple) >= 2 else (1, 1)
+            stride_2d: tuple[int, int] = (
+                (stride_tuple[0], stride_tuple[1]) if len(stride_tuple) >= 2 else (1, 1)
+            )
             self.lora_B = nn.Conv2d(
                 rank,
                 out_channels,
@@ -93,13 +95,17 @@ class LoRALayer(nn.Module):
         if isinstance(self.original_layer, nn.Linear):
             # x: (batch, in_features)
             # lora_A and lora_B are Parameters (tensors) for Linear layers
-            assert isinstance(self.lora_A, nn.Parameter) and isinstance(self.lora_B, nn.Parameter)
+            assert isinstance(self.lora_A, nn.Parameter) and isinstance(
+                self.lora_B, nn.Parameter
+            )
             lora_output = (x @ self.lora_A.T) @ self.lora_B.T  # (batch, out_features)
             lora_output = lora_output * self.scaling
         elif isinstance(self.original_layer, nn.Conv2d):
             # x: (batch, in_channels, H, W)
             # lora_A and lora_B are Conv2d modules for Conv layers
-            assert isinstance(self.lora_A, nn.Conv2d) and isinstance(self.lora_B, nn.Conv2d)
+            assert isinstance(self.lora_A, nn.Conv2d) and isinstance(
+                self.lora_B, nn.Conv2d
+            )
             lora_output = self.lora_B(self.lora_A(x))  # (batch, out_channels, H, W)
             lora_output = lora_output * self.scaling
         else:
@@ -109,7 +115,9 @@ class LoRALayer(nn.Module):
         return original_output + lora_output
 
 
-def apply_lora_to_resnet(resnet: nn.Module, rank: int = 16, alpha: float = 16.0) -> nn.Module:
+def apply_lora_to_resnet(
+    resnet: nn.Module, rank: int = 16, alpha: float = 16.0
+) -> nn.Module:
     """Apply LoRA to all convolutional and linear layers in ResNet.
 
     Args:

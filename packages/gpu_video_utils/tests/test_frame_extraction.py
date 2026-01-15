@@ -15,6 +15,7 @@ def test_extract_frames_gpu_tensor_format(test_video_path, _tmp_path):
 
     assert len(frames) > 0
     import torch
+
     assert all(isinstance(f, torch.Tensor) for f in frames)
     assert all(f.device.type == "cuda" for f in frames)
 
@@ -47,7 +48,7 @@ def test_extract_frames_gpu_jpeg_format(test_video_path, _tmp_path):
     assert len(frames) > 0
     assert all(isinstance(f, bytes) for f in frames)
     # Verify JPEG header
-    assert all(f.startswith(b'\xff\xd8\xff') for f in frames)
+    assert all(f.startswith(b"\xff\xd8\xff") for f in frames)
 
 
 def test_extract_frames_with_crop(test_video_path, _tmp_path):

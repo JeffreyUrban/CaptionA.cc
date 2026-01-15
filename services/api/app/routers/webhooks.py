@@ -127,7 +127,9 @@ async def trigger_prefect_flow(
             }
 
     except httpx.HTTPStatusError as e:
-        logger.error(f"Prefect API returned error: {e.response.status_code} {e.response.text}")
+        logger.error(
+            f"Prefect API returned error: {e.response.status_code} {e.response.text}"
+        )
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Failed to trigger Prefect flow: {e.response.text}",

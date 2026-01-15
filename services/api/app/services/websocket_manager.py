@@ -24,7 +24,9 @@ class SyncSession:
     db_name: str
     user_id: str
     connected_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    last_activity_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    last_activity_at: datetime = field(
+        default_factory=lambda: datetime.now(timezone.utc)
+    )
 
 
 class WebSocketManager:
@@ -207,9 +209,7 @@ class WebSocketManager:
             },
         )
 
-    async def send_error(
-        self, connection_id: str, code: str, message: str
-    ) -> None:
+    async def send_error(self, connection_id: str, code: str, message: str) -> None:
         """Send error message to connection.
 
         Args:

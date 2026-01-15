@@ -60,7 +60,11 @@ def calculate_max_batch_size(
     # Based on test: 950 frames @ 666×64 = 15.41 MB
     reference_bytes_per_frame = (15.41 * 1024 * 1024) / 950
     reference_pixels_per_frame = 666 * 64
-    estimated_bytes_per_frame = reference_bytes_per_frame * (frame_width * frame_height) / reference_pixels_per_frame
+    estimated_bytes_per_frame = (
+        reference_bytes_per_frame
+        * (frame_width * frame_height)
+        / reference_pixels_per_frame
+    )
     max_by_size = int((FILE_SIZE_LIMIT_MB * 1024 * 1024) / estimated_bytes_per_frame)
 
     # Apply configured max frames limit
@@ -70,15 +74,17 @@ def calculate_max_batch_size(
     backend_constraints = backend.get_constraints()
 
     # Calculate max based on backend height constraint if present
-    max_by_backend_height = float('inf')
-    if 'max_image_height' in backend_constraints:
-        backend_height_limit = backend_constraints['max_image_height']
-        max_by_backend_height = (backend_height_limit + SEPARATOR_PX) // (frame_height + SEPARATOR_PX)
+    max_by_backend_height = float("inf")
+    if "max_image_height" in backend_constraints:
+        backend_height_limit = backend_constraints["max_image_height"]
+        max_by_backend_height = (backend_height_limit + SEPARATOR_PX) // (
+            frame_height + SEPARATOR_PX
+        )
 
     # Calculate max based on backend file size constraint if present
-    max_by_backend_size = float('inf')
-    if 'max_file_size_bytes' in backend_constraints:
-        backend_size_limit_bytes = backend_constraints['max_file_size_bytes']
+    max_by_backend_size = float("inf")
+    if "max_file_size_bytes" in backend_constraints:
+        backend_size_limit_bytes = backend_constraints["max_file_size_bytes"]
         max_by_backend_size = int(backend_size_limit_bytes / estimated_bytes_per_frame)
 
     # Find minimum (most restrictive) across all constraints

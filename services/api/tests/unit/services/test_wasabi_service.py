@@ -2,6 +2,7 @@
 Unit tests for Wasabi Service.
 Tests the WasabiServiceImpl class with mocked boto3 S3 client.
 """
+
 import io
 import pytest
 from pathlib import Path
@@ -20,13 +21,13 @@ def mock_s3_client():
 @pytest.fixture
 def wasabi_service(mock_s3_client):
     """Create service with mocked S3 client."""
-    with patch('app.services.wasabi_service.boto3.client') as mock_boto:
+    with patch("app.services.wasabi_service.boto3.client") as mock_boto:
         mock_boto.return_value = mock_s3_client
         service = WasabiServiceImpl(
             access_key="test-access",
-            secret_key="test-secret",   # pragma: allowlist secret
+            secret_key="test-secret",  # pragma: allowlist secret
             bucket="test-bucket",
-            region="us-east-1"
+            region="us-east-1",
         )
         service.s3_client = mock_s3_client
         return service
@@ -39,9 +40,7 @@ class TestUploadFile:
         """Upload bytes data."""
         data = b"test data"
         key = wasabi_service.upload_file(
-            key="test/file.txt",
-            data=data,
-            content_type="text/plain"
+            key="test/file.txt", data=data, content_type="text/plain"
         )
 
         assert key == "test/file.txt"
@@ -58,10 +57,7 @@ class TestUploadFile:
         """Upload file-like object."""
         file_obj = io.BytesIO(b"test data")
 
-        key = wasabi_service.upload_file(
-            key="test/file.txt",
-            data=file_obj
-        )
+        key = wasabi_service.upload_file(key="test/file.txt", data=file_obj)
 
         assert key == "test/file.txt"
         assert mock_s3_client.upload_fileobj.called
@@ -73,9 +69,7 @@ class TestUploadFile:
         local_file.write_text("test content")
 
         key = wasabi_service.upload_from_path(
-            key="test/uploaded.txt",
-            local_path=local_file,
-            content_type="text/plain"
+            key="test/uploaded.txt", local_path=local_file, content_type="text/plain"
         )
 
         assert key == "test/uploaded.txt"
@@ -95,8 +89,7 @@ class TestUploadFile:
         local_file.write_bytes(b"fake video data")
 
         key = wasabi_service.upload_from_path(
-            key="test/video.mp4",
-            local_path=local_file
+            key="test/video.mp4", local_path=local_file
         )
 
         assert key == "test/video.mp4"
@@ -110,8 +103,7 @@ class TestUploadFile:
         """Upload from non-existent path raises FileNotFoundError."""
         with pytest.raises(FileNotFoundError):
             wasabi_service.upload_from_path(
-                key="test/file.txt",
-                local_path="/nonexistent/file.txt"
+                key="test/file.txt", local_path="/nonexistent/file.txt"
             )
 
 
@@ -122,31 +114,24 @@ class TestDownloadFile:
         """Download file to local path."""
         local_path = tmp_path / "downloaded.txt"
 
-        wasabi_service.download_file(
-            key="test/file.txt",
-            local_path=str(local_path)
-        )
+        wasabi_service.download_file(key="test/file.txt", local_path=str(local_path))
 
         assert mock_s3_client.download_file.called
         call_args = mock_s3_client.download_file.call_args
         assert call_args[0][0] == "test-bucket"
         assert call_args[0][1] == "test/file.txt"
 
-    def test_download_creates_parent_dirs(
-        self, wasabi_service, tmp_path
-    ):
+    def test_download_creates_parent_dirs(self, wasabi_service, tmp_path):
         """Download creates parent directories."""
         local_path = tmp_path / "nested" / "dir" / "file.txt"
 
-        wasabi_service.download_file(
-            key="test/file.txt",
-            local_path=str(local_path)
-        )
+        wasabi_service.download_file(key="test/file.txt", local_path=str(local_path))
 
         assert local_path.parent.exists()
 
     def test_download_to_bytes(self, wasabi_service, mock_s3_client):
         """Download file to memory as bytes."""
+
         # Mock the download_fileobj to write data to buffer
         def mock_download(_bucket, _key, buffer):
             buffer.write(b"test file content")
@@ -183,10 +168,12 @@ class TestDeleteOperations:
         mock_s3_client.get_paginator.return_value = paginator
 
         pages = [
-            {"Contents": [
-                {"Key": "tenant/video/file1.jpg"},
-                {"Key": "tenant/video/file2.jpg"}
-            ]}
+            {
+                "Contents": [
+                    {"Key": "tenant/video/file1.jpg"},
+                    {"Key": "tenant/video/file2.jpg"},
+                ]
+            }
         ]
         paginator.paginate.return_value = pages
 
@@ -242,11 +229,13 @@ class TestListFiles:
         mock_s3_client.get_paginator.return_value = paginator
 
         pages = [
-            {"Contents": [
-                {"Key": "tenant/video/file1.jpg"},
-                {"Key": "tenant/video/file2.jpg"},
-                {"Key": "tenant/video/file3.jpg"}
-            ]}
+            {
+                "Contents": [
+                    {"Key": "tenant/video/file1.jpg"},
+                    {"Key": "tenant/video/file2.jpg"},
+                    {"Key": "tenant/video/file3.jpg"},
+                ]
+            }
         ]
         paginator.paginate.return_value = pages
 
@@ -256,7 +245,7 @@ class TestListFiles:
         assert files == [
             "tenant/video/file1.jpg",
             "tenant/video/file2.jpg",
-            "tenant/video/file3.jpg"
+            "tenant/video/file3.jpg",
         ]
 
     def test_list_files_with_max_keys(self, wasabi_service, mock_s3_client):
@@ -265,11 +254,13 @@ class TestListFiles:
         mock_s3_client.get_paginator.return_value = paginator
 
         pages = [
-            {"Contents": [
-                {"Key": "tenant/video/file1.jpg"},
-                {"Key": "tenant/video/file2.jpg"},
-                {"Key": "tenant/video/file3.jpg"}
-            ]}
+            {
+                "Contents": [
+                    {"Key": "tenant/video/file1.jpg"},
+                    {"Key": "tenant/video/file2.jpg"},
+                    {"Key": "tenant/video/file3.jpg"},
+                ]
+            }
         ]
         paginator.paginate.return_value = pages
 
@@ -299,8 +290,7 @@ class TestPresignedUrl:
         )
 
         url = wasabi_service.generate_presigned_url(
-            key="test/file.txt",
-            expiration_seconds=1800
+            key="test/file.txt", expiration_seconds=1800
         )
 
         assert url.startswith("https://s3.us-east-1.wasabisys.com")
@@ -321,12 +311,18 @@ class TestContentTypeGuessing:
         # Test standard mimetypes
         assert WasabiServiceImpl._guess_content_type(Path("file.txt")) == "text/plain"
         assert WasabiServiceImpl._guess_content_type(Path("file.html")) == "text/html"
-        assert WasabiServiceImpl._guess_content_type(Path("file.json")) == "application/json"
+        assert (
+            WasabiServiceImpl._guess_content_type(Path("file.json"))
+            == "application/json"
+        )
 
     def test_guess_content_type_video(self):
         """Guess content type for video files."""
         assert WasabiServiceImpl._guess_content_type(Path("video.mp4")) == "video/mp4"
-        assert WasabiServiceImpl._guess_content_type(Path("video.mov")) == "video/quicktime"
+        assert (
+            WasabiServiceImpl._guess_content_type(Path("video.mov"))
+            == "video/quicktime"
+        )
         assert WasabiServiceImpl._guess_content_type(Path("video.webm")) == "video/webm"
 
     def test_guess_content_type_image(self):
@@ -337,8 +333,14 @@ class TestContentTypeGuessing:
 
     def test_guess_content_type_compressed(self):
         """Guess content type for compressed files."""
-        assert WasabiServiceImpl._guess_content_type(Path("archive.gz")) == "application/gzip"
-        assert WasabiServiceImpl._guess_content_type(Path("archive.tar")) == "application/x-tar"
+        assert (
+            WasabiServiceImpl._guess_content_type(Path("archive.gz"))
+            == "application/gzip"
+        )
+        assert (
+            WasabiServiceImpl._guess_content_type(Path("archive.tar"))
+            == "application/x-tar"
+        )
 
     def test_guess_content_type_unknown(self):
         """Guess content type for unknown extension returns None."""

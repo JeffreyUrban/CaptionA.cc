@@ -114,7 +114,9 @@ class WasabiUploadWorker:
 
             # Check if working copy exists
             if not cr_manager.has_working_copy(tenant_id, video_id, db_name):
-                logger.warning(f"No working copy for {video_id}/{db_name}, skipping upload")
+                logger.warning(
+                    f"No working copy for {video_id}/{db_name}, skipping upload"
+                )
                 continue
 
             try:

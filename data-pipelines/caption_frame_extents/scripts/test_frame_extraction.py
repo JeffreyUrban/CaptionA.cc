@@ -43,21 +43,29 @@ def test_frame_offset_calculation():
         # Verify modulo detection
         detected_modulo = determine_modulo_for_frame(frame_idx)
         if detected_modulo != expected_modulo:
-            console.print(f"[red]✗ Frame {frame_idx}: expected modulo {expected_modulo}, got {detected_modulo}[/red]")
+            console.print(
+                f"[red]✗ Frame {frame_idx}: expected modulo {expected_modulo}, got {detected_modulo}[/red]"
+            )
             continue
 
         # Verify offset calculation
         try:
             offset = calculate_frame_offset(frame_idx, detected_modulo)
             if offset == expected_offset:
-                console.print(f"[green]✓ Frame {frame_idx}: modulo {detected_modulo}, offset {offset}[/green]")
+                console.print(
+                    f"[green]✓ Frame {frame_idx}: modulo {detected_modulo}, offset {offset}[/green]"
+                )
                 passed += 1
             else:
-                console.print(f"[red]✗ Frame {frame_idx}: expected offset {expected_offset}, got {offset}[/red]")
+                console.print(
+                    f"[red]✗ Frame {frame_idx}: expected offset {expected_offset}, got {offset}[/red]"
+                )
         except ValueError as e:
             console.print(f"[red]✗ Frame {frame_idx}: {e}[/red]")
 
-    console.print(f"\n[{'green' if passed == len(test_cases) else 'yellow'}]Passed {passed}/{len(test_cases)} tests[/]")
+    console.print(
+        f"\n[{'green' if passed == len(test_cases) else 'yellow'}]Passed {passed}/{len(test_cases)} tests[/]"
+    )
 
 
 def main():

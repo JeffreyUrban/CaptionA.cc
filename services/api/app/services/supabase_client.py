@@ -164,13 +164,15 @@ class DatabaseStateRepository:
         now = datetime.now(timezone.utc).isoformat()
         response = (
             self._table()
-            .update({
-                "lock_holder_user_id": user_id,
-                "lock_type": "client",
-                "locked_at": now,
-                "last_activity_at": now,
-                "active_connection_id": connection_id,
-            })
+            .update(
+                {
+                    "lock_holder_user_id": user_id,
+                    "lock_type": "client",
+                    "locked_at": now,
+                    "last_activity_at": now,
+                    "active_connection_id": connection_id,
+                }
+            )
             .eq("video_id", video_id)
             .eq("database_name", db_name)
             .execute()
@@ -189,12 +191,14 @@ class DatabaseStateRepository:
         """
         response = (
             self._table()
-            .update({
-                "lock_holder_user_id": None,
-                "lock_type": None,
-                "locked_at": None,
-                "active_connection_id": None,
-            })
+            .update(
+                {
+                    "lock_holder_user_id": None,
+                    "lock_type": None,
+                    "locked_at": None,
+                    "active_connection_id": None,
+                }
+            )
             .eq("video_id", video_id)
             .eq("database_name", db_name)
             .execute()
@@ -230,9 +234,9 @@ class DatabaseStateRepository:
 
         new_version = state.get("server_version", 0) + 1
 
-        self._table().update({"server_version": new_version}).eq("video_id", video_id).eq(
-            "database_name", db_name
-        ).execute()
+        self._table().update({"server_version": new_version}).eq(
+            "video_id", video_id
+        ).eq("database_name", db_name).execute()
 
         return new_version
 
@@ -250,10 +254,12 @@ class DatabaseStateRepository:
             version: Version that was uploaded
         """
         now = datetime.now(timezone.utc).isoformat()
-        self._table().update({
-            "wasabi_version": version,
-            "wasabi_synced_at": now,
-        }).eq("video_id", video_id).eq("database_name", db_name).execute()
+        self._table().update(
+            {
+                "wasabi_version": version,
+                "wasabi_synced_at": now,
+            }
+        ).eq("video_id", video_id).eq("database_name", db_name).execute()
 
     async def set_working_copy_path(
         self,
@@ -357,10 +363,7 @@ class DatabaseStateRepository:
             List of state dicts with stale locks
         """
         response = (
-            self._table()
-            .select("*")
-            .not_.is_("lock_holder_user_id", "null")
-            .execute()
+            self._table().select("*").not_.is_("lock_holder_user_id", "null").execute()
         )
 
         all_locked = self._extract_list(response)

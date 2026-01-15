@@ -162,7 +162,9 @@ class TestWebhooksRouter:
         assert json_data["status"] == "ignored"
         assert json_data["success"] is True
 
-    def test_webhook_success_premium_tier(self, client, mock_settings, mock_prefect_api):
+    def test_webhook_success_premium_tier(
+        self, client, mock_settings, mock_prefect_api
+    ):
         """Test successful webhook processing with premium tier."""
         response = client.post(
             "/webhooks/supabase/videos",
@@ -197,7 +199,10 @@ class TestWebhooksRouter:
         assert "parameters" in request_body
         assert request_body["parameters"]["video_id"] == "video-123"
         assert request_body["parameters"]["tenant_id"] == "tenant-456"
-        assert request_body["parameters"]["storage_key"] == "tenant-456/videos/video-123.mp4"
+        assert (
+            request_body["parameters"]["storage_key"]
+            == "tenant-456/videos/video-123.mp4"
+        )
 
         # Verify priority was calculated (premium = 70)
         assert "priority" in request_body
@@ -244,9 +249,13 @@ class TestWebhooksRouter:
         call_args = mock_prefect_api.post.call_args
         request_body = call_args[1]["json"]
         assert request_body["priority"] >= 50
-        assert request_body["priority"] <= 52  # At most 2 points age boost for recent video
+        assert (
+            request_body["priority"] <= 52
+        )  # At most 2 points age boost for recent video
 
-    def test_webhook_success_enterprise_tier(self, client, mock_settings, mock_prefect_api):
+    def test_webhook_success_enterprise_tier(
+        self, client, mock_settings, mock_prefect_api
+    ):
         """Test successful webhook processing with enterprise tier."""
         response = client.post(
             "/webhooks/supabase/videos",
@@ -273,7 +282,9 @@ class TestWebhooksRouter:
         request_body = call_args[1]["json"]
         assert request_body["priority"] >= 90
 
-    def test_webhook_success_default_tier_when_missing(self, client, mock_settings, mock_prefect_api):
+    def test_webhook_success_default_tier_when_missing(
+        self, client, mock_settings, mock_prefect_api
+    ):
         """Test webhook defaults to free tier when tenant_tier is missing."""
         from datetime import datetime, timezone
 
@@ -304,7 +315,9 @@ class TestWebhooksRouter:
         call_args = mock_prefect_api.post.call_args
         request_body = call_args[1]["json"]
         assert request_body["priority"] >= 50
-        assert request_body["priority"] <= 52  # At most 2 points age boost for recent video
+        assert (
+            request_body["priority"] <= 52
+        )  # At most 2 points age boost for recent video
 
     def test_webhook_prefect_api_not_configured(self, client, mock_settings):
         """Test webhook fails when Prefect API is not configured."""
@@ -345,7 +358,9 @@ class TestWebhooksRouter:
 
             response = client.post(
                 "/webhooks/supabase/videos",
-                headers={"Authorization": "Bearer test-secret"},  # pragma: allowlist secret
+                headers={
+                    "Authorization": "Bearer test-secret"
+                },  # pragma: allowlist secret
                 json={
                     "type": "INSERT",
                     "table": "videos",
@@ -376,7 +391,9 @@ class TestWebhooksRouter:
 
             response = client.post(
                 "/webhooks/supabase/videos",
-                headers={"Authorization": "Bearer test-secret"},  # pragma: allowlist secret
+                headers={
+                    "Authorization": "Bearer test-secret"
+                },  # pragma: allowlist secret
                 json={
                     "type": "INSERT",
                     "table": "videos",
@@ -392,7 +409,9 @@ class TestWebhooksRouter:
             assert response.status_code == 503
             assert "Failed to connect to Prefect API" in response.json()["detail"]
 
-    def test_webhook_includes_prefect_api_key(self, client, mock_settings, mock_prefect_api):
+    def test_webhook_includes_prefect_api_key(
+        self, client, mock_settings, mock_prefect_api
+    ):
         """Test webhook includes Prefect API key in request headers when configured."""
         mock_settings.prefect_api_key = "test-api-key"  # pragma: allowlist secret
         response = client.post(
@@ -416,13 +435,17 @@ class TestWebhooksRouter:
         call_args = mock_prefect_api.post.call_args
         headers = call_args[1]["headers"]
         assert "Authorization" in headers
-        assert headers["Authorization"] == "Bearer test-api-key"  # pragma: allowlist secret
+        assert (
+            headers["Authorization"] == "Bearer test-api-key"
+        )  # pragma: allowlist secret
 
     def test_webhook_auth_header_malformed_no_bearer(self, client, mock_settings):
         """Test webhook with malformed auth header (no Bearer prefix)."""
         response = client.post(
             "/webhooks/supabase/videos",
-            headers={"Authorization": "test-secret"},  # Missing "Bearer" prefix # pragma: allowlist secret
+            headers={
+                "Authorization": "test-secret"
+            },  # Missing "Bearer" prefix # pragma: allowlist secret
             json={
                 "type": "INSERT",
                 "table": "videos",

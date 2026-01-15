@@ -322,7 +322,10 @@ class ConsolidatedLayout(BaseModel):
             )
 
         layout_params = None
-        if config.verticalPosition is not None or config.analysisModelVersion is not None:
+        if (
+            config.verticalPosition is not None
+            or config.analysisModelVersion is not None
+        ):
             layout_params = LayoutParams(
                 verticalPosition=config.verticalPosition,
                 verticalStd=config.verticalStd,

@@ -52,7 +52,7 @@ def mock_ocr_result() -> CaptionOcrResult:
         ocr_text="Sample Caption Text",
         confidence=0.95,
         frame_count=101,
-        median_frame_index=150
+        median_frame_index=150,
     )
 
 
@@ -63,7 +63,7 @@ def mock_ocr_result_low_confidence() -> CaptionOcrResult:
         ocr_text="Uncertain Text",
         confidence=0.42,
         frame_count=101,
-        median_frame_index=150
+        median_frame_index=150,
     )
 
 
@@ -96,9 +96,13 @@ class TestCaptionOcrSuccess:
         # Mock CaptionServiceImpl
         mock_caption_service = Mock()
 
-        with patch('modal.App.lookup', return_value=mock_modal_app), \
-             patch('app.flows.caption_ocr.CaptionServiceImpl', return_value=mock_caption_service):
-
+        with (
+            patch("modal.App.lookup", return_value=mock_modal_app),
+            patch(
+                "app.flows.caption_ocr.CaptionServiceImpl",
+                return_value=mock_caption_service,
+            ),
+        ):
             from app.flows.caption_ocr import caption_ocr
 
             # Run the flow
@@ -116,14 +120,14 @@ class TestCaptionOcrSuccess:
 
             # First call: status → 'processing'
             first_call = mock_caption_service.update_caption_status.call_args_list[0]
-            assert first_call[1]['video_id'] == test_video_id
-            assert first_call[1]['tenant_id'] == test_tenant_id
-            assert first_call[1]['caption_id'] == test_caption_id
-            assert first_call[1]['status'] == 'processing'
+            assert first_call[1]["video_id"] == test_video_id
+            assert first_call[1]["tenant_id"] == test_tenant_id
+            assert first_call[1]["caption_id"] == test_caption_id
+            assert first_call[1]["status"] == "processing"
 
             # Second call: status → 'completed'
             second_call = mock_caption_service.update_caption_status.call_args_list[1]
-            assert second_call[1]['status'] == 'completed'
+            assert second_call[1]["status"] == "completed"
 
     @pytest.mark.asyncio
     async def test_modal_called_with_frame_range(
@@ -145,9 +149,13 @@ class TestCaptionOcrSuccess:
 
         mock_caption_service = Mock()
 
-        with patch('modal.App.lookup', return_value=mock_modal_app), \
-             patch('app.flows.caption_ocr.CaptionServiceImpl', return_value=mock_caption_service):
-
+        with (
+            patch("modal.App.lookup", return_value=mock_modal_app),
+            patch(
+                "app.flows.caption_ocr.CaptionServiceImpl",
+                return_value=mock_caption_service,
+            ),
+        ):
             from app.flows.caption_ocr import caption_ocr
 
             # Run the flow
@@ -165,11 +173,11 @@ class TestCaptionOcrSuccess:
 
             # Verify call arguments
             call_kwargs = mock_modal_function.remote.aio.call_args[1]
-            assert call_kwargs['start_frame'] == test_start_frame
-            assert call_kwargs['end_frame'] == test_end_frame
+            assert call_kwargs["start_frame"] == test_start_frame
+            assert call_kwargs["end_frame"] == test_end_frame
 
             # Verify chunks_prefix includes version
-            chunks_prefix = call_kwargs['chunks_prefix']
+            chunks_prefix = call_kwargs["chunks_prefix"]
             assert f"cropped_frames_v{test_version}" in chunks_prefix
             assert test_tenant_id in chunks_prefix
             assert test_video_id in chunks_prefix
@@ -194,9 +202,13 @@ class TestCaptionOcrSuccess:
 
         mock_caption_service = Mock()
 
-        with patch('modal.App.lookup', return_value=mock_modal_app), \
-             patch('app.flows.caption_ocr.CaptionServiceImpl', return_value=mock_caption_service):
-
+        with (
+            patch("modal.App.lookup", return_value=mock_modal_app),
+            patch(
+                "app.flows.caption_ocr.CaptionServiceImpl",
+                return_value=mock_caption_service,
+            ),
+        ):
             from app.flows.caption_ocr import caption_ocr
 
             # Run the flow
@@ -238,9 +250,13 @@ class TestCaptionOcrSuccess:
 
         mock_caption_service = Mock()
 
-        with patch('modal.App.lookup', return_value=mock_modal_app), \
-             patch('app.flows.caption_ocr.CaptionServiceImpl', return_value=mock_caption_service):
-
+        with (
+            patch("modal.App.lookup", return_value=mock_modal_app),
+            patch(
+                "app.flows.caption_ocr.CaptionServiceImpl",
+                return_value=mock_caption_service,
+            ),
+        ):
             from app.flows.caption_ocr import caption_ocr
 
             # Run the flow
@@ -255,9 +271,9 @@ class TestCaptionOcrSuccess:
 
             # Verify return structure
             assert isinstance(result, dict)
-            assert result['caption_id'] == test_caption_id
-            assert result['ocr_text'] == mock_ocr_result.ocr_text
-            assert result['confidence'] == mock_ocr_result.confidence
+            assert result["caption_id"] == test_caption_id
+            assert result["ocr_text"] == mock_ocr_result.ocr_text
+            assert result["confidence"] == mock_ocr_result.confidence
 
     @pytest.mark.asyncio
     async def test_flow_uses_correct_version(
@@ -281,9 +297,13 @@ class TestCaptionOcrSuccess:
 
         mock_caption_service = Mock()
 
-        with patch('modal.App.lookup', return_value=mock_modal_app), \
-             patch('app.flows.caption_ocr.CaptionServiceImpl', return_value=mock_caption_service):
-
+        with (
+            patch("modal.App.lookup", return_value=mock_modal_app),
+            patch(
+                "app.flows.caption_ocr.CaptionServiceImpl",
+                return_value=mock_caption_service,
+            ),
+        ):
             from app.flows.caption_ocr import caption_ocr
 
             # Run the flow
@@ -298,7 +318,7 @@ class TestCaptionOcrSuccess:
 
             # Verify chunks_prefix includes correct version
             call_kwargs = mock_modal_function.remote.aio.call_args[1]
-            chunks_prefix = call_kwargs['chunks_prefix']
+            chunks_prefix = call_kwargs["chunks_prefix"]
             assert f"cropped_frames_v{test_version}" in chunks_prefix
             assert "cropped_frames_v3" in chunks_prefix
 
@@ -322,9 +342,13 @@ class TestCaptionOcrSuccess:
 
         mock_caption_service = Mock()
 
-        with patch('modal.App.lookup', return_value=mock_modal_app), \
-             patch('app.flows.caption_ocr.CaptionServiceImpl', return_value=mock_caption_service):
-
+        with (
+            patch("modal.App.lookup", return_value=mock_modal_app),
+            patch(
+                "app.flows.caption_ocr.CaptionServiceImpl",
+                return_value=mock_caption_service,
+            ),
+        ):
             from app.flows.caption_ocr import caption_ocr
 
             # Run the flow
@@ -338,13 +362,13 @@ class TestCaptionOcrSuccess:
             )
 
             # Verify confidence is in valid range
-            assert 0.0 <= result['confidence'] <= 1.0
-            assert result['confidence'] == 0.42
+            assert 0.0 <= result["confidence"] <= 1.0
+            assert result["confidence"] == 0.42
 
             # Verify low confidence was still saved
             mock_caption_service.update_caption_ocr.assert_called_once()
             call_kwargs = mock_caption_service.update_caption_ocr.call_args[1]
-            assert call_kwargs['confidence'] == 0.42
+            assert call_kwargs["confidence"] == 0.42
 
 
 # ============================================================================
@@ -398,9 +422,13 @@ class TestCaptionOcrRetries:
 
         mock_caption_service = Mock()
 
-        with patch('modal.App.lookup', return_value=mock_modal_app), \
-             patch('app.flows.caption_ocr.CaptionServiceImpl', return_value=mock_caption_service):
-
+        with (
+            patch("modal.App.lookup", return_value=mock_modal_app),
+            patch(
+                "app.flows.caption_ocr.CaptionServiceImpl",
+                return_value=mock_caption_service,
+            ),
+        ):
             from app.flows.caption_ocr import caption_ocr
 
             # Run the flow - should succeed after retry (Prefect handles this)
@@ -414,16 +442,17 @@ class TestCaptionOcrRetries:
             )
 
             # Verify the flow succeeded on retry
-            assert result['caption_id'] == test_caption_id
-            assert result['ocr_text'] == mock_ocr_result.ocr_text
+            assert result["caption_id"] == test_caption_id
+            assert result["ocr_text"] == mock_ocr_result.ocr_text
 
             # Verify Modal function was called twice (initial + retry)
             assert mock_modal_function.remote.aio.call_count == 2
 
             # Verify final status is 'completed'
             completed_calls = [
-                call for call in mock_caption_service.update_caption_status.call_args_list
-                if call[1].get('status') == 'completed'
+                call
+                for call in mock_caption_service.update_caption_status.call_args_list
+                if call[1].get("status") == "completed"
             ]
             assert len(completed_calls) >= 1
 
@@ -442,13 +471,19 @@ class TestCaptionOcrRetries:
     ):
         """Verify error status set after all retries exhausted."""
         # Configure Modal function to always fail
-        mock_modal_function.remote.aio.side_effect = Exception("Permanent Modal failure")
+        mock_modal_function.remote.aio.side_effect = Exception(
+            "Permanent Modal failure"
+        )
 
         mock_caption_service = Mock()
 
-        with patch('modal.App.lookup', return_value=mock_modal_app), \
-             patch('app.flows.caption_ocr.CaptionServiceImpl', return_value=mock_caption_service):
-
+        with (
+            patch("modal.App.lookup", return_value=mock_modal_app),
+            patch(
+                "app.flows.caption_ocr.CaptionServiceImpl",
+                return_value=mock_caption_service,
+            ),
+        ):
             from app.flows.caption_ocr import caption_ocr
 
             # Run the flow - should fail
@@ -464,15 +499,16 @@ class TestCaptionOcrRetries:
 
             # Verify error status was set with error message
             error_status_calls = [
-                call for call in mock_caption_service.update_caption_status.call_args_list
-                if call[1].get('status') == 'error'
+                call
+                for call in mock_caption_service.update_caption_status.call_args_list
+                if call[1].get("status") == "error"
             ]
             assert len(error_status_calls) >= 1
 
             # Verify error message was included
             error_call = error_status_calls[0]
-            assert error_call[1].get('error_message') is not None
-            assert "Permanent Modal failure" in error_call[1]['error_message']
+            assert error_call[1].get("error_message") is not None
+            assert "Permanent Modal failure" in error_call[1]["error_message"]
 
     @pytest.mark.asyncio
     async def test_retry_count_tracked(
@@ -493,9 +529,13 @@ class TestCaptionOcrRetries:
 
         mock_caption_service = Mock()
 
-        with patch('modal.App.lookup', return_value=mock_modal_app), \
-             patch('app.flows.caption_ocr.CaptionServiceImpl', return_value=mock_caption_service):
-
+        with (
+            patch("modal.App.lookup", return_value=mock_modal_app),
+            patch(
+                "app.flows.caption_ocr.CaptionServiceImpl",
+                return_value=mock_caption_service,
+            ),
+        ):
             from app.flows.caption_ocr import caption_ocr
 
             # Run the flow
@@ -601,13 +641,19 @@ class TestCaptionOcrErrors:
     ):
         """Verify timeout exception caught and status updated to error."""
         # Configure Modal function to timeout
-        mock_modal_function.remote.aio.side_effect = TimeoutError("Modal function timeout")
+        mock_modal_function.remote.aio.side_effect = TimeoutError(
+            "Modal function timeout"
+        )
 
         mock_caption_service = Mock()
 
-        with patch('modal.App.lookup', return_value=mock_modal_app), \
-             patch('app.flows.caption_ocr.CaptionServiceImpl', return_value=mock_caption_service):
-
+        with (
+            patch("modal.App.lookup", return_value=mock_modal_app),
+            patch(
+                "app.flows.caption_ocr.CaptionServiceImpl",
+                return_value=mock_caption_service,
+            ),
+        ):
             from app.flows.caption_ocr import caption_ocr
 
             # Run the flow
@@ -623,11 +669,12 @@ class TestCaptionOcrErrors:
 
             # Verify error status was set
             error_calls = [
-                call for call in mock_caption_service.update_caption_status.call_args_list
-                if call[1].get('status') == 'error'
+                call
+                for call in mock_caption_service.update_caption_status.call_args_list
+                if call[1].get("status") == "error"
             ]
             assert len(error_calls) >= 1
-            assert "timeout" in error_calls[0][1]['error_message'].lower()
+            assert "timeout" in error_calls[0][1]["error_message"].lower()
 
     @pytest.mark.asyncio
     async def test_invalid_frame_range(
@@ -647,9 +694,13 @@ class TestCaptionOcrErrors:
 
         mock_caption_service = Mock()
 
-        with patch('modal.App.lookup', return_value=mock_modal_app), \
-             patch('app.flows.caption_ocr.CaptionServiceImpl', return_value=mock_caption_service):
-
+        with (
+            patch("modal.App.lookup", return_value=mock_modal_app),
+            patch(
+                "app.flows.caption_ocr.CaptionServiceImpl",
+                return_value=mock_caption_service,
+            ),
+        ):
             from app.flows.caption_ocr import caption_ocr
 
             # Run the flow - Modal may validate this, or we get empty result
@@ -666,8 +717,9 @@ class TestCaptionOcrErrors:
             except Exception:
                 # If it raises, verify error status was set
                 error_calls = [
-                    call for call in mock_caption_service.update_caption_status.call_args_list
-                    if call[1].get('status') == 'error'
+                    call
+                    for call in mock_caption_service.update_caption_status.call_args_list
+                    if call[1].get("status") == "error"
                 ]
                 assert len(error_calls) >= 1
 
@@ -688,13 +740,19 @@ class TestCaptionOcrErrors:
         invalid_version = 999
 
         # Configure Modal to fail with version not found
-        mock_modal_function.remote.aio.side_effect = Exception("Cropped frames version 999 not found")
+        mock_modal_function.remote.aio.side_effect = Exception(
+            "Cropped frames version 999 not found"
+        )
 
         mock_caption_service = Mock()
 
-        with patch('modal.App.lookup', return_value=mock_modal_app), \
-             patch('app.flows.caption_ocr.CaptionServiceImpl', return_value=mock_caption_service):
-
+        with (
+            patch("modal.App.lookup", return_value=mock_modal_app),
+            patch(
+                "app.flows.caption_ocr.CaptionServiceImpl",
+                return_value=mock_caption_service,
+            ),
+        ):
             from app.flows.caption_ocr import caption_ocr
 
             # Run the flow
@@ -710,8 +768,9 @@ class TestCaptionOcrErrors:
 
             # Verify error status was set
             error_calls = [
-                call for call in mock_caption_service.update_caption_status.call_args_list
-                if call[1].get('status') == 'error'
+                call
+                for call in mock_caption_service.update_caption_status.call_args_list
+                if call[1].get("status") == "error"
             ]
             assert len(error_calls) >= 1
 
@@ -737,11 +796,17 @@ class TestCaptionOcrErrors:
 
         # Configure caption service to fail on first status update
         mock_caption_service = Mock()
-        mock_caption_service.update_caption_status.side_effect = Exception("Caption 99999 not found")
+        mock_caption_service.update_caption_status.side_effect = Exception(
+            "Caption 99999 not found"
+        )
 
-        with patch('modal.App.lookup', return_value=mock_modal_app), \
-             patch('app.flows.caption_ocr.CaptionServiceImpl', return_value=mock_caption_service):
-
+        with (
+            patch("modal.App.lookup", return_value=mock_modal_app),
+            patch(
+                "app.flows.caption_ocr.CaptionServiceImpl",
+                return_value=mock_caption_service,
+            ),
+        ):
             from app.flows.caption_ocr import caption_ocr
 
             # Run the flow
@@ -775,9 +840,13 @@ class TestCaptionOcrErrors:
 
         mock_caption_service = Mock()
 
-        with patch('modal.App.lookup', return_value=mock_modal_app), \
-             patch('app.flows.caption_ocr.CaptionServiceImpl', return_value=mock_caption_service):
-
+        with (
+            patch("modal.App.lookup", return_value=mock_modal_app),
+            patch(
+                "app.flows.caption_ocr.CaptionServiceImpl",
+                return_value=mock_caption_service,
+            ),
+        ):
             from app.flows.caption_ocr import caption_ocr
 
             # Run the flow
@@ -793,14 +862,15 @@ class TestCaptionOcrErrors:
 
             # Verify error status includes the error message
             error_calls = [
-                call for call in mock_caption_service.update_caption_status.call_args_list
-                if call[1].get('status') == 'error'
+                call
+                for call in mock_caption_service.update_caption_status.call_args_list
+                if call[1].get("status") == "error"
             ]
             assert len(error_calls) >= 1
 
             # Verify error message is passed
             error_call = error_calls[0]
-            assert error_call[1]['error_message'] == error_message
+            assert error_call[1]["error_message"] == error_message
 
     @pytest.mark.asyncio
     async def test_modal_app_lookup_failure(
@@ -817,9 +887,13 @@ class TestCaptionOcrErrors:
         mock_caption_service = Mock()
 
         # Configure Modal.App.lookup to fail
-        with patch('modal.App.lookup', side_effect=Exception("Modal app not found")), \
-             patch('app.flows.caption_ocr.CaptionServiceImpl', return_value=mock_caption_service):
-
+        with (
+            patch("modal.App.lookup", side_effect=Exception("Modal app not found")),
+            patch(
+                "app.flows.caption_ocr.CaptionServiceImpl",
+                return_value=mock_caption_service,
+            ),
+        ):
             from app.flows.caption_ocr import caption_ocr
 
             # Run the flow
@@ -835,8 +909,9 @@ class TestCaptionOcrErrors:
 
             # Verify error status was set
             error_calls = [
-                call for call in mock_caption_service.update_caption_status.call_args_list
-                if call[1].get('status') == 'error'
+                call
+                for call in mock_caption_service.update_caption_status.call_args_list
+                if call[1].get("status") == "error"
             ]
             assert len(error_calls) >= 1
 
@@ -863,19 +938,25 @@ class TestCaptionOcrErrors:
 
         def update_status_side_effect(*args, **kwargs):
             call_count[0] += 1
-            status = kwargs.get('status')
-            if status == 'processing':
+            status = kwargs.get("status")
+            if status == "processing":
                 # First call (processing) succeeds
                 return None
-            elif status == 'error':
+            elif status == "error":
                 # Error status update fails
                 raise Exception("Database connection lost")
 
-        mock_caption_service.update_caption_status.side_effect = update_status_side_effect
+        mock_caption_service.update_caption_status.side_effect = (
+            update_status_side_effect
+        )
 
-        with patch('modal.App.lookup', return_value=mock_modal_app), \
-             patch('app.flows.caption_ocr.CaptionServiceImpl', return_value=mock_caption_service):
-
+        with (
+            patch("modal.App.lookup", return_value=mock_modal_app),
+            patch(
+                "app.flows.caption_ocr.CaptionServiceImpl",
+                return_value=mock_caption_service,
+            ),
+        ):
             from app.flows.caption_ocr import caption_ocr
 
             # Run the flow - original Modal exception should still be raised
@@ -891,4 +972,6 @@ class TestCaptionOcrErrors:
                 )
 
             # Verify error status update was attempted at least once
-            assert mock_caption_service.update_caption_status.call_count >= 2  # processing + error
+            assert (
+                mock_caption_service.update_caption_status.call_count >= 2
+            )  # processing + error

@@ -85,9 +85,9 @@ def run_test_and_view():
             layout_db_path = Path(tmpdir) / "layout.db"
 
             # Minimal OCR viz
-            ocr_viz_img = PILImage.new('RGB', (1, 1), color=(0, 0, 0))
+            ocr_viz_img = PILImage.new("RGB", (1, 1), color=(0, 0, 0))
             ocr_viz_buffer = io.BytesIO()
-            ocr_viz_img.save(ocr_viz_buffer, format='PNG')
+            ocr_viz_img.save(ocr_viz_buffer, format="PNG")
             ocr_viz_blob = ocr_viz_buffer.getvalue()
 
             # Create layout.db
@@ -119,17 +119,20 @@ def run_test_and_view():
             """)
 
             cursor = conn.cursor()
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT INTO video_layout_config (id, anchor_type, ocr_visualization_image)
                 VALUES (?, ?, ?)
-            """, (1, 'center', ocr_viz_blob))
+            """,
+                (1, "center", ocr_viz_blob),
+            )
 
             conn.commit()
             conn.close()
 
             # Compress
             layout_db_gz_path = Path(tmpdir) / "layout.db.gz"
-            with open(layout_db_path, 'rb') as f_in, gzip.open(layout_db_gz_path, 'wb') as f_out:
+            with open(layout_db_path, "rb") as f_in, gzip.open(layout_db_gz_path, "wb") as f_out:
                 shutil.copyfileobj(f_in, f_out)
 
             # Upload
@@ -145,8 +148,7 @@ def run_test_and_view():
         # Run Modal function
         print("[3/4] Running Modal function...")
         crop_and_infer_fn = modal.Function.from_name(
-            app_name="extract-crop-frames-and-infer-extents",
-            name="crop_and_infer_sequential"
+            app_name="extract-crop-frames-and-infer-extents", name="crop_and_infer_sequential"
         )
 
         result_call = crop_and_infer_fn.spawn(
@@ -175,17 +177,13 @@ def run_test_and_view():
         print(f"  Searching for chunks at: {actual_prefix}")
 
         # List all cropped frame chunks
-        response = wasabi.s3_client.list_objects_v2(
-            Bucket=settings.wasabi_bucket,
-            Prefix=actual_prefix,
-            MaxKeys=1000
-        )
+        response = wasabi.s3_client.list_objects_v2(Bucket=settings.wasabi_bucket, Prefix=actual_prefix, MaxKeys=1000)
 
-        if 'Contents' not in response:
+        if "Contents" not in response:
             print("  ✗ No cropped frames found")
             return
 
-        webm_chunks = [obj['Key'] for obj in response['Contents'] if obj['Key'].endswith('.webm')]
+        webm_chunks = [obj["Key"] for obj in response["Contents"] if obj["Key"].endswith(".webm")]
         print(f"  Found {len(webm_chunks)} WebM chunks\n")
 
         # Download samples
@@ -232,11 +230,11 @@ def run_test_and_view():
             import platform
             import subprocess
 
-            if platform.system() == 'Darwin':  # macOS
-                subprocess.run(['open', str(downloaded[0])])
+            if platform.system() == "Darwin":  # macOS
+                subprocess.run(["open", str(downloaded[0])])
                 print(f"✓ Opened {downloaded[0].name} in default player")
-            elif platform.system() == 'Linux':
-                subprocess.run(['xdg-open', str(downloaded[0])])
+            elif platform.system() == "Linux":
+                subprocess.run(["xdg-open", str(downloaded[0])])
                 print(f"✓ Opened {downloaded[0].name} in default player")
         except Exception as e:
             print(f"Could not auto-open file: {e}")
@@ -244,6 +242,7 @@ def run_test_and_view():
     except Exception as e:
         print(f"✗ Error: {e}")
         import traceback
+
         traceback.print_exc()
 
 

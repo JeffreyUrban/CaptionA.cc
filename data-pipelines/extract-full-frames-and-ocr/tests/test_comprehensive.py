@@ -10,7 +10,9 @@ import pytest
 # from full_frames.full_frames import CaptionLayout  # type: ignore[attr-defined]
 CaptionLayout: Any = None  # Placeholder for deleted class - tests are skipped
 
-pytestmark = pytest.mark.skip(reason="CaptionLayout class has been refactored/removed - tests need updating")
+pytestmark = pytest.mark.skip(
+    reason="CaptionLayout class has been refactored/removed - tests need updating"
+)
 
 
 def load_fixtures(filename: str):
@@ -31,7 +33,9 @@ ALL_CASES = HANDCRAFTED + EDGE_CASES + RANDOM_CASES
 class TestHandcraftedCases:
     """Test handcrafted cases with known patterns."""
 
-    @pytest.mark.parametrize("fixture", HANDCRAFTED, ids=[f["name"] for f in HANDCRAFTED])
+    @pytest.mark.parametrize(
+        "fixture", HANDCRAFTED, ids=[f["name"] for f in HANDCRAFTED]
+    )
     def test_handcrafted_output(self, fixture):
         """Verify output matches expected for handcrafted cases."""
         assert True
@@ -51,12 +55,16 @@ class TestEdgeCases:
 class TestRandomCases:
     """Test random TEMPLATE_PLACEHOLDER with precomputed oracle results."""
 
-    @pytest.mark.parametrize("fixture", RANDOM_CASES, ids=[f["name"] for f in RANDOM_CASES])
+    @pytest.mark.parametrize(
+        "fixture", RANDOM_CASES, ids=[f["name"] for f in RANDOM_CASES]
+    )
     def test_random_output(self, fixture):
         """Verify output matches oracle for random TEMPLATE_PLACEHOLDER."""
         assert True
 
-    @pytest.mark.parametrize("fixture", RANDOM_CASES, ids=[f["name"] for f in RANDOM_CASES])
+    @pytest.mark.parametrize(
+        "fixture", RANDOM_CASES, ids=[f["name"] for f in RANDOM_CASES]
+    )
     def test_random_statistics(self, fixture):
         """Verify statistics match oracle for random TEMPLATE_PLACEHOLDER."""
         processor = CaptionLayout()

@@ -42,7 +42,9 @@ async def get_stats(video_id: str, auth: Auth):
 
     # Get caption stats
     try:
-        async with caption_db_manager.get_database(auth.tenant_id, video_id) as caption_conn:
+        async with caption_db_manager.get_database(
+            auth.tenant_id, video_id
+        ) as caption_conn:
             caption_repo = CaptionRepository(caption_conn)
             # Get all captions to calculate stats
             captions = caption_repo.list_captions(0, 999999999)
@@ -51,11 +53,14 @@ async def get_stats(video_id: str, auth: Auth):
             # Calculate covered frames (non-gap captions)
             for caption in captions:
                 if caption.captionFrameExtentsState.value != "gap":
-                    covered_frames += caption.endFrameIndex - caption.startFrameIndex + 1
+                    covered_frames += (
+                        caption.endFrameIndex - caption.startFrameIndex + 1
+                    )
 
                 # Count captions needing text
                 if caption.textPending or (
-                    caption.text is None and caption.captionFrameExtentsState.value != "gap"
+                    caption.text is None
+                    and caption.captionFrameExtentsState.value != "gap"
                 ):
                     needs_text_count += 1
 

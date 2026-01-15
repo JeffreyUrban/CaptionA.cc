@@ -48,7 +48,9 @@ def create_token(jwt_secret: str):
 
 
 @pytest.fixture
-async def unauthenticated_client(app: FastAPI, jwt_secret: str) -> AsyncGenerator[AsyncClient, None]:
+async def unauthenticated_client(
+    app: FastAPI, jwt_secret: str
+) -> AsyncGenerator[AsyncClient, None]:
     """Create a test client without auth overrides but with test JWT secret."""
     from unittest.mock import MagicMock
 
@@ -98,8 +100,9 @@ class TestJWTValidation:
 
         # Should not get 401 or 422 (auth should succeed)
         # Might get 500 from database errors, but that means auth worked
-        assert response.status_code not in [401, 422], \
+        assert response.status_code not in [401, 422], (
             f"Authentication failed with status {response.status_code}: {response.json()}"
+        )
 
     async def test_missing_authorization_header(
         self,
@@ -167,7 +170,9 @@ class TestJWTValidation:
     ):
         """Should return 401 when JWT signature is invalid."""
         # Create token with wrong secret
-        token = jwt.encode(valid_token_payload, "wrong-secret", algorithm="HS256")  # pragma: allowlist secret
+        token = jwt.encode(
+            valid_token_payload, "wrong-secret", algorithm="HS256"
+        )  # pragma: allowlist secret
 
         response = await unauthenticated_client.get(
             "/videos/test-video/captions",
@@ -440,7 +445,9 @@ class TestTenantIsolation:
 
         original_get_database = mock_seeded_database_manager.get_database
 
-        async def tracking_get_database(tenant_id: str, video_id: str, writable: bool = False):
+        async def tracking_get_database(
+            tenant_id: str, video_id: str, writable: bool = False
+        ):
             requested_tenant_ids.append(tenant_id)
             async with original_get_database(tenant_id, video_id, writable) as conn:
                 yield conn
@@ -452,7 +459,9 @@ class TestTenantIsolation:
             return_value=mock_seeded_database_manager,
         ):
             transport = ASGITransport(app=app)
-            async with AsyncClient(transport=transport, base_url="http://test") as client:
+            async with AsyncClient(
+                transport=transport, base_url="http://test"
+            ) as client:
                 # Request with tenant-A token
                 await client.get(
                     f"/videos/{test_video_id}/captions",
@@ -736,7 +745,9 @@ class TestWebhookAuthentication:
                     "storage_key": "path/to/video.mp4",
                 },
             },
-            headers={"Authorization": "Bearer wrong-secret"},  # pragma: allowlist secret
+            headers={
+                "Authorization": "Bearer wrong-secret"
+            },  # pragma: allowlist secret
         )
 
         assert response.status_code == 401

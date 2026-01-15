@@ -8,16 +8,16 @@ import sys
 import pytest
 
 # Mock modal and extract_crop_frames_and_infer_extents modules before any imports
-sys.modules['modal'] = MagicMock()
-sys.modules['extract_crop_frames_and_infer_extents'] = MagicMock()
-sys.modules['extract_crop_frames_and_infer_extents.models'] = MagicMock()
-
+sys.modules["modal"] = MagicMock()
+sys.modules["extract_crop_frames_and_infer_extents"] = MagicMock()
+sys.modules["extract_crop_frames_and_infer_extents.models"] = MagicMock()
 
 
 # Mock CropRegion and CropInferResult since extract_crop_frames_and_infer_extents is not installed in test environment
 @dataclass
 class CropRegion:
     """Normalized crop region coordinates (0.0 to 1.0)."""
+
     crop_left: float
     crop_top: float
     crop_right: float
@@ -25,15 +25,18 @@ class CropRegion:
 
     def __post_init__(self):
         """Validate crop region coordinates."""
-        assert 0.0 <= self.crop_left < self.crop_right <= 1.0, \
+        assert 0.0 <= self.crop_left < self.crop_right <= 1.0, (
             f"Invalid horizontal crop: {self.crop_left} to {self.crop_right}"
-        assert 0.0 <= self.crop_top < self.crop_bottom <= 1.0, \
+        )
+        assert 0.0 <= self.crop_top < self.crop_bottom <= 1.0, (
             f"Invalid vertical crop: {self.crop_top} to {self.crop_bottom}"
+        )
 
 
 @dataclass
 class CropInferResult:
     """Result from crop_and_infer_caption_frame_extents Modal function."""
+
     version: int
     frame_count: int
     label_counts: dict[str, int]
@@ -43,20 +46,25 @@ class CropInferResult:
 
 
 # Register mock classes with the mocked module
-sys.modules['extract_crop_frames_and_infer_extents.models'].CropRegion = CropRegion
-sys.modules['extract_crop_frames_and_infer_extents.models'].CropInferResult = CropInferResult
+sys.modules["extract_crop_frames_and_infer_extents.models"].CropRegion = CropRegion
+sys.modules[
+    "extract_crop_frames_and_infer_extents.models"
+].CropInferResult = CropInferResult
 
 
 @dataclass
 class CaptionOcrResult:
     """Result from generate_caption_ocr Modal function."""
+
     ocr_text: str
     confidence: float
     frame_count: int
     median_frame_index: int = None
 
 
-sys.modules['extract_crop_frames_and_infer_extents.models'].CaptionOcrResult = CaptionOcrResult
+sys.modules[
+    "extract_crop_frames_and_infer_extents.models"
+].CaptionOcrResult = CaptionOcrResult
 
 
 @dataclass
@@ -65,6 +73,7 @@ class ExtractResult:
     Result from extract_frames_and_ocr Modal function.
     Initial video processing: frame extraction + OCR.
     """
+
     # Video metadata
     frame_count: int
     duration: float
@@ -149,9 +158,13 @@ def mock_env_vars(monkeypatch):
     This fixture uses monkeypatch to ensure test isolation.
     """
     monkeypatch.setenv("SUPABASE_URL", "https://test.supabase.co")
-    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "test-key")  # pragma: allowlist secret
+    monkeypatch.setenv(
+        "SUPABASE_SERVICE_ROLE_KEY", "test-key"
+    )  # pragma: allowlist secret
     monkeypatch.setenv("WASABI_ACCESS_KEY_ID", "test-access")
-    monkeypatch.setenv("WASABI_SECRET_ACCESS_KEY", "test-secret")  # pragma: allowlist secret
+    monkeypatch.setenv(
+        "WASABI_SECRET_ACCESS_KEY", "test-secret"
+    )  # pragma: allowlist secret
     monkeypatch.setenv("WASABI_BUCKET", "test-bucket")
 
 

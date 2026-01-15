@@ -34,7 +34,9 @@ import pytest
 def wasabi_service():
     """Create Wasabi service instance for test setup and cleanup."""
     # Import here to avoid issues if dependencies aren't available
-    sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "services" / "api"))
+    sys.path.insert(
+        0, str(Path(__file__).parent.parent.parent.parent / "services" / "api")
+    )
     from app.config import get_settings
     from app.services.wasabi_service import WasabiServiceImpl
 
@@ -146,7 +148,9 @@ def test_full_frames_gpu_ocr_pipeline(setup_test_video):
     assert result["version"] == 1, "Version should be 1"
     assert result["frame_count"] > 0, "Should have extracted frames"
     assert result["total_ocr_boxes"] >= 0, "Should return OCR box count"
-    assert result["processing_duration_seconds"] > 0, "Processing duration should be positive"
+    assert result["processing_duration_seconds"] > 0, (
+        "Processing duration should be positive"
+    )
     assert result["fullOCR_db_key"], "Should have database key"
     assert result["full_frames_prefix"], "Should have frames prefix"
 
@@ -154,8 +158,12 @@ def test_full_frames_gpu_ocr_pipeline(setup_test_video):
     expected_db_key = f"{tenant_id}/server/videos/{video_id}/fullOCR.db"
     expected_frames_prefix = f"{tenant_id}/client/videos/{video_id}/full_frames/"
 
-    assert result["fullOCR_db_key"] == expected_db_key, f"Database key should be {expected_db_key}"
-    assert result["full_frames_prefix"] == expected_frames_prefix, f"Frames prefix should be {expected_frames_prefix}"
+    assert result["fullOCR_db_key"] == expected_db_key, (
+        f"Database key should be {expected_db_key}"
+    )
+    assert result["full_frames_prefix"] == expected_frames_prefix, (
+        f"Frames prefix should be {expected_frames_prefix}"
+    )
 
     print("✓ All validations passed!")
     print()
@@ -181,10 +189,13 @@ def test_full_frames_gpu_ocr_pipeline(setup_test_video):
 
 @pytest.mark.modal
 @pytest.mark.integration
-@pytest.mark.parametrize("rate_hz,language", [
-    (0.05, "en"),
-    (0.1, "zh-Hans"),
-])
+@pytest.mark.parametrize(
+    "rate_hz,language",
+    [
+        (0.05, "en"),
+        (0.1, "zh-Hans"),
+    ],
+)
 def test_different_rates_and_languages(setup_test_video, rate_hz, language):
     """Test pipeline with different frame extraction rates and languages."""
     import modal
@@ -213,7 +224,9 @@ def test_different_rates_and_languages(setup_test_video, rate_hz, language):
 
     result = result_call.get()
 
-    print(f"Extracted {result['frame_count']} frames, found {result['total_ocr_boxes']} OCR boxes")
+    print(
+        f"Extracted {result['frame_count']} frames, found {result['total_ocr_boxes']} OCR boxes"
+    )
 
     assert result["version"] == 1, "Version should be 1"
     assert result["frame_count"] > 0, f"Should extract frames at {rate_hz} Hz"
@@ -231,5 +244,7 @@ if __name__ == "__main__":
     # Allow running directly with python for backward compatibility
     print("This test should be run with pytest:")
     print("  pytest tests/test_full_frames_modal_integration.py --run-modal")
-    print("  pytest tests/test_full_frames_modal_integration.py --run-modal --full-video")
+    print(
+        "  pytest tests/test_full_frames_modal_integration.py --run-modal --full-video"
+    )
     sys.exit(1)

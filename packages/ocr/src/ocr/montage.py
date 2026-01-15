@@ -57,13 +57,15 @@ def create_vertical_montage(
         montage.paste(img, (0, y_offset))
 
         # Store metadata
-        metadata.append({
-            "id": img_id,
-            "x": 0,
-            "y": y_offset,
-            "width": width,
-            "height": height,
-        })
+        metadata.append(
+            {
+                "id": img_id,
+                "x": 0,
+                "y": y_offset,
+                "width": width,
+                "height": height,
+            }
+        )
 
         y_offset += height + separator_px
 
@@ -120,11 +122,13 @@ def distribute_results_to_images(
 
         # Create result for this image
         text = "".join(c.text for c in img_chars)
-        results.append(OCRResult(
-            id=img_id,
-            characters=img_chars,
-            text=text,
-            char_count=len(img_chars),
-        ))
+        results.append(
+            OCRResult(
+                id=img_id,
+                characters=img_chars,
+                text=text,
+                char_count=len(img_chars),
+            )
+        )
 
     return results

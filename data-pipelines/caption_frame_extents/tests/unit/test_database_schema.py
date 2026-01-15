@@ -46,7 +46,11 @@ def test_video_registry_creation(test_db):
     test_db.commit()
 
     # Retrieve and verify
-    retrieved = test_db.query(VideoRegistry).filter(VideoRegistry.video_hash == "a" * 64).first()
+    retrieved = (
+        test_db.query(VideoRegistry)
+        .filter(VideoRegistry.video_hash == "a" * 64)
+        .first()
+    )
     assert retrieved is not None
     assert retrieved.video_path == "/path/to/video.mp4"
     assert retrieved.file_size_bytes == 1024 * 1024 * 500
@@ -62,12 +66,21 @@ def test_training_dataset_creation(test_db):
         description="Test dataset for unit tests",
         num_samples=1000,
         num_videos=5,
-        label_distribution={"same": 400, "different": 300, "empty_empty": 150, "empty_valid": 75, "valid_empty": 75},
+        label_distribution={
+            "same": 400,
+            "different": 300,
+            "empty_empty": 150,
+            "empty_valid": 75,
+            "valid_empty": 75,
+        },
         split_strategy="random",
         train_split_ratio=0.8,
         random_seed=42,
         video_hashes=["a" * 64, "b" * 64, "c" * 64],
-        video_metadata={"a" * 64: {"path": "/path/to/video1.mp4"}, "b" * 64: {"path": "/path/to/video2.mp4"}},
+        video_metadata={
+            "a" * 64: {"path": "/path/to/video1.mp4"},
+            "b" * 64: {"path": "/path/to/video2.mp4"},
+        },
         crop_region_versions={"a" * 64: 1, "b" * 64: 2},
         full_frames_version="1.0.0",
         crop_frames_version="1.0.0",
@@ -81,7 +94,11 @@ def test_training_dataset_creation(test_db):
     test_db.commit()
 
     # Retrieve and verify
-    retrieved = test_db.query(TrainingDataset).filter(TrainingDataset.name == "test_dataset_v1").first()
+    retrieved = (
+        test_db.query(TrainingDataset)
+        .filter(TrainingDataset.name == "test_dataset_v1")
+        .first()
+    )
     assert retrieved is not None
     assert retrieved.num_samples == 1000
     assert retrieved.num_videos == 5
@@ -125,7 +142,11 @@ def test_training_sample_creation(test_db):
     test_db.commit()
 
     # Retrieve and verify
-    retrieved = test_db.query(TrainingSample).filter(TrainingSample.video_hash == "a" * 64).first()
+    retrieved = (
+        test_db.query(TrainingSample)
+        .filter(TrainingSample.video_hash == "a" * 64)
+        .first()
+    )
     assert retrieved is not None
     assert retrieved.dataset_id == dataset.id
     assert retrieved.frame1_index == 100
@@ -160,7 +181,11 @@ def test_ocr_visualization_creation(test_db):
     test_db.commit()
 
     # Retrieve and verify
-    retrieved = test_db.query(OCRVisualization).filter(OCRVisualization.video_hash == "a" * 64).first()
+    retrieved = (
+        test_db.query(OCRVisualization)
+        .filter(OCRVisualization.video_hash == "a" * 64)
+        .first()
+    )
     assert retrieved is not None
     assert retrieved.variant == "boundaries"
     assert retrieved.visualization_path == "/cache/ocr_viz/a_boundaries.png"
@@ -180,7 +205,13 @@ def test_experiment_creation(test_db):
         description="Dataset for experiment test",
         num_samples=1000,
         num_videos=5,
-        label_distribution={"same": 400, "different": 300, "empty_empty": 150, "empty_valid": 75, "valid_empty": 75},
+        label_distribution={
+            "same": 400,
+            "different": 300,
+            "empty_empty": 150,
+            "empty_valid": 75,
+            "valid_empty": 75,
+        },
         video_hashes=["a" * 64],
         video_metadata={},
         crop_region_versions={"a" * 64: 1},
@@ -211,7 +242,9 @@ def test_experiment_creation(test_db):
     test_db.commit()
 
     # Retrieve and verify
-    retrieved = test_db.query(Experiment).filter(Experiment.name == "baseline_exp_v1").first()
+    retrieved = (
+        test_db.query(Experiment).filter(Experiment.name == "baseline_exp_v1").first()
+    )
     assert retrieved is not None
     assert retrieved.dataset_id == dataset.id
     assert retrieved.wandb_run_id == "abc123"

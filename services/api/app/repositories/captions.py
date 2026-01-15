@@ -19,7 +19,9 @@ def _row_to_caption_row(row: sqlite3.Row) -> CaptionRow:
         id=row["id"],
         start_frame_index=row["start_frame_index"],
         end_frame_index=row["end_frame_index"],
-        caption_frame_extents_state=CaptionFrameExtentsState(row["caption_frame_extents_state"]),
+        caption_frame_extents_state=CaptionFrameExtentsState(
+            row["caption_frame_extents_state"]
+        ),
         caption_frame_extents_pending=row["caption_frame_extents_pending"],
         caption_frame_extents_updated_at=row["caption_frame_extents_updated_at"],
         text=row["text"],
@@ -74,7 +76,9 @@ class CaptionRepository:
 
         # Add workable filter
         if workable_only:
-            conditions.append("(caption_frame_extents_state = 'gap' OR caption_frame_extents_pending = 1)")
+            conditions.append(
+                "(caption_frame_extents_state = 'gap' OR caption_frame_extents_pending = 1)"
+            )
 
         # Build query
         if conditions:
@@ -370,7 +374,12 @@ class CaptionRepository:
                 )
                 VALUES (?, ?, ?, 1, ?)
                 """,
-                (end_frame + 1, overlap.end_frame_index, overlap.caption_frame_extents_state.value, overlap.text),
+                (
+                    end_frame + 1,
+                    overlap.end_frame_index,
+                    overlap.caption_frame_extents_state.value,
+                    overlap.text,
+                ),
             )
             if cursor.lastrowid:
                 right_cap = self.get_caption(cursor.lastrowid)

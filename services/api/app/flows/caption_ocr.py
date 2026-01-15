@@ -14,6 +14,7 @@ Steps:
 4. Update caption status to 'completed'
 5. Handle errors by updating status to 'error'
 """
+
 import os
 from typing import Any
 
@@ -32,8 +33,12 @@ def _initialize_services() -> tuple[WasabiServiceImpl, CaptionServiceImpl]:
         Tuple of (wasabi_service, caption_service)
     """
     # Load environment variables
-    wasabi_access_key = os.getenv("WASABI_ACCESS_KEY_ID") or os.getenv("WASABI_ACCESS_KEY_READWRITE")
-    wasabi_secret_key = os.getenv("WASABI_SECRET_ACCESS_KEY") or os.getenv("WASABI_SECRET_KEY_READWRITE")
+    wasabi_access_key = os.getenv("WASABI_ACCESS_KEY_ID") or os.getenv(
+        "WASABI_ACCESS_KEY_READWRITE"
+    )
+    wasabi_secret_key = os.getenv("WASABI_SECRET_ACCESS_KEY") or os.getenv(
+        "WASABI_SECRET_KEY_READWRITE"
+    )
     wasabi_bucket = os.getenv("WASABI_BUCKET", "caption-acc-prod")
     wasabi_region = os.getenv("WASABI_REGION", "us-east-1")
 
@@ -45,13 +50,12 @@ def _initialize_services() -> tuple[WasabiServiceImpl, CaptionServiceImpl]:
         access_key=wasabi_access_key,
         secret_key=wasabi_secret_key,
         bucket=wasabi_bucket,
-        region=wasabi_region
+        region=wasabi_region,
     )
 
     # Initialize Caption service (supabase_service=None for now)
     caption_service = CaptionServiceImpl(
-        wasabi_service=wasabi_service,
-        supabase_service=None
+        wasabi_service=wasabi_service, supabase_service=None
     )
 
     return wasabi_service, caption_service
@@ -69,7 +73,7 @@ async def caption_ocr(
     caption_id: int,
     start_frame: int,
     end_frame: int,
-    version: int
+    version: int,
 ) -> dict[str, Any]:
     """
     Generates median frame from caption range and runs OCR.
@@ -110,26 +114,29 @@ async def caption_ocr(
             video_id=video_id,
             tenant_id=tenant_id,
             caption_id=caption_id,
-            status="processing"
+            status="processing",
         )
 
         # Step 2: Call Modal generate_caption_ocr function
         logger.info("Looking up Modal function")
         ocr_fn = modal.Function.from_name(
-            "extract-crop-frames-and-infer-extents",
-            "generate_caption_ocr"
+            "extract-crop-frames-and-infer-extents", "generate_caption_ocr"
         )
 
-        chunks_prefix = f"{tenant_id}/client/videos/{video_id}/cropped_frames_v{version}/"
-        logger.info(f"Calling Modal generate_caption_ocr with chunks_prefix: {chunks_prefix}")
+        chunks_prefix = (
+            f"{tenant_id}/client/videos/{video_id}/cropped_frames_v{version}/"
+        )
+        logger.info(
+            f"Calling Modal generate_caption_ocr with chunks_prefix: {chunks_prefix}"
+        )
 
         result = await ocr_fn.remote.aio(
-            chunks_prefix=chunks_prefix,
-            start_frame=start_frame,
-            end_frame=end_frame
+            chunks_prefix=chunks_prefix, start_frame=start_frame, end_frame=end_frame
         )
 
-        logger.info(f"OCR completed. Text length: {len(result.ocr_text)}, confidence: {result.confidence}")
+        logger.info(
+            f"OCR completed. Text length: {len(result.ocr_text)}, confidence: {result.confidence}"
+        )
 
         # Step 3: Update caption with OCR result
         logger.info(f"Updating caption {caption_id} with OCR result")
@@ -138,7 +145,7 @@ async def caption_ocr(
             tenant_id=tenant_id,
             caption_id=caption_id,
             ocr_text=result.ocr_text,
-            confidence=result.confidence
+            confidence=result.confidence,
         )
 
         # Step 4: Update caption status to 'completed'
@@ -147,7 +154,7 @@ async def caption_ocr(
             video_id=video_id,
             tenant_id=tenant_id,
             caption_id=caption_id,
-            status="completed"
+            status="completed",
         )
 
         logger.info(f"Caption OCR flow completed successfully for caption {caption_id}")
@@ -155,13 +162,15 @@ async def caption_ocr(
         return {
             "caption_id": caption_id,
             "ocr_text": result.ocr_text,
-            "confidence": result.confidence
+            "confidence": result.confidence,
         }
 
     except Exception as e:
         # Step 5: Handle errors by updating status to 'error'
         error_message = str(e)
-        logger.error(f"Caption OCR flow failed for caption {caption_id}: {error_message}")
+        logger.error(
+            f"Caption OCR flow failed for caption {caption_id}: {error_message}"
+        )
 
         try:
             caption_service.update_caption_status(
@@ -169,7 +178,7 @@ async def caption_ocr(
                 tenant_id=tenant_id,
                 caption_id=caption_id,
                 status="error",
-                error_message=error_message
+                error_message=error_message,
             )
             logger.info(f"Updated caption {caption_id} status to 'error'")
         except Exception as update_error:

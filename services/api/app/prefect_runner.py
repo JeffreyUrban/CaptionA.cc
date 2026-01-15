@@ -72,11 +72,14 @@ class PrefectWorkerManager:
         try:
             from app import flows  # noqa: F401
             from app.flows import caption_ocr, crop_and_infer, video_initial_processing  # noqa: F401
+
             loaded_flows = ["caption_ocr", "crop_and_infer", "video_initial_processing"]
             logger.info(f"Loaded flows: {', '.join(loaded_flows)}")
         except ImportError as e:
             logger.warning(f"Failed to import flows: {e}")
-            logger.warning("Worker will start but cannot execute flows until dependencies are installed")
+            logger.warning(
+                "Worker will start but cannot execute flows until dependencies are installed"
+            )
 
         # Set environment variable for worker
         env = os.environ.copy()
@@ -87,18 +90,21 @@ class PrefectWorkerManager:
         # Start worker as subprocess
         try:
             self.worker_process = await asyncio.create_subprocess_exec(
-                "prefect", "worker", "start",
-                "--pool", "captionacc-workers",
-                "--name", "captionacc-api-worker",
+                "prefect",
+                "worker",
+                "start",
+                "--pool",
+                "captionacc-workers",
+                "--name",
+                "captionacc-api-worker",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                env=env
+                env=env,
             )
 
             # Start monitor task to log worker output
             self.monitor_task = asyncio.create_task(
-                self._monitor_worker_output(),
-                name="prefect-worker-monitor"
+                self._monitor_worker_output(), name="prefect-worker-monitor"
             )
 
             logger.info("Prefect worker started successfully")

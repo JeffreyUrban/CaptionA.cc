@@ -252,26 +252,34 @@ def create_caption_frame_extents_db(
             )
 
             if (i + batch_size) % 5000 == 0 or i + batch_size >= len(results):
-                console.print(f"[cyan]  Inserted {min(i + batch_size, len(results))}/{len(results)} results[/cyan]")
+                console.print(
+                    f"[cyan]  Inserted {min(i + batch_size, len(results))}/{len(results)} results[/cyan]"
+                )
 
         conn.commit()
 
         # Get file size
         file_size = db_path.stat().st_size
-        console.print(f"[green]✓ Created Caption Frame Extents DB: {db_path.name}[/green]")
+        console.print(
+            f"[green]✓ Created Caption Frame Extents DB: {db_path.name}[/green]"
+        )
         console.print(f"  Total pairs: {len(results)}")
         console.print(f"  File size: {file_size / 1024 / 1024:.2f} MB")
 
     except Exception as e:
         conn.rollback()
-        raise RuntimeError(f"Failed to create caption frame extents database: {e}") from e
+        raise RuntimeError(
+            f"Failed to create caption frame extents database: {e}"
+        ) from e
     finally:
         conn.close()
 
     return db_path
 
 
-def read_caption_frame_extents_db(db_path: Path) -> tuple[dict[str, Any], list[PairResult]]:
+def read_caption_frame_extents_db(
+    db_path: Path,
+) -> tuple[dict[str, Any], list[PairResult]]:
     """Read caption frame extents database metadata and results.
 
     Args:
@@ -350,7 +358,9 @@ def get_db_filename(
     """
     model_hash = model_version[:8] if len(model_version) > 8 else model_version
     run_uuid = run_id[:8] if len(run_id) > 8 else run_id
-    version_str = str(cropped_frames_version) if cropped_frames_version is not None else "0"
+    version_str = (
+        str(cropped_frames_version) if cropped_frames_version is not None else "0"
+    )
 
     return f"v{version_str}_model-{model_hash}_run-{run_uuid}.db"
 

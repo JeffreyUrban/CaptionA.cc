@@ -37,6 +37,7 @@ class TestVideoProcessingE2E:
 
         # Get settings for credentials
         from app.config import get_settings
+
         settings = get_settings()
 
         # Initialize Wasabi client with read-write credentials
@@ -49,12 +50,14 @@ class TestVideoProcessingE2E:
 
         # Generate unique identifiers for this test run using UUIDs
         import uuid
+
         tenant_id = str(uuid.uuid4())  # Real UUID for database compatibility
-        video_id = str(uuid.uuid4())   # Real UUID for database compatibility
+        video_id = str(uuid.uuid4())  # Real UUID for database compatibility
         storage_key = f"{tenant_id}/client/videos/{video_id}/video.mp4"
 
         # Initialize Supabase to create tenant record first
         from app.services.supabase_service import SupabaseServiceImpl
+
         supabase = SupabaseServiceImpl(
             supabase_url=settings.supabase_url,
             supabase_key=settings.supabase_service_role_key,
@@ -63,15 +66,19 @@ class TestVideoProcessingE2E:
 
         # Create tenant record FIRST (required by foreign key constraint)
         try:
-            supabase.client.schema(settings.supabase_schema).table("tenants").insert({
-                "id": tenant_id,
-                "name": f"Test Tenant {tenant_id[:8]}",
-                "slug": f"test-tenant-{tenant_id[:8]}",
-            }).execute()
+            supabase.client.schema(settings.supabase_schema).table("tenants").insert(
+                {
+                    "id": tenant_id,
+                    "name": f"Test Tenant {tenant_id[:8]}",
+                    "slug": f"test-tenant-{tenant_id[:8]}",
+                }
+            ).execute()
             print(f"Created tenant record in Supabase (tenant_id: {tenant_id})")
         except Exception as e:
             cleanup_test_video(video_file)
-            raise RuntimeError(f"Failed to create tenant record in Supabase: {e}") from e
+            raise RuntimeError(
+                f"Failed to create tenant record in Supabase: {e}"
+            ) from e
 
         # Upload video to Wasabi
         try:
@@ -127,6 +134,7 @@ class TestVideoProcessingE2E:
 
         # Initialize Supabase client using settings
         from app.config import get_settings
+
         settings = get_settings()
 
         supabase = SupabaseServiceImpl(
@@ -145,7 +153,7 @@ class TestVideoProcessingE2E:
                     "id": video_id,
                     "tenant_id": tenant_id,
                     "video_path": f"test-videos/{video_id}.mp4",  # Required: user-facing path
-                    "storage_key": storage_key,                     # Required: Wasabi key
+                    "storage_key": storage_key,  # Required: Wasabi key
                     "status": "uploading",
                     "uploaded_at": datetime.now(timezone.utc).isoformat(),
                     "size_bytes": test_video["video_file"].stat().st_size,
@@ -159,7 +167,9 @@ class TestVideoProcessingE2E:
         app = create_app()
         client = TestClient(app)
 
-        webhook_secret = settings.webhook_secret or "test-webhook-secret"  # pragma: allowlist secret
+        webhook_secret = (
+            settings.webhook_secret or "test-webhook-secret"
+        )  # pragma: allowlist secret
         webhook_response = client.post(
             "/webhooks/supabase/videos",
             headers={"Authorization": f"Bearer {webhook_secret}"},

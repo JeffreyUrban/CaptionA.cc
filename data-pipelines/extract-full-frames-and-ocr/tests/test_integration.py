@@ -39,7 +39,9 @@ class TestGPUFrameExtraction:
         for frame_path in frame_paths:
             assert frame_path.exists(), f"Frame file should exist: {frame_path}"
             assert frame_path.suffix == ".jpg", f"Frame should be JPEG: {frame_path}"
-            assert frame_path.stat().st_size > 0, f"Frame should not be empty: {frame_path}"
+            assert frame_path.stat().st_size > 0, (
+                f"Frame should not be empty: {frame_path}"
+            )
 
         print("\n=== GPU Frame Extraction ===")
         print(f"Extracted {len(frame_paths)} frames")
@@ -67,8 +69,9 @@ class TestGPUFrameExtraction:
             expected_index = int(expected_time * 10)
             expected_name = f"frame_{expected_index:010d}.jpg"
 
-            assert frame_path.name == expected_name, \
+            assert frame_path.name == expected_name, (
                 f"Frame {i} should be named {expected_name}, got {frame_path.name}"
+            )
 
         print("\n=== Frame Naming Convention ===")
         print(f"First frame: {frame_paths[0].name}")
@@ -76,7 +79,9 @@ class TestGPUFrameExtraction:
             print(f"Last frame: {frame_paths[-1].name}")
 
     @pytest.mark.parametrize("rate_hz", [0.05, 0.1, 0.2])
-    def test_extract_frames_gpu_different_rates(self, test_video_path, tmp_path, rate_hz):
+    def test_extract_frames_gpu_different_rates(
+        self, test_video_path, tmp_path, rate_hz
+    ):
         """Test extraction at different frame rates."""
         from gpu_video_utils import GPUVideoDecoder
 
@@ -101,8 +106,9 @@ class TestGPUFrameExtraction:
         expected_frames = int(duration * rate_hz)
 
         # Allow small tolerance for rounding
-        assert abs(len(frame_paths) - expected_frames) <= 1, \
+        assert abs(len(frame_paths) - expected_frames) <= 1, (
             f"At {rate_hz} Hz, expected ~{expected_frames} frames, got {len(frame_paths)}"
+        )
 
         print(f"\n=== Rate {rate_hz} Hz ===")
         print(f"Duration: {duration:.1f}s")
@@ -147,8 +153,9 @@ class TestGPUFrameExtraction:
         expected_width = crop_right - crop_left
         expected_height = crop_bottom - crop_top
 
-        assert first_frame.size == (expected_width, expected_height), \
+        assert first_frame.size == (expected_width, expected_height), (
             f"Cropped frame should be {expected_width}x{expected_height}, got {first_frame.size}"
+        )
 
         print("\n=== Cropped Frame Extraction ===")
         print(f"Original: {width}x{height}")
@@ -176,10 +183,12 @@ class TestGPUFrameExtraction:
 
         # Verify progress tracking
         assert len(progress_calls) > 0, "Progress callback should be called"
-        assert progress_calls[-1][0] == progress_calls[-1][1], \
+        assert progress_calls[-1][0] == progress_calls[-1][1], (
             "Last progress call should indicate completion"
-        assert progress_calls[-1][1] == len(frame_paths), \
+        )
+        assert progress_calls[-1][1] == len(frame_paths), (
             "Total in progress should match frame count"
+        )
 
         print("\n=== Progress Tracking ===")
         print(f"Progress calls: {len(progress_calls)}")
@@ -192,8 +201,12 @@ class TestGPUOCRIntegration:
     """Integration tests for GPU + OCR service processing."""
 
     @pytest.mark.skipif(
-        not Path(__file__).parent.parent.parent.parent.joinpath("services/api/app/services/wasabi_service.py").exists(),
-        reason="OCR service dependencies not available"
+        not Path(__file__)
+        .parent.parent.parent.parent.joinpath(
+            "services/api/app/services/wasabi_service.py"
+        )
+        .exists(),
+        reason="OCR service dependencies not available",
     )
     def test_process_video_with_ocr_service(self, test_video_path, tmp_path):
         """Test end-to-end GPU extraction + OCR service processing."""
@@ -224,8 +237,9 @@ class TestGPUOCRIntegration:
         cursor = conn.execute("SELECT COUNT(*) FROM full_frame_ocr")
         db_count = cursor.fetchone()[0]
 
-        assert db_count == total_boxes, \
+        assert db_count == total_boxes, (
             f"Database count {db_count} should match returned count {total_boxes}"
+        )
 
         conn.close()
 
@@ -235,8 +249,12 @@ class TestGPUOCRIntegration:
         print(f"Database size: {db_path.stat().st_size / 1024:.1f} KB")
 
     @pytest.mark.skipif(
-        not Path(__file__).parent.parent.parent.parent.joinpath("services/api/app/services/wasabi_service.py").exists(),
-        reason="OCR service dependencies not available"
+        not Path(__file__)
+        .parent.parent.parent.parent.joinpath(
+            "services/api/app/services/wasabi_service.py"
+        )
+        .exists(),
+        reason="OCR service dependencies not available",
     )
     def test_ocr_with_different_languages(self, test_video_path, tmp_path):
         """Test OCR with different language hints."""
