@@ -5,7 +5,9 @@ repos:
 # Initial setup - snapshot current state
 #      detect-secrets scan > .secrets.baseline
 # Later, if intentionally adding something that must absolutely look secret-ish
-# but isn't (like a test fixture), revise it to look like a placeholder.
+# but isn't (like a test fixture), revise it to look like a placeholder,
+# and add a `pragma: allowlist secret` comment.
+#
 # To audit:
 #      detect-secrets scan --baseline .secrets.baseline
 - repo: https://github.com/Yelp/detect-secrets
