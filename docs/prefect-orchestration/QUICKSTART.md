@@ -6,7 +6,7 @@ Get the Prefect orchestration system running in your development environment.
 
 - Python 3.11+
 - Modal account with API token configured (`modal token list`)
-- Prefect server running at `https://traefik-prefect.fly.dev/api`
+- Prefect server running at `https://banchelabs-gateway.fly.dev/api`
 - Environment variables configured (see below)
 
 ## Environment Setup
@@ -18,7 +18,7 @@ Create `/services/api/.env` with required variables:
 WEBHOOK_SECRET=your-random-secret-key-here
 
 # Prefect (already configured)
-PREFECT_API_URL=https://traefik-prefect.fly.dev/api
+PREFECT_API_URL=https://banchelabs-gateway.fly.dev/api
 
 # Supabase (verify these are set)
 SUPABASE_URL=https://stbnsczvywpwjzbpfehp.supabase.co
@@ -63,7 +63,7 @@ modal app list
 cd services/api
 
 # Set Prefect API URL
-export PREFECT_API_URL=https://traefik-prefect.fly.dev/api
+export PREFECT_API_URL=https://banchelabs-gateway.fly.dev/api
 
 # Register all flows
 ./scripts/register_flows.sh
@@ -135,7 +135,7 @@ Expected response:
 
 ### Monitor Flow Execution
 
-1. **Prefect UI:** Visit https://traefik-prefect.fly.dev
+1. **Prefect UI:** Visit https://banchelabs-gateway.fly.dev
 2. **Flow Runs:** Check the latest flow run
 3. **Logs:** View execution logs and status
 
@@ -162,7 +162,7 @@ Once testing is complete, configure the webhook in Supabase:
 echo $PREFECT_API_URL
 
 # If not set, add to .env
-echo "PREFECT_API_URL=https://traefik-prefect.fly.dev/api" >> services/api/.env
+echo "PREFECT_API_URL=https://banchelabs-gateway.fly.dev/api" >> services/api/.env
 
 # Restart API service
 ```
@@ -220,7 +220,7 @@ curl -X POST http://localhost:8000/webhooks/supabase/videos \
   -d '{"type":"INSERT","table":"videos","record":{"id":"test","tenant_id":"test","storage_key":"test.mp4","created_at":"2024-01-12T00:00:00Z"}}'
 
 # Check Prefect deployments
-export PREFECT_API_URL=https://traefik-prefect.fly.dev/api
+export PREFECT_API_URL=https://banchelabs-gateway.fly.dev/api
 prefect deployment ls
 
 # View flow runs

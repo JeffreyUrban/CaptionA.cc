@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y \
 ENV PREFECT_SERVER_API_HOST=0.0.0.0
 ENV PREFECT_SERVER_API_PORT=4200
 ENV PREFECT_UI_ENABLED=true
-ENV PREFECT_UI_API_URL=https://traefik-prefect.fly.dev/api
+ENV PREFECT_UI_API_URL=https://banchelabs-gateway.fly.dev/api
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s \

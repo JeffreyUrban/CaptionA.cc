@@ -12,7 +12,7 @@
  *   "service": "prefect",            // Service identifier
  *   "description": "Modal service token",
  *   "expiresInDays": 90,             // Optional, defaults to 90 days
- *   "backend": "traefik-prefect.internal:4200"  // Optional reference
+ *   "backend": "banchelabs-gateway.internal:4200"  // Optional reference
  * }
  *
  * Response:
