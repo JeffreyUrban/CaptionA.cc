@@ -1,14 +1,14 @@
 # Deploy Traefik-Prefect Gateway Service to Fly.io
 # This workflow deploys the combined Traefik + Prefect service when changes are pushed to main
 
-name: Deploy Traefik-Prefect
+name: Deploy Banchelabs Gateway
 
 on:
   push:
     branches:
       - main
     paths:
-      - 'infrastructure/traefik-prefect/**'
+      - 'infrastructure/banchelabs-gateway/**'
       - '.github/workflows/deploy-traefik-prefect.yml'
   workflow_dispatch:  # Allow manual triggering
 
@@ -29,15 +29,15 @@ jobs:
       - name: Configure Fly.io secrets
         run: |
           flyctl secrets set \
-            TRAEFIK_JWT_SECRET="${{ secrets.TRAEFIK_JWT_SECRET }}" \
+            GATEWAY_JWT_SECRET="${{ secrets.GATEWAY_JWT_SECRET }}" \
             PREFECT_API_DATABASE_CONNECTION_URL="${{ secrets.SUPABASE_DIRECT_CONNECTION_STRING }}" \
-            --app traefik-prefect \
+            --app banchelabs-gateway \
             --stage
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
       - name: Deploy to Fly.io
-        run: flyctl deploy -c infrastructure/traefik-prefect/fly.toml --remote-only
+        run: flyctl deploy -c infrastructure/banchelabs-gateway/fly.toml --remote-only
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
@@ -48,7 +48,7 @@ jobs:
           sleep 45
 
           # Get the app URL from fly.toml app name
-          APP_URL="traefik-prefect.fly.dev"
+          APP_URL="banchelabs-gateway.fly.dev"
 
           # Health check with retries
           for i in {1..5}; do

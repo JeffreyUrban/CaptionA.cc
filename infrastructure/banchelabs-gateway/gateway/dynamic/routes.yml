@@ -51,7 +51,7 @@ http:
         jwt:
           # JWT signing secret from environment variable (symmetric key)
           Keys:
-            - "{{env `TRAEFIK_JWT_SECRET`}}"
+            - "{{env `GATEWAY_JWT_SECRET`}}"
 
           # Require JWT to be present
           Required: true

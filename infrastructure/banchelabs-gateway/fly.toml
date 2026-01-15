@@ -12,7 +12,7 @@ primary_region = "ewr"
   # UI should point to the gateway URL (not direct Prefect)
   PREFECT_UI_API_URL = "https://banchelabs-gateway.fly.dev/api"
 
-  # Set PREFECT_API_DATABASE_CONNECTION_URL and TRAEFIK_JWT_SECRET in secrets
+  # Set PREFECT_API_DATABASE_CONNECTION_URL and GATEWAY_JWT_SECRET in secrets
 
 # HTTP Service (Traefik gateway)
 [http_service]

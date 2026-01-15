@@ -13,7 +13,7 @@ services:
       - ./gateway/traefik.yml:/etc/traefik/traefik.yml:ro
       - ./gateway/dynamic:/etc/traefik/dynamic:ro
     environment:
-      - TRAEFIK_JWT_SECRET=${TRAEFIK_JWT_SECRET}
+      - GATEWAY_JWT_SECRET=${GATEWAY_JWT_SECRET}
     networks:
       - gateway
     healthcheck:

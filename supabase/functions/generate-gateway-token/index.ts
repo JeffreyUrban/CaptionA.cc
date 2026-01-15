@@ -32,7 +32,7 @@ import { generateJWT, hashToken, generateJTI, calculateExpiration } from "../_sh
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 const ADMIN_SERVICE_KEY = Deno.env.get("ADMIN_SERVICE_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-const JWT_SIGNING_SECRET = Deno.env.get("TRAEFIK_JWT_SECRET");
+const JWT_SIGNING_SECRET = Deno.env.get("GATEWAY_JWT_SECRET");
 // Default token expiration
 const DEFAULT_EXPIRY_DAYS = 90;
 const MAX_EXPIRY_DAYS = 365;
@@ -65,7 +65,7 @@ Deno.serve(async (req)=>{
     }
     // Validate JWT signing secret is configured
     if (!JWT_SIGNING_SECRET) {
-      console.error("TRAEFIK_JWT_SECRET environment variable not set");
+      console.error("GATEWAY_JWT_SECRET environment variable not set");
       return jsonResponse({
         error: "Server configuration error",
         code: "CONFIG_ERROR"

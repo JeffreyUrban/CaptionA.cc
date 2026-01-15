@@ -1,10 +1,10 @@
-name: Deploy Traefik-Prefect Review App
+name: Deploy Banchelabs Gateway Review App
 on:
-  # Run this workflow only when traefik-prefect code changes. Existing review apps will be updated when the PR is updated.
+  # Run this workflow only when banchelabs-gateway code changes. Existing review apps will be updated when the PR is updated.
   pull_request:
     types: [opened, reopened, synchronize, closed]
     paths:
-      - 'infrastructure/traefik-prefect/**'
+      - 'infrastructure/banchelabs-gateway/**'
 
 env:
   FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
@@ -19,11 +19,11 @@ jobs:
       url: ${{ steps.deploy.outputs.url }}
     # Only run one deployment at a time per PR.
     concurrency:
-      group: pr-${{ github.event.number }}-traefik-prefect
+      group: pr-${{ github.event.number }}-banchelabs-gateway
 
     # Deploying apps with this "review" environment allows the URL for the app to be displayed in the PR UI.
     environment:
-      name: review-traefik-prefect
+      name: review-banchelabs-gateway
       # The script in the `deploy` sets the URL output for each review app.
       url: ${{ steps.deploy.outputs.url }}
     steps:
@@ -39,9 +39,9 @@ jobs:
         run: |
           # Set required secrets for the review app
           flyctl secrets set \
-            TRAEFIK_JWT_SECRET="${{ secrets.TRAEFIK_JWT_SECRET }}" \
+            GATEWAY_JWT_SECRET="${{ secrets.GATEWAY_JWT_SECRET }}" \
             PREFECT_API_DATABASE_CONNECTION_URL="${{ secrets.SUPABASE_DIRECT_CONNECTION_STRING_STAGING }}" \
-            --app pr-${{ github.event.number }}-traefik-prefect
+            --app pr-${{ github.event.number }}-banchelabs-gateway
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         # Continue even if app doesn't exist yet (will be created by next step)
@@ -51,16 +51,16 @@ jobs:
         id: deploy
         uses: superfly/fly-pr-review-apps@1.5.0
         with:
-          name: pr-${{ github.event.number }}-traefik-prefect
-          path: infrastructure/traefik-prefect
+          name: pr-${{ github.event.number }}-banchelabs-gateway
+          path: infrastructure/banchelabs-gateway
 
       - name: Configure secrets after deployment
         if: ${{ github.event.action != 'closed' }}
         run: |
           # Ensure secrets are set after app creation
           flyctl secrets set \
-            TRAEFIK_JWT_SECRET="${{ secrets.TRAEFIK_JWT_SECRET }}" \
+            GATEWAY_JWT_SECRET="${{ secrets.GATEWAY_JWT_SECRET }}" \
             PREFECT_API_DATABASE_CONNECTION_URL="${{ secrets.SUPABASE_DIRECT_CONNECTION_STRING_STAGING }}" \
-            --app pr-${{ github.event.number }}-traefik-prefect
+            --app pr-${{ github.event.number }}-banchelabs-gateway
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
