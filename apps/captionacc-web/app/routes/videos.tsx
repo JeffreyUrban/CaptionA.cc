@@ -71,6 +71,7 @@ export async function clientLoader() {
       videoId: v.id,
       displayPath: v.display_path ?? v.id,
       isDemo: v.is_demo ?? false,
+      status: v.status,
     })) ?? []
 
   // Build tree structure from videos only (without stats - will be loaded client-side)

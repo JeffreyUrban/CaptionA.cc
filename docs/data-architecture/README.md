@@ -131,15 +131,21 @@ See: [SQLite Database Reference](./sqlite-databases.md)
 ### Video Upload Flow
 
 ```
-1. Client calls Edge Function for presigned upload URL
+1. Client calls Edge Function for presigned upload URL (no video record created yet)
 2. Client uploads video directly to Wasabi (client/videos/{id}/video.mp4)
-3. Backend creates video record in Supabase (status: 'uploading')
-4. Prefect flow: upload_and_process_video
+   - Upload progress tracked client-side only (not visible in videos page)
+3. Client calls Edge Function /confirm endpoint after upload completes
+   - Edge Function creates video record in Supabase (status: 'processing')
+   - Supabase INSERT webhook fires → triggers Prefect flow
+4. Prefect flow: captionacc-video-initial-processing
    a. Extract full frames → client/videos/{id}/full_frames/*.jpg
    b. Run OCR → server/videos/{id}/raw-ocr.db.gz
    c. Initialize client/videos/{id}/layout.db.gz with box data from OCR
 5. Video status set to 'active'
+   - Video now appears in videos page with annotation statistics
 ```
+
+**Key design principle:** Video record is only created AFTER upload completes, ensuring the backend never tries to process a partially uploaded file.
 
 ### Layout Annotation Flow (CR-SQLite Sync)
 

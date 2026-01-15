@@ -3,10 +3,13 @@
  * Server-side functionality removed for SPA mode
  */
 
+export type { VideoStats } from './video-stats'
+
 export interface VideoInfo {
   videoId: string
   displayPath: string
   isDemo: boolean
+  status?: string
 }
 
 export interface TreeNode {
@@ -16,9 +19,12 @@ export interface TreeNode {
   children?: TreeNode[]
   videoId?: string
   isDemo?: boolean
+  status?: string
   videoCount?: number
   demoCount?: number
 }
+
+export type FolderNode = TreeNode & { type: 'folder' }
 
 export function buildVideoTree(videos: VideoInfo[]): TreeNode[] {
   const tree: TreeNode[] = []
@@ -54,6 +60,7 @@ export function buildVideoTree(videos: VideoInfo[]): TreeNode[] {
         path: video.displayPath,
         videoId: video.videoId,
         isDemo: video.isDemo,
+        status: video.status,
       })
     }
   }

@@ -26,6 +26,8 @@ Extracts frames from uploaded video, runs OCR, and initializes layout.db for ann
 
 **Handler:** `services/api/app/routers/webhooks.py:handle_video_insert()`
 
+**Note:** The webhook fires AFTER the video file has been fully uploaded to Wasabi. The client-side upload process creates the video record only after upload completion, ensuring the file is ready for processing when the webhook fires.
+
 ### Parameters
 
 | Parameter | Type | Source | Description |
@@ -36,20 +38,22 @@ Extracts frames from uploaded video, runs OCR, and initializes layout.db for ann
 
 ### Processing Steps
 
-1. **Update status** → `videos.status = 'processing'`
-2. **Call Modal** → `extract_frames_and_ocr()` (T4 GPU, 30 min)
+1. **Call Modal** → `extract_frames_and_ocr()` (T4 GPU, 30 min)
    - Extracts frames at 0.1 Hz
    - Runs Google Vision OCR
    - Uploads to Wasabi: `full_frames/`, `raw-ocr.db.gz`, `layout.db.gz`
-3. **Update metadata** → `videos` table with frame count, duration, codec, etc.
-4. **Update status** → `videos.status = 'active'`
+2. **Update metadata** → `videos` table with frame count, duration, codec, etc.
+3. **Update status** → `videos.status = 'active'`
 
 ### State Transitions
 
 ```
 videos.status:
-  uploading → processing → active
-                        → error (on failure)
+  processing → active
+            → error (on failure)
+
+Note: Video record is created with status 'processing' after upload completes.
+The upload phase happens client-side before the video record exists.
 ```
 
 ### Outputs

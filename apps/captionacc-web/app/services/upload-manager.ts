@@ -293,6 +293,7 @@ class UploadManager {
       )
 
       // Step 2: Upload file directly to Wasabi using presigned URL with progress tracking
+      // Note: Video record is NOT created yet - only after upload completes
       const abortController = new AbortController()
       this.activeUploads.set(uploadId, abortController)
 
@@ -324,6 +325,39 @@ class UploadManager {
       )
 
       console.log(`[UploadManager] Upload complete ${uploadMetadata.relativePath}`)
+
+      // Step 3: Confirm upload completion - creates video record with status 'processing'
+      // This triggers the Supabase INSERT webhook for backend processing
+      console.log(`[UploadManager] Confirming upload for videoId: ${presignedData.videoId}`)
+
+      const confirmResponse = await fetch(
+        `${supabaseUrl}/functions/v1/captionacc-presigned-upload/confirm`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            videoId: presignedData.videoId,
+            storageKey: presignedData.storageKey,
+            filename,
+            contentType: uploadMetadata.fileType,
+            sizeBytes: file.size,
+            videoPath,
+            width: dimensions.width,
+            height: dimensions.height,
+          }),
+        }
+      )
+
+      if (!confirmResponse.ok) {
+        const errorText = await confirmResponse.text()
+        console.error('[UploadManager] Failed to confirm upload:', errorText)
+        throw new Error(`Failed to confirm upload: ${confirmResponse.status} ${errorText}`)
+      }
+
+      console.log(`[UploadManager] Upload confirmed, video record created with status 'processing'`)
 
       // Mark as completed
       store.completeUpload(uploadId, presignedData.videoId)

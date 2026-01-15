@@ -429,7 +429,7 @@ If issues arise:
 
 ## References
 
-- [Frontend Migration Plan](/docs/frontend-to-new-backend.md)
+- [Frontend Migration Plan](/docs/_organize-and-revise/frontend-to-new-backend.md)
 - [Supabase Edge Functions](https://supabase.com/docs/guides/functions)
 - [S3 Presigned URLs](https://docs.aws.amazon.com/AmazonS3/latest/userguide/PresignedUrlUploadObject.html)
 - [XMLHttpRequest Progress](https://developer.mozilla.org/en-US/docs/Web/API/XMLHttpRequest/upload)

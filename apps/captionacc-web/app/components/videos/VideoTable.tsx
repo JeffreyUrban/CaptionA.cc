@@ -355,11 +355,32 @@ export function TreeRow({
   // Load stats for video nodes
   useEffect(() => {
     if (node.type === 'video' && !videoStatsMap.has(node.videoId)) {
+      // Only fetch stats for videos that have been processed
+      // Skip videos with status 'processing' (or 'error')
+      const shouldFetchStats = node.status === 'active'
+
+      if (!shouldFetchStats) {
+        setLoading(false)
+        return
+      }
+
       setLoading(true)
       fetch(`/api/videos/${encodeURIComponent(node.videoId)}/stats`)
-        .then(res => res.json())
+        .then(res => {
+          if (!res.ok) {
+            // 404 is expected for videos without stats yet
+            if (res.status === 404) {
+              setLoading(false)
+              return null
+            }
+            throw new Error(`HTTP ${res.status}: ${res.statusText}`)
+          }
+          return res.json()
+        })
         .then(data => {
-          onStatsUpdate(node.videoId, data)
+          if (data) {
+            onStatsUpdate(node.videoId, data)
+          }
           setLoading(false)
         })
         .catch(err => {
@@ -701,6 +722,7 @@ function VideoRow({
             stats={stats}
             loading={loading}
             videoId={node.videoId}
+            videoStatus={node.status}
             onErrorBadgeClick={onErrorBadgeClick}
           />
         </div>
@@ -716,7 +738,11 @@ function VideoRow({
         )}
       </td>
       <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-600 dark:text-gray-400">
-        <PendingBadge count={stats?.pendingReview ?? 0} />
+        {stats ? (
+          <PendingBadge count={stats.pendingReview} />
+        ) : (
+          <span className="text-gray-500 dark:text-gray-500">-</span>
+        )}
       </td>
       <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-600 dark:text-gray-400">
         {stats ? (
@@ -747,10 +773,17 @@ interface VideoBadgesProps {
   stats: VideoStats | null
   loading: boolean
   videoId: string
+  videoStatus?: string
   onErrorBadgeClick: (videoId: string, errorDetails: BadgeState['errorDetails']) => void
 }
 
-function VideoBadges({ stats, loading, videoId, onErrorBadgeClick }: VideoBadgesProps) {
+function VideoBadges({
+  stats,
+  loading,
+  videoId,
+  videoStatus,
+  onErrorBadgeClick,
+}: VideoBadgesProps) {
   // Show loading badge while fetching stats
   if (loading && (!stats?.badges || stats.badges.length === 0)) {
     return (
@@ -762,7 +795,29 @@ function VideoBadges({ stats, loading, videoId, onErrorBadgeClick }: VideoBadges
     )
   }
 
-  if (!stats?.badges || stats.badges.length === 0) return null
+  // Show status badge for videos without stats (uploading, processing, etc.)
+  if (!stats?.badges || stats.badges.length === 0) {
+    if (videoStatus && videoStatus !== 'active') {
+      const statusLabel = videoStatus.charAt(0).toUpperCase() + videoStatus.slice(1)
+      const statusColor =
+        videoStatus === 'uploading'
+          ? 'bg-blue-50 text-blue-700 ring-blue-600/20 dark:bg-blue-900/30 dark:text-blue-400 dark:ring-blue-500/30'
+          : videoStatus === 'processing'
+            ? 'bg-purple-50 text-purple-700 ring-purple-600/20 dark:bg-purple-900/30 dark:text-purple-400 dark:ring-purple-500/30'
+            : 'bg-gray-50 text-gray-700 ring-gray-600/20 dark:bg-gray-900/30 dark:text-gray-400 dark:ring-gray-500/30'
+
+      return (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span
+            className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset ${statusColor}`}
+          >
+            {statusLabel}
+          </span>
+        </div>
+      )
+    }
+    return null
+  }
 
   return (
     <div className="flex items-center gap-2 flex-wrap">
