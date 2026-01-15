@@ -37,6 +37,7 @@ dependencies = [
     "python-Levenshtein>=0.21.0",
     "pydantic>=2.0.0",
     "requests>=2.31.0",  # For downloading VP9/WebM chunks
+    "boto3>=1.28.0",  # For Wasabi S3-compatible storage
 
     # Internal packages
     "frames_db",
@@ -53,6 +54,7 @@ dev = [
     "pytest-cov>=7.0.0",
     "pyright>=1.1.400",
     "ruff>=0.14.0",
+    "boto3-stubs[s3]>=1.28.0",  # Type stubs for boto3
 ]
 
 [tool.hatch.version]

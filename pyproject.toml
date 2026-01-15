@@ -10,6 +10,7 @@ requires-python = ">=3.13,<3.14"
 dependencies = [
     "tqdm>=4.67.1",
     "pillow>=11.0.0",
+    "boto3>=1.28.0",  # Required by vp9_utils and caption_frame_extents for Wasabi storage
     "crop_frames",
     "caption_boundaries",
     "caption_text",
@@ -37,6 +38,8 @@ exclude = [
 # Policy: Keep all shared dependencies on same version unless there's a specific reason
 [tool.uv]
 override-dependencies = [
+    # Shared across multiple packages (vp9_utils, caption_frame_extents)
+    "boto3>=1.28.0",
     # Add shared dependency constraints here as your monorepo grows
     # Example:
     # "fastapi>=0.115.0,<1.0",
