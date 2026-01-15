@@ -42,6 +42,19 @@ export async function clientLoader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url)
   const preselectedFolder = url.searchParams.get('folder')
 
+  // Check authentication
+  const { supabase } = await import('~/services/supabase-client')
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+
+  if (!session) {
+    // Redirect to login page
+    const { redirect } = await import('react-router')
+    const loginUrl = `/login?redirect=${encodeURIComponent(url.pathname + url.search)}`
+    throw redirect(loginUrl)
+  }
+
   return new Response(JSON.stringify({ preselectedFolder }), {
     headers: { 'Content-Type': 'application/json' },
   })
@@ -114,28 +127,43 @@ export default function UploadPage() {
     async (entry: FileSystemEntry, path = ''): Promise<UploadFile[]> => {
       const results: UploadFile[] = []
 
-      if (entry.isFile) {
-        const fileEntry = entry as FileSystemFileEntry
-        const file = await new Promise<File>((resolve, reject) => {
-          fileEntry.file(resolve, reject)
-        })
+      try {
+        if (entry.isFile) {
+          const fileEntry = entry as FileSystemFileEntry
+          console.log(`[collectFiles] Processing file: ${entry.name}, path: ${path}`)
+          const file = await new Promise<File>((resolve, reject) => {
+            fileEntry.file(resolve, reject)
+          })
 
-        // Only include video files
-        if (isVideoFile(file)) {
-          results.push({ file, relativePath: path + file.name })
-        }
-      } else if (entry.isDirectory) {
-        const dirEntry = entry as FileSystemDirectoryEntry
-        const reader = dirEntry.createReader()
-        const entries = await new Promise<FileSystemEntry[]>((resolve, reject) => {
-          reader.readEntries(resolve, reject)
-        })
+          console.log(
+            `[collectFiles] Got file: ${file.name}, type: ${file.type}, size: ${file.size}`
+          )
 
-        for (const childEntry of entries) {
-          const childPath = path + entry.name + '/'
-          const childResults = await collectFilesFromEntry(childEntry, childPath)
-          results.push(...childResults)
+          // Only include video files
+          if (isVideoFile(file)) {
+            console.log(`[collectFiles] ✓ Video file accepted: ${file.name}`)
+            results.push({ file, relativePath: path + file.name })
+          } else {
+            console.log(`[collectFiles] ✗ File rejected (not a video): ${file.name}`)
+          }
+        } else if (entry.isDirectory) {
+          const dirEntry = entry as FileSystemDirectoryEntry
+          console.log(`[collectFiles] Processing directory: ${entry.name}, path: ${path}`)
+          const reader = dirEntry.createReader()
+          const entries = await new Promise<FileSystemEntry[]>((resolve, reject) => {
+            reader.readEntries(resolve, reject)
+          })
+
+          console.log(`[collectFiles] Directory ${entry.name} has ${entries.length} entries`)
+
+          for (const childEntry of entries) {
+            const childPath = path + entry.name + '/'
+            const childResults = await collectFilesFromEntry(childEntry, childPath)
+            results.push(...childResults)
+          }
         }
+      } catch (error) {
+        console.error(`[collectFiles] Error processing entry ${entry.name}:`, error)
       }
 
       return results
@@ -223,20 +251,32 @@ export default function UploadPage() {
 
       try {
         const items = Array.from(e.dataTransfer.items)
+        console.log(`[UploadPage] Processing drop with ${items.length} items`)
         const allFiles: UploadFile[] = []
 
         // Process each dropped item (could be files or directories)
         for (const item of items) {
+          console.log(`[UploadPage] Processing item: ${item.kind}, type: ${item.type}`)
           const entry = item.webkitGetAsEntry()
           if (entry) {
+            console.log(
+              `[UploadPage] Got entry: ${entry.name}, isFile: ${entry.isFile}, isDirectory: ${entry.isDirectory}`
+            )
             setProcessingStatus(`Scanning ${entry.name}...`)
             const files = await collectFilesFromEntry(entry)
+            console.log(`[UploadPage] Collected ${files.length} files from ${entry.name}`)
             allFiles.push(...files)
             setProcessingStatus(`Found ${allFiles.length} video files...`)
+          } else {
+            console.warn(`[UploadPage] No entry for item:`, item)
           }
         }
 
-        console.log(`[UploadPage] Collected ${allFiles.length} files from drop`)
+        console.log(`[UploadPage] Total collected ${allFiles.length} files from drop`)
+
+        if (allFiles.length === 0) {
+          console.warn('[UploadPage] No video files found in drop')
+        }
 
         setProcessingStatus('Preparing preview...')
 
@@ -245,6 +285,8 @@ export default function UploadPage() {
 
         // Show preview modal
         showUploadPreview(allFiles)
+      } catch (error) {
+        console.error('[UploadPage] Error processing drop:', error)
       } finally {
         setIsProcessingDrop(false)
         setProcessingStatus('')

@@ -19,13 +19,99 @@
  */
 
 import { useUploadStore } from '~/stores/upload-store'
-import {
-  CONCURRENT_UPLOADS,
-  RETRY_DELAYS,
-  MAX_RETRIES,
-  STALL_TIMEOUT,
-} from '~/types/upload'
+import { CONCURRENT_UPLOADS, RETRY_DELAYS, MAX_RETRIES, STALL_TIMEOUT } from '~/types/upload'
 import { isRetryableError } from '~/utils/upload-helpers'
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+/**
+ * Read video dimensions from a video file
+ * Returns a promise that resolves with {width, height} or defaults to {width: 0, height: 0}
+ */
+async function getVideoDimensions(file: File): Promise<{ width: number; height: number }> {
+  return new Promise(resolve => {
+    const video = document.createElement('video')
+    video.preload = 'metadata'
+
+    video.onloadedmetadata = () => {
+      window.URL.revokeObjectURL(video.src)
+      const width = video.videoWidth
+      const height = video.videoHeight
+
+      if (width > 0 && height > 0) {
+        resolve({ width, height })
+      } else {
+        console.warn('[UploadManager] Could not read video dimensions, defaulting to 0x0')
+        resolve({ width: 0, height: 0 })
+      }
+    }
+
+    video.onerror = () => {
+      window.URL.revokeObjectURL(video.src)
+      console.warn('[UploadManager] Error reading video metadata, defaulting to 0x0')
+      resolve({ width: 0, height: 0 })
+    }
+
+    video.src = window.URL.createObjectURL(file)
+  })
+}
+
+/**
+ * Upload file to presigned URL with progress tracking
+ */
+function uploadWithProgress(
+  url: string,
+  file: File,
+  contentType: string,
+  abortSignal: AbortSignal,
+  onProgress: (loaded: number, total: number) => void
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+
+    // Handle abort signal
+    const abortHandler = () => {
+      xhr.abort()
+      reject(new Error('Upload aborted'))
+    }
+    abortSignal.addEventListener('abort', abortHandler)
+
+    // Track upload progress
+    xhr.upload.addEventListener('progress', e => {
+      if (e.lengthComputable) {
+        onProgress(e.loaded, e.total)
+      }
+    })
+
+    // Handle completion
+    xhr.addEventListener('load', () => {
+      abortSignal.removeEventListener('abort', abortHandler)
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve()
+      } else {
+        reject(new Error(`Upload failed: ${xhr.status} ${xhr.statusText}`))
+      }
+    })
+
+    // Handle errors
+    xhr.addEventListener('error', () => {
+      abortSignal.removeEventListener('abort', abortHandler)
+      reject(new Error('Upload failed: Network error'))
+    })
+
+    xhr.addEventListener('abort', () => {
+      abortSignal.removeEventListener('abort', abortHandler)
+      reject(new Error('Upload aborted'))
+    })
+
+    // Start upload
+    xhr.open('PUT', url)
+    xhr.setRequestHeader('Content-Type', contentType)
+    xhr.send(file)
+  })
+}
 
 // ============================================================================
 // Upload Manager Class
@@ -151,15 +237,25 @@ class UploadManager {
       const { supabase } = await import('~/services/supabase-client')
       const {
         data: { session },
+        error: sessionError,
       } = await supabase.auth.getSession()
 
-      if (!session) {
-        throw new Error('No authenticated session')
+      if (sessionError) {
+        throw new Error(`Session error: ${sessionError.message}`)
       }
+
+      if (!session?.access_token) {
+        throw new Error('No authenticated session - please sign in')
+      }
+
+      // Read video dimensions from file metadata
+      const dimensions = await getVideoDimensions(file)
+      console.log(`[UploadManager] Video dimensions: ${dimensions.width}x${dimensions.height}`)
 
       // Step 1: Get presigned URL from Edge Function
       // POST /functions/v1/captionacc-presigned-upload
       const supabaseUrl = import.meta.env['VITE_SUPABASE_URL'] ?? 'http://localhost:54321'
+
       const presignedResponse = await fetch(
         `${supabaseUrl}/functions/v1/captionacc-presigned-upload`,
         {
@@ -173,12 +269,15 @@ class UploadManager {
             contentType: uploadMetadata.fileType,
             sizeBytes: file.size,
             videoPath, // Include video path for backend processing
+            width: dimensions.width,
+            height: dimensions.height,
           }),
         }
       )
 
       if (!presignedResponse.ok) {
         const errorText = await presignedResponse.text()
+        console.error('[UploadManager] Edge Function error:', errorText)
         throw new Error(`Failed to get presigned URL: ${presignedResponse.status} ${errorText}`)
       }
 
@@ -189,9 +288,11 @@ class UploadManager {
         expiresAt: string
       }
 
-      console.log(`[UploadManager] Got presigned URL for ${filename}, videoId: ${presignedData.videoId}`)
+      console.log(
+        `[UploadManager] Got presigned URL for ${filename}, videoId: ${presignedData.videoId}`
+      )
 
-      // Step 2: Upload file directly to Wasabi using presigned URL
+      // Step 2: Upload file directly to Wasabi using presigned URL with progress tracking
       const abortController = new AbortController()
       this.activeUploads.set(uploadId, abortController)
 
@@ -202,20 +303,25 @@ class UploadManager {
       // Start stall detection if not already running
       this.startStallDetection()
 
-      // TODO: Implement chunked upload with progress tracking
-      // For now, simple PUT request (works for smaller files)
-      const uploadResponse = await fetch(presignedData.uploadUrl, {
-        method: 'PUT',
-        body: file,
-        headers: {
-          'Content-Type': uploadMetadata.fileType,
-        },
-        signal: abortController.signal,
-      })
+      // Upload with progress tracking
+      await uploadWithProgress(
+        presignedData.uploadUrl,
+        file,
+        uploadMetadata.fileType,
+        abortController.signal,
+        (loaded, total) => {
+          // Update progress in store
+          const progress = Math.round((loaded / total) * 100)
+          store.updateProgress(uploadId, loaded, progress)
 
-      if (!uploadResponse.ok) {
-        throw new Error(`Upload failed: ${uploadResponse.status} ${uploadResponse.statusText}`)
-      }
+          // Update last activity time for stall detection
+          this.lastProgressTime.set(uploadId, Date.now())
+
+          console.log(
+            `[UploadManager] ${uploadMetadata.fileName}: ${progress}% (${loaded}/${total} bytes)`
+          )
+        }
+      )
 
       console.log(`[UploadManager] Upload complete ${uploadMetadata.relativePath}`)
 

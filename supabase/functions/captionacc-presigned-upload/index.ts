@@ -52,6 +52,9 @@ interface UploadRequest {
   filename: string;
   contentType: string;
   sizeBytes: number;
+  videoPath?: string;
+  width?: number;
+  height?: number;
 }
 
 interface UploadResponse {
@@ -86,8 +89,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     const token = authHeader.replace("Bearer ", "");
 
-    // Create Supabase client with user's token
-    const supabaseUser = createClient(SUPABASE_URL, token, {
+    // Create Supabase client with service role key (needed to validate JWT)
+    const supabaseUser = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
       db: { schema: DB_SCHEMA },
       auth: { persistSession: false },
     });
@@ -127,7 +130,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     // Parse request body
     const body: UploadRequest = await req.json();
-    const { filename, contentType, sizeBytes } = body;
+    const { filename, contentType, sizeBytes, videoPath, width, height } = body;
 
     // Validate request
     if (!filename || !contentType || !sizeBytes) {
@@ -173,11 +176,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const { error: insertError } = await supabaseAdmin.from("videos").insert({
       id: videoId,
       tenant_id: tenantId,
-      video_path: filename,
+      video_path: videoPath || filename, // Use videoPath for better organization
+      display_path: videoPath || filename, // Display path for UI
       storage_key: storageKey,
       size_bytes: sizeBytes,
-      width: 0, // Will be updated after processing
-      height: 0, // Will be updated after processing
+      width: width ?? 0, // Use client-provided dimensions or default to 0
+      height: height ?? 0,
       status: "uploading",
       uploaded_by_user_id: user.id,
       uploaded_at: new Date().toISOString(),
