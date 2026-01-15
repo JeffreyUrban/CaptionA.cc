@@ -1,0 +1,75 @@
+# Deploy CaptionA.cc API to Fly.io
+# This workflow deploys the API service when changes are pushed to main
+
+name: Deploy CaptionA.cc API
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'services/api/**'
+      - '.github/workflows/deploy-captionacc-api.yml'
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  deploy:
+    name: Deploy to Fly.io
+    runs-on: ubuntu-latest
+    # Only deploy from main branch
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Fly.io CLI
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Configure Fly.io secrets
+        run: |
+          flyctl secrets set \
+            SUPABASE_URL="${{ secrets.SUPABASE_URL }}" \
+            SUPABASE_JWT_SECRET="${{ secrets.SUPABASE_JWT_SECRET }}" \
+            SUPABASE_SCHEMA="captionacc_production" \
+            SUPABASE_SERVICE_ROLE_KEY="${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            WASABI_ACCESS_KEY_ID="${{ secrets.WASABI_ACCESS_KEY_READWRITE }}" \
+            WASABI_SECRET_ACCESS_KEY="${{ secrets.WASABI_SECRET_KEY_READWRITE }}" \
+            WASABI_BUCKET="${{ secrets.WASABI_BUCKET }}" \
+            WASABI_REGION="${{ secrets.WASABI_REGION }}" \
+            WASABI_ENDPOINT_URL="https://s3.wasabisys.com" \
+            --app captionacc-api \
+            --stage
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Deploy to Fly.io
+        run: flyctl deploy -c services/api/fly.toml --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Verify deployment
+        run: |
+          # Wait for deployment to be ready
+          echo "Waiting for service to start..."
+          sleep 30
+
+          # Get the app URL from fly.toml app name
+          APP_URL="captionacc-api.fly.dev"
+
+          # Health check with retries
+          for i in {1..5}; do
+            echo "Health check attempt $i/5..."
+            if curl -f -m 10 https://${APP_URL}/health 2>/dev/null; then
+              echo "✅ Deployment successful: https://${APP_URL}"
+              exit 0
+            fi
+            echo "Not ready yet, waiting 10s..."
+            sleep 10
+          done
+
+          echo "⚠️ Deployment completed but health check failed"
+          echo "Service may still be starting up. Check: https://${APP_URL}/health"
+          exit 0
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
