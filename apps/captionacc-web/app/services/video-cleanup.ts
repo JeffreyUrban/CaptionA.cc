@@ -532,8 +532,11 @@ export function startPeriodicCleanup(): void {
     `[Cleanup] Starting periodic cleanup (every ${CLEANUP_INTERVAL_MS / 1000 / 60} minutes)`
   )
 
-  // Run immediately on start
-  runCleanup().catch(console.error)
+  // Delay initial cleanup to avoid blocking server startup
+  // Run after 30 seconds to allow server to fully initialize
+  setTimeout(() => {
+    runCleanup().catch(console.error)
+  }, 30000)
 
   // Then run periodically
   cleanupTimer = setInterval(() => {

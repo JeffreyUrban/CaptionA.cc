@@ -28,6 +28,7 @@ RUN npm ci --include=dev
 COPY --link . .
 
 # Build application
+# Environment variables from fly.toml [env] section are available here
 RUN npm run build
 
 # Remove development dependencies

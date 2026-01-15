@@ -31,16 +31,26 @@ type ProductionDatabase = {
 // Production keys are NEVER in code - only in environment variables/secrets
 const LOCAL_SUPABASE_URL = 'http://localhost:54321'
 const LOCAL_SUPABASE_ANON_KEY =
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0'
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0' // # pragma: allowlist secret
 const LOCAL_SUPABASE_SERVICE_ROLE_KEY =
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU'
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU' // # pragma: allowlist secret
 
 // Use environment variables if provided, otherwise default to local
-const supabaseUrl = import.meta.env['VITE_SUPABASE_URL'] ?? LOCAL_SUPABASE_URL
-const supabaseAnonKey = import.meta.env['VITE_SUPABASE_ANON_KEY'] ?? LOCAL_SUPABASE_ANON_KEY
+// For SSR, process.env is available on server, import.meta.env on client
+const supabaseUrl =
+  (typeof process !== 'undefined' ? process.env['VITE_SUPABASE_URL'] : undefined) ??
+  import.meta.env['VITE_SUPABASE_URL'] ??
+  LOCAL_SUPABASE_URL
+const supabaseAnonKey =
+  (typeof process !== 'undefined' ? process.env['VITE_SUPABASE_ANON_KEY'] : undefined) ??
+  import.meta.env['VITE_SUPABASE_ANON_KEY'] ??
+  LOCAL_SUPABASE_ANON_KEY
 
 // Both local and remote use captionacc_production schema for consistency
-const supabaseSchema = import.meta.env['VITE_SUPABASE_SCHEMA'] ?? 'captionacc_production'
+const supabaseSchema =
+  (typeof process !== 'undefined' ? process.env['VITE_SUPABASE_SCHEMA'] : undefined) ??
+  import.meta.env['VITE_SUPABASE_SCHEMA'] ??
+  'captionacc_production'
 
 // Log Supabase connection info in development
 if (import.meta.env.DEV) {
@@ -78,7 +88,9 @@ export function createServerSupabaseClient() {
   }
 
   const serviceRoleKey =
-    import.meta.env['VITE_SUPABASE_SERVICE_ROLE_KEY'] ?? LOCAL_SUPABASE_SERVICE_ROLE_KEY
+    (typeof process !== 'undefined' ? process.env['VITE_SUPABASE_SERVICE_ROLE_KEY'] : undefined) ??
+    import.meta.env['VITE_SUPABASE_SERVICE_ROLE_KEY'] ??
+    LOCAL_SUPABASE_SERVICE_ROLE_KEY
 
   return createClient<ProductionDatabase>(supabaseUrl, serviceRoleKey, {
     auth: {
