@@ -40,12 +40,12 @@ interface UseLayoutCanvasParams {
   annotationsSinceRecalc: number
   pulseStartTime: number
   frameBoxesCache: React.RefObject<Map<number, FrameBoxesData>>
-  showCropRegionInFrame: boolean
+  showCropBoundsInFrame: boolean
   setCurrentFrameBoxes: React.Dispatch<React.SetStateAction<FrameBoxesData | null>>
   setHasUnsyncedAnnotations: (value: boolean) => void
   setAnnotationsSinceRecalc: (count: number) => void
   handleBoxClick: (boxIndex: number, label: 'in' | 'out') => Promise<void>
-  recalculateCropRegion: () => Promise<void>
+  recalculateCropBounds: () => Promise<void>
   loadAnalysisBoxes: () => Promise<void>
 }
 
@@ -64,6 +64,7 @@ interface UseLayoutCanvasReturn {
 
 export const SELECTION_PADDING = 20
 
+// eslint-disable-next-line max-lines-per-function -- Canvas rendering logic with multiple event handlers and drawing functions
 export function useLayoutCanvas(params: UseLayoutCanvasParams): UseLayoutCanvasReturn {
   const {
     viewMode,
@@ -75,12 +76,12 @@ export function useLayoutCanvas(params: UseLayoutCanvasParams): UseLayoutCanvasR
     annotationsSinceRecalc,
     pulseStartTime,
     frameBoxesCache,
-    showCropRegionInFrame,
+    showCropBoundsInFrame,
     setCurrentFrameBoxes,
     setHasUnsyncedAnnotations,
     setAnnotationsSinceRecalc,
     handleBoxClick,
-    recalculateCropRegion,
+    recalculateCropBounds,
     loadAnalysisBoxes,
   } = params
 
@@ -128,6 +129,7 @@ export function useLayoutCanvas(params: UseLayoutCanvasParams): UseLayoutCanvasR
   }, [viewMode, currentFrameBoxes, layoutConfig])
 
   // Main drawing function
+  // eslint-disable-next-line complexity -- Canvas drawing logic handles multiple view modes and box states
   const drawCanvas = useCallback(() => {
     if (!canvasRef.current || !imageRef.current || canvasSize.width === 0) return
     const ctx = canvasRef.current.getContext('2d')
@@ -152,8 +154,8 @@ export function useLayoutCanvas(params: UseLayoutCanvasParams): UseLayoutCanvasR
         })
       })
 
-      // Draw crop region overlay if enabled
-      if (showCropRegionInFrame && layoutConfig) {
+      // Draw crop bounds overlay if enabled
+      if (showCropBoundsInFrame && layoutConfig) {
         ctx.strokeStyle = '#ef4444' // red-500
         ctx.lineWidth = 2
         ctx.setLineDash([15, 5])
@@ -193,7 +195,7 @@ export function useLayoutCanvas(params: UseLayoutCanvasParams): UseLayoutCanvasR
     selectionLabel,
     boxHighlightMode,
     pulseStartTime,
-    showCropRegionInFrame,
+    showCropBoundsInFrame,
   ])
 
   useEffect(() => {
@@ -231,7 +233,7 @@ export function useLayoutCanvas(params: UseLayoutCanvasParams): UseLayoutCanvasR
         if (result.newlyAnnotatedBoxes && result.newlyAnnotatedBoxes > 0) {
           const newCount = annotationsSinceRecalc + result.newlyAnnotatedBoxes
           setAnnotationsSinceRecalc(newCount)
-          if (newCount >= RECALC_THRESHOLD) await recalculateCropRegion()
+          if (newCount >= RECALC_THRESHOLD) await recalculateCropBounds()
         }
       } catch (err) {
         console.error('Failed to bulk annotate:', err)
@@ -244,7 +246,7 @@ export function useLayoutCanvas(params: UseLayoutCanvasParams): UseLayoutCanvasR
       loadAnalysisBoxes,
       annotationsSinceRecalc,
       setAnnotationsSinceRecalc,
-      recalculateCropRegion,
+      recalculateCropBounds,
       setHasUnsyncedAnnotations,
       frameBoxesCache,
     ]
@@ -278,7 +280,7 @@ export function useLayoutCanvas(params: UseLayoutCanvasParams): UseLayoutCanvasR
         if (newlyAnnotatedCount > 0) {
           const newCount = annotationsSinceRecalc + newlyAnnotatedCount
           setAnnotationsSinceRecalc(newCount)
-          if (newCount >= RECALC_THRESHOLD) await recalculateCropRegion()
+          if (newCount >= RECALC_THRESHOLD) await recalculateCropBounds()
         }
       } catch (err) {
         console.error('Failed to save annotations:', err)
@@ -290,7 +292,7 @@ export function useLayoutCanvas(params: UseLayoutCanvasParams): UseLayoutCanvasR
       videoId,
       selectedFrameIndex,
       annotationsSinceRecalc,
-      recalculateCropRegion,
+      recalculateCropBounds,
       setCurrentFrameBoxes,
       setHasUnsyncedAnnotations,
       setAnnotationsSinceRecalc,

@@ -3,6 +3,7 @@
 import subprocess
 from collections.abc import Callable
 from pathlib import Path
+from typing import Optional
 
 import ffmpeg
 
@@ -31,7 +32,7 @@ def extract_frames(
     video_path: Path,
     output_dir: Path,
     rate_hz: float = 0.1,
-    crop_box: tuple[int, int, int, int] | None = None,
+    crop_box: Optional[tuple[int, int, int, int]] = None,
     progress_callback: Callable[[int, int], None] | None = None,
 ) -> list[Path]:
     """Extract frames from video at specified rate.
@@ -144,7 +145,7 @@ def extract_frames_streaming(
     video_path: Path,
     output_dir: Path,
     rate_hz: float = 0.1,
-    crop_box: tuple[int, int, int, int] | None = None,
+    crop_box: Optional[tuple[int, int, int, int]] = None,
     max_threads: int = 4,
 ) -> subprocess.Popen:
     """Extract frames from video as streaming background process.

@@ -5,7 +5,6 @@
 
 import { useState, useCallback } from 'react'
 
-import { supabase } from '~/services/supabase-client'
 import type { RenameVideoModalState, DeleteVideoModalState, ErrorModalState } from '~/types/videos'
 import type { BadgeState } from '~/utils/video-stats'
 
@@ -104,18 +103,9 @@ export function useVideoOperations({
     try {
       const oldPath = renameVideoModal.videoPath
 
-      // Get the current session for auth token
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-      if (session?.access_token) {
-        headers['Authorization'] = `Bearer ${session.access_token}`
-      }
-
       const response = await fetch('/api/videos/rename', {
         method: 'PATCH',
-        headers,
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ oldPath, newName: renamedVideoName }),
       })
 
@@ -147,18 +137,8 @@ export function useVideoOperations({
     try {
       const videoPath = deleteVideoModal.videoPath
 
-      // Get the current session for auth token
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-      const headers: Record<string, string> = {}
-      if (session?.access_token) {
-        headers['Authorization'] = `Bearer ${session.access_token}`
-      }
-
       const response = await fetch(`/api/videos/${encodeURIComponent(videoPath)}/delete`, {
         method: 'DELETE',
-        headers,
       })
 
       const data = await response.json()
@@ -169,14 +149,15 @@ export function useVideoOperations({
         return
       }
 
-      // Clear cached stats FIRST, before state updates trigger re-renders
+      // Success - close modal and reload
+      setVideoLoading(false)
+      setDeleteVideoModal({ open: false })
+
+      // Clear cached stats for this video
       if (clearVideoStats) {
         clearVideoStats(videoPath)
       }
 
-      // Success - close modal and reload
-      setVideoLoading(false)
-      setDeleteVideoModal({ open: false })
       onOperationComplete()
     } catch {
       setVideoError('Network error')

@@ -10,7 +10,7 @@ export interface TextQueueAnnotation {
   id: number
   start_frame_index: number
   end_frame_index: number
-  caption_frame_extents_state: 'predicted' | 'confirmed' | 'gap' | 'issue'
+  boundary_state: 'predicted' | 'confirmed' | 'gap'
   text: string | null
   text_pending: number
   text_status: string | null
@@ -21,14 +21,14 @@ export interface Annotation {
   id: number
   start_frame_index: number
   end_frame_index: number
-  caption_frame_extents_state: 'predicted' | 'confirmed' | 'gap' | 'issue'
-  caption_frame_extents_pending: number
-  caption_frame_extents_updated_at: string
+  boundary_state: 'predicted' | 'confirmed' | 'gap'
+  boundary_pending: number
+  boundary_updated_at: string
   text: string | null
   text_pending: number
   text_status: string | null
   text_notes: string | null
-  caption_ocr: string | null
+  text_ocr_combined: string | null
   text_updated_at: string | null
   created_at: string
 }

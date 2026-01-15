@@ -42,26 +42,21 @@ export interface AuthContext {
 export async function requireAuth(request: Request): Promise<AuthContext> {
   const supabase = createServerSupabaseClient()
 
-  // Try to get user from Authorization header (Bearer token)
-  const authHeader = request.headers.get('Authorization')
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null
-
   const {
     data: { user },
     error,
-  } = token ? await supabase.auth.getUser(token) : await supabase.auth.getUser()
+  } = await supabase.auth.getUser()
 
   if (error || !user) {
     // Log authentication failure
-    await logAuthFailure(request, error?.message || 'No user session')
+    await logAuthFailure(request, error?.message ?? 'No user session')
     throw new Response('Unauthorized', { status: 401 })
   }
 
-  // Get user profile (includes tenant_id, role)
-  // Note: approval_status column may not exist in all deployments
+  // Get user profile (includes tenant_id, role, approval_status)
   const { data: profile, error: profileError } = await supabase
     .from('user_profiles')
-    .select('tenant_id, role')
+    .select('tenant_id, role, approval_status')
     .eq('id', user.id)
     .single()
 
@@ -69,6 +64,13 @@ export async function requireAuth(request: Request): Promise<AuthContext> {
     // Log authentication failure (profile missing)
     await logAuthFailure(request, `User profile not found for ${user.id}`)
     throw new Response('User profile not found', { status: 404 })
+  }
+
+  // Check approval status
+  if (profile.approval_status !== 'approved') {
+    // Log authentication failure (not approved)
+    await logAuthFailure(request, `Account pending approval for ${user.id}`)
+    throw new Response('Account pending approval', { status: 403 })
   }
 
   // Validate required profile fields

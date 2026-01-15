@@ -28,7 +28,7 @@ interface ThumbnailUploadResult {
  * Format: {tenant_id}/{video_id}/thumbnail.jpg
  */
 function getThumbnailStoragePath(tenantId: string, videoId: string, filename?: string): string {
-  const name = filename || 'thumbnail.jpg'
+  const name = filename ?? 'thumbnail.jpg'
   return `${tenantId}/${videoId}/${name}`
 }
 

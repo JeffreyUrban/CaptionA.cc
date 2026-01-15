@@ -71,7 +71,7 @@ pyrightconfig.json.user
 *.ipynb_checkpoints/
 
 # Documentation
-docs/_organize-and-revise/supabase/_build/
+supabase/docs/_build/
 site/
 
 # Node/TypeScript (for frontend projects)

@@ -3,23 +3,13 @@
  * Handles rendering of frame/analysis views with overlays.
  */
 
-import { useState, useEffect } from 'react'
-
-import {
-  RECALC_THRESHOLD,
-  type FrameBoxesData,
-  type LayoutConfig,
-  type BoxData,
-  type ViewMode,
-} from '~/types/layout'
-import { generateSignedUrl, isS3Url } from '~/utils/s3-image-url-helper'
+import { type FrameBoxesData, type LayoutConfig, type BoxData, type ViewMode } from '~/types/layout'
 
 interface LayoutMainCanvasProps {
-  videoId: string
   viewMode: ViewMode
   layoutConfig: LayoutConfig | null
   layoutApproved: boolean
-  cropRegionMismatch: boolean
+  boundsMismatch: boolean
   currentFrameBoxes: FrameBoxesData | null
   analysisBoxes: BoxData[] | null
   loadingFrame: boolean
@@ -39,9 +29,9 @@ interface LayoutMainCanvasProps {
 function AnalysisViewContent({
   layoutConfig,
   layoutApproved,
-  cropRegionMismatch,
+  boundsMismatch,
   analysisBoxes,
-  annotationsSinceRecalc,
+  annotationsSinceRecalc: _annotationsSinceRecalc,
   selectionPadding,
   imageRef,
   canvasRef,
@@ -64,7 +54,7 @@ function AnalysisViewContent({
       <div
         className="relative"
         style={{
-          outline: cropRegionMismatch
+          outline: boundsMismatch
             ? '3px solid #ec4899' // pink-500
             : layoutApproved
               ? '3px solid #10b981' // green-500
@@ -97,9 +87,8 @@ function AnalysisViewContent({
  * Frame view canvas content
  */
 function FrameViewContent({
-  videoId,
   currentFrameBoxes,
-  annotationsSinceRecalc,
+  annotationsSinceRecalc: _annotationsSinceRecalc,
   selectionPadding,
   imageRef,
   canvasRef,
@@ -109,7 +98,6 @@ function FrameViewContent({
   onContextMenu,
 }: Pick<
   LayoutMainCanvasProps,
-  | 'videoId'
   | 'annotationsSinceRecalc'
   | 'selectionPadding'
   | 'imageRef'
@@ -122,23 +110,6 @@ function FrameViewContent({
   currentFrameBoxes: FrameBoxesData
 }) {
   const allBoxesAnnotated = currentFrameBoxes.boxes.every(box => box.userLabel !== null)
-  const [signedImageUrl, setSignedImageUrl] = useState<string | null>(null)
-  const [loadingUrl, setLoadingUrl] = useState(false)
-
-  // Convert S3 URL to signed URL if needed
-  useEffect(() => {
-    async function convertUrl() {
-      if (isS3Url(currentFrameBoxes.imageUrl)) {
-        setLoadingUrl(true)
-        const url = await generateSignedUrl(videoId, currentFrameBoxes.imageUrl)
-        setSignedImageUrl(url)
-        setLoadingUrl(false)
-      } else {
-        setSignedImageUrl(currentFrameBoxes.imageUrl)
-      }
-    }
-    void convertUrl()
-  }, [videoId, currentFrameBoxes.imageUrl])
 
   return (
     <div
@@ -155,18 +126,12 @@ function FrameViewContent({
           outline: allBoxesAnnotated ? '3px solid #10b981' : 'none',
         }}
       >
-        {loadingUrl || !signedImageUrl ? (
-          <div className="bg-gray-200 animate-pulse w-full h-64 flex items-center justify-center">
-            Loading image...
-          </div>
-        ) : (
-          <img
-            ref={imageRef}
-            src={signedImageUrl}
-            alt={`Frame ${currentFrameBoxes.frameIndex}`}
-            className="max-w-full max-h-full object-contain block"
-          />
-        )}
+        <img
+          ref={imageRef}
+          src={currentFrameBoxes.imageUrl}
+          alt={`Frame ${currentFrameBoxes.frameIndex}`}
+          className="max-w-full max-h-full object-contain block"
+        />
         <canvas
           ref={canvasRef}
           className="absolute left-0 top-0"
@@ -190,11 +155,10 @@ function EmptyState({ loadingFrame }: { loadingFrame: boolean }) {
 }
 
 export function LayoutMainCanvas({
-  videoId,
   viewMode,
   layoutConfig,
   layoutApproved,
-  cropRegionMismatch,
+  boundsMismatch,
   currentFrameBoxes,
   analysisBoxes,
   loadingFrame,
@@ -213,7 +177,7 @@ export function LayoutMainCanvas({
         <AnalysisViewContent
           layoutConfig={layoutConfig}
           layoutApproved={layoutApproved}
-          cropRegionMismatch={cropRegionMismatch}
+          boundsMismatch={boundsMismatch}
           analysisBoxes={analysisBoxes}
           annotationsSinceRecalc={annotationsSinceRecalc}
           selectionPadding={selectionPadding}
@@ -226,7 +190,6 @@ export function LayoutMainCanvas({
         />
       ) : viewMode === 'frame' && currentFrameBoxes ? (
         <FrameViewContent
-          videoId={videoId}
           currentFrameBoxes={currentFrameBoxes}
           annotationsSinceRecalc={annotationsSinceRecalc}
           selectionPadding={selectionPadding}

@@ -803,7 +803,7 @@ version-file = "{source_path}/_version.py"
 [tool.uv.sources]
 # Add workspace dependencies here, for example:
 # video_utils = { workspace = true }
-# ocr = { workspace = true }
+# ocr_utils = { workspace = true }
 """
         # Append after [tool.uv]
         content = content.rstrip() + "\n" + uv_sources_template + "\n"
@@ -940,7 +940,7 @@ def validate_pyproject_toml(project_path: Path) -> bool:
         return False
 
 
-def strip_monorepo_irrelevant_fields(project_path: Path, _monorepo_root: Path) -> None:
+def strip_monorepo_irrelevant_fields(project_path: Path, monorepo_root: Path) -> None:
     """
     Strip fields from pyproject.toml that are irrelevant or redundant in monorepo context.
 
@@ -1001,7 +1001,7 @@ def strip_monorepo_irrelevant_fields(project_path: Path, _monorepo_root: Path) -
         print("    No irrelevant fields found to strip")
 
 
-def apply_cli_template_transformations(project_path: Path, _monorepo_root: Path) -> None:
+def apply_cli_template_transformations(project_path: Path, monorepo_root: Path) -> None:
     """
     Apply transformations specific to our cli-template.
 
@@ -1331,31 +1331,32 @@ def integrate_project(project_path: Path, monorepo_root: Path, project_name: str
                     import re
 
                     # Add path parameter to fly-pr-review-apps if missing
-                    if (re.search(r"uses:\s+superfly/fly-pr-review-apps", content)
-                            and "with:" in content
-                            and f"path: {project_rel_path}" not in content):
-                        # Add path parameter after 'with:'
-                        content = re.sub(
-                            r"(uses:\s+superfly/fly-pr-review-apps@[^\n]+\n\s+with:\n)",
-                            f"\\1          path: {project_rel_path}\\n",
-                            content,
-                        )
-                        print(f"    Added 'path: {project_rel_path}' to Fly.io action in {workflow_file.name}")
+                    if re.search(r"uses:\s+superfly/fly-pr-review-apps", content):
+                        # Check if 'with:' section exists but 'path:' doesn't
+                        if "with:" in content and f"path: {project_rel_path}" not in content:
+                            # Add path parameter after 'with:'
+                            content = re.sub(
+                                r"(uses:\s+superfly/fly-pr-review-apps@[^\n]+\n\s+with:\n)",
+                                f"\\1          path: {project_rel_path}\\n",
+                                content,
+                            )
+                            print(f"    Added 'path: {project_rel_path}' to Fly.io action in {workflow_file.name}")
 
                     # Add path parameter to flyctl-actions deploy if missing
-                    if (re.search(r"uses:\s+superfly/flyctl-actions/setup-flyctl", content)
-                            and re.search(r"flyctl deploy.*--remote-only", content)
-                            and f"--config {project_rel_path}/fly.toml" not in content):
+                    if re.search(r"uses:\s+superfly/flyctl-actions/setup-flyctl", content):
                         # For flyctl deploy, we need to add --config parameter to the flyctl deploy command
-                        content = re.sub(
-                            r"(flyctl deploy)(.*--remote-only)",
-                            f"\\1 --config {project_rel_path}/fly.toml\\2",
-                            content,
-                        )
-                        print(
-                            f"    Added '--config {project_rel_path}/fly.toml' "
-                            f"to flyctl deploy in {workflow_file.name}"
-                        )
+                        # Check if the deploy command exists and doesn't have --config
+                        if re.search(r"flyctl deploy.*--remote-only", content):
+                            if f"--config {project_rel_path}/fly.toml" not in content:
+                                content = re.sub(
+                                    r"(flyctl deploy)(.*--remote-only)",
+                                    f"\\1 --config {project_rel_path}/fly.toml\\2",
+                                    content,
+                                )
+                                print(
+                                    f"    Added '--config {project_rel_path}/fly.toml' "
+                                    f"to flyctl deploy in {workflow_file.name}"
+                                )
 
                 # Write to monorepo workflows with project prefix
                 new_name = f"{project_path.name}-{workflow_file.name}"

@@ -147,7 +147,8 @@ export function useIncompleteUploadDetection() {
       // Show notification or prompt to user
       // (Implementation depends on notification system)
     }
-  }, []) // Only run on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Mount-only effect, incompleteUploads.length is read not used as dep
+  }, [])
 
   return {
     incompleteUploads,

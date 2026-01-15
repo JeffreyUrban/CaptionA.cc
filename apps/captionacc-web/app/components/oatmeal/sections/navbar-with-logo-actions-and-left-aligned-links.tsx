@@ -1,5 +1,5 @@
-import { useState, type ComponentProps, type ReactNode } from 'react'
 import { clsx } from 'clsx/lite'
+import { useState, type ComponentProps, type ReactNode } from 'react'
 
 export function NavbarLink({
   children,

@@ -46,16 +46,24 @@ export function calculateFeatureImportance(
   }
 
   const importance = inFeatures.map((inParam, idx) => {
-    const outParam = outFeatures[idx]!
+    const outParam = outFeatures[idx]
+    if (!outParam) {
+      throw new Error(`Missing out feature at index ${idx}`)
+    }
 
     // Fisher score: mean difference squared / variance sum
     const meanDiff = Math.abs(inParam.mean - outParam.mean)
     const varianceSum = inParam.std ** 2 + outParam.std ** 2
     const fisherScore = varianceSum > 0 ? meanDiff ** 2 / varianceSum : 0
 
+    const featureName = FEATURE_NAMES[idx]
+    if (!featureName) {
+      throw new Error(`Missing feature name at index ${idx}`)
+    }
+
     return {
       featureIndex: idx,
-      featureName: FEATURE_NAMES[idx]!,
+      featureName,
       fisherScore,
       meanDifference: meanDiff,
       importanceWeight: 0, // Will normalize below
@@ -116,10 +124,51 @@ export function computePooledCovariance(
   const pooled = new Array(NUM_FEATURES * NUM_FEATURES).fill(0)
 
   for (let i = 0; i < NUM_FEATURES * NUM_FEATURES; i++) {
-    pooled[i] = (inSamples.n * covIn[i]! + outSamples.n * covOut[i]!) / totalSamples
+    const covInVal = covIn[i] ?? 0
+    const covOutVal = covOut[i] ?? 0
+    pooled[i] = (inSamples.n * covInVal + outSamples.n * covOutVal) / totalSamples
   }
 
   return pooled
+}
+
+/**
+ * Compute feature means from sample features.
+ */
+function computeFeatureMeans(samples: ClassSamples): number[] {
+  const means: number[] = new Array(NUM_FEATURES).fill(0)
+  for (const sample of samples.features) {
+    for (let i = 0; i < NUM_FEATURES; i++) {
+      means[i] = (means[i] ?? 0) + (sample[i] ?? 0)
+    }
+  }
+  for (let i = 0; i < NUM_FEATURES; i++) {
+    means[i] = (means[i] ?? 0) / samples.n
+  }
+  return means
+}
+
+/**
+ * Accumulate covariance contributions from a single sample.
+ */
+function accumulateSampleCovariance(sample: number[], means: number[], cov: number[]): void {
+  for (let i = 0; i < NUM_FEATURES; i++) {
+    for (let j = 0; j < NUM_FEATURES; j++) {
+      const dev_i = (sample[i] ?? 0) - (means[i] ?? 0)
+      const dev_j = (sample[j] ?? 0) - (means[j] ?? 0)
+      const covIdx = i * NUM_FEATURES + j
+      cov[covIdx] = (cov[covIdx] ?? 0) + dev_i * dev_j
+    }
+  }
+}
+
+/**
+ * Normalize covariance matrix by divisor.
+ */
+function normalizeCovarianceMatrix(cov: number[], divisor: number): void {
+  for (let i = 0; i < cov.length; i++) {
+    cov[i] = (cov[i] ?? 0) / divisor
+  }
 }
 
 /**
@@ -133,39 +182,17 @@ export function computePooledCovariance(
  */
 function computeClassCovariance(samples: ClassSamples): number[] {
   if (samples.n < 2) {
-    // Need at least 2 samples for covariance - return identity
     return createIdentityMatrix(NUM_FEATURES)
   }
 
-  // Compute mean for each feature
-  const means = new Array(NUM_FEATURES).fill(0)
-  for (const sample of samples.features) {
-    for (let i = 0; i < NUM_FEATURES; i++) {
-      means[i] += sample[i]!
-    }
-  }
-  for (let i = 0; i < NUM_FEATURES; i++) {
-    means[i] /= samples.n
-  }
-
-  // Compute covariance matrix: Σ[i,j] = Σ_k (x_k[i] - μ[i])(x_k[j] - μ[j]) / (n-1)
-  const cov = new Array(NUM_FEATURES * NUM_FEATURES).fill(0)
+  const means = computeFeatureMeans(samples)
+  const cov: number[] = new Array(NUM_FEATURES * NUM_FEATURES).fill(0)
 
   for (const sample of samples.features) {
-    for (let i = 0; i < NUM_FEATURES; i++) {
-      for (let j = 0; j < NUM_FEATURES; j++) {
-        const dev_i = sample[i]! - means[i]!
-        const dev_j = sample[j]! - means[j]!
-        cov[i * NUM_FEATURES + j] += dev_i * dev_j
-      }
-    }
+    accumulateSampleCovariance(sample, means, cov)
   }
 
-  // Divide by (n-1) for unbiased estimate
-  const divisor = samples.n - 1
-  for (let i = 0; i < NUM_FEATURES * NUM_FEATURES; i++) {
-    cov[i] /= divisor
-  }
+  normalizeCovarianceMatrix(cov, samples.n - 1)
 
   return cov
 }
@@ -211,7 +238,9 @@ export function invertCovarianceMatrix(matrix: number[]): number[] {
         let sum = 0
         for (let k = 0; k < n; k++) {
           // L_inv^T[i,k] × L_inv[k,j]
-          sum += L_inv[k * n + i]! * L_inv[k * n + j]!
+          const L_inv_ki = L_inv[k * n + i] ?? 0
+          const L_inv_kj = L_inv[k * n + j] ?? 0
+          sum += L_inv_ki * L_inv_kj
         }
         result[i * n + j] = sum
       }
@@ -236,7 +265,7 @@ export function invertCovarianceMatrix(matrix: number[]): number[] {
  * @throws Error if matrix is not positive definite
  */
 function choleskyDecomposition(A: number[], n: number): number[] {
-  const L = new Array(n * n).fill(0)
+  const L = new Array(n * n).fill(0) as number[]
 
   for (let i = 0; i < n; i++) {
     for (let j = 0; j <= i; j++) {
@@ -245,9 +274,11 @@ function choleskyDecomposition(A: number[], n: number): number[] {
       if (j === i) {
         // Diagonal element
         for (let k = 0; k < j; k++) {
-          sum += L[j * n + k]! ** 2
+          const L_jk = L[j * n + k] ?? 0
+          sum += L_jk ** 2
         }
-        const diag = A[j * n + j]! - sum
+        const A_jj = A[j * n + j] ?? 0
+        const diag = A_jj - sum
         if (diag <= 0) {
           throw new Error(`Matrix not positive definite at diagonal ${j}`)
         }
@@ -255,9 +286,13 @@ function choleskyDecomposition(A: number[], n: number): number[] {
       } else {
         // Off-diagonal element
         for (let k = 0; k < j; k++) {
-          sum += L[i * n + k]! * L[j * n + k]!
+          const L_ik = L[i * n + k] ?? 0
+          const L_jk = L[j * n + k] ?? 0
+          sum += L_ik * L_jk
         }
-        L[i * n + j] = (A[i * n + j]! - sum) / L[j * n + j]!
+        const A_ij = A[i * n + j] ?? 0
+        const L_jj = L[j * n + j] ?? 1 // Avoid division by zero
+        L[i * n + j] = (A_ij - sum) / L_jj
       }
     }
   }
@@ -273,19 +308,23 @@ function choleskyDecomposition(A: number[], n: number): number[] {
  * @returns Inverted lower triangular matrix
  */
 function invertLowerTriangular(L: number[], n: number): number[] {
-  const L_inv = new Array(n * n).fill(0)
+  const L_inv = new Array(n * n).fill(0) as number[]
 
   for (let i = 0; i < n; i++) {
     // Diagonal element
-    L_inv[i * n + i] = 1.0 / L[i * n + i]!
+    const L_ii = L[i * n + i] ?? 1 // Avoid division by zero
+    L_inv[i * n + i] = 1.0 / L_ii
 
     // Off-diagonal elements
     for (let j = i + 1; j < n; j++) {
       let sum = 0
       for (let k = i; k < j; k++) {
-        sum += L[j * n + k]! * L_inv[k * n + i]!
+        const L_jk = L[j * n + k] ?? 0
+        const L_inv_ki = L_inv[k * n + i] ?? 0
+        sum += L_jk * L_inv_ki
       }
-      L_inv[j * n + i] = -sum / L[j * n + j]!
+      const L_jj = L[j * n + j] ?? 1 // Avoid division by zero
+      L_inv[j * n + i] = -sum / L_jj
     }
   }
 
@@ -303,10 +342,10 @@ function invertLowerTriangular(L: number[], n: number): number[] {
  * @returns Diagonal inverse matrix
  */
 function invertDiagonalMatrix(matrix: number[], n: number): number[] {
-  const inv = new Array(n * n).fill(0)
+  const inv = new Array(n * n).fill(0) as number[]
 
   for (let i = 0; i < n; i++) {
-    const diag = matrix[i * n + i]!
+    const diag = matrix[i * n + i] ?? 0
     inv[i * n + i] = diag > 0 ? 1.0 / diag : 1.0
   }
 
@@ -344,13 +383,16 @@ export function computeMahalanobisDistance(
   }
 
   // Compute difference vector: diff = x - y
-  const diff = x.map((xi, i) => xi - y[i]!)
+  const diff = x.map((xi, i) => xi - (y[i] ?? 0))
 
   // Compute diff^T × Σ^(-1) × diff
   let sum = 0
   for (let i = 0; i < NUM_FEATURES; i++) {
     for (let j = 0; j < NUM_FEATURES; j++) {
-      sum += diff[i]! * covarianceInverse[i * NUM_FEATURES + j]! * diff[j]!
+      const diff_i = diff[i] ?? 0
+      const diff_j = diff[j] ?? 0
+      const covInv_ij = covarianceInverse[i * NUM_FEATURES + j] ?? 0
+      sum += diff_i * covInv_ij * diff_j
     }
   }
 

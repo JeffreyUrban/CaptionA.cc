@@ -5,12 +5,8 @@
  * instead of batch recalculation every 20 annotations.
  */
 
-import {
-  ADAPTIVE_RECALC_CONFIG,
-  PREDICTION_CHANGE_CONFIG,
-  type FeatureImportanceMetrics,
-} from './streaming-prediction-config'
 import { computeMahalanobisDistance, type GaussianParams } from './feature-importance'
+import { ADAPTIVE_RECALC_CONFIG, PREDICTION_CHANGE_CONFIG } from './streaming-prediction-config'
 
 /**
  * Box with current prediction and features.
@@ -225,7 +221,7 @@ export async function adaptiveRecalculation(
 
   // Determine why we stopped
   const hitMaxBoxes = totalProcessed >= ADAPTIVE_RECALC_CONFIG.MAX_BOXES_PER_UPDATE
-  const exhaustedCandidates = totalProcessed >= candidates.length
+  const _exhaustedCandidates = totalProcessed >= candidates.length
 
   const finalRate =
     reversalWindow.length > 0

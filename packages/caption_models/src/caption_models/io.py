@@ -40,7 +40,7 @@ def save_analysis_text(region: SubtitleRegion, output_file: Path) -> None:
         "vertical_position_std": float(f"{region.vertical_std:.2f}"),
         "anchor_type": region.anchor_type,
         "anchor_position": region.anchor_position,
-        "crop_region": [
+        "crop_bounds": [
             region.crop_left,
             region.crop_top,
             region.crop_right,
@@ -56,7 +56,7 @@ Vertical position mode: {stats_dict["vertical_position_mode"]} pixels
 Vertical position standard deviation: {stats_dict["vertical_position_std"]} pixels
 Anchor type: {stats_dict["anchor_type"]}
 Anchor position: {stats_dict["anchor_position"]} pixels
-Crop region: {stats_dict["crop_region"]}
+Crop bounds: {stats_dict["crop_bounds"]}
 """
 
     with output_file.open("w") as f:

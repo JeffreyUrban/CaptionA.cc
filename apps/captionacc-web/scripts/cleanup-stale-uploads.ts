@@ -19,6 +19,100 @@ import Database from 'better-sqlite3'
 
 const STALE_THRESHOLD_HOURS = 24
 
+/**
+ * Update database to mark upload as error
+ */
+function markDatabaseAsError(storagePath: string, videoPath: string) {
+  const dbPath = resolve(
+    process.cwd(),
+    '..',
+    '..',
+    'local',
+    'data',
+    ...storagePath.split('/'),
+    'captions.db'
+  )
+
+  if (!existsSync(dbPath)) {
+    return
+  }
+
+  try {
+    const db = new Database(dbPath)
+    try {
+      db.prepare(
+        `
+        UPDATE processing_status
+        SET status = 'error',
+            error_message = 'Upload stalled and automatically cleared after 24h',
+            deleted = 1,
+            deleted_at = datetime('now')
+        WHERE id = 1
+      `
+      ).run()
+    } finally {
+      db.close()
+    }
+  } catch (error) {
+    console.error(`[Cleanup] Failed to update database for ${videoPath}:`, error)
+  }
+}
+
+/**
+ * Parse metadata and extract info
+ */
+function parseUploadMetadata(metadataPath: string, uploadId: string, uploadPath: string) {
+  if (!existsSync(metadataPath)) {
+    return { videoPath: uploadId, progress: 0, storagePath: null }
+  }
+
+  const metadata = JSON.parse(readFileSync(metadataPath, 'utf-8')) as {
+    metadata?: { videoPath?: string; storagePath?: string }
+    uploadLength?: number
+  }
+
+  const videoPath = metadata?.metadata?.videoPath ?? uploadId
+  const storagePath = metadata?.metadata?.storagePath ?? null
+
+  let progress = 0
+  if (metadata && existsSync(uploadPath) && metadata.uploadLength) {
+    progress = Math.round((statSync(uploadPath).size / metadata.uploadLength) * 100)
+  }
+
+  return { videoPath, progress, storagePath }
+}
+
+/**
+ * Delete stale upload files and update database
+ */
+function deleteStaleUpload(
+  uploadPath: string,
+  metadataPath: string,
+  videoPath: string,
+  progress: number,
+  ageMs: number,
+  storagePath: string | null
+) {
+  console.log(
+    `[Cleanup] Clearing stale upload: ${videoPath} (${progress}% complete, ${Math.round(ageMs / (60 * 60 * 1000))}h old)`
+  )
+
+  // Delete partial upload file
+  if (existsSync(uploadPath)) {
+    unlinkSync(uploadPath)
+  }
+
+  // Delete metadata file
+  if (existsSync(metadataPath)) {
+    unlinkSync(metadataPath)
+  }
+
+  // Mark database as error if it exists
+  if (storagePath) {
+    markDatabaseAsError(storagePath, videoPath)
+  }
+}
+
 function cleanupStaleUploads() {
   const uploadsDir = resolve(process.cwd(), '..', '..', 'local', 'uploads')
 
@@ -49,70 +143,13 @@ function cleanupStaleUploads() {
       const ageMs = now - stats.mtimeMs
 
       if (ageMs > staleThreshold) {
-        // Read metadata before deleting
-        let metadata: unknown = null
-        if (existsSync(metadataPath)) {
-          metadata = JSON.parse(readFileSync(metadataPath, 'utf-8')) as unknown
-        }
-
-        const metadataObj = metadata as {
-          metadata?: { videoPath?: string; storagePath?: string }
-          uploadLength?: number
-        } | null
-        const videoPath = metadataObj?.metadata?.videoPath ?? uploadId
-        const progress =
-          metadataObj && existsSync(uploadPath) && metadataObj.uploadLength
-            ? Math.round((statSync(uploadPath).size / metadataObj.uploadLength) * 100)
-            : 0
-
-        console.log(
-          `[Cleanup] Clearing stale upload: ${videoPath} (${progress}% complete, ${Math.round(ageMs / (60 * 60 * 1000))}h old)`
+        const { videoPath, progress, storagePath } = parseUploadMetadata(
+          metadataPath,
+          uploadId,
+          uploadPath
         )
 
-        // Delete partial upload file
-        if (existsSync(uploadPath)) {
-          unlinkSync(uploadPath)
-        }
-
-        // Delete metadata file
-        if (existsSync(metadataPath)) {
-          unlinkSync(metadataPath)
-        }
-
-        // Mark database as error if it exists
-        if (metadataObj?.metadata?.storagePath) {
-          const dbPath = resolve(
-            process.cwd(),
-            '..',
-            '..',
-            'local',
-            'data',
-            ...metadataObj.metadata.storagePath.split('/'),
-            'captions.db'
-          )
-
-          if (existsSync(dbPath)) {
-            try {
-              const db = new Database(dbPath)
-              try {
-                db.prepare(
-                  `
-                  UPDATE processing_status
-                  SET status = 'error',
-                      error_message = 'Upload stalled and automatically cleared after 24h',
-                      deleted = 1,
-                      deleted_at = datetime('now')
-                  WHERE id = 1
-                `
-                ).run()
-              } finally {
-                db.close()
-              }
-            } catch (error) {
-              console.error(`[Cleanup] Failed to update database for ${videoPath}:`, error)
-            }
-          }
-        }
+        deleteStaleUpload(uploadPath, metadataPath, videoPath, progress, ageMs, storagePath)
 
         cleared++
       }

@@ -108,15 +108,9 @@ export function useVideoStats({ tree }: UseVideoStatsParams): UseVideoStatsRetur
   useEffect(() => {
     if (!isMounted || errorBadgesValidated) return
 
-    // Get current videos in tree
-    const videoIdsInTree = new Set(collectAllVideoIds(tree))
-
-    // Find videos with error badges in cache that are STILL in the tree
+    // Find videos with error badges in cache and refetch them to validate
     const videosWithErrors = Array.from(videoStatsMap.entries())
-      .filter(
-        ([videoId, videoStats]) =>
-          videoIdsInTree.has(videoId) && videoStats.badges?.some(badge => badge.type === 'error')
-      )
+      .filter(([, videoStats]) => videoStats.badges?.some(badge => badge.type === 'error'))
       .map(([videoId]) => videoId)
 
     if (videosWithErrors.length > 0) {
@@ -129,7 +123,7 @@ export function useVideoStats({ tree }: UseVideoStatsParams): UseVideoStatsRetur
     }
 
     setErrorBadgesValidated(true)
-  }, [isMounted, errorBadgesValidated, videoStatsMap, fetchStats, tree])
+  }, [isMounted, errorBadgesValidated, videoStatsMap, fetchStats])
 
   // Eagerly load stats for all videos in the tree
   useEffect(() => {
@@ -139,20 +133,17 @@ export function useVideoStats({ tree }: UseVideoStatsParams): UseVideoStatsRetur
     const videoIdSet = new Set(videoIds)
 
     // Clean up stale entries (videos that are no longer in the tree)
-    // Skip cleanup if tree is empty (still loading) to avoid race condition
-    if (videoIds.length > 0) {
-      const cachedVideoIds = Object.keys(stats)
-      const staleVideoIds = cachedVideoIds.filter(id => !videoIdSet.has(id))
+    const cachedVideoIds = Object.keys(stats)
+    const staleVideoIds = cachedVideoIds.filter(id => !videoIdSet.has(id))
 
-      if (staleVideoIds.length > 0) {
-        console.log(
-          `[useVideoStats] Removing ${staleVideoIds.length} stale cache entries:`,
-          staleVideoIds
-        )
-        staleVideoIds.forEach(videoId => {
-          removeStats(videoId)
-        })
-      }
+    if (staleVideoIds.length > 0) {
+      console.log(
+        `[useVideoStats] Removing ${staleVideoIds.length} stale cache entries:`,
+        staleVideoIds
+      )
+      staleVideoIds.forEach(videoId => {
+        removeStats(videoId)
+      })
     }
 
     // Check for videos that were recently touched and need stats refresh

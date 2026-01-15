@@ -318,6 +318,39 @@ function UploadCompleteBanner({
 }
 
 // ============================================================================
+// Helper Functions
+// ============================================================================
+
+function hasActiveStatusUpdates(
+  uploadingCount: number,
+  retryingCount: number,
+  pendingCount: number,
+  stalledCount: number,
+  errorCount: number
+): boolean {
+  return (
+    uploadingCount > 0 ||
+    retryingCount > 0 ||
+    pendingCount > 0 ||
+    stalledCount > 0 ||
+    errorCount > 0
+  )
+}
+
+function hasQueuedOrStalled(pendingCount: number, stalledCount: number): boolean {
+  return pendingCount > 0 || stalledCount > 0
+}
+
+function hasActiveOrRetrying(
+  uploadingCount: number,
+  retryingCount: number,
+  pendingCount: number,
+  stalledCount: number
+): boolean {
+  return uploadingCount > 0 || retryingCount > 0 || pendingCount > 0 || stalledCount > 0
+}
+
+// ============================================================================
 // Main Component
 // ============================================================================
 
@@ -389,11 +422,13 @@ export function UploadProgressSection({
 
         {/* Status breakdown */}
         {uploading &&
-          (uploadingCount > 0 ||
-            retryingCount > 0 ||
-            pendingCount > 0 ||
-            stalledCount > 0 ||
-            errorCount > 0) && (
+          hasActiveStatusUpdates(
+            uploadingCount,
+            retryingCount,
+            pendingCount,
+            stalledCount,
+            errorCount
+          ) && (
             <UploadStatusBreakdown
               uploadingCount={uploadingCount}
               retryingCount={retryingCount}
@@ -405,9 +440,9 @@ export function UploadProgressSection({
 
         {/* Cancel buttons */}
         {uploading &&
-          (uploadingCount > 0 || retryingCount > 0 || pendingCount > 0 || stalledCount > 0) && (
+          hasActiveOrRetrying(uploadingCount, retryingCount, pendingCount, stalledCount) && (
             <div className="mt-4 flex flex-wrap gap-3">
-              {(pendingCount > 0 || stalledCount > 0) && (
+              {hasQueuedOrStalled(pendingCount, stalledCount) && (
                 <button
                   onClick={onStopQueued}
                   className="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"

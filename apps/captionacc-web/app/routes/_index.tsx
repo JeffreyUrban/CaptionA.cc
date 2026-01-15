@@ -1,6 +1,5 @@
 import { redirect, type LoaderFunctionArgs, type MetaFunction } from 'react-router'
 
-import { supabase } from '~/services/supabase-client'
 import { ThemeSwitcher } from '~/components/ThemeSwitcher'
 import { WaitlistForm } from '~/components/WaitlistForm'
 import { ButtonLink } from '~/components/oatmeal/elements/button'
@@ -20,6 +19,7 @@ import {
 } from '~/components/oatmeal/sections/footer-with-link-categories'
 import { HeroSimpleCentered } from '~/components/oatmeal/sections/hero-simple-centered'
 import { NavbarWithLogoActionsAndLeftAlignedLinks } from '~/components/oatmeal/sections/navbar-with-logo-actions-and-left-aligned-links'
+import { supabase } from '~/services/supabase-client'
 
 export const meta: MetaFunction = () => {
   return [
@@ -34,7 +34,7 @@ export const meta: MetaFunction = () => {
   ]
 }
 
-export async function loader({ request }: LoaderFunctionArgs) {
+export async function loader({ request: _request }: LoaderFunctionArgs) {
   // Check if user is authenticated
   const {
     data: { session },
@@ -48,6 +48,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
   return null
 }
 
+// Large Home page component with marketing content - acceptable length for landing page
+/* eslint-disable max-lines-per-function */
 export default function Home() {
   return (
     <>
@@ -246,8 +248,8 @@ export default function Home() {
                 Automated Extraction
               </h3>
               <p className="mt-4 text-sm/7 text-olive-700 dark:text-olive-400">
-                Our system identifies caption frame extents and extracts text with
-                professional-grade accuracy
+                Our system identifies caption boundaries and extracts text with professional-grade
+                accuracy
               </p>
             </div>
             <div>
@@ -270,7 +272,8 @@ export default function Home() {
           subheadline={
             <div className="text-left">
               <p className="mb-6 text-center">
-                We're launching with a select group of early users. During early access, you'll:
+                We&apos;re launching with a select group of early users. During early access,
+                you&apos;ll:
               </p>
               <ul className="mx-auto max-w-2xl space-y-3">
                 <li className="flex items-start">
@@ -325,9 +328,9 @@ export default function Home() {
             question="How accurate is the extraction?"
             answer={
               <p>
-                We've developed the system to deliver exceptional accuracy, significantly better
-                than standard OCR tools. During early access, we'll work with you to ensure quality
-                on your specific content.
+                We&apos;ve developed the system to deliver exceptional accuracy, significantly
+                better than standard OCR tools. During early access, we&apos;ll work with you to
+                ensure quality on your specific content.
               </p>
             }
           />
@@ -335,8 +338,8 @@ export default function Home() {
             question="What languages and character sets do you support?"
             answer={
               <p>
-                We've primarily developed and tested with Chinese subtitles, but the system is
-                designed to work with multiple character sets. We're interested in working with
+                We&apos;ve primarily developed and tested with Chinese subtitles, but the system is
+                designed to work with multiple character sets. We&apos;re interested in working with
                 early users who have content in any language or script.
               </p>
             }
@@ -345,8 +348,8 @@ export default function Home() {
             question="What formats do you support?"
             answer={
               <p>
-                We export to SRT, VTT, and other standard subtitle formats. Upload MP4 video format
-                (let us know if you need support for other formats).
+                We export to SRT, VTT, and other standard subtitle formats. Upload common video
+                formats like MP4, MOV, MKV, and AVI.
               </p>
             }
           />
@@ -354,8 +357,8 @@ export default function Home() {
             question="What about pricing?"
             answer={
               <p>
-                We're still finalizing our pricing model. Details will be shared with early access
-                users.
+                We&apos;re still finalizing our pricing model. Details will be shared with early
+                access users.
               </p>
             }
           />

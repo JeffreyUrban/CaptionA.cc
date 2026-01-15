@@ -6,7 +6,7 @@ for use in caption text classification. All coordinates are in absolute pixels.
 
 from typing import TypedDict
 
-from caption_models import BoundingBox, CropRegion, box_overlap_with_crop, is_box_inside_crop
+from caption_models import BoundingBox, CropBounds, box_overlap_with_crop, is_box_inside_crop
 
 
 class LayoutParams(TypedDict):
@@ -54,7 +54,7 @@ class BoxFeatures(TypedDict):
     anchor_consistency: float  # [0-1] how well box aligns with anchor type
 
     # Constraint features
-    inside_crop_region: bool
+    inside_crop_bounds: bool
     overlap_with_crop: float  # [0-1]
     inside_selection_rect: bool  # If selection rect exists
     overlap_with_selection: float  # [0-1]
@@ -67,7 +67,7 @@ def extract_box_features(
     box: BoundingBox,
     frame_width: int,
     frame_height: int,
-    crop_region: CropRegion,
+    crop_bounds: CropBounds,
     layout_params: LayoutParams,
     selection_rect: BoundingBox | None = None,
 ) -> BoxFeatures:
@@ -77,7 +77,7 @@ def extract_box_features(
         box: Bounding box in original frame pixel coordinates
         frame_width: Frame width in pixels
         frame_height: Frame height in pixels
-        crop_region: Crop region in original frame coordinates
+        crop_bounds: Crop region in original frame coordinates
         layout_params: Layout parameters from SubtitleRegion analysis
         selection_rect: Optional selection rectangle constraint (original coords)
 
@@ -128,8 +128,8 @@ def extract_box_features(
         anchor_consistency = 1.0 - min(horizontal_distance / (frame_width / 2), 1.0)
 
     # Constraint features
-    inside_crop = is_box_inside_crop(box, crop_region)
-    overlap_crop = box_overlap_with_crop(box, crop_region)
+    inside_crop = is_box_inside_crop(box, crop_bounds)
+    overlap_crop = box_overlap_with_crop(box, crop_bounds)
 
     if selection_rect is not None:
         inside_selection = box.is_inside(selection_rect)
@@ -160,7 +160,7 @@ def extract_box_features(
         height_similarity_score=height_similarity_score,
         anchor_consistency=anchor_consistency,
         # Constraints
-        inside_crop_region=inside_crop,
+        inside_crop_bounds=inside_crop,
         overlap_with_crop=overlap_crop,
         inside_selection_rect=inside_selection,
         overlap_with_selection=overlap_selection,
@@ -173,7 +173,7 @@ def extract_features_batch(
     boxes: list[BoundingBox],
     frame_width: int,
     frame_height: int,
-    crop_region: CropRegion,
+    crop_bounds: CropBounds,
     layout_params: LayoutParams,
     selection_rect: BoundingBox | None = None,
 ) -> list[BoxFeatures]:
@@ -183,7 +183,7 @@ def extract_features_batch(
         boxes: List of bounding boxes in original frame coordinates
         frame_width: Frame width in pixels
         frame_height: Frame height in pixels
-        crop_region: Crop region in original frame coordinates
+        crop_bounds: Crop region in original frame coordinates
         layout_params: Layout parameters from SubtitleRegion analysis
         selection_rect: Optional selection rectangle constraint
 
@@ -195,7 +195,7 @@ def extract_features_batch(
             box=box,
             frame_width=frame_width,
             frame_height=frame_height,
-            crop_region=crop_region,
+            crop_bounds=crop_bounds,
             layout_params=layout_params,
             selection_rect=selection_rect,
         )
@@ -221,7 +221,7 @@ def features_to_array(features: BoxFeatures) -> list[float]:
         5: height_similarity_score
         6: horizontal_distance_from_anchor
         7: anchor_consistency
-        8: inside_crop_region (0 or 1)
+        8: inside_crop_bounds (0 or 1)
         9: overlap_with_crop
         10: inside_selection_rect (0 or 1)
         11: overlap_with_selection
@@ -236,7 +236,7 @@ def features_to_array(features: BoxFeatures) -> list[float]:
         features["height_similarity_score"],
         float(features["horizontal_distance_from_anchor"]),
         features["anchor_consistency"],
-        float(features["inside_crop_region"]),
+        float(features["inside_crop_bounds"]),
         features["overlap_with_crop"],
         float(features["inside_selection_rect"]),
         features["overlap_with_selection"],

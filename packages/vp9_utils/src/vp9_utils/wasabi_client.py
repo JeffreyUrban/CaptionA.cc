@@ -1,9 +1,8 @@
 """Wasabi S3 client for uploading VP9 chunks."""
 
 import os
-from collections.abc import Callable
 from pathlib import Path
-from typing import Literal, TypedDict
+from typing import Callable, Literal, TypedDict
 
 import boto3
 from botocore.exceptions import ClientError

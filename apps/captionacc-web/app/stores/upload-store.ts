@@ -30,7 +30,7 @@ export interface ActiveUpload {
   relativePath: string
   targetFolder: string | null
 
-  // Note: uploadUrl removed - S3 presigned URLs are short-lived and not resumable like TUS
+  uploadUrl: string | null
   bytesUploaded: number
   progress: number
   status: 'pending' | 'uploading' | 'error'
@@ -80,11 +80,19 @@ export interface UploadStore {
   addUpload: (
     upload: Omit<
       ActiveUpload,
-      'id' | 'createdAt' | 'startedAt' | 'bytesUploaded' | 'progress' | 'status' | 'error'
+      | 'id'
+      | 'createdAt'
+      | 'startedAt'
+      | 'uploadUrl'
+      | 'bytesUploaded'
+      | 'progress'
+      | 'status'
+      | 'error'
     >
   ) => string
   updateProgress: (id: string, bytesUploaded: number, progress: number) => void
   updateStatus: (id: string, status: ActiveUpload['status'], error?: string) => void
+  setUploadUrl: (id: string, uploadUrl: string) => void
   removeUpload: (id: string) => void
 
   // Duplicate handling
@@ -180,6 +188,7 @@ const initialNotification: UploadNotification = {
 
 export const useUploadStore = create<UploadStore>()(
   persist(
+    // eslint-disable-next-line max-lines-per-function -- Zustand store pattern combines all upload state management and actions in single creator function
     (set, get) => ({
       // Initial state
       activeUploads: {},
@@ -198,6 +207,7 @@ export const useUploadStore = create<UploadStore>()(
             [id]: {
               ...upload,
               id,
+              uploadUrl: null,
               bytesUploaded: 0,
               progress: 0,
               status: 'pending' as const,
@@ -271,6 +281,23 @@ export const useUploadStore = create<UploadStore>()(
               state.completedUploads,
               state.notification.dismissed
             ),
+          }
+        })
+      },
+
+      setUploadUrl: (id, uploadUrl) => {
+        set(state => {
+          const upload = state.activeUploads[id]
+          if (!upload) return state
+
+          return {
+            activeUploads: {
+              ...state.activeUploads,
+              [id]: {
+                ...upload,
+                uploadUrl,
+              },
+            },
           }
         })
       },

@@ -46,6 +46,7 @@ function createTestFolder(name: string): string {
   return folderName
 }
 
+// eslint-disable-next-line max-lines-per-function -- Comprehensive test suite covering all folder API endpoints and edge cases
 describe('Folder API', () => {
   beforeAll(async () => {
     // Clean up any leftover test folders from previous runs

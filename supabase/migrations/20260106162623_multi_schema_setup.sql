@@ -5,7 +5,6 @@
 --   - captionacc_production: Main alpha/production environment
 --   - captionacc_staging: Testing/review apps environment
 --   - captionacc_prefect: Prefect Server database (optional, for self-hosted Prefect)
---     NOTE: This schema was renamed to 'prefect' in migration 20260110100000
 --   - umami: Umami analytics database
 --
 -- Note: This migration creates the schema structure.

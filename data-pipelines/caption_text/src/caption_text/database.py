@@ -3,8 +3,6 @@
 Interacts with captions.db for caption text reading, comparison, and vetting.
 """
 
-# TODO: The database details in this file are out of date.
-
 import sqlite3
 from pathlib import Path
 from typing import Any
@@ -14,14 +12,14 @@ def get_database_path(video_dir: Path) -> Path:
     """Get captions.db path from video directory.
 
     Args:
-        video_dir: Path to video directory (e.g., !__local/data/_has_been_deprecated__!/show_name/video_id/)
+        video_dir: Path to video directory (e.g., local/data/show_name/video_id/)
 
     Returns:
         Path to captions.db file
 
     Example:
-        >>> get_database_path(Path("!__local/data/_has_been_deprecated__!/show_name/video_id"))
-        Path("!__local/data/_has_been_deprecated__!/show_name/video_id/captions.db")
+        >>> get_database_path(Path("local/data/show_name/video_id"))
+        Path("local/data/show_name/video_id/captions.db")
     """
     return video_dir / "captions.db"
 
@@ -75,10 +73,10 @@ def get_captions_needing_text(db_path: Path, limit: int | None = None) -> list[d
     query = """
         SELECT
             id, start_frame_index, end_frame_index,
-            caption_frame_extents_state, text, text_pending, text_status, caption_ocr
+            boundary_state, text, text_pending, text_status, text_ocr_combined
         FROM captions
         WHERE (text IS NULL OR text_pending = 1)
-          AND caption_frame_extents_state != 'gap'
+          AND boundary_state != 'gap'
         ORDER BY start_frame_index
     """
 
@@ -216,8 +214,8 @@ def get_caption_by_frames(db_path: Path, start_frame: int, end_frame: int) -> di
         """
         SELECT
             id, start_frame_index, end_frame_index,
-            caption_frame_extents_state, text, text_pending, text_status,
-            text_notes, caption_ocr
+            boundary_state, text, text_pending, text_status,
+            text_notes, text_ocr_combined
         FROM captions
         WHERE start_frame_index = ? AND end_frame_index = ?
     """,

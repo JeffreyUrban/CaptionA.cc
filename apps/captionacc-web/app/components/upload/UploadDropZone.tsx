@@ -93,7 +93,7 @@ export function UploadDropZone({
           </p>
         </div>
         <div className="mt-4 text-xs text-gray-500 dark:text-gray-500">
-          Supports: MP4 (let us know if you need support for other formats).
+          Supports: MP4, MKV, AVI, MOV, WebM
         </div>
 
         {/* Hidden file inputs */}

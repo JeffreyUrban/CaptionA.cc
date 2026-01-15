@@ -9,7 +9,7 @@ from caption_models.models import SubtitleRegion
 
 def create_analysis_visualization(
     region: SubtitleRegion,
-    _ocr_annotations: list[dict],
+    ocr_annotations: list[dict],
     output_image: Path,
 ) -> None:
     """Create visualization of subtitle region analysis.
@@ -18,7 +18,7 @@ def create_analysis_visualization(
 
     Args:
         region: Analyzed subtitle region
-        _ocr_annotations: OCR annotations for drawing boxes (unused - uses pre-rendered OCR.png)
+        ocr_annotations: OCR annotations for drawing boxes
         output_image: Path to save visualization
     """
     # Load the OCR.png visualization
@@ -30,7 +30,7 @@ def create_analysis_visualization(
     if img is None:
         raise ValueError(f"Failed to load image at {ocr_img_path}")
 
-    # Draw crop region (green) - tight box around detected captions
+    # Draw crop bounds (green) - tight box around detected captions
     cv2.rectangle(
         img,
         (region.crop_left, region.crop_top),

@@ -3,9 +3,8 @@
 import sqlite3
 import subprocess
 import tempfile
-from collections.abc import Callable
 from pathlib import Path
-from typing import Literal, TypedDict
+from typing import Callable, Literal, TypedDict
 
 FrameType = Literal["cropped", "full"]
 
@@ -111,7 +110,7 @@ def write_frames_to_temp_dir(frames: list[tuple[int, bytes, int, int]], temp_dir
 
     width, height = None, None
 
-    for i, (_frame_index, image_data, w, h) in enumerate(frames):
+    for i, (frame_index, image_data, w, h) in enumerate(frames):
         if width is None:
             width, height = w, h
 
@@ -122,14 +121,14 @@ def write_frames_to_temp_dir(frames: list[tuple[int, bytes, int, int]], temp_dir
     return width, height
 
 
-def encode_chunk(input_dir: Path, output_path: Path, _width: int, _height: int, crf: int = 30) -> None:
+def encode_chunk(input_dir: Path, output_path: Path, width: int, height: int, crf: int = 30) -> None:
     """Encode frames into VP9 WebM chunk using ffmpeg.
 
     Args:
         input_dir: Directory containing frame_*.jpg files
         output_path: Output .webm file path
-        _width: Frame width (unused - ffmpeg auto-detects)
-        _height: Frame height (unused - ffmpeg auto-detects)
+        width: Frame width
+        height: Frame height
         crf: Constant quality (0-63, lower = better quality)
     """
     # VP9 encoding parameters:
@@ -168,7 +167,7 @@ def encode_chunk(input_dir: Path, output_path: Path, _width: int, _height: int, 
 
 
 def encode_modulo_chunks(
-    _modulo: int,
+    modulo: int,
     frames: list[tuple[int, bytes, int, int]],
     output_dir: Path,
     chunk_size: int = 32,
@@ -178,7 +177,7 @@ def encode_modulo_chunks(
     """Encode all chunks for a modulo level.
 
     Args:
-        _modulo: Modulo level (16, 4, or 1) - unused but kept for API consistency
+        modulo: Modulo level (16, 4, or 1)
         frames: List of frames for this modulo
         output_dir: Directory to write chunks
         chunk_size: Frames per chunk

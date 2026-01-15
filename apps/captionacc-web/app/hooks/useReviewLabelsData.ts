@@ -36,6 +36,7 @@ interface UseReviewLabelsDataReturn {
  * Custom hook for managing Review Labels data fetching and state.
  * Extracts the data management logic from the main component.
  */
+// eslint-disable-next-line max-lines-per-function -- Review labels data management with loading and saving operations
 export function useReviewLabelsData({
   videoId,
 }: UseReviewLabelsDataParams): UseReviewLabelsDataReturn {
@@ -274,9 +275,7 @@ function buildFrameInfos(potentialMislabels: PotentialMislabel[], videoId: strin
       captionBoxCount: frameMislabels.filter(m => m.userLabel === 'in').length,
       minConfidence,
       hasAnnotations: true,
-      // Note: imageUrl is now handled client-side via S3 direct access
-      // Frontend should use S3Image component or generate signed URL from frameIndex
-      imageUrl: `s3://full_frames/frame_${String(frameIndex).padStart(4, '0')}.jpg`,
+      imageUrl: `/api/full-frames/${encodeURIComponent(videoId)}/${frameIndex}.jpg`,
     }
   })
 }

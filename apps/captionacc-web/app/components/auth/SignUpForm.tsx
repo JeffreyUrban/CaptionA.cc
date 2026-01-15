@@ -9,12 +9,134 @@ import { useState } from 'react'
 import { signUp } from '../../services/supabase-client'
 import { Button } from '../Button'
 
+function SignUpSuccess() {
+  return (
+    <div className="w-full max-w-md mx-auto">
+      <div className="bg-white dark:bg-olive-900 shadow-md rounded-lg px-8 pt-6 pb-8">
+        <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded dark:bg-green-950/20 dark:border-green-400/20 dark:text-green-100">
+          <p className="font-bold">Success!</p>
+          <p className="text-sm">Please check your email to confirm your account.</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function SignUpFormFields({
+  inviteCode,
+  fullName,
+  email,
+  password,
+  loading,
+  onInviteCodeChange,
+  onFullNameChange,
+  onEmailChange,
+  onPasswordChange,
+}: {
+  inviteCode: string
+  fullName: string
+  email: string
+  password: string
+  loading: boolean
+  onInviteCodeChange: (value: string) => void
+  onFullNameChange: (value: string) => void
+  onEmailChange: (value: string) => void
+  onPasswordChange: (value: string) => void
+}) {
+  return (
+    <>
+      <div className="mb-4">
+        <label
+          className="block text-olive-950 dark:text-white text-sm font-bold mb-2"
+          htmlFor="inviteCode"
+        >
+          Invite Code
+        </label>
+        <input
+          id="inviteCode"
+          type="text"
+          value={inviteCode}
+          onChange={e => onInviteCodeChange(e.target.value.toUpperCase())}
+          className="shadow appearance-none border border-olive-950/10 dark:border-white/10 rounded w-full py-2 px-3 text-olive-950 dark:text-white bg-white dark:bg-olive-950 leading-tight focus:outline-none focus:border-olive-600 dark:focus:border-olive-400 font-mono"
+          placeholder="PREVIEW-XXXXXXXX"
+          required
+          disabled={loading}
+        />
+        <p className="text-olive-700 dark:text-olive-400 text-xs mt-1">
+          CaptionA.cc is currently invite-only. Enter your invite code to sign up.
+        </p>
+      </div>
+
+      <div className="mb-4">
+        <label
+          className="block text-olive-950 dark:text-white text-sm font-bold mb-2"
+          htmlFor="fullName"
+        >
+          Full Name
+        </label>
+        <input
+          id="fullName"
+          type="text"
+          value={fullName}
+          onChange={e => onFullNameChange(e.target.value)}
+          className="shadow appearance-none border border-olive-950/10 dark:border-white/10 rounded w-full py-2 px-3 text-olive-950 dark:text-white bg-white dark:bg-olive-950 leading-tight focus:outline-none focus:border-olive-600 dark:focus:border-olive-400"
+          placeholder="John Doe"
+          required
+          disabled={loading}
+        />
+      </div>
+
+      <div className="mb-4">
+        <label
+          className="block text-olive-950 dark:text-white text-sm font-bold mb-2"
+          htmlFor="email"
+        >
+          Email
+        </label>
+        <input
+          id="email"
+          type="email"
+          value={email}
+          onChange={e => onEmailChange(e.target.value)}
+          className="shadow appearance-none border border-olive-950/10 dark:border-white/10 rounded w-full py-2 px-3 text-olive-950 dark:text-white bg-white dark:bg-olive-950 leading-tight focus:outline-none focus:border-olive-600 dark:focus:border-olive-400"
+          placeholder="you@example.com"
+          required
+          disabled={loading}
+        />
+      </div>
+
+      <div className="mb-6">
+        <label
+          className="block text-olive-950 dark:text-white text-sm font-bold mb-2"
+          htmlFor="password"
+        >
+          Password
+        </label>
+        <input
+          id="password"
+          type="password"
+          value={password}
+          onChange={e => onPasswordChange(e.target.value)}
+          className="shadow appearance-none border border-olive-950/10 dark:border-white/10 rounded w-full py-2 px-3 text-olive-950 dark:text-white bg-white dark:bg-olive-950 leading-tight focus:outline-none focus:border-olive-600 dark:focus:border-olive-400"
+          placeholder="••••••••"
+          required
+          minLength={6}
+          disabled={loading}
+        />
+        <p className="text-olive-700 dark:text-olive-400 text-xs mt-1">
+          Password must be at least 6 characters
+        </p>
+      </div>
+    </>
+  )
+}
+
 interface SignUpFormProps {
   onSuccess?: () => void
   onSwitchToLogin?: () => void
 }
 
-export function SignUpForm({ onSuccess, onSwitchToLogin }: SignUpFormProps) {
+export function SignUpForm({ onSuccess: _onSuccess, onSwitchToLogin }: SignUpFormProps) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [fullName, setFullName] = useState('')
@@ -56,7 +178,7 @@ export function SignUpForm({ onSuccess, onSwitchToLogin }: SignUpFormProps) {
       const result = await response.json()
 
       if (!response.ok || !result.success) {
-        throw new Error(result.error || 'Failed to complete signup')
+        throw new Error(result.error ?? 'Failed to complete signup')
       }
 
       setSuccess(true)
@@ -70,16 +192,7 @@ export function SignUpForm({ onSuccess, onSwitchToLogin }: SignUpFormProps) {
   }
 
   if (success) {
-    return (
-      <div className="w-full max-w-md mx-auto">
-        <div className="bg-white dark:bg-olive-900 shadow-md rounded-lg px-8 pt-6 pb-8">
-          <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded dark:bg-green-950/20 dark:border-green-400/20 dark:text-green-100">
-            <p className="font-bold">Success!</p>
-            <p className="text-sm">Please check your email to confirm your account.</p>
-          </div>
-        </div>
-      </div>
-    )
+    return <SignUpSuccess />
   }
 
   return (
@@ -96,88 +209,17 @@ export function SignUpForm({ onSuccess, onSwitchToLogin }: SignUpFormProps) {
         )}
 
         <form onSubmit={e => void handleSubmit(e)}>
-          <div className="mb-4">
-            <label
-              className="block text-olive-950 dark:text-white text-sm font-bold mb-2"
-              htmlFor="inviteCode"
-            >
-              Invite Code
-            </label>
-            <input
-              id="inviteCode"
-              type="text"
-              value={inviteCode}
-              onChange={e => setInviteCode(e.target.value.toUpperCase())}
-              className="shadow appearance-none border border-olive-950/10 dark:border-white/10 rounded w-full py-2 px-3 text-olive-950 dark:text-white bg-white dark:bg-olive-950 leading-tight focus:outline-none focus:border-olive-600 dark:focus:border-olive-400 font-mono"
-              placeholder="PREVIEW-XXXXXXXX"
-              required
-              disabled={loading}
-            />
-            <p className="text-olive-700 dark:text-olive-400 text-xs mt-1">
-              CaptionA.cc is currently invite-only. Enter your invite code to sign up.
-            </p>
-          </div>
-
-          <div className="mb-4">
-            <label
-              className="block text-olive-950 dark:text-white text-sm font-bold mb-2"
-              htmlFor="fullName"
-            >
-              Full Name
-            </label>
-            <input
-              id="fullName"
-              type="text"
-              value={fullName}
-              onChange={e => setFullName(e.target.value)}
-              className="shadow appearance-none border border-olive-950/10 dark:border-white/10 rounded w-full py-2 px-3 text-olive-950 dark:text-white bg-white dark:bg-olive-950 leading-tight focus:outline-none focus:border-olive-600 dark:focus:border-olive-400"
-              placeholder="John Doe"
-              required
-              disabled={loading}
-            />
-          </div>
-
-          <div className="mb-4">
-            <label
-              className="block text-olive-950 dark:text-white text-sm font-bold mb-2"
-              htmlFor="email"
-            >
-              Email
-            </label>
-            <input
-              id="email"
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              className="shadow appearance-none border border-olive-950/10 dark:border-white/10 rounded w-full py-2 px-3 text-olive-950 dark:text-white bg-white dark:bg-olive-950 leading-tight focus:outline-none focus:border-olive-600 dark:focus:border-olive-400"
-              placeholder="you@example.com"
-              required
-              disabled={loading}
-            />
-          </div>
-
-          <div className="mb-6">
-            <label
-              className="block text-olive-950 dark:text-white text-sm font-bold mb-2"
-              htmlFor="password"
-            >
-              Password
-            </label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              className="shadow appearance-none border border-olive-950/10 dark:border-white/10 rounded w-full py-2 px-3 text-olive-950 dark:text-white bg-white dark:bg-olive-950 leading-tight focus:outline-none focus:border-olive-600 dark:focus:border-olive-400"
-              placeholder="••••••••"
-              required
-              minLength={6}
-              disabled={loading}
-            />
-            <p className="text-olive-700 dark:text-olive-400 text-xs mt-1">
-              Password must be at least 6 characters
-            </p>
-          </div>
+          <SignUpFormFields
+            inviteCode={inviteCode}
+            fullName={fullName}
+            email={email}
+            password={password}
+            loading={loading}
+            onInviteCodeChange={setInviteCode}
+            onFullNameChange={setFullName}
+            onEmailChange={setEmail}
+            onPasswordChange={setPassword}
+          />
 
           <div className="flex items-center justify-between mb-4">
             <Button type="submit" disabled={loading} className="w-full">

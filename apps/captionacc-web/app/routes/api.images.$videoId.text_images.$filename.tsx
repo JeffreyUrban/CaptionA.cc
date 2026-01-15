@@ -1,0 +1,47 @@
+import { existsSync } from 'fs'
+import { readFile } from 'fs/promises'
+import { resolve } from 'path'
+
+import { type LoaderFunctionArgs } from 'react-router'
+
+import { getVideoDir } from '~/utils/video-paths'
+
+export async function loader({ params }: LoaderFunctionArgs) {
+  const { videoId: encodedVideoId, filename } = params
+
+  if (!encodedVideoId || !filename) {
+    return new Response('Missing videoId or filename', { status: 400 })
+  }
+
+  // Decode the URL-encoded videoId
+  const videoId = decodeURIComponent(encodedVideoId)
+
+  // Validate filename to prevent directory traversal
+  if (filename.includes('..') || filename.includes('/')) {
+    return new Response('Invalid filename', { status: 400 })
+  }
+
+  // Get video directory
+  const videoDir = await getVideoDir(videoId)
+  if (!videoDir) {
+    return new Response('Video not found', { status: 404 })
+  }
+
+  // Construct path to text image
+  const imagePath = resolve(videoDir, 'text_images', filename)
+
+  // Check if file exists
+  if (!existsSync(imagePath)) {
+    return new Response('Image not found', { status: 404 })
+  }
+
+  // Read and return the image file
+  const imageBuffer = await readFile(imagePath)
+
+  return new Response(imageBuffer, {
+    headers: {
+      'Content-Type': 'image/jpeg',
+      'Cache-Control': 'public, max-age=31536000, immutable',
+    },
+  })
+}

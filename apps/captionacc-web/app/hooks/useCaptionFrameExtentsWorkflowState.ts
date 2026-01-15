@@ -166,7 +166,7 @@ export function useCaptionFrameExtentsWorkflowState({
       setIsInitialized(true)
     }
     void loadInitial()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Only run when videoId changes to load initial state; annotationData is intentionally excluded to prevent loops
   }, [videoId])
 
   // Frame loader hook (only starts after initial position is set)
@@ -368,7 +368,7 @@ export function useCaptionFrameExtentsWorkflowState({
 
     // Only load if range actually changed (prevents infinite loop from array recreation)
     const lastRange = lastAnnotationRangeRef.current
-    if (lastRange && lastRange.start === startFrame && lastRange.end === endFrame) {
+    if (lastRange?.start === startFrame && lastRange.end === endFrame) {
       return
     }
 

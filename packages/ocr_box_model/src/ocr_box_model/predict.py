@@ -7,7 +7,7 @@ Uses layout parameters from SubtitleRegion analysis as Bayesian priors.
 import math
 from typing import TypedDict
 
-from caption_models import BoundingBox, CropRegion
+from caption_models import BoundingBox, CropBounds
 
 from ocr_box_model.features import LayoutParams, extract_box_features
 
@@ -41,7 +41,7 @@ def predict_box_with_heuristics(
     box: BoundingBox,
     frame_width: int,
     frame_height: int,
-    crop_region: CropRegion,
+    crop_bounds: CropBounds,
     layout_params: LayoutParams,
     selection_rect: BoundingBox | None = None,
 ) -> Prediction:
@@ -49,7 +49,7 @@ def predict_box_with_heuristics(
 
     Decision logic (using layout parameters as Bayesian priors):
 
-    1. Hard constraint: Box outside crop region → "out" (high confidence)
+    1. Hard constraint: Box outside crop bounds → "out" (high confidence)
     2. Hard constraint: Box outside selection rect → "out" (high confidence)
     3. Bayesian scoring using layout priors:
        - Vertical position likelihood
@@ -61,7 +61,7 @@ def predict_box_with_heuristics(
         box: Bounding box in original frame pixel coordinates
         frame_width: Frame width in pixels
         frame_height: Frame height in pixels
-        crop_region: Crop region boundaries
+        crop_bounds: Crop region boundaries
         layout_params: Layout parameters as Bayesian priors
         selection_rect: Optional selection rectangle constraint
 
@@ -73,13 +73,13 @@ def predict_box_with_heuristics(
         box=box,
         frame_width=frame_width,
         frame_height=frame_height,
-        crop_region=crop_region,
+        crop_bounds=crop_bounds,
         layout_params=layout_params,
         selection_rect=selection_rect,
     )
 
-    # Hard constraint 1: Outside crop region
-    if not features["inside_crop_region"]:
+    # Hard constraint 1: Outside crop bounds
+    if not features["inside_crop_bounds"]:
         # Box completely outside caption region
         overlap = features["overlap_with_crop"]
         if overlap == 0.0:
@@ -156,7 +156,7 @@ def predict_with_heuristics(
     boxes: list[BoundingBox],
     frame_width: int,
     frame_height: int,
-    crop_region: CropRegion,
+    crop_bounds: CropBounds,
     layout_params: LayoutParams,
     selection_rect: BoundingBox | None = None,
 ) -> list[Prediction]:
@@ -166,7 +166,7 @@ def predict_with_heuristics(
         boxes: List of bounding boxes in original frame coordinates
         frame_width: Frame width in pixels
         frame_height: Frame height in pixels
-        crop_region: Crop region boundaries
+        crop_bounds: Crop region boundaries
         layout_params: Layout parameters as Bayesian priors
         selection_rect: Optional selection rectangle constraint
 
@@ -186,12 +186,12 @@ def predict_with_heuristics(
         ...     'anchor_type': 'left',
         ...     'anchor_position': 960,
         ... }
-        >>> crop = CropRegion(left=0, top=723, right=1920, bottom=1080)
+        >>> crop = CropBounds(left=0, top=723, right=1920, bottom=1080)
         >>> predictions = predict_with_heuristics(
         ...     boxes=boxes,
         ...     frame_width=1920,
         ...     frame_height=1080,
-        ...     crop_region=crop,
+        ...     crop_bounds=crop,
         ...     layout_params=layout_params,
         ... )
         >>> # predictions[0] = {'label': 'in', 'confidence': 0.87}
@@ -202,7 +202,7 @@ def predict_with_heuristics(
             box=box,
             frame_width=frame_width,
             frame_height=frame_height,
-            crop_region=crop_region,
+            crop_bounds=crop_bounds,
             layout_params=layout_params,
             selection_rect=selection_rect,
         )

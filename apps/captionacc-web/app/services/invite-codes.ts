@@ -4,10 +4,10 @@
  * Handles invite code validation and signup with invite codes.
  */
 
-import type { Database } from '~/types/supabase'
 import { createServerSupabaseClient } from './supabase-client'
 
-type InviteCodeRow = Database['captionacc_production']['Tables']['invite_codes']['Row']
+import type { Database } from '~/types/supabase'
+
 type TenantInsert = Database['captionacc_production']['Tables']['tenants']['Insert']
 type UserProfileInsert = Database['captionacc_production']['Tables']['user_profiles']['Insert']
 
@@ -169,7 +169,7 @@ export async function createUserProfile(
   userId: string,
   tenantId: string,
   fullName: string | undefined,
-  inviteCode: string | null
+  _inviteCode: string | null
 ): Promise<void> {
   const supabase = createServerSupabaseClient()
 

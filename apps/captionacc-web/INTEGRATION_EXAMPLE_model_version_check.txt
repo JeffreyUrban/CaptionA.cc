@@ -1,0 +1,107 @@
+/**
+ * EXAMPLE: How to integrate model version checking
+ *
+ * TWO APPROACHES:
+ * 1. Background recalculation (scripts/recalculate-after-model-update.py)
+ *    - Runs periodically or after model updates
+ *    - Processes all videos automatically
+ *    - Users don't need to open pages
+ *
+ * 2. On-page-load check (shown below)
+ *    - Fallback/immediate check when user opens a page
+ *    - Catches videos not yet processed by background job
+ */
+
+import Database from 'better-sqlite3'
+import { checkAndRecalculate } from '~/utils/model-version-check'
+
+// ============================================================================
+// APPROACH 1: Background Recalculation (Recommended for bulk processing)
+// ============================================================================
+//
+// Run after model updates:
+//   python3 scripts/recalculate-after-model-update.py
+//
+// Or schedule as cron job:
+//   0 * * * * cd /path/to/app && python3 scripts/recalculate-after-model-update.py
+//
+// ============================================================================
+
+// ============================================================================
+// APPROACH 2: On-Page-Load Check (Fallback + Immediate)
+// ============================================================================
+
+// Example 1: In the layout analysis boxes endpoint
+export async function loader({ params }: LoaderFunctionArgs) {
+  const db = getDatabase(videoId)
+
+  // Check for model version mismatch and recalculate if needed
+  const result = await checkAndRecalculate(db, async () => {
+    // Your existing crop bounds calculation logic
+    // This function should return new bounds or null if calculation not needed
+    const newBounds = await calculateCropBounds(db, layoutConfig)
+    return newBounds
+  })
+
+  if (result.boundsChanged) {
+    console.log(
+      `[LayoutAnalysis] Model updated (${result.oldVersion} → ${result.newVersion}), ` +
+      `bounds recalculated and marked ${result.captionsPendingReview} captions for review`
+    )
+  }
+
+  // Continue with normal layout analysis logic...
+  const boxes = fetchLayoutAnalysisBoxes(db)
+
+  // Include model version info in response
+  const modelInfo = db.prepare('SELECT model_version FROM box_classification_model WHERE id = 1').get()
+
+  return {
+    boxes,
+    modelVersion: modelInfo.model_version,
+    modelUpdated: result.recalculated,
+    boundsChanged: result.boundsChanged,
+  }
+}
+
+// Example 2: Standalone recalculation function
+async function recalculateCropBounds(db: Database.Database, layoutConfig: LayoutConfig) {
+  // Re-run layout analysis logic to calculate new crop bounds
+  // This is your existing logic for determining optimal crop bounds
+
+  // 1. Get all OCR boxes
+  const boxes = db.prepare('SELECT * FROM full_frame_ocr').all()
+
+  // 2. Run predictions with current model
+  const predictions = boxes.map(box => predictBoxLabel(box, layoutConfig, db))
+
+  // 3. Calculate new crop bounds based on predicted "in" boxes
+  const inBoxes = boxes.filter((_, i) => predictions[i].label === 'in')
+
+  if (inBoxes.length === 0) {
+    return null // No change needed
+  }
+
+  const newBounds = {
+    crop_left: Math.min(...inBoxes.map(b => b.left)),
+    crop_top: Math.min(...inBoxes.map(b => b.top)),
+    crop_right: Math.max(...inBoxes.map(b => b.right)),
+    crop_bottom: Math.max(...inBoxes.map(b => b.bottom)),
+  }
+
+  return newBounds
+}
+
+// Example 3: Simple check without recalculation
+import { needsRecalculation } from '~/utils/model-version-check'
+
+export async function loader({ params }: LoaderFunctionArgs) {
+  const db = getDatabase(videoId)
+
+  if (needsRecalculation(db)) {
+    console.log('[LayoutAnalysis] Model version mismatch detected - recalculation needed')
+    // Show notification to user or trigger background recalculation
+  }
+
+  // ... rest of endpoint logic
+}

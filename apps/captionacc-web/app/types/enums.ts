@@ -9,8 +9,8 @@
 // =============================================================================
 
 /**
- * Caption frame extents annotation states
- * Used in: captions.caption_frame_extents_state
+ * Boundary annotation states
+ * Used in: captions.boundary_state
  */
 export const ANNOTATION_STATES = ['predicted', 'confirmed', 'gap', 'issue'] as const
 export type AnnotationState = (typeof ANNOTATION_STATES)[number]
@@ -106,7 +106,7 @@ function generateCheckConstraint(columnName: string, values: readonly string[]):
  * Pre-generated CHECK constraints for common use cases
  */
 export const SQL_CONSTRAINTS = {
-  annotationState: generateCheckConstraint('caption_frame_extents_state', ANNOTATION_STATES),
+  annotationState: generateCheckConstraint('boundary_state', ANNOTATION_STATES),
   textStatus: generateCheckConstraint('text_status', TEXT_STATUS_VALUES),
   textAnchor: generateCheckConstraint('text_anchor', TEXT_ANCHOR_VALUES),
   anchorType: generateCheckConstraint('anchor_type', TEXT_ANCHOR_VALUES),

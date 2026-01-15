@@ -18,6 +18,89 @@ import {
 // ============================================================================
 
 /**
+ * File list table showing videos to be uploaded
+ */
+function FileListTable({
+  videoFiles,
+  selectedFolder,
+  onToggleFileSelection,
+  onSelectAllFiles,
+}: {
+  videoFiles: VideoFilePreview[]
+  selectedFolder: string
+  onToggleFileSelection: (index: number) => void
+  onSelectAllFiles: (selected: boolean) => void
+}) {
+  const selectedVideos = videoFiles.filter(v => v.selected)
+
+  return (
+    <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 dark:ring-white dark:ring-opacity-10 rounded-lg max-h-96 overflow-y-auto">
+      <table className="min-w-full divide-y divide-gray-300 dark:divide-gray-700">
+        <thead className="bg-gray-50 dark:bg-gray-900 sticky top-0">
+          <tr>
+            <th className="py-3 pl-4 pr-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 sm:pl-6">
+              <input
+                type="checkbox"
+                checked={selectedVideos.length === videoFiles.length}
+                onChange={e => onSelectAllFiles(e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300 text-indigo-600"
+              />
+            </th>
+            <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">
+              Original Path
+            </th>
+            <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">
+              Target Path
+            </th>
+            <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">
+              Size
+            </th>
+            <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">
+              Status
+            </th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-200 dark:divide-gray-800 bg-white dark:bg-gray-950">
+          {videoFiles.map((video, index) => (
+            <tr
+              key={index}
+              className={`hover:bg-gray-50 dark:hover:bg-gray-900 ${video.isDuplicate ? 'bg-yellow-50 dark:bg-yellow-900/10' : ''}`}
+            >
+              <td className="py-3 pl-4 pr-3 sm:pl-6">
+                <input
+                  type="checkbox"
+                  checked={video.selected}
+                  onChange={() => onToggleFileSelection(index)}
+                  className="h-4 w-4 rounded border-gray-300 text-indigo-600"
+                />
+              </td>
+              <td className="px-3 py-3 text-sm text-gray-600 dark:text-gray-400">
+                {getOriginalPath(video)}
+              </td>
+              <td className="px-3 py-3 text-sm text-gray-900 dark:text-gray-200 font-medium">
+                {calculateTargetPath(video, selectedFolder)}
+              </td>
+              <td className="px-3 py-3 text-sm text-gray-600 dark:text-gray-400">
+                {formatBytes(video.size)}
+              </td>
+              <td className="px-3 py-3 text-sm">
+                {video.isDuplicate ? (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
+                    Path exists
+                  </span>
+                ) : (
+                  <span className="text-gray-400 dark:text-gray-600">-</span>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+/**
  * Warning banner for duplicate file paths
  */
 function DuplicateWarning({
@@ -189,69 +272,12 @@ export function UploadConfirmationModal({
 
         {/* File List */}
         <div className="mt-6">
-          <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 dark:ring-white dark:ring-opacity-10 rounded-lg max-h-96 overflow-y-auto">
-            <table className="min-w-full divide-y divide-gray-300 dark:divide-gray-700">
-              <thead className="bg-gray-50 dark:bg-gray-900 sticky top-0">
-                <tr>
-                  <th className="py-3 pl-4 pr-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 sm:pl-6">
-                    <input
-                      type="checkbox"
-                      checked={selectedVideos.length === videoFiles.length}
-                      onChange={e => onSelectAllFiles(e.target.checked)}
-                      className="h-4 w-4 rounded border-gray-300 text-indigo-600"
-                    />
-                  </th>
-                  <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">
-                    Original Path
-                  </th>
-                  <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">
-                    Target Path
-                  </th>
-                  <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">
-                    Size
-                  </th>
-                  <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">
-                    Status
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200 dark:divide-gray-800 bg-white dark:bg-gray-950">
-                {videoFiles.map((video, index) => (
-                  <tr
-                    key={index}
-                    className={`hover:bg-gray-50 dark:hover:bg-gray-900 ${video.isDuplicate ? 'bg-yellow-50 dark:bg-yellow-900/10' : ''}`}
-                  >
-                    <td className="py-3 pl-4 pr-3 sm:pl-6">
-                      <input
-                        type="checkbox"
-                        checked={video.selected}
-                        onChange={() => onToggleFileSelection(index)}
-                        className="h-4 w-4 rounded border-gray-300 text-indigo-600"
-                      />
-                    </td>
-                    <td className="px-3 py-3 text-sm text-gray-600 dark:text-gray-400">
-                      {getOriginalPath(video)}
-                    </td>
-                    <td className="px-3 py-3 text-sm text-gray-900 dark:text-gray-200 font-medium">
-                      {calculateTargetPath(video, selectedFolder)}
-                    </td>
-                    <td className="px-3 py-3 text-sm text-gray-600 dark:text-gray-400">
-                      {formatBytes(video.size)}
-                    </td>
-                    <td className="px-3 py-3 text-sm">
-                      {video.isDuplicate ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
-                          Path exists
-                        </span>
-                      ) : (
-                        <span className="text-gray-400 dark:text-gray-600">-</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <FileListTable
+            videoFiles={videoFiles}
+            selectedFolder={selectedFolder}
+            onToggleFileSelection={onToggleFileSelection}
+            onSelectAllFiles={onSelectAllFiles}
+          />
         </div>
 
         {/* Skipped Files */}

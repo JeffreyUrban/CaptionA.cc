@@ -1,0 +1,35 @@
+line-length = 120
+target-version = "py314"
+
+# Exclude a variety of commonly ignored directories
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".nox",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    ".env",
+    ".venv",
+    "venv",
+]
+
+[format]
+quote-style = "double"
+
+[lint]
+select = ["E", "F", "I"]  # pycodestyle errors, pyflakes, isort
+ignore = []
+
+[lint.mccabe]
+max-complexity = 10

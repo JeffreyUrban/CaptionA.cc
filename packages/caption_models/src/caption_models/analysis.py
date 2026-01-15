@@ -37,7 +37,7 @@ def box_overlap_fraction(box1, box2):
     return intersection_area / (box1_area + 1e-6)
 
 
-def determine_anchor_type(boxes, _region_bounds):
+def determine_anchor_type(boxes, region_bounds):
     """Determine if boxes are left, center, or right anchored based on location.
 
     Checks which edge has consistency on its respective side:
@@ -52,7 +52,7 @@ def determine_anchor_type(boxes, _region_bounds):
     left_edges = [box[0] for box in boxes]
     right_edges = [box[2] for box in boxes]
 
-    # Get bounds of region
+    # Get bounds
     min_left = min(left_edges)
     max_right = max(right_edges)
     region_width = max_right - min_left
@@ -133,7 +133,7 @@ def get_anchor_position(boxes, anchor_type, crop_left, crop_right):
         for _ in range(3):  # A few iterations is enough
             weights = [1.0 / (1.0 + abs(pos - center) / scale) for pos in positions]
             total_weight = sum(weights)
-            center = sum(pos * w for pos, w in zip(positions, weights, strict=False)) / total_weight
+            center = sum(pos * w for pos, w in zip(positions, weights)) / total_weight
 
         return int(round(center))
     else:
@@ -145,7 +145,12 @@ def get_anchor_position(boxes, anchor_type, crop_left, crop_right):
         return mode_value
 
 
-def analyze_subtitle_region(ocr_annotations: list[dict], width: int, height: int) -> SubtitleRegion:
+def analyze_subtitle_region(
+    ocr_annotations: list[dict],
+    width: int,
+    height: int,
+    min_overlap: float = 0.75,  # Deprecated parameter, kept for compatibility
+) -> SubtitleRegion:
     """Analyze OCR boxes to determine subtitle region characteristics.
 
     Creates an initial layout config from ALL detected OCR boxes without
@@ -156,6 +161,7 @@ def analyze_subtitle_region(ocr_annotations: list[dict], width: int, height: int
         ocr_annotations: List of OCR result dictionaries from load_ocr_annotations()
         width: Video frame width in pixels
         height: Video frame height in pixels
+        min_overlap: Deprecated (kept for compatibility, no longer used)
 
     Returns:
         SubtitleRegion with analyzed characteristics
@@ -172,7 +178,7 @@ def analyze_subtitle_region(ocr_annotations: list[dict], width: int, height: int
 
     for entry in ocr_annotations:
         total_boxes += len(entry["annotations"])
-        for _text, _confidence, frac_bounds in entry["annotations"]:
+        for text, confidence, frac_bounds in entry["annotations"]:
             # Convert fractional bounds to pixels
             box = convert_fractional_bounds_to_pixels(frac_bounds, img_width, img_height)
             all_boxes.append(box)

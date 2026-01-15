@@ -1,7 +1,3 @@
-import { useState, useEffect } from 'react'
-
-import { generateSignedUrl, isS3Url } from '~/utils/s3-image-url-helper'
-
 interface FrameInfo {
   frameIndex: number
   imageUrl: string
@@ -11,7 +7,6 @@ interface FrameInfo {
 type ViewMode = 'analysis' | 'frame'
 
 interface LayoutThumbnailGridProps {
-  videoId: string
   frames: FrameInfo[]
   viewMode: ViewMode
   selectedFrameIndex: number | null
@@ -20,48 +15,7 @@ interface LayoutThumbnailGridProps {
   onThumbnailClick: (frameIndexOrMode: number | 'analysis') => void
 }
 
-/**
- * Thumbnail image component that handles S3 URL conversion
- */
-function ThumbnailImage({
-  videoId,
-  imageUrl,
-  alt,
-}: {
-  videoId: string
-  imageUrl: string
-  alt: string
-}) {
-  const [signedUrl, setSignedUrl] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
-
-  useEffect(() => {
-    async function convertUrl() {
-      if (isS3Url(imageUrl)) {
-        setLoading(true)
-        const url = await generateSignedUrl(videoId, imageUrl)
-        setSignedUrl(url)
-        setLoading(false)
-      } else {
-        setSignedUrl(imageUrl)
-      }
-    }
-    void convertUrl()
-  }, [videoId, imageUrl])
-
-  if (loading || !signedUrl) {
-    return (
-      <div className="h-full w-full bg-gray-300 animate-pulse flex items-center justify-center">
-        <span className="text-xs text-gray-500">Loading...</span>
-      </div>
-    )
-  }
-
-  return <img src={signedUrl} alt={alt} className="h-full w-full object-contain" />
-}
-
 export function LayoutThumbnailGrid({
-  videoId,
   frames,
   viewMode,
   selectedFrameIndex,
@@ -120,10 +74,10 @@ export function LayoutThumbnailGrid({
           }`}
         >
           <div className="aspect-video w-full bg-black">
-            <ThumbnailImage
-              videoId={videoId}
-              imageUrl={frame.imageUrl}
+            <img
+              src={frame.imageUrl}
               alt={`Frame ${frame.frameIndex}`}
+              className="h-full w-full object-contain"
             />
           </div>
           <div className="flex h-11 flex-col items-center justify-center bg-gray-100 px-2 py-1 text-xs text-gray-900 dark:bg-gray-800 dark:text-gray-100">

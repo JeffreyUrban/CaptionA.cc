@@ -1,10 +1,7 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
-import type { RealtimeChannel } from '@supabase/supabase-js'
-
-import { supabase, supabaseSchema } from '~/services/supabase-client'
+import { useState, useEffect, useRef } from 'react'
 
 /**
- * Processing status from the API and Supabase realtime.
+ * Processing status from the API.
  */
 export interface ProcessingStatus {
   isProcessing: boolean
@@ -19,61 +16,19 @@ export interface ProcessingStatus {
 }
 
 /**
- * Video record fields relevant for processing status
- */
-interface VideoRecord {
-  id: string
-  status: string | null
-  prefect_flow_run_id: string | null
-}
-
-/**
- * Determine processing status from video record status field.
- * Maps Supabase video status to ProcessingStatus.
- */
-function mapVideoStatusToProcessingStatus(
-  videoStatus: string | null,
-  flowRunId: string | null
-): ProcessingStatus {
-  // Processing states from the video status field
-  const processingStatuses = ['processing', 'extracting', 'uploading', 'queued']
-  const isProcessing = videoStatus !== null && processingStatuses.includes(videoStatus)
-
-  // Determine processing type based on status
-  let type: ProcessingStatus['type'] = null
-  if (isProcessing) {
-    // If there's a flow run, it's likely a full retrain; otherwise streaming update
-    type = flowRunId ? 'full_retrain' : 'streaming_update'
-  }
-
-  return {
-    isProcessing,
-    type,
-    startedAt: isProcessing ? new Date().toISOString() : null,
-    estimatedCompletionAt: isProcessing
-      ? new Date(Date.now() + (type === 'full_retrain' ? 15000 : 2000)).toISOString()
-      : null,
-    progress: isProcessing
-      ? {
-          message: type === 'full_retrain' ? 'Retraining model...' : 'Updating predictions...',
-        }
-      : null,
-  }
-}
-
-/**
- * Hook to track background processing status via Supabase Realtime.
+ * Hook to track background processing status (streaming updates, full retrains).
  *
- * Subscribes to changes on the videos table for a specific video ID
- * and updates local state when processing status changes.
- *
- * Falls back to initial API fetch to get current status, then uses
- * realtime for subsequent updates.
+ * Polls the processing status API and returns current state.
+ * Automatically stops polling when processing completes.
  *
  * @param videoId - Video identifier
+ * @param pollInterval - Polling interval in milliseconds (default: 1000ms)
  * @returns Current processing status
  */
-export function useProcessingStatus(videoId: string | undefined): ProcessingStatus {
+export function useProcessingStatus(
+  videoId: string | undefined,
+  pollInterval = 1000
+): ProcessingStatus {
   const [status, setStatus] = useState<ProcessingStatus>({
     isProcessing: false,
     type: null,
@@ -82,30 +37,8 @@ export function useProcessingStatus(videoId: string | undefined): ProcessingStat
     progress: null,
   })
 
-  const channelRef = useRef<RealtimeChannel | null>(null)
+  const intervalRef = useRef<NodeJS.Timeout | null>(null)
   const wasProcessingRef = useRef(false)
-
-  // Fetch initial status from API
-  const fetchInitialStatus = useCallback(async () => {
-    if (!videoId) return
-
-    try {
-      const response = await fetch(
-        `/api/annotations/${encodeURIComponent(videoId)}/processing-status`
-      )
-
-      if (!response.ok) {
-        console.error('[useProcessingStatus] Failed to fetch initial status:', response.statusText)
-        return
-      }
-
-      const data: ProcessingStatus = await response.json()
-      setStatus(data)
-      wasProcessingRef.current = data.isProcessing
-    } catch (error) {
-      console.error('[useProcessingStatus] Error fetching initial status:', error)
-    }
-  }, [videoId])
 
   useEffect(() => {
     if (!videoId) {
@@ -120,70 +53,52 @@ export function useProcessingStatus(videoId: string | undefined): ProcessingStat
       return
     }
 
-    // Only run on client side
-    if (typeof window === 'undefined') return
+    const checkStatus = async () => {
+      try {
+        const response = await fetch(
+          `/api/annotations/${encodeURIComponent(videoId)}/processing-status`
+        )
 
-    // Fetch initial status
-    fetchInitialStatus()
-
-    // Clean up existing subscription before creating new one
-    if (channelRef.current) {
-      supabase.removeChannel(channelRef.current)
-      channelRef.current = null
-    }
-
-    console.log(`[useProcessingStatus] Subscribing to changes for video ${videoId}`)
-
-    // Subscribe to changes on this specific video
-    const channel = supabase
-      .channel(`video-processing-${videoId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: supabaseSchema,
-          table: 'videos',
-          filter: `id=eq.${videoId}`,
-        },
-        payload => {
-          const newRecord = payload.new as VideoRecord
-          console.log(`[useProcessingStatus] Video ${videoId} updated:`, newRecord.status)
-
-          const newStatus = mapVideoStatusToProcessingStatus(
-            newRecord.status,
-            newRecord.prefect_flow_run_id
-          )
-
-          // Track transitions for logging
-          if (wasProcessingRef.current && !newStatus.isProcessing) {
-            console.log('[useProcessingStatus] Processing completed')
-          } else if (!wasProcessingRef.current && newStatus.isProcessing) {
-            console.log('[useProcessingStatus] Processing started:', newStatus.type)
-          }
-
-          wasProcessingRef.current = newStatus.isProcessing
-          setStatus(newStatus)
+        if (!response.ok) {
+          console.error('Failed to check processing status:', response.statusText)
+          return
         }
-      )
-      .subscribe(subscriptionStatus => {
-        if (subscriptionStatus === 'SUBSCRIBED') {
-          console.log(`[useProcessingStatus] Subscribed to video ${videoId}`)
-        } else if (subscriptionStatus === 'CHANNEL_ERROR' || subscriptionStatus === 'TIMED_OUT') {
-          console.error('[useProcessingStatus] Subscription error:', subscriptionStatus)
+
+        const data: ProcessingStatus = await response.json()
+        setStatus(data)
+
+        // Track transitions
+        if (wasProcessingRef.current && !data.isProcessing) {
+          console.log('[useProcessingStatus] Processing completed')
+        } else if (!wasProcessingRef.current && data.isProcessing) {
+          console.log('[useProcessingStatus] Processing started:', data.type)
         }
-      })
 
-    channelRef.current = channel
+        wasProcessingRef.current = data.isProcessing
 
-    // Cleanup on unmount or videoId change
-    return () => {
-      console.log(`[useProcessingStatus] Unsubscribing from video ${videoId}`)
-      if (channelRef.current) {
-        supabase.removeChannel(channelRef.current)
-        channelRef.current = null
+        // Stop polling if no longer processing
+        if (!data.isProcessing && intervalRef.current) {
+          clearInterval(intervalRef.current)
+          intervalRef.current = null
+        }
+      } catch (error) {
+        console.error('[useProcessingStatus] Error checking status:', error)
       }
     }
-  }, [videoId, fetchInitialStatus])
+
+    // Initial check
+    void checkStatus()
+
+    // Set up polling
+    intervalRef.current ??= setInterval(() => void checkStatus(), pollInterval)
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
+        intervalRef.current = null
+      }
+    }
+  }, [videoId, pollInterval])
 
   return status
 }

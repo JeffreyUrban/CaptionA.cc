@@ -70,9 +70,9 @@ export interface FrameSize {
 }
 
 /**
- * Crop region in pixels.
+ * Crop region bounds in pixels.
  */
-export interface CropRegion {
+export interface CropBounds {
   left: number
   top: number
   right: number
@@ -80,10 +80,10 @@ export interface CropRegion {
 }
 
 /**
- * Fractional region (0-1) used for display in cropped space.
+ * Fractional bounds (0-1) used for display in cropped space.
  * All values are relative to the cropped region, not the full frame.
  */
-export interface FractionalCropRegionBounds {
+export interface FractionalBounds {
   left: number
   top: number
   right: number
@@ -142,13 +142,10 @@ export function fractionalToPixelBounds(box: FractionalBox, frameSize: FrameSize
  * @example
  * const pixels = { left: 192, top: 918, right: 768, bottom: 972 }
  * const frame = { width: 1920, height: 1080 }
- * const ocr = pixelToFractionalCropRegionBounds(pixels, frame)
+ * const ocr = pixelToFractionalBounds(pixels, frame)
  * // Returns: { x: 0.1, y: 0.1, width: 0.3, height: 0.05 }
  */
-export function pixelToFractionalCropRegionBounds(
-  bounds: PixelBounds,
-  frameSize: FrameSize
-): FractionalBox {
+export function pixelToFractionalBounds(bounds: PixelBounds, frameSize: FrameSize): FractionalBox {
   const { left, top, right, bottom } = bounds
   const { width: frameWidth, height: frameHeight } = frameSize
 
@@ -173,7 +170,7 @@ export function pixelToFractionalCropRegionBounds(
  * Boxes that extend outside the crop region are clamped to the crop boundaries.
  *
  * @param boxBounds - Pixel bounds in full frame coordinates
- * @param cropRegion - Crop region bounds in pixels
+ * @param cropBounds - Crop region bounds in pixels
  * @returns Fractional bounds (0-1) relative to the cropped region
  *
  * @example
@@ -184,10 +181,10 @@ export function pixelToFractionalCropRegionBounds(
  */
 export function pixelToCroppedDisplay(
   boxBounds: PixelBounds,
-  cropRegion: CropRegion
-): FractionalCropRegionBounds {
-  const cropWidth = cropRegion.right - cropRegion.left
-  const cropHeight = cropRegion.bottom - cropRegion.top
+  cropBounds: CropBounds
+): FractionalBounds {
+  const cropWidth = cropBounds.right - cropBounds.left
+  const cropHeight = cropBounds.bottom - cropBounds.top
 
   // Handle edge case of zero-dimension crop
   if (cropWidth <= 0 || cropHeight <= 0) {
@@ -195,17 +192,17 @@ export function pixelToCroppedDisplay(
   }
 
   // Clamp box to crop region
-  const clampedLeft = Math.max(boxBounds.left, cropRegion.left)
-  const clampedTop = Math.max(boxBounds.top, cropRegion.top)
-  const clampedRight = Math.min(boxBounds.right, cropRegion.right)
-  const clampedBottom = Math.min(boxBounds.bottom, cropRegion.bottom)
+  const clampedLeft = Math.max(boxBounds.left, cropBounds.left)
+  const clampedTop = Math.max(boxBounds.top, cropBounds.top)
+  const clampedRight = Math.min(boxBounds.right, cropBounds.right)
+  const clampedBottom = Math.min(boxBounds.bottom, cropBounds.bottom)
 
   // Convert to fractional coordinates within crop region
   return {
-    left: (clampedLeft - cropRegion.left) / cropWidth,
-    top: (clampedTop - cropRegion.top) / cropHeight,
-    right: (clampedRight - cropRegion.left) / cropWidth,
-    bottom: (clampedBottom - cropRegion.top) / cropHeight,
+    left: (clampedLeft - cropBounds.left) / cropWidth,
+    top: (clampedTop - cropBounds.top) / cropHeight,
+    right: (clampedRight - cropBounds.left) / cropWidth,
+    bottom: (clampedBottom - cropBounds.top) / cropHeight,
   }
 }
 
@@ -216,21 +213,21 @@ export function pixelToCroppedDisplay(
  * cropped display need to be converted back to full-frame coordinates.
  *
  * @param displayBounds - Fractional bounds (0-1) in cropped space
- * @param cropRegion - Crop region bounds in pixels
+ * @param cropBounds - Crop region bounds in pixels
  * @returns Pixel bounds in full frame coordinates
  */
 export function croppedDisplayToPixel(
-  displayBounds: FractionalCropRegionBounds,
-  cropRegion: CropRegion
+  displayBounds: FractionalBounds,
+  cropBounds: CropBounds
 ): PixelBounds {
-  const cropWidth = cropRegion.right - cropRegion.left
-  const cropHeight = cropRegion.bottom - cropRegion.top
+  const cropWidth = cropBounds.right - cropBounds.left
+  const cropHeight = cropBounds.bottom - cropBounds.top
 
   return {
-    left: Math.floor(cropRegion.left + displayBounds.left * cropWidth),
-    top: Math.floor(cropRegion.top + displayBounds.top * cropHeight),
-    right: Math.floor(cropRegion.left + displayBounds.right * cropWidth),
-    bottom: Math.floor(cropRegion.top + displayBounds.bottom * cropHeight),
+    left: Math.floor(cropBounds.left + displayBounds.left * cropWidth),
+    top: Math.floor(cropBounds.top + displayBounds.top * cropHeight),
+    right: Math.floor(cropBounds.left + displayBounds.right * cropWidth),
+    bottom: Math.floor(cropBounds.top + displayBounds.bottom * cropHeight),
   }
 }
 

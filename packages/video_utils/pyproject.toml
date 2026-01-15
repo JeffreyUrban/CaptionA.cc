@@ -76,12 +76,5 @@ exclude_lines = [
     "if TYPE_CHECKING:"
 ]
 
-# Inherits workspace config from root pyproject.toml
-# Only project-specific overrides here
-[tool.ruff.lint]
-extend-ignore = [
-    "B008",  # Allow function calls in argument defaults (Typer idiom)
-]
-
 [tool.hatch.build.hooks.vcs]
 version-file = "src/video_utils/_version.py"

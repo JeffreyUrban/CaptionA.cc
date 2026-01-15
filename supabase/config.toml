@@ -146,6 +146,3 @@ client_id = ""
 secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET)"
 redirect_uri = ""
 url = ""
-
-[functions.captionacc-presigned-upload]
-verify_jwt = true

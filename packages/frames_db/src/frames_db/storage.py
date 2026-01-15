@@ -12,6 +12,8 @@ def write_frame_to_db(
     width: int,
     height: int,
     table: str = "full_frames",
+    crop_bounds_version: int | None = None,
+    crop_bounds: tuple[int, int, int, int] | None = None,
 ) -> None:
     """Write single frame to database.
 
@@ -21,11 +23,13 @@ def write_frame_to_db(
         image_data: JPEG-compressed image bytes
         width: Frame width in pixels
         height: Frame height in pixels
-        table: Table name ("full_frames")
+        table: Table name ("full_frames" or "cropped_frames")
+        crop_bounds_version: Crop bounds version (for cropped_frames only)
+        crop_bounds: Crop bounds as (left, top, right, bottom) in pixels (for cropped_frames only)
 
     Raises:
         sqlite3.IntegrityError: If frame_index already exists
-        ValueError: If table is invalid
+        ValueError: If table is invalid or required parameters missing for cropped_frames
 
     Example:
         >>> jpeg_bytes = Path("frame_0000000000.jpg").read_bytes()
@@ -38,8 +42,14 @@ def write_frame_to_db(
         ...     table="full_frames"
         ... )
     """
-    if table not in ("full_frames"):
-        raise ValueError(f"Invalid table: {table}. Must be 'full_frames'")
+    if table not in ("full_frames", "cropped_frames"):
+        raise ValueError(f"Invalid table: {table}. Must be 'full_frames' or 'cropped_frames'")
+
+    if table == "cropped_frames":
+        if crop_bounds_version is None:
+            raise ValueError("crop_bounds_version is required for cropped_frames table")
+        if crop_bounds is None:
+            raise ValueError("crop_bounds is required for cropped_frames table")
 
     conn = sqlite3.connect(db_path)
     try:
@@ -53,6 +63,30 @@ def write_frame_to_db(
                 """,
                 (frame_index, image_data, width, height, len(image_data)),
             )
+        else:  # cropped_frames
+            assert crop_bounds is not None  # Validated above
+            crop_left, crop_top, crop_right, crop_bottom = crop_bounds
+            cursor.execute(
+                """
+                INSERT INTO cropped_frames (
+                    frame_index, image_data, width, height, file_size,
+                    crop_left, crop_top, crop_right, crop_bottom, crop_bounds_version
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    frame_index,
+                    image_data,
+                    width,
+                    height,
+                    len(image_data),
+                    crop_left,
+                    crop_top,
+                    crop_right,
+                    crop_bottom,
+                    crop_bounds_version,
+                ),
+            )
 
         conn.commit()
     finally:
@@ -63,6 +97,8 @@ def write_frames_batch(
     db_path: Path,
     frames: list[tuple[int, bytes, int, int]],
     table: str = "full_frames",
+    crop_bounds_version: int | None = None,
+    crop_bounds: tuple[int, int, int, int] | None = None,
     progress_callback: Callable[[int, int], None] | None = None,
 ) -> int:
     """Write multiple frames to database in a single transaction.
@@ -72,14 +108,16 @@ def write_frames_batch(
     Args:
         db_path: Path to SQLite database file
         frames: List of (frame_index, image_data, width, height) tuples
-        table: Table name ("full_frames")
+        table: Table name ("full_frames" or "cropped_frames")
+        crop_bounds_version: Crop bounds version (for cropped_frames only)
+        crop_bounds: Crop bounds as (left, top, right, bottom) in pixels (for cropped_frames only)
         progress_callback: Optional callback function(current, total) for progress tracking
 
     Returns:
         Number of frames written
 
     Raises:
-        ValueError: If table is invalid
+        ValueError: If table is invalid or required parameters missing for cropped_frames
 
     Example:
         >>> frames = []
@@ -97,8 +135,14 @@ def write_frames_batch(
         ... )
         >>> print(f"Wrote {count} frames")
     """
-    if table not in ("full_frames"):
-        raise ValueError(f"Invalid table: {table}. Must be 'full_frames'")
+    if table not in ("full_frames", "cropped_frames"):
+        raise ValueError(f"Invalid table: {table}. Must be 'full_frames' or 'cropped_frames'")
+
+    if table == "cropped_frames":
+        if crop_bounds_version is None:
+            raise ValueError("crop_bounds_version is required for cropped_frames table")
+        if crop_bounds is None:
+            raise ValueError("crop_bounds is required for cropped_frames table")
 
     if not frames:
         return 0
@@ -115,6 +159,39 @@ def write_frames_batch(
                     VALUES (?, ?, ?, ?, ?)
                     """,
                     (frame_index, image_data, width, height, len(image_data)),
+                )
+
+                if progress_callback:
+                    progress_callback(i + 1, len(frames))
+
+        else:  # cropped_frames
+            # Delete ALL existing cropped frames to avoid UNIQUE constraint errors
+            # (frame_index is PRIMARY KEY, so only one set of cropped frames can exist)
+            cursor.execute("DELETE FROM cropped_frames")
+
+            assert crop_bounds is not None  # Validated above
+            crop_left, crop_top, crop_right, crop_bottom = crop_bounds
+            for i, (frame_index, image_data, width, height) in enumerate(frames):
+                cursor.execute(
+                    """
+                    INSERT INTO cropped_frames (
+                        frame_index, image_data, width, height, file_size,
+                        crop_left, crop_top, crop_right, crop_bottom, crop_bounds_version
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        frame_index,
+                        image_data,
+                        width,
+                        height,
+                        len(image_data),
+                        crop_left,
+                        crop_top,
+                        crop_right,
+                        crop_bottom,
+                        crop_bounds_version,
+                    ),
                 )
 
                 if progress_callback:
@@ -142,7 +219,7 @@ def init_vp9_encoding_status(
     Args:
         db_path: Path to SQLite database file
         video_id: Video UUID
-        frame_type: "full"
+        frame_type: "cropped" or "full"
         modulo_levels: List of modulo levels (e.g., [16, 4, 1])
         total_frames: Total number of frames to encode
     """
@@ -189,7 +266,7 @@ def update_vp9_encoding_status(
     Args:
         db_path: Path to SQLite database file
         video_id: Video UUID
-        frame_type: "full"
+        frame_type: "cropped" or "full"
         status: New status (optional)
         chunks_encoded: Number of chunks encoded (optional)
         chunks_uploaded: Number of chunks uploaded (optional)
@@ -256,7 +333,7 @@ def get_vp9_encoding_status(
     Args:
         db_path: Path to SQLite database file
         video_id: Video UUID
-        frame_type: "full"
+        frame_type: "cropped" or "full"
 
     Returns:
         Dict with status fields, or None if not found

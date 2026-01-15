@@ -5,19 +5,13 @@
  */
 
 import { createServerClient } from '@supabase/ssr'
+
 import type { Database } from '~/types/supabase'
 
-const supabaseUrl = process.env['VITE_SUPABASE_URL'] || 'http://localhost:54321'
+const supabaseUrl = process.env['VITE_SUPABASE_URL'] ?? 'http://localhost:54321'
 const supabaseAnonKey =
-  process.env['VITE_SUPABASE_ANON_KEY'] || 'LOCAL_DEVELOPMENT_ANON_KEY_PLACEHOLDER'
-
-interface CookieOptions {
-  path?: string
-  maxAge?: number
-  sameSite?: 'Lax' | 'Strict' | 'None'
-  secure?: boolean
-  httpOnly?: boolean
-}
+  process.env['VITE_SUPABASE_ANON_KEY'] ??
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0'
 
 /**
  * Create a Supabase client for server-side use with cookie access
@@ -38,13 +32,13 @@ export function createSupabaseServerClient(request: Request, responseHeaders: He
           .split(';')
           .map(cookie => {
             const [name, ...valueParts] = cookie.trim().split('=')
-            return { name: name || '', value: valueParts.join('=') || '' }
+            return { name: name ?? '', value: valueParts.join('=') ?? '' }
           })
           .filter(cookie => cookie.name && cookie.value)
       },
       setAll(cookiesToSet) {
         cookiesToSet.forEach(({ name, value, options }) => {
-          const cookieString = `${name}=${value}; Path=${options?.path || '/'}; Max-Age=${options?.maxAge || 3600}; SameSite=${options?.sameSite || 'Lax'}${options?.secure ? '; Secure' : ''}${options?.httpOnly ? '; HttpOnly' : ''}`
+          const cookieString = `${name}=${value}; Path=${options?.path ?? '/'}; Max-Age=${options?.maxAge ?? 3600}; SameSite=${options?.sameSite ?? 'Lax'}${options?.secure ? '; Secure' : ''}${options?.httpOnly ? '; HttpOnly' : ''}`
           responseHeaders.append('Set-Cookie', cookieString)
         })
       },

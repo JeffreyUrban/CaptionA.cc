@@ -38,9 +38,11 @@
     "@supabase/supabase-js": "^2.89.0",
     "@tailwindcss/typography": "^0.5.19",
     "@tailwindplus/elements": "^1.0.22",
-    "@vlcn.io/crsqlite-wasm": "^0.16.0",
+    "@tus/file-store": "^2.0.0",
+    "@tus/server": "^2.3.0",
     "@types/dompurify": "^3.0.5",
     "@web3forms/react": "^1.1.3",
+    "better-sqlite3": "^12.5.0",
     "canvas": "^3.2.0",
     "clsx": "^2.1.1",
     "dompurify": "^3.3.1",
@@ -50,6 +52,7 @@
     "react-hook-form": "^7.68.0",
     "react-router": "^7.1.1",
     "sharp": "^0.34.5",
+    "tus-js-client": "^4.3.1",
     "zustand": "^5.0.9"
   },
   "devDependencies": {
@@ -62,6 +65,7 @@
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^14.6.1",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.0.2",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",

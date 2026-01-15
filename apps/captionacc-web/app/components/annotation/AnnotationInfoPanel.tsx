@@ -2,7 +2,7 @@ interface Annotation {
   id: number
   start_frame_index: number
   end_frame_index: number
-  caption_frame_extents_state: 'predicted' | 'confirmed' | 'gap' | 'issue'
+  boundary_state: 'predicted' | 'confirmed' | 'gap'
 }
 
 interface AnnotationInfoPanelProps {
@@ -27,7 +27,7 @@ export function AnnotationInfoPanel({ annotation }: AnnotationInfoPanelProps) {
         <div className="flex justify-between">
           <span className="text-gray-600 dark:text-gray-400">State:</span>
           <span className="capitalize font-semibold text-gray-900 dark:text-white">
-            {annotation.caption_frame_extents_state}
+            {annotation.boundary_state}
           </span>
         </div>
         <div className="flex justify-between">

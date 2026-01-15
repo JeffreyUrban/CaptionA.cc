@@ -32,9 +32,9 @@ export interface BoxStats {
 }
 
 /**
- * Crop region edit state
+ * Crop bounds edit state
  */
-export interface CropRegionEdit {
+export interface CropBoundsEdit {
   left: number
   top: number
   right: number
@@ -67,7 +67,7 @@ export interface LayoutParamsEdit {
  * Edit state updaters for loadQueue callback
  */
 export interface EditStateUpdaters {
-  setCropRegionEdit: (value: CropRegionEdit | null) => void
+  setCropBoundsEdit: (value: CropBoundsEdit | null) => void
   setSelectionRectEdit: (value: SelectionRectEdit | null) => void
   setLayoutParamsEdit: (value: LayoutParamsEdit | null) => void
 }

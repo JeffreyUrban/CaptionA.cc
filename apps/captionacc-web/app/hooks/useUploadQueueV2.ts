@@ -34,6 +34,7 @@ interface UseUploadQueueV2Result {
  * @param selectedFolder - Target folder for uploads
  * @returns Upload control functions and state
  */
+// eslint-disable-next-line max-lines-per-function -- Compatibility layer syncing UploadManager with existing UI
 export function useUploadQueueV2(
   videoFiles: VideoFilePreview[],
   setVideoFiles: React.Dispatch<React.SetStateAction<VideoFilePreview[]>>,
@@ -139,7 +140,8 @@ export function useUploadQueueV2(
         uploadIdMapRef.current.set(upload.relativePath, upload.id)
       })
     }
-  }, []) // Run once on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Mount-only effect, setVideoFiles is stable setState
+  }, [])
 
   /**
    * Sync upload progress from store back to videoFiles array
@@ -192,6 +194,7 @@ export function useUploadQueueV2(
     // Poll every 100ms while uploads are active
     const interval = setInterval(syncProgress, 100)
     return () => clearInterval(interval)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- setVideoFiles is stable setState, syncs from store
   }, [uploading])
 
   /**
@@ -332,6 +335,7 @@ export function useUploadQueueV2(
     // Check every second
     const interval = setInterval(checkCompletion, 1000)
     return () => clearInterval(interval)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- setVideoFiles is stable setState, checks completion status
   }, [uploading])
 
   /**

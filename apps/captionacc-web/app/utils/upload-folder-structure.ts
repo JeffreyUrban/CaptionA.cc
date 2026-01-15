@@ -59,7 +59,10 @@ function buildFolderTree(files: UploadFile[]): FolderNode {
           subfolders: new Map(),
         })
       }
-      current = current.subfolders.get(segment)!
+      const nextNode = current.subfolders.get(segment)
+      if (nextNode) {
+        current = nextNode
+      }
     }
 
     // Add file to the final folder
@@ -86,7 +89,7 @@ async function willHaveSingleFile(
     if (!response.ok) return newFileCount === 1 // Assume folder doesn't exist
 
     const data = await response.json()
-    const existingCount = data.fileCount || 0
+    const existingCount = data.fileCount ?? 0
 
     return existingCount + newFileCount === 1
   } catch {
@@ -121,7 +124,8 @@ async function collapseSingleFileFolders(
 
     if (willBeSingle && currentPath) {
       // Collapse: move file up to parent, keeping video filename
-      const fileName = file.relativePath.split('/').pop()!
+      const fileName = file.relativePath.split('/').pop()
+      if (!fileName) return // TypeScript guard for pop()
       const parentPath = currentPath.split('/').slice(0, -1).join('/')
 
       // Update the file's relative path to collapsed location
@@ -142,7 +146,7 @@ export async function processUploadFiles(
   if (options.mode === 'flatten') {
     // Flatten: all files go directly in target folder
     for (const uploadFile of files) {
-      const fileName = uploadFile.relativePath.split('/').pop()!
+      const fileName = uploadFile.relativePath.split('/').pop() ?? uploadFile.file.name
       const finalPath = options.targetFolder ? `${options.targetFolder}/${fileName}` : fileName
 
       results.push({
@@ -162,7 +166,7 @@ export async function processUploadFiles(
 
     // Generate final paths
     for (const uploadFile of files) {
-      const fileName = uploadFile.relativePath.split('/').pop()!
+      const fileName = uploadFile.relativePath.split('/').pop() ?? uploadFile.file.name
       const finalPath = options.targetFolder
         ? `${options.targetFolder}/${uploadFile.relativePath}`
         : uploadFile.relativePath

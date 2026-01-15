@@ -1,0 +1,155 @@
+/**
+ * Retry failed video processing
+ */
+
+import { resolve } from 'path'
+
+import Database from 'better-sqlite3'
+import { type ActionFunctionArgs } from 'react-router'
+
+import { queueFullFramesProcessing } from '~/services/prefect'
+import { getDbPath, getVideoDir } from '~/utils/video-paths'
+
+export async function action({ params }: ActionFunctionArgs) {
+  const { videoId: encodedVideoId } = params
+
+  if (!encodedVideoId) {
+    return new Response(JSON.stringify({ error: 'Missing videoId' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  const videoId = decodeURIComponent(encodedVideoId)
+
+  try {
+    const dbPath = await getDbPath(videoId)
+    if (!dbPath) {
+      return new Response(JSON.stringify({ error: 'Video not found' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+
+    const videoDir = await getVideoDir(videoId)
+    if (!videoDir) {
+      return new Response(JSON.stringify({ error: 'Video directory not found' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+
+    const db = new Database(dbPath)
+    try {
+      // Get current status
+      const status = db
+        .prepare(
+          `
+        SELECT status FROM processing_status WHERE id = 1
+      `
+        )
+        .get() as { status: string } | undefined
+
+      if (!status) {
+        return new Response(JSON.stringify({ error: 'No processing status found' }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
+
+      // Only retry if in error state
+      if (status.status !== 'error') {
+        return new Response(
+          JSON.stringify({
+            error: `Cannot retry video in ${status.status} state. Only error state can be retried.`,
+          }),
+          {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
+      }
+
+      // Get video metadata
+      const metadata = db
+        .prepare(
+          `
+        SELECT video_id, original_filename FROM video_metadata WHERE id = 1
+      `
+        )
+        .get() as { video_id: string; original_filename: string } | undefined
+
+      if (!metadata) {
+        return new Response(JSON.stringify({ error: 'Video metadata not found' }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
+
+      // Reset status to upload_complete to allow reprocessing
+      db.prepare(
+        `
+        UPDATE processing_status
+        SET status = 'upload_complete',
+            error_message = NULL,
+            error_details = NULL,
+            error_occurred_at = NULL,
+            processing_attempts = processing_attempts + 1
+        WHERE id = 1
+      `
+      ).run()
+
+      console.log(`[RetryProcessing] Retrying video: ${videoId}`)
+    } finally {
+      db.close()
+    }
+
+    // Find the video file
+    const { readdirSync } = await import('fs')
+    const videoFiles = readdirSync(videoDir).filter(
+      f => f.endsWith('.mp4') || f.endsWith('.mkv') || f.endsWith('.avi') || f.endsWith('.mov')
+    )
+
+    const firstVideoFile = videoFiles[0]
+    if (!firstVideoFile) {
+      return new Response(JSON.stringify({ error: 'Video file not found' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+
+    const videoFile = resolve(videoDir, firstVideoFile)
+
+    // Queue for processing via Prefect
+    await queueFullFramesProcessing({
+      videoId,
+      videoPath: videoFile,
+      dbPath,
+      outputDir: resolve(videoDir, 'full_frames'),
+      frameRate: 0.1,
+    })
+
+    console.log(`[Prefect] Queued general retry for ${videoId}`)
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        message: 'Video queued for reprocessing',
+      }),
+      {
+        headers: { 'Content-Type': 'application/json' },
+      }
+    )
+  } catch (error) {
+    console.error(`[RetryProcessing] Error retrying ${videoId}:`, error)
+    return new Response(
+      JSON.stringify({
+        error: error instanceof Error ? error.message : 'Unknown error',
+      }),
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    )
+  }
+}
