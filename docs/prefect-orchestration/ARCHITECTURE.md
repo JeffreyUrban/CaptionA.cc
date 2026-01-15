@@ -88,7 +88,7 @@ We needed:
 
 ### Prefect Server (Coordination Only)
 
-**URL:** `https://traefik-prefect.fly.dev/api`
+**URL:** `https://banchelabs-gateway.fly.dev/api`
 
 **Responsibilities:**
 - Track flow run state (scheduled, running, completed, failed)

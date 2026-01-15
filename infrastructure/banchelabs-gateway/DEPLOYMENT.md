@@ -44,25 +44,25 @@ supabase secrets set GATEWAY_JWT_SECRET="$SECRET"
 ### A. Set Secrets
 
 ```bash
-cd infrastructure/traefik-prefect
+cd infrastructure/banchelabs-gateway
 
 # Set the SAME JWT secret from Supabase
 fly secrets set \
   GATEWAY_JWT_SECRET="<secret-from-step-1b>" \
-  -a traefik-prefect
+  -a banchelabs-gateway
 
 # Set Prefect database connection
 # Get from: Supabase Dashboard → Settings → Database → Connection string (postgres role, not pgbouncer)
 fly secrets set \
   PREFECT_API_DATABASE_CONNECTION_URL="postgresql://postgres.PROJECT:PASSWORD@aws-0-us-east-1.pooler.supabase.com:6543/postgres" \  # pragma: allowlist secret
-  -a traefik-prefect
+  -a banchelabs-gateway
 ```
 
 ### B. Deploy
 
 ```bash
 # First deployment
-fly deploy -a traefik-prefect
+fly deploy -a banchelabs-gateway
 
 # This will:
 # 1. Build multi-stage Docker image (Traefik + Prefect)
@@ -74,14 +74,14 @@ fly deploy -a traefik-prefect
 
 ```bash
 # Check gateway health
-curl https://traefik-prefect.fly.dev/ping
+curl https://banchelabs-gateway.fly.dev/ping
 # Should return: OK
 
 # Check deployment status
-fly status -a traefik-prefect
+fly status -a banchelabs-gateway
 
 # View logs
-fly logs -a traefik-prefect
+fly logs -a banchelabs-gateway
 ```
 
 ## Step 3: Generate Service Tokens
@@ -137,15 +137,9 @@ Update services to use the new authenticated gateway:
 ```bash
 # Update API service
 fly secrets set \
-  PREFECT_API_URL="https://traefik-prefect.fly.dev/captionacc/prefect/api" \
+  PREFECT_API_URL="https://banchelabs-gateway.fly.dev/prefect/api" \
   PREFECT_AUTH_TOKEN="<token-from-step-3>" \
   -a captionacc-api
-
-# Update Orchestrator service
-fly secrets set \
-  PREFECT_API_URL="https://traefik-prefect.fly.dev/captionacc/prefect/api" \
-  PREFECT_AUTH_TOKEN="<token-from-step-3>" \
-  -a captionacc-orchestrator
 ```
 
 ### For Modal Functions
@@ -153,14 +147,14 @@ fly secrets set \
 ```bash
 # Set Modal secrets
 modal secret create PREFECT_AUTH_TOKEN="<token-from-step-3>"
-modal secret create PREFECT_API_URL="https://traefik-prefect.fly.dev/captionacc/prefect/api"
+modal secret create PREFECT_API_URL="https://banchelabs-gateway.fly.dev/prefect/api"
 ```
 
 ### For Web App
 
 ```bash
 fly secrets set \
-  NEXT_PUBLIC_PREFECT_API_URL="https://traefik-prefect.fly.dev/captionacc/prefect/api" \
+  NEXT_PUBLIC_PREFECT_API_URL="https://banchelabs-gateway.fly.dev/prefect/api" \
   PREFECT_AUTH_TOKEN="<token-from-step-3>" \
   -a captionacc-web
 ```
@@ -171,11 +165,11 @@ fly secrets set \
 
 ```bash
 # Should fail without token
-curl https://traefik-prefect.fly.dev/captionacc/prefect/api/health
+curl https://banchelabs-gateway.fly.dev/prefect/api/health
 # Expected: 401 Unauthorized
 
 # Should succeed with token
-curl https://traefik-prefect.fly.dev/captionacc/prefect/api/health \
+curl https://banchelabs-gateway.fly.dev/prefect/api/health \
   -H "Authorization: Bearer <token>"
 # Expected: {"status": "ok"}
 ```
@@ -215,7 +209,7 @@ if __name__ == "__main__":
 
 ```bash
 # SSH into container
-fly ssh console -a traefik-prefect
+fly ssh console -a banchelabs-gateway
 
 # Check supervisor status
 supervisorctl status
@@ -234,7 +228,7 @@ Prefect may still be starting (takes 30-60s on cold start):
 
 ```bash
 # Watch logs
-fly logs -a traefik-prefect -f
+fly logs -a banchelabs-gateway -f
 
 # Wait for "Prefect server started" message
 ```
@@ -243,7 +237,7 @@ fly logs -a traefik-prefect -f
 
 ```bash
 # Verify secrets are set
-fly secrets list -a traefik-prefect
+fly secrets list -a banchelabs-gateway
 
 # Should see:
 # GATEWAY_JWT_SECRET
@@ -257,11 +251,11 @@ supabase secrets list
 
 ```bash
 # Check memory usage
-fly status -a traefik-prefect
+fly status -a banchelabs-gateway
 
 # If consistently above 800MB, increase memory:
 # Edit fly.toml: memory = "2048mb"
-fly deploy -a traefik-prefect
+fly deploy -a banchelabs-gateway
 ```
 
 ## Monitoring
@@ -270,10 +264,10 @@ fly deploy -a traefik-prefect
 
 ```bash
 # Gateway
-curl https://traefik-prefect.fly.dev/ping
+curl https://banchelabs-gateway.fly.dev/ping
 
 # Prefect (authenticated)
-curl https://traefik-prefect.fly.dev/captionacc/prefect/api/health \
+curl https://banchelabs-gateway.fly.dev/prefect/api/health \
   -H "Authorization: Bearer <token>"
 ```
 
@@ -281,18 +275,18 @@ curl https://traefik-prefect.fly.dev/captionacc/prefect/api/health \
 
 ```bash
 # Combined logs
-fly logs -a traefik-prefect
+fly logs -a banchelabs-gateway
 
 # Filter by service
-fly logs -a traefik-prefect | grep "traefik"
-fly logs -a traefik-prefect | grep "prefect"
+fly logs -a banchelabs-gateway | grep "traefik"
+fly logs -a banchelabs-gateway | grep "prefect"
 ```
 
 ### Metrics
 
 ```bash
 # Prometheus metrics
-curl https://traefik-prefect.fly.dev/metrics
+curl https://banchelabs-gateway.fly.dev/metrics
 ```
 
 ## Next Steps
@@ -305,36 +299,36 @@ curl https://traefik-prefect.fly.dev/metrics
 ## Quick Reference
 
 ### URLs
-- **Gateway Health**: `https://traefik-prefect.fly.dev/ping`
-- **Prefect API**: `https://traefik-prefect.fly.dev/captionacc/prefect/api/*`
-- **Prefect UI**: `https://traefik-prefect.fly.dev/captionacc/prefect/` (requires auth)
-- **Metrics**: `https://traefik-prefect.fly.dev/metrics`
+- **Gateway Health**: `https://banchelabs-gateway.fly.dev/ping`
+- **Prefect API**: `https://banchelabs-gateway.fly.dev/prefect/api/*`
+- **Prefect UI**: `https://banchelabs-gateway.fly.dev/prefect/` (requires auth)
+- **Metrics**: `https://banchelabs-gateway.fly.dev/metrics`
 
 ### Environment Variables (Client Services)
 ```bash
-PREFECT_API_URL="https://traefik-prefect.fly.dev/captionacc/prefect/api"
+PREFECT_API_URL="https://banchelabs-gateway.fly.dev/prefect/api"
 PREFECT_AUTH_TOKEN="<your-jwt-token>"
 ```
 
 ### Common Commands
 ```bash
 # Deploy
-fly deploy -a traefik-prefect
+fly deploy -a banchelabs-gateway
 
 # View logs
-fly logs -a traefik-prefect
+fly logs -a banchelabs-gateway
 
 # SSH into container
-fly ssh console -a traefik-prefect
+fly ssh console -a banchelabs-gateway
 
 # Check status
-fly status -a traefik-prefect
+fly status -a banchelabs-gateway
 
 # Scale memory
-fly scale memory 2048 -a traefik-prefect
+fly scale memory 2048 -a banchelabs-gateway
 
 # Restart
-fly apps restart traefik-prefect
+fly apps restart banchelabs-gateway
 ```
 
 ## Support
@@ -342,5 +336,5 @@ fly apps restart traefik-prefect
 For issues, see:
 - **README.md**: Full documentation
 - **services/api-gateway/README.md**: Gateway standalone documentation
-- **Fly.io logs**: `fly logs -a traefik-prefect`
+- **Fly.io logs**: `fly logs -a banchelabs-gateway`
 - **Supabase dashboard**: Check Edge Function logs

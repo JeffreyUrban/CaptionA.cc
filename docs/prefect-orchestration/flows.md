@@ -190,7 +190,7 @@ Registers all three flows with Prefect server:
 **Usage:**
 ```bash
 cd services/api
-export PREFECT_API_URL=https://traefik-prefect.fly.dev/api
+export PREFECT_API_URL=https://banchelabs-gateway.fly.dev/api
 ./scripts/register_flows.sh
 ```
 
