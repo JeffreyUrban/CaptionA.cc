@@ -5,6 +5,7 @@
 
 import { useState, useEffect } from 'react'
 
+import { supabase } from '~/services/supabase-client'
 import type { FolderItem } from '~/types/upload'
 
 interface UseUploadFoldersResult {
@@ -34,9 +35,40 @@ export function useUploadFolders(preselectedFolder: string | null): UseUploadFol
         setLoading(true)
         setError(null)
 
-        const response = await fetch('/api/folders')
-        const data = await response.json()
-        setAvailableFolders(data.folders ?? [])
+        // Query videos to extract folder structure from display_path
+        const { data: videos, error: videosError } = await supabase
+          .from('videos')
+          .select('display_path')
+          .is('deleted_at', null)
+
+        if (videosError) throw videosError
+
+        // Extract unique folder paths
+        const folderSet = new Set<string>()
+        videos?.forEach(video => {
+          if (video.display_path) {
+            // Extract folder path (everything before the last /)
+            const lastSlash = video.display_path.lastIndexOf('/')
+            if (lastSlash > 0) {
+              const folder = video.display_path.substring(0, lastSlash)
+              folderSet.add(folder)
+
+              // Also add parent folders
+              const parts = folder.split('/')
+              for (let i = 1; i < parts.length; i++) {
+                folderSet.add(parts.slice(0, i).join('/'))
+              }
+            }
+          }
+        })
+
+        // Convert to FolderItem array
+        const folders: FolderItem[] = Array.from(folderSet).map(path => ({
+          path,
+          name: path.split('/').pop() || path,
+        }))
+
+        setAvailableFolders(folders.sort((a, b) => a.path.localeCompare(b.path)))
 
         // Set preselected folder from URL
         if (preselectedFolder) {
