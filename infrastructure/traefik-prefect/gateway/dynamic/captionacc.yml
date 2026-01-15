@@ -41,7 +41,7 @@ http:
         jwt:
           # JWT signing secret from environment variable (symmetric key)
           Keys:
-            - "{{env `GATEWAY_JWT_SECRET`}}"
+            - "{{env `TRAEFIK_JWT_SECRET`}}"
 
           # Require JWT to be present
           Required: true
@@ -71,7 +71,7 @@ http:
     #   plugin:
     #     jwt:
     #       Keys:
-    #         - "{{env `GATEWAY_JWT_SECRET`}}"
+    #         - "{{env `TRAEFIK_JWT_SECRET`}}"
     #       Required: true
     #       PayloadFields:
     #         - exp

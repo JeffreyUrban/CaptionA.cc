@@ -31,13 +31,13 @@ supabase functions deploy generate-gateway-token
 
 # Generate and set JWT signing secret (SAVE THIS!)
 SECRET=$(openssl rand -base64 32)
-echo "GATEWAY_JWT_SECRET=$SECRET"
+echo "TRAEFIK_JWT_SECRET=$SECRET"
 
 # Set in Supabase
-supabase secrets set GATEWAY_JWT_SECRET="$SECRET"
+supabase secrets set TRAEFIK_JWT_SECRET="$SECRET"
 ```
 
-**Important**: Save the `GATEWAY_JWT_SECRET` - you'll need it for Fly.io!
+**Important**: Save the `TRAEFIK_JWT_SECRET` - you'll need it for Fly.io!
 
 ## Step 2: Deploy to Fly.io
 
@@ -48,7 +48,7 @@ cd infrastructure/traefik-prefect
 
 # Set the SAME JWT secret from Supabase
 fly secrets set \
-  GATEWAY_JWT_SECRET="<secret-from-step-1b>" \
+  TRAEFIK_JWT_SECRET="<secret-from-step-1b>" \
   -a traefik-prefect
 
 # Set Prefect database connection
@@ -246,7 +246,7 @@ fly logs -a traefik-prefect -f
 fly secrets list -a traefik-prefect
 
 # Should see:
-# GATEWAY_JWT_SECRET
+# TRAEFIK_JWT_SECRET
 # PREFECT_API_DATABASE_CONNECTION_URL
 
 # Check they match Supabase

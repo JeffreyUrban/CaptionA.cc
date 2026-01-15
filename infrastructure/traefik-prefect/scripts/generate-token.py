@@ -78,9 +78,17 @@ def generate_token(
     if created_by:
         payload["createdBy"] = created_by
 
+    # Get anon key for Supabase platform authentication
+    anon_key = os.getenv("SUPABASE_ANON_KEY")
+    if not anon_key:
+        raise ValueError("SUPABASE_ANON_KEY environment variable not set")
+
     # Make request
+    # Use anon key for Supabase platform auth, service role key in custom header for function auth
     headers = {
-        "Authorization": f"Bearer {service_role_key}",
+        "Authorization": f"Bearer {anon_key}",
+        "apikey": anon_key,
+        "X-Service-Role-Key": service_role_key,
         "Content-Type": "application/json",
     }
 

@@ -67,12 +67,12 @@ SECRET=$(openssl rand -base64 32)
 
 # Set Fly.io secrets
 fly secrets set \
-  GATEWAY_JWT_SECRET="$SECRET" \
+  TRAEFIK_JWT_SECRET="$SECRET" \
   PREFECT_API_DATABASE_CONNECTION_URL="your-supabase-postgres-url" \
   -a traefik-prefect
 ```
 
-**Important**: Use the same `GATEWAY_JWT_SECRET` in your Supabase Edge Function!
+**Important**: Use the same `TRAEFIK_JWT_SECRET` in your Supabase Edge Function!
 
 ### 2. Deploy to Fly.io
 
@@ -129,7 +129,7 @@ For local testing, you can use Docker Compose:
 
 ```bash
 # Set environment variables
-export GATEWAY_JWT_SECRET="your-secret"  # pragma: allowlist secret
+export TRAEFIK_JWT_SECRET="your-secret"  # pragma: allowlist secret
 export PREFECT_API_DATABASE_CONNECTION_URL="sqlite+aiosqlite:////data/prefect.db"
 
 # Start both services
@@ -162,7 +162,7 @@ http:
       plugin:
         jwt:
           Keys:
-            - "{{env `GATEWAY_JWT_SECRET`}}"
+            - "{{env `TRAEFIK_JWT_SECRET`}}"
           Required: true
           PayloadFields: [exp, iat, jti, project, service]
 
@@ -236,7 +236,7 @@ Expected memory usage on 1GB machine:
 
 ### "401 Unauthorized"
 - Verify JWT token is valid
-- Check `GATEWAY_JWT_SECRET` matches between Supabase and Fly.io
+- Check `TRAEFIK_JWT_SECRET` matches between Supabase and Fly.io
 - Generate new token if needed
 
 ### "502 Bad Gateway"
