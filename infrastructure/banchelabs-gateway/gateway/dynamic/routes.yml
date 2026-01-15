@@ -1,17 +1,27 @@
-# CaptionA.cc Project Dynamic Configuration
-# Routes and services specific to the CaptionA.cc project
+# Dynamic Configuration for routes and services
 
 http:
   # Routers
   routers:
-    # CaptionA.cc Prefect API
-    traefik-prefect:
-      rule: "PathPrefix(`/captionacc/prefect`)"
-      service: traefik-prefect
+    # Prefect API - shared infrastructure
+    banchelabs-gateway:
+      rule: "PathPrefix(`/prefect`)"
+      service: banchelabs-gateway
       middlewares:
-        - traefik-prefect-retry
-        - traefik-prefect-auth
-        - traefik-prefect-strip-prefix
+        - banchelabs-gateway-retry
+        - banchelabs-gateway-auth
+        - banchelabs-gateway-strip-prefix
+      entryPoints:
+        - websecure
+      tls: {}
+
+    # Umami Analytics (proxied to umami.fly.dev) - shared infrastructure
+    traefik-umami:
+      rule: "PathPrefix(`/umami`)"
+      service: traefik-umami
+      middlewares:
+        - traefik-umami-retry
+        - traefik-umami-strip-prefix
       entryPoints:
         - websecure
       tls: {}
@@ -30,13 +40,13 @@ http:
   # Middlewares
   middlewares:
     # Retry middleware for cold starts (Prefect takes ~15-30s to start)
-    traefik-prefect-retry:
+    banchelabs-gateway-retry:
       retry:
         attempts: 5
         initialInterval: 2s
 
     # JWT Authentication for Prefect
-    traefik-prefect-auth:
+    banchelabs-gateway-auth:
       plugin:
         jwt:
           # JWT signing secret from environment variable (symmetric key)
@@ -60,11 +70,23 @@ http:
             X-Gateway-Service: service
             X-Gateway-JTI: jti
 
-    # Strip /captionacc/prefect prefix before forwarding
-    traefik-prefect-strip-prefix:
+    # Strip /prefect prefix before forwarding
+    banchelabs-gateway-strip-prefix:
       stripPrefix:
         prefixes:
-          - "/captionacc/prefect"
+          - "/prefect"
+
+    # Retry middleware for Umami cold starts (similar to Prefect)
+    traefik-umami-retry:
+      retry:
+        attempts: 5
+        initialInterval: 2s
+
+    # Strip /umami prefix before forwarding
+    traefik-umami-strip-prefix:
+      stripPrefix:
+        prefixes:
+          - "/umami"
 
     # Example: Future API middleware
     # captionacc-api-auth:
@@ -92,7 +114,7 @@ http:
   # Services (Backend targets)
   services:
     # Prefect on SAME machine (localhost)
-    traefik-prefect:
+    banchelabs-gateway:
       loadBalancer:
         servers:
           # Localhost - Prefect container on same machine
@@ -104,6 +126,20 @@ http:
           interval: 30s
           timeout: 5s
           scheme: http
+
+    # Umami Analytics on separate Fly.io machine
+    traefik-umami:
+      loadBalancer:
+        servers:
+          # External Fly.io app - uses public DNS
+          - url: "https://umami.fly.dev"
+
+        # Health check (umami root returns 200)
+        healthCheck:
+          path: /
+          interval: 30s
+          timeout: 10s
+          scheme: https
 
     # Example: Future API service (on different Fly.io machine)
     # captionacc-api-service:

@@ -20,7 +20,7 @@ Self-hosted provides unlimited deployments at minimal cost with auto-stop.
 
 ```
 ┌────────────────────────────────────┐
-│     Fly.io: traefik-prefect        │
+│     Fly.io: banchelabs-gateway        │
 ├────────────────────────────────────┤
 │  Prefect Server (API + UI)         │
 │  Port: 4200                         │
@@ -98,7 +98,7 @@ fly secrets set WEBHOOK_SECRET=xxx
 
 **For API Service (.env):**
 ```bash
-PREFECT_API_URL=https://traefik-prefect.fly.dev/api
+PREFECT_API_URL=https://banchelabs-gateway.fly.dev/api
 WEBHOOK_SECRET=xxx
 SUPABASE_URL=xxx
 SUPABASE_SERVICE_ROLE_KEY=xxx
@@ -115,7 +115,7 @@ WASABI_BUCKET=caption-acc-prod
 
 ```bash
 # Create app
-fly apps create traefik-prefect
+fly apps create banchelabs-gateway
 
 # Create volume for SQLite
 fly volumes create prefect_data --size 1 --region iad
@@ -138,7 +138,7 @@ fly logs
 
 # Rollback
 fly releases
-fly deploy --image registry.fly.io/traefik-prefect:v123
+fly deploy --image registry.fly.io/banchelabs-gateway:v123
 ```
 
 ---
@@ -147,7 +147,7 @@ fly deploy --image registry.fly.io/traefik-prefect:v123
 
 ### Prefect Server
 ```bash
-curl https://traefik-prefect.fly.dev/api/health
+curl https://banchelabs-gateway.fly.dev/api/health
 # Expected: {"status": "ok"}
 ```
 
@@ -167,7 +167,7 @@ fly logs          # Recent logs
 ```
 
 ### Prefect UI
-- **URL:** https://traefik-prefect.fly.dev
+- **URL:** https://banchelabs-gateway.fly.dev
 - Monitor: Flow runs, work pool health, task logs
 
 ### Key Metrics
@@ -210,7 +210,7 @@ Actual cost depends on usage patterns.
 echo $PREFECT_API_URL
 
 # Test connection
-curl https://traefik-prefect.fly.dev/api/health
+curl https://banchelabs-gateway.fly.dev/api/health
 ```
 
 ### Flow Runs Stuck in "Scheduled"
@@ -238,14 +238,14 @@ ps aux | grep "prefect worker"
 
 **Solution:**
 ```bash
-fly ssh console --app traefik-prefect
+fly ssh console --app banchelabs-gateway
 
 # Backup and recreate
 cp /data/prefect.db /data/prefect.db.bak
 rm /data/prefect.db
 
 # Restart (will recreate database)
-fly apps restart traefik-prefect
+fly apps restart banchelabs-gateway
 # Note: Loses flow run history
 ```
 
