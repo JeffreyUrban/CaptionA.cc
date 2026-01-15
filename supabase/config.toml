@@ -146,3 +146,16 @@ client_id = ""
 secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET)"
 redirect_uri = ""
 url = ""
+
+[edge_runtime]
+policy = "per_worker"
+inspector_port = 8083
+
+# Edge Functions configuration
+# Disable legacy JWT verification - we use new short-format API keys (sb_secret_*, sb_publishable_*)
+# and implement our own auth checks in the function code
+[functions.captionacc-presigned-upload]
+verify_jwt = false
+
+[functions.captionacc-s3-credentials]
+verify_jwt = false
