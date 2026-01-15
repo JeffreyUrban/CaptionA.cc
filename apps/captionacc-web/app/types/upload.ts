@@ -60,7 +60,7 @@ export interface FolderItem {
 }
 
 /**
- * Incomplete upload metadata from /api/uploads/incomplete
+ * Incomplete upload metadata from upload store
  */
 export interface IncompleteUpload {
   uploadId: string
@@ -98,7 +98,7 @@ export interface VideoFilePreview {
   uploadProgress: number
   uploadStatus: UploadStatus
   uploadId?: string
-  uploadUrl?: string // TUS upload URL for resumability
+  uploadUrl?: string // Upload URL for resumability
   videoId?: string // UUID of created video (set when upload completes)
   error?: string
   isDuplicate?: boolean // Pre-upload duplicate check (by path)
@@ -118,9 +118,6 @@ export interface VideoFilePreview {
 
 /** Number of concurrent uploads to process at once */
 export const CONCURRENT_UPLOADS = 3
-
-/** Chunk size for TUS uploads (8MB) */
-export const CHUNK_SIZE = 8 * 1024 * 1024
 
 /** Exponential backoff retry delays in milliseconds */
 export const RETRY_DELAYS = [0, 3000, 5000, 10000, 20000, 60000]

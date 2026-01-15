@@ -641,20 +641,9 @@ This project requires Node.js >= 24.0.0
 
 ## Maintenance
 
-### Clean Stale Uploads
+### Upload Management
 
-Incomplete uploads are automatically cleared when users return to the Upload page. For long-running servers, run this script periodically to clean uploads older than 24 hours:
-
-```bash
-cd apps/captionacc-web
-npx tsx scripts/cleanup-stale-uploads.ts
-```
-
-**Recommended cron schedule** (daily at 2am):
-
-```cron
-0 2 * * * cd /path/to/CaptionA.cc/apps/captionacc-web && npx tsx scripts/cleanup-stale-uploads.ts
-```
+Uploads use presigned URLs for direct upload to Wasabi S3. Incomplete uploads are tracked in the client-side store and are automatically cleaned up when users return to the Upload page. No server-side maintenance required.
 
 ## Clean Up
 

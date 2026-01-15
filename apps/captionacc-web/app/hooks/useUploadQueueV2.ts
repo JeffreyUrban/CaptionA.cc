@@ -27,7 +27,7 @@ interface UseUploadQueueV2Result {
 }
 
 /**
- * Hook for managing TUS upload queue with new UploadManager service
+ * Hook for managing upload queue with UploadManager service
  *
  * @param videoFiles - Array of video files to upload
  * @param setVideoFiles - State setter for video files

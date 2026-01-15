@@ -323,56 +323,32 @@ export default function UploadPage() {
       if (decision === 'cancel_upload') {
         console.log(`[UploadPage] Canceling upload for ${duplicate.relativePath}`)
 
-        // Try to call backend (best effort)
-        try {
-          const response = await fetch(`/api/uploads/resolve-duplicate/${duplicate.videoId}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({ decision }),
-          })
+        // TODO: Integrate duplicate resolution with backend API
+        // No endpoint documented in api-endpoints.md for duplicate resolution
+        // For now, just remove from UI
+        console.log(
+          `[UploadPage] Canceling upload for ${duplicate.relativePath} (backend integration pending)`
+        )
 
-          if (!response.ok) {
-            console.warn('[UploadPage] Backend cancel failed, removing from UI anyway')
-          }
-        } catch (error) {
-          console.warn('[UploadPage] Backend cancel error, removing from UI anyway:', error)
-        }
-
-        // Always remove from UI
+        // Remove from UI
         resolveDuplicate(uploadId)
         return
       }
 
       // For keep_both and replace_existing, call backend
-      try {
-        console.log(`[UploadPage] Resolving duplicate ${duplicate.videoId}: ${decision}`)
+      // TODO: Integrate duplicate resolution with backend API
+      // No endpoint documented in api-endpoints.md for duplicate resolution
+      // For now, just show an error since we can't actually resolve duplicates yet
+      console.log(`[UploadPage] Duplicate resolution not yet implemented: ${decision}`)
 
-        const response = await fetch(`/api/uploads/resolve-duplicate/${duplicate.videoId}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({ decision }),
-        })
-
-        if (!response.ok) {
-          const errorText = await response.text()
-          throw new Error(`Server returned ${response.status}: ${errorText}`)
-        }
-
-        console.log(`[UploadPage] Resolved duplicate ${duplicate.videoId}: ${decision}`)
-
-        // Remove from pending duplicates
-        resolveDuplicate(uploadId)
-      } catch (error) {
-        console.error('[UploadPage] Error resolving duplicate:', error)
-        const action = decision === 'keep_both' ? 'Keep Both' : 'Replace Existing'
-        const errorMsg = error instanceof Error ? error.message : String(error)
-        alert(
-          `Failed to ${action}:\n\n${errorMsg}\n\n` +
-            `You can:\n` +
-            `• Try again (the duplicate will remain in the list)\n` +
-            `• Click "Cancel Upload" to remove it without resolving`
-        )
-      }
+      const action = decision === 'keep_both' ? 'Keep Both' : 'Replace Existing'
+      alert(
+        `Duplicate resolution not yet implemented.\n\n` +
+          `The backend API doesn't have an endpoint for duplicate resolution yet.\n\n` +
+          `You can:\n` +
+          `• Click "Cancel Upload" to remove it from the list\n` +
+          `• Wait for backend API integration`
+      )
     },
     [pendingDuplicates, resolveDuplicate]
   )
