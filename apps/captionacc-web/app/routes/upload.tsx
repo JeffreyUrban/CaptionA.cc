@@ -63,8 +63,8 @@ export default function UploadPage() {
   const [isProcessingDrop, setIsProcessingDrop] = useState(false)
   const [processingStatus, setProcessingStatus] = useState('')
 
-  // Load available folders for the modal
-  const { availableFolders } = useUploadFolders(loaderData.preselectedFolder)
+  // Load available folders and videos for the modal
+  const { availableFolders, videos } = useUploadFolders(loaderData.preselectedFolder)
 
   // Upload store state - subscribe to the objects, convert to arrays with useMemo
   const activeUploadsObj = useUploadStore(state => state.activeUploads)
@@ -162,7 +162,7 @@ export default function UploadPage() {
     console.log(`[UploadPage] Processing ${files.length} files with options:`, options)
 
     // Process files according to options
-    const processed = await processUploadFiles(files, options)
+    const processed = processUploadFiles(files, options, videos)
 
     console.log(`[UploadPage] Starting upload for ${processed.length} processed files`)
 
@@ -179,7 +179,7 @@ export default function UploadPage() {
         console.error(`[UploadPage] Failed to start upload for ${upload.finalPath}:`, error)
       }
     }
-  }, [])
+  }, [videos])
 
   // Handle modal cancellation
   const handleUploadCancel = useCallback(() => {
@@ -457,6 +457,7 @@ export default function UploadPage() {
         <UploadPreviewModal
           files={pendingFiles}
           availableFolders={availableFolders}
+          videos={videos}
           defaultTargetFolder={loaderData.preselectedFolder}
           onConfirm={(files, options) => void handleUploadConfirm(files, options)}
           onCancel={handleUploadCancel}

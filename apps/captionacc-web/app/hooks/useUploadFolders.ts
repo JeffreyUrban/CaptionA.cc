@@ -7,11 +7,13 @@ import { useState, useEffect } from 'react'
 
 import { supabase } from '~/services/supabase-client'
 import type { FolderItem } from '~/types/upload'
+import type { VideoData } from '~/utils/upload-folder-structure'
 
 interface UseUploadFoldersResult {
   selectedFolder: string
   setSelectedFolder: (folder: string) => void
   availableFolders: FolderItem[]
+  videos: VideoData[]
   loading: boolean
   error: string | null
 }
@@ -25,6 +27,7 @@ interface UseUploadFoldersResult {
 export function useUploadFolders(preselectedFolder: string | null): UseUploadFoldersResult {
   const [selectedFolder, setSelectedFolder] = useState<string>('')
   const [availableFolders, setAvailableFolders] = useState<FolderItem[]>([])
+  const [videos, setVideos] = useState<VideoData[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -36,16 +39,19 @@ export function useUploadFolders(preselectedFolder: string | null): UseUploadFol
         setError(null)
 
         // Query videos to extract folder structure from display_path
-        const { data: videos, error: videosError } = await supabase
+        const { data: videosData, error: videosError } = await supabase
           .from('videos')
-          .select('display_path')
+          .select('id, display_path')
           .is('deleted_at', null)
 
         if (videosError) throw videosError
 
+        // Store videos for use in upload processing
+        setVideos(videosData || [])
+
         // Extract unique folder paths
         const folderSet = new Set<string>()
-        videos?.forEach(video => {
+        videosData?.forEach(video => {
           if (video.display_path) {
             // Extract folder path (everything before the last /)
             const lastSlash = video.display_path.lastIndexOf('/')
@@ -89,6 +95,7 @@ export function useUploadFolders(preselectedFolder: string | null): UseUploadFol
     selectedFolder,
     setSelectedFolder,
     availableFolders,
+    videos,
     loading,
     error,
   }

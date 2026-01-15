@@ -12,6 +12,7 @@ import {
   type UploadFile,
   type UploadOptions,
   type FolderStructureMode,
+  type VideoData,
   processUploadFiles,
   getFolderStructurePreview,
 } from '~/utils/upload-folder-structure'
@@ -128,6 +129,7 @@ function FolderModeOptions({
 interface UploadPreviewModalProps {
   files: UploadFile[]
   availableFolders: Array<{ path: string; name: string }>
+  videos: VideoData[]
   defaultTargetFolder: string | null
   onConfirm: (files: UploadFile[], options: UploadOptions) => void
   onCancel: () => void
@@ -136,6 +138,7 @@ interface UploadPreviewModalProps {
 export function UploadPreviewModal({
   files,
   availableFolders,
+  videos,
   defaultTargetFolder,
   onConfirm,
   onCancel,
@@ -153,11 +156,11 @@ export function UploadPreviewModal({
   } | null>(null)
 
   useEffect(() => {
-    async function process() {
+    function process() {
       setProcessing(true)
       try {
         const options: UploadOptions = { mode, collapseSingles, targetFolder }
-        const processed = await processUploadFiles(files, options)
+        const processed = processUploadFiles(files, options, videos)
         const previewData = getFolderStructurePreview(processed)
         setPreview(previewData)
       } catch (error) {
@@ -166,8 +169,8 @@ export function UploadPreviewModal({
         setProcessing(false)
       }
     }
-    void process()
-  }, [files, mode, collapseSingles, targetFolder])
+    process()
+  }, [files, mode, collapseSingles, targetFolder, videos])
 
   const handleConfirm = () => {
     const options: UploadOptions = { mode, collapseSingles, targetFolder }

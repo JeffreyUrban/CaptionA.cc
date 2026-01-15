@@ -9,6 +9,11 @@
 
 export type FolderStructureMode = 'preserve' | 'flatten'
 
+export interface VideoData {
+  id: string
+  display_path: string | null
+}
+
 export interface UploadFile {
   file: File
   relativePath: string // Original path from drop/selection
@@ -76,41 +81,39 @@ function buildFolderTree(files: UploadFile[]): FolderNode {
  * Check if a folder will have only one file after upload
  * Must consider existing files at the destination
  */
-async function willHaveSingleFile(
+function willHaveSingleFile(
   folderPath: string,
   newFileCount: number,
-  targetFolder: string | null
-): Promise<boolean> {
+  targetFolder: string | null,
+  existingVideos: VideoData[]
+): boolean {
   // Check existing files at this folder path
   const fullPath = targetFolder ? `${targetFolder}/${folderPath}` : folderPath
 
-  try {
-    const response = await fetch(`/api/folders/file-count?path=${encodeURIComponent(fullPath)}`)
-    if (!response.ok) return newFileCount === 1 // Assume folder doesn't exist
+  // Count videos in the exact folder (not subfolders)
+  const existingCount = existingVideos.filter(v => {
+    if (!v.display_path) return false
+    const videoFolder = v.display_path.substring(0, v.display_path.lastIndexOf('/'))
+    return videoFolder === fullPath
+  }).length
 
-    const data = await response.json()
-    const existingCount = data.fileCount ?? 0
-
-    return existingCount + newFileCount === 1
-  } catch {
-    // If API fails, assume folder doesn't exist
-    return newFileCount === 1
-  }
+  return existingCount + newFileCount === 1
 }
 
 /**
  * Collapse single-file folders in the tree
  * Only collapse if destination will have exactly one file (considering existing files)
  */
-async function collapseSingleFileFolders(
+function collapseSingleFileFolders(
   node: FolderNode,
   currentPath: string,
-  targetFolder: string | null
-): Promise<void> {
+  targetFolder: string | null,
+  existingVideos: VideoData[]
+): void {
   // Process subfolders first (depth-first)
   for (const [name, subfolder] of node.subfolders) {
     const subfolderPath = currentPath ? `${currentPath}/${name}` : name
-    await collapseSingleFileFolders(subfolder, subfolderPath, targetFolder)
+    collapseSingleFileFolders(subfolder, subfolderPath, targetFolder, existingVideos)
   }
 
   // Check if this folder should be collapsed
@@ -120,7 +123,7 @@ async function collapseSingleFileFolders(
     if (!file) return // TypeScript guard
 
     const folderPath = currentPath
-    const willBeSingle = await willHaveSingleFile(folderPath, 1, targetFolder)
+    const willBeSingle = willHaveSingleFile(folderPath, 1, targetFolder, existingVideos)
 
     if (willBeSingle && currentPath) {
       // Collapse: move file up to parent, keeping video filename
@@ -137,10 +140,11 @@ async function collapseSingleFileFolders(
 /**
  * Process files according to folder structure options
  */
-export async function processUploadFiles(
+export function processUploadFiles(
   files: UploadFile[],
-  options: UploadOptions
-): Promise<ProcessedUpload[]> {
+  options: UploadOptions,
+  existingVideos: VideoData[]
+): ProcessedUpload[] {
   const results: ProcessedUpload[] = []
 
   if (options.mode === 'flatten') {
@@ -161,7 +165,7 @@ export async function processUploadFiles(
     if (options.collapseSingles) {
       // Build tree and collapse singles
       const tree = buildFolderTree(files)
-      await collapseSingleFileFolders(tree, '', options.targetFolder)
+      collapseSingleFileFolders(tree, '', options.targetFolder, existingVideos)
     }
 
     // Generate final paths
