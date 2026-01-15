@@ -152,7 +152,9 @@ def visualize_boxes_centers(
             intensity = int(confidence * 255)
 
         # Draw circle at center
-        cv2.circle(image, (center_x, center_y), radius, (intensity, intensity, intensity), -1)
+        cv2.circle(
+            image, (center_x, center_y), radius, (intensity, intensity, intensity), -1
+        )
 
     return image
 
@@ -184,8 +186,12 @@ def visualize_boxes_both(
         >>> viz = visualize_boxes_both((640, 480), boxes)
     """
     # Create both visualizations
-    boundaries = visualize_boxes_boundaries(image_size, boxes, boundary_thickness, normalize_confidence)
-    centers = visualize_boxes_centers(image_size, boxes, center_radius, normalize_confidence)
+    boundaries = visualize_boxes_boundaries(
+        image_size, boxes, boundary_thickness, normalize_confidence
+    )
+    centers = visualize_boxes_centers(
+        image_size, boxes, center_radius, normalize_confidence
+    )
 
     # Combine with max (brightest wins)
     combined = np.maximum(boundaries, centers)
@@ -226,17 +232,23 @@ def visualize_boxes_3d(
     width, height = image_size
 
     # R channel: Caption Frame Extents
-    r_channel = visualize_boxes_boundaries(image_size, boxes, boundary_thickness, normalize_confidence)
+    r_channel = visualize_boxes_boundaries(
+        image_size, boxes, boundary_thickness, normalize_confidence
+    )
 
     # G channel: Centers
-    g_channel = visualize_boxes_centers(image_size, boxes, center_radius, normalize_confidence)
+    g_channel = visualize_boxes_centers(
+        image_size, boxes, center_radius, normalize_confidence
+    )
 
     # B channel: Confidence heatmap (decay from centers)
     b_channel = np.zeros((height, width), dtype=np.uint8)
 
     if boxes:
         # Create distance transform from centers
-        centers_mask = visualize_boxes_centers(image_size, boxes, radius=1, normalize_confidence=False)
+        centers_mask = visualize_boxes_centers(
+            image_size, boxes, radius=1, normalize_confidence=False
+        )
         if centers_mask.max() > 0:
             # Distance transform (pixels get darker further from centers)
             dist_transform = cv2.distanceTransform(255 - centers_mask, cv2.DIST_L2, 5)
@@ -254,7 +266,8 @@ def visualize_boxes_3d(
 def create_ocr_visualization(
     image_size: tuple[int, int],
     boxes: list[dict],
-    variant: OCRVisualizationVariant | Literal["boundaries", "centers", "both", "3d_channels"] = "boundaries",
+    variant: OCRVisualizationVariant
+    | Literal["boundaries", "centers", "both", "3d_channels"] = "boundaries",
     **kwargs,
 ) -> np.ndarray:
     """Create OCR box visualization with specified variant.
@@ -281,7 +294,9 @@ def create_ocr_visualization(
         >>> # 3D encoding
         >>> viz_3d = create_ocr_visualization((640, 480), boxes, "3d_channels")
     """
-    variant_str = variant.value if isinstance(variant, OCRVisualizationVariant) else variant
+    variant_str = (
+        variant.value if isinstance(variant, OCRVisualizationVariant) else variant
+    )
 
     if variant_str == "boundaries":
         return visualize_boxes_boundaries(image_size, boxes, **kwargs)

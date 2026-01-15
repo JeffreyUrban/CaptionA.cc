@@ -11,7 +11,7 @@ class OCRBackend(ABC):
     @abstractmethod
     def get_constraints(self) -> dict:
         """Return backend constraints for batch size calculation.
-        
+
         Returns dict with keys like: max_image_height, max_image_width, max_file_size_bytes
         """
         ...

@@ -196,14 +196,10 @@ Environment variables:
             print(f"  PREFECT_AUTH_TOKEN={result['token']}")
             print()
             print("For Fly.io:")
-            print(
-                f"  fly secrets set PREFECT_AUTH_TOKEN='{result['token']}' -a your-app"
-            )
+            print(f"  fly secrets set PREFECT_AUTH_TOKEN='{result['token']}' -a your-app")
             print()
             print("For Modal:")
-            print(
-                f"  modal secret create PREFECT_AUTH_TOKEN='{result['token']}'"
-            )
+            print(f"  modal secret create PREFECT_AUTH_TOKEN='{result['token']}'")
 
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)

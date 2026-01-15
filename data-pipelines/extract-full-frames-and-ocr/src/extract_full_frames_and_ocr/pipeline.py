@@ -122,16 +122,18 @@ def process_video_with_gpu_and_ocr(
         # so we use 1.0 as a placeholder
         annotations = []
         for char in ocr_result.characters:
-            annotations.append([
-                char.text,
-                1.0,  # Confidence placeholder
+            annotations.append(
                 [
-                    char.bbox.x,
-                    char.bbox.y,
-                    char.bbox.width,
-                    char.bbox.height,
+                    char.text,
+                    1.0,  # Confidence placeholder
+                    [
+                        char.bbox.x,
+                        char.bbox.y,
+                        char.bbox.width,
+                        char.bbox.height,
+                    ],
                 ]
-            ])
+            )
 
         # Create database record format
         db_record = {
@@ -149,6 +151,8 @@ def process_video_with_gpu_and_ocr(
         total_boxes += boxes_inserted
 
     print(f"[DB] Wrote {total_boxes} total OCR boxes to database")
-    print(f"\n[Pipeline] Complete! Processed {len(frames)} frames with {total_boxes} text boxes")
+    print(
+        f"\n[Pipeline] Complete! Processed {len(frames)} frames with {total_boxes} text boxes"
+    )
 
     return total_boxes

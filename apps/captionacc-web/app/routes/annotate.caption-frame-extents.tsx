@@ -19,6 +19,7 @@ export async function loader() {
   }
 }
 
+// eslint-disable-next-line complexity -- Component with multiple conditional rendering paths for different workflow states
 export default function CaptionFrameExtentsWorkflow() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
@@ -26,7 +27,7 @@ export default function CaptionFrameExtentsWorkflow() {
 
   // Lock modal state
   const [showLockModal, setShowLockModal] = useState(true)
-  const [lockError, setLockError] = useState<string | null>(null)
+  const lockError: string | null = null
 
   const workflow = useCaptionFrameExtentsWorkflowState({ videoId })
 
@@ -100,12 +101,7 @@ export default function CaptionFrameExtentsWorkflow() {
     <AppLayout fullScreen>
       <div className="flex h-[calc(100vh-4rem)] max-h-[calc(100vh-4rem)] flex-col overflow-hidden px-4 py-4">
         {/* Lock Status Banner */}
-        <DatabaseLockBanner
-          lockState={getLockState()}
-          lockHolder={lockHolder}
-          canEdit={workflow.canEdit}
-          className="mb-4"
-        />
+        <DatabaseLockBanner lockState={getLockState()} lockHolder={lockHolder} className="mb-4" />
 
         <CompletionBanner workflowProgress={displayState.workflowProgress || 0} />
 

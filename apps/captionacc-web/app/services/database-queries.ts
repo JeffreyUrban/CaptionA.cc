@@ -11,6 +11,7 @@
  */
 
 import type { CRSQLiteDatabase } from './crsqlite-client'
+
 import type { BoxLabel, TextAnchor } from '~/types/enums'
 
 // =============================================================================

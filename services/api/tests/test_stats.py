@@ -25,7 +25,9 @@ class TestGetStats:
         # Check processing status
         assert stats["processingStatus"] == "ready"
 
-    async def test_stats_annotation_count(self, stats_client: AsyncClient, test_video_id: str):
+    async def test_stats_annotation_count(
+        self, stats_client: AsyncClient, test_video_id: str
+    ):
         """Should count captions correctly."""
         response = await stats_client.get(f"/videos/{test_video_id}/stats")
         data = response.json()
@@ -33,7 +35,9 @@ class TestGetStats:
         # Seeded captions_db has 4 captions
         assert data["stats"]["annotationCount"] == 4
 
-    async def test_stats_needs_text_count(self, stats_client: AsyncClient, test_video_id: str):
+    async def test_stats_needs_text_count(
+        self, stats_client: AsyncClient, test_video_id: str
+    ):
         """Should count captions needing text."""
         response = await stats_client.get(f"/videos/{test_video_id}/stats")
         data = response.json()

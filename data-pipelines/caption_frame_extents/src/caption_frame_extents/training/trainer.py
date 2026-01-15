@@ -92,7 +92,9 @@ def get_git_commit() -> str:
         return "unknown"
 
 
-def compute_per_class_accuracy(y_true: np.ndarray, y_pred: np.ndarray, num_classes: int) -> dict[int, float]:
+def compute_per_class_accuracy(
+    y_true: np.ndarray, y_pred: np.ndarray, num_classes: int
+) -> dict[int, float]:
     """Compute accuracy for each class separately.
 
     Args:
@@ -150,7 +152,11 @@ class BalancedBatchSampler(Sampler):
         - Epoch time: grows with dataset size
     """
 
-    def __init__(self, dataset: CaptionFrameExtentsDataset, max_samples_per_class: int | None = None):
+    def __init__(
+        self,
+        dataset: CaptionFrameExtentsDataset,
+        max_samples_per_class: int | None = None,
+    ):
         self.dataset = dataset
         self.max_samples_per_class_param = max_samples_per_class
 
@@ -160,7 +166,9 @@ class BalancedBatchSampler(Sampler):
             self.label_to_indices[sample.label].append(idx)
 
         # Calculate class sizes
-        self.class_sizes = {label: len(indices) for label, indices in self.label_to_indices.items()}
+        self.class_sizes = {
+            label: len(indices) for label, indices in self.label_to_indices.items()
+        }
 
         # Determine sampling cap (cap-based takes precedence over ratio-based)
         if max_samples_per_class is not None:
@@ -172,7 +180,8 @@ class BalancedBatchSampler(Sampler):
 
         # Calculate epoch size
         self.epoch_size = sum(
-            min(len(indices), self.max_samples_per_class) for indices in self.label_to_indices.values()
+            min(len(indices), self.max_samples_per_class)
+            for indices in self.label_to_indices.values()
         )
 
     def __iter__(self):
@@ -219,13 +228,25 @@ class CaptionFrameExtentsTrainer:
         max_samples_per_class: Absolute cap on samples per class (recommended for scaling)
     """
 
-    def __init__(self, dataset_db_path: Path, experiment_name: str, architecture_name: str = "triple_backbone_resnet50",
-                 model_config: dict[str, Any] | None = None,
-                 transform_strategy: ResizeStrategy = ResizeStrategy.MIRROR_TILE, ocr_viz_variant: str = "caption-frame-extents",
-                 epochs: int = 50, batch_size: int = 32, lr_features: float = 1e-3, lr_classifier: float = 1e-2,
-                 device: str | None = None, wandb_project: str = "caption-frame-extents-detection",
-                 checkpoint_dir: Path = Path("checkpoints"), save_every_n_epochs: int = 5,
-                 balanced_sampling: bool = True, max_samples_per_class: int | None = None):
+    def __init__(
+        self,
+        dataset_db_path: Path,
+        experiment_name: str,
+        architecture_name: str = "triple_backbone_resnet50",
+        model_config: dict[str, Any] | None = None,
+        transform_strategy: ResizeStrategy = ResizeStrategy.MIRROR_TILE,
+        ocr_viz_variant: str = "caption-frame-extents",
+        epochs: int = 50,
+        batch_size: int = 32,
+        lr_features: float = 1e-3,
+        lr_classifier: float = 1e-2,
+        device: str | None = None,
+        wandb_project: str = "caption-frame-extents-detection",
+        checkpoint_dir: Path = Path("checkpoints"),
+        save_every_n_epochs: int = 5,
+        balanced_sampling: bool = True,
+        max_samples_per_class: int | None = None,
+    ):
         self.dataset_db_path = dataset_db_path
         self.experiment_name = experiment_name
         self.architecture_name = architecture_name
@@ -296,7 +317,9 @@ class CaptionFrameExtentsTrainer:
 
         # Create train loader with optional balanced sampling
         if self.balanced_sampling:
-            train_sampler = BalancedBatchSampler(self.train_dataset, max_samples_per_class=self.max_samples_per_class)
+            train_sampler = BalancedBatchSampler(
+                self.train_dataset, max_samples_per_class=self.max_samples_per_class
+            )
 
             self.train_loader = DataLoader(
                 self.train_dataset,
@@ -324,7 +347,9 @@ class CaptionFrameExtentsTrainer:
                 sampled_count = min(original_count, train_sampler.max_samples_per_class)
                 if original_count > 0:
                     pct = (sampled_count / original_count) * 100
-                    console.print(f"    {label_name}: {sampled_count}/{original_count} ({pct:.0f}%)")
+                    console.print(
+                        f"    {label_name}: {sampled_count}/{original_count} ({pct:.0f}%)"
+                    )
         else:
             self.train_loader = DataLoader(
                 self.train_dataset,
@@ -381,7 +406,11 @@ class CaptionFrameExtentsTrainer:
         for class_idx in range(num_classes):
             count = label_counts.get(class_idx, 0)
             weight = class_weights[class_idx].item()
-            label_name = label_names[class_idx] if class_idx < len(label_names) else f"class_{class_idx}"
+            label_name = (
+                label_names[class_idx]
+                if class_idx < len(label_names)
+                else f"class_{class_idx}"
+            )
             console.print(f"  {label_name}: {count} samples, weight={weight:.2f}")
 
         return class_weights
@@ -411,12 +440,16 @@ class CaptionFrameExtentsTrainer:
         # Higher LR for newly added classifier, lower LR for pretrained feature extractor
         param_groups = [
             {
-                "params": [p for n, p in self.model.named_parameters() if "classifier" in n],
+                "params": [
+                    p for n, p in self.model.named_parameters() if "classifier" in n
+                ],
                 "lr": self.lr_classifier,
                 "name": "classifier",
             },
             {
-                "params": [p for n, p in self.model.named_parameters() if "classifier" not in n],
+                "params": [
+                    p for n, p in self.model.named_parameters() if "classifier" not in n
+                ],
                 "lr": self.lr_features,
                 "name": "features",
             },
@@ -466,7 +499,9 @@ class CaptionFrameExtentsTrainer:
                 # Data config
                 "dataset_name": dataset.name,
                 "dataset_db_path": str(self.dataset_db_path),
-                "dataset_dvc_hash": get_dataset_dvc_hash(self.dataset_db_path),  # DVC traceability
+                "dataset_dvc_hash": get_dataset_dvc_hash(
+                    self.dataset_db_path
+                ),  # DVC traceability
                 "num_train_samples": len(self.train_dataset),
                 "num_val_samples": len(self.val_dataset),
                 "transform_strategy": self.transform_strategy.value,
@@ -483,7 +518,9 @@ class CaptionFrameExtentsTrainer:
 
             # Initialize W&B (store runs in local/models/caption_frame_extents/wandb)
             project_root = get_project_root()
-            wandb_dir = project_root / "local" / "models" / "caption_frame_extents" / "wandb"
+            wandb_dir = (
+                project_root / "local" / "models" / "caption_frame_extents" / "wandb"
+            )
             wandb_dir.mkdir(parents=True, exist_ok=True)
 
             wandb.init(
@@ -513,16 +550,24 @@ class CaptionFrameExtentsTrainer:
         """
         # Assert training components are initialized (set by train() before calling this)
         assert self.model is not None, "Model not initialized. Call train() first."
-        assert self.train_loader is not None, "Train loader not initialized. Call train() first."
-        assert self.optimizer is not None, "Optimizer not initialized. Call train() first."
-        assert self.criterion is not None, "Criterion not initialized. Call train() first."
+        assert self.train_loader is not None, (
+            "Train loader not initialized. Call train() first."
+        )
+        assert self.optimizer is not None, (
+            "Optimizer not initialized. Call train() first."
+        )
+        assert self.criterion is not None, (
+            "Criterion not initialized. Call train() first."
+        )
 
         self.model.train()
         total_loss = 0.0
         all_preds = []
         all_labels = []
 
-        for batch in track(self.train_loader, description=f"Epoch {epoch}/{self.epochs}"):
+        for batch in track(
+            self.train_loader, description=f"Epoch {epoch}/{self.epochs}"
+        ):
             # Move batch to device
             ocr_viz = batch["ocr_viz"].to(self.device)
             frame1 = batch["frame1"].to(self.device)
@@ -555,11 +600,17 @@ class CaptionFrameExtentsTrainer:
         # Overall metrics
         accuracy = accuracy_score(all_labels_np, all_preds_np)
         balanced_acc = balanced_accuracy_score(all_labels_np, all_preds_np)
-        f1_weighted = f1_score(all_labels_np, all_preds_np, average="weighted", zero_division="0")
-        f1_macro = f1_score(all_labels_np, all_preds_np, average="macro", zero_division="0")
+        f1_weighted = f1_score(
+            all_labels_np, all_preds_np, average="weighted", zero_division="0"
+        )
+        f1_macro = f1_score(
+            all_labels_np, all_preds_np, average="macro", zero_division="0"
+        )
 
         # Per-class accuracy
-        per_class_acc = compute_per_class_accuracy(all_labels_np, all_preds_np, len(CaptionFrameExtentsDataset.LABELS))
+        per_class_acc = compute_per_class_accuracy(
+            all_labels_np, all_preds_np, len(CaptionFrameExtentsDataset.LABELS)
+        )
 
         metrics = {
             "train/loss": avg_loss,
@@ -586,8 +637,12 @@ class CaptionFrameExtentsTrainer:
         """
         # Assert validation components are initialized (set by train() before calling this)
         assert self.model is not None, "Model not initialized. Call train() first."
-        assert self.val_loader is not None, "Validation loader not initialized. Call train() first."
-        assert self.criterion is not None, "Criterion not initialized. Call train() first."
+        assert self.val_loader is not None, (
+            "Validation loader not initialized. Call train() first."
+        )
+        assert self.criterion is not None, (
+            "Criterion not initialized. Call train() first."
+        )
 
         self.model.eval()
         total_loss = 0.0
@@ -623,11 +678,17 @@ class CaptionFrameExtentsTrainer:
         # Overall metrics
         accuracy = accuracy_score(all_labels_np, all_preds_np)
         balanced_acc = balanced_accuracy_score(all_labels_np, all_preds_np)
-        f1_weighted = f1_score(all_labels_np, all_preds_np, average="weighted", zero_division="0")
-        f1_macro = f1_score(all_labels_np, all_preds_np, average="macro", zero_division="0")
+        f1_weighted = f1_score(
+            all_labels_np, all_preds_np, average="weighted", zero_division="0"
+        )
+        f1_macro = f1_score(
+            all_labels_np, all_preds_np, average="macro", zero_division="0"
+        )
 
         # Per-class accuracy
-        per_class_acc = compute_per_class_accuracy(all_labels_np, all_preds_np, len(CaptionFrameExtentsDataset.LABELS))
+        per_class_acc = compute_per_class_accuracy(
+            all_labels_np, all_preds_np, len(CaptionFrameExtentsDataset.LABELS)
+        )
 
         # Confusion matrix
         cm = confusion_matrix(all_labels_np, all_preds_np)
@@ -663,7 +724,9 @@ class CaptionFrameExtentsTrainer:
 
             # Per-class precision, recall, f1 from classification report
             if label_name in class_report:
-                metrics[f"val/precision_{label_name}"] = class_report[label_name]["precision"]
+                metrics[f"val/precision_{label_name}"] = class_report[label_name][
+                    "precision"
+                ]
                 metrics[f"val/recall_{label_name}"] = class_report[label_name]["recall"]
                 metrics[f"val/f1_{label_name}"] = class_report[label_name]["f1-score"]
 
@@ -698,7 +761,9 @@ class CaptionFrameExtentsTrainer:
             "epoch": epoch,
             "model_state_dict": self.model.state_dict(),
             "optimizer_state_dict": self.optimizer.state_dict(),
-            "scheduler_state_dict": self.scheduler.state_dict() if self.scheduler else None,
+            "scheduler_state_dict": self.scheduler.state_dict()
+            if self.scheduler
+            else None,
             "metrics": metrics,
             "config": wandb.config.as_dict()
             if wandb.run
@@ -753,7 +818,11 @@ class CaptionFrameExtentsTrainer:
         epoch_0_metrics = self.validate(epoch=0)
 
         # Log epoch 0 to W&B
-        wandb_metrics = {k: v for k, v in epoch_0_metrics.items() if not isinstance(v, (np.ndarray, dict))}
+        wandb_metrics = {
+            k: v
+            for k, v in epoch_0_metrics.items()
+            if not isinstance(v, (np.ndarray, dict))
+        }
         wandb_metrics["epoch"] = 0
         wandb.log(wandb_metrics, step=0)
 
@@ -784,7 +853,11 @@ class CaptionFrameExtentsTrainer:
             all_metrics = {**train_metrics, **val_metrics, "epoch": epoch}
 
             # Remove non-scalar metrics for W&B logging
-            wandb_metrics = {k: v for k, v in all_metrics.items() if not isinstance(v, (np.ndarray, dict))}
+            wandb_metrics = {
+                k: v
+                for k, v in all_metrics.items()
+                if not isinstance(v, (np.ndarray, dict))
+            }
             wandb.log(wandb_metrics, step=epoch)
 
             # Print progress with key metrics
@@ -865,9 +938,17 @@ class CaptionFrameExtentsTrainer:
             try:
                 import subprocess
 
-                git_commit = subprocess.check_output(["git", "rev-parse", "HEAD"]).decode("ascii").strip()
+                git_commit = (
+                    subprocess.check_output(["git", "rev-parse", "HEAD"])
+                    .decode("ascii")
+                    .strip()
+                )
                 git_branch = (
-                    subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"]).decode("ascii").strip()
+                    subprocess.check_output(
+                        ["git", "rev-parse", "--abbrev-ref", "HEAD"]
+                    )
+                    .decode("ascii")
+                    .strip()
                 )
             except Exception:
                 git_commit = None
@@ -907,4 +988,6 @@ class CaptionFrameExtentsTrainer:
             db.refresh(experiment)
 
             self.experiment_id = experiment.id
-            console.print(f"[green]✓[/green] Experiment saved to database (ID: {experiment.id})")
+            console.print(
+                f"[green]✓[/green] Experiment saved to database (ID: {experiment.id})"
+            )

@@ -77,9 +77,7 @@ async def batch_captions(
     db_manager = get_database_manager()
 
     try:
-        async with db_manager.get_or_create_database(
-            auth.tenant_id, video_id
-        ) as conn:
+        async with db_manager.get_or_create_database(auth.tenant_id, video_id) as conn:
             repo = CaptionRepository(conn)
             results: list[BatchResultItem] = []
 
@@ -143,9 +141,7 @@ async def batch_captions(
                             text=create_data.text,
                         )
                         caption = repo.create_caption(caption_create)
-                        results.append(
-                            BatchResultItem(op=operation.op, id=caption.id)
-                        )
+                        results.append(BatchResultItem(op=operation.op, id=caption.id))
 
                     elif operation.op == BatchOperationType.UPDATE:
                         # Validate update operation
@@ -285,7 +281,11 @@ async def get_caption(video_id: str, caption_id: int, auth: Auth):
         )
 
 
-@router.post("/{video_id}/captions", response_model=CaptionResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{video_id}/captions",
+    response_model=CaptionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_caption(video_id: str, body: CaptionCreate, auth: Auth):
     """
     Create a new caption.
@@ -307,7 +307,9 @@ async def create_caption(video_id: str, body: CaptionCreate, auth: Auth):
         )
 
 
-@router.put("/{video_id}/captions/{caption_id}", response_model=OverlapResolutionResponse)
+@router.put(
+    "/{video_id}/captions/{caption_id}", response_model=OverlapResolutionResponse
+)
 async def update_caption(
     video_id: str, caption_id: int, body: CaptionUpdate, auth: Auth
 ):
@@ -324,7 +326,9 @@ async def update_caption(
     db_manager = get_database_manager()
 
     try:
-        async with db_manager.get_database(auth.tenant_id, video_id, writable=True) as conn:
+        async with db_manager.get_database(
+            auth.tenant_id, video_id, writable=True
+        ) as conn:
             repo = CaptionRepository(conn)
             try:
                 result = repo.update_caption_with_overlap_resolution(caption_id, body)
@@ -354,7 +358,9 @@ async def update_caption_text(
     db_manager = get_database_manager()
 
     try:
-        async with db_manager.get_database(auth.tenant_id, video_id, writable=True) as conn:
+        async with db_manager.get_database(
+            auth.tenant_id, video_id, writable=True
+        ) as conn:
             repo = CaptionRepository(conn)
             caption = repo.update_caption_text(caption_id, body)
             if caption is None:
@@ -376,7 +382,9 @@ async def delete_caption(video_id: str, caption_id: int, auth: Auth):
     db_manager = get_database_manager()
 
     try:
-        async with db_manager.get_database(auth.tenant_id, video_id, writable=True) as conn:
+        async with db_manager.get_database(
+            auth.tenant_id, video_id, writable=True
+        ) as conn:
             repo = CaptionRepository(conn)
             deleted = repo.delete_caption(caption_id)
             if not deleted:

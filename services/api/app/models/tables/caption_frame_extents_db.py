@@ -30,7 +30,9 @@ class PairResult(SQLModel, table=True):
     frame2_index: int
 
     # Forward direction: frame1 -> frame2
-    forward_predicted_label: str  # 'same', 'different', 'empty_empty', 'empty_valid', 'valid_empty'
+    forward_predicted_label: (
+        str  # 'same', 'different', 'empty_empty', 'empty_valid', 'valid_empty'
+    )
     forward_confidence: float
     forward_prob_same: float
     forward_prob_different: float
@@ -39,7 +41,9 @@ class PairResult(SQLModel, table=True):
     forward_prob_valid_empty: float
 
     # Backward direction: frame2 -> frame1
-    backward_predicted_label: str  # 'same', 'different', 'empty_empty', 'empty_valid', 'valid_empty'
+    backward_predicted_label: (
+        str  # 'same', 'different', 'empty_empty', 'empty_valid', 'valid_empty'
+    )
     backward_confidence: float
     backward_prob_same: float
     backward_prob_different: float

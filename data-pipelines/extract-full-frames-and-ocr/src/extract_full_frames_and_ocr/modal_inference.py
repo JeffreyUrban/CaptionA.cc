@@ -26,6 +26,7 @@ def get_full_frames_image():
 
     # Get repo root - this file is in data-pipelines/extract-full-frames-and-ocr/src/extract_full_frames_and_ocr/
     from pathlib import Path
+
     repo_root = Path(__file__).parent.parent.parent.parent.parent
 
     return (
@@ -45,10 +46,25 @@ def get_full_frames_image():
         )
         .env({"PYTHONPATH": "/root"})
         # Add local packages
-        .add_local_dir(repo_root / "packages" / "gpu_video_utils" / "src" / "gpu_video_utils", remote_path="/root/gpu_video_utils")
-        .add_local_dir(repo_root / "packages" / "ocr" / "src" / "ocr", remote_path="/root/ocr")
-        .add_local_dir(repo_root / "packages" / "frames_db" / "src" / "frames_db", remote_path="/root/frames_db")
-        .add_local_dir(repo_root / "data-pipelines" / "extract-full-frames-and-ocr" / "src" / "extract_full_frames_and_ocr", remote_path="/root/extract_full_frames_and_ocr")
+        .add_local_dir(
+            repo_root / "packages" / "gpu_video_utils" / "src" / "gpu_video_utils",
+            remote_path="/root/gpu_video_utils",
+        )
+        .add_local_dir(
+            repo_root / "packages" / "ocr" / "src" / "ocr", remote_path="/root/ocr"
+        )
+        .add_local_dir(
+            repo_root / "packages" / "frames_db" / "src" / "frames_db",
+            remote_path="/root/frames_db",
+        )
+        .add_local_dir(
+            repo_root
+            / "data-pipelines"
+            / "extract-full-frames-and-ocr"
+            / "src"
+            / "extract_full_frames_and_ocr",
+            remote_path="/root/extract_full_frames_and_ocr",
+        )
     )
 
 
@@ -137,6 +153,7 @@ def extract_frames_and_ocr_impl(
         # Step 3: Count frames and get stats
         print("[3/4] Collecting statistics...")
         import sqlite3
+
         conn = sqlite3.connect(str(db_path))
 
         # Count frames
@@ -163,7 +180,7 @@ def extract_frames_and_ocr_impl(
             str(db_path),
             bucket_name,
             db_storage_key,
-            ExtraArgs={'ContentType': 'application/x-sqlite3'}
+            ExtraArgs={"ContentType": "application/x-sqlite3"},
         )
 
         print(f"  Uploaded in {time.time() - upload_start:.2f}s\n")

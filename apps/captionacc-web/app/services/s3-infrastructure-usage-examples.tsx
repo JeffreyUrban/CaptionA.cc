@@ -9,8 +9,6 @@ import { useEffect } from 'react'
 
 import { S3Image } from '~/components/S3Image'
 import { S3Video } from '~/components/S3Video'
-import { useS3CredentialsStore, initializeS3CredentialsStore } from '~/stores/s3-credentials-store'
-import { getVideoResourceUrl, buildS3Path, getCurrentTenantId } from '~/services/s3-client'
 import {
   getFrame,
   setFrame,
@@ -20,6 +18,8 @@ import {
   estimateBlobSize,
   getFrameCacheStats,
 } from '~/services/frame-cache'
+import { getVideoResourceUrl, buildS3Path, getCurrentTenantId } from '~/services/s3-client'
+import { useS3CredentialsStore, initializeS3CredentialsStore } from '~/stores/s3-credentials-store'
 
 // ============================================================================
 // Example 1: Initialize S3 credentials store (in root component)

@@ -42,13 +42,13 @@ class TestGetLayout:
 class TestUpdateLayout:
     """Tests for PUT /{video_id}/layout endpoint."""
 
-    async def test_update_crop_region(self, layout_client: AsyncClient, test_video_id: str):
+    async def test_update_crop_region(
+        self, layout_client: AsyncClient, test_video_id: str
+    ):
         """Should update crop region."""
         response = await layout_client.put(
             f"/videos/{test_video_id}/layout",
-            json={
-                "cropRegion": {"left": 50, "top": 60, "right": 70, "bottom": 80}
-            },
+            json={"cropRegion": {"left": 50, "top": 60, "right": 70, "bottom": 80}},
         )
         assert response.status_code == 200
 
@@ -59,12 +59,19 @@ class TestUpdateLayout:
         assert layout["cropRegion"]["right"] == 70
         assert layout["cropRegion"]["bottom"] == 80
 
-    async def test_update_selection_region(self, layout_client: AsyncClient, test_video_id: str):
+    async def test_update_selection_region(
+        self, layout_client: AsyncClient, test_video_id: str
+    ):
         """Should update selection region."""
         response = await layout_client.put(
             f"/videos/{test_video_id}/layout",
             json={
-                "selectionRegion": {"left": 100, "top": 100, "right": 500, "bottom": 300}
+                "selectionRegion": {
+                    "left": 100,
+                    "top": 100,
+                    "right": 500,
+                    "bottom": 300,
+                }
             },
         )
         assert response.status_code == 200
@@ -74,7 +81,9 @@ class TestUpdateLayout:
         assert layout["selectionRegion"]["left"] == 100
         assert layout["selectionRegion"]["right"] == 500
 
-    async def test_update_selection_mode(self, layout_client: AsyncClient, test_video_id: str):
+    async def test_update_selection_mode(
+        self, layout_client: AsyncClient, test_video_id: str
+    ):
         """Should update selection mode."""
         response = await layout_client.put(
             f"/videos/{test_video_id}/layout",
@@ -85,7 +94,9 @@ class TestUpdateLayout:
         data = response.json()
         assert data["layout"]["selectionMode"] == "auto"
 
-    async def test_update_layout_params(self, layout_client: AsyncClient, test_video_id: str):
+    async def test_update_layout_params(
+        self, layout_client: AsyncClient, test_video_id: str
+    ):
         """Should update layout analysis parameters."""
         response = await layout_client.put(
             f"/videos/{test_video_id}/layout",
@@ -93,7 +104,7 @@ class TestUpdateLayout:
                 "layoutParams": {
                     "verticalPosition": 0.85,
                     "boxHeight": 50.0,
-                    "analysisModelVersion": "v2.0"
+                    "analysisModelVersion": "v2.0",
                 }
             },
         )
@@ -109,7 +120,9 @@ class TestUpdateLayout:
 class TestInitLayout:
     """Tests for POST /{video_id}/layout endpoint."""
 
-    async def test_init_layout(self, layout_client_empty_db: AsyncClient, test_video_id: str):
+    async def test_init_layout(
+        self, layout_client_empty_db: AsyncClient, test_video_id: str
+    ):
         """Should initialize layout with frame dimensions."""
         response = await layout_client_empty_db.post(
             f"/videos/{test_video_id}/layout",

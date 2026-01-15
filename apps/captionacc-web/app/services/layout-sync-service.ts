@@ -13,10 +13,8 @@
  * - Provide API compatible with existing layout-api.ts
  */
 
-import { DATABASE_NAMES, type DatabaseName } from '~/config'
-import { useDatabaseStore, type DatabaseInstance } from '~/stores/database-store'
 import { CRSQLiteDatabase } from './crsqlite-client'
-import { type LockStatus, type LockState, type LockHolder } from './database-lock'
+import { type LockStatus } from './database-lock'
 import {
   getLayoutQueue,
   getAllAnalysisBoxes,
@@ -32,6 +30,9 @@ import {
   type LayoutConfigResult,
 } from './database-queries'
 import { subscribeToTable, type SubscriptionResult } from './database-subscriptions'
+
+import { DATABASE_NAMES, type DatabaseName } from '~/config'
+import { useDatabaseStore } from '~/stores/database-store'
 import type { BoxLabel } from '~/types/enums'
 
 // =============================================================================
@@ -286,8 +287,8 @@ export class LayoutSyncService {
    * Equivalent to fetchLayoutQueue() from layout-api.ts.
    */
   async fetchLayoutQueue(): Promise<LayoutQueueResult> {
-    this.ensureReady()
-    return getLayoutQueue(this.database!, this.videoId)
+    const db = this.ensureReady()
+    return getLayoutQueue(db, this.videoId)
   }
 
   /**
@@ -295,8 +296,8 @@ export class LayoutSyncService {
    * Equivalent to fetchAnalysisBoxes() from layout-api.ts.
    */
   async fetchAnalysisBoxes(): Promise<{ boxes: BoxDataResult[] }> {
-    this.ensureReady()
-    const boxes = await getAllAnalysisBoxes(this.database!)
+    const db = this.ensureReady()
+    const boxes = await getAllAnalysisBoxes(db)
     return { boxes }
   }
 
@@ -305,9 +306,9 @@ export class LayoutSyncService {
    * Equivalent to fetchFrameBoxes() from layout-api.ts.
    */
   async fetchFrameBoxes(frameIndex: number): Promise<FrameBoxesResult> {
-    this.ensureReady()
+    const db = this.ensureReady()
     const layoutConfig = await this.getLayoutConfig()
-    return getFrameBoxes(this.database!, this.videoId, frameIndex, layoutConfig)
+    return getFrameBoxes(db, this.videoId, frameIndex, layoutConfig)
   }
 
   /**
@@ -318,10 +319,10 @@ export class LayoutSyncService {
     frameIndex: number,
     annotations: Array<{ boxIndex: number; label: BoxLabel }>
   ): Promise<void> {
-    this.ensureReady()
+    const db = this.ensureReady()
     this.ensureCanEdit()
 
-    await updateBoxLabels(this.database!, frameIndex, annotations)
+    await updateBoxLabels(db, frameIndex, annotations)
     this.emitEvent({ type: 'boxes_changed', videoId: this.videoId, data: { frameIndex } })
   }
 
@@ -352,10 +353,10 @@ export class LayoutSyncService {
    * Equivalent to clearAllAnnotations() from layout-api.ts.
    */
   async clearAllAnnotations(): Promise<{ deletedCount: number }> {
-    this.ensureReady()
+    const db = this.ensureReady()
     this.ensureCanEdit()
 
-    const deletedCount = await clearAnnotationsQuery(this.database!)
+    const deletedCount = await clearAnnotationsQuery(db)
     this.emitEvent({ type: 'boxes_changed', videoId: this.videoId })
     return { deletedCount }
   }
@@ -368,11 +369,11 @@ export class LayoutSyncService {
     rectangle: { left: number; top: number; right: number; bottom: number },
     action: 'clear' | 'mark_out'
   ): Promise<{ newlyAnnotatedBoxes?: number; error?: string }> {
-    this.ensureReady()
+    const db = this.ensureReady()
     this.ensureCanEdit()
 
     try {
-      const newlyAnnotatedBoxes = await bulkAnnotateByRectangle(this.database!, rectangle, action)
+      const newlyAnnotatedBoxes = await bulkAnnotateByRectangle(db, rectangle, action)
       this.emitEvent({ type: 'boxes_changed', videoId: this.videoId })
       return { newlyAnnotatedBoxes }
     } catch (err) {
@@ -384,8 +385,8 @@ export class LayoutSyncService {
    * Get layout configuration.
    */
   async getLayoutConfig(): Promise<LayoutConfigResult | null> {
-    this.ensureReady()
-    const { layoutConfig } = await getLayoutQueue(this.database!, this.videoId)
+    const db = this.ensureReady()
+    const { layoutConfig } = await getLayoutQueue(db, this.videoId)
     return layoutConfig
   }
 
@@ -393,18 +394,18 @@ export class LayoutSyncService {
    * Get annotation count.
    */
   async getAnnotationCount(): Promise<number> {
-    this.ensureReady()
-    return getAnnotationCount(this.database!)
+    const db = this.ensureReady()
+    return getAnnotationCount(db)
   }
 
   /**
    * Set layout as approved.
    */
   async approveLayout(): Promise<void> {
-    this.ensureReady()
+    const db = this.ensureReady()
     this.ensureCanEdit()
 
-    await setLayoutApproved(this.database!, true)
+    await setLayoutApproved(db, true)
     this.emitEvent({ type: 'config_changed', videoId: this.videoId })
   }
 
@@ -446,11 +447,13 @@ export class LayoutSyncService {
 
   /**
    * Ensure service is ready for operations.
+   * Returns the database instance if ready, throws otherwise.
    */
-  private ensureReady(): void {
+  private ensureReady(): CRSQLiteDatabase {
     if (!this.initialized || !this.database) {
       throw new Error('Layout sync service not initialized')
     }
+    return this.database
   }
 
   /**

@@ -97,7 +97,9 @@ class TestGetState:
         """Should return None when state doesn't exist."""
         mock_client = MockSupabaseClient([])
 
-        with patch("app.services.supabase_client.get_settings", return_value=mock_settings):
+        with patch(
+            "app.services.supabase_client.get_settings", return_value=mock_settings
+        ):
             repo = DatabaseStateRepository(client=mock_client)
             result = await repo.get_state("video-123", "layout")
             assert result is None
@@ -113,7 +115,9 @@ class TestGetState:
         }
         mock_client = MockSupabaseClient([state_data])
 
-        with patch("app.services.supabase_client.get_settings", return_value=mock_settings):
+        with patch(
+            "app.services.supabase_client.get_settings", return_value=mock_settings
+        ):
             repo = DatabaseStateRepository(client=mock_client)
             result = await repo.get_state("video-123", "layout")
             assert result is not None
@@ -127,7 +131,9 @@ class TestCreateState:
         """Should create state with default values."""
         mock_client = MockSupabaseClient()
 
-        with patch("app.services.supabase_client.get_settings", return_value=mock_settings):
+        with patch(
+            "app.services.supabase_client.get_settings", return_value=mock_settings
+        ):
             repo = DatabaseStateRepository(client=mock_client)
             result = await repo.create_state("video-123", "layout", "tenant-456")
 
@@ -153,7 +159,9 @@ class TestGetOrCreateState:
         }
         mock_client = MockSupabaseClient([existing_state])
 
-        with patch("app.services.supabase_client.get_settings", return_value=mock_settings):
+        with patch(
+            "app.services.supabase_client.get_settings", return_value=mock_settings
+        ):
             repo = DatabaseStateRepository(client=mock_client)
             result = await repo.get_or_create_state("video-123", "layout", "tenant-456")
             assert result["server_version"] == 10
@@ -162,7 +170,9 @@ class TestGetOrCreateState:
         """Should create new state if not found."""
         mock_client = MockSupabaseClient([])
 
-        with patch("app.services.supabase_client.get_settings", return_value=mock_settings):
+        with patch(
+            "app.services.supabase_client.get_settings", return_value=mock_settings
+        ):
             repo = DatabaseStateRepository(client=mock_client)
             result = await repo.get_or_create_state("video-123", "layout", "tenant-456")
             assert result["server_version"] == 0
@@ -205,7 +215,9 @@ class TestAcquireLock:
 
         mock_client = TrackingMockClient()
 
-        with patch("app.services.supabase_client.get_settings", return_value=mock_settings):
+        with patch(
+            "app.services.supabase_client.get_settings", return_value=mock_settings
+        ):
             repo = DatabaseStateRepository(client=mock_client)
             await repo.acquire_lock(
                 video_id="video-123",
@@ -244,7 +256,9 @@ class TestReleaseLock:
 
         mock_client = TrackingMockClient()
 
-        with patch("app.services.supabase_client.get_settings", return_value=mock_settings):
+        with patch(
+            "app.services.supabase_client.get_settings", return_value=mock_settings
+        ):
             repo = DatabaseStateRepository(client=mock_client)
             await repo.release_lock("video-123", "layout")
 
@@ -288,7 +302,9 @@ class TestIncrementServerVersion:
 
         mock_client = TrackingMockClient()
 
-        with patch("app.services.supabase_client.get_settings", return_value=mock_settings):
+        with patch(
+            "app.services.supabase_client.get_settings", return_value=mock_settings
+        ):
             repo = DatabaseStateRepository(client=mock_client)
             new_version = await repo.increment_server_version("video-123", "layout")
 
@@ -300,7 +316,9 @@ class TestIncrementServerVersion:
         """Should return 0 when state doesn't exist."""
         mock_client = MockSupabaseClient([])
 
-        with patch("app.services.supabase_client.get_settings", return_value=mock_settings):
+        with patch(
+            "app.services.supabase_client.get_settings", return_value=mock_settings
+        ):
             repo = DatabaseStateRepository(client=mock_client)
             result = await repo.increment_server_version("video-123", "layout")
             assert result == 0
@@ -335,7 +353,9 @@ class TestGetPendingUploads:
         ]
         mock_client = MockSupabaseClient(states)
 
-        with patch("app.services.supabase_client.get_settings", return_value=mock_settings):
+        with patch(
+            "app.services.supabase_client.get_settings", return_value=mock_settings
+        ):
             repo = DatabaseStateRepository(client=mock_client)
             pending = await repo.get_pending_uploads(
                 idle_minutes=5, checkpoint_minutes=15
@@ -363,7 +383,9 @@ class TestGetPendingUploads:
         ]
         mock_client = MockSupabaseClient(states)
 
-        with patch("app.services.supabase_client.get_settings", return_value=mock_settings):
+        with patch(
+            "app.services.supabase_client.get_settings", return_value=mock_settings
+        ):
             repo = DatabaseStateRepository(client=mock_client)
             pending = await repo.get_pending_uploads(
                 idle_minutes=5, checkpoint_minutes=15
@@ -386,7 +408,9 @@ class TestGetPendingUploads:
         ]
         mock_client = MockSupabaseClient(states)
 
-        with patch("app.services.supabase_client.get_settings", return_value=mock_settings):
+        with patch(
+            "app.services.supabase_client.get_settings", return_value=mock_settings
+        ):
             repo = DatabaseStateRepository(client=mock_client)
             pending = await repo.get_pending_uploads(
                 idle_minutes=5, checkpoint_minutes=15
@@ -422,7 +446,9 @@ class TestGetAllWithUnsavedChanges:
         ]
         mock_client = MockSupabaseClient(states)
 
-        with patch("app.services.supabase_client.get_settings", return_value=mock_settings):
+        with patch(
+            "app.services.supabase_client.get_settings", return_value=mock_settings
+        ):
             repo = DatabaseStateRepository(client=mock_client)
             unsaved = await repo.get_all_with_unsaved_changes()
 

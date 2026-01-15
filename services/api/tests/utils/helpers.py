@@ -72,24 +72,33 @@ def create_test_video(
     cmd = [
         "ffmpeg",
         "-y",  # Overwrite output file if it exists
-        "-f", "lavfi",
-        "-i", f"testsrc=duration={duration}:size={resolution[0]}x{resolution[1]}:rate={fps}",
+        "-f",
+        "lavfi",
+        "-i",
+        f"testsrc=duration={duration}:size={resolution[0]}x{resolution[1]}:rate={fps}",
     ]
 
     # Add text overlay if specified
     if text_overlay:
         # Escape single quotes in text for shell safety
         safe_text = text_overlay.replace("'", "'\\''")
-        cmd.extend([
-            "-vf", f"drawtext=text='{safe_text}':fontsize=48:x=(w-text_w)/2:y=h-th-20:fontcolor=white",
-        ])
+        cmd.extend(
+            [
+                "-vf",
+                f"drawtext=text='{safe_text}':fontsize=48:x=(w-text_w)/2:y=h-th-20:fontcolor=white",
+            ]
+        )
 
     # Output settings - H.264 with yuv420p for maximum compatibility
-    cmd.extend([
-        "-c:v", "libx264",
-        "-pix_fmt", "yuv420p",
-        str(output),
-    ])
+    cmd.extend(
+        [
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            str(output),
+        ]
+    )
 
     subprocess.run(cmd, check=True, capture_output=True)
 
@@ -401,20 +410,33 @@ def validate_modal_result(result: dict[str, Any], result_type: str) -> bool:
     """
     if result_type == "extract":
         required_fields = {
-            "frame_count", "duration", "frame_width", "frame_height",
-            "video_codec", "bitrate", "ocr_box_count", "failed_ocr_count",
-            "processing_duration_seconds", "full_frames_key", "ocr_db_key",
+            "frame_count",
+            "duration",
+            "frame_width",
+            "frame_height",
+            "video_codec",
+            "bitrate",
+            "ocr_box_count",
+            "failed_ocr_count",
+            "processing_duration_seconds",
+            "full_frames_key",
+            "ocr_db_key",
             "layout_db_key",
         }
     elif result_type == "crop_infer":
         required_fields = {
-            "version", "frame_count", "label_counts",
-            "processing_duration_seconds", "caption_frame_extents_db_key",
+            "version",
+            "frame_count",
+            "label_counts",
+            "processing_duration_seconds",
+            "caption_frame_extents_db_key",
             "cropped_frames_prefix",
         }
     elif result_type == "caption_ocr":
         required_fields = {
-            "ocr_text", "confidence", "frame_count",
+            "ocr_text",
+            "confidence",
+            "frame_count",
         }
     else:
         raise ValueError(f"Invalid result_type: {result_type}")

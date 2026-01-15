@@ -68,36 +68,43 @@ class TestCropAndInferE2E:
 
         # Generate unique test identifiers using UUIDs (database expects UUID format)
         import uuid
+
         tenant_id = str(uuid.uuid4())  # Real UUID for database compatibility
-        video_id = str(uuid.uuid4())   # Real UUID for database compatibility
+        video_id = str(uuid.uuid4())  # Real UUID for database compatibility
 
         # Use persistent test fixture instead of uploading each time
         storage_key = "test-fixtures/videos/car-teardown-comparison-08.mp4"
 
         # Create tenant record FIRST (required by foreign key constraint)
         try:
-            supabase.client.schema(settings.supabase_schema).table("tenants").insert({
-                "id": tenant_id,
-                "name": f"Test Tenant {tenant_id[:8]}",
-                "slug": f"test-tenant-{tenant_id[:8]}",
-            }).execute()
+            supabase.client.schema(settings.supabase_schema).table("tenants").insert(
+                {
+                    "id": tenant_id,
+                    "name": f"Test Tenant {tenant_id[:8]}",
+                    "slug": f"test-tenant-{tenant_id[:8]}",
+                }
+            ).execute()
             print(f"Created tenant record in Supabase (tenant_id: {tenant_id})")
         except Exception as e:
-            raise RuntimeError(f"Failed to create tenant record in Supabase: {e}") from e
+            raise RuntimeError(
+                f"Failed to create tenant record in Supabase: {e}"
+            ) from e
 
         # Create video record in Supabase with all required fields
         # This must happen before video_database_state due to foreign key constraint
         # Required NOT NULL fields from actual schema: video_path, storage_key
         # Note: width/height documented but don't exist in production yet
         try:
-            supabase.client.schema(settings.supabase_schema).table("videos").insert({
-                "id": video_id,
-                "tenant_id": tenant_id,
-                "video_path": f"test-videos/{video_id}.mp4",  # Required: user-facing path
-                "storage_key": storage_key,                     # Required: Wasabi key
-                "status": "active",
-                "uploaded_at": datetime.now(timezone.utc).isoformat(),
-            }).execute()
+            supabase.client.schema(settings.supabase_schema).table("videos").insert(
+                {
+                    "id": video_id,
+                    "tenant_id": tenant_id,
+                    "video_path": f"test-videos/{video_id}.mp4",  # Required: user-facing path
+                    "storage_key": storage_key,  # Required: Wasabi key
+                    "status": "active",
+                    "uploaded_at": datetime.now(timezone.utc).isoformat(),
+                }
+            ).execute()
             print(f"Created video record in Supabase (video_id: {video_id})")
         except Exception as e:
             raise RuntimeError(f"Failed to create video record in Supabase: {e}") from e
@@ -157,14 +164,18 @@ class TestCropAndInferE2E:
         # Create video_database_state record for lock management
         # This is required for acquire_server_lock to work
         try:
-            supabase.client.schema(settings.supabase_schema).table("video_database_state").insert({
-                "video_id": video_id,
-                "database_name": "layout",
-                "tenant_id": tenant_id,
-                "server_version": 1,
-                "wasabi_version": 1,
-                "wasabi_synced_at": datetime.now(timezone.utc).isoformat(),
-            }).execute()
+            supabase.client.schema(settings.supabase_schema).table(
+                "video_database_state"
+            ).insert(
+                {
+                    "video_id": video_id,
+                    "database_name": "layout",
+                    "tenant_id": tenant_id,
+                    "server_version": 1,
+                    "wasabi_version": 1,
+                    "wasabi_synced_at": datetime.now(timezone.utc).isoformat(),
+                }
+            ).execute()
         except Exception as e:
             print(f"Warning: Could not create video_database_state record: {e}")
             # Continue anyway - test may still work if lock management is mocked
@@ -188,27 +199,27 @@ class TestCropAndInferE2E:
 
         # Delete video_database_state records
         try:
-            supabase.client.schema(settings.supabase_schema).table("video_database_state").delete().eq(
-                "video_id", video_id
-            ).execute()
+            supabase.client.schema(settings.supabase_schema).table(
+                "video_database_state"
+            ).delete().eq("video_id", video_id).execute()
             print("Deleted video_database_state records")
         except Exception as e:
             print(f"Warning: Failed to clean up video_database_state: {e}")
 
         # Delete video record from Supabase
         try:
-            supabase.client.schema(settings.supabase_schema).table("videos").delete().eq(
-                "id", video_id
-            ).execute()
+            supabase.client.schema(settings.supabase_schema).table(
+                "videos"
+            ).delete().eq("id", video_id).execute()
             print(f"Deleted video record from Supabase (video_id: {video_id})")
         except Exception as e:
             print(f"Warning: Failed to clean up video record: {e}")
 
         # Delete tenant record from Supabase (must be last due to foreign keys)
         try:
-            supabase.client.schema(settings.supabase_schema).table("tenants").delete().eq(
-                "id", tenant_id
-            ).execute()
+            supabase.client.schema(settings.supabase_schema).table(
+                "tenants"
+            ).delete().eq("id", tenant_id).execute()
             print(f"Deleted tenant record from Supabase (tenant_id: {tenant_id})")
         except Exception as e:
             print(f"Warning: Failed to clean up tenant record: {e}")
@@ -301,7 +312,9 @@ class TestCropAndInferE2E:
             )
             print("Pre-test lock check: Lock is available")
         else:
-            pytest.skip("Lock is not available - another process may be using this video")
+            pytest.skip(
+                "Lock is not available - another process may be using this video"
+            )
 
         # Step 4: Execute flow directly (tests our flow logic with lock management)
         print(f"\nExecuting crop_and_infer flow for video {video_id}...")
@@ -319,14 +332,20 @@ class TestCropAndInferE2E:
         # Step 5: Verify flow results
         assert result is not None, "Flow returned None"
         assert result["status"] == "completed", f"Flow status: {result.get('status')}"
-        assert "cropped_frames_version" in result, "Missing cropped_frames_version in result"
+        assert "cropped_frames_version" in result, (
+            "Missing cropped_frames_version in result"
+        )
         assert result["cropped_frames_version"] > 0, "Invalid version number"
 
         version = result["cropped_frames_version"]
-        print(f"Flow result: version={version}, frame_count={result.get('frame_count')}")
+        print(
+            f"Flow result: version={version}, frame_count={result.get('frame_count')}"
+        )
 
         # Step 6: Verify cropped frames created in Wasabi
-        cropped_frames_prefix = f"{tenant_id}/client/videos/{video_id}/cropped_frames_v{version}/"
+        cropped_frames_prefix = (
+            f"{tenant_id}/client/videos/{video_id}/cropped_frames_v{version}/"
+        )
 
         print(f"\nVerifying cropped frames at: {cropped_frames_prefix}")
         cropped_files = wasabi.list_files(prefix=cropped_frames_prefix, max_keys=10)
@@ -338,7 +357,9 @@ class TestCropAndInferE2E:
         print(f"Found {len(cropped_files)} cropped frame files (showing first 10)")
 
         # Step 7: Verify caption_frame_extents database created in Wasabi
-        caption_db_key = f"{tenant_id}/server/videos/{video_id}/caption_frame_extents_v{version}.db"
+        caption_db_key = (
+            f"{tenant_id}/server/videos/{video_id}/caption_frame_extents_v{version}.db"
+        )
 
         print(f"\nVerifying caption_frame_extents database at: {caption_db_key}")
         db_exists = wasabi.file_exists(caption_db_key)
@@ -359,7 +380,9 @@ class TestCropAndInferE2E:
             f"Video metadata not updated. Expected version {version}, "
             f"got {current_version}"
         )
-        print(f"Video metadata correctly updated: current_cropped_frames_version={current_version}")
+        print(
+            f"Video metadata correctly updated: current_cropped_frames_version={current_version}"
+        )
 
         # Step 9: Verify lock was released (CRITICAL for this test)
         # Query video_database_state to ensure lock_holder_user_id is NULL
@@ -376,7 +399,7 @@ class TestCropAndInferE2E:
         )
 
         # Type narrowing: ensure response.data is treated as dict when not None
-        lock_state = getattr(response, 'data', None)  # Safely access data attribute
+        lock_state = getattr(response, "data", None)  # Safely access data attribute
 
         if lock_state is not None and isinstance(lock_state, dict):
             lock_holder = lock_state.get("lock_holder_user_id")
@@ -493,7 +516,7 @@ class TestCropAndInferE2E:
             )
 
             # Type narrowing: ensure response.data is treated as dict
-            lock_state = getattr(response, 'data', None)  # Safely access data attribute
+            lock_state = getattr(response, "data", None)  # Safely access data attribute
             assert lock_state is not None, "Lock state disappeared"
             assert isinstance(lock_state, dict), "Lock state should be a dictionary"
             assert lock_state.get("lock_holder_user_id") == "external-process", (

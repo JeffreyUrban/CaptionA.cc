@@ -23,8 +23,13 @@ export default defineConfig(({ mode }) => ({
   build: {
     rollupOptions: {
       // Only externalize canvas for SSR builds, not client builds
+      // Also externalize @vlcn.io/crsqlite-wasm which is dynamically imported
       external: id => {
         if (id === 'canvas') {
+          return true
+        }
+        // Externalize CR-SQLite wasm module - it's dynamically imported at runtime
+        if (id === '@vlcn.io/crsqlite-wasm') {
           return true
         }
         return false

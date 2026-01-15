@@ -131,7 +131,9 @@ class CRSqliteManager:
             )
             original_size = len(data)
             compressed_size = len(compressed)
-            ratio = (1 - compressed_size / original_size) * 100 if original_size > 0 else 0
+            ratio = (
+                (1 - compressed_size / original_size) * 100 if original_size > 0 else 0
+            )
             logger.info(
                 f"Uploaded {s3_key}: {original_size} -> {compressed_size} bytes ({ratio:.1f}% reduction)"
             )

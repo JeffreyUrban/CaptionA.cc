@@ -63,7 +63,10 @@ class TestGetCaptions:
         # Caption 2 is pending, Caption 3 is a gap
         assert len(data["captions"]) == 2
         for caption in data["captions"]:
-            assert caption["captionFrameExtentsState"] == "gap" or caption["captionFrameExtentsPending"] is True
+            assert (
+                caption["captionFrameExtentsState"] == "gap"
+                or caption["captionFrameExtentsPending"] is True
+            )
 
     @pytest.mark.asyncio
     async def test_get_captions_with_limit(

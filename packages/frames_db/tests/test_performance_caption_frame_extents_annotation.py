@@ -48,7 +48,7 @@ def setup_test_data(tmp_path: Path):
                 crop_top INTEGER,
                 crop_right INTEGER,
                 crop_bottom INTEGER,
-                crop_region_version INTEGER DEFAULT 1,
+                crop_bounds_version INTEGER DEFAULT 1,
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
             )
             """
@@ -67,8 +67,8 @@ def setup_test_data(tmp_path: Path):
         db_path=db_path,
         frames=frames,
         table="full_frames",
-        crop_region_version=1,
-        crop_region=(0, 0, width, height),
+        crop_bounds_version=1,
+        crop_bounds=(0, 0, width, height),
     )
 
     # Create filesystem frames for comparison

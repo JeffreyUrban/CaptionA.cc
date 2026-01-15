@@ -2,6 +2,7 @@
 Caption database management service.
 Handles operations on captions.db files stored in Wasabi.
 """
+
 from typing import Optional, Protocol
 
 

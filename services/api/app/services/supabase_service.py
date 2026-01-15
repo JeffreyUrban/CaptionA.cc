@@ -2,6 +2,7 @@
 Supabase service interface and implementation.
 Handles all database operations for video processing workflows.
 """
+
 from typing import Optional, Protocol
 
 
@@ -17,7 +18,7 @@ class SupabaseService(Protocol):
         video_id: str,
         status: Optional[str] = None,
         caption_status: Optional[str] = None,
-        error_message: Optional[str] = None
+        error_message: Optional[str] = None,
     ) -> None:
         """
         Update video processing status.
@@ -35,7 +36,7 @@ class SupabaseService(Protocol):
         video_id: str,
         frame_count: Optional[int] = None,
         duration_seconds: Optional[float] = None,
-        cropped_frames_version: Optional[int] = None
+        cropped_frames_version: Optional[int] = None,
     ) -> None:
         """
         Update video metadata after processing.
@@ -54,7 +55,7 @@ class SupabaseService(Protocol):
         video_id: str,
         database_name: str,
         lock_holder_user_id: Optional[str] = None,
-        timeout_seconds: int = 300
+        timeout_seconds: int = 300,
     ) -> bool:
         """
         Acquire server lock on video database.
@@ -103,11 +104,7 @@ class SupabaseService(Protocol):
         """
         ...
 
-    def release_server_lock(
-        self,
-        video_id: str,
-        database_name: str
-    ) -> None:
+    def release_server_lock(self, video_id: str, database_name: str) -> None:
         """
         Release server lock on video database.
 
@@ -116,7 +113,6 @@ class SupabaseService(Protocol):
             database_name: Database name (e.g., 'layout', 'captions')
         """
         ...
-
 
     # Tenant information
     def get_tenant_tier(self, tenant_id: str) -> str:
@@ -152,7 +148,12 @@ class SupabaseServiceImpl:
     Adapted from /services/orchestrator/supabase_client.py
     """
 
-    def __init__(self, supabase_url: str, supabase_key: str, schema: str = "captionacc_production"):
+    def __init__(
+        self,
+        supabase_url: str,
+        supabase_key: str,
+        schema: str = "captionacc_production",
+    ):
         """
         Initialize Supabase client.
 
@@ -173,7 +174,7 @@ class SupabaseServiceImpl:
         video_id: str,
         status: Optional[str] = None,
         caption_status: Optional[str] = None,
-        error_message: Optional[str] = None
+        error_message: Optional[str] = None,
     ) -> None:
         """
         Update video processing status.
@@ -207,7 +208,7 @@ class SupabaseServiceImpl:
         video_id: str,
         frame_count: Optional[int] = None,
         duration_seconds: Optional[float] = None,
-        cropped_frames_version: Optional[int] = None
+        cropped_frames_version: Optional[int] = None,
     ) -> None:
         """
         Update video metadata after processing.
@@ -243,7 +244,7 @@ class SupabaseServiceImpl:
         video_id: str,
         database_name: str,
         lock_holder_user_id: Optional[str] = None,
-        timeout_seconds: int = 300
+        timeout_seconds: int = 300,
     ) -> bool:
         """
         Acquire server lock on video database.
@@ -283,7 +284,7 @@ class SupabaseServiceImpl:
         )
 
         # Handle None response (e.g., when query returns 406 Not Acceptable)
-        state = getattr(response, 'data', None) if response else None
+        state = getattr(response, "data", None) if response else None
 
         # If state doesn't exist, we need to get tenant_id from videos table
         if not state:
@@ -306,18 +307,20 @@ class SupabaseServiceImpl:
             # Create the state record with the lock already acquired
             now = datetime.now(timezone.utc).isoformat()
             try:
-                self.client.schema(self.schema).table("video_database_state").insert({
-                    "video_id": video_id,
-                    "database_name": database_name,
-                    "tenant_id": tenant_id,
-                    "server_version": 0,
-                    "wasabi_version": 0,
-                    "wasabi_synced_at": now,
-                    "lock_holder_user_id": lock_holder_user_id,
-                    "lock_type": "server",
-                    "locked_at": now,
-                    "last_activity_at": now,
-                }).execute()
+                self.client.schema(self.schema).table("video_database_state").insert(
+                    {
+                        "video_id": video_id,
+                        "database_name": database_name,
+                        "tenant_id": tenant_id,
+                        "server_version": 0,
+                        "wasabi_version": 0,
+                        "wasabi_synced_at": now,
+                        "lock_holder_user_id": lock_holder_user_id,
+                        "lock_type": "server",
+                        "locked_at": now,
+                        "last_activity_at": now,
+                    }
+                ).execute()
                 return True
             except Exception:
                 # Insert failed (possibly race condition), lock not acquired
@@ -351,11 +354,7 @@ class SupabaseServiceImpl:
             # If update fails (e.g., race condition), lock was not acquired
             return False
 
-    def release_server_lock(
-        self,
-        video_id: str,
-        database_name: str
-    ) -> None:
+    def release_server_lock(self, video_id: str, database_name: str) -> None:
         """
         Release server lock on video database.
 
@@ -363,11 +362,13 @@ class SupabaseServiceImpl:
             video_id: Video UUID
             database_name: Database name (e.g., 'layout', 'captions')
         """
-        self.client.schema(self.schema).table("video_database_state").update({
-            "lock_holder_user_id": None,
-            "lock_type": None,
-            "locked_at": None,
-        }).eq("video_id", video_id).eq("database_name", database_name).execute()
+        self.client.schema(self.schema).table("video_database_state").update(
+            {
+                "lock_holder_user_id": None,
+                "lock_type": None,
+                "locked_at": None,
+            }
+        ).eq("video_id", video_id).eq("database_name", database_name).execute()
 
     def get_tenant_tier(self, tenant_id: str) -> str:
         """
@@ -446,7 +447,9 @@ class SupabaseServiceImpl:
             "created_at": video.get("uploaded_at"),
             "status": video.get("status"),
             "duration_seconds": video.get("duration_seconds"),
-            "current_cropped_frames_version": video.get("current_cropped_frames_version"),
+            "current_cropped_frames_version": video.get(
+                "current_cropped_frames_version"
+            ),
             "captions_db_key": video.get("captions_db_key"),
             "prefect_flow_run_id": video.get("prefect_flow_run_id"),
         }

@@ -361,8 +361,14 @@ class TestWebhookSecurity:
         call_kwargs = mock_trigger_prefect_flow.call_args.kwargs
         assert call_kwargs["flow_name"] == "captionacc-video-initial-processing"
         assert call_kwargs["parameters"]["video_id"] == test_payload["record"]["id"]
-        assert call_kwargs["parameters"]["tenant_id"] == test_payload["record"]["tenant_id"]
-        assert call_kwargs["parameters"]["storage_key"] == test_payload["record"]["storage_key"]
+        assert (
+            call_kwargs["parameters"]["tenant_id"]
+            == test_payload["record"]["tenant_id"]
+        )
+        assert (
+            call_kwargs["parameters"]["storage_key"]
+            == test_payload["record"]["storage_key"]
+        )
 
     async def test_webhook_success_premium_tier_higher_priority(
         self,
@@ -504,4 +510,6 @@ class TestWebhookSecurity:
         assert "wrong-webhook-secret" not in response_text  # pragma: allowlist secret
 
         # Should only have generic error message
-        assert "invalid webhook secret" in response_text.lower()  # pragma: allowlist secret
+        assert (
+            "invalid webhook secret" in response_text.lower()
+        )  # pragma: allowlist secret

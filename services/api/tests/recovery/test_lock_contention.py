@@ -8,6 +8,7 @@ Note: This file contains unit tests for core lock behavior. For integration test
 covering lock lifecycle scenarios (timeout/retry, idempotence, sequential acquisition),
 see LOCK_INTEGRATION_TEST_GUIDANCE.md for implementation guidance.
 """
+
 import concurrent.futures
 import threading
 from datetime import datetime, timedelta, timezone
@@ -40,7 +41,9 @@ class TestLockContention:
         shared_lock_state = {}
         state_lock = threading.Lock()
 
-        def mock_acquire_lock(video_id, database_name, lock_holder_user_id=None, timeout_seconds=300):
+        def mock_acquire_lock(
+            video_id, database_name, lock_holder_user_id=None, timeout_seconds=300
+        ):
             """Simulates acquire_server_lock with thread-safe state."""
             lock_key = f"{video_id}:{database_name}"
 
@@ -55,7 +58,7 @@ class TestLockContention:
                 # Acquire lock
                 shared_lock_state[lock_key] = {
                     "holder": lock_holder_user_id,
-                    "locked_at": datetime.now(timezone.utc)
+                    "locked_at": datetime.now(timezone.utc),
                 }
                 return True
 
@@ -65,7 +68,9 @@ class TestLockContention:
         results = []
 
         def try_acquire(thread_id):
-            success = mock_acquire_lock(video_id, database_name, lock_holder_user_id=f"user-{thread_id}")
+            success = mock_acquire_lock(
+                video_id, database_name, lock_holder_user_id=f"user-{thread_id}"
+            )
             return success
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
@@ -74,7 +79,9 @@ class TestLockContention:
 
         # Verify exactly one succeeded
         successful_locks = sum(results)
-        assert successful_locks == 1, f"Expected 1 lock acquisition, got {successful_locks}"
+        assert successful_locks == 1, (
+            f"Expected 1 lock acquisition, got {successful_locks}"
+        )
         assert results.count(False) == 9, "Expected 9 failed lock acquisitions"
 
     def test_stale_lock_cleanup(self):
@@ -98,7 +105,7 @@ class TestLockContention:
             timestamp and force-releases locks older than timeout_seconds.
         """
         # Simulate stale lock scenario
-        with patch('supabase.create_client') as mock_create:
+        with patch("supabase.create_client") as mock_create:
             mock_client = Mock()
             mock_create.return_value = mock_client
 
@@ -125,7 +132,7 @@ class TestLockContention:
             - Returns False (not acquired)
             - No exception raised
         """
-        with patch('supabase.create_client') as mock_create:
+        with patch("supabase.create_client") as mock_create:
             mock_client = Mock()
             mock_create.return_value = mock_client
 
@@ -161,13 +168,12 @@ class TestLockContention:
             service = SupabaseServiceImpl(
                 supabase_url="https://test.supabase.co",
                 supabase_key="test-key",  # pragma: allowlist secret
-                schema="test_schema"
+                schema="test_schema",
             )
 
             # Attempt to acquire lock on nonexistent video
             result = service.acquire_server_lock(
-                video_id="nonexistent-video",
-                database_name="layout"
+                video_id="nonexistent-video", database_name="layout"
             )
 
             assert result is False, "Lock acquisition should fail for nonexistent video"

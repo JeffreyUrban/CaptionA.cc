@@ -33,19 +33,13 @@ def _convert_normalized_to_pixels(
     # Validate normalized coordinates are in valid range
     for name, value in [("left", left), ("top", top), ("right", right), ("bottom", bottom)]:
         if not (0.0 <= value <= 1.0):
-            raise ValueError(
-                f"Normalized crop coordinate '{name}' must be between 0.0 and 1.0, got {value}"
-            )
+            raise ValueError(f"Normalized crop coordinate '{name}' must be between 0.0 and 1.0, got {value}")
 
     # Validate logical ordering
     if left >= right:
-        raise ValueError(
-            f"crop_normalized left ({left}) must be less than right ({right})"
-        )
+        raise ValueError(f"crop_normalized left ({left}) must be less than right ({right})")
     if top >= bottom:
-        raise ValueError(
-            f"crop_normalized top ({top}) must be less than bottom ({bottom})"
-        )
+        raise ValueError(f"crop_normalized top ({top}) must be less than bottom ({bottom})")
 
     # Convert to pixels using same formula as CropRegionHelper
     left_px = int(left * frame_width)
@@ -71,8 +65,7 @@ def _validate_crop_params(
     """
     if crop_region is not None and crop_normalized is not None:
         raise ValueError(
-            "Cannot specify both crop_region (pixels) and crop_normalized (0.0-1.0). "
-            "Use only one crop parameter."
+            "Cannot specify both crop_region (pixels) and crop_normalized (0.0-1.0). Use only one crop parameter."
         )
 
 
@@ -134,9 +127,7 @@ def extract_frames_gpu(
     # Convert normalized crop to pixels if provided
     effective_crop_region = crop_region
     if crop_normalized is not None:
-        effective_crop_region = _convert_normalized_to_pixels(
-            crop_normalized, frame_width, frame_height
-        )
+        effective_crop_region = _convert_normalized_to_pixels(crop_normalized, frame_width, frame_height)
 
     # Calculate number of output frames
     num_output_frames = int(video_duration * frame_rate_hz)
@@ -180,7 +171,8 @@ def extract_frames_gpu(
 
         # Periodic logging (every 100 frames or at the end)
         if (frame_idx + 1) % 100 == 0 or (frame_idx + 1) == num_output_frames:
-            print(f"Extracted {frame_idx + 1}/{num_output_frames} frames ({((frame_idx + 1) / num_output_frames * 100):.1f}%)")
+            progress_pct = (frame_idx + 1) / num_output_frames * 100
+            print(f"Extracted {frame_idx + 1}/{num_output_frames} frames ({progress_pct:.1f}%)")
 
     decoder.close()
     return frames
@@ -242,7 +234,7 @@ def extract_frames_for_montage(
     # Split into batches
     batches = []
     for i in range(0, len(all_frames), max_frames_per_batch):
-        batch_frames = all_frames[i:i + max_frames_per_batch]
+        batch_frames = all_frames[i : i + max_frames_per_batch]
         # Frame indices use convention: frame_index = time_in_seconds * 10
         # This matches the existing full_frames convention
         batch_indices = [int((j / frame_rate_hz) * 10) for j in range(i, i + len(batch_frames))]

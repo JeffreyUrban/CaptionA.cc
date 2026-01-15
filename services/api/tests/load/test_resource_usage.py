@@ -45,9 +45,9 @@ class TestResourceUsage:
         memory_increase = peak_memory - baseline_memory
 
         # Memory increase should be < 500 MB
-        assert (
-            memory_increase < 500
-        ), f"Memory increased by {memory_increase:.2f} MB (exceeded 500 MB limit)"
+        assert memory_increase < 500, (
+            f"Memory increased by {memory_increase:.2f} MB (exceeded 500 MB limit)"
+        )
 
         # Verify most requests succeeded
         success_count = sum(1 for r in results if r == 200)
@@ -76,7 +76,9 @@ class TestResourceUsage:
             nonlocal call_count
             call_count += 1
             # Use original context manager
-            async with original_get_database(self, tenant_id, video_id, writable) as conn:
+            async with original_get_database(
+                self, tenant_id, video_id, writable
+            ) as conn:
                 yield conn
 
         with patch.object(DatabaseManager, "get_database", track_connections):
@@ -129,15 +131,13 @@ class TestResourceUsage:
 
                 # Health endpoint should work
                 response = client.get("/health")
-                assert (
-                    response.status_code == 200
-                ), f"Health check failed with status {response.status_code}"
+                assert response.status_code == 200, (
+                    f"Health check failed with status {response.status_code}"
+                )
                 assert response.json()["status"] == "healthy"
 
                 # Webhooks should return 503 (service unavailable) when Prefect is down
-                with patch(
-                    "app.routers.webhooks.trigger_prefect_flow"
-                ) as mock_trigger:
+                with patch("app.routers.webhooks.trigger_prefect_flow") as mock_trigger:
                     mock_trigger.side_effect = Exception("Prefect not available")
 
                     webhook_response = client.post(
@@ -151,7 +151,9 @@ class TestResourceUsage:
                                 "storage_key": "test/path/video.mp4",
                             },
                         },
-                        headers={"Authorization": "Bearer test-secret"},  # pragma: allowlist secret
+                        headers={
+                            "Authorization": "Bearer test-secret"
+                        },  # pragma: allowlist secret
                     )
 
                     # Should return error status when Prefect is unavailable
@@ -194,20 +196,18 @@ class TestResourceUsage:
                 mock_process.pid = 12345
                 mock_process.wait = AsyncMock()
 
-                with patch(
-                    "asyncio.create_subprocess_exec", return_value=mock_process
-                ):
+                with patch("asyncio.create_subprocess_exec", return_value=mock_process):
                     # Start the worker
                     with caplog.at_level(logging.INFO):
                         await worker_manager.start()
 
                     # Verify worker started
-                    assert (
-                        worker_manager.worker_process is not None
-                    ), "Worker process should be created"
-                    assert (
-                        worker_manager.monitor_task is not None
-                    ), "Monitor task should be created"
+                    assert worker_manager.worker_process is not None, (
+                        "Worker process should be created"
+                    )
+                    assert worker_manager.monitor_task is not None, (
+                        "Monitor task should be created"
+                    )
 
                     # Simulate worker crash by configuring the mock to return crash status
                     # Configure mock's returncode property to simulate crash

@@ -163,7 +163,9 @@ def test_create_ocr_visualization_3d(image_size, sample_boxes):
 @pytest.mark.unit
 def test_create_ocr_visualization_enum(image_size, sample_boxes):
     """Test factory function with enum variant."""
-    viz = create_ocr_visualization(image_size, sample_boxes, OCRVisualizationVariant.BOUNDARIES)
+    viz = create_ocr_visualization(
+        image_size, sample_boxes, OCRVisualizationVariant.BOUNDARIES
+    )
 
     assert viz.shape == (480, 640)
     assert viz.dtype == np.uint8
@@ -186,8 +188,12 @@ def test_confidence_normalization(image_size):
         {"x": 85, "y": 20, "width": 40, "height": 15, "confidence": 0.92},
     ]
 
-    viz_normalized = visualize_boxes_boundaries(image_size, boxes, normalize_confidence=True)
-    viz_unnormalized = visualize_boxes_boundaries(image_size, boxes, normalize_confidence=False)
+    viz_normalized = visualize_boxes_boundaries(
+        image_size, boxes, normalize_confidence=True
+    )
+    viz_unnormalized = visualize_boxes_boundaries(
+        image_size, boxes, normalize_confidence=False
+    )
 
     # Normalized should use full range (brighter)
     assert viz_normalized.max() > viz_unnormalized.max()
@@ -254,9 +260,27 @@ def test_boxes_outside_image_bounds(image_size):
     """Test visualization handles boxes outside image bounds gracefully."""
     # Boxes partially or fully outside image
     boxes = [
-        {"x": -10, "y": 20, "width": 30, "height": 15, "confidence": 0.95},  # Partially outside left
-        {"x": 630, "y": 20, "width": 30, "height": 15, "confidence": 0.88},  # Partially outside right
-        {"x": 700, "y": 500, "width": 30, "height": 15, "confidence": 0.92},  # Fully outside
+        {
+            "x": -10,
+            "y": 20,
+            "width": 30,
+            "height": 15,
+            "confidence": 0.95,
+        },  # Partially outside left
+        {
+            "x": 630,
+            "y": 20,
+            "width": 30,
+            "height": 15,
+            "confidence": 0.88,
+        },  # Partially outside right
+        {
+            "x": 700,
+            "y": 500,
+            "width": 30,
+            "height": 15,
+            "confidence": 0.92,
+        },  # Fully outside
     ]
 
     # Should not crash

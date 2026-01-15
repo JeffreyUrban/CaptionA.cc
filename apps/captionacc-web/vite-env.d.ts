@@ -50,3 +50,9 @@ declare module '*.svg' {
   const src: string
   export default src
 }
+
+// CR-SQLite WASM module
+declare module '@vlcn.io/crsqlite-wasm' {
+  const initCRSQLite: () => Promise<unknown>
+  export default initCRSQLite
+}

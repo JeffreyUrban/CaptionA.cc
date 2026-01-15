@@ -13,8 +13,13 @@ import pytest
 import torch
 from PIL import Image
 
-from caption_frame_extents.inference.batch_predictor import BatchCaptionFrameExtentsPredictor
-from caption_frame_extents.inference.caption_frame_extents_db import PairResult, create_caption_frame_extents_db
+from caption_frame_extents.inference.batch_predictor import (
+    BatchCaptionFrameExtentsPredictor,
+)
+from caption_frame_extents.inference.caption_frame_extents_db import (
+    PairResult,
+    create_caption_frame_extents_db,
+)
 from caption_frame_extents.inference.quality_checks import run_quality_checks
 
 
@@ -95,7 +100,9 @@ class TestSequentialFrameInference:
         layout_db_path = create_mock_layout_db(tmp_path)
         checkpoint_path = create_mock_checkpoint(tmp_path)
 
-        with patch("caption_frame_extents.inference.batch_predictor.create_model") as mock_create:
+        with patch(
+            "caption_frame_extents.inference.batch_predictor.create_model"
+        ) as mock_create:
             mock_model = MagicMock()
             mock_model.eval = MagicMock(return_value=None)
             mock_model.load_state_dict = MagicMock(return_value=None)
@@ -134,7 +141,13 @@ class TestSequentialFrameInference:
 
         assert len(results) == 9
         for result in results:
-            assert result["predicted_label"] in ["same", "different", "empty_empty", "empty_valid", "valid_empty"]
+            assert result["predicted_label"] in [
+                "same",
+                "different",
+                "empty_empty",
+                "empty_valid",
+                "valid_empty",
+            ]
 
     @pytest.mark.integration
     def test_bidirectional_inference_pattern(self, mock_predictor):
@@ -158,7 +171,9 @@ class TestSequentialFrameInference:
 
         # Split back into forward/backward
         forward_predictions = [all_predictions[i * 2] for i in range(len(frame_pairs))]
-        backward_predictions = [all_predictions[i * 2 + 1] for i in range(len(frame_pairs))]
+        backward_predictions = [
+            all_predictions[i * 2 + 1] for i in range(len(frame_pairs))
+        ]
 
         assert len(forward_predictions) == 4
         assert len(backward_predictions) == 4
@@ -181,7 +196,13 @@ class TestSequentialFrameInference:
 
         results = mock_predictor.predict_batch(frame_pairs)
 
-        expected_classes = ["same", "different", "empty_empty", "empty_valid", "valid_empty"]
+        expected_classes = [
+            "same",
+            "different",
+            "empty_empty",
+            "empty_valid",
+            "valid_empty",
+        ]
         for result in results:
             for cls in expected_classes:
                 assert cls in result["probabilities"]
@@ -399,7 +420,9 @@ class TestEndToEndSequentialInference:
         layout_db_path = create_mock_layout_db(tmp_path)
         checkpoint_path = create_mock_checkpoint(tmp_path)
 
-        with patch("caption_frame_extents.inference.batch_predictor.create_model") as mock_create:
+        with patch(
+            "caption_frame_extents.inference.batch_predictor.create_model"
+        ) as mock_create:
             mock_model = MagicMock()
             mock_model.eval = MagicMock(return_value=None)
             mock_model.load_state_dict = MagicMock(return_value=None)
@@ -414,7 +437,12 @@ class TestEndToEndSequentialInference:
                 for i in range(batch_size):
                     idx = call_count[0] + i
                     # Simulate caption frame extents at positions 5 and 15
-                    if idx in [5, 15, 10 + 5, 10 + 15]:  # Forward and backward positions
+                    if idx in [
+                        5,
+                        15,
+                        10 + 5,
+                        10 + 15,
+                    ]:  # Forward and backward positions
                         logits[i, 1] = 2.0  # "different"
                     else:
                         logits[i, 0] = 2.0  # "same"
@@ -434,7 +462,9 @@ class TestEndToEndSequentialInference:
             return predictor
 
     @pytest.mark.integration
-    def test_full_pipeline_with_quality_checks(self, mock_predictor_with_caption_frame_extents_detection, tmp_path):
+    def test_full_pipeline_with_quality_checks(
+        self, mock_predictor_with_caption_frame_extents_detection, tmp_path
+    ):
         """Test full pipeline: inference -> database -> quality checks."""
         from datetime import datetime
 
@@ -448,10 +478,18 @@ class TestEndToEndSequentialInference:
             bidirectional_pairs.append((frames[f1_idx], frames[f2_idx]))
             bidirectional_pairs.append((frames[f2_idx], frames[f1_idx]))
 
-        all_predictions = mock_predictor_with_caption_frame_extents_detection.predict_batch(bidirectional_pairs)
+        all_predictions = (
+            mock_predictor_with_caption_frame_extents_detection.predict_batch(
+                bidirectional_pairs
+            )
+        )
 
-        forward_predictions = [all_predictions[i * 2] for i in range(len(frame_pairs_indices))]
-        backward_predictions = [all_predictions[i * 2 + 1] for i in range(len(frame_pairs_indices))]
+        forward_predictions = [
+            all_predictions[i * 2] for i in range(len(frame_pairs_indices))
+        ]
+        backward_predictions = [
+            all_predictions[i * 2 + 1] for i in range(len(frame_pairs_indices))
+        ]
 
         # Create PairResults
         pair_results = []

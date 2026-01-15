@@ -3,6 +3,7 @@ Dynamic priority calculation for Prefect flow runs.
 Priority range: 0-100 (higher = more urgent)
 Age-based boosting is enabled by default to prevent starvation.
 """
+
 from datetime import datetime, timezone
 from enum import IntEnum
 from typing import Optional
@@ -10,6 +11,7 @@ from typing import Optional
 
 class TenantTier(IntEnum):
     """Base priority by tenant tier"""
+
     FREE = 50
     PREMIUM = 70
     ENTERPRISE = 90
@@ -21,7 +23,7 @@ def calculate_flow_priority(
     enable_age_boosting: bool = True,
     age_boost_per_minutes: int = 60,
     age_boost_cap: int = 20,
-    base_priority_override: Optional[int] = None
+    base_priority_override: Optional[int] = None,
 ) -> int:
     """
     Calculate dynamic priority for flow execution.
@@ -84,10 +86,7 @@ def calculate_flow_priority(
 
 
 def get_priority_tags(
-    priority: int,
-    tenant_id: str,
-    tenant_tier: str,
-    age_boosting_enabled: bool
+    priority: int, tenant_id: str, tenant_tier: str, age_boosting_enabled: bool
 ) -> list[str]:
     """
     Generate Prefect tags for flow run observability.
@@ -109,6 +108,6 @@ def get_priority_tags(
         f"tenant:{tenant_id}",
         f"tier:{tenant_tier}",
         f"priority:{priority}",
-        f"age-boosting:{'enabled' if age_boosting_enabled else 'disabled'}"
+        f"age-boosting:{'enabled' if age_boosting_enabled else 'disabled'}",
     ]
     return tags

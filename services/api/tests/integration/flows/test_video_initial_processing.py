@@ -18,9 +18,9 @@ from unittest.mock import Mock, patch, MagicMock
 from prefect.testing.utilities import prefect_test_harness
 
 # Mock modal and extract_crop_frames_and_infer_extents before importing flows (not installed in test environment)
-sys.modules['modal'] = MagicMock()
-sys.modules['extract_crop_frames_and_infer_extents'] = MagicMock()
-sys.modules['extract_crop_frames_and_infer_extents.models'] = MagicMock()
+sys.modules["modal"] = MagicMock()
+sys.modules["extract_crop_frames_and_infer_extents"] = MagicMock()
+sys.modules["extract_crop_frames_and_infer_extents.models"] = MagicMock()
 
 from app.flows.video_initial_processing import video_initial_processing
 
@@ -42,14 +42,16 @@ class TestVideoInitialProcessingFlow:
         """Mock all external services."""
         # Set required environment variables for the flow
         env_vars = {
-            'SUPABASE_URL': 'http://test-supabase.com',
-            'SUPABASE_SERVICE_ROLE_KEY': 'test-key',
-            'SUPABASE_SCHEMA': 'test_schema',
+            "SUPABASE_URL": "http://test-supabase.com",
+            "SUPABASE_SERVICE_ROLE_KEY": "test-key",
+            "SUPABASE_SCHEMA": "test_schema",
         }
 
         with patch.dict(os.environ, env_vars):
             # Patch SupabaseServiceImpl at module level
-            with patch('app.services.supabase_service.SupabaseServiceImpl') as mock_supabase_cls:
+            with patch(
+                "app.services.supabase_service.SupabaseServiceImpl"
+            ) as mock_supabase_cls:
                 # Create mock Supabase service instance
                 supabase = Mock()
                 supabase.update_video_status = Mock()
@@ -69,12 +71,13 @@ class TestVideoInitialProcessingFlow:
                     processing_duration_seconds=45.0,
                     full_frames_key="tenant/client/videos/video-1/full_frames/",
                     ocr_db_key="tenant/server/videos/video-1/raw-ocr.db.gz",  # pragma: allowlist secret
-                    layout_db_key="tenant/server/videos/video-1/layout.db.gz"  # pragma: allowlist secret
+                    layout_db_key="tenant/server/videos/video-1/layout.db.gz",  # pragma: allowlist secret
                 )
 
                 # Configure the global modal mock (sys.modules['modal'])
                 # This ensures when tasks import modal, they get our configured mock
                 import modal
+
                 mock_app = Mock()
                 mock_function = Mock()
                 mock_function.remote = Mock(return_value=extract_result)
@@ -91,7 +94,7 @@ class TestVideoInitialProcessingFlow:
                     "modal": modal,
                     "modal_app": mock_app,
                     "modal_function": mock_function,
-                    "extract_result": extract_result
+                    "extract_result": extract_result,
                 }
 
     @pytest.mark.asyncio
@@ -101,7 +104,7 @@ class TestVideoInitialProcessingFlow:
         result = await video_initial_processing(
             video_id="video-123",
             tenant_id="tenant-456",
-            storage_key="tenant-456/client/videos/video-123/video.mp4"
+            storage_key="tenant-456/client/videos/video-123/video.mp4",
         )
 
         # Verify flow completed successfully
@@ -133,7 +136,9 @@ class TestVideoInitialProcessingFlow:
         modal_function = mock_services["modal_function"]
         assert modal_function.remote.called
         modal_call = modal_function.remote.call_args
-        assert modal_call[1]["video_key"] == "tenant-456/client/videos/video-123/video.mp4"
+        assert (
+            modal_call[1]["video_key"] == "tenant-456/client/videos/video-123/video.mp4"
+        )
         assert modal_call[1]["tenant_id"] == "tenant-456"
         assert modal_call[1]["video_id"] == "video-123"
         assert modal_call[1]["frame_rate"] == 0.1
@@ -158,7 +163,7 @@ class TestVideoInitialProcessingFlow:
             await video_initial_processing(
                 video_id="video-123",
                 tenant_id="tenant-456",
-                storage_key="tenant-456/client/videos/video-123/video.mp4"
+                storage_key="tenant-456/client/videos/video-123/video.mp4",
             )
 
         # Verify error message
@@ -178,8 +183,7 @@ class TestVideoInitialProcessingFlow:
 
         # Last call should be error status
         error_calls = [
-            call for call in status_calls
-            if call[1].get("status") == "error"
+            call for call in status_calls if call[1].get("status") == "error"
         ]
         assert len(error_calls) > 0
         error_call = error_calls[0]
@@ -200,7 +204,7 @@ class TestVideoInitialProcessingFlow:
         result = await video_initial_processing(
             video_id="video-123",
             tenant_id="tenant-456",
-            storage_key="tenant-456/client/videos/video-123/video.mp4"
+            storage_key="tenant-456/client/videos/video-123/video.mp4",
         )
 
         # Verify flow completed successfully despite metadata update failure
@@ -234,7 +238,7 @@ class TestVideoInitialProcessingFlow:
             await video_initial_processing(
                 video_id="video-123",
                 tenant_id="tenant-456",
-                storage_key="tenant-456/client/videos/video-123/video.mp4"
+                storage_key="tenant-456/client/videos/video-123/video.mp4",
             )
 
         # Verify error message
@@ -251,7 +255,7 @@ class TestVideoInitialProcessingFlow:
         result = await video_initial_processing(
             video_id="video-123",
             tenant_id="tenant-456",
-            storage_key="tenant-456/client/videos/video-123/video.mp4"
+            storage_key="tenant-456/client/videos/video-123/video.mp4",
         )
 
         # Verify Modal function returns expected result structure
@@ -278,7 +282,7 @@ class TestVideoInitialProcessingFlow:
         result = await video_initial_processing(
             video_id="different-video-789",
             tenant_id="different-tenant-999",
-            storage_key="different-tenant-999/client/videos/different-video-789/upload.mp4"
+            storage_key="different-tenant-999/client/videos/different-video-789/upload.mp4",
         )
 
         # Verify the flow used the correct parameters
@@ -293,13 +297,18 @@ class TestVideoInitialProcessingFlow:
         modal_call = modal_function.remote.call_args
         assert modal_call[1]["video_id"] == "different-video-789"
         assert modal_call[1]["tenant_id"] == "different-tenant-999"
-        assert modal_call[1]["video_key"] == "different-tenant-999/client/videos/different-video-789/upload.mp4"
+        assert (
+            modal_call[1]["video_key"]
+            == "different-tenant-999/client/videos/different-video-789/upload.mp4"
+        )
 
         # Verify result
         assert result["video_id"] == "different-video-789"
 
     @pytest.mark.asyncio
-    async def test_flow_metadata_update_failure_does_not_block_completion(self, mock_services):
+    async def test_flow_metadata_update_failure_does_not_block_completion(
+        self, mock_services
+    ):
         """Test that metadata update failure logs error but allows flow completion."""
         # Mock metadata update to fail
         mock_services["supabase"].update_video_metadata.side_effect = Exception(
@@ -310,7 +319,7 @@ class TestVideoInitialProcessingFlow:
         result = await video_initial_processing(
             video_id="video-123",
             tenant_id="tenant-456",
-            storage_key="tenant-456/client/videos/video-123/video.mp4"
+            storage_key="tenant-456/client/videos/video-123/video.mp4",
         )
 
         # Verify flow completed successfully
@@ -336,7 +345,7 @@ class TestVideoInitialProcessingFlow:
         await video_initial_processing(
             video_id="video-123",
             tenant_id="tenant-456",
-            storage_key="tenant-456/client/videos/video-123/video.mp4"
+            storage_key="tenant-456/client/videos/video-123/video.mp4",
         )
 
         # Verify status update call order
@@ -365,7 +374,7 @@ class TestVideoInitialProcessingFlow:
         result = await video_initial_processing(
             video_id="video-123",
             tenant_id="tenant-456",
-            storage_key="tenant-456/client/videos/video-123/video.mp4"
+            storage_key="tenant-456/client/videos/video-123/video.mp4",
         )
 
         # Verify result reflects zero frames

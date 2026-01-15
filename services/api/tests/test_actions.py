@@ -41,7 +41,9 @@ def mock_action_layout_manager(seeded_action_layout_db: Path):
             self.db_path = db_path
 
         @asynccontextmanager
-        async def get_database(self, tenant_id: str, video_id: str, writable: bool = False):
+        async def get_database(
+            self, tenant_id: str, video_id: str, writable: bool = False
+        ):
             conn = sqlite3.connect(str(self.db_path))
             conn.row_factory = sqlite3.Row
             try:
@@ -75,12 +77,15 @@ async def actions_client(
 
     app.dependency_overrides[get_auth_context] = lambda: auth_context
 
-    with patch(
-        "app.routers.actions.get_ocr_database_manager",
-        return_value=mock_seeded_ocr_database_manager,
-    ), patch(
-        "app.routers.actions.get_layout_database_manager",
-        return_value=mock_action_layout_manager,
+    with (
+        patch(
+            "app.routers.actions.get_ocr_database_manager",
+            return_value=mock_seeded_ocr_database_manager,
+        ),
+        patch(
+            "app.routers.actions.get_layout_database_manager",
+            return_value=mock_action_layout_manager,
+        ),
     ):
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:

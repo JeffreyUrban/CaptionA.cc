@@ -119,7 +119,10 @@ def main():
     """Run migration on all dataset databases."""
 
     # Find all dataset databases
-    datasets_dir = Path(__file__).parent.parent / "../../local/models/caption_frame_extents/datasets"
+    datasets_dir = (
+        Path(__file__).parent.parent
+        / "../../local/models/caption_frame_extents/datasets"
+    )
     datasets_dir = datasets_dir.resolve()
 
     if not datasets_dir.exists():

@@ -7,7 +7,6 @@
  * This is the foundation layer for the CR-SQLite sync infrastructure.
  */
 
-import type { DatabaseName } from '~/config'
 import {
   wasmLoadError,
   crsqliteInitError,
@@ -15,8 +14,9 @@ import {
   queryError,
   toDatabaseError,
   logDatabaseError,
-  type DatabaseError,
 } from './database-errors'
+
+import type { DatabaseName } from '~/config'
 
 // =============================================================================
 // Type Definitions
@@ -411,6 +411,26 @@ export class CRSQLiteDatabase {
   }
 
   /**
+   * Helper to build a row object from a prepared statement.
+   * Extracted to reduce nesting depth in query().
+   */
+  private buildRowFromStatement(
+    sqliteApi: SQLiteAPI,
+    stmt: number,
+    columns: string[],
+    columnCount: number
+  ): Record<string, unknown> {
+    const row: Record<string, unknown> = {}
+    for (let i = 0; i < columnCount; i++) {
+      const colName = columns[i]
+      if (colName !== undefined) {
+        row[colName] = sqliteApi.column(stmt, i)
+      }
+    }
+    return row
+  }
+
+  /**
    * Execute a SQL query and return results.
    *
    * @param sql SQL query
@@ -447,13 +467,7 @@ export class CRSQLiteDatabase {
           // Fetch rows
           // SQLITE_ROW = 100
           while ((await sqliteApi.step(prepared.stmt)) === 100) {
-            const row: Record<string, unknown> = {}
-            for (let i = 0; i < columnCount; i++) {
-              const colName = columns[i]
-              if (colName !== undefined) {
-                row[colName] = sqliteApi.column(prepared.stmt, i)
-              }
-            }
+            const row = this.buildRowFromStatement(sqliteApi, prepared.stmt, columns, columnCount)
             rows.push(row as T)
           }
         } finally {
@@ -555,7 +569,7 @@ export class CRSQLiteDatabase {
     await this.initializeMetadata()
     return {
       version: this._version,
-      siteId: this._siteId || new Uint8Array(16),
+      siteId: this._siteId ?? new Uint8Array(16),
     }
   }
 

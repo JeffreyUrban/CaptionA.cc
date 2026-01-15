@@ -25,7 +25,9 @@ class GoogleVisionBackend(OCRBackend):
 
         if credentials_json:
             service_account_info = json.loads(credentials_json)
-            credentials = service_account.Credentials.from_service_account_info(service_account_info)
+            credentials = service_account.Credentials.from_service_account_info(
+                service_account_info
+            )
             self.client = vision.ImageAnnotatorClient(credentials=credentials)
         else:
             # Fall back to default credentials (GOOGLE_APPLICATION_CREDENTIALS)
@@ -55,7 +57,9 @@ class GoogleVisionBackend(OCRBackend):
 
         # Call Google Vision API with language hints
         image_context = {"language_hints": [language]}
-        response = self.client.document_text_detection(image=image, image_context=image_context)
+        response = self.client.document_text_detection(
+            image=image, image_context=image_context
+        )
 
         # Check for errors
         if response.error.message:
@@ -79,7 +83,7 @@ class GoogleVisionBackend(OCRBackend):
                                 # Create CharacterResult
                                 char_result = CharacterResult(
                                     text=symbol.text,
-                                    bbox=BoundingBox(x=x, y=y, width=w, height=h)
+                                    bbox=BoundingBox(x=x, y=y, width=w, height=h),
                                 )
                                 characters.append(char_result)
 
@@ -92,5 +96,5 @@ class GoogleVisionBackend(OCRBackend):
             id="",  # Will be set by caller
             characters=characters,
             text=full_text,
-            char_count=len(characters)
+            char_count=len(characters),
         )

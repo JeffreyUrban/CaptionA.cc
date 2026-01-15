@@ -55,7 +55,9 @@ if modal:
             - {tenant_id}/client/videos/{video_id}/full_frames/frame_NNNNNNNNNN.jpg
             - {tenant_id}/server/videos/{video_id}/fullOCR.db
         """
-        return extract_frames_and_ocr_impl(video_key, tenant_id, video_id, rate_hz, language)
+        return extract_frames_and_ocr_impl(
+            video_key, tenant_id, video_id, rate_hz, language
+        )
 
 else:
     # Modal not available - provide stub for type checking

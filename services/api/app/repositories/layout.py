@@ -122,7 +122,9 @@ class LayoutRepository:
         self.conn.commit()
         return self.get_layout_config()  # type: ignore
 
-    def update_layout_config(self, input: VideoLayoutConfigUpdate) -> VideoLayoutConfig | None:
+    def update_layout_config(
+        self, input: VideoLayoutConfigUpdate
+    ) -> VideoLayoutConfig | None:
         """Update crop region and selection region."""
         updates: list[str] = []
         params: list[int | str] = []
@@ -173,7 +175,9 @@ class LayoutRepository:
 
         return self.get_layout_config()
 
-    def update_analysis_results(self, input: AnalysisResultsUpdate) -> VideoLayoutConfig | None:
+    def update_analysis_results(
+        self, input: AnalysisResultsUpdate
+    ) -> VideoLayoutConfig | None:
         """Update layout analysis results from ML model."""
         updates: list[str] = []
         params: list[float | str] = []
@@ -317,7 +321,9 @@ class LayoutRepository:
             input.frameIndex, input.boxIndex, input.labelSource
         )  # type: ignore
 
-    def create_box_labels_batch(self, labels: list[BoxLabelCreate]) -> list[FrameBoxLabel]:
+    def create_box_labels_batch(
+        self, labels: list[BoxLabelCreate]
+    ) -> list[FrameBoxLabel]:
         """Create multiple box labels in a single transaction."""
         created: list[FrameBoxLabel] = []
 

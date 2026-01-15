@@ -44,6 +44,7 @@ from app.services.wasabi_service import WasabiServiceImpl
 # Safety Check: Prevent Accidental E2E Tests on Production
 # =============================================================================
 
+
 def _check_production_safety():
     """
     Safety check to prevent accidentally running E2E tests on production.
@@ -139,13 +140,19 @@ def e2e_settings() -> Settings:
     if not settings.supabase_url:
         raise ValueError("SUPABASE_URL environment variable is required for E2E tests")
     if not settings.supabase_service_role_key:
-        raise ValueError("SUPABASE_SERVICE_ROLE_KEY environment variable is required for E2E tests")
+        raise ValueError(
+            "SUPABASE_SERVICE_ROLE_KEY environment variable is required for E2E tests"
+        )
 
     # Validate required Wasabi settings
     if not settings.effective_wasabi_access_key:
-        raise ValueError("WASABI_ACCESS_KEY_ID or WASABI_ACCESS_KEY_READWRITE required for E2E tests")
+        raise ValueError(
+            "WASABI_ACCESS_KEY_ID or WASABI_ACCESS_KEY_READWRITE required for E2E tests"
+        )
     if not settings.effective_wasabi_secret_key:
-        raise ValueError("WASABI_SECRET_ACCESS_KEY or WASABI_SECRET_KEY_READWRITE required for E2E tests")
+        raise ValueError(
+            "WASABI_SECRET_ACCESS_KEY or WASABI_SECRET_KEY_READWRITE required for E2E tests"
+        )
     if not settings.wasabi_bucket:
         raise ValueError("WASABI_BUCKET environment variable is required for E2E tests")
 
@@ -312,9 +319,9 @@ async def test_video_record(
 
     # Cleanup: Delete video record from Supabase
     try:
-        supabase_service.client.schema(supabase_service.schema).table("videos").delete().eq(
-            "id", e2e_video_id
-        ).execute()
+        supabase_service.client.schema(supabase_service.schema).table(
+            "videos"
+        ).delete().eq("id", e2e_video_id).execute()
     except Exception as e:
         print(f"Warning: Failed to cleanup video record from Supabase: {e}")
 

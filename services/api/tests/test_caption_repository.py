@@ -124,7 +124,9 @@ class TestCreateCaption:
 class TestUpdateCaptionWithOverlapResolution:
     """Tests for update_caption_with_overlap_resolution method."""
 
-    def test_update_caption_frame_extents_no_overlap(self, seeded_repo: CaptionRepository):
+    def test_update_caption_frame_extents_no_overlap(
+        self, seeded_repo: CaptionRepository
+    ):
         """Should update caption frame extents without affecting other captions."""
         result = seeded_repo.update_caption_with_overlap_resolution(
             1,
@@ -137,11 +139,16 @@ class TestUpdateCaptionWithOverlapResolution:
 
         assert result.caption.startFrameIndex == 10
         assert result.caption.endFrameIndex == 90
-        assert result.caption.captionFrameExtentsState == CaptionFrameExtentsState.CONFIRMED
+        assert (
+            result.caption.captionFrameExtentsState
+            == CaptionFrameExtentsState.CONFIRMED
+        )
         # Should create gaps for uncovered ranges
         assert len(result.createdGaps) == 2  # [0-9] and [91-100]
 
-    def test_update_caption_frame_extents_delete_contained(self, seeded_repo: CaptionRepository):
+    def test_update_caption_frame_extents_delete_contained(
+        self, seeded_repo: CaptionRepository
+    ):
         """Should delete captions completely contained in new range."""
         # Expand caption 1 to completely contain caption 2
         result = seeded_repo.update_caption_with_overlap_resolution(
@@ -156,7 +163,9 @@ class TestUpdateCaptionWithOverlapResolution:
         assert result.caption.endFrameIndex == 250
         assert 2 in result.deletedCaptions
 
-    def test_update_caption_frame_extents_trim_overlap(self, seeded_repo: CaptionRepository):
+    def test_update_caption_frame_extents_trim_overlap(
+        self, seeded_repo: CaptionRepository
+    ):
         """Should trim overlapping captions."""
         # Expand caption 1 to partially overlap caption 2
         result = seeded_repo.update_caption_with_overlap_resolution(
@@ -252,10 +261,18 @@ class TestGapMerging:
         """Should merge adjacent gaps when creating new gap."""
         # Create initial gaps
         repo.create_caption(
-            CaptionCreate(startFrameIndex=0, endFrameIndex=50, captionFrameExtentsState=CaptionFrameExtentsState.GAP)
+            CaptionCreate(
+                startFrameIndex=0,
+                endFrameIndex=50,
+                captionFrameExtentsState=CaptionFrameExtentsState.GAP,
+            )
         )
         repo.create_caption(
-            CaptionCreate(startFrameIndex=100, endFrameIndex=150, captionFrameExtentsState=CaptionFrameExtentsState.GAP)
+            CaptionCreate(
+                startFrameIndex=100,
+                endFrameIndex=150,
+                captionFrameExtentsState=CaptionFrameExtentsState.GAP,
+            )
         )
 
         # Create caption in between and then shrink it to create a gap that merges
@@ -279,7 +296,11 @@ class TestGapMerging:
 
         # Check that gaps were created/merged
         all_captions = repo.list_captions(0, 200)
-        gaps = [c for c in all_captions if c.captionFrameExtentsState == CaptionFrameExtentsState.GAP]
+        gaps = [
+            c
+            for c in all_captions
+            if c.captionFrameExtentsState == CaptionFrameExtentsState.GAP
+        ]
 
         # Should have merged gaps: [0-59] and [91-150]
         assert len(gaps) == 2

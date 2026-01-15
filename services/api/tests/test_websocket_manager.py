@@ -217,9 +217,7 @@ class TestWebSocketManagerDisconnect:
         )
         assert active is None
 
-    async def test_disconnect_nonexistent_is_safe(
-        self, ws_manager: WebSocketManager
-    ):
+    async def test_disconnect_nonexistent_is_safe(self, ws_manager: WebSocketManager):
         """Should handle disconnecting nonexistent connection."""
         # Should not raise
         await ws_manager.disconnect("nonexistent-conn")
@@ -258,9 +256,7 @@ class TestWebSocketManagerSendMessage:
         self, ws_manager: WebSocketManager
     ):
         """Should return False when connection doesn't exist."""
-        result = await ws_manager.send_message(
-            "nonexistent", {"type": "test"}
-        )
+        result = await ws_manager.send_message("nonexistent", {"type": "test"})
         assert result is False
 
     async def test_send_message_error_returns_false(
@@ -284,9 +280,7 @@ class TestWebSocketManagerSendMessage:
             user_id=test_user_id,
         )
 
-        result = await ws_manager.send_message(
-            test_connection_id, {"type": "test"}
-        )
+        result = await ws_manager.send_message(test_connection_id, {"type": "test"})
         assert result is False
 
 
@@ -366,9 +360,7 @@ class TestWebSocketManagerNotifications:
         )
 
         changes = [{"table": "test", "pk": "1"}]
-        await ws_manager.send_server_update(
-            test_connection_id, "layout", changes, 5
-        )
+        await ws_manager.send_server_update(test_connection_id, "layout", changes, 5)
 
         mock_websocket.send_json.assert_called()
         call_args = mock_websocket.send_json.call_args[0][0]
@@ -424,7 +416,9 @@ class TestWebSocketManagerNotifications:
             user_id=test_user_id,
         )
 
-        await ws_manager.send_ack(test_connection_id, server_version=10, applied_count=3)
+        await ws_manager.send_ack(
+            test_connection_id, server_version=10, applied_count=3
+        )
 
         mock_websocket.send_json.assert_called()
         call_args = mock_websocket.send_json.call_args[0][0]

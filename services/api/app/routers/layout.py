@@ -58,7 +58,9 @@ async def update_layout(video_id: str, body: LayoutUpdate, auth: Auth):
     db_manager = get_layout_database_manager()
 
     try:
-        async with db_manager.get_database(auth.tenant_id, video_id, writable=True) as conn:
+        async with db_manager.get_database(
+            auth.tenant_id, video_id, writable=True
+        ) as conn:
             repo = LayoutRepository(conn)
 
             # Check if layout exists
@@ -132,7 +134,11 @@ async def update_layout(video_id: str, body: LayoutUpdate, auth: Auth):
         )
 
 
-@router.post("/{video_id}/layout", response_model=LayoutResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{video_id}/layout",
+    response_model=LayoutResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def init_layout(video_id: str, body: VideoLayoutConfigInit, auth: Auth):
     """
     Initialize layout with frame dimensions.

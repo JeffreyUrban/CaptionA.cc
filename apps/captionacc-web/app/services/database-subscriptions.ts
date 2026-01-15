@@ -11,8 +11,9 @@
  * - Automatically triggers React re-renders on relevant changes
  */
 
-import type { DatabaseName } from '~/config'
 import type { CRSQLiteChange } from './crsqlite-client'
+
+import type { DatabaseName } from '~/config'
 
 // =============================================================================
 // Types
@@ -111,7 +112,7 @@ class DatabaseSubscriptionManager {
 
     console.log(
       `[DatabaseSubscriptions] Subscribed to ${this.instanceId}: ${id}`,
-      options?.filter || 'all changes'
+      options?.filter ?? 'all changes'
     )
 
     return {
@@ -436,6 +437,7 @@ export function clearAllSubscriptions(): void {
 export function getSubscriptionCount(videoId: string, dbName: DatabaseName): number {
   const instanceId = `${videoId}:${dbName}`
   const manager = subscriptionManagers.get(instanceId)
+  // Keep || here as we want to treat undefined/0 the same way
   return manager?.size ?? 0
 }
 
@@ -487,13 +489,13 @@ export function createReactSubscription<T>(
   const { unsubscribe } = subscribeToChanges(
     videoId,
     dbName,
-    async changes => {
+    changes => {
       setState(currentState => {
         const result = transform(changes, currentState)
 
         // Handle both sync and async transforms
         if (result instanceof Promise) {
-          result.then(newState => setState(newState))
+          void result.then(newState => setState(newState))
           return currentState // Return current while async completes
         }
 

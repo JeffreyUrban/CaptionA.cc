@@ -153,8 +153,7 @@ async function getS3Client(): Promise<{ client: S3Client; config: S3ClientConfig
   // Check if we need to recreate client (credentials changed)
   const needsRecreate =
     !s3ClientInstance ||
-    !s3ClientConfig ||
-    s3ClientConfig.credentials.sessionToken !== newConfig.credentials.sessionToken
+    s3ClientConfig?.credentials.sessionToken !== newConfig.credentials.sessionToken
 
   if (needsRecreate) {
     s3ClientInstance = new S3Client({

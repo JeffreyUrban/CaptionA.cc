@@ -207,7 +207,9 @@ class OcrRepository:
         frames_with_ocr = cursor.fetchone()["count"]
 
         # Average detections per frame
-        avg_per_frame = total_detections / frames_with_ocr if frames_with_ocr > 0 else 0.0
+        avg_per_frame = (
+            total_detections / frames_with_ocr if frames_with_ocr > 0 else 0.0
+        )
 
         return {
             "total_detections": total_detections,

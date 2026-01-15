@@ -28,7 +28,9 @@ class TestTenantIsolation:
     """
 
     @pytest.fixture
-    def tenant_isolated_database_manager(self, temp_db_dir: Path, tenant_b_video_id: str):
+    def tenant_isolated_database_manager(
+        self, temp_db_dir: Path, tenant_b_video_id: str
+    ):
         """Create a database manager that enforces tenant isolation.
 
         This mock properly simulates real tenant isolation by:
@@ -383,9 +385,7 @@ class TestTenantIsolation:
         Expected: 404 Not Found
         """
         # Patch layout database manager for this test
-        with patch(
-            "app.routers.layout.get_layout_database_manager"
-        ) as mock_layout_mgr:
+        with patch("app.routers.layout.get_layout_database_manager") as mock_layout_mgr:
             # Mock manager that raises FileNotFoundError (simulating cross-tenant access)
             from contextlib import asynccontextmanager
 
@@ -399,9 +399,7 @@ class TestTenantIsolation:
 
             mock_layout_mgr.return_value = MockLayoutManager()
 
-            response = await tenant_a_client.get(
-                f"/videos/{tenant_b_video_id}/layout"
-            )
+            response = await tenant_a_client.get(f"/videos/{tenant_b_video_id}/layout")
 
             assert response.status_code == 404
             assert "not found" in response.json()["detail"].lower()
@@ -422,9 +420,7 @@ class TestTenantIsolation:
             "cropRegion": {"left": 10, "top": 20, "right": 30, "bottom": 40}
         }
 
-        with patch(
-            "app.routers.layout.get_layout_database_manager"
-        ) as mock_layout_mgr:
+        with patch("app.routers.layout.get_layout_database_manager") as mock_layout_mgr:
             from contextlib import asynccontextmanager
 
             class MockLayoutManager:
@@ -462,16 +458,12 @@ class TestTenantIsolation:
             "frameHeight": 1080,
         }
 
-        with patch(
-            "app.routers.layout.get_layout_database_manager"
-        ) as mock_layout_mgr:
+        with patch("app.routers.layout.get_layout_database_manager") as mock_layout_mgr:
             from contextlib import asynccontextmanager
 
             class MockLayoutManager:
                 @asynccontextmanager  # type: ignore[arg-type]
-                async def get_or_create_database(
-                    self, tenant_id: str, video_id: str
-                ):
+                async def get_or_create_database(self, tenant_id: str, video_id: str):
                     # Simulate S3 key mismatch - tenant_id in path doesn't match
                     raise FileNotFoundError("Database not found")
                     yield  # type: ignore[unreachable]  # pragma: no cover - unreachable but required for context manager
@@ -556,10 +548,7 @@ class TestTenantIsolation:
         # Verify tenant_id is at the start of the key
         assert s3_key.startswith(f"{tenant_a_id}/")
         # Verify full expected format
-        assert (
-            s3_key
-            == f"{tenant_a_id}/client/videos/{tenant_a_video_id}/captions.db"
-        )
+        assert s3_key == f"{tenant_a_id}/client/videos/{tenant_a_video_id}/captions.db"
 
     async def test_wasabi_keys_include_tenant_id_layout(
         self,
@@ -754,7 +743,9 @@ class TestTenantIsolation:
             return_value=tenant_isolated_database_manager,
         ):
             transport = ASGITransport(app=app)
-            async with AsyncClient(transport=transport, base_url="http://test") as client:
+            async with AsyncClient(
+                transport=transport, base_url="http://test"
+            ) as client:
                 # Try to access tenant_b's video with tenant_a's auth
                 response = await client.get(f"/videos/{tenant_b_video_id}/captions")
 

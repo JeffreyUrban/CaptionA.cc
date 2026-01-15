@@ -68,9 +68,7 @@ function getBroadcastChannel(): BroadcastChannel | null {
     return null
   }
 
-  if (!broadcastChannel) {
-    broadcastChannel = new BroadcastChannel(BROADCAST_CHANNEL_NAME)
-  }
+  broadcastChannel ??= new BroadcastChannel(BROADCAST_CHANNEL_NAME)
 
   return broadcastChannel
 }

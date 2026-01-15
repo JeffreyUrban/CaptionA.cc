@@ -76,7 +76,9 @@ def test_db_filename_generation():
 
 def test_create_and_read_db():
     """Test creating and reading caption frame extents database."""
-    console.print("\n[cyan]Test 3: create_caption_frame_extents_db() and read_caption_frame_extents_db()[/cyan]")
+    console.print(
+        "\n[cyan]Test 3: create_caption_frame_extents_db() and read_caption_frame_extents_db()[/cyan]"
+    )
 
     # Create temporary directory
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -140,10 +142,14 @@ def test_create_and_read_db():
         console.print(f"    Run ID: {metadata['run_id']}")
         console.print(f"    Model: {metadata['model_version']}")
         console.print(f"    Total pairs: {metadata['total_pairs']}")
-        console.print(f"    Processing time: {metadata['processing_time_seconds']:.2f}s")
+        console.print(
+            f"    Processing time: {metadata['processing_time_seconds']:.2f}s"
+        )
 
         # Verify results
-        assert len(read_results) == 100, f"Expected 100 results, got {len(read_results)}"
+        assert len(read_results) == 100, (
+            f"Expected 100 results, got {len(read_results)}"
+        )
 
         # Check a few specific results
         first = read_results[0]
@@ -157,9 +163,15 @@ def test_create_and_read_db():
         assert last.frame2_index == 100
         assert last.forward_predicted_label == "different"  # 99 % 3 == 0
 
-        console.print(f"[green]✓ All {len(read_results)} results read correctly[/green]")
-        console.print(f"    First result: frames ({first.frame1_index}, {first.frame2_index})")
-        console.print(f"    Last result: frames ({last.frame1_index}, {last.frame2_index})")
+        console.print(
+            f"[green]✓ All {len(read_results)} results read correctly[/green]"
+        )
+        console.print(
+            f"    First result: frames ({first.frame1_index}, {first.frame2_index})"
+        )
+        console.print(
+            f"    Last result: frames ({last.frame1_index}, {last.frame2_index})"
+        )
 
 
 def test_large_batch():
@@ -227,7 +239,9 @@ def test_large_batch():
         read_time = time.time() - start
 
         assert len(read_results) == 25000
-        console.print(f"[green]✓ Read {len(read_results)} results in {read_time:.2f}s[/green]")
+        console.print(
+            f"[green]✓ Read {len(read_results)} results in {read_time:.2f}s[/green]"
+        )
 
 
 def test_model_version_hash():
@@ -256,7 +270,9 @@ def test_model_version_hash():
 
 def main():
     """Run all tests."""
-    console.print("[bold cyan]Testing Caption Frame Extents Database Operations[/bold cyan]")
+    console.print(
+        "[bold cyan]Testing Caption Frame Extents Database Operations[/bold cyan]"
+    )
     console.print("=" * 60)
 
     try:

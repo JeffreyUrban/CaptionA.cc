@@ -58,7 +58,9 @@ async def get_boxes(
     model_predictions: dict[int, BoxLabel] = {}
 
     try:
-        async with layout_db_manager.get_database(auth.tenant_id, video_id) as layout_conn:
+        async with layout_db_manager.get_database(
+            auth.tenant_id, video_id
+        ) as layout_conn:
             layout_repo = LayoutRepository(layout_conn)
             labels = layout_repo.list_box_labels(frame_index=frame)
             for label in labels:
@@ -150,7 +152,9 @@ async def _get_updated_frame(
     model_predictions: dict[int, BoxLabel] = {}
 
     try:
-        async with layout_db_manager.get_database(auth.tenant_id, video_id) as layout_conn:
+        async with layout_db_manager.get_database(
+            auth.tenant_id, video_id
+        ) as layout_conn:
             layout_repo = LayoutRepository(layout_conn)
             labels = layout_repo.list_box_labels(frame_index=frame)
             for label in labels:

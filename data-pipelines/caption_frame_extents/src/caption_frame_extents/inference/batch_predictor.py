@@ -15,7 +15,11 @@ from PIL import Image as PILImage
 from rich.console import Console
 
 from caption_frame_extents.data.dataset import CaptionFrameExtentsDataset
-from caption_frame_extents.data.transforms import AnchorAwareResize, NormalizeImageNet, ResizeStrategy
+from caption_frame_extents.data.transforms import (
+    AnchorAwareResize,
+    NormalizeImageNet,
+    ResizeStrategy,
+)
 from caption_frame_extents.models.registry import create_model
 
 console = Console(stderr=True)
@@ -54,13 +58,19 @@ class BatchCaptionFrameExtentsPredictor:
 
         # Load checkpoint
         console.print(f"[cyan]Loading checkpoint:[/cyan] {checkpoint_path.name}")
-        checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
+        checkpoint = torch.load(
+            checkpoint_path, map_location=device, weights_only=False
+        )
 
         # Extract config
         config = checkpoint.get("config", {})
-        self.architecture_name = config.get("architecture_name", "triple_backbone_resnet50")
+        self.architecture_name = config.get(
+            "architecture_name", "triple_backbone_resnet50"
+        )
         self.model_config = config.get("model_config", {"pretrained": False})
-        self.transform_strategy = ResizeStrategy(config.get("transform_strategy", "mirror_tile"))
+        self.transform_strategy = ResizeStrategy(
+            config.get("transform_strategy", "mirror_tile")
+        )
         self.ocr_viz_variant = config.get("ocr_visualization_variant", "boundaries")
 
         # Load model from registry
@@ -130,7 +140,9 @@ class BatchCaptionFrameExtentsPredictor:
         # Precompute spatial features (same for all frames in this video)
         self._precompute_spatial_features()
 
-        console.print(f"[green]✓ Loaded layout metadata from {self.layout_db_path.name}[/green]")
+        console.print(
+            f"[green]✓ Loaded layout metadata from {self.layout_db_path.name}[/green]"
+        )
 
     def _precompute_spatial_features(self):
         """Precompute spatial features (same for all frames in video)."""
@@ -203,7 +215,9 @@ class BatchCaptionFrameExtentsPredictor:
 
         return {
             "predicted_label": predicted_label,
-            "probabilities": {label: float(probs[idx]) for idx, label in enumerate(self.labels)},
+            "probabilities": {
+                label: float(probs[idx]) for idx, label in enumerate(self.labels)
+            },
             "confidence": float(probs[pred_idx]),
         }
 
@@ -235,7 +249,9 @@ class BatchCaptionFrameExtentsPredictor:
 
             for frame1_img, frame2_img in batch:
                 # Transform OCR viz
-                ocr_viz = self.resize_transform(self.ocr_viz_img, anchor_type=self.anchor_type)
+                ocr_viz = self.resize_transform(
+                    self.ocr_viz_img, anchor_type=self.anchor_type
+                )
                 ocr_viz = self.normalize_transform(ocr_viz)
                 ocr_viz = torch.from_numpy(ocr_viz)
                 ocr_viz_batch.append(ocr_viz)
@@ -264,7 +280,9 @@ class BatchCaptionFrameExtentsPredictor:
 
             # Forward pass
             with torch.no_grad():
-                logits = self.model(ocr_viz_tensor, frame1_tensor, frame2_tensor, spatial_tensor)
+                logits = self.model(
+                    ocr_viz_tensor, frame1_tensor, frame2_tensor, spatial_tensor
+                )
                 probs = torch.softmax(logits, dim=1).cpu().numpy()
 
             # Extract predictions
@@ -274,13 +292,18 @@ class BatchCaptionFrameExtentsPredictor:
 
                 result = {
                     "predicted_label": predicted_label,
-                    "probabilities": {label: float(prob_dist[idx]) for idx, label in enumerate(self.labels)},
+                    "probabilities": {
+                        label: float(prob_dist[idx])
+                        for idx, label in enumerate(self.labels)
+                    },
                     "confidence": float(prob_dist[pred_idx]),
                 }
                 results.append(result)
 
             # Progress logging
             if (i + batch_size) % 1000 == 0:
-                console.print(f"  Processed {min(i + batch_size, len(frame_pairs))}/{len(frame_pairs)} pairs")
+                console.print(
+                    f"  Processed {min(i + batch_size, len(frame_pairs))}/{len(frame_pairs)} pairs"
+                )
 
         return results

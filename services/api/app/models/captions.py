@@ -119,7 +119,9 @@ class CaptionCreate(BaseModel):
 
     startFrameIndex: int
     endFrameIndex: int
-    captionFrameExtentsState: CaptionFrameExtentsState = CaptionFrameExtentsState.PREDICTED
+    captionFrameExtentsState: CaptionFrameExtentsState = (
+        CaptionFrameExtentsState.PREDICTED
+    )
     captionFrameExtentsPending: bool = False
     text: str | None = None
 
@@ -129,7 +131,9 @@ class CaptionUpdate(BaseModel):
 
     startFrameIndex: int
     endFrameIndex: int
-    captionFrameExtentsState: CaptionFrameExtentsState = CaptionFrameExtentsState.CONFIRMED
+    captionFrameExtentsState: CaptionFrameExtentsState = (
+        CaptionFrameExtentsState.CONFIRMED
+    )
 
 
 class CaptionTextUpdate(BaseModel):
@@ -165,7 +169,9 @@ class BatchCreateData(BaseModel):
 
     startFrameIndex: int
     endFrameIndex: int
-    captionFrameExtentsState: CaptionFrameExtentsState = CaptionFrameExtentsState.PREDICTED
+    captionFrameExtentsState: CaptionFrameExtentsState = (
+        CaptionFrameExtentsState.PREDICTED
+    )
     text: str | None = None
 
 

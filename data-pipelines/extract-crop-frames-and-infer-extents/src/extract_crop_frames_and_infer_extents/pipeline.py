@@ -91,12 +91,14 @@ from .models import CropInferResult, CropRegion
 # Try to import monitoring libraries
 try:
     import psutil
+
     PSUTIL_AVAILABLE = True
 except ImportError:
     PSUTIL_AVAILABLE = False
 
 try:
     import pynvml
+
     pynvml.nvmlInit()
     GPU_MONITORING_AVAILABLE = True
 except Exception:
@@ -164,7 +166,7 @@ class ParallelEncodingCoordinator:
         num_workers: int = 4,
         frames_per_chunk: int = 32,
         modulo_levels: list = None,
-        upload_coordinator: 'ParallelUploadCoordinator' = None,
+        upload_coordinator: "ParallelUploadCoordinator" = None,
     ):
         self.frames_dir = frames_dir
         self.chunks_dir = chunks_dir
@@ -227,7 +229,7 @@ class ParallelEncodingCoordinator:
 
                 # Split into chunks
                 for chunk_start_idx in range(0, len(modulo_frames) - self.frames_per_chunk + 1, self.frames_per_chunk):
-                    chunk_frames = modulo_frames[chunk_start_idx:chunk_start_idx + self.frames_per_chunk]
+                    chunk_frames = modulo_frames[chunk_start_idx : chunk_start_idx + self.frames_per_chunk]
 
                     # Use first frame index as chunk identifier
                     start_frame_idx = chunk_frames[0]
@@ -243,12 +245,7 @@ class ParallelEncodingCoordinator:
                         self.encoded_chunks.add(chunk_id)
 
                         # Submit encoding task
-                        future = self.executor.submit(
-                            self._encode_chunk,
-                            modulo,
-                            chunk_frames,
-                            start_frame_idx
-                        )
+                        future = self.executor.submit(self._encode_chunk, modulo, chunk_frames, start_frame_idx)
                         self.futures.append(future)
 
     def _encode_chunk(self, modulo: int, chunk_frame_indices: list, start_frame_idx: int) -> Path:
@@ -260,10 +257,7 @@ class ParallelEncodingCoordinator:
         modulo_dir.mkdir(exist_ok=True, parents=True)
 
         # Build frame file paths
-        chunk_frames = [
-            self.frames_dir / f"frame_{idx:010d}.jpg"
-            for idx in chunk_frame_indices
-        ]
+        chunk_frames = [self.frames_dir / f"frame_{idx:010d}.jpg" for idx in chunk_frame_indices]
 
         # Output path
         chunk_output = modulo_dir / f"chunk_{start_frame_idx:010d}.webm"
@@ -280,19 +274,32 @@ class ParallelEncodingCoordinator:
             subprocess.run(
                 [
                     "ffmpeg",
-                    "-f", "concat",
-                    "-safe", "0",
-                    "-i", filelist_path,
-                    "-c:v", "libvpx-vp9",
-                    "-crf", "30",
-                    "-b:v", "0",
-                    "-cpu-used", "2",
-                    "-threads", "2",
-                    "-row-mt", "1",
-                    "-tile-columns", "1",
-                    "-frame-parallel", "1",
-                    "-auto-alt-ref", "1",
-                    "-lag-in-frames", "25",
+                    "-f",
+                    "concat",
+                    "-safe",
+                    "0",
+                    "-i",
+                    filelist_path,
+                    "-c:v",
+                    "libvpx-vp9",
+                    "-crf",
+                    "30",
+                    "-b:v",
+                    "0",
+                    "-cpu-used",
+                    "2",
+                    "-threads",
+                    "2",
+                    "-row-mt",
+                    "1",
+                    "-tile-columns",
+                    "1",
+                    "-frame-parallel",
+                    "1",
+                    "-auto-alt-ref",
+                    "1",
+                    "-lag-in-frames",
+                    "25",
                     "-y",
                     str(chunk_output),
                 ],
@@ -448,13 +455,11 @@ class PerformanceMetrics:
         # Check if encoding is bottleneck
         total_pipeline = max(extraction_time, inference_time)
         if encoding_time > total_pipeline * 1.5:
-            print(f"  ⚠️  BOTTLENECK: Encoding is {encoding_time/total_pipeline:.1f}x slower than GPU pipeline")
+            print(f"  ⚠️  BOTTLENECK: Encoding is {encoding_time / total_pipeline:.1f}x slower than GPU pipeline")
             print("     Consider offloading VP9 encoding to separate instances")
         else:
-            print(f"  ✓ Encoding throughput is adequate ({encoding_time/total_pipeline:.1f}x GPU pipeline time)")
+            print(f"  ✓ Encoding throughput is adequate ({encoding_time / total_pipeline:.1f}x GPU pipeline time)")
         print(f"{'=' * 80}\n")
-
-
 
 
 class VP9EncoderPool:
@@ -494,20 +499,33 @@ class VP9EncoderPool:
             subprocess.run(
                 [
                     "ffmpeg",
-                    "-f", "concat",
-                    "-safe", "0",
-                    "-i", filelist_path,
-                    "-c:v", "libvpx-vp9",
-                    "-crf", "30",
-                    "-b:v", "0",
+                    "-f",
+                    "concat",
+                    "-safe",
+                    "0",
+                    "-i",
+                    filelist_path,
+                    "-c:v",
+                    "libvpx-vp9",
+                    "-crf",
+                    "30",
+                    "-b:v",
+                    "0",
                     # Speed optimizations (2-3x faster)
-                    "-cpu-used", "2",           # Good speed/quality balance
-                    "-threads", "2",            # 2 threads per worker
-                    "-row-mt", "1",             # Row-based multithreading
-                    "-tile-columns", "1",       # 2 tile columns
-                    "-frame-parallel", "1",     # Frame parallelization
-                    "-auto-alt-ref", "1",       # Better compression
-                    "-lag-in-frames", "25",     # Look-ahead
+                    "-cpu-used",
+                    "2",  # Good speed/quality balance
+                    "-threads",
+                    "2",  # 2 threads per worker
+                    "-row-mt",
+                    "1",  # Row-based multithreading
+                    "-tile-columns",
+                    "1",  # 2 tile columns
+                    "-frame-parallel",
+                    "1",  # Frame parallelization
+                    "-auto-alt-ref",
+                    "1",  # Better compression
+                    "-lag-in-frames",
+                    "25",  # Look-ahead
                     "-y",
                     str(chunk_output),
                 ],
@@ -627,8 +645,10 @@ def crop_and_infer_caption_frame_extents_pipelined(
     print(f"Video: {video_key}")
     print(f"Tenant: {tenant_id}")
     print(f"Video ID: {video_id}")
-    print(f"Crop Region: L={crop_region.crop_left}, T={crop_region.crop_top}, "
-          f"R={crop_region.crop_right}, B={crop_region.crop_bottom}")
+    print(
+        f"Crop Region: L={crop_region.crop_left}, T={crop_region.crop_top}, "
+        f"R={crop_region.crop_right}, B={crop_region.crop_bottom}"
+    )
     print(f"Frame Rate: {frame_rate} Hz")
     print(f"Encoder Workers: {encoder_workers}")
     print(f"{'=' * 80}\n")
@@ -693,7 +713,8 @@ def crop_and_infer_caption_frame_extents_pipelined(
         # Decompress
         import gzip
         import shutil
-        with gzip.open(layout_db_gz_path, 'rb') as f_in, open(layout_db_path, 'wb') as f_out:
+
+        with gzip.open(layout_db_gz_path, "rb") as f_in, open(layout_db_path, "wb") as f_out:
             shutil.copyfileobj(f_in, f_out)
         print("  Downloaded and decompressed\n")
 
@@ -771,7 +792,10 @@ def crop_and_infer_caption_frame_extents_pipelined(
         frames_first_batch = pairs_per_batch + 1  # Need N+1 frames for N consecutive pairs
         frames_per_subsequent = pairs_per_batch  # Add N new frames (plus 1 reused = N+1 total)
 
-        print(f"    Batch config: {inference_batch_size} images/batch = {pairs_per_batch} pairs = {frames_first_batch} frames (first) / {frames_per_subsequent} frames (subsequent)")
+        print(
+            f"    Batch config: {inference_batch_size} images/batch = {pairs_per_batch} pairs = "
+            f"{frames_first_batch} frames (first) / {frames_per_subsequent} frames (subsequent)"
+        )
 
         # Track last frame from previous batch for continuity
         prev_batch_last_frame_gpu = None
@@ -812,9 +836,9 @@ def crop_and_infer_caption_frame_extents_pipelined(
 
                 # Crop on GPU
                 cropped_tensor = frame_tensor[
-                    crop_helper.crop_top_px:crop_helper.crop_bottom_px,
-                    crop_helper.crop_left_px:crop_helper.crop_right_px,
-                    :
+                    crop_helper.crop_top_px : crop_helper.crop_bottom_px,
+                    crop_helper.crop_left_px : crop_helper.crop_right_px,
+                    :,
                 ]
 
                 batch_frames_gpu.append(cropped_tensor)
@@ -915,7 +939,9 @@ def crop_and_infer_caption_frame_extents_pipelined(
 
         frame_count = len(frames_saved)
         pipeline_duration = time.time() - pipeline_start
-        print(f"  GPU processing complete: {frame_count} frames, {len(pair_results)} pairs in {pipeline_duration:.2f}s\n")
+        print(
+            f"  GPU processing complete: {frame_count} frames, {len(pair_results)} pairs in {pipeline_duration:.2f}s\n"
+        )
 
         # Step 6: Wait for parallel VP9 encoding and uploads to complete
         print("[6/7] Waiting for parallel VP9 encoding and Wasabi uploads to complete...")
@@ -952,6 +978,7 @@ def crop_and_infer_caption_frame_extents_pipelined(
 
         # Create caption frame extents database
         import uuid
+
         run_id = str(uuid.uuid4())
         started_at = datetime.fromtimestamp(job_start)
         completed_at = datetime.now()

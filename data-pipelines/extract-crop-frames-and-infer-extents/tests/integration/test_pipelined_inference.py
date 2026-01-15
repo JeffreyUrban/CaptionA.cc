@@ -251,9 +251,7 @@ def test_pipelined_crop_and_infer(
     # Validate label counts structure
     expected_labels = {"same", "different", "empty_empty", "empty_valid", "valid_empty"}
     actual_labels = set(result.label_counts.keys())
-    assert actual_labels.issubset(
-        expected_labels
-    ), f"Unexpected labels: {actual_labels - expected_labels}"
+    assert actual_labels.issubset(expected_labels), f"Unexpected labels: {actual_labels - expected_labels}"
 
     print("✓ All validations passed!")
     print()

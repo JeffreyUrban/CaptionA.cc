@@ -142,7 +142,9 @@ MODAL_CONFIG = ModalInferenceConfig()
 # ============================================================================
 
 
-def estimate_job_cost(frame_count: int, config: ModalInferenceConfig = MODAL_CONFIG) -> dict[str, float]:
+def estimate_job_cost(
+    frame_count: int, config: ModalInferenceConfig = MODAL_CONFIG
+) -> dict[str, float]:
     """Estimate cost and time for a video with given frame count.
 
     Args:

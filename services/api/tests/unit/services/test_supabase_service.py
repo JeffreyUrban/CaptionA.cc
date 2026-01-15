@@ -2,6 +2,7 @@
 Unit tests for Supabase Service.
 Tests SupabaseServiceImpl methods with mocked Supabase client.
 """
+
 import pytest
 from unittest.mock import Mock, patch
 
@@ -35,12 +36,12 @@ def mock_supabase_client():
 @pytest.fixture
 def supabase_service(mock_supabase_client):
     """Create service with mocked client."""
-    with patch('supabase.create_client') as mock_create:
+    with patch("supabase.create_client") as mock_create:
         mock_create.return_value = mock_supabase_client
         service = SupabaseServiceImpl(
             supabase_url="https://test.supabase.co",
             supabase_key="test-key",  # pragma: allowlist secret
-            schema="test_schema"
+            schema="test_schema",
         )
         service.client = mock_supabase_client
         return service
@@ -51,10 +52,7 @@ class TestUpdateVideoStatus:
 
     def test_update_status_only(self, supabase_service, mock_supabase_client):
         """Update only status field."""
-        supabase_service.update_video_status(
-            video_id="video-123",
-            status="processing"
-        )
+        supabase_service.update_video_status(video_id="video-123", status="processing")
 
         # Verify update was called with correct data
         call_args = mock_supabase_client.schema().table().update.call_args
@@ -63,9 +61,7 @@ class TestUpdateVideoStatus:
     def test_update_multiple_fields(self, supabase_service, mock_supabase_client):
         """Update multiple fields."""
         supabase_service.update_video_status(
-            video_id="video-123",
-            status="active",
-            caption_status="ready"
+            video_id="video-123", status="active", caption_status="ready"
         )
 
         call_args = mock_supabase_client.schema().table().update.call_args
@@ -83,9 +79,7 @@ class TestUpdateVideoStatus:
     def test_update_status_to_error(self, supabase_service, mock_supabase_client):
         """Update status to error state."""
         supabase_service.update_video_status(
-            video_id="video-123",
-            status="error",
-            error_message="Processing failed"
+            video_id="video-123", status="error", error_message="Processing failed"
         )
 
         call_args = mock_supabase_client.schema().table().update.call_args
@@ -95,10 +89,7 @@ class TestUpdateVideoStatus:
 
     def test_update_verifies_video_id(self, supabase_service, mock_supabase_client):
         """Verify video_id is passed to eq filter."""
-        supabase_service.update_video_status(
-            video_id="video-456",
-            status="active"
-        )
+        supabase_service.update_video_status(video_id="video-456", status="active")
 
         # Check that eq was called with the video_id
         eq_call_args = mock_supabase_client.schema().table().update().eq.call_args
@@ -111,29 +102,29 @@ class TestUpdateVideoMetadata:
     def test_update_duration_only(self, supabase_service, mock_supabase_client):
         """Update only duration_seconds field."""
         supabase_service.update_video_metadata(
-            video_id="video-123",
-            duration_seconds=120.5
+            video_id="video-123", duration_seconds=120.5
         )
 
         call_args = mock_supabase_client.schema().table().update.call_args
         assert call_args[0][0] == {"duration_seconds": 120.5}
 
-    def test_update_cropped_frames_version(self, supabase_service, mock_supabase_client):
+    def test_update_cropped_frames_version(
+        self, supabase_service, mock_supabase_client
+    ):
         """Update cropped_frames_version field."""
         supabase_service.update_video_metadata(
-            video_id="video-123",
-            cropped_frames_version=2
+            video_id="video-123", cropped_frames_version=2
         )
 
         call_args = mock_supabase_client.schema().table().update.call_args
         assert call_args[0][0] == {"current_cropped_frames_version": 2}
 
-    def test_update_multiple_metadata_fields(self, supabase_service, mock_supabase_client):
+    def test_update_multiple_metadata_fields(
+        self, supabase_service, mock_supabase_client
+    ):
         """Update multiple metadata fields."""
         supabase_service.update_video_metadata(
-            video_id="video-123",
-            duration_seconds=95.3,
-            cropped_frames_version=1
+            video_id="video-123", duration_seconds=95.3, cropped_frames_version=1
         )
 
         call_args = mock_supabase_client.schema().table().update.call_args
@@ -141,12 +132,11 @@ class TestUpdateVideoMetadata:
         assert data["duration_seconds"] == 95.3
         assert data["current_cropped_frames_version"] == 1
 
-    def test_update_frame_count_not_stored(self, supabase_service, mock_supabase_client):
+    def test_update_frame_count_not_stored(
+        self, supabase_service, mock_supabase_client
+    ):
         """Frame count is not stored in videos table."""
-        supabase_service.update_video_metadata(
-            video_id="video-123",
-            frame_count=1000
-        )
+        supabase_service.update_video_metadata(video_id="video-123", frame_count=1000)
 
         # Verify update was not called (frame_count not in videos table)
         assert not mock_supabase_client.schema().table().update.called
@@ -197,11 +187,14 @@ class TestAcquireServerLock:
         insert_mock3.execute.return_value = Mock(data={"id": "new-state"})
 
         # Set up schema() to return different mocks for each call
-        mock_supabase_client.schema.side_effect = [schema_mock1, schema_mock2, schema_mock3]
+        mock_supabase_client.schema.side_effect = [
+            schema_mock1,
+            schema_mock2,
+            schema_mock3,
+        ]
 
         result = supabase_service.acquire_server_lock(
-            video_id="video-123",
-            database_name="layout"
+            video_id="video-123", database_name="layout"
         )
 
         assert result is True
@@ -212,17 +205,18 @@ class TestAcquireServerLock:
         self, supabase_service, mock_supabase_client
     ):
         """Successfully acquire lock when state exists but unlocked."""
-        state_response = Mock(data={
-            "lock_holder_user_id": None,
-            "lock_type": None,
-            "tenant_id": "tenant-123"
-        })
+        state_response = Mock(
+            data={
+                "lock_holder_user_id": None,
+                "lock_type": None,
+                "tenant_id": "tenant-123",
+            }
+        )
 
         mock_supabase_client.schema().table().select().eq().maybe_single().execute.return_value = state_response
 
         result = supabase_service.acquire_server_lock(
-            video_id="video-123",
-            database_name="layout"
+            video_id="video-123", database_name="layout"
         )
 
         assert result is True
@@ -233,17 +227,18 @@ class TestAcquireServerLock:
         self, supabase_service, mock_supabase_client
     ):
         """Fail to acquire lock when already held."""
-        state_response = Mock(data={
-            "lock_holder_user_id": "user-456",
-            "lock_type": "server",
-            "tenant_id": "tenant-123"
-        })
+        state_response = Mock(
+            data={
+                "lock_holder_user_id": "user-456",
+                "lock_type": "server",
+                "tenant_id": "tenant-123",
+            }
+        )
 
         mock_supabase_client.schema().table().select().eq().maybe_single().execute.return_value = state_response
 
         result = supabase_service.acquire_server_lock(
-            video_id="video-123",
-            database_name="layout"
+            video_id="video-123", database_name="layout"
         )
 
         assert result is False
@@ -254,18 +249,20 @@ class TestAcquireServerLock:
         self, supabase_service, mock_supabase_client
     ):
         """Acquire lock with specific user_id."""
-        state_response = Mock(data={
-            "lock_holder_user_id": None,
-            "lock_type": None,
-            "tenant_id": "tenant-123"
-        })
+        state_response = Mock(
+            data={
+                "lock_holder_user_id": None,
+                "lock_type": None,
+                "tenant_id": "tenant-123",
+            }
+        )
 
         mock_supabase_client.schema().table().select().eq().maybe_single().execute.return_value = state_response
 
         result = supabase_service.acquire_server_lock(
             video_id="video-123",
             database_name="captions",
-            lock_holder_user_id="user-789"
+            lock_holder_user_id="user-789",
         )
 
         assert result is True
@@ -273,22 +270,20 @@ class TestAcquireServerLock:
         update_call_args = mock_supabase_client.schema().table().update.call_args
         assert update_call_args[0][0]["lock_holder_user_id"] == "user-789"
 
-    def test_lock_acquisition_system_lock(
-        self, supabase_service, mock_supabase_client
-    ):
+    def test_lock_acquisition_system_lock(self, supabase_service, mock_supabase_client):
         """Acquire system lock (user_id=None)."""
-        state_response = Mock(data={
-            "lock_holder_user_id": None,
-            "lock_type": None,
-            "tenant_id": "tenant-123"
-        })
+        state_response = Mock(
+            data={
+                "lock_holder_user_id": None,
+                "lock_type": None,
+                "tenant_id": "tenant-123",
+            }
+        )
 
         mock_supabase_client.schema().table().select().eq().maybe_single().execute.return_value = state_response
 
         result = supabase_service.acquire_server_lock(
-            video_id="video-123",
-            database_name="layout",
-            lock_holder_user_id=None
+            video_id="video-123", database_name="layout", lock_holder_user_id=None
         )
 
         assert result is True
@@ -306,13 +301,14 @@ class TestAcquireServerLock:
         execute_mock = Mock()
         execute_mock.side_effect = [
             state_response,  # video_database_state query
-            video_response   # videos query (no video found)
+            video_response,  # videos query (no video found)
         ]
-        mock_supabase_client.schema().table().select().eq().maybe_single().execute = execute_mock
+        mock_supabase_client.schema().table().select().eq().maybe_single().execute = (
+            execute_mock
+        )
 
         result = supabase_service.acquire_server_lock(
-            video_id="nonexistent-video",
-            database_name="layout"
+            video_id="nonexistent-video", database_name="layout"
         )
 
         assert result is False
@@ -352,11 +348,14 @@ class TestAcquireServerLock:
         insert_mock3.execute.side_effect = Exception("Insert failed")
 
         # Set up schema() to return different mocks for each call
-        mock_supabase_client.schema.side_effect = [schema_mock1, schema_mock2, schema_mock3]
+        mock_supabase_client.schema.side_effect = [
+            schema_mock1,
+            schema_mock2,
+            schema_mock3,
+        ]
 
         result = supabase_service.acquire_server_lock(
-            video_id="video-123",
-            database_name="layout"
+            video_id="video-123", database_name="layout"
         )
 
         assert result is False
@@ -365,11 +364,13 @@ class TestAcquireServerLock:
         self, supabase_service, mock_supabase_client
     ):
         """Handle update failure gracefully (race condition)."""
-        state_response = Mock(data={
-            "lock_holder_user_id": None,
-            "lock_type": None,
-            "tenant_id": "tenant-123"
-        })
+        state_response = Mock(
+            data={
+                "lock_holder_user_id": None,
+                "lock_type": None,
+                "tenant_id": "tenant-123",
+            }
+        )
 
         # Create separate mock chains for query and update
         schema_mock1 = Mock()
@@ -394,8 +395,7 @@ class TestAcquireServerLock:
         mock_supabase_client.schema.side_effect = [schema_mock1, schema_mock2]
 
         result = supabase_service.acquire_server_lock(
-            video_id="video-123",
-            database_name="layout"
+            video_id="video-123", database_name="layout"
         )
 
         assert result is False
@@ -407,8 +407,7 @@ class TestReleaseServerLock:
     def test_release_lock_success(self, supabase_service, mock_supabase_client):
         """Successfully release lock."""
         supabase_service.release_server_lock(
-            video_id="video-123",
-            database_name="layout"
+            video_id="video-123", database_name="layout"
         )
 
         # Verify update was called with None values
@@ -424,8 +423,7 @@ class TestReleaseServerLock:
     ):
         """Verify video_id and database_name are passed to eq filters."""
         supabase_service.release_server_lock(
-            video_id="video-456",
-            database_name="captions"
+            video_id="video-456", database_name="captions"
         )
 
         # Check that eq was called with video_id and database_name
@@ -470,7 +468,9 @@ class TestGetTenantTier:
         tier = supabase_service.get_tenant_tier("tenant-123")
         assert tier == "free"
 
-    def test_default_tier_unknown_access_tier(self, supabase_service, mock_supabase_client):
+    def test_default_tier_unknown_access_tier(
+        self, supabase_service, mock_supabase_client
+    ):
         """Default to free for unknown access_tier_id."""
         response = Mock(data={"access_tier_id": "unknown_tier"})
         mock_supabase_client.schema().table().select().eq().limit().maybe_single().execute.return_value = response
@@ -478,7 +478,9 @@ class TestGetTenantTier:
         tier = supabase_service.get_tenant_tier("tenant-123")
         assert tier == "free"
 
-    def test_default_tier_missing_access_tier_id(self, supabase_service, mock_supabase_client):
+    def test_default_tier_missing_access_tier_id(
+        self, supabase_service, mock_supabase_client
+    ):
         """Default to free when access_tier_id is missing."""
         response = Mock(data={})
         mock_supabase_client.schema().table().select().eq().limit().maybe_single().execute.return_value = response
@@ -501,7 +503,7 @@ class TestGetVideoMetadata:
             "duration_seconds": 120.5,
             "current_cropped_frames_version": 1,
             "captions_db_key": "captions/video-123.db",  # pragma: allowlist secret
-            "prefect_flow_run_id": "flow-run-456"
+            "prefect_flow_run_id": "flow-run-456",
         }
         response = Mock(data=video_data)
         mock_supabase_client.schema().table().select().eq().single().execute.return_value = response
@@ -515,7 +517,10 @@ class TestGetVideoMetadata:
         assert metadata["status"] == "processing"
         assert metadata["duration_seconds"] == 120.5
         assert metadata["current_cropped_frames_version"] == 1
-        assert metadata["captions_db_key"] == "captions/video-123.db"  # pragma: allowlist secret
+        assert (
+            metadata["captions_db_key"]
+            == "captions/video-123.db"  # pragma: allowlist secret
+        )
         assert metadata["prefect_flow_run_id"] == "flow-run-456"
 
     def test_get_video_metadata_not_found(self, supabase_service, mock_supabase_client):
@@ -527,7 +532,9 @@ class TestGetVideoMetadata:
 
         assert metadata == {}
 
-    def test_get_video_metadata_partial_data(self, supabase_service, mock_supabase_client):
+    def test_get_video_metadata_partial_data(
+        self, supabase_service, mock_supabase_client
+    ):
         """Handle partial data gracefully."""
         video_data = {
             "tenant_id": "tenant-123",
@@ -545,7 +552,9 @@ class TestGetVideoMetadata:
         assert metadata["created_at"] is None
         assert metadata["status"] is None
 
-    def test_get_video_metadata_field_mapping(self, supabase_service, mock_supabase_client):
+    def test_get_video_metadata_field_mapping(
+        self, supabase_service, mock_supabase_client
+    ):
         """Verify field name mappings."""
         video_data = {
             "size_bytes": 2048000,  # Maps to file_size_bytes
@@ -566,13 +575,13 @@ class TestSupabaseServiceInitialization:
 
     def test_initialization_with_defaults(self):
         """Initialize service with default schema."""
-        with patch('supabase.create_client') as mock_create:
+        with patch("supabase.create_client") as mock_create:
             mock_client = Mock()
             mock_create.return_value = mock_client
 
             service = SupabaseServiceImpl(
                 supabase_url="https://test.supabase.co",
-                supabase_key="test-key"  # pragma: allowlist secret
+                supabase_key="test-key",  # pragma: allowlist secret
             )
 
             assert service.supabase_url == "https://test.supabase.co"
@@ -582,30 +591,30 @@ class TestSupabaseServiceInitialization:
 
     def test_initialization_with_custom_schema(self):
         """Initialize service with custom schema."""
-        with patch('supabase.create_client') as mock_create:
+        with patch("supabase.create_client") as mock_create:
             mock_client = Mock()
             mock_create.return_value = mock_client
 
             service = SupabaseServiceImpl(
                 supabase_url="https://test.supabase.co",
                 supabase_key="test-key",  # pragma: allowlist secret
-                schema="custom_schema"
+                schema="custom_schema",
             )
 
             assert service.schema == "custom_schema"
 
     def test_initialization_creates_client(self):
         """Verify client is created on initialization."""
-        with patch('supabase.create_client') as mock_create:
+        with patch("supabase.create_client") as mock_create:
             mock_client = Mock()
             mock_create.return_value = mock_client
 
             _service = SupabaseServiceImpl(
                 supabase_url="https://test.supabase.co",
-                supabase_key="test-key"  # pragma: allowlist secret
+                supabase_key="test-key",  # pragma: allowlist secret
             )
 
             mock_create.assert_called_once_with(
                 "https://test.supabase.co",
-                "test-key"  # pragma: allowlist secret
+                "test-key",  # pragma: allowlist secret
             )

@@ -13,20 +13,13 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 
-import { type DatabaseName, DATABASE_NAMES } from '~/config'
-import { CRSQLiteDatabase, type CRSQLiteChange, createInstanceId } from '~/services/crsqlite-client'
-import { downloadDatabaseWithRetry, type DownloadProgress } from '~/services/database-loader'
-import {
-  acquireLock,
-  releaseLock,
-  checkLockState,
-  type LockStatus,
-  type LockState,
-  type LockHolder,
-} from '~/services/database-lock'
-import { getSyncManager, removeSyncManager, type ConnectionState } from '~/services/websocket-sync'
-import { notifySubscribers, clearSubscriptions } from '~/services/database-subscriptions'
+import { type DatabaseName } from '~/config'
+import { CRSQLiteDatabase, createInstanceId } from '~/services/crsqlite-client'
 import { type DatabaseError, logDatabaseError, toDatabaseError } from '~/services/database-errors'
+import { downloadDatabaseWithRetry, type DownloadProgress } from '~/services/database-loader'
+import { acquireLock, releaseLock, checkLockState, type LockStatus } from '~/services/database-lock'
+import { notifySubscribers, clearSubscriptions } from '~/services/database-subscriptions'
+import { getSyncManager, removeSyncManager, type ConnectionState } from '~/services/websocket-sync'
 
 // =============================================================================
 // Types
@@ -217,6 +210,7 @@ function createInitialInstance(videoId: string, dbName: DatabaseName): DatabaseI
 
 export const useDatabaseStore = create<DatabaseStore>()(
   persist(
+    // eslint-disable-next-line max-lines-per-function -- Store implementation with database lifecycle, lock, and sync management
     (set, get) => ({
       // Initial state
       instances: {},
@@ -238,7 +232,7 @@ export const useDatabaseStore = create<DatabaseStore>()(
         }
 
         // Create or update instance
-        instance = instance || createInitialInstance(videoId, dbName)
+        instance = instance ?? createInitialInstance(videoId, dbName)
         instance.error = null
 
         set(state => ({
@@ -397,16 +391,21 @@ export const useDatabaseStore = create<DatabaseStore>()(
 
       getDatabase: (videoId, dbName) => {
         const instanceId = createInstanceId(videoId, dbName)
-        return get().instances[instanceId]?.database || null
+        return get().instances[instanceId]?.database ?? null
       },
 
-      query: async (videoId, dbName, sql, params) => {
+      query: async <T = Record<string, unknown>>(
+        videoId: string,
+        dbName: DatabaseName,
+        sql: string,
+        params?: unknown[]
+      ): Promise<T[]> => {
         const database = get().getDatabase(videoId, dbName)
         if (!database) {
           throw new Error(`Database not initialized: ${videoId}:${dbName}`)
         }
         const result = await database.query(sql, params)
-        return result.rows as any[]
+        return result.rows as T[]
       },
 
       execute: async (videoId, dbName, sql, params) => {
@@ -534,20 +533,20 @@ export const useDatabaseStore = create<DatabaseStore>()(
               connectionState: state,
             })
           },
-          onChanges: async (changes, version) => {
+          onChanges: (changes, version) => {
             // Apply changes to local database
-            await database.applyChanges(changes)
+            void database.applyChanges(changes).then(() => {
+              // Update version
+              store.setInstanceState(instanceId, { version })
 
-            // Update version
-            store.setInstanceState(instanceId, { version })
+              // Notify subscribers
+              notifySubscribers(videoId, dbName, changes)
 
-            // Notify subscribers
-            notifySubscribers(videoId, dbName, changes)
-
-            // Update sync status
-            store.setSyncStatus(instanceId, {
-              lastSyncTime: Date.now(),
-              syncing: false,
+              // Update sync status
+              store.setSyncStatus(instanceId, {
+                lastSyncTime: Date.now(),
+                syncing: false,
+              })
             })
           },
           onAck: version => {
@@ -621,7 +620,7 @@ export function useDatabaseInstance(
   dbName: DatabaseName
 ): DatabaseInstance | null {
   const instanceId = createInstanceId(videoId, dbName)
-  return useDatabaseStore(state => state.instances[instanceId] || null)
+  return useDatabaseStore(state => state.instances[instanceId] ?? null)
 }
 
 /**
@@ -629,7 +628,7 @@ export function useDatabaseInstance(
  */
 export function useSyncStatus(videoId: string, dbName: DatabaseName): SyncStatus {
   const instanceId = createInstanceId(videoId, dbName)
-  return useDatabaseStore(state => state.instances[instanceId]?.syncStatus || initialSyncStatus)
+  return useDatabaseStore(state => state.instances[instanceId]?.syncStatus ?? initialSyncStatus)
 }
 
 /**
@@ -637,7 +636,7 @@ export function useSyncStatus(videoId: string, dbName: DatabaseName): SyncStatus
  */
 export function useLockStatus(videoId: string, dbName: DatabaseName): LockStatus | null {
   const instanceId = createInstanceId(videoId, dbName)
-  return useDatabaseStore(state => state.instances[instanceId]?.lockStatus || null)
+  return useDatabaseStore(state => state.instances[instanceId]?.lockStatus ?? null)
 }
 
 /**
@@ -645,7 +644,7 @@ export function useLockStatus(videoId: string, dbName: DatabaseName): LockStatus
  */
 export function useIsDatabaseReady(videoId: string, dbName: DatabaseName): boolean {
   const instanceId = createInstanceId(videoId, dbName)
-  return useDatabaseStore(state => state.instances[instanceId]?.ready || false)
+  return useDatabaseStore(state => state.instances[instanceId]?.ready ?? false)
 }
 
 /**
@@ -656,7 +655,7 @@ export function useDownloadProgress(
   dbName: DatabaseName
 ): DownloadProgress | null {
   const instanceId = createInstanceId(videoId, dbName)
-  return useDatabaseStore(state => state.instances[instanceId]?.downloadProgress || null)
+  return useDatabaseStore(state => state.instances[instanceId]?.downloadProgress ?? null)
 }
 
 /**
@@ -664,5 +663,5 @@ export function useDownloadProgress(
  */
 export function useDatabaseError(videoId: string, dbName: DatabaseName): DatabaseError | null {
   const instanceId = createInstanceId(videoId, dbName)
-  return useDatabaseStore(state => state.instances[instanceId]?.error || null)
+  return useDatabaseStore(state => state.instances[instanceId]?.error ?? null)
 }

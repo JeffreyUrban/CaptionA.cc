@@ -62,8 +62,12 @@ class InferenceMetrics:
         """Compute throughput and averages."""
         if self.successful_inferences > 0:
             total_inference_time = (inference_end - inference_start) * 1000  # ms
-            self.avg_inference_time_ms = total_inference_time / self.successful_inferences
-            self.pairs_per_second = self.successful_inferences / ((inference_end - inference_start) or 1)
+            self.avg_inference_time_ms = (
+                total_inference_time / self.successful_inferences
+            )
+            self.pairs_per_second = self.successful_inferences / (
+                (inference_end - inference_start) or 1
+            )
 
 
 # Modal app
@@ -95,7 +99,9 @@ if modal:
     )
 
     # Model checkpoint volume (persistent across containers)
-    model_volume = modal.Volume.from_name("caption-frame-extents-models", create_if_missing=True)
+    model_volume = modal.Volume.from_name(
+        "caption-frame-extents-models", create_if_missing=True
+    )
 
     # Shared metrics tracking across container lifetime
     # Note: This persists across function calls within the same container
@@ -142,8 +148,12 @@ def test_inference():
     if has_cuda:
         gpu_info = {
             "gpu_name": torch.cuda.get_device_name(0),
-            "gpu_memory_gb": round(torch.cuda.get_device_properties(0).total_memory / 1024**3, 1),
-            "gpu_memory_allocated_mb": round(torch.cuda.memory_allocated(0) / 1024**2, 1),
+            "gpu_memory_gb": round(
+                torch.cuda.get_device_properties(0).total_memory / 1024**3, 1
+            ),
+            "gpu_memory_allocated_mb": round(
+                torch.cuda.memory_allocated(0) / 1024**2, 1
+            ),
         }
 
     init_duration_ms = (time.time() - init_start) * 1000
@@ -161,7 +171,9 @@ def test_inference():
             "is_cold_start": is_cold,
             "cold_start_ms": cold_start_ms if is_cold else None,
             "initialization_ms": init_duration_ms,
-            "container_uptime_s": function_start - _container_start_time if _container_start_time else 0,
+            "container_uptime_s": function_start - _container_start_time
+            if _container_start_time
+            else 0,
             "timestamp": datetime.now().isoformat(),
         },
     }
@@ -224,8 +236,13 @@ def run_caption_frame_extents_inference_batch(
 
     import tempfile
 
-    from caption_frame_extents.inference.batch_predictor import BatchCaptionFrameExtentsPredictor
-    from caption_frame_extents.inference.caption_frame_extents_db import PairResult, create_caption_frame_extents_db
+    from caption_frame_extents.inference.batch_predictor import (
+        BatchCaptionFrameExtentsPredictor,
+    )
+    from caption_frame_extents.inference.caption_frame_extents_db import (
+        PairResult,
+        create_caption_frame_extents_db,
+    )
     from caption_frame_extents.inference.frame_extractor import (
         download_and_extract_chunks_parallel,
         get_frames_in_chunk,
@@ -339,14 +356,18 @@ def run_caption_frame_extents_inference_batch(
         print(f"  Downloading {len(chunk_download_list)} chunks in parallel...")
 
         # Download and extract all frames in parallel
-        raw_frames = download_and_extract_chunks_parallel(chunk_download_list, max_workers=16)
+        raw_frames = download_and_extract_chunks_parallel(
+            chunk_download_list, max_workers=16
+        )
 
         # Convert numpy arrays to PIL Images
         all_frames: dict[int, PILImage.Image] = {}
         for frame_idx, frame_array in raw_frames.items():
             all_frames[frame_idx] = PILImage.fromarray(frame_array)
 
-        print(f"  Extracted {len(all_frames)} total frames in {time.time() - extract_start:.2f}s\n")
+        print(
+            f"  Extracted {len(all_frames)} total frames in {time.time() - extract_start:.2f}s\n"
+        )
 
         # Step 5: Run GPU inference
         print("[5/8] Running GPU inference...")
@@ -356,7 +377,9 @@ def run_caption_frame_extents_inference_batch(
         batch_size = MODAL_CONFIG.inference_batch_size
         num_batches = (len(frame_pairs) + batch_size - 1) // batch_size
 
-        print(f"  Processing {len(frame_pairs)} pairs in {num_batches} batches (batch_size={batch_size})")
+        print(
+            f"  Processing {len(frame_pairs)} pairs in {num_batches} batches (batch_size={batch_size})"
+        )
 
         # Results accumulators
         forward_predictions = []
@@ -384,7 +407,9 @@ def run_caption_frame_extents_inference_batch(
 
             # Run GPU inference on this batch
             if bidirectional_pairs:
-                batch_predictions = predictor.predict_batch(bidirectional_pairs, batch_size=batch_size)
+                batch_predictions = predictor.predict_batch(
+                    bidirectional_pairs, batch_size=batch_size
+                )
 
                 # Split into forward/backward
                 for i in range(len(batch_valid_indices)):
@@ -397,7 +422,9 @@ def run_caption_frame_extents_inference_batch(
                 elapsed = time.time() - inference_start
                 pairs_done = len(valid_indices)
                 rate = pairs_done / elapsed if elapsed > 0 else 0
-                print(f"  Batch {batch_idx + 1}/{num_batches}: {pairs_done} pairs @ {rate:.1f} pairs/sec")
+                print(
+                    f"  Batch {batch_idx + 1}/{num_batches}: {pairs_done} pairs @ {rate:.1f} pairs/sec"
+                )
 
         inference_end = time.time()
         inference_time = inference_end - inference_start
@@ -438,7 +465,9 @@ def run_caption_frame_extents_inference_batch(
         metrics.successful_inferences = len(pair_results)
 
         # Create database
-        from caption_frame_extents.inference.caption_frame_extents_db import get_db_filename
+        from caption_frame_extents.inference.caption_frame_extents_db import (
+            get_db_filename,
+        )
 
         db_filename = get_db_filename(cropped_frames_version, model_version, run_id)
         db_path = tmp_path / db_filename
@@ -463,9 +492,13 @@ def run_caption_frame_extents_inference_batch(
         upload_start = time.time()
 
         # Build storage key for caption frame extents database
-        from caption_frame_extents.inference.caption_frame_extents_db import get_db_filename
+        from caption_frame_extents.inference.caption_frame_extents_db import (
+            get_db_filename,
+        )
 
-        caption_frame_extents_filename = get_db_filename(cropped_frames_version, model_version, run_id)
+        caption_frame_extents_filename = get_db_filename(
+            cropped_frames_version, model_version, run_id
+        )
         storage_key = f"videos/{tenant_id}/{video_id}/caption_frame_extents/{caption_frame_extents_filename}"
 
         wasabi.upload_file(db_path, storage_key, content_type="application/x-sqlite3")
@@ -477,7 +510,9 @@ def run_caption_frame_extents_inference_batch(
         register_start = time.time()
 
         try:
-            from caption_frame_extents.inference.inference_repository import CaptionFrameExtentsInferenceRunRepository
+            from caption_frame_extents.inference.inference_repository import (
+                CaptionFrameExtentsInferenceRunRepository,
+            )
 
             # Initialize repository with environment credentials
             supabase_url = os.environ.get("SUPABASE_URL")
@@ -486,7 +521,9 @@ def run_caption_frame_extents_inference_batch(
             if not supabase_url or not supabase_key:
                 print("  [WARNING] Supabase credentials not set, skipping registration")
             else:
-                repo = CaptionFrameExtentsInferenceRunRepository(supabase_url, supabase_key)
+                repo = CaptionFrameExtentsInferenceRunRepository(
+                    supabase_url, supabase_key
+                )
 
                 # Register completed run
                 repo.register_run(
@@ -504,7 +541,9 @@ def run_caption_frame_extents_inference_batch(
                     model_checkpoint_path=str(checkpoint_path),
                 )
 
-                print(f"  Registered in Supabase in {time.time() - register_start:.2f}s\n")
+                print(
+                    f"  Registered in Supabase in {time.time() - register_start:.2f}s\n"
+                )
         except Exception as e:
             print(f"  [ERROR] Failed to register in Supabase: {e}")
             # Don't fail the job if Supabase registration fails

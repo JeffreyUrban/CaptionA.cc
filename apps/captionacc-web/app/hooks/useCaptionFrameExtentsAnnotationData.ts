@@ -5,11 +5,12 @@
  * Uses CR-SQLite local database with WebSocket sync instead of REST API calls.
  */
 
-import { useCallback, useRef, useEffect } from 'react'
+import { useCallback, useRef } from 'react'
 
-import type { Annotation } from '~/types/caption-frame-extents'
 import { useCaptionsDatabase } from './useCaptionsDatabase'
+
 import type { CaptionAnnotationData, CaptionFrameExtentState } from '~/services/database-queries'
+import type { Annotation } from '~/types/caption-frame-extents'
 
 interface UseCaptionFrameExtentsAnnotationDataParams {
   videoId: string
@@ -88,6 +89,7 @@ function toUIAnnotation(dbAnnotation: CaptionAnnotationData): Annotation {
 /**
  * Hook for managing caption frame extents annotation data and operations.
  */
+// eslint-disable-next-line max-lines-per-function -- Complex hook managing annotation CRUD, navigation stack, and cache; splitting would harm cohesion
 export function useCaptionFrameExtentsAnnotationData({
   videoId,
   tenantId,
@@ -531,7 +533,9 @@ export function useCaptionFrameExtentsAnnotationData({
           )
 
           try {
-            const annotation = await captionsDb.getAnnotation(prevAnnotationId!)
+            // prevAnnotationId is guaranteed to be defined here since we checked navigationStackRef.current.length > 1
+            if (prevAnnotationId === undefined) return
+            const annotation = await captionsDb.getAnnotation(prevAnnotationId)
             if (annotation) {
               const uiAnnotation = toUIAnnotation(annotation)
               activeAnnotationRef.current = uiAnnotation
@@ -602,8 +606,9 @@ export function useCaptionFrameExtentsAnnotationData({
         // Query for annotations containing this frame
         const annotations = await captionsDb.getAnnotationsForRange(frameNumber, frameNumber)
 
-        if (annotations.length > 0) {
-          const annotation = toUIAnnotation(annotations[0]!)
+        const firstAnnotation = annotations[0]
+        if (firstAnnotation) {
+          const annotation = toUIAnnotation(firstAnnotation)
           activeAnnotationRef.current = annotation
           jumpTargetRef.current = frameNumber // Set pending jump target
           markedStartRef.current = annotation.start_frame_index
@@ -633,8 +638,9 @@ export function useCaptionFrameExtentsAnnotationData({
       try {
         const annotations = await captionsDb.getAnnotationsForRange(frameIndex, frameIndex)
 
-        if (annotations.length > 0) {
-          const annotation = toUIAnnotation(annotations[0]!)
+        const firstAnnotation = annotations[0]
+        if (firstAnnotation) {
+          const annotation = toUIAnnotation(firstAnnotation)
           activeAnnotationRef.current = annotation
           markedStartRef.current = annotation.start_frame_index
           markedEndRef.current = annotation.end_frame_index

@@ -9,11 +9,9 @@
  * - TypeScript type safety
  */
 
-import { useState, useEffect } from 'react'
-import type { ImgHTMLAttributes } from 'react'
+import { useState, useEffect, type ImgHTMLAttributes } from 'react'
 
-import { getVideoResourceUrl } from '~/services/s3-client'
-import type { S3PathParams } from '~/services/s3-client'
+import { getVideoResourceUrl, type S3PathParams } from '~/services/s3-client'
 
 // ============================================================================
 // Types
@@ -99,7 +97,7 @@ export function S3Image({
             // Parse cropped frames path
             // Example: cropped_frames_v2/modulo_16/chunk_0001.webm
             const match = path.match(/cropped_frames_v(\d+)\/modulo_(\d+)\/chunk_(\d+)\.webm/)
-            if (match && match[1] && match[2] && match[3]) {
+            if (match?.[1] && match[2] && match[3]) {
               pathParams = {
                 videoId,
                 type: 'cropped_frames',
@@ -240,7 +238,7 @@ export async function preloadS3Image(
       }
     } else if (path.includes('cropped_frames')) {
       const match = path.match(/cropped_frames_v(\d+)\/modulo_(\d+)\/chunk_(\d+)\.webm/)
-      if (match && match[1] && match[2] && match[3]) {
+      if (match?.[1] && match[2] && match[3]) {
         pathParams = {
           videoId,
           type: 'cropped_frames',

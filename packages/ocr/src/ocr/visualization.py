@@ -8,7 +8,9 @@ from typing import cast
 from PIL import Image
 
 
-def create_ocr_visualization(ocr_file: Path, output_image: Path, width: int, height: int) -> None:
+def create_ocr_visualization(
+    ocr_file: Path, output_image: Path, width: int, height: int
+) -> None:
     """Create visualization of OCR bounding boxes.
 
     Creates a white canvas showing all detected text boxes from all frames.
@@ -81,7 +83,11 @@ def create_ocr_visualization(ocr_file: Path, output_image: Path, width: int, hei
                     r, g, b = cast(tuple[int, int, int], blank_image.getpixel((i, y1)))
                     blank_image.putpixel(
                         (i, y1),
-                        (max(0, r - darkness), max(0, g - darkness), max(0, b - darkness)),
+                        (
+                            max(0, r - darkness),
+                            max(0, g - darkness),
+                            max(0, b - darkness),
+                        ),
                     )
 
                 # Bottom edge
@@ -89,7 +95,11 @@ def create_ocr_visualization(ocr_file: Path, output_image: Path, width: int, hei
                     r, g, b = cast(tuple[int, int, int], blank_image.getpixel((i, y2)))
                     blank_image.putpixel(
                         (i, y2),
-                        (max(0, r - darkness), max(0, g - darkness), max(0, b - darkness)),
+                        (
+                            max(0, r - darkness),
+                            max(0, g - darkness),
+                            max(0, b - darkness),
+                        ),
                     )
 
                 # Left edge
@@ -97,7 +107,11 @@ def create_ocr_visualization(ocr_file: Path, output_image: Path, width: int, hei
                     r, g, b = cast(tuple[int, int, int], blank_image.getpixel((x1, i)))
                     blank_image.putpixel(
                         (x1, i),
-                        (max(0, r - darkness), max(0, g - darkness), max(0, b - darkness)),
+                        (
+                            max(0, r - darkness),
+                            max(0, g - darkness),
+                            max(0, b - darkness),
+                        ),
                     )
 
                 # Right edge
@@ -105,7 +119,11 @@ def create_ocr_visualization(ocr_file: Path, output_image: Path, width: int, hei
                     r, g, b = cast(tuple[int, int, int], blank_image.getpixel((x2, i)))
                     blank_image.putpixel(
                         (x2, i),
-                        (max(0, r - darkness), max(0, g - darkness), max(0, b - darkness)),
+                        (
+                            max(0, r - darkness),
+                            max(0, g - darkness),
+                            max(0, b - darkness),
+                        ),
                     )
 
     # Save the resulting image

@@ -78,7 +78,9 @@ class AnchorAwareResize:
         # Step 1: Resize to target height, preserving aspect ratio
         aspect_ratio = image.width / image.height
         new_width = int(self.target_height * aspect_ratio)
-        resized = image.resize((new_width, self.target_height), Image.Resampling.LANCZOS)
+        resized = image.resize(
+            (new_width, self.target_height), Image.Resampling.LANCZOS
+        )
 
         # Step 2: Handle width (crop or tile based on strategy)
         if new_width == self.target_width:
@@ -188,7 +190,9 @@ class AnchorAwareResize:
 
         return canvas
 
-    def _fill_right(self, canvas: Image.Image, source: Image.Image, start_offset: int) -> None:
+    def _fill_right(
+        self, canvas: Image.Image, source: Image.Image, start_offset: int
+    ) -> None:
         """Fill right side of canvas with mirrored source image.
 
         Args:
@@ -237,7 +241,9 @@ class AnchorAwareResize:
             # Crop if needed (from right side when filling left)
             if paste_width < mirrored.width:
                 crop_left = mirrored.width - paste_width
-                mirrored = mirrored.crop((crop_left, 0, mirrored.width, self.target_height))
+                mirrored = mirrored.crop(
+                    (crop_left, 0, mirrored.width, self.target_height)
+                )
 
             # Paste mirrored section
             paste_left = filled_left - paste_width

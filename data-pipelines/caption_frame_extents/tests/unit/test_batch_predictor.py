@@ -9,10 +9,14 @@ import pytest
 import torch
 from PIL import Image
 
-from caption_frame_extents.inference.batch_predictor import BatchCaptionFrameExtentsPredictor
+from caption_frame_extents.inference.batch_predictor import (
+    BatchCaptionFrameExtentsPredictor,
+)
 
 
-def create_test_image(width: int = 480, height: int = 48, color: tuple = (100, 150, 200)) -> Image.Image:
+def create_test_image(
+    width: int = 480, height: int = 48, color: tuple = (100, 150, 200)
+) -> Image.Image:
     """Create a test PIL image."""
     img = Image.new("RGB", (width, height), color)
     return img
@@ -103,7 +107,9 @@ class TestBatchCaptionFrameExtentsPredictorInit:
 
         checkpoint_path = create_mock_checkpoint(tmp_path)
 
-        with patch("caption_frame_extents.inference.batch_predictor.create_model") as mock_create:
+        with patch(
+            "caption_frame_extents.inference.batch_predictor.create_model"
+        ) as mock_create:
             mock_model = MagicMock()
             mock_create.return_value = mock_model
 
@@ -141,7 +147,9 @@ class TestBatchCaptionFrameExtentsPredictorInit:
 
         checkpoint_path = create_mock_checkpoint(tmp_path)
 
-        with patch("caption_frame_extents.inference.batch_predictor.create_model") as mock_create:
+        with patch(
+            "caption_frame_extents.inference.batch_predictor.create_model"
+        ) as mock_create:
             mock_model = MagicMock()
             mock_create.return_value = mock_model
 
@@ -157,7 +165,9 @@ class TestBatchCaptionFrameExtentsPredictorInit:
         layout_db_path = create_mock_layout_db(tmp_path)
         checkpoint_path = create_mock_checkpoint(tmp_path)
 
-        with patch("caption_frame_extents.inference.batch_predictor.create_model") as mock_create:
+        with patch(
+            "caption_frame_extents.inference.batch_predictor.create_model"
+        ) as mock_create:
             mock_model = MagicMock()
             mock_model.eval = MagicMock()
             mock_model.load_state_dict = MagicMock()
@@ -178,7 +188,9 @@ class TestBatchCaptionFrameExtentsPredictorInit:
         layout_db_path = create_mock_layout_db(tmp_path)
         checkpoint_path = create_mock_checkpoint(tmp_path)
 
-        with patch("caption_frame_extents.inference.batch_predictor.create_model") as mock_create:
+        with patch(
+            "caption_frame_extents.inference.batch_predictor.create_model"
+        ) as mock_create:
             mock_model = MagicMock()
             mock_create.return_value = mock_model
 
@@ -226,7 +238,9 @@ class TestBatchCaptionFrameExtentsPredictorSpatialFeatures:
 
         checkpoint_path = create_mock_checkpoint(tmp_path)
 
-        with patch("caption_frame_extents.inference.batch_predictor.create_model") as mock_create:
+        with patch(
+            "caption_frame_extents.inference.batch_predictor.create_model"
+        ) as mock_create:
             mock_model = MagicMock()
             mock_create.return_value = mock_model
 
@@ -244,7 +258,9 @@ class TestBatchCaptionFrameExtentsPredictorSpatialFeatures:
         layout_db_path = create_mock_layout_db(tmp_path)  # Uses center anchor
         checkpoint_path = create_mock_checkpoint(tmp_path)
 
-        with patch("caption_frame_extents.inference.batch_predictor.create_model") as mock_create:
+        with patch(
+            "caption_frame_extents.inference.batch_predictor.create_model"
+        ) as mock_create:
             mock_model = MagicMock()
             mock_create.return_value = mock_model
 
@@ -287,7 +303,9 @@ class TestBatchCaptionFrameExtentsPredictorSpatialFeatures:
 
         checkpoint_path = create_mock_checkpoint(tmp_path)
 
-        with patch("caption_frame_extents.inference.batch_predictor.create_model") as mock_create:
+        with patch(
+            "caption_frame_extents.inference.batch_predictor.create_model"
+        ) as mock_create:
             mock_model = MagicMock()
             mock_create.return_value = mock_model
 
@@ -304,7 +322,9 @@ class TestBatchCaptionFrameExtentsPredictorSpatialFeatures:
         layout_db_path = create_mock_layout_db(tmp_path)
         checkpoint_path = create_mock_checkpoint(tmp_path)
 
-        with patch("caption_frame_extents.inference.batch_predictor.create_model") as mock_create:
+        with patch(
+            "caption_frame_extents.inference.batch_predictor.create_model"
+        ) as mock_create:
             mock_model = MagicMock()
             mock_create.return_value = mock_model
 
@@ -321,7 +341,9 @@ class TestBatchCaptionFrameExtentsPredictorSpatialFeatures:
         layout_db_path = create_mock_layout_db(tmp_path)
         checkpoint_path = create_mock_checkpoint(tmp_path)
 
-        with patch("caption_frame_extents.inference.batch_predictor.create_model") as mock_create:
+        with patch(
+            "caption_frame_extents.inference.batch_predictor.create_model"
+        ) as mock_create:
             mock_model = MagicMock()
             mock_create.return_value = mock_model
 
@@ -350,7 +372,9 @@ class TestBatchCaptionFrameExtentsPredictorPrediction:
         layout_db_path = create_mock_layout_db(tmp_path)
         checkpoint_path = create_mock_checkpoint(tmp_path)
 
-        with patch("caption_frame_extents.inference.batch_predictor.create_model") as mock_create:
+        with patch(
+            "caption_frame_extents.inference.batch_predictor.create_model"
+        ) as mock_create:
             mock_model = MagicMock()
             mock_model.eval = MagicMock(return_value=None)
             mock_model.load_state_dict = MagicMock(return_value=None)
@@ -394,7 +418,13 @@ class TestBatchCaptionFrameExtentsPredictorPrediction:
 
         result = predictor.predict_frame_pair(frame1, frame2)
 
-        valid_labels = ["same", "different", "empty_empty", "empty_valid", "valid_empty"]
+        valid_labels = [
+            "same",
+            "different",
+            "empty_empty",
+            "empty_valid",
+            "valid_empty",
+        ]
         assert result["predicted_label"] in valid_labels
 
     def test_predict_frame_pair_probabilities_sum_to_one(self, predictor):
@@ -432,9 +462,18 @@ class TestBatchCaptionFrameExtentsPredictorPrediction:
     def test_predict_batch_preserves_order(self, predictor):
         """Results should be in same order as input pairs."""
         frames = [
-            (create_test_image(color=(255, 0, 0)), create_test_image(color=(0, 255, 0))),
-            (create_test_image(color=(0, 0, 255)), create_test_image(color=(255, 255, 0))),
-            (create_test_image(color=(255, 0, 255)), create_test_image(color=(0, 255, 255))),
+            (
+                create_test_image(color=(255, 0, 0)),
+                create_test_image(color=(0, 255, 0)),
+            ),
+            (
+                create_test_image(color=(0, 0, 255)),
+                create_test_image(color=(255, 255, 0)),
+            ),
+            (
+                create_test_image(color=(255, 0, 255)),
+                create_test_image(color=(0, 255, 255)),
+            ),
         ]
 
         results = predictor.predict_batch(frames)
@@ -478,7 +517,9 @@ class TestBatchCaptionFrameExtentsPredictorLabels:
         layout_db_path = create_mock_layout_db(tmp_path)
         checkpoint_path = create_mock_checkpoint(tmp_path)
 
-        with patch("caption_frame_extents.inference.batch_predictor.create_model") as mock_create:
+        with patch(
+            "caption_frame_extents.inference.batch_predictor.create_model"
+        ) as mock_create:
             mock_model = MagicMock()
             mock_create.return_value = mock_model
 
@@ -488,7 +529,13 @@ class TestBatchCaptionFrameExtentsPredictorLabels:
                 device="cpu",
             )
 
-            expected_labels = ["same", "different", "empty_empty", "empty_valid", "valid_empty"]
+            expected_labels = [
+                "same",
+                "different",
+                "empty_empty",
+                "empty_valid",
+                "valid_empty",
+            ]
             assert predictor.labels == expected_labels
 
     def test_label_to_idx_mapping(self, tmp_path):
@@ -496,7 +543,9 @@ class TestBatchCaptionFrameExtentsPredictorLabels:
         layout_db_path = create_mock_layout_db(tmp_path)
         checkpoint_path = create_mock_checkpoint(tmp_path)
 
-        with patch("caption_frame_extents.inference.batch_predictor.create_model") as mock_create:
+        with patch(
+            "caption_frame_extents.inference.batch_predictor.create_model"
+        ) as mock_create:
             mock_model = MagicMock()
             mock_create.return_value = mock_model
 

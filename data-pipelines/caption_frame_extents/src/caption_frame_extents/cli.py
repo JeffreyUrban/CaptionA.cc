@@ -41,23 +41,44 @@ def get_project_root() -> Path:
 @app.command()
 def train(
     dataset_name: str = typer.Argument(..., help="Dataset name (e.g., 'my_dataset')"),
-    experiment_name: str = typer.Option(..., "--name", "-n", help="Experiment name for W&B"),
-    architecture: str = typer.Option(
-        "triple_backbone_resnet50", "--architecture", "-a", help="Model architecture from registry"
+    experiment_name: str = typer.Option(
+        ..., "--name", "-n", help="Experiment name for W&B"
     ),
-    pretrained: bool = typer.Option(True, "--pretrained/--no-pretrained", help="Use ImageNet pretrained weights"),
+    architecture: str = typer.Option(
+        "triple_backbone_resnet50",
+        "--architecture",
+        "-a",
+        help="Model architecture from registry",
+    ),
+    pretrained: bool = typer.Option(
+        True, "--pretrained/--no-pretrained", help="Use ImageNet pretrained weights"
+    ),
     epochs: int = typer.Option(50, "--epochs", "-e", help="Number of training epochs"),
-    batch_size: int = typer.Option(32, "--batch-size", "-b", help="Training batch size"),
-    lr_features: float = typer.Option(1e-3, "--lr-features", help="Learning rate for feature extractor"),
-    lr_classifier: float = typer.Option(1e-2, "--lr-classifier", help="Learning rate for classifier head"),
+    batch_size: int = typer.Option(
+        32, "--batch-size", "-b", help="Training batch size"
+    ),
+    lr_features: float = typer.Option(
+        1e-3, "--lr-features", help="Learning rate for feature extractor"
+    ),
+    lr_classifier: float = typer.Option(
+        1e-2, "--lr-classifier", help="Learning rate for classifier head"
+    ),
     transform_strategy: str = typer.Option(
-        "mirror_tile", "--transform", help="Transform strategy: 'crop', 'mirror_tile', or 'adaptive'"
+        "mirror_tile",
+        "--transform",
+        help="Transform strategy: 'crop', 'mirror_tile', or 'adaptive'",
     ),
     ocr_viz_variant: str = typer.Option(
-        "boundaries", "--ocr-viz", help="OCR visualization variant: 'boundaries', 'centers', 'both', or '3d_channels'"
+        "boundaries",
+        "--ocr-viz",
+        help="OCR visualization variant: 'boundaries', 'centers', 'both', or '3d_channels'",
     ),
-    device: str = typer.Option(None, "--device", help="Device: 'cuda', 'mps', 'cpu', or None for auto-detect"),
-    wandb_project: str = typer.Option("caption-frame-extents-detection", "--wandb-project", help="W&B project name"),
+    device: str = typer.Option(
+        None, "--device", help="Device: 'cuda', 'mps', 'cpu', or None for auto-detect"
+    ),
+    wandb_project: str = typer.Option(
+        "caption-frame-extents-detection", "--wandb-project", help="W&B project name"
+    ),
     checkpoint_dir: Path = typer.Option(
         None,
         "--checkpoint-dir",
@@ -74,7 +95,9 @@ def train(
         help="Max samples per class per epoch (recommended for scaling). Overrides --sampling-ratio.",
     ),
     sampling_ratio: float = typer.Option(
-        3.0, "--sampling-ratio", help="Max ratio of majority to minority class (legacy, for backward compat)"
+        3.0,
+        "--sampling-ratio",
+        help="Max ratio of majority to minority class (legacy, for backward compat)",
     ),
 ):
     """Train caption frame extents detection model with W&B tracking.
@@ -99,12 +122,16 @@ def train(
     # Set default checkpoint_dir if not provided
     if checkpoint_dir is None:
         project_root = get_project_root()
-        checkpoint_dir = project_root / "local" / "models" / "caption_frame_extents" / "experiments"
+        checkpoint_dir = (
+            project_root / "local" / "models" / "caption_frame_extents" / "experiments"
+        )
 
     # Get dataset database path
     dataset_db_path = get_dataset_db_path(dataset_name)
     if not dataset_db_path.exists():
-        console.print(f"[red]✗[/red] Dataset '{dataset_name}' not found at {dataset_db_path}")
+        console.print(
+            f"[red]✗[/red] Dataset '{dataset_name}' not found at {dataset_db_path}"
+        )
         console.print("Available datasets:")
         datasets_dir = dataset_db_path.parent
         if datasets_dir.exists():
@@ -123,19 +150,31 @@ def train(
     # Validate OCR viz variant
     valid_viz = ["boundaries", "centers", "both", "3d_channels"]
     if ocr_viz_variant not in valid_viz:
-        console.print(f"[red]✗[/red] Invalid OCR visualization variant: {ocr_viz_variant}")
+        console.print(
+            f"[red]✗[/red] Invalid OCR visualization variant: {ocr_viz_variant}"
+        )
         console.print(f"Valid options: {', '.join(valid_viz)}")
         raise typer.Exit(code=1)
 
     try:
         # Initialize trainer
-        trainer = CaptionFrameExtentsTrainer(dataset_db_path=dataset_db_path, experiment_name=experiment_name,
-                                         architecture_name=architecture, model_config={"pretrained": pretrained},
-                                         transform_strategy=strategy, ocr_viz_variant=ocr_viz_variant, epochs=epochs,
-                                         batch_size=batch_size, lr_features=lr_features, lr_classifier=lr_classifier,
-                                         device=device, wandb_project=wandb_project, checkpoint_dir=checkpoint_dir,
-                                         balanced_sampling=balanced_sampling,
-                                         max_samples_per_class=max_samples_per_class)
+        trainer = CaptionFrameExtentsTrainer(
+            dataset_db_path=dataset_db_path,
+            experiment_name=experiment_name,
+            architecture_name=architecture,
+            model_config={"pretrained": pretrained},
+            transform_strategy=strategy,
+            ocr_viz_variant=ocr_viz_variant,
+            epochs=epochs,
+            batch_size=batch_size,
+            lr_features=lr_features,
+            lr_classifier=lr_classifier,
+            device=device,
+            wandb_project=wandb_project,
+            checkpoint_dir=checkpoint_dir,
+            balanced_sampling=balanced_sampling,
+            max_samples_per_class=max_samples_per_class,
+        )
 
         # Run training
         trainer.train()
@@ -152,10 +191,11 @@ def train(
 def analyze(
     predictions_json: Path = typer.Argument(..., help="Path to predictions JSON file"),
     video_db: Path = typer.Option(..., "--video-db", help="Path to video captions.db"),
-    ocr_confidence_min: float = typer.Option(0.7, "--ocr-min", help="Minimum OCR confidence"),
+    ocr_confidence_min: float = typer.Option(
+        0.7, "--ocr-min", help="Minimum OCR confidence"
+    ),
 ):
-    """Run quality checks on existing caption frame extents predictions.
-    """
+    """Run quality checks on existing caption frame extents predictions."""
     import json
 
     from caption_frame_extents.inference.quality_checks import run_quality_checks
@@ -185,8 +225,12 @@ def analyze(
 
         if quality_results["flagged_caption_frame_extents"]:
             console.print("\n[yellow]Detailed Flags:[/yellow]")
-            for caption_frame_extent in quality_results["flagged_caption_frame_extents"]:
-                console.print(f"\n  Frames {caption_frame_extent['frame1_index']} → {caption_frame_extent['frame2_index']}:")
+            for caption_frame_extent in quality_results[
+                "flagged_caption_frame_extents"
+            ]:
+                console.print(
+                    f"\n  Frames {caption_frame_extent['frame1_index']} → {caption_frame_extent['frame2_index']}:"
+                )
                 for flag in caption_frame_extent["flags"]:
                     console.print(f"    • {flag}")
 
@@ -200,15 +244,26 @@ def analyze(
 
 @app.command()
 def create_dataset(
-    name: str = typer.Argument(..., help="Dataset name (will be used as database filename)"),
-    video_dirs: list[Path] = typer.Argument(..., help="Paths to video directories (glob patterns supported)"),
-    split_strategy: str = typer.Option("random", "--split", help="Split strategy: 'random' or 'show_based'"),
-    train_ratio: float = typer.Option(0.8, "--train-ratio", help="Fraction of data for training (default: 0.8)"),
-    random_seed: int = typer.Option(42, "--seed", help="Random seed for reproducibility"),
-    description: str = typer.Option(None, "--description", "-d", help="Dataset description"),
+    name: str = typer.Argument(
+        ..., help="Dataset name (will be used as database filename)"
+    ),
+    video_dirs: list[Path] = typer.Argument(
+        ..., help="Paths to video directories (glob patterns supported)"
+    ),
+    split_strategy: str = typer.Option(
+        "random", "--split", help="Split strategy: 'random' or 'show_based'"
+    ),
+    train_ratio: float = typer.Option(
+        0.8, "--train-ratio", help="Fraction of data for training (default: 0.8)"
+    ),
+    random_seed: int = typer.Option(
+        42, "--seed", help="Random seed for reproducibility"
+    ),
+    description: str = typer.Option(
+        None, "--description", "-d", help="Dataset description"
+    ),
 ):
-    """Create training dataset from annotated videos.
-    """
+    """Create training dataset from annotated videos."""
     from caption_frame_extents.data.dataset_builder import create_training_dataset
 
     # Expand glob patterns and find captions.db files
@@ -263,7 +318,11 @@ def create_dataset(
 @app.command()
 def list_models():
     """List available model architectures."""
-    from caption_frame_extents.models import create_model, get_model_info, list_architectures
+    from caption_frame_extents.models import (
+        create_model,
+        get_model_info,
+        list_architectures,
+    )
 
     console.print("[cyan]Available Model Architectures:[/cyan]\n")
 
@@ -283,11 +342,15 @@ def list_models():
         if callable(get_trainable):
             trainable_params: int = get_trainable()  # type: ignore[assignment]
         else:
-            trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+            trainable_params = sum(
+                p.numel() for p in model.parameters() if p.requires_grad
+            )
 
         console.print(f"[green]{arch_name}[/green]")
         trainable_pct = trainable_params / total_params * 100 if total_params > 0 else 0
-        console.print(f"  Parameters: {total_params:,} total, {trainable_params:,} trainable ({trainable_pct:.1f}%)")
+        console.print(
+            f"  Parameters: {total_params:,} total, {trainable_params:,} trainable ({trainable_pct:.1f}%)"
+        )
         console.print(f"  Module: {info['module']}")
 
         if info["docstring"]:

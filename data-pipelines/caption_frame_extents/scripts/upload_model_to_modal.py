@@ -70,7 +70,9 @@ def compute_file_hash(filepath: Path, chunk_size: int = 8192) -> str:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Upload model checkpoint to Modal volume")
+    parser = argparse.ArgumentParser(
+        description="Upload model checkpoint to Modal volume"
+    )
     parser.add_argument(
         "--checkpoint",
         required=True,

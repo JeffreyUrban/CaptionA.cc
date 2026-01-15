@@ -8,11 +8,12 @@
  * Resources: video.db, fullOCR.db, layout.db, captions.db
  */
 
-import { S3Client, GetObjectCommand, PutObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3'
 import { createWriteStream, existsSync, mkdirSync, readFileSync, rmSync, statSync } from 'fs'
 import { dirname, resolve } from 'path'
 import { Readable } from 'stream'
 import { pipeline } from 'stream/promises'
+
+import { S3Client, GetObjectCommand, PutObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3'
 
 const WASABI_REGION = 'us-east-1'
 const WASABI_BUCKET = 'caption-acc-prod'
@@ -25,8 +26,8 @@ const CACHE_DIR = resolve(process.cwd(), '..', '..', 'local', 'cache')
  * Get configured S3 client for Wasabi
  */
 function getS3Client(): S3Client {
-  const accessKey = process.env['WASABI_ACCESS_KEY_READWRITE'] || process.env['WASABI_ACCESS_KEY']
-  const secretKey = process.env['WASABI_SECRET_KEY_READWRITE'] || process.env['WASABI_SECRET_KEY']
+  const accessKey = process.env['WASABI_ACCESS_KEY_READWRITE'] ?? process.env['WASABI_ACCESS_KEY']
+  const secretKey = process.env['WASABI_SECRET_KEY_READWRITE'] ?? process.env['WASABI_SECRET_KEY']
 
   if (!accessKey || !secretKey) {
     throw new Error(

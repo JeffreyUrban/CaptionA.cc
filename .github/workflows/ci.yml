@@ -42,7 +42,7 @@ jobs:
       - name: Install dependencies
         if: steps.check-python.outputs.has_python == 'true'
 
-        run: uv sync --only-group dev
+        run: uv sync
 
       - name: Lint with ruff
         if: steps.check-python.outputs.has_python == 'true'

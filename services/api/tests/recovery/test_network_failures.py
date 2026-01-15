@@ -14,15 +14,19 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import httpx
 import pytest
-from botocore.exceptions import ClientError, ConnectTimeoutError, EndpointConnectionError
+from botocore.exceptions import (
+    ClientError,
+    ConnectTimeoutError,
+    EndpointConnectionError,
+)
 from postgrest.exceptions import APIError
 
 from app.services.wasabi_service import WasabiServiceImpl
 
 # Mock modal and extract_crop_frames_and_infer_extents modules to avoid import errors in tests
-sys.modules['modal'] = MagicMock()
-sys.modules['extract_crop_frames_and_infer_extents'] = MagicMock()
-sys.modules['extract_crop_frames_and_infer_extents.models'] = MagicMock()
+sys.modules["modal"] = MagicMock()
+sys.modules["extract_crop_frames_and_infer_extents"] = MagicMock()
+sys.modules["extract_crop_frames_and_infer_extents.models"] = MagicMock()
 
 
 @pytest.mark.recovery
@@ -59,12 +63,14 @@ class TestNetworkFailureRecovery:
             with pytest.raises(httpx.ConnectError) as exc_info:
                 # Simulate what the webhook would do
                 import asyncio
+
                 async def trigger_flow():
                     async with httpx.AsyncClient() as client:
                         await client.post(
                             "https://api.prefect.cloud/api/deployments/trigger",
-                            json={"parameters": {}}
+                            json={"parameters": {}},
                         )
+
                 asyncio.run(trigger_flow())
 
             assert "Connection refused" in str(exc_info.value)
@@ -96,13 +102,15 @@ class TestNetworkFailureRecovery:
             # Test that timeout is properly raised
             with pytest.raises(httpx.ReadTimeout) as exc_info:
                 import asyncio
+
                 async def trigger_flow():
                     async with httpx.AsyncClient() as client:
                         await client.post(
                             "https://api.prefect.cloud/api/deployments/trigger",
                             json={"parameters": {}},
-                            timeout=30.0
+                            timeout=30.0,
                         )
+
                 asyncio.run(trigger_flow())
 
             assert "timed out" in str(exc_info.value)
@@ -123,7 +131,7 @@ class TestNetworkFailureRecovery:
         """
         from app.services.supabase_service import SupabaseServiceImpl
 
-        with patch('supabase.create_client') as mock_create:
+        with patch("supabase.create_client") as mock_create:
             # Mock Supabase client
             mock_client = Mock()
             mock_create.return_value = mock_client
@@ -142,13 +150,13 @@ class TestNetworkFailureRecovery:
             # First call: timeout, Second call: success
             mock_eq.execute.side_effect = [
                 APIError({"message": "Connection timeout", "code": "PGRST301"}),
-                Mock(data={"status": "processing"})
+                Mock(data={"status": "processing"}),
             ]
 
             service = SupabaseServiceImpl(
                 supabase_url="https://test.supabase.co",
                 supabase_key="test-key",  # pragma: allowlist secret
-                schema="test_schema"
+                schema="test_schema",
             )
 
             # First attempt should raise timeout
@@ -178,7 +186,7 @@ class TestNetworkFailureRecovery:
         """
         from app.services.supabase_service import SupabaseServiceImpl
 
-        with patch('supabase.create_client') as mock_create:
+        with patch("supabase.create_client") as mock_create:
             mock_client = Mock()
             mock_create.return_value = mock_client
 
@@ -194,12 +202,14 @@ class TestNetworkFailureRecovery:
             mock_update.eq.return_value = mock_eq
 
             # All attempts fail
-            mock_eq.execute.side_effect = APIError({"message": "Network error", "code": "PGRST301"})
+            mock_eq.execute.side_effect = APIError(
+                {"message": "Network error", "code": "PGRST301"}
+            )
 
             service = SupabaseServiceImpl(
                 supabase_url="https://test.supabase.co",
                 supabase_key="test-key",  # pragma: allowlist secret
-                schema="test_schema"
+                schema="test_schema",
             )
 
             # Should fail with network error
@@ -223,36 +233,32 @@ class TestNetworkFailureRecovery:
             - Upload is retried
             - Eventually succeeds after retry
         """
-        with patch('app.services.wasabi_service.boto3.client') as mock_boto:
+        with patch("app.services.wasabi_service.boto3.client") as mock_boto:
             mock_s3_client = Mock()
             mock_boto.return_value = mock_s3_client
 
             # Simulate: first upload fails, second succeeds
             mock_s3_client.upload_fileobj.side_effect = [
                 EndpointConnectionError(endpoint_url="https://s3.wasabisys.com"),
-                None  # Success
+                None,  # Success
             ]
 
             service = WasabiServiceImpl(
                 access_key="test-access",
                 secret_key="test-secret",  # pragma: allowlist secret
                 bucket="test-bucket",
-                region="us-east-1"
+                region="us-east-1",
             )
 
             # First attempt should fail
             with pytest.raises(EndpointConnectionError):
                 service.upload_file(
-                    key="test/file.txt",
-                    data=b"test data",
-                    content_type="text/plain"
+                    key="test/file.txt", data=b"test data", content_type="text/plain"
                 )
 
             # Second attempt should succeed (simulating retry)
             result = service.upload_file(
-                key="test/file.txt",
-                data=b"test data",
-                content_type="text/plain"
+                key="test/file.txt", data=b"test data", content_type="text/plain"
             )
 
             assert result == "test/file.txt"
@@ -272,35 +278,29 @@ class TestNetworkFailureRecovery:
             - Upload is retried
             - Eventually succeeds
         """
-        with patch('app.services.wasabi_service.boto3.client') as mock_boto:
+        with patch("app.services.wasabi_service.boto3.client") as mock_boto:
             mock_s3_client = Mock()
             mock_boto.return_value = mock_s3_client
 
             # Simulate: timeout then success
             mock_s3_client.upload_fileobj.side_effect = [
                 ConnectTimeoutError(endpoint_url="https://s3.wasabisys.com"),
-                None
+                None,
             ]
 
             service = WasabiServiceImpl(
                 access_key="test-access",
                 secret_key="test-secret",  # pragma: allowlist secret
                 bucket="test-bucket",
-                region="us-east-1"
+                region="us-east-1",
             )
 
             # First attempt times out
             with pytest.raises(ConnectTimeoutError):
-                service.upload_file(
-                    key="test/timeout.txt",
-                    data=b"test data"
-                )
+                service.upload_file(key="test/timeout.txt", data=b"test data")
 
             # Retry succeeds
-            result = service.upload_file(
-                key="test/timeout.txt",
-                data=b"test data"
-            )
+            result = service.upload_file(key="test/timeout.txt", data=b"test data")
 
             assert result == "test/timeout.txt"
 
@@ -316,31 +316,29 @@ class TestNetworkFailureRecovery:
             - Permission error is raised immediately
             - No retry attempted (configuration issue, not transient)
         """
-        with patch('app.services.wasabi_service.boto3.client') as mock_boto:
+        with patch("app.services.wasabi_service.boto3.client") as mock_boto:
             mock_s3_client = Mock()
             mock_boto.return_value = mock_s3_client
 
             # Simulate permission denied
             mock_s3_client.upload_fileobj.side_effect = ClientError(
-                {"Error": {"Code": "403", "Message": "Access Denied"}},
-                "PutObject"
+                {"Error": {"Code": "403", "Message": "Access Denied"}}, "PutObject"
             )
 
             service = WasabiServiceImpl(
                 access_key="test-access",
                 secret_key="test-secret",  # pragma: allowlist secret
                 bucket="test-bucket",
-                region="us-east-1"
+                region="us-east-1",
             )
 
             # Should raise immediately (no retry for permission errors)
             with pytest.raises(ClientError) as exc_info:
-                service.upload_file(
-                    key="test/forbidden.txt",
-                    data=b"test data"
-                )
+                service.upload_file(key="test/forbidden.txt", data=b"test data")
 
-            assert "403" in str(exc_info.value) or "Access Denied" in str(exc_info.value)
+            assert "403" in str(exc_info.value) or "Access Denied" in str(
+                exc_info.value
+            )
             # Only one attempt (no retry for permission errors)
             assert mock_s3_client.upload_fileobj.call_count == 1
 
@@ -361,21 +359,21 @@ class TestNetworkFailureRecovery:
         import tempfile
         from pathlib import Path
 
-        with patch('app.services.wasabi_service.boto3.client') as mock_boto:
+        with patch("app.services.wasabi_service.boto3.client") as mock_boto:
             mock_s3_client = Mock()
             mock_boto.return_value = mock_s3_client
 
             # Simulate: network error then success
             mock_s3_client.download_file.side_effect = [
                 EndpointConnectionError(endpoint_url="https://s3.wasabisys.com"),
-                None
+                None,
             ]
 
             service = WasabiServiceImpl(
                 access_key="test-access",
                 secret_key="test-secret",  # pragma: allowlist secret
                 bucket="test-bucket",
-                region="us-east-1"
+                region="us-east-1",
             )
 
             with tempfile.TemporaryDirectory() as tmpdir:
@@ -384,15 +382,11 @@ class TestNetworkFailureRecovery:
                 # First attempt fails
                 with pytest.raises(EndpointConnectionError):
                     service.download_file(
-                        key="test/file.txt",
-                        local_path=str(local_path)
+                        key="test/file.txt", local_path=str(local_path)
                     )
 
                 # Retry succeeds
-                service.download_file(
-                    key="test/file.txt",
-                    local_path=str(local_path)
-                )
+                service.download_file(key="test/file.txt", local_path=str(local_path))
 
                 assert mock_s3_client.download_file.call_count == 2
 
@@ -413,7 +407,7 @@ class TestNetworkFailureRecovery:
         # Test service-level isolation
         from app.services.supabase_service import SupabaseServiceImpl
 
-        with patch('supabase.create_client') as mock_create_supabase:
+        with patch("supabase.create_client") as mock_create_supabase:
             # Supabase works
             mock_supabase = Mock()
             mock_create_supabase.return_value = mock_supabase
@@ -432,17 +426,16 @@ class TestNetworkFailureRecovery:
             supabase_service = SupabaseServiceImpl(
                 supabase_url="https://test.supabase.co",
                 supabase_key="test-key",  # pragma: allowlist secret
-                schema="test_schema"
+                schema="test_schema",
             )
 
             # Supabase update succeeds
             supabase_service.update_video_status(
-                video_id="test-123",
-                status="processing"
+                video_id="test-123", status="processing"
             )
 
         # Wasabi fails - independent of Supabase success
-        with patch('app.services.wasabi_service.boto3.client') as mock_boto:
+        with patch("app.services.wasabi_service.boto3.client") as mock_boto:
             mock_s3_client = Mock()
             mock_boto.return_value = mock_s3_client
             mock_s3_client.upload_fileobj.side_effect = EndpointConnectionError(
@@ -453,15 +446,12 @@ class TestNetworkFailureRecovery:
                 access_key="test-access",
                 secret_key="test-secret",  # pragma: allowlist secret
                 bucket="test-bucket",
-                region="us-east-1"
+                region="us-east-1",
             )
 
             # Wasabi upload fails
             with pytest.raises(EndpointConnectionError):
-                wasabi_service.upload_file(
-                    key="test/file.txt",
-                    data=b"test data"
-                )
+                wasabi_service.upload_file(key="test/file.txt", data=b"test data")
 
         # This demonstrates service isolation - Supabase success doesn't depend on Wasabi
         # In a real flow, the error handling would catch the Wasabi error and handle it

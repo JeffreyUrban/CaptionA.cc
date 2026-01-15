@@ -77,30 +77,23 @@ def create_vertical_montage_gpu(
         raise ValueError("No frames provided")
 
     if len(frames) != len(frame_ids):
-        raise ValueError(
-            f"frames ({len(frames)}) and frame_ids ({len(frame_ids)}) must have same length"
-        )
+        raise ValueError(f"frames ({len(frames)}) and frame_ids ({len(frame_ids)}) must have same length")
 
     # Get dimensions from first frame
     first_frame = frames[0]
     if first_frame.dim() != 3:
-        raise MontageValidationError(
-            f"Expected 3D tensor (H, W, C), got {first_frame.dim()}D tensor"
-        )
+        raise MontageValidationError(f"Expected 3D tensor (H, W, C), got {first_frame.dim()}D tensor")
 
     height, width, channels = first_frame.shape
 
     if channels != 3:
-        raise MontageValidationError(
-            f"Expected 3 channels (RGB), got {channels} channels"
-        )
+        raise MontageValidationError(f"Expected 3 channels (RGB), got {channels} channels")
 
     # Validate all frames have same dimensions
     for i, frame in enumerate(frames):
         if frame.shape != first_frame.shape:
             raise MontageValidationError(
-                f"Frame {frame_ids[i]} dimensions {tuple(frame.shape)} don't match "
-                f"expected {tuple(first_frame.shape)}"
+                f"Frame {frame_ids[i]} dimensions {tuple(frame.shape)} don't match expected {tuple(first_frame.shape)}"
             )
 
     # Calculate total montage height
@@ -109,9 +102,7 @@ def create_vertical_montage_gpu(
     total_height = num_frames * height + (num_frames - 1) * separator_px
 
     # Create montage tensor on GPU, filled with separator color
-    montage = torch.empty(
-        (total_height, width, 3), dtype=torch.uint8, device=device
-    )
+    montage = torch.empty((total_height, width, 3), dtype=torch.uint8, device=device)
     # Fill with separator color (220, 220, 220)
     montage[:, :, 0] = SEPARATOR_COLOR[0]
     montage[:, :, 1] = SEPARATOR_COLOR[1]
@@ -206,8 +197,7 @@ def create_vertical_montage_cpu(
         # Verify dimensions match
         if img.width != width or img.height != height:
             raise ValueError(
-                f"Image {img_id} dimensions {img.width}x{img.height} "
-                f"don't match expected {width}x{height}"
+                f"Image {img_id} dimensions {img.width}x{img.height} don't match expected {width}x{height}"
             )
 
         # Paste image at current offset
@@ -260,9 +250,7 @@ def create_vertical_montage_from_pil(
         raise ValueError("No images provided")
 
     if len(images) != len(frame_ids):
-        raise ValueError(
-            f"images ({len(images)}) and frame_ids ({len(frame_ids)}) must have same length"
-        )
+        raise ValueError(f"images ({len(images)}) and frame_ids ({len(frame_ids)}) must have same length")
 
     # Get dimensions from first image
     width = images[0].width
@@ -281,8 +269,7 @@ def create_vertical_montage_from_pil(
         # Verify dimensions
         if img.width != width or img.height != height:
             raise ValueError(
-                f"Image {frame_id} dimensions {img.width}x{img.height} "
-                f"don't match expected {width}x{height}"
+                f"Image {frame_id} dimensions {img.width}x{img.height} don't match expected {width}x{height}"
             )
 
         # Paste image
@@ -306,5 +293,3 @@ def create_vertical_montage_from_pil(
     montage.save(buffer, format="JPEG", quality=jpeg_quality)
 
     return buffer.getvalue(), metadata
-
-

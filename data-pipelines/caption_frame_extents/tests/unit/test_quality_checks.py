@@ -17,7 +17,9 @@ class TestCheckCaptionFrameExtentsCoherence:
 
     def test_single_caption_frame_extent_is_coherent(self):
         """Single caption frame extent should be considered coherent."""
-        caption_frame_extents = [{"frame1_index": 0, "frame2_index": 1, "predicted_label": "different"}]
+        caption_frame_extents = [
+            {"frame1_index": 0, "frame2_index": 1, "predicted_label": "different"}
+        ]
         result = check_caption_frame_extents_coherence(caption_frame_extents)
         assert result["coherent"] is True
         assert result["issues"] == []

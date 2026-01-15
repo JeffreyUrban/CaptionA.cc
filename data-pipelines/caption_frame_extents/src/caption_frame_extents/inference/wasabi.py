@@ -42,16 +42,22 @@ class WasabiClient:
             region: Wasabi region
         """
         self.access_key = (
-            access_key or os.environ.get("WASABI_ACCESS_KEY_READWRITE") or os.environ.get("WASABI_ACCESS_KEY")
+            access_key
+            or os.environ.get("WASABI_ACCESS_KEY_READWRITE")
+            or os.environ.get("WASABI_ACCESS_KEY")
         )
         self.secret_key = (
-            secret_key or os.environ.get("WASABI_SECRET_KEY_READWRITE") or os.environ.get("WASABI_SECRET_KEY")
+            secret_key
+            or os.environ.get("WASABI_SECRET_KEY_READWRITE")
+            or os.environ.get("WASABI_SECRET_KEY")
         )
         self.bucket_name = bucket_name
         self.region = region
 
         if not self.access_key or not self.secret_key:
-            raise ValueError("Wasabi credentials required. Set WASABI_ACCESS_KEY and WASABI_SECRET_KEY")
+            raise ValueError(
+                "Wasabi credentials required. Set WASABI_ACCESS_KEY and WASABI_SECRET_KEY"
+            )
 
         self.s3_client = boto3.client(
             "s3",

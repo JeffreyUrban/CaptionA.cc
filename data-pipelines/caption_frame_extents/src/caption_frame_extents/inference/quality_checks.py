@@ -38,13 +38,20 @@ def check_caption_frame_extents_coherence(
         next_caption_frame_extent = caption_frame_extents[i + 1]
 
         # Check: Two consecutive "different" predictions should have a gap
-        if curr["predicted_label"] == "different" and next_caption_frame_extent["predicted_label"] == "different":
+        if (
+            curr["predicted_label"] == "different"
+            and next_caption_frame_extent["predicted_label"] == "different"
+        ):
             gap = next_caption_frame_extent["frame1_index"] - curr["frame2_index"]
             if gap < 2:
                 issues.append(
                     {
                         "type": "consecutive_caption_frame_extents",
-                        "frames": (curr["frame1_index"], curr["frame2_index"], next_caption_frame_extent["frame1_index"]),
+                        "frames": (
+                            curr["frame1_index"],
+                            curr["frame2_index"],
+                            next_caption_frame_extent["frame1_index"],
+                        ),
                         "message": "Two caption frame extents with no gap between them",
                     }
                 )
@@ -88,25 +95,37 @@ def run_quality_checks(
         for caption_frame_extent in caption_frame_extents:
             # Check if this caption frame extent is part of any issue
             for frames in issue_frames:
-                if caption_frame_extent["frame1_index"] in frames or caption_frame_extent["frame2_index"] in frames:
+                if (
+                    caption_frame_extent["frame1_index"] in frames
+                    or caption_frame_extent["frame2_index"] in frames
+                ):
                     flagged_caption_frame_extents.append(
                         {
                             **caption_frame_extent,
                             "flags": [
                                 issue["message"]
                                 for issue in coherence_check["issues"]
-                                if caption_frame_extent["frame1_index"] in issue["frames"]
-                                or caption_frame_extent["frame2_index"] in issue["frames"]
+                                if caption_frame_extent["frame1_index"]
+                                in issue["frames"]
+                                or caption_frame_extent["frame2_index"]
+                                in issue["frames"]
                             ],
                         }
                     )
                     break
 
     # Summary
-    pass_rate = (len(caption_frame_extents) - len(flagged_caption_frame_extents)) / len(caption_frame_extents) if caption_frame_extents else 1.0
+    pass_rate = (
+        (len(caption_frame_extents) - len(flagged_caption_frame_extents))
+        / len(caption_frame_extents)
+        if caption_frame_extents
+        else 1.0
+    )
 
     console.print("\n[cyan]Quality Check Summary:[/cyan]")
-    console.print(f"  Total caption frame extents: {quality_stats['total_caption_frame_extents']}")
+    console.print(
+        f"  Total caption frame extents: {quality_stats['total_caption_frame_extents']}"
+    )
     console.print(f"  Flagged: {len(flagged_caption_frame_extents)}")
     console.print(f"  Pass rate: {pass_rate * 100:.1f}%")
     console.print(f"  Sequence issues: {quality_stats['sequence_issues']}")

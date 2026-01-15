@@ -122,7 +122,9 @@ def test_cli_progress_flag(tmp_path):
 def test_cli_progress_with_stdin():
     """Test progress bar with stdin input (covers cli.py lines 493-502)."""
     input_data = "\n".join([f"line{i % 10}" for i in range(1000)])
-    result = runner.invoke(app, ["--progress", "--quiet"], input=input_data, env=TEST_ENV)
+    result = runner.invoke(
+        app, ["--progress", "--quiet"], input=input_data, env=TEST_ENV
+    )
     assert result.exit_code == 0
 
 
@@ -157,7 +159,9 @@ def test_cli_json_stats_format(tmp_path):
     lines = ["A", "B", "C", "D", "E"] * 3  # 15 lines with duplicates
     test_file.write_text("\n".join(lines) + "\n")
 
-    result = runner.invoke(app, [str(test_file), "--stats-format", "json"], env=TEST_ENV)
+    result = runner.invoke(
+        app, [str(test_file), "--stats-format", "json"], env=TEST_ENV
+    )
     assert result.exit_code == 0
 
     # Parse JSON from output (CliRunner captures stdout and stderr together)
@@ -182,7 +186,9 @@ def test_cli_invalid_stats_format(tmp_path):
     test_file = tmp_path / "test.txt"
     test_file.write_text("test\n")
 
-    result = runner.invoke(app, [str(test_file), "--stats-format", "invalid"], env=TEST_ENV)
+    result = runner.invoke(
+        app, [str(test_file), "--stats-format", "invalid"], env=TEST_ENV
+    )
     assert result.exit_code != 0
     # Check output (combines stdout + stderr) to handle ANSI codes across environments
     assert "stats-format" in strip_ansi(result.output).lower()

@@ -2,6 +2,7 @@
 Wasabi S3 storage service interface and implementation.
 Handles all object storage operations for video processing workflows.
 """
+
 import io
 import mimetypes
 from pathlib import Path
@@ -20,10 +21,7 @@ class WasabiService(Protocol):
 
     # Upload operations
     def upload_file(
-        self,
-        key: str,
-        data: bytes | BinaryIO,
-        content_type: Optional[str] = None
+        self, key: str, data: bytes | BinaryIO, content_type: Optional[str] = None
     ) -> str:
         """
         Upload file to Wasabi S3.
@@ -39,10 +37,7 @@ class WasabiService(Protocol):
         ...
 
     def upload_from_path(
-        self,
-        key: str,
-        local_path: Path | str,
-        content_type: Optional[str] = None
+        self, key: str, local_path: Path | str, content_type: Optional[str] = None
     ) -> str:
         """
         Upload file from local filesystem to Wasabi S3.
@@ -58,11 +53,7 @@ class WasabiService(Protocol):
         ...
 
     # Download operations
-    def download_file(
-        self,
-        key: str,
-        local_path: Path | str
-    ) -> None:
+    def download_file(self, key: str, local_path: Path | str) -> None:
         """
         Download file from Wasabi S3 to local filesystem.
 
@@ -135,11 +126,7 @@ class WasabiService(Protocol):
         ...
 
     # List operations
-    def list_files(
-        self,
-        prefix: str,
-        max_keys: Optional[int] = None
-    ) -> list[str]:
+    def list_files(self, prefix: str, max_keys: Optional[int] = None) -> list[str]:
         """
         List files with given prefix in Wasabi S3.
 
@@ -153,11 +140,7 @@ class WasabiService(Protocol):
         ...
 
     # URL generation
-    def generate_presigned_url(
-        self,
-        key: str,
-        expiration_seconds: int = 3600
-    ) -> str:
+    def generate_presigned_url(self, key: str, expiration_seconds: int = 3600) -> str:
         """
         Generate presigned URL for temporary file access.
 
@@ -178,11 +161,7 @@ class WasabiServiceImpl:
     """
 
     def __init__(
-        self,
-        access_key: str,
-        secret_key: str,
-        bucket: str,
-        region: str = "us-east-1"
+        self, access_key: str, secret_key: str, bucket: str, region: str = "us-east-1"
     ):
         """
         Initialize Wasabi S3 client.
@@ -209,10 +188,7 @@ class WasabiServiceImpl:
 
     # Upload operations
     def upload_file(
-        self,
-        key: str,
-        data: bytes | BinaryIO,
-        content_type: Optional[str] = None
+        self, key: str, data: bytes | BinaryIO, content_type: Optional[str] = None
     ) -> str:
         """
         Upload file to Wasabi S3.
@@ -245,10 +221,7 @@ class WasabiServiceImpl:
         return key
 
     def upload_from_path(
-        self,
-        key: str,
-        local_path: Path | str,
-        content_type: Optional[str] = None
+        self, key: str, local_path: Path | str, content_type: Optional[str] = None
     ) -> str:
         """
         Upload file from local filesystem to Wasabi S3.
@@ -284,11 +257,7 @@ class WasabiServiceImpl:
         return key
 
     # Download operations
-    def download_file(
-        self,
-        key: str,
-        local_path: Path | str
-    ) -> None:
+    def download_file(self, key: str, local_path: Path | str) -> None:
         """
         Download file from Wasabi S3 to local filesystem.
 
@@ -318,11 +287,7 @@ class WasabiServiceImpl:
             File contents as bytes
         """
         buffer = io.BytesIO()
-        self.s3_client.download_fileobj(
-            self.bucket,
-            key,
-            buffer
-        )
+        self.s3_client.download_fileobj(self.bucket, key, buffer)
         return buffer.getvalue()
 
     # Delete operations
@@ -392,11 +357,7 @@ class WasabiServiceImpl:
             return False
 
     # List operations
-    def list_files(
-        self,
-        prefix: str,
-        max_keys: Optional[int] = None
-    ) -> list[str]:
+    def list_files(self, prefix: str, max_keys: Optional[int] = None) -> list[str]:
         """
         List files with given prefix in Wasabi S3.
 
@@ -418,7 +379,7 @@ class WasabiServiceImpl:
         pages = paginator.paginate(
             Bucket=self.bucket,
             Prefix=prefix,
-            PaginationConfig=pagination_config if pagination_config else {}
+            PaginationConfig=pagination_config if pagination_config else {},
         )
 
         keys = []
@@ -433,11 +394,7 @@ class WasabiServiceImpl:
         return keys
 
     # URL generation
-    def generate_presigned_url(
-        self,
-        key: str,
-        expiration_seconds: int = 3600
-    ) -> str:
+    def generate_presigned_url(self, key: str, expiration_seconds: int = 3600) -> str:
         """
         Generate presigned URL for temporary file access.
 

@@ -81,10 +81,14 @@ def extract_frames(
                 video,
                 output_dir,
                 frame_rate,
-                progress_callback=lambda current, _: progress.update(task, completed=current),
+                progress_callback=lambda current, _: progress.update(
+                    task, completed=current
+                ),
             )
 
-        console.print(f"[green]✓[/green] Extracted {len(frames)} frames to {output_dir}")
+        console.print(
+            f"[green]✓[/green] Extracted {len(frames)} frames to {output_dir}"
+        )
 
     except (RuntimeError, FileNotFoundError) as e:
         console.print(f"[red]Error:[/red] {e}")
@@ -131,7 +135,9 @@ def run_livetext(
     try:
         from .backends.livetext import LiveTextBackend
     except ImportError:
-        console.print("[red]Error:[/red] LiveText backend requires macOS with ocrmac installed")
+        console.print(
+            "[red]Error:[/red] LiveText backend requires macOS with ocrmac installed"
+        )
         console.print("Install with: pip install ocrmac")
         raise typer.Exit(1)
 
@@ -178,11 +184,18 @@ def run_livetext(
                 # Convert to JSONL format
                 annotations = []
                 for char in result.characters:
-                    annotations.append([
-                        char.text,
-                        1.0,  # LiveText doesn't provide confidence
-                        [char.bbox.x, char.bbox.y, char.bbox.width, char.bbox.height]
-                    ])
+                    annotations.append(
+                        [
+                            char.text,
+                            1.0,  # LiveText doesn't provide confidence
+                            [
+                                char.bbox.x,
+                                char.bbox.y,
+                                char.bbox.width,
+                                char.bbox.height,
+                            ],
+                        ]
+                    )
 
                 record = {
                     "image_path": str(frame_path.relative_to(frames_dir.parent)),

@@ -13,7 +13,11 @@ import torch
 from PIL import Image
 from torch.utils.data import Dataset
 
-from caption_frame_extents.data.transforms import AnchorAwareResize, NormalizeImageNet, ResizeStrategy
+from caption_frame_extents.data.transforms import (
+    AnchorAwareResize,
+    NormalizeImageNet,
+    ResizeStrategy,
+)
 from caption_frame_extents.database import TrainingDataset, TrainingSample
 
 
@@ -132,10 +136,16 @@ class CaptionFrameExtentsDataset(Dataset):
             raise ValueError(f"No dataset found in {self.dataset_db_path}")
 
         # Load samples for this split
-        all_samples = self._db_session.query(TrainingSample).filter(TrainingSample.split == self.split).all()
+        all_samples = (
+            self._db_session.query(TrainingSample)
+            .filter(TrainingSample.split == self.split)
+            .all()
+        )
 
         if not all_samples:
-            raise ValueError(f"No {self.split} samples found in dataset '{dataset.name}'")
+            raise ValueError(
+                f"No {self.split} samples found in dataset '{dataset.name}'"
+            )
 
         # Filter to only complete samples (all required data exists)
         valid_samples = []
@@ -167,11 +177,15 @@ class CaptionFrameExtentsDataset(Dataset):
                     print(f"   - {key}: {count} samples")
 
         if not valid_samples:
-            raise ValueError(f"No complete {self.split} samples found in dataset '{dataset.name}'")
+            raise ValueError(
+                f"No complete {self.split} samples found in dataset '{dataset.name}'"
+            )
 
         return valid_samples
 
-    def _is_complete_sample(self, sample: TrainingSample, missing_stats: dict | None = None) -> bool:
+    def _is_complete_sample(
+        self, sample: TrainingSample, missing_stats: dict | None = None
+    ) -> bool:
         """Check if a sample has all required data.
 
         Note: Reference frame check removed since we now fallback to frame1 if missing.
@@ -183,12 +197,18 @@ class CaptionFrameExtentsDataset(Dataset):
         Returns:
             True if all required data exists, False otherwise
         """
-        from caption_frame_extents.database import TrainingFrame, TrainingOCRVisualization
+        from caption_frame_extents.database import (
+            TrainingFrame,
+            TrainingOCRVisualization,
+        )
 
         # Check frame1 exists (also serves as fallback reference frame)
         frame1 = (
             self._db_session.query(TrainingFrame)
-            .filter(TrainingFrame.video_hash == sample.video_hash, TrainingFrame.frame_index == sample.frame1_index)
+            .filter(
+                TrainingFrame.video_hash == sample.video_hash,
+                TrainingFrame.frame_index == sample.frame1_index,
+            )
             .first()
         )
         if not frame1:
@@ -199,7 +219,10 @@ class CaptionFrameExtentsDataset(Dataset):
         # Check frame2 exists
         frame2 = (
             self._db_session.query(TrainingFrame)
-            .filter(TrainingFrame.video_hash == sample.video_hash, TrainingFrame.frame_index == sample.frame2_index)
+            .filter(
+                TrainingFrame.video_hash == sample.video_hash,
+                TrainingFrame.frame_index == sample.frame2_index,
+            )
             .first()
         )
         if not frame2:
@@ -298,12 +321,17 @@ class CaptionFrameExtentsDataset(Dataset):
 
         frame = (
             self._db_session.query(TrainingFrame)
-            .filter(TrainingFrame.video_hash == video_hash, TrainingFrame.frame_index == frame_index)
+            .filter(
+                TrainingFrame.video_hash == video_hash,
+                TrainingFrame.frame_index == frame_index,
+            )
             .first()
         )
 
         if not frame:
-            raise ValueError(f"Frame {frame_index} for video {video_hash[:8]}... not found in dataset")
+            raise ValueError(
+                f"Frame {frame_index} for video {video_hash[:8]}... not found in dataset"
+            )
 
         return Image.open(BytesIO(frame.image_data))
 
@@ -330,7 +358,9 @@ class CaptionFrameExtentsDataset(Dataset):
         )
 
         if not ocr_viz:
-            raise ValueError(f"OCR visualization for video {video_hash[:8]}... not found in dataset")
+            raise ValueError(
+                f"OCR visualization for video {video_hash[:8]}... not found in dataset"
+            )
 
         img = Image.open(BytesIO(ocr_viz.image_data))
         return img.convert("RGB")  # Ensure RGB, remove alpha channel if present
@@ -364,7 +394,9 @@ class CaptionFrameExtentsDataset(Dataset):
         self._spatial_metadata_cache[video_hash] = features
         return features
 
-    def _get_anchor_type(self, spatial_features: np.ndarray) -> Literal["left", "center", "right"]:
+    def _get_anchor_type(
+        self, spatial_features: np.ndarray
+    ) -> Literal["left", "center", "right"]:
         """Extract anchor type from spatial features.
 
         Args:
@@ -430,7 +462,9 @@ def _get_video_metadata(video_db_path: Path) -> dict:
         return {}
 
 
-def _get_spatial_features(video_db_path: Path, frame1_index: int, frame2_index: int) -> list[float]:
+def _get_spatial_features(
+    video_db_path: Path, frame1_index: int, frame2_index: int
+) -> list[float]:
     """Extract spatial features for frame pair.
 
     Args:
@@ -459,10 +493,22 @@ def _get_spatial_features(video_db_path: Path, frame1_index: int, frame2_index: 
         anchor_encoding = [0.0, 0.0, 0.0]  # center
         x_norm, y_norm, w_norm = 0.5, 0.9, 0.5
     else:
-        anchor_type, crop_left, crop_top, crop_right, crop_bottom, frame_width, frame_height = layout
+        (
+            anchor_type,
+            crop_left,
+            crop_top,
+            crop_right,
+            crop_bottom,
+            frame_width,
+            frame_height,
+        ) = layout
 
         # Encode anchor type (one-hot)
-        anchor_map = {"left": [1.0, 0.0, 0.0], "center": [0.0, 1.0, 0.0], "right": [0.0, 0.0, 1.0]}
+        anchor_map = {
+            "left": [1.0, 0.0, 0.0],
+            "center": [0.0, 1.0, 0.0],
+            "right": [0.0, 0.0, 1.0],
+        }
         anchor_encoding = anchor_map.get(anchor_type, [0.0, 1.0, 0.0])
 
         # Calculate normalized crop region
