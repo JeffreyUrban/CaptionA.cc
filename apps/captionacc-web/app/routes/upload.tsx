@@ -156,30 +156,33 @@ export default function UploadPage() {
   }, [])
 
   // Handle modal confirmation - process and upload files
-  const handleUploadConfirm = useCallback(async (files: UploadFile[], options: UploadOptions) => {
-    setShowPreviewModal(false)
+  const handleUploadConfirm = useCallback(
+    async (files: UploadFile[], options: UploadOptions) => {
+      setShowPreviewModal(false)
 
-    console.log(`[UploadPage] Processing ${files.length} files with options:`, options)
+      console.log(`[UploadPage] Processing ${files.length} files with options:`, options)
 
-    // Process files according to options
-    const processed = processUploadFiles(files, options, videos)
+      // Process files according to options
+      const processed = processUploadFiles(files, options, videos)
 
-    console.log(`[UploadPage] Starting upload for ${processed.length} processed files`)
+      console.log(`[UploadPage] Starting upload for ${processed.length} processed files`)
 
-    // Start each upload
-    for (const upload of processed) {
-      try {
-        await uploadManager.startUpload(upload.file, {
-          fileName: upload.fileName,
-          fileType: upload.file.type,
-          targetFolder: null, // Already included in finalPath
-          relativePath: upload.finalPath,
-        })
-      } catch (error) {
-        console.error(`[UploadPage] Failed to start upload for ${upload.finalPath}:`, error)
+      // Start each upload
+      for (const upload of processed) {
+        try {
+          await uploadManager.startUpload(upload.file, {
+            fileName: upload.fileName,
+            fileType: upload.file.type,
+            targetFolder: null, // Already included in finalPath
+            relativePath: upload.finalPath,
+          })
+        } catch (error) {
+          console.error(`[UploadPage] Failed to start upload for ${upload.finalPath}:`, error)
+        }
       }
-    }
-  }, [videos])
+    },
+    [videos]
+  )
 
   // Handle modal cancellation
   const handleUploadCancel = useCallback(() => {
