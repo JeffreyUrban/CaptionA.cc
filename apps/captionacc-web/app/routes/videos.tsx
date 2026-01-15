@@ -56,7 +56,7 @@ export async function clientLoader() {
   // Query videos table - RLS automatically filters by tenant/user
   const { data: videos, error: videosError } = await supabase
     .from('videos')
-    .select('id, filename, display_path, status, uploaded_at, is_demo')
+    .select('id, display_path, status, uploaded_at, is_demo')
     .is('deleted_at', null)
     .order('uploaded_at', { ascending: false })
 
@@ -69,7 +69,7 @@ export async function clientLoader() {
   const videoList: VideoInfo[] =
     videos?.map(v => ({
       videoId: v.id,
-      displayPath: v.display_path ?? v.filename ?? v.id,
+      displayPath: v.display_path ?? v.id,
       isDemo: v.is_demo ?? false,
     })) ?? []
 

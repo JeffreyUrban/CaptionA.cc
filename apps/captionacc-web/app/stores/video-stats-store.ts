@@ -132,28 +132,32 @@ export const useVideoStatsStore = create<VideoStatsStore>()(
           return state.stats[videoId] ?? null
         }
 
-        try {
-          const res = await fetch(`/api/videos/${encodeURIComponent(videoId)}/stats`)
-          if (!res.ok) {
-            console.error(`[VideoStatsStore] Failed to fetch stats for ${videoId}: ${res.status}`)
-            return null
-          }
-
-          const data = await res.json()
-          if (data && !data.error) {
-            get().setStats(videoId, data)
-            return data
-          }
-
-          return null
-        } catch (err) {
-          console.error(`[VideoStatsStore] Error fetching stats for ${videoId}:`, err)
-          return null
+        // TODO: Integrate with backend API at https://captionacc-api.fly.dev/
+        // Endpoint: GET /videos/{videoId}/stats
+        // For now, return placeholder values
+        const placeholderStats = {
+          databaseId: null,
+          totalFrames: 0,
+          coveredFrames: 0,
+          confirmedCount: 0,
+          predictedCount: 0,
+          needsTextCount: 0,
+          issueCount: 0,
+          badges: [],
         }
+
+        get().setStats(videoId, placeholderStats)
+        return placeholderStats
       },
 
       // Connect to SSE (singleton, only one connection ever)
       connectSSE: () => {
+        // TODO: Integrate with backend API SSE endpoint
+        // Endpoint: WebSocket /videos/{videoId}/sync/{db} or SSE for stats updates
+        // For now, SSE is disabled
+        console.log('[VideoStatsStore] SSE connection disabled (TODO: integrate with backend API)')
+        return
+
         // Already connected or connecting
         if (sseConnection) {
           console.log('[VideoStatsStore] SSE already connected')
