@@ -188,6 +188,7 @@ const initialNotification: UploadNotification = {
 
 export const useUploadStore = create<UploadStore>()(
   persist(
+    // eslint-disable-next-line max-lines-per-function -- Zustand store pattern combines all upload state management and actions in single creator function
     (set, get) => ({
       // Initial state
       activeUploads: {},

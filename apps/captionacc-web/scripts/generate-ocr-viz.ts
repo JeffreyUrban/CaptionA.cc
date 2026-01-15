@@ -81,13 +81,16 @@ async function processVideo(
       bottom: layoutConfig.crop_bottom,
     }
 
-    const layoutParams = layoutConfig.anchor_type
-      ? {
-          anchorType: layoutConfig.anchor_type,
-          anchorPosition: layoutConfig.anchor_position!,
-          verticalPosition: layoutConfig.vertical_position!,
-        }
-      : undefined
+    const layoutParams =
+      layoutConfig.anchor_type &&
+      layoutConfig.anchor_position !== null &&
+      layoutConfig.vertical_position !== null
+        ? {
+            anchorType: layoutConfig.anchor_type,
+            anchorPosition: layoutConfig.anchor_position,
+            verticalPosition: layoutConfig.vertical_position,
+          }
+        : undefined
 
     // Transform boxes to analysisBoxes format
     // Note: OCR boxes are stored in normalized coordinates (0-1 range)

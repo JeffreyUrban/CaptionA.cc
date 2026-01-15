@@ -43,6 +43,7 @@ const defaultPreferences: UserPreferences = {
 export const useAppStore = create<AppState>()(
   devtools(
     persist(
+      // eslint-disable-next-line max-lines-per-function -- Zustand store pattern combines all state and actions in single creator function
       set => ({
         // Initial state
         uploads: {},

@@ -99,17 +99,63 @@ function findAllDatabases(): string[] {
 }
 
 /**
- * Main execution
+ * Track columns for a table
  */
-function main() {
-  console.log('Auditing database schemas...\n')
+function trackTableColumns(
+  tableSchema: TableSchema,
+  tableName: string,
+  shortPath: string,
+  tableColumns: Map<string, Map<string, Set<string>>>
+) {
+  if (!tableColumns.has(tableName)) {
+    tableColumns.set(tableName, new Map())
+  }
+  const colMap = tableColumns.get(tableName)
+  if (!colMap) return
 
-  const databases = findAllDatabases()
-  console.log(`Found ${databases.length} databases\n`)
+  for (const [colName] of tableSchema.columns) {
+    if (!colMap.has(colName)) {
+      colMap.set(colName, new Set())
+    }
+    const colSet = colMap.get(colName)
+    if (colSet) {
+      colSet.add(shortPath)
+    }
+  }
+}
 
-  // Collect all unique tables and columns
-  const allTables = new Map<string, Set<string>>() // table -> set of databases
-  const tableColumns = new Map<string, Map<string, Set<string>>>() // table -> column -> set of databases
+/**
+ * Process a single database and collect its schema
+ */
+function processDatabaseSchema(
+  dbPath: string,
+  allTables: Map<string, Set<string>>,
+  tableColumns: Map<string, Map<string, Set<string>>>
+) {
+  const schema = getDatabaseSchema(dbPath)
+  const shortPath = dbPath.replace(LOCAL_DATA_DIR + '/', '')
+
+  for (const [tableName, tableSchema] of schema) {
+    // Track which databases have this table
+    if (!allTables.has(tableName)) {
+      allTables.set(tableName, new Set())
+    }
+    const tableSet = allTables.get(tableName)
+    if (tableSet) {
+      tableSet.add(shortPath)
+    }
+
+    // Track which databases have each column
+    trackTableColumns(tableSchema, tableName, shortPath, tableColumns)
+  }
+}
+
+/**
+ * Collect schemas from all databases
+ */
+function collectAllSchemas(databases: string[]) {
+  const allTables = new Map<string, Set<string>>()
+  const tableColumns = new Map<string, Map<string, Set<string>>>()
 
   let processed = 0
   for (const dbPath of databases) {
@@ -119,35 +165,27 @@ function main() {
     }
 
     try {
-      const schema = getDatabaseSchema(dbPath)
-      const shortPath = dbPath.replace(LOCAL_DATA_DIR + '/', '')
-
-      for (const [tableName, tableSchema] of schema) {
-        // Track which databases have this table
-        if (!allTables.has(tableName)) {
-          allTables.set(tableName, new Set())
-        }
-        allTables.get(tableName)!.add(shortPath)
-
-        // Track which databases have each column
-        if (!tableColumns.has(tableName)) {
-          tableColumns.set(tableName, new Map())
-        }
-        const colMap = tableColumns.get(tableName)!
-
-        for (const [colName] of tableSchema.columns) {
-          if (!colMap.has(colName)) {
-            colMap.set(colName, new Set())
-          }
-          colMap.get(colName)!.add(shortPath)
-        }
-      }
+      processDatabaseSchema(dbPath, allTables, tableColumns)
     } catch (error) {
       console.error(`\nError reading ${dbPath}:`, error)
     }
   }
 
   console.log(`\r\nProcessed ${databases.length} databases\n`)
+
+  return { allTables, tableColumns }
+}
+
+/**
+ * Main execution
+ */
+function main() {
+  console.log('Auditing database schemas...\n')
+
+  const databases = findAllDatabases()
+  console.log(`Found ${databases.length} databases\n`)
+
+  const { allTables, tableColumns } = collectAllSchemas(databases)
 
   // Report findings
   console.log('=== Schema Audit Results ===\n')
@@ -179,7 +217,9 @@ function main() {
   console.log('=== Column Variations ===\n')
 
   for (const tableName of universalTables) {
-    const colMap = tableColumns.get(tableName)!
+    const colMap = tableColumns.get(tableName)
+    if (!colMap) continue
+
     const allColumns = Array.from(colMap.entries()).sort((a, b) => a[0].localeCompare(b[0]))
 
     const universalCols = allColumns.filter(([_, dbs]) => dbs.size === databases.length)

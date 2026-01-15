@@ -198,6 +198,209 @@ interface CharacterSetsProps {
   register: UseFormRegister<WaitlistFormData>
 }
 
+function EastAsianScripts({ register }: CharacterSetsProps) {
+  return (
+    <div>
+      <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-olive-600 dark:text-olive-400">
+        East Asian Scripts
+      </div>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <label className="flex items-center">
+          <input
+            {...register('character_sets')}
+            type="checkbox"
+            value="Chinese (Simplified)"
+            className="h-4 w-4 rounded border-olive-950/10 text-olive-950 focus:ring-olive-950 dark:border-white/10 dark:bg-olive-900 dark:focus:ring-olive-300"
+          />
+          <span className="ml-2 text-sm text-olive-700 dark:text-olive-400">
+            Chinese (Simplified) - 简体中文
+          </span>
+        </label>
+        <label className="flex items-center">
+          <input
+            {...register('character_sets')}
+            type="checkbox"
+            value="Chinese (Traditional)"
+            className="h-4 w-4 rounded border-olive-950/10 text-olive-950 focus:ring-olive-950 dark:border-white/10 dark:bg-olive-900 dark:focus:ring-olive-300"
+          />
+          <span className="ml-2 text-sm text-olive-700 dark:text-olive-400">
+            Chinese (Traditional) - 繁體中文
+          </span>
+        </label>
+        <label className="flex items-center">
+          <input
+            {...register('character_sets')}
+            type="checkbox"
+            value="Japanese - Hiragana"
+            className="h-4 w-4 rounded border-olive-950/10 text-olive-950 focus:ring-olive-950 dark:border-white/10 dark:bg-olive-900 dark:focus:ring-olive-300"
+          />
+          <span className="ml-2 text-sm text-olive-700 dark:text-olive-400">
+            Japanese - Hiragana (ひらがな)
+          </span>
+        </label>
+        <label className="flex items-center">
+          <input
+            {...register('character_sets')}
+            type="checkbox"
+            value="Japanese - Katakana"
+            className="h-4 w-4 rounded border-olive-950/10 text-olive-950 focus:ring-olive-950 dark:border-white/10 dark:bg-olive-900 dark:focus:ring-olive-300"
+          />
+          <span className="ml-2 text-sm text-olive-700 dark:text-olive-400">
+            Japanese - Katakana (カタカナ)
+          </span>
+        </label>
+        <label className="flex items-center">
+          <input
+            {...register('character_sets')}
+            type="checkbox"
+            value="Japanese - Kanji"
+            className="h-4 w-4 rounded border-olive-950/10 text-olive-950 focus:ring-olive-950 dark:border-white/10 dark:bg-olive-900 dark:focus:ring-olive-300"
+          />
+          <span className="ml-2 text-sm text-olive-700 dark:text-olive-400">
+            Japanese - Kanji (漢字)
+          </span>
+        </label>
+        <label className="flex items-center">
+          <input
+            {...register('character_sets')}
+            type="checkbox"
+            value="Korean - Hangul"
+            className="h-4 w-4 rounded border-olive-950/10 text-olive-950 focus:ring-olive-950 dark:border-white/10 dark:bg-olive-900 dark:focus:ring-olive-300"
+          />
+          <span className="ml-2 text-sm text-olive-700 dark:text-olive-400">
+            Korean - Hangul (한글)
+          </span>
+        </label>
+      </div>
+    </div>
+  )
+}
+
+function LatinEuropeanScripts({ register }: CharacterSetsProps) {
+  return (
+    <div>
+      <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-olive-600 dark:text-olive-400">
+        Latin & European Scripts
+      </div>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <label className="flex items-center">
+          <input
+            {...register('character_sets')}
+            type="checkbox"
+            value="Latin/Roman alphabet"
+            className="h-4 w-4 rounded border-olive-950/10 text-olive-950 focus:ring-olive-950 dark:border-white/10 dark:bg-olive-900 dark:focus:ring-olive-300"
+          />
+          <span className="ml-2 text-sm text-olive-700 dark:text-olive-400">
+            Latin/Roman alphabet
+          </span>
+        </label>
+        <label className="flex items-center">
+          <input
+            {...register('character_sets')}
+            type="checkbox"
+            value="Cyrillic"
+            className="h-4 w-4 rounded border-olive-950/10 text-olive-950 focus:ring-olive-950 dark:border-white/10 dark:bg-olive-900 dark:focus:ring-olive-300"
+          />
+          <span className="ml-2 text-sm text-olive-700 dark:text-olive-400">
+            Cyrillic (Russian, Ukrainian, etc.)
+          </span>
+        </label>
+        <label className="flex items-center">
+          <input
+            {...register('character_sets')}
+            type="checkbox"
+            value="Greek"
+            className="h-4 w-4 rounded border-olive-950/10 text-olive-950 focus:ring-olive-950 dark:border-white/10 dark:bg-olive-900 dark:focus:ring-olive-300"
+          />
+          <span className="ml-2 text-sm text-olive-700 dark:text-olive-400">Greek (Ελληνικά)</span>
+        </label>
+      </div>
+    </div>
+  )
+}
+
+function MiddleEasternSouthAsianScripts({ register }: CharacterSetsProps) {
+  return (
+    <div>
+      <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-olive-600 dark:text-olive-400">
+        Middle Eastern & South Asian Scripts
+      </div>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <label className="flex items-center">
+          <input
+            {...register('character_sets')}
+            type="checkbox"
+            value="Arabic"
+            className="h-4 w-4 rounded border-olive-950/10 text-olive-950 focus:ring-olive-950 dark:border-white/10 dark:bg-olive-900 dark:focus:ring-olive-300"
+          />
+          <span className="ml-2 text-sm text-olive-700 dark:text-olive-400">Arabic (العربية)</span>
+        </label>
+        <label className="flex items-center">
+          <input
+            {...register('character_sets')}
+            type="checkbox"
+            value="Hebrew"
+            className="h-4 w-4 rounded border-olive-950/10 text-olive-950 focus:ring-olive-950 dark:border-white/10 dark:bg-olive-900 dark:focus:ring-olive-300"
+          />
+          <span className="ml-2 text-sm text-olive-700 dark:text-olive-400">Hebrew (עברית)</span>
+        </label>
+        <label className="flex items-center">
+          <input
+            {...register('character_sets')}
+            type="checkbox"
+            value="Devanagari"
+            className="h-4 w-4 rounded border-olive-950/10 text-olive-950 focus:ring-olive-950 dark:border-white/10 dark:bg-olive-900 dark:focus:ring-olive-300"
+          />
+          <span className="ml-2 text-sm text-olive-700 dark:text-olive-400">
+            Devanagari (Hindi, etc.)
+          </span>
+        </label>
+        <label className="flex items-center">
+          <input
+            {...register('character_sets')}
+            type="checkbox"
+            value="Thai"
+            className="h-4 w-4 rounded border-olive-950/10 text-olive-950 focus:ring-olive-950 dark:border-white/10 dark:bg-olive-900 dark:focus:ring-olive-300"
+          />
+          <span className="ml-2 text-sm text-olive-700 dark:text-olive-400">Thai (ไทย)</span>
+        </label>
+      </div>
+    </div>
+  )
+}
+
+function OtherScripts({ register }: CharacterSetsProps) {
+  return (
+    <div>
+      <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-olive-600 dark:text-olive-400">
+        Other Scripts
+      </div>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <label className="flex items-center">
+          <input
+            {...register('character_sets')}
+            type="checkbox"
+            value="Vietnamese"
+            className="h-4 w-4 rounded border-olive-950/10 text-olive-950 focus:ring-olive-950 dark:border-white/10 dark:bg-olive-900 dark:focus:ring-olive-300"
+          />
+          <span className="ml-2 text-sm text-olive-700 dark:text-olive-400">
+            Vietnamese (Tiếng Việt)
+          </span>
+        </label>
+        <label className="flex items-center">
+          <input
+            {...register('character_sets')}
+            type="checkbox"
+            value="Other"
+            className="h-4 w-4 rounded border-olive-950/10 text-olive-950 focus:ring-olive-950 dark:border-white/10 dark:bg-olive-900 dark:focus:ring-olive-300"
+          />
+          <span className="ml-2 text-sm text-olive-700 dark:text-olive-400">Other</span>
+        </label>
+      </div>
+    </div>
+  )
+}
+
 export function CharacterSetsSection({ register }: CharacterSetsProps) {
   return (
     <div>
@@ -205,202 +408,10 @@ export function CharacterSetsSection({ register }: CharacterSetsProps) {
         What character sets/scripts do your subtitles use? (select all that apply)
       </label>
       <div className="space-y-4">
-        {/* East Asian Scripts */}
-        <div>
-          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-olive-600 dark:text-olive-400">
-            East Asian Scripts
-          </div>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <label className="flex items-center">
-              <input
-                {...register('character_sets')}
-                type="checkbox"
-                value="Chinese (Simplified)"
-                className="h-4 w-4 rounded border-olive-950/10 text-olive-950 focus:ring-olive-950 dark:border-white/10 dark:bg-olive-900 dark:focus:ring-olive-300"
-              />
-              <span className="ml-2 text-sm text-olive-700 dark:text-olive-400">
-                Chinese (Simplified) - 简体中文
-              </span>
-            </label>
-            <label className="flex items-center">
-              <input
-                {...register('character_sets')}
-                type="checkbox"
-                value="Chinese (Traditional)"
-                className="h-4 w-4 rounded border-olive-950/10 text-olive-950 focus:ring-olive-950 dark:border-white/10 dark:bg-olive-900 dark:focus:ring-olive-300"
-              />
-              <span className="ml-2 text-sm text-olive-700 dark:text-olive-400">
-                Chinese (Traditional) - 繁體中文
-              </span>
-            </label>
-            <label className="flex items-center">
-              <input
-                {...register('character_sets')}
-                type="checkbox"
-                value="Japanese - Hiragana"
-                className="h-4 w-4 rounded border-olive-950/10 text-olive-950 focus:ring-olive-950 dark:border-white/10 dark:bg-olive-900 dark:focus:ring-olive-300"
-              />
-              <span className="ml-2 text-sm text-olive-700 dark:text-olive-400">
-                Japanese - Hiragana (ひらがな)
-              </span>
-            </label>
-            <label className="flex items-center">
-              <input
-                {...register('character_sets')}
-                type="checkbox"
-                value="Japanese - Katakana"
-                className="h-4 w-4 rounded border-olive-950/10 text-olive-950 focus:ring-olive-950 dark:border-white/10 dark:bg-olive-900 dark:focus:ring-olive-300"
-              />
-              <span className="ml-2 text-sm text-olive-700 dark:text-olive-400">
-                Japanese - Katakana (カタカナ)
-              </span>
-            </label>
-            <label className="flex items-center">
-              <input
-                {...register('character_sets')}
-                type="checkbox"
-                value="Japanese - Kanji"
-                className="h-4 w-4 rounded border-olive-950/10 text-olive-950 focus:ring-olive-950 dark:border-white/10 dark:bg-olive-900 dark:focus:ring-olive-300"
-              />
-              <span className="ml-2 text-sm text-olive-700 dark:text-olive-400">
-                Japanese - Kanji (漢字)
-              </span>
-            </label>
-            <label className="flex items-center">
-              <input
-                {...register('character_sets')}
-                type="checkbox"
-                value="Korean - Hangul"
-                className="h-4 w-4 rounded border-olive-950/10 text-olive-950 focus:ring-olive-950 dark:border-white/10 dark:bg-olive-900 dark:focus:ring-olive-300"
-              />
-              <span className="ml-2 text-sm text-olive-700 dark:text-olive-400">
-                Korean - Hangul (한글)
-              </span>
-            </label>
-          </div>
-        </div>
-
-        {/* Latin & European Scripts */}
-        <div>
-          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-olive-600 dark:text-olive-400">
-            Latin & European Scripts
-          </div>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <label className="flex items-center">
-              <input
-                {...register('character_sets')}
-                type="checkbox"
-                value="Latin/Roman alphabet"
-                className="h-4 w-4 rounded border-olive-950/10 text-olive-950 focus:ring-olive-950 dark:border-white/10 dark:bg-olive-900 dark:focus:ring-olive-300"
-              />
-              <span className="ml-2 text-sm text-olive-700 dark:text-olive-400">
-                Latin/Roman alphabet
-              </span>
-            </label>
-            <label className="flex items-center">
-              <input
-                {...register('character_sets')}
-                type="checkbox"
-                value="Cyrillic"
-                className="h-4 w-4 rounded border-olive-950/10 text-olive-950 focus:ring-olive-950 dark:border-white/10 dark:bg-olive-900 dark:focus:ring-olive-300"
-              />
-              <span className="ml-2 text-sm text-olive-700 dark:text-olive-400">
-                Cyrillic (Russian, Ukrainian, etc.)
-              </span>
-            </label>
-            <label className="flex items-center">
-              <input
-                {...register('character_sets')}
-                type="checkbox"
-                value="Greek"
-                className="h-4 w-4 rounded border-olive-950/10 text-olive-950 focus:ring-olive-950 dark:border-white/10 dark:bg-olive-900 dark:focus:ring-olive-300"
-              />
-              <span className="ml-2 text-sm text-olive-700 dark:text-olive-400">
-                Greek (Ελληνικά)
-              </span>
-            </label>
-          </div>
-        </div>
-
-        {/* Middle Eastern & South Asian Scripts */}
-        <div>
-          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-olive-600 dark:text-olive-400">
-            Middle Eastern & South Asian Scripts
-          </div>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <label className="flex items-center">
-              <input
-                {...register('character_sets')}
-                type="checkbox"
-                value="Arabic"
-                className="h-4 w-4 rounded border-olive-950/10 text-olive-950 focus:ring-olive-950 dark:border-white/10 dark:bg-olive-900 dark:focus:ring-olive-300"
-              />
-              <span className="ml-2 text-sm text-olive-700 dark:text-olive-400">
-                Arabic (العربية)
-              </span>
-            </label>
-            <label className="flex items-center">
-              <input
-                {...register('character_sets')}
-                type="checkbox"
-                value="Hebrew"
-                className="h-4 w-4 rounded border-olive-950/10 text-olive-950 focus:ring-olive-950 dark:border-white/10 dark:bg-olive-900 dark:focus:ring-olive-300"
-              />
-              <span className="ml-2 text-sm text-olive-700 dark:text-olive-400">
-                Hebrew (עברית)
-              </span>
-            </label>
-            <label className="flex items-center">
-              <input
-                {...register('character_sets')}
-                type="checkbox"
-                value="Devanagari"
-                className="h-4 w-4 rounded border-olive-950/10 text-olive-950 focus:ring-olive-950 dark:border-white/10 dark:bg-olive-900 dark:focus:ring-olive-300"
-              />
-              <span className="ml-2 text-sm text-olive-700 dark:text-olive-400">
-                Devanagari (Hindi, etc.)
-              </span>
-            </label>
-            <label className="flex items-center">
-              <input
-                {...register('character_sets')}
-                type="checkbox"
-                value="Thai"
-                className="h-4 w-4 rounded border-olive-950/10 text-olive-950 focus:ring-olive-950 dark:border-white/10 dark:bg-olive-900 dark:focus:ring-olive-300"
-              />
-              <span className="ml-2 text-sm text-olive-700 dark:text-olive-400">Thai (ไทย)</span>
-            </label>
-          </div>
-        </div>
-
-        {/* Other Scripts */}
-        <div>
-          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-olive-600 dark:text-olive-400">
-            Other Scripts
-          </div>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <label className="flex items-center">
-              <input
-                {...register('character_sets')}
-                type="checkbox"
-                value="Vietnamese"
-                className="h-4 w-4 rounded border-olive-950/10 text-olive-950 focus:ring-olive-950 dark:border-white/10 dark:bg-olive-900 dark:focus:ring-olive-300"
-              />
-              <span className="ml-2 text-sm text-olive-700 dark:text-olive-400">
-                Vietnamese (Tiếng Việt)
-              </span>
-            </label>
-            <label className="flex items-center">
-              <input
-                {...register('character_sets')}
-                type="checkbox"
-                value="Other"
-                className="h-4 w-4 rounded border-olive-950/10 text-olive-950 focus:ring-olive-950 dark:border-white/10 dark:bg-olive-900 dark:focus:ring-olive-300"
-              />
-              <span className="ml-2 text-sm text-olive-700 dark:text-olive-400">Other</span>
-            </label>
-          </div>
-        </div>
+        <EastAsianScripts register={register} />
+        <LatinEuropeanScripts register={register} />
+        <MiddleEasternSouthAsianScripts register={register} />
+        <OtherScripts register={register} />
       </div>
     </div>
   )

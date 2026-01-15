@@ -191,6 +191,139 @@ function getActualColumns(db: Database.Database, tableName: string): Map<string,
 }
 
 /**
+ * Add a single missing column to a table
+ * Returns the action message describing what was done
+ */
+function addMissingColumn(
+  db: Database.Database,
+  tableName: string,
+  colDef: ColumnDefinition
+): string {
+  // Build ALTER TABLE statement
+  let alterSQL = `ALTER TABLE ${tableName} ADD COLUMN ${colDef.name} ${colDef.type}`
+
+  // Note: SQLite doesn't support adding NOT NULL columns without a default
+  // We'll add the column as nullable to avoid errors
+  if (colDef.dflt_value) {
+    alterSQL += ` DEFAULT ${colDef.dflt_value}`
+  }
+
+  try {
+    db.exec(alterSQL)
+    return `Added column: ${tableName}.${colDef.name}`
+  } catch (error) {
+    return `Failed to add ${tableName}.${colDef.name}: ${error}`
+  }
+}
+
+/**
+ * Repair missing columns in a single table
+ * Returns actions taken and whether any repairs were made
+ */
+function repairTableColumns(
+  db: Database.Database,
+  tableName: string,
+  expectedSchema: TableSchema
+): { actions: string[]; repaired: boolean } {
+  const actions: string[] = []
+  const actualColumns = getActualColumns(db, tableName)
+  const missingColumns = [...expectedSchema.columns.keys()].filter(col => !actualColumns.has(col))
+
+  if (missingColumns.length === 0) {
+    return { actions, repaired: false }
+  }
+
+  for (const colName of missingColumns) {
+    const colDef = expectedSchema.columns.get(colName)
+    if (colDef) {
+      actions.push(addMissingColumn(db, tableName, colDef))
+    }
+  }
+
+  return { actions, repaired: true }
+}
+
+/**
+ * Verify version metadata and determine if repair is needed
+ * Returns actions describing issues found
+ */
+function verifyVersionMetadata(
+  db: Database.Database,
+  hasMetadata: boolean
+): { actions: string[]; needsRepair: boolean } {
+  const actions: string[] = []
+
+  if (!hasMetadata) {
+    actions.push('Missing database_metadata table')
+    return { actions, needsRepair: true }
+  }
+
+  try {
+    const metadata = db.prepare('SELECT schema_version FROM database_metadata').get() as
+      | { schema_version: number }
+      | undefined
+
+    if (!metadata) {
+      actions.push('Missing version metadata row')
+      return { actions, needsRepair: true }
+    }
+
+    if (metadata.schema_version !== CURRENT_SCHEMA_VERSION) {
+      actions.push(`Version mismatch: ${metadata.schema_version} → ${CURRENT_SCHEMA_VERSION}`)
+      return { actions, needsRepair: true }
+    }
+  } catch {
+    actions.push('Could not read version metadata')
+    return { actions, needsRepair: true }
+  }
+
+  return { actions, needsRepair: false }
+}
+
+/**
+ * Update schema version in database_metadata table
+ * Returns the action message describing what was done
+ */
+function updateSchemaVersion(db: Database.Database, schemaSQL: string): string {
+  const metadataExists = db
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='database_metadata'")
+    .get()
+
+  if (!metadataExists) {
+    // Metadata table doesn't exist, create it
+    db.exec(schemaSQL)
+  }
+
+  // Check if row exists
+  const rowExists = db.prepare('SELECT id FROM database_metadata WHERE id = 1').get()
+
+  if (!rowExists) {
+    // Insert initial row
+    db.prepare(
+      `
+      INSERT INTO database_metadata (
+        schema_version,
+        created_at,
+        verified_at
+      ) VALUES (?, datetime('now'), datetime('now'))
+    `
+    ).run(CURRENT_SCHEMA_VERSION)
+    return `Set version to ${CURRENT_SCHEMA_VERSION}`
+  }
+
+  // Update existing row
+  db.prepare(
+    `
+    UPDATE database_metadata
+    SET schema_version = ?,
+        verified_at = datetime('now')
+    WHERE id = 1
+  `
+  ).run(CURRENT_SCHEMA_VERSION)
+  return `Updated version to ${CURRENT_SCHEMA_VERSION}`
+}
+
+/**
  * Repair a single database
  */
 function repairDatabase(dbPath: string, schemaSQL: string): RepairResult {
@@ -208,17 +341,15 @@ function repairDatabase(dbPath: string, schemaSQL: string): RepairResult {
     const expectedTables = parseSchemaSQL(schemaSQL)
     const actualTables = getActualTables(db)
 
-    // Find missing tables
+    // Find and create missing tables
     const missingTables = [...expectedTables.keys()].filter(t => !actualTables.has(t))
 
-    // Create missing tables
     if (missingTables.length > 0) {
       result.actions.push(`Missing tables: ${missingTables.join(', ')}`)
       result.status = 'repaired'
 
       // Apply full schema (CREATE TABLE IF NOT EXISTS is idempotent)
       db.exec(schemaSQL)
-
       result.actions.push('Created missing tables')
 
       // Refresh actual tables list
@@ -228,106 +359,27 @@ function repairDatabase(dbPath: string, schemaSQL: string): RepairResult {
       }
     }
 
-    // Check columns for each table
+    // Repair columns for each table
     for (const [tableName, expectedSchema] of expectedTables) {
-      if (!actualTables.has(tableName)) continue // Table doesn't exist (shouldn't happen after above)
+      if (!actualTables.has(tableName)) continue
 
-      const actualColumns = getActualColumns(db, tableName)
-      const missingColumns = [...expectedSchema.columns.keys()].filter(
-        col => !actualColumns.has(col)
-      )
-
-      if (missingColumns.length > 0) {
+      const columnResult = repairTableColumns(db, tableName, expectedSchema)
+      if (columnResult.repaired) {
         result.status = 'repaired'
-
-        for (const colName of missingColumns) {
-          const colDef = expectedSchema.columns.get(colName)
-          if (!colDef) continue
-
-          // Build ALTER TABLE statement
-          let alterSQL = `ALTER TABLE ${tableName} ADD COLUMN ${colDef.name} ${colDef.type}`
-
-          // Note: SQLite doesn't support adding NOT NULL columns without a default
-          // We'll add the column as nullable to avoid errors
-          if (colDef.dflt_value) {
-            alterSQL += ` DEFAULT ${colDef.dflt_value}`
-          }
-
-          try {
-            db.exec(alterSQL)
-            result.actions.push(`Added column: ${tableName}.${colName}`)
-          } catch (error) {
-            result.actions.push(`Failed to add ${tableName}.${colName}: ${error}`)
-          }
-        }
+        result.actions.push(...columnResult.actions)
       }
     }
 
-    // Verify or update version metadata
-    const hasMetadata = actualTables.has('database_metadata')
-
-    if (!hasMetadata) {
-      result.actions.push('Missing database_metadata table')
+    // Verify version metadata
+    const metadataResult = verifyVersionMetadata(db, actualTables.has('database_metadata'))
+    result.actions.push(...metadataResult.actions)
+    if (metadataResult.needsRepair) {
       result.status = 'repaired'
-    } else {
-      try {
-        const metadata = db.prepare('SELECT schema_version FROM database_metadata').get() as
-          | { schema_version: number }
-          | undefined
-
-        if (!metadata) {
-          result.actions.push('Missing version metadata row')
-          result.status = 'repaired'
-        } else if (metadata.schema_version !== CURRENT_SCHEMA_VERSION) {
-          result.actions.push(
-            `Version mismatch: ${metadata.schema_version} → ${CURRENT_SCHEMA_VERSION}`
-          )
-          result.status = 'repaired'
-        }
-      } catch {
-        result.actions.push('Could not read version metadata')
-        result.status = 'repaired'
-      }
     }
 
-    // If we made changes, ensure version is set correctly
+    // Update version if repairs were made
     if (result.status === 'repaired') {
-      const metadataExists = db
-        .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='database_metadata'")
-        .get()
-
-      if (!metadataExists) {
-        // Metadata table doesn't exist, create it
-        db.exec(schemaSQL) // This will create it
-      }
-
-      // Check if row exists
-      const rowExists = db.prepare('SELECT id FROM database_metadata WHERE id = 1').get()
-
-      if (!rowExists) {
-        // Insert initial row
-        db.prepare(
-          `
-          INSERT INTO database_metadata (
-            schema_version,
-            created_at,
-            verified_at
-          ) VALUES (?, datetime('now'), datetime('now'))
-        `
-        ).run(CURRENT_SCHEMA_VERSION)
-        result.actions.push(`Set version to ${CURRENT_SCHEMA_VERSION}`)
-      } else {
-        // Update existing row
-        db.prepare(
-          `
-          UPDATE database_metadata
-          SET schema_version = ?,
-              verified_at = datetime('now')
-          WHERE id = 1
-        `
-        ).run(CURRENT_SCHEMA_VERSION)
-        result.actions.push(`Updated version to ${CURRENT_SCHEMA_VERSION}`)
-      }
+      result.actions.push(updateSchemaVersion(db, schemaSQL))
     }
   } catch (error) {
     result.status = 'failed'

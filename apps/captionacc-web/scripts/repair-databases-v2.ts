@@ -12,7 +12,10 @@
  */
 
 import { CURRENT_SCHEMA_VERSION } from '../app/db/migrate'
-import { repairAllDatabases } from '../app/services/database-repair-service'
+import { repairAllDatabases, type RepairSummary } from '../app/services/database-repair-service'
+
+// Infer RepairResult type from RepairSummary
+type RepairResult = RepairSummary['results'][number]
 
 const force = process.argv.includes('--force')
 
@@ -22,16 +25,14 @@ console.log('='.repeat(80))
 console.log()
 
 if (force) {
-  console.log('⚠️  FORCE MODE: Will apply destructive changes without confirmation')
+  console.log('Warning: FORCE MODE: Will apply destructive changes without confirmation')
   console.log()
 }
 
-async function main() {
-  console.log(`Repairing all databases to schema version ${CURRENT_SCHEMA_VERSION}...`)
-  console.log()
-
-  const result = await repairAllDatabases(CURRENT_SCHEMA_VERSION, force)
-
+/**
+ * Print summary statistics for the repair operation
+ */
+function printSummary(result: RepairSummary): void {
   console.log()
   console.log('='.repeat(80))
   console.log('Repair Summary')
@@ -42,61 +43,91 @@ async function main() {
   console.log(`Failed: ${result.failed}`)
   console.log(`Need confirmation: ${result.needsConfirmation}`)
   console.log()
+}
 
-  if (result.failed > 0) {
-    console.log('❌ Failed databases:')
-    const failedDbs = result.results.filter(r => r.status === 'failed')
-    for (const db of failedDbs) {
+/**
+ * Print details about failed databases
+ */
+function printFailedDatabases(results: RepairResult[]): void {
+  const failedDbs = results.filter(r => r.status === 'failed')
+  if (failedDbs.length === 0) return
+
+  console.log('Failed databases:')
+  for (const db of failedDbs) {
+    console.log(`  ${db.path}`)
+    console.log(`    Error: ${db.error}`)
+  }
+  console.log()
+}
+
+/**
+ * Print details about destructive changes that were not applied
+ */
+function printDestructiveChanges(result: RepairSummary): void {
+  if (!result.hasDestructiveChanges || force) return
+
+  console.log('Warning: Destructive changes detected but not applied (use --force to apply):')
+  console.log()
+
+  const summary = result.destructiveActionsSummary
+  if (summary?.tablesToRemove) {
+    console.log('  Tables to remove:')
+    for (const [table, info] of Object.entries(summary.tablesToRemove)) {
+      console.log(`    - ${table}: ${info.databases} database(s), ${info.totalRows} total rows`)
+    }
+    console.log()
+  }
+
+  if (summary?.columnsToRemove) {
+    console.log('  Columns to remove:')
+    for (const [column, info] of Object.entries(summary.columnsToRemove)) {
+      console.log(`    - ${column}: ${info.databases} database(s)`)
+    }
+    console.log()
+  }
+}
+
+/**
+ * Print details about successfully repaired databases
+ */
+function printRepairedDatabases(results: RepairResult[]): void {
+  const repairedDbs = results.filter(r => r.status === 'repaired')
+  if (repairedDbs.length === 0) return
+
+  console.log('Successfully repaired databases')
+
+  // Show sample of repaired databases (first 5)
+  const sample = repairedDbs.slice(0, 5)
+  if (sample.length > 0) {
+    console.log()
+    console.log('Sample of repaired databases (showing first 5):')
+    for (const db of sample) {
       console.log(`  ${db.path}`)
-      console.log(`    Error: ${db.error}`)
-    }
-    console.log()
-  }
-
-  if (result.hasDestructiveChanges && !force) {
-    console.log('⚠️  Destructive changes detected but not applied (use --force to apply):')
-    console.log()
-
-    if (result.destructiveActionsSummary?.tablesToRemove) {
-      console.log('  Tables to remove:')
-      for (const [table, info] of Object.entries(result.destructiveActionsSummary.tablesToRemove)) {
-        console.log(`    - ${table}: ${info.databases} database(s), ${info.totalRows} total rows`)
+      if (db.actions.length > 0) {
+        console.log(`    Actions: ${db.actions.join(', ')}`)
       }
-      console.log()
-    }
-
-    if (result.destructiveActionsSummary?.columnsToRemove) {
-      console.log('  Columns to remove:')
-      for (const [column, info] of Object.entries(
-        result.destructiveActionsSummary.columnsToRemove
-      )) {
-        console.log(`    - ${column}: ${info.databases} database(s)`)
-      }
-      console.log()
     }
   }
+}
+
+async function main() {
+  console.log(`Repairing all databases to schema version ${CURRENT_SCHEMA_VERSION}...`)
+  console.log()
+
+  const result = await repairAllDatabases(CURRENT_SCHEMA_VERSION, force)
+
+  printSummary(result)
+  printFailedDatabases(result.results)
+  printDestructiveChanges(result)
 
   if (result.needsConfirmation > 0) {
-    console.log('⚠️  Some databases need confirmation for destructive changes')
+    console.log('Warning: Some databases need confirmation for destructive changes')
     console.log('    Run with --force to apply all changes')
     console.log()
   }
 
   if (result.repaired > 0) {
-    console.log('✅ Successfully repaired databases')
-
-    // Show sample of repaired databases
-    const repairedDbs = result.results.filter(r => r.status === 'repaired').slice(0, 5)
-    if (repairedDbs.length > 0) {
-      console.log()
-      console.log('Sample of repaired databases (showing first 5):')
-      for (const db of repairedDbs) {
-        console.log(`  ${db.path}`)
-        if (db.actions.length > 0) {
-          console.log(`    Actions: ${db.actions.join(', ')}`)
-        }
-      }
-    }
+    printRepairedDatabases(result.results)
   }
 
   console.log()

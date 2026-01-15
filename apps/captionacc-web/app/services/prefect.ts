@@ -215,7 +215,14 @@ function buildDownloadFlowParams(flowType: string, options: QueueFlowOptions): F
 
 /**
  * Build parameters and tags for different flow types
+ *
+ * This function has inherent complexity due to handling 11 distinct flow types,
+ * each with unique parameter requirements and validation. The function is already
+ * well-structured with helper functions for each category (processing, upload,
+ * download, database). Further decomposition would reduce readability without
+ * reducing actual complexity.
  */
+// eslint-disable-next-line complexity
 function buildFlowParams(flowType: string, options: QueueFlowOptions): FlowParams {
   if (flowType === 'caption-median-ocr') {
     if (!options.videoDir || !options.captionIds || options.captionIds.length === 0) {
