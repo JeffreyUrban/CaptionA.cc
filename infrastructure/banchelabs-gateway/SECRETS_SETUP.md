@@ -1,15 +1,15 @@
 # Secrets Setup Guide for Traefik-Prefect
 
-This guide covers all the secrets you need to configure for the traefik-prefect deployment.
+This guide covers all the secrets you need to configure for the banchelabs-gateway deployment.
 
 ## Overview
 
-The traefik-prefect service requires secrets in three places:
+The banchelabs-gateway service requires secrets in three places:
 1. **Supabase** - For the Edge Function to generate JWT tokens
 2. **GitHub** - For automated deployments via GitHub Actions
-3. **Fly.io** - For the running traefik-prefect application
+3. **Fly.io** - For the running banchelabs-gateway application
 
-## Step 1: Generate TRAEFIK_JWT_SECRET
+## Step 1: Generate GATEWAY_JWT_SECRET
 
 Generate a secure random secret for JWT signing:
 
@@ -25,7 +25,7 @@ The Edge Function `generate-gateway-token` uses this secret to sign JWT tokens.
 
 ```bash
 # Set the secret in Supabase
-supabase secrets set TRAEFIK_JWT_SECRET="<your-secret-from-step-1>"
+supabase secrets set GATEWAY_JWT_SECRET="<your-secret-from-step-1>"
 
 # Verify it was set
 supabase secrets list
@@ -46,7 +46,7 @@ Go to your repository: **Settings → Secrets and variables → Actions → New 
 
 ### Required Secrets:
 
-1. **`TRAEFIK_JWT_SECRET`**
+1. **`GATEWAY_JWT_SECRET`**
    - Value: The same secret from Step 1
    - Used by: Both production and preview deployments
 
@@ -70,17 +70,17 @@ Go to your repository: **Settings → Secrets and variables → Actions → New 
 For the main production deployment:
 
 ```bash
-cd infrastructure/traefik-prefect
+cd infrastructure/banchelabs-gateway
 
 # Create the app first (if not already created)
-fly apps create traefik-prefect --org personal
+fly apps create banchelabs-gateway --org personal
 
 # Set secrets
 # Note: PREFECT_API_DATABASE_CONNECTION_URL is the env var that Prefect reads
 fly secrets set \
-  TRAEFIK_JWT_SECRET='<your-secret-from-step-1>' \
+  GATEWAY_JWT_SECRET='<your-secret-from-step-1>' \
   PREFECT_API_DATABASE_CONNECTION_URL='<your-supabase-direct-connection-string>' \
-  -a traefik-prefect
+  -a banchelabs-gateway
 ```
 
 **Notes:**
@@ -92,15 +92,15 @@ fly secrets set \
 
 After setting all secrets, verify:
 
-- [ ] Supabase secret is set: `supabase secrets list` shows `TRAEFIK_JWT_SECRET`
+- [ ] Supabase secret is set: `supabase secrets list` shows `GATEWAY_JWT_SECRET`
 - [ ] Edge Function is redeployed: `supabase functions deploy generate-gateway-token`
 - [ ] GitHub secrets are set (4 total):
-  - [ ] `TRAEFIK_JWT_SECRET`
+  - [ ] `GATEWAY_JWT_SECRET`
   - [ ] `SUPABASE_DIRECT_CONNECTION_STRING`
   - [ ] `SUPABASE_DIRECT_CONNECTION_STRING_STAGING`
   - [ ] `FLY_API_TOKEN`
-- [ ] Fly.io production secrets are set: `fly secrets list -a traefik-prefect`
-  - Should show: `TRAEFIK_JWT_SECRET` and `PREFECT_API_DATABASE_CONNECTION_URL`
+- [ ] Fly.io production secrets are set: `fly secrets list -a banchelabs-gateway`
+  - Should show: `GATEWAY_JWT_SECRET` and `PREFECT_API_DATABASE_CONNECTION_URL`
 
 ## Testing the Setup
 
@@ -112,7 +112,7 @@ export SUPABASE_URL="https://your-project.supabase.co"
 export SUPABASE_SERVICE_ROLE_KEY="your-service-role-key"
 
 # Generate a test token using the script
-cd infrastructure/traefik-prefect
+cd infrastructure/banchelabs-gateway
 python scripts/generate-token.py \
   --project captionacc \
   --service test \
@@ -126,7 +126,7 @@ If successful, you'll get a JWT token. Save it for testing the gateway after dep
 
 ### Edge Function can't generate tokens
 
-**Error:** "Server configuration error" or "TRAEFIK_JWT_SECRET environment variable not set"
+**Error:** "Server configuration error" or "GATEWAY_JWT_SECRET environment variable not set"
 
 **Fix:**
 1. Verify secret is set: `supabase secrets list`
@@ -147,27 +147,27 @@ If successful, you'll get a JWT token. Save it for testing the gateway after dep
 **Error:** "Missing required environment variable"
 
 **Fix:**
-1. Check secrets are set: `fly secrets list -a traefik-prefect`
+1. Check secrets are set: `fly secrets list -a banchelabs-gateway`
 2. Set missing secrets using `fly secrets set`
-3. Restart the app: `fly apps restart traefik-prefect`
+3. Restart the app: `fly apps restart banchelabs-gateway`
 
 ## Security Best Practices
 
 1. **Never commit secrets to git** - All secrets should be in environment variables only
-2. **Use different secrets for staging/production** - Consider separate `TRAEFIK_JWT_SECRET` values
-3. **Rotate secrets regularly** - Change `TRAEFIK_JWT_SECRET` every 90 days
+2. **Use different secrets for staging/production** - Consider separate `GATEWAY_JWT_SECRET` values
+3. **Rotate secrets regularly** - Change `GATEWAY_JWT_SECRET` every 90 days
 4. **Limit token expiration** - Default is 90 days, max is 365 days
 5. **Revoke old tokens** - Use the revocation API when rotating secrets
 
 ## Secret Rotation Process
 
-### Rotating TRAEFIK_JWT_SECRET
+### Rotating GATEWAY_JWT_SECRET
 
 1. Generate new secret: `openssl rand -base64 32`  # pragma: allowlist secret
-2. Update Supabase: `supabase secrets set TRAEFIK_JWT_SECRET="<new-secret>"`  # pragma: allowlist secret
+2. Update Supabase: `supabase secrets set GATEWAY_JWT_SECRET="<new-secret>"`  # pragma: allowlist secret
 3. Redeploy Edge Function: `supabase functions deploy generate-gateway-token`
 4. Update GitHub secrets in repository settings
-5. Update Fly.io: `fly secrets set TRAEFIK_JWT_SECRET="<new-secret>" -a traefik-prefect`
+5. Update Fly.io: `fly secrets set GATEWAY_JWT_SECRET="<new-secret>" -a banchelabs-gateway`
 6. Generate new tokens for all services (old tokens will stop working)
 7. Update all services with new tokens
 
@@ -177,13 +177,13 @@ If you rotate your Supabase database password:
 
 1. Update in Supabase Dashboard
 2. Update GitHub secrets: `SUPABASE_DIRECT_CONNECTION_STRING` (and `_STAGING` if separate)  # pragma: allowlist secret
-3. Update Fly.io: `fly secrets set PREFECT_API_DATABASE_CONNECTION_URL="<new-connection-string>" -a traefik-prefect`  # pragma: allowlist secret
-4. Restart the app: `fly apps restart traefik-prefect`
+3. Update Fly.io: `fly secrets set PREFECT_API_DATABASE_CONNECTION_URL="<new-connection-string>" -a banchelabs-gateway`  # pragma: allowlist secret
+4. Restart the app: `fly apps restart banchelabs-gateway`
 
 ## Next Steps
 
 After setting up secrets:
-1. Deploy traefik-prefect to production (see DEPLOYMENT.md)
+1. Deploy banchelabs-gateway to production (see DEPLOYMENT.md)
 2. Generate service tokens for your applications
 3. Configure client services to use the gateway
 

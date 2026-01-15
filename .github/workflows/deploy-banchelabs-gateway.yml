@@ -9,7 +9,7 @@ on:
       - main
     paths:
       - 'infrastructure/banchelabs-gateway/**'
-      - '.github/workflows/deploy-traefik-prefect.yml'
+      - '.github/workflows/deploy-banchelabs-gateway.yml'
   workflow_dispatch:  # Allow manual triggering
 
 jobs:
