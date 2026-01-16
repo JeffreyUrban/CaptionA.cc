@@ -4,6 +4,9 @@
 app = "captionacc-api"
 primary_region = "ewr"
 
+[experimental]
+  private_network = true  # Enable private networking to reach banchelabs-gateway
+
 [build]
 
 [env]
@@ -39,10 +42,10 @@ kill_timeout = "30s"
 
 [checks]
   [checks.health]
-    grace_period = "10s"
+    grace_period = "60s"  # Allow 60s for startup (Prefect connection, etc.)
     interval = "30s"
     method = "get"
     path = "/health"
     port = 8000
-    timeout = "5s"
+    timeout = "10s"  # Increased timeout for health check response
     type = "http"
