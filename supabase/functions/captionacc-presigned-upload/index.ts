@@ -177,12 +177,11 @@ async function handleConfirm(
 
   // Create video record with status 'processing'
   // This will trigger the Supabase INSERT webhook for backend processing
+  // Note: storage_key is computed as {tenant_id}/client/videos/{video_id}/video.mp4 (not stored)
   const { error: insertError } = await supabaseAdmin.from("videos").insert({
     id: videoId,
     tenant_id: tenantId,
-    video_path: videoPath || filename,
     display_path: videoPath || filename,
-    storage_key: storageKey,
     size_bytes: sizeBytes,
     width: width ?? 0,
     height: height ?? 0,

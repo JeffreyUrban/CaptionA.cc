@@ -34,7 +34,8 @@ Extracts frames from uploaded video, runs OCR, and initializes layout.db for ann
 |-----------|------|--------|-------------|
 | `video_id` | UUID | webhook | Video identifier |
 | `tenant_id` | UUID | webhook | Tenant for path scoping |
-| `storage_key` | string | webhook | Wasabi S3 key for video file |
+
+**Note:** `storage_key` is computed as `{tenant_id}/client/videos/{video_id}/video.mp4` by the backend.
 
 ### Processing Steps
 

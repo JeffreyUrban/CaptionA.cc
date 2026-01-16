@@ -81,13 +81,12 @@ Video catalog with multi-tenant isolation. (added width, height)
 |--------|------|----------------------------------------------|
 | `id` | UUID PK | Video identifier                             |
 | `tenant_id` | UUID FK | Owner tenant                                 |
-| `video_path` | TEXT NOT NULL | User-facing path/name                        |
-| `storage_key` | TEXT NOT NULL | Wasabi storage key                           |
+| `display_path` | TEXT NOT NULL | User-facing path for organization            |
 | `size_bytes` | BIGINT | File size                                    |
 | `duration_seconds` | REAL | Video duration                               |
 | `width` | INTEGER NOT NULL | Width                                        |
 | `height` | INTEGER NOT NULL | Height                                       |
-| `status` | TEXT | 'uploading', 'processing', 'active', 'error' |
+| `status` | TEXT | 'processing', 'active', 'error'              |
 | `uploaded_by_user_id` | UUID FK | Uploader                                     |
 | `uploaded_at` | TIMESTAMPTZ | Upload timestamp                             |
 | `locked_by_user_id` | UUID FK | Current editor (locking)                     |
@@ -95,8 +94,9 @@ Video catalog with multi-tenant isolation. (added width, height)
 | `annotations_db_key` | TEXT | captions.db storage key                      |
 | `prefect_flow_run_id` | TEXT | Processing flow ID                           |
 | `is_demo` | BOOLEAN | Shared demo video flag                       |
-| `display_path` | TEXT | User-facing path                             |
 | `deleted_at` | TIMESTAMPTZ | Soft delete timestamp                        |
+
+**Note:** `storage_key` is computed as `{tenant_id}/client/videos/{id}/video.mp4` and not stored in the database.
 | `current_cropped_frames_version` | INTEGER | Active frames version                        |
 
 #### `cropped_frames_versions`
@@ -455,7 +455,8 @@ client = get_supabase_client(require_production=True)
 from supabase_client import VideoRepository
 
 video_repo = VideoRepository(client)
-video = video_repo.create_video(tenant_id, storage_key, size_bytes, ...)
+video = video_repo.create_video(tenant_id, display_path, size_bytes, ...)
+# storage_key is computed as f"{tenant_id}/client/videos/{video_id}/video.mp4"
 ```
 
 ---
