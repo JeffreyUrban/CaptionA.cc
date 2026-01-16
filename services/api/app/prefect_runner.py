@@ -60,6 +60,13 @@ class PrefectWorkerManager:
                 if not health:
                     raise Exception("Prefect server health check failed")
                 logger.info("Successfully connected to Prefect server")
+
+                # Ensure work pool exists (optional - worker will create if needed)
+                try:
+                    await client.read_work_pool("captionacc-workers")
+                    logger.info("Work pool 'captionacc-workers' exists")
+                except Exception as e:
+                    logger.info(f"Work pool 'captionacc-workers' not found ({e}), worker will create it")
         except Exception as e:
             logger.error(f"Failed to connect to Prefect server: {e}")
             raise Exception(
@@ -95,6 +102,8 @@ class PrefectWorkerManager:
                 "start",
                 "--pool",
                 "captionacc-workers",
+                "--type",
+                "process",
                 "--name",
                 "captionacc-api-worker",
                 stdout=asyncio.subprocess.PIPE,
@@ -119,15 +128,35 @@ class PrefectWorkerManager:
 
         This ensures worker logs are visible in the API service logs.
         """
-        if not self.worker_process or not self.worker_process.stdout:
+        if not self.worker_process:
             return
 
+        async def monitor_stream(stream, prefix):
+            """Monitor a single stream (stdout or stderr)."""
+            if not stream:
+                return
+            try:
+                while True:
+                    line = await stream.readline()
+                    if not line:
+                        break
+                    decoded = line.decode().strip()
+                    if "exception" in decoded.lower() or "error" in decoded.lower():
+                        logger.error(f"[Worker {prefix}] {decoded}")
+                    else:
+                        logger.info(f"[Worker {prefix}] {decoded}")
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                logger.error(f"Error monitoring worker {prefix}: {e}", exc_info=True)
+
         try:
-            while True:
-                line = await self.worker_process.stdout.readline()
-                if not line:
-                    break
-                logger.info(f"[Worker] {line.decode().strip()}")
+            # Monitor both stdout and stderr concurrently
+            await asyncio.gather(
+                monitor_stream(self.worker_process.stdout, "stdout"),
+                monitor_stream(self.worker_process.stderr, "stderr"),
+                return_exceptions=True,
+            )
         except asyncio.CancelledError:
             logger.info("Worker output monitoring cancelled")
             raise
