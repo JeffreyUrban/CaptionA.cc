@@ -539,9 +539,9 @@ export type Database = {
           annotations_db_key: string | null
           current_cropped_frames_version: number | null
           deleted_at: string | null
-          display_path: string | null
+          display_path: string
           duration_seconds: number | null
-          filename: string
+          height: number
           id: string
           is_demo: boolean | null
           locked_at: string | null
@@ -549,18 +549,18 @@ export type Database = {
           prefect_flow_run_id: string | null
           size_bytes: number | null
           status: string | null
-          storage_key: string
           tenant_id: string | null
           uploaded_at: string | null
           uploaded_by_user_id: string | null
+          width: number
         }
         Insert: {
           annotations_db_key?: string | null
           current_cropped_frames_version?: number | null
           deleted_at?: string | null
-          display_path?: string | null
+          display_path: string
           duration_seconds?: number | null
-          filename: string
+          height?: number
           id?: string
           is_demo?: boolean | null
           locked_at?: string | null
@@ -568,18 +568,18 @@ export type Database = {
           prefect_flow_run_id?: string | null
           size_bytes?: number | null
           status?: string | null
-          storage_key: string
           tenant_id?: string | null
           uploaded_at?: string | null
           uploaded_by_user_id?: string | null
+          width?: number
         }
         Update: {
           annotations_db_key?: string | null
           current_cropped_frames_version?: number | null
           deleted_at?: string | null
-          display_path?: string | null
+          display_path?: string
           duration_seconds?: number | null
-          filename?: string
+          height?: number
           id?: string
           is_demo?: boolean | null
           locked_at?: string | null
@@ -587,10 +587,10 @@ export type Database = {
           prefect_flow_run_id?: string | null
           size_bytes?: number | null
           status?: string | null
-          storage_key?: string
           tenant_id?: string | null
           uploaded_at?: string | null
           uploaded_by_user_id?: string | null
+          width?: number
         }
         Relationships: [
           {
