@@ -70,9 +70,12 @@ export function useVideoOperations({
     setVideoLoading(false)
   }, [])
 
-  const openDeleteVideoModal = useCallback((videoPath: string, videoName: string) => {
-    setDeleteVideoModal({ open: true, videoPath, videoName })
-  }, [])
+  const openDeleteVideoModal = useCallback(
+    (videoId: string, videoName: string, videoPath: string) => {
+      setDeleteVideoModal({ open: true, videoId, videoName, videoPath })
+    },
+    []
+  )
 
   const openErrorModal = useCallback(
     (videoId: string, errorDetails: BadgeState['errorDetails']) => {
@@ -136,22 +139,24 @@ export function useVideoOperations({
   }, [renameVideoModal.videoPath, renamedVideoName, onOperationComplete])
 
   const handleDeleteVideo = useCallback(async () => {
-    if (!deleteVideoModal.videoPath) return
+    if (!deleteVideoModal.videoId) return
 
     setVideoError(null)
     setVideoLoading(true)
 
     try {
+      const videoId = deleteVideoModal.videoId
       const videoPath = deleteVideoModal.videoPath
 
       // Soft delete by setting deleted_at timestamp
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('videos')
         .update({
           deleted_at: new Date().toISOString(),
         })
-        .eq('display_path', videoPath)
+        .eq('id', videoId)
         .is('deleted_at', null)
+        .select()
 
       if (error) {
         console.error('Failed to delete video:', error)
@@ -160,12 +165,22 @@ export function useVideoOperations({
         return
       }
 
+      // Check if any rows were actually updated
+      if (!data || data.length === 0) {
+        console.error('Delete failed: No video found with ID:', videoId)
+        setVideoError('Video not found or already deleted')
+        setVideoLoading(false)
+        return
+      }
+
+      console.log('Successfully deleted video:', videoId, 'Updated rows:', data.length)
+
       // Success - close modal and reload
       setVideoLoading(false)
       setDeleteVideoModal({ open: false })
 
       // Clear cached stats for this video
-      if (clearVideoStats) {
+      if (clearVideoStats && videoPath) {
         clearVideoStats(videoPath)
       }
 
@@ -175,7 +190,7 @@ export function useVideoOperations({
       setVideoError('Network error')
       setVideoLoading(false)
     }
-  }, [deleteVideoModal.videoPath, onOperationComplete, clearVideoStats])
+  }, [deleteVideoModal.videoId, deleteVideoModal.videoPath, onOperationComplete, clearVideoStats])
 
   return {
     // Modal states

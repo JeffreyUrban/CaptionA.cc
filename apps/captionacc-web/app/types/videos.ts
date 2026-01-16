@@ -49,8 +49,9 @@ export interface RenameVideoModalState {
 /** Modal state for deleting videos */
 export interface DeleteVideoModalState {
   open: boolean
-  videoPath?: string
+  videoId?: string
   videoName?: string
+  videoPath?: string // Keep for stats cleanup
 }
 
 /** Modal state for error details */

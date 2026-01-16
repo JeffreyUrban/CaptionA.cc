@@ -315,7 +315,7 @@ interface TreeRowProps {
   onDeleteFolder: (folderPath: string, folderName: string, videoCount: number) => void
   onRenameVideo: (videoPath: string, currentName: string) => void
   onMoveVideo: (videoPath: string, videoName: string) => void
-  onDeleteVideo: (videoPath: string, videoName: string) => void
+  onDeleteVideo: (videoId: string, videoName: string, videoPath: string) => void
   onErrorBadgeClick: (videoId: string, errorDetails: BadgeState['errorDetails']) => void
   onDragStart: (path: string, name: string, type: 'video' | 'folder') => void
   onDragEnd: () => void
@@ -464,7 +464,7 @@ interface FolderRowProps {
   onDeleteFolder: (folderPath: string, folderName: string, videoCount: number) => void
   onRenameVideo: (videoPath: string, currentName: string) => void
   onMoveVideo: (videoPath: string, videoName: string) => void
-  onDeleteVideo: (videoPath: string, videoName: string) => void
+  onDeleteVideo: (videoId: string, videoName: string, videoPath: string) => void
   onErrorBadgeClick: (videoId: string, errorDetails: BadgeState['errorDetails']) => void
   onDragStart: (path: string, name: string, type: 'video' | 'folder') => void
   onDragEnd: () => void
@@ -684,7 +684,7 @@ interface VideoRowProps {
   loading: boolean
   onRenameVideo: (videoPath: string, currentName: string) => void
   onMoveVideo: (videoPath: string, videoName: string) => void
-  onDeleteVideo: (videoPath: string, videoName: string) => void
+  onDeleteVideo: (videoId: string, videoName: string, videoPath: string) => void
   onErrorBadgeClick: (videoId: string, errorDetails: BadgeState['errorDetails']) => void
   onDragStart: (path: string, name: string, type: 'video' | 'folder') => void
   onDragEnd: () => void
@@ -872,7 +872,7 @@ interface VideoActionsMenuProps {
   stats: VideoStats | null
   onRenameVideo: (videoPath: string, currentName: string) => void
   onMoveVideo: (videoPath: string, videoName: string) => void
-  onDeleteVideo: (videoPath: string, videoName: string) => void
+  onDeleteVideo: (videoId: string, videoName: string, videoPath: string) => void
 }
 
 function VideoActionsMenu({
@@ -975,7 +975,7 @@ function VideoActionsMenu({
           </MenuItem>
           <MenuItem>
             <button
-              onClick={() => onDeleteVideo(node.videoId, node.name)}
+              onClick={() => onDeleteVideo(node.videoId!, node.name, node.path)}
               className="block w-full text-left px-4 py-2 text-sm text-red-700 dark:text-red-400 data-[focus]:bg-red-50 dark:data-[focus]:bg-red-900/20 data-[focus]:text-red-900 dark:data-[focus]:text-red-300 data-[focus]:outline-none"
             >
               Delete...
