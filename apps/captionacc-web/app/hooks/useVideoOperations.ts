@@ -5,6 +5,7 @@
 
 import { useState, useCallback } from 'react'
 
+import { supabase } from '~/services/supabase-client'
 import type { RenameVideoModalState, DeleteVideoModalState, ErrorModalState } from '~/types/videos'
 import type { BadgeState } from '~/utils/video-stats'
 
@@ -102,17 +103,22 @@ export function useVideoOperations({
 
     try {
       const oldPath = renameVideoModal.videoPath
+      const pathParts = oldPath.split('/')
+      pathParts[pathParts.length - 1] = renamedVideoName
+      const newPath = pathParts.join('/')
 
-      const response = await fetch('/api/videos/rename', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ oldPath, newName: renamedVideoName }),
-      })
+      // Update video display_path in Supabase (video_path stays as original, storage_key never changes)
+      const { error } = await supabase
+        .from('videos')
+        .update({
+          display_path: newPath,
+        })
+        .eq('display_path', oldPath)
+        .is('deleted_at', null)
 
-      const data = await response.json()
-
-      if (!response.ok) {
-        setVideoError(data.error ?? 'Failed to rename video')
+      if (error) {
+        console.error('Failed to rename video:', error)
+        setVideoError(error.message ?? 'Failed to rename video')
         setVideoLoading(false)
         return
       }
@@ -122,7 +128,8 @@ export function useVideoOperations({
       setRenameVideoModal({ open: false })
       setRenamedVideoName('')
       onOperationComplete()
-    } catch {
+    } catch (error) {
+      console.error('Rename video error:', error)
       setVideoError('Network error')
       setVideoLoading(false)
     }
@@ -137,14 +144,18 @@ export function useVideoOperations({
     try {
       const videoPath = deleteVideoModal.videoPath
 
-      const response = await fetch(`/api/videos/${encodeURIComponent(videoPath)}/delete`, {
-        method: 'DELETE',
-      })
+      // Soft delete by setting deleted_at timestamp
+      const { error } = await supabase
+        .from('videos')
+        .update({
+          deleted_at: new Date().toISOString(),
+        })
+        .eq('display_path', videoPath)
+        .is('deleted_at', null)
 
-      const data = await response.json()
-
-      if (!response.ok) {
-        setVideoError(data.error ?? 'Failed to delete video')
+      if (error) {
+        console.error('Failed to delete video:', error)
+        setVideoError(error.message ?? 'Failed to delete video')
         setVideoLoading(false)
         return
       }
@@ -159,7 +170,8 @@ export function useVideoOperations({
       }
 
       onOperationComplete()
-    } catch {
+    } catch (error) {
+      console.error('Delete video error:', error)
       setVideoError('Network error')
       setVideoLoading(false)
     }

@@ -5,6 +5,7 @@
 
 import { useState, useCallback, useMemo } from 'react'
 
+import { supabase } from '~/services/supabase-client'
 import type { MoveModalState, FolderItem } from '~/types/videos'
 import type { TreeNode } from '~/utils/video-tree'
 
@@ -120,41 +121,77 @@ export function useMoveOperation({
         return
       }
 
-      const endpoint = itemType === 'video' ? '/api/videos/move' : '/api/folders/move'
-      const bodyKey = itemType === 'video' ? 'videoPath' : 'folderPath'
+      if (itemType === 'video') {
+        // Move a single video (only update display_path, video_path stays as original)
+        const pathParts = itemPath.split('/')
+        const fileName = pathParts[pathParts.length - 1]
+        const newPath = selectedTargetFolder ? `${selectedTargetFolder}/${fileName}` : fileName
 
-      const response = await fetch(endpoint, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          [bodyKey]: itemPath,
-          targetFolder: selectedTargetFolder,
-        }),
-      })
+        const { error } = await supabase
+          .from('videos')
+          .update({
+            display_path: newPath,
+          })
+          .eq('display_path', itemPath)
+          .is('deleted_at', null)
 
-      const data = await response.json()
+        if (error) {
+          console.error('Failed to move video:', error)
+          setMoveError(error.message ?? 'Failed to move video')
+          setMoveLoading(false)
+          return
+        }
 
-      if (!response.ok) {
-        setMoveError(data.error ?? `Failed to move ${itemType}`)
-        setMoveLoading(false)
-        return
+        // Clear cached stats for old and new paths
+        if (clearVideoStats) {
+          clearVideoStats(itemPath)
+          clearVideoStats(newPath)
+        }
+      } else {
+        // Move a folder (update all videos in the folder)
+        const { data: videos, error: fetchError } = await supabase
+          .from('videos')
+          .select('id, display_path')
+          .like('display_path', `${itemPath}/%`)
+          .is('deleted_at', null)
+
+        if (fetchError) {
+          console.error('Failed to fetch videos in folder:', fetchError)
+          setMoveError(fetchError.message ?? 'Failed to move folder')
+          setMoveLoading(false)
+          return
+        }
+
+        // Update each video's display_path (video_path stays as original, storage_key never changes)
+        for (const video of videos ?? []) {
+          const relativePath = video.display_path?.replace(`${itemPath}/`, '') ?? ''
+          const newDisplayPath = selectedTargetFolder
+            ? `${selectedTargetFolder}/${itemPath.split('/').pop()}/${relativePath}`
+            : `${itemPath.split('/').pop()}/${relativePath}`
+
+          const { error: updateError } = await supabase
+            .from('videos')
+            .update({
+              display_path: newDisplayPath,
+            })
+            .eq('id', video.id)
+
+          if (updateError) {
+            console.error('Failed to update video:', updateError)
+            setMoveError(updateError.message ?? 'Failed to move folder')
+            setMoveLoading(false)
+            return
+          }
+        }
       }
 
       // Success - close modal and reload
       setMoveLoading(false)
       setMoveModal({ open: false })
       setSelectedTargetFolder('')
-
-      // Clear cached stats for the moved video (old and new paths)
-      if (itemType === 'video' && clearVideoStats) {
-        clearVideoStats(itemPath) // Clear old path
-        if (data.newPath) {
-          clearVideoStats(data.newPath) // Clear new path to force refresh
-        }
-      }
-
       onMoveComplete()
-    } catch {
+    } catch (error) {
+      console.error('Move operation error:', error)
       setMoveError('Network error')
       setMoveLoading(false)
     }

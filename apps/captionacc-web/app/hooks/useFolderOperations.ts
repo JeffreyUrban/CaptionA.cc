@@ -5,6 +5,7 @@
 
 import { useState, useCallback } from 'react'
 
+import { supabase } from '~/services/supabase-client'
 import type {
   CreateFolderModalState,
   RenameFolderModalState,
@@ -92,27 +93,30 @@ export function useFolderOperations({
     setFolderLoading(true)
 
     try {
-      // First, get the video count
-      const response = await fetch(`/api/folders/delete?path=${encodeURIComponent(folderPath)}`, {
-        method: 'DELETE',
-      })
+      // Count videos in this folder (display_path starts with folderPath)
+      const { count, error } = await supabase
+        .from('videos')
+        .select('*', { count: 'exact', head: true })
+        .like('display_path', `${folderPath}/%`)
+        .is('deleted_at', null)
 
-      const data = await response.json()
-
-      if (data.requiresConfirmation) {
-        // Show modal with video count
-        setDeleteFolderModal({
-          open: true,
-          folderPath,
-          folderName,
-          videoCount: data.videoCount,
-        })
+      if (error) {
+        console.error('Failed to count videos in folder:', error)
+        setFolderError(error.message ?? 'Failed to check folder')
         setFolderLoading(false)
-      } else if (!response.ok) {
-        setFolderError(data.error ?? 'Failed to check folder')
-        setFolderLoading(false)
+        return
       }
-    } catch {
+
+      // Show modal with video count
+      setDeleteFolderModal({
+        open: true,
+        folderPath,
+        folderName,
+        videoCount: count ?? 0,
+      })
+      setFolderLoading(false)
+    } catch (error) {
+      console.error('Check folder error:', error)
       setFolderError('Network error')
       setFolderLoading(false)
     }
@@ -141,16 +145,18 @@ export function useFolderOperations({
         ? `${createFolderModal.parentPath}/${newFolderName}`
         : newFolderName
 
-      const response = await fetch('/api/folders/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ folderPath }),
-      })
+      // Note: In this design, folders don't exist independently - they're derived from video paths
+      // Creating a folder is just a client-side operation that will be persisted when videos are added
+      // For now, we'll just validate the folder name and close the modal
 
-      const data = await response.json()
+      if (!newFolderName.trim()) {
+        setFolderError('Folder name cannot be empty')
+        setFolderLoading(false)
+        return
+      }
 
-      if (!response.ok) {
-        setFolderError(data.error ?? 'Failed to create folder')
+      if (newFolderName.includes('/')) {
+        setFolderError('Folder name cannot contain "/"')
         setFolderLoading(false)
         return
       }
@@ -160,7 +166,8 @@ export function useFolderOperations({
       setCreateFolderModal({ open: false })
       setNewFolderName('')
       onOperationComplete()
-    } catch {
+    } catch (error) {
+      console.error('Create folder error:', error)
       setFolderError('Network error')
       setFolderLoading(false)
     }
@@ -178,18 +185,38 @@ export function useFolderOperations({
       pathParts[pathParts.length - 1] = renamedFolderName
       const newPath = pathParts.join('/')
 
-      const response = await fetch('/api/folders/rename', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ oldPath, newPath }),
-      })
+      // Get all videos in this folder
+      const { data: videos, error: fetchError } = await supabase
+        .from('videos')
+        .select('id, display_path')
+        .like('display_path', `${oldPath}/%`)
+        .is('deleted_at', null)
 
-      const data = await response.json()
-
-      if (!response.ok) {
-        setFolderError(data.error ?? 'Failed to rename folder')
+      if (fetchError) {
+        console.error('Failed to fetch videos in folder:', fetchError)
+        setFolderError(fetchError.message ?? 'Failed to rename folder')
         setFolderLoading(false)
         return
+      }
+
+      // Update each video's display_path (video_path stays as original, storage_key never changes)
+      for (const video of videos ?? []) {
+        const updatedDisplayPath =
+          video.display_path?.replace(oldPath, newPath) ?? video.display_path
+
+        const { error: updateError } = await supabase
+          .from('videos')
+          .update({
+            display_path: updatedDisplayPath,
+          })
+          .eq('id', video.id)
+
+        if (updateError) {
+          console.error('Failed to update video:', updateError)
+          setFolderError(updateError.message ?? 'Failed to rename folder')
+          setFolderLoading(false)
+          return
+        }
       }
 
       // Success - close modal and reload
@@ -197,7 +224,8 @@ export function useFolderOperations({
       setRenameFolderModal({ open: false })
       setRenamedFolderName('')
       onOperationComplete()
-    } catch {
+    } catch (error) {
+      console.error('Rename folder error:', error)
       setFolderError('Network error')
       setFolderLoading(false)
     }
@@ -210,18 +238,20 @@ export function useFolderOperations({
     setFolderLoading(true)
 
     try {
-      // Delete with confirmed=true parameter
-      const response = await fetch(
-        `/api/folders/delete?path=${encodeURIComponent(deleteFolderModal.folderPath)}&confirmed=true`,
-        {
-          method: 'DELETE',
-        }
-      )
+      const folderPath = deleteFolderModal.folderPath
 
-      const data = await response.json()
+      // Soft delete all videos in this folder by setting deleted_at timestamp
+      const { error } = await supabase
+        .from('videos')
+        .update({
+          deleted_at: new Date().toISOString(),
+        })
+        .like('display_path', `${folderPath}/%`)
+        .is('deleted_at', null)
 
-      if (!response.ok) {
-        setFolderError(data.error ?? 'Failed to delete folder')
+      if (error) {
+        console.error('Failed to delete folder:', error)
+        setFolderError(error.message ?? 'Failed to delete folder')
         setFolderLoading(false)
         return
       }
@@ -230,7 +260,8 @@ export function useFolderOperations({
       setFolderLoading(false)
       setDeleteFolderModal({ open: false })
       onOperationComplete()
-    } catch {
+    } catch (error) {
+      console.error('Delete folder error:', error)
       setFolderError('Network error')
       setFolderLoading(false)
     }
