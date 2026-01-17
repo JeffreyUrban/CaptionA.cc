@@ -9,58 +9,56 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router'
 
 import type { DraggedItemState } from '~/types/videos'
-import type { BadgeState } from '~/utils/video-stats'
-import type { TreeNode, FolderNode, VideoStats } from '~/utils/video-tree'
+import { calculateBadges, calculateMenuActions, type BadgeState } from '~/utils/video-badges'
+import type { TreeNode, FolderNode } from '~/utils/video-tree'
 
 // =============================================================================
 // Helper Functions
 // =============================================================================
 
-/** Calculate aggregate stats for a folder from the stats map */
-function calculateFolderStatsFromMap(
-  node: FolderNode,
-  statsMap: Map<string, VideoStats>
-): VideoStats | null {
-  const collectVideoIds = (n: TreeNode): string[] => {
+interface AggregatedStats {
+  totalAnnotations: number
+  confirmedAnnotations: number
+  predictedAnnotations: number
+  boundaryPendingCount: number
+  textPendingCount: number
+  totalFrames: number
+  coveredFrames: number
+  progress: number
+}
+
+/** Calculate aggregate stats for a folder from its children */
+function calculateFolderStats(node: FolderNode): AggregatedStats | null {
+  const collectVideoNodes = (n: TreeNode): TreeNode[] => {
     if (n.type === 'video') {
-      return [n.videoId]
+      return [n]
     } else {
-      return n.children.flatMap(collectVideoIds)
+      return n.children?.flatMap(collectVideoNodes) || []
     }
   }
 
-  const videoIds = collectVideoIds(node)
-  const videoStats = videoIds.map(id => statsMap.get(id)).filter((s): s is VideoStats => s != null)
+  const videoNodes = collectVideoNodes(node)
+  if (videoNodes.length === 0) return null
 
-  if (videoStats.length === 0) return null
-
-  const aggregated: VideoStats = {
+  const aggregated: AggregatedStats = {
     totalAnnotations: 0,
-    pendingReview: 0,
     confirmedAnnotations: 0,
     predictedAnnotations: 0,
-    gapAnnotations: 0,
-    progress: 0,
+    boundaryPendingCount: 0,
+    textPendingCount: 0,
     totalFrames: 0,
     coveredFrames: 0,
-    hasOcrData: false,
-    layoutApproved: false,
-    boundaryPendingReview: 0,
-    textPendingReview: 0,
-    badges: [],
+    progress: 0,
   }
 
-  for (const stats of videoStats) {
-    aggregated.totalAnnotations += stats.totalAnnotations || 0
-    aggregated.pendingReview += stats.pendingReview || 0
-    aggregated.confirmedAnnotations += stats.confirmedAnnotations || 0
-    aggregated.predictedAnnotations += stats.predictedAnnotations || 0
-    aggregated.gapAnnotations += stats.gapAnnotations || 0
-    aggregated.totalFrames += stats.totalFrames || 0
-    aggregated.coveredFrames += stats.coveredFrames || 0
-    // Aggregate hasOcrData and layoutApproved as "any video has it"
-    aggregated.hasOcrData = aggregated.hasOcrData || stats.hasOcrData
-    aggregated.layoutApproved = aggregated.layoutApproved || stats.layoutApproved
+  for (const video of videoNodes) {
+    aggregated.totalAnnotations += video.total_annotations || 0
+    aggregated.confirmedAnnotations += video.confirmed_annotations || 0
+    aggregated.predictedAnnotations += video.predicted_annotations || 0
+    aggregated.boundaryPendingCount += video.boundary_pending_count || 0
+    aggregated.textPendingCount += video.text_pending_count || 0
+    aggregated.totalFrames += video.total_frames || 0
+    aggregated.coveredFrames += video.covered_frames || 0
   }
 
   aggregated.progress =
@@ -226,36 +224,42 @@ export function EmptyState({ searchQuery }: EmptyStateProps) {
 // =============================================================================
 
 interface AnnotationDistributionBarProps {
-  stats: VideoStats
+  confirmed: number
+  predicted: number
+  pending: number
 }
 
-export function AnnotationDistributionBar({ stats }: AnnotationDistributionBarProps) {
-  const denominator = stats.totalAnnotations - stats.gapAnnotations
-  if (denominator <= 0) {
-    return <span className="text-gray-500 dark:text-gray-500">-</span>
+export function AnnotationDistributionBar({
+  confirmed,
+  predicted,
+  pending,
+}: AnnotationDistributionBarProps) {
+  const total = confirmed + predicted + pending
+  if (total <= 0) {
+    return null
   }
 
   return (
     <div className="flex h-2 w-32 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
-      {stats.confirmedAnnotations > 0 && (
+      {confirmed > 0 && (
         <div
           className="bg-teal-500"
-          style={{ width: `${(stats.confirmedAnnotations / denominator) * 100}%` }}
-          title={`${stats.confirmedAnnotations} confirmed`}
+          style={{ width: `${(confirmed / total) * 100}%` }}
+          title={`${confirmed} confirmed`}
         />
       )}
-      {stats.predictedAnnotations > 0 && (
+      {predicted > 0 && (
         <div
           className="bg-indigo-500"
-          style={{ width: `${(stats.predictedAnnotations / denominator) * 100}%` }}
-          title={`${stats.predictedAnnotations} predicted`}
+          style={{ width: `${(predicted / total) * 100}%` }}
+          title={`${predicted} predicted`}
         />
       )}
-      {stats.pendingReview > 0 && (
+      {pending > 0 && (
         <div
           className="bg-pink-500"
-          style={{ width: `${(stats.pendingReview / denominator) * 100}%` }}
-          title={`${stats.pendingReview} pending`}
+          style={{ width: `${(pending / total) * 100}%` }}
+          title={`${pending} pending`}
         />
       )}
     </div>
@@ -274,7 +278,7 @@ export function PendingBadge({ count }: PendingBadgeProps) {
       </span>
     )
   }
-  return <span className="text-gray-500 dark:text-gray-500">0</span>
+  return null
 }
 
 interface ProgressBarProps {
@@ -307,8 +311,6 @@ interface TreeRowProps {
   depth: number
   expandedPaths: Set<string>
   onToggle: (path: string) => void
-  videoStatsMap: Map<string, VideoStats>
-  onStatsUpdate: (videoId: string, stats: VideoStats) => void
   onCreateSubfolder: (parentPath: string) => void
   onRenameFolder: (folderPath: string, currentName: string) => void
   onMoveFolder: (folderPath: string, folderName: string) => void
@@ -331,8 +333,6 @@ export function TreeRow({
   depth,
   expandedPaths,
   onToggle,
-  videoStatsMap,
-  onStatsUpdate,
   onCreateSubfolder,
   onRenameFolder,
   onMoveFolder,
@@ -349,67 +349,18 @@ export function TreeRow({
   dragOverFolder,
   isMounted,
 }: TreeRowProps) {
-  const [loading, setLoading] = useState(false)
   const isExpanded = expandedPaths.has(node.path)
-
-  // Load stats for video nodes
-  useEffect(() => {
-    if (node.type === 'video' && !videoStatsMap.has(node.videoId)) {
-      // Only fetch stats for videos that have been processed
-      // Skip videos with status 'processing' (or 'error')
-      const shouldFetchStats = node.status === 'active'
-
-      if (!shouldFetchStats) {
-        setLoading(false)
-        return
-      }
-
-      setLoading(true)
-      fetch(`/api/videos/${encodeURIComponent(node.videoId)}/stats`)
-        .then(res => {
-          if (!res.ok) {
-            // 404 is expected for videos without stats yet
-            if (res.status === 404) {
-              setLoading(false)
-              return null
-            }
-            throw new Error(`HTTP ${res.status}: ${res.statusText}`)
-          }
-          return res.json()
-        })
-        .then(data => {
-          if (data) {
-            onStatsUpdate(node.videoId, data)
-          }
-          setLoading(false)
-        })
-        .catch(err => {
-          console.error(`Failed to load stats for ${node.videoId}:`, err)
-          setLoading(false)
-        })
-    }
-  }, [node, videoStatsMap, onStatsUpdate])
-
-  // Only use stats after client-side mount to avoid hydration mismatch
-  const stats = isMounted
-    ? node.type === 'video'
-      ? (videoStatsMap.get(node.videoId) ?? null)
-      : calculateFolderStatsFromMap(node, videoStatsMap)
-    : null
 
   if (node.type === 'folder') {
     return (
       <FolderRow
-        node={node}
+        node={node as TreeNode & { type: 'folder' }}
         depth={depth}
         isExpanded={isExpanded}
-        stats={stats}
         expandedPaths={expandedPaths}
-        videoStatsMap={videoStatsMap}
         dragOverFolder={dragOverFolder}
         isMounted={isMounted}
         onToggle={onToggle}
-        onStatsUpdate={onStatsUpdate}
         onCreateSubfolder={onCreateSubfolder}
         onRenameFolder={onRenameFolder}
         onMoveFolder={onMoveFolder}
@@ -431,8 +382,6 @@ export function TreeRow({
     <VideoRow
       node={node}
       depth={depth}
-      stats={stats}
-      loading={loading}
       onRenameVideo={onRenameVideo}
       onMoveVideo={onMoveVideo}
       onDeleteVideo={onDeleteVideo}
@@ -451,13 +400,10 @@ interface FolderRowProps {
   node: FolderNode
   depth: number
   isExpanded: boolean
-  stats: VideoStats | null
   expandedPaths: Set<string>
-  videoStatsMap: Map<string, VideoStats>
   dragOverFolder: string | null
   isMounted: boolean
   onToggle: (path: string) => void
-  onStatsUpdate: (videoId: string, stats: VideoStats) => void
   onCreateSubfolder: (parentPath: string) => void
   onRenameFolder: (folderPath: string, currentName: string) => void
   onMoveFolder: (folderPath: string, folderName: string) => void
@@ -477,13 +423,10 @@ function FolderRow({
   node,
   depth,
   isExpanded,
-  stats,
   expandedPaths,
-  videoStatsMap,
   dragOverFolder,
   isMounted,
   onToggle,
-  onStatsUpdate,
   onCreateSubfolder,
   onRenameFolder,
   onMoveFolder,
@@ -499,6 +442,7 @@ function FolderRow({
   onDrop,
 }: FolderRowProps) {
   const isDragOver = dragOverFolder === node.path
+  const folderStats = calculateFolderStats(node)
 
   return (
     <>
@@ -535,24 +479,31 @@ function FolderRow({
           </div>
         </td>
         <td className="whitespace-nowrap px-3 py-3 text-sm text-gray-600 dark:text-gray-400">
-          {stats ? stats.totalAnnotations : '-'}
+          {folderStats ? folderStats.totalAnnotations : ''}
         </td>
         <td className="whitespace-nowrap px-3 py-3 text-sm text-gray-600 dark:text-gray-400">
-          {stats && stats.totalAnnotations > 0 ? (
-            <AnnotationDistributionBar stats={stats} />
+          {folderStats && folderStats.totalAnnotations > 0 ? (
+            <AnnotationDistributionBar
+              confirmed={folderStats.confirmedAnnotations}
+              predicted={folderStats.predictedAnnotations}
+              pending={folderStats.boundaryPendingCount + folderStats.textPendingCount}
+            />
           ) : (
-            <span className="text-gray-500 dark:text-gray-500">-</span>
+            ''
           )}
         </td>
         <td className="whitespace-nowrap px-3 py-3 text-sm text-gray-600 dark:text-gray-400">
-          <PendingBadge count={stats?.pendingReview ?? 0} />
+          {folderStats &&
+          folderStats.boundaryPendingCount + folderStats.textPendingCount > 0 ? (
+            <PendingBadge
+              count={folderStats.boundaryPendingCount + folderStats.textPendingCount}
+            />
+          ) : (
+            ''
+          )}
         </td>
         <td className="whitespace-nowrap px-3 py-3 text-sm text-gray-600 dark:text-gray-400">
-          {stats ? (
-            <ProgressBar progress={stats.progress} />
-          ) : (
-            <span className="text-gray-500 dark:text-gray-500">-</span>
-          )}
+          {folderStats ? <ProgressBar progress={folderStats.progress} /> : ''}
         </td>
         <td className="relative whitespace-nowrap py-3 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
           <FolderActionsMenu
@@ -567,15 +518,13 @@ function FolderRow({
 
       {/* Render children if expanded */}
       {isExpanded &&
-        node.children.map(child => (
+        node.children?.map(child => (
           <TreeRow
             key={child.path}
             node={child}
             depth={depth + 1}
             expandedPaths={expandedPaths}
             onToggle={onToggle}
-            videoStatsMap={videoStatsMap}
-            onStatsUpdate={onStatsUpdate}
             onCreateSubfolder={onCreateSubfolder}
             isMounted={isMounted}
             onRenameFolder={onRenameFolder}
@@ -661,7 +610,7 @@ function FolderActionsMenu({
           </MenuItem>
           <MenuItem>
             <button
-              onClick={() => onDeleteFolder(node.path, node.name, node.videoCount)}
+              onClick={() => onDeleteFolder(node.path, node.name, node.videoCount || 0)}
               className="block w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 data-[focus]:bg-gray-100 dark:data-[focus]:bg-gray-700 data-[focus]:outline-none"
             >
               Delete folder...
@@ -680,8 +629,6 @@ function FolderActionsMenu({
 interface VideoRowProps {
   node: TreeNode & { type: 'video' }
   depth: number
-  stats: VideoStats | null
-  loading: boolean
   onRenameVideo: (videoPath: string, currentName: string) => void
   onMoveVideo: (videoPath: string, videoName: string) => void
   onDeleteVideo: (videoId: string, videoName: string, videoPath: string) => void
@@ -693,8 +640,6 @@ interface VideoRowProps {
 function VideoRow({
   node,
   depth,
-  stats,
-  loading,
   onRenameVideo,
   onMoveVideo,
   onDeleteVideo,
@@ -702,12 +647,12 @@ function VideoRow({
   onDragStart,
   onDragEnd,
 }: VideoRowProps) {
-  const videoId = node.videoId
+  const videoId = node.videoId!
 
   return (
     <tr
       draggable
-      onDragStart={() => onDragStart(node.videoId, node.name, 'video')}
+      onDragStart={() => onDragStart(videoId, node.name, 'video')}
       onDragEnd={onDragEnd}
       className="hover:bg-gray-100 dark:hover:bg-gray-800"
       style={{ cursor: 'grab' }}
@@ -718,44 +663,43 @@ function VideoRow({
       >
         <div className="flex items-center gap-2 flex-wrap">
           <span>{node.name}</span>
-          <VideoBadges
-            stats={stats}
-            loading={loading}
-            videoId={node.videoId}
-            videoStatus={node.status}
-            onErrorBadgeClick={onErrorBadgeClick}
-          />
+          <VideoBadges node={node} onErrorBadgeClick={onErrorBadgeClick} />
         </div>
       </td>
       <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-600 dark:text-gray-400">
-        {stats ? stats.totalAnnotations : '-'}
+        {node.total_annotations || ''}
       </td>
       <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-600 dark:text-gray-400">
-        {stats && stats.totalAnnotations > 0 ? (
-          <AnnotationDistributionBar stats={stats} />
+        {node.total_annotations && node.total_annotations > 0 ? (
+          <AnnotationDistributionBar
+            confirmed={node.confirmed_annotations || 0}
+            predicted={node.predicted_annotations || 0}
+            pending={(node.boundary_pending_count || 0) + (node.text_pending_count || 0)}
+          />
         ) : (
-          <span className="text-gray-500 dark:text-gray-500">-</span>
+          ''
         )}
       </td>
       <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-600 dark:text-gray-400">
-        {stats ? (
-          <PendingBadge count={stats.pendingReview} />
+        {(node.boundary_pending_count || 0) + (node.text_pending_count || 0) > 0 ? (
+          <PendingBadge
+            count={(node.boundary_pending_count || 0) + (node.text_pending_count || 0)}
+          />
         ) : (
-          <span className="text-gray-500 dark:text-gray-500">-</span>
+          ''
         )}
       </td>
       <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-600 dark:text-gray-400">
-        {stats ? (
-          <ProgressBar progress={stats.progress} />
+        {node.total_frames && node.total_frames > 0 ? (
+          <ProgressBar progress={((node.covered_frames || 0) / node.total_frames) * 100} />
         ) : (
-          <span className="text-gray-500 dark:text-gray-500">-</span>
+          ''
         )}
       </td>
       <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
         <VideoActionsMenu
           videoId={videoId}
           node={node}
-          stats={stats}
           onRenameVideo={onRenameVideo}
           onMoveVideo={onMoveVideo}
           onDeleteVideo={onDeleteVideo}
@@ -770,58 +714,29 @@ function VideoRow({
 // =============================================================================
 
 interface VideoBadgesProps {
-  stats: VideoStats | null
-  loading: boolean
-  videoId: string
-  videoStatus?: string
+  node: TreeNode & { type: 'video' }
   onErrorBadgeClick: (videoId: string, errorDetails: BadgeState['errorDetails']) => void
 }
 
-function VideoBadges({
-  stats,
-  loading,
-  videoId,
-  videoStatus,
-  onErrorBadgeClick,
-}: VideoBadgesProps) {
-  // Show loading badge while fetching stats
-  if (loading && (!stats?.badges || stats.badges.length === 0)) {
-    return (
-      <div className="flex items-center gap-2 flex-wrap">
-        <span className="inline-flex items-center rounded-md px-2 py-1 text-xs font-medium bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400 animate-pulse">
-          Loading...
-        </span>
-      </div>
-    )
-  }
+function VideoBadges({ node, onErrorBadgeClick }: VideoBadgesProps) {
+  // Calculate badges from video workflow data
+  const badges = calculateBadges({
+    id: node.videoId!,
+    layout_status: node.layout_status || 'wait',
+    boundaries_status: node.boundaries_status || 'wait',
+    text_status: node.text_status || 'wait',
+    layout_error_details: node.layout_error_details,
+    boundaries_error_details: node.boundaries_error_details,
+    text_error_details: node.text_error_details,
+  })
 
-  // Show status badge for videos without stats (uploading, processing, etc.)
-  if (!stats?.badges || stats.badges.length === 0) {
-    if (videoStatus && videoStatus !== 'active') {
-      const statusLabel = videoStatus.charAt(0).toUpperCase() + videoStatus.slice(1)
-      const statusColor =
-        videoStatus === 'uploading'
-          ? 'bg-blue-50 text-blue-700 ring-blue-600/20 dark:bg-blue-900/30 dark:text-blue-400 dark:ring-blue-500/30'
-          : videoStatus === 'processing'
-            ? 'bg-purple-50 text-purple-700 ring-purple-600/20 dark:bg-purple-900/30 dark:text-purple-400 dark:ring-purple-500/30'
-            : 'bg-gray-50 text-gray-700 ring-gray-600/20 dark:bg-gray-900/30 dark:text-gray-400 dark:ring-gray-500/30'
-
-      return (
-        <div className="flex items-center gap-2 flex-wrap">
-          <span
-            className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset ${statusColor}`}
-          >
-            {statusLabel}
-          </span>
-        </div>
-      )
-    }
+  if (badges.length === 0) {
     return null
   }
 
   return (
     <div className="flex items-center gap-2 flex-wrap">
-      {stats.badges.map((badge, index) => {
+      {badges.map((badge, index) => {
         const colorClasses = getBadgeColorClasses(badge.color)
         const baseClasses = `inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ${colorClasses}`
 
@@ -830,7 +745,7 @@ function VideoBadges({
           return (
             <button
               key={index}
-              onClick={() => onErrorBadgeClick(videoId, badge.errorDetails)}
+              onClick={() => onErrorBadgeClick(node.videoId!, badge.errorDetails)}
               className={`${baseClasses} hover:opacity-80 cursor-pointer transition-opacity`}
             >
               {badge.label}
@@ -869,7 +784,6 @@ function VideoBadges({
 interface VideoActionsMenuProps {
   videoId: string
   node: TreeNode & { type: 'video' }
-  stats: VideoStats | null
   onRenameVideo: (videoPath: string, currentName: string) => void
   onMoveVideo: (videoPath: string, videoName: string) => void
   onDeleteVideo: (videoId: string, videoName: string, videoPath: string) => void
@@ -878,25 +792,20 @@ interface VideoActionsMenuProps {
 function VideoActionsMenu({
   videoId,
   node,
-  stats,
   onRenameVideo,
   onMoveVideo,
   onDeleteVideo,
 }: VideoActionsMenuProps) {
-  const layoutDisabled =
-    !stats?.hasOcrData || stats?.processingStatus?.status !== 'processing_complete'
-  const boundariesDisabled = !stats?.layoutApproved
-  const textDisabled = !stats?.layoutApproved || (stats?.totalAnnotations ?? 0) === 0
-
-  const getStatusText = () => {
-    if (stats?.processingStatus?.status) {
-      return `(${stats.processingStatus.status.replace(/_/g, ' ')})`
-    }
-    if (!stats?.hasOcrData) {
-      return '(no OCR data)'
-    }
-    return ''
-  }
+  // Calculate menu actions from workflow data
+  const menuActions = calculateMenuActions({
+    id: videoId,
+    layout_status: node.layout_status || 'wait',
+    boundaries_status: node.boundaries_status || 'wait',
+    text_status: node.text_status || 'wait',
+    layout_error_details: node.layout_error_details,
+    boundaries_error_details: node.boundaries_error_details,
+    text_error_details: node.text_error_details,
+  })
 
   return (
     <Menu as="div" className="relative inline-block text-left">
@@ -909,57 +818,27 @@ function VideoActionsMenu({
         className="z-50 mt-2 w-56 rounded-md bg-white dark:bg-gray-800 shadow-lg ring-1 ring-black/5 dark:ring-white/10 focus:outline-none"
       >
         <div className="py-1">
-          <MenuItem disabled={layoutDisabled}>
-            {({ disabled }) =>
-              disabled ? (
-                <span className="block px-4 py-2 text-sm text-gray-400 dark:text-gray-600 cursor-not-allowed">
-                  Annotate Layout {getStatusText()}
-                </span>
-              ) : (
-                <Link
-                  to={`/annotate/layout?videoId=${encodeURIComponent(videoId)}`}
-                  className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 data-[focus]:bg-gray-100 dark:data-[focus]:bg-gray-700 data-[focus]:text-gray-900 dark:data-[focus]:text-white data-[focus]:outline-none"
-                >
-                  Annotate Layout
-                </Link>
-              )
-            }
-          </MenuItem>
-          <MenuItem disabled={boundariesDisabled}>
-            {({ disabled }) =>
-              disabled ? (
-                <span className="block px-4 py-2 text-sm text-gray-400 dark:text-gray-600 cursor-not-allowed">
-                  Mark Boundaries
-                </span>
-              ) : (
-                <Link
-                  to={`/annotate/boundaries?videoId=${encodeURIComponent(videoId)}`}
-                  className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 data-[focus]:bg-gray-100 dark:data-[focus]:bg-gray-700 data-[focus]:text-gray-900 dark:data-[focus]:text-white data-[focus]:outline-none"
-                >
-                  Mark Boundaries
-                </Link>
-              )
-            }
-          </MenuItem>
-          <MenuItem disabled={textDisabled}>
-            {({ disabled }) =>
-              disabled ? (
-                <span className="block px-4 py-2 text-sm text-gray-400 dark:text-gray-600 cursor-not-allowed">
-                  Annotate Text
-                </span>
-              ) : (
-                <Link
-                  to={`/annotate/text?videoId=${encodeURIComponent(videoId)}`}
-                  className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 data-[focus]:bg-gray-100 dark:data-[focus]:bg-gray-700 data-[focus]:text-gray-900 dark:data-[focus]:text-white data-[focus]:outline-none"
-                >
-                  Annotate Text
-                </Link>
-              )
-            }
-          </MenuItem>
+          {menuActions.map((action, index) => (
+            <MenuItem key={index} disabled={!action.enabled}>
+              {({ disabled }) =>
+                disabled ? (
+                  <span className="block px-4 py-2 text-sm text-gray-400 dark:text-gray-600 cursor-not-allowed">
+                    {action.label}
+                  </span>
+                ) : (
+                  <Link
+                    to={action.url}
+                    className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 data-[focus]:bg-gray-100 dark:data-[focus]:bg-gray-700 data-[focus]:text-gray-900 dark:data-[focus]:text-white data-[focus]:outline-none"
+                  >
+                    {action.label}
+                  </Link>
+                )
+              }
+            </MenuItem>
+          ))}
           <MenuItem>
             <button
-              onClick={() => onRenameVideo(node.videoId, node.name)}
+              onClick={() => onRenameVideo(node.videoId!, node.name)}
               className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 data-[focus]:bg-gray-100 dark:data-[focus]:bg-gray-700 data-[focus]:text-gray-900 dark:data-[focus]:text-white data-[focus]:outline-none"
             >
               Rename...
@@ -967,7 +846,7 @@ function VideoActionsMenu({
           </MenuItem>
           <MenuItem>
             <button
-              onClick={() => onMoveVideo(node.videoId, node.name)}
+              onClick={() => onMoveVideo(node.videoId!, node.name)}
               className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 data-[focus]:bg-gray-100 dark:data-[focus]:bg-gray-700 data-[focus]:text-gray-900 dark:data-[focus]:text-white data-[focus]:outline-none"
             >
               Move to...

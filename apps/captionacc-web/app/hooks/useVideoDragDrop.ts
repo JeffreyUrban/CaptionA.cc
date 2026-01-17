@@ -11,8 +11,6 @@ import type { DraggedItemState } from '~/types/videos'
 interface UseVideoDragDropParams {
   /** Callback when a drop operation completes successfully */
   onMoveComplete: () => void
-  /** Callback to clear stats for a moved video */
-  clearVideoStats?: (videoId: string) => void
 }
 
 interface UseVideoDragDropReturn {
@@ -118,7 +116,6 @@ async function performMoveOperation(
 // eslint-disable-next-line max-lines-per-function -- Drag and drop logic with multiple event handlers and validation
 export function useVideoDragDrop({
   onMoveComplete,
-  clearVideoStats,
 }: UseVideoDragDropParams): UseVideoDragDropReturn {
   const [draggedItem, setDraggedItem] = useState<DraggedItemState | null>(null)
   const [dragOverFolder, setDragOverFolder] = useState<string | null>(null)
@@ -251,14 +248,6 @@ export function useVideoDragDrop({
 
         console.log('[DnD] Move to root successful, reloading tree...')
 
-        // Clear cached stats for moved video (old and new paths)
-        if (draggedItem.type === 'video' && clearVideoStats) {
-          clearVideoStats(draggedItem.path) // Clear old path
-          if (result.newPath) {
-            clearVideoStats(result.newPath) // Clear new path to force refresh
-          }
-        }
-
         // Success - notify parent to reload
         onMoveComplete()
       } catch (error) {
@@ -267,7 +256,7 @@ export function useVideoDragDrop({
         setDraggedItem(null)
       }
     },
-    [draggedItem, onMoveComplete, clearVideoStats]
+    [draggedItem, onMoveComplete]
   )
 
   const handleDrop = useCallback(
@@ -324,14 +313,6 @@ export function useVideoDragDrop({
 
         console.log('[DnD] Move successful, reloading tree...')
 
-        // Clear cached stats for moved video (old and new paths)
-        if (draggedItem.type === 'video' && clearVideoStats) {
-          clearVideoStats(draggedItem.path) // Clear old path
-          if (result.newPath) {
-            clearVideoStats(result.newPath) // Clear new path to force refresh
-          }
-        }
-
         // Success - notify parent to reload
         onMoveComplete()
       } catch (error) {
@@ -340,7 +321,7 @@ export function useVideoDragDrop({
         setDraggedItem(null)
       }
     },
-    [draggedItem, onMoveComplete, clearVideoStats]
+    [draggedItem, onMoveComplete]
   )
 
   return {

@@ -8,7 +8,7 @@
  */
 
 import { MagnifyingGlassIcon, PlusIcon } from '@heroicons/react/20/solid'
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useLoaderData, Link, useRevalidator, redirect } from 'react-router'
 
 import { AppLayout } from '~/components/AppLayout'
@@ -28,7 +28,6 @@ import { useMoveOperation } from '~/hooks/useMoveOperation'
 import { useTreeNavigation } from '~/hooks/useTreeNavigation'
 import { useVideoDragDrop } from '~/hooks/useVideoDragDrop'
 import { useVideoOperations } from '~/hooks/useVideoOperations'
-import { useVideoStats } from '~/hooks/useVideoStats'
 import { supabase } from '~/services/supabase-client'
 import {
   buildVideoTree,
@@ -56,7 +55,25 @@ export async function clientLoader() {
   // Query videos table - RLS automatically filters by tenant/user
   const { data: videos, error: videosError } = await supabase
     .from('videos')
-    .select('id, display_path, status, uploaded_at, is_demo')
+    .select(`
+      id,
+      display_path,
+      uploaded_at,
+      is_demo,
+      layout_status,
+      boundaries_status,
+      text_status,
+      total_frames,
+      covered_frames,
+      total_annotations,
+      confirmed_annotations,
+      predicted_annotations,
+      boundary_pending_count,
+      text_pending_count,
+      layout_error_details,
+      boundaries_error_details,
+      text_error_details
+    `)
     .is('deleted_at', null)
     .order('uploaded_at', { ascending: false })
 
@@ -71,7 +88,19 @@ export async function clientLoader() {
       videoId: v.id,
       displayPath: v.display_path ?? v.id,
       isDemo: v.is_demo ?? false,
-      status: v.status,
+      layout_status: v.layout_status,
+      boundaries_status: v.boundaries_status,
+      text_status: v.text_status,
+      total_frames: v.total_frames,
+      covered_frames: v.covered_frames,
+      total_annotations: v.total_annotations,
+      confirmed_annotations: v.confirmed_annotations,
+      predicted_annotations: v.predicted_annotations,
+      boundary_pending_count: v.boundary_pending_count,
+      text_pending_count: v.text_pending_count,
+      layout_error_details: v.layout_error_details,
+      boundaries_error_details: v.boundaries_error_details,
+      text_error_details: v.text_error_details,
     })) ?? []
 
   // Build tree structure from videos only (without stats - will be loaded client-side)
@@ -208,8 +237,11 @@ export default function VideosPage() {
     void revalidator.revalidate()
   }
 
-  // Video stats hook
-  const { videoStatsMap, isMounted, updateVideoStats, clearVideoStats } = useVideoStats({ tree })
+  // Track if component is mounted (for hydration safety)
+  const [isMounted, setIsMounted] = useState(false)
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
 
   // Tree navigation hook
   const { expandedPaths, toggleExpand, expandAll, collapseAll } = useTreeNavigation({ tree })
@@ -230,7 +262,6 @@ export default function VideosPage() {
     handleDrop,
   } = useVideoDragDrop({
     onMoveComplete: handleOperationComplete,
-    clearVideoStats,
   })
 
   // Folder operations hook
@@ -274,7 +305,6 @@ export default function VideosPage() {
     handleDeleteVideo,
   } = useVideoOperations({
     onOperationComplete: handleOperationComplete,
-    clearVideoStats,
   })
 
   // Move operation hook
@@ -292,7 +322,6 @@ export default function VideosPage() {
   } = useMoveOperation({
     tree,
     onMoveComplete: handleOperationComplete,
-    clearVideoStats,
   })
 
   // Filter tree based on search query
@@ -309,7 +338,7 @@ export default function VideosPage() {
         return matches ? node : null
       } else {
         // For folders, filter children and keep folder if any children match
-        const filteredChildren = node.children
+        const filteredChildren = (node.children || [])
           .map(filterNode)
           .filter((n): n is TreeNode => n !== null)
 
@@ -367,8 +396,6 @@ export default function VideosPage() {
                           depth={0}
                           expandedPaths={expandedPaths}
                           onToggle={toggleExpand}
-                          videoStatsMap={videoStatsMap}
-                          onStatsUpdate={updateVideoStats}
                           isMounted={isMounted}
                           onCreateSubfolder={openCreateFolderModal}
                           onRenameFolder={openRenameFolderModal}

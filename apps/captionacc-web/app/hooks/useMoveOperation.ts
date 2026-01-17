@@ -14,8 +14,6 @@ interface UseMoveOperationParams {
   tree: TreeNode[]
   /** Callback when a move operation completes successfully */
   onMoveComplete: () => void
-  /** Callback to clear stats for a moved video */
-  clearVideoStats?: (videoId: string) => void
 }
 
 interface UseMoveOperationReturn {
@@ -50,7 +48,6 @@ interface UseMoveOperationReturn {
 export function useMoveOperation({
   tree,
   onMoveComplete,
-  clearVideoStats,
 }: UseMoveOperationParams): UseMoveOperationReturn {
   // Modal state
   const [moveModal, setMoveModal] = useState<MoveModalState>({ open: false })
@@ -68,7 +65,9 @@ export function useMoveOperation({
       for (const node of nodes) {
         if (node.type === 'folder') {
           folders.push({ path: node.path, name: node.path })
-          collectFolders(node.children)
+          if (node.children) {
+            collectFolders(node.children)
+          }
         }
       }
     }
@@ -141,12 +140,6 @@ export function useMoveOperation({
           setMoveLoading(false)
           return
         }
-
-        // Clear cached stats for old and new paths
-        if (clearVideoStats) {
-          clearVideoStats(itemPath)
-          clearVideoStats(newPath)
-        }
       } else {
         // Move a folder (update all videos in the folder)
         const { data: videos, error: fetchError } = await supabase
@@ -195,7 +188,7 @@ export function useMoveOperation({
       setMoveError('Network error')
       setMoveLoading(false)
     }
-  }, [moveModal, selectedTargetFolder, onMoveComplete, clearVideoStats])
+  }, [moveModal, selectedTargetFolder, onMoveComplete])
 
   return {
     // Modal state

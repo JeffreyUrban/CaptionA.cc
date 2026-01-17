@@ -3,13 +3,28 @@
  * Server-side functionality removed for SPA mode
  */
 
-export type { VideoStats } from './video-stats'
+import type { WorkflowStatus } from './video-badges'
 
 export interface VideoInfo {
   videoId: string
   displayPath: string
   isDemo: boolean
-  status?: string
+  // Workflow status
+  layout_status?: WorkflowStatus
+  boundaries_status?: WorkflowStatus
+  text_status?: WorkflowStatus
+  // Stats
+  total_frames?: number
+  covered_frames?: number
+  total_annotations?: number
+  confirmed_annotations?: number
+  predicted_annotations?: number
+  boundary_pending_count?: number
+  text_pending_count?: number
+  // Error details
+  layout_error_details?: { message?: string; [key: string]: unknown } | null
+  boundaries_error_details?: { message?: string; [key: string]: unknown } | null
+  text_error_details?: { message?: string; [key: string]: unknown } | null
 }
 
 export interface TreeNode {
@@ -19,9 +34,22 @@ export interface TreeNode {
   children?: TreeNode[]
   videoId?: string
   isDemo?: boolean
-  status?: string
   videoCount?: number
   demoCount?: number
+  // Video workflow data (only for video nodes)
+  layout_status?: WorkflowStatus
+  boundaries_status?: WorkflowStatus
+  text_status?: WorkflowStatus
+  total_frames?: number
+  covered_frames?: number
+  total_annotations?: number
+  confirmed_annotations?: number
+  predicted_annotations?: number
+  boundary_pending_count?: number
+  text_pending_count?: number
+  layout_error_details?: { message?: string; [key: string]: unknown } | null
+  boundaries_error_details?: { message?: string; [key: string]: unknown } | null
+  text_error_details?: { message?: string; [key: string]: unknown } | null
 }
 
 export type FolderNode = TreeNode & { type: 'folder' }
@@ -60,7 +88,19 @@ export function buildVideoTree(videos: VideoInfo[]): TreeNode[] {
         path: video.displayPath,
         videoId: video.videoId,
         isDemo: video.isDemo,
-        status: video.status,
+        layout_status: video.layout_status,
+        boundaries_status: video.boundaries_status,
+        text_status: video.text_status,
+        total_frames: video.total_frames,
+        covered_frames: video.covered_frames,
+        total_annotations: video.total_annotations,
+        confirmed_annotations: video.confirmed_annotations,
+        predicted_annotations: video.predicted_annotations,
+        boundary_pending_count: video.boundary_pending_count,
+        text_pending_count: video.text_pending_count,
+        layout_error_details: video.layout_error_details,
+        boundaries_error_details: video.boundaries_error_details,
+        text_error_details: video.text_error_details,
       })
     }
   }

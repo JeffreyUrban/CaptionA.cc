@@ -7,13 +7,11 @@ import { useState, useCallback } from 'react'
 
 import { supabase } from '~/services/supabase-client'
 import type { RenameVideoModalState, DeleteVideoModalState, ErrorModalState } from '~/types/videos'
-import type { BadgeState } from '~/utils/video-stats'
+import type { BadgeState } from '~/utils/video-badges'
 
 interface UseVideoOperationsParams {
   /** Callback when an operation completes successfully */
   onOperationComplete: () => void
-  /** Callback to clear stats for a deleted video */
-  clearVideoStats?: (videoId: string) => void
 }
 
 interface UseVideoOperationsReturn {
@@ -50,7 +48,6 @@ interface UseVideoOperationsReturn {
  */
 export function useVideoOperations({
   onOperationComplete,
-  clearVideoStats,
 }: UseVideoOperationsParams): UseVideoOperationsReturn {
   // Modal states
   const [renameVideoModal, setRenameVideoModal] = useState<RenameVideoModalState>({ open: false })
@@ -179,18 +176,13 @@ export function useVideoOperations({
       setVideoLoading(false)
       setDeleteVideoModal({ open: false })
 
-      // Clear cached stats for this video
-      if (clearVideoStats && videoPath) {
-        clearVideoStats(videoPath)
-      }
-
       onOperationComplete()
     } catch (error) {
       console.error('Delete video error:', error)
       setVideoError('Network error')
       setVideoLoading(false)
     }
-  }, [deleteVideoModal.videoId, deleteVideoModal.videoPath, onOperationComplete, clearVideoStats])
+  }, [deleteVideoModal.videoId, deleteVideoModal.videoPath, onOperationComplete])
 
   return {
     // Modal states

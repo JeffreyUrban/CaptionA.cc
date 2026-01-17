@@ -3,7 +3,7 @@
  * These types are used across hooks and components for the video list view.
  */
 
-import type { BadgeState } from '~/utils/video-stats'
+import type { BadgeState } from '~/utils/video-badges'
 
 // =============================================================================
 // Folders Metadata

@@ -1,6 +1,3 @@
-Using workdir /Users/jurban/PycharmProjects/CaptionA.cc-claude1
-WARN: no SMS provider is enabled. Disabling phone login
-Initialising login role...
 export type Json =
   | string
   | number
