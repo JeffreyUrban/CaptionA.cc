@@ -67,6 +67,67 @@ def verify_webhook_auth(authorization: str | None) -> None:
         )
 
 
+async def get_deployment_id(deployment_name: str) -> str:
+    """
+    Get deployment ID by name from Prefect API.
+
+    Args:
+        deployment_name: Name of the deployment
+
+    Returns:
+        Deployment ID (UUID)
+
+    Raises:
+        HTTPException: If deployment not found or API call fails
+    """
+    settings = get_settings()
+
+    if not settings.prefect_api_url:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Prefect API URL not configured",
+        )
+
+    url = f"{settings.prefect_api_url}/deployments/filter"
+    payload = {
+        "deployments": {"name": {"any_": [deployment_name]}},
+        "limit": 1,
+    }
+
+    headers = {}
+    if settings.prefect_api_key:
+        headers["Authorization"] = f"Bearer {settings.prefect_api_key}"
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(url, json=payload, headers=headers)
+            response.raise_for_status()
+            result = response.json()
+
+            if not result or len(result) == 0:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Deployment '{deployment_name}' not found",
+                )
+
+            return result[0]["id"]
+
+    except httpx.HTTPStatusError as e:
+        logger.error(
+            f"Prefect API returned error getting deployment: {e.response.status_code} {e.response.text}"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Failed to get deployment ID: {e.response.text}",
+        )
+    except httpx.RequestError as e:
+        logger.error(f"Failed to connect to Prefect API: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Failed to connect to Prefect API: {str(e)}",
+        )
+
+
 async def trigger_prefect_flow(
     flow_name: str,
     parameters: dict[str, Any],
@@ -77,7 +138,7 @@ async def trigger_prefect_flow(
     Trigger a Prefect flow run via Prefect API.
 
     Args:
-        flow_name: Name of the Prefect flow to trigger
+        flow_name: Name of the Prefect deployment to trigger
         parameters: Flow parameters
         priority: Flow run priority (0-100) - currently for logging/tags only, not sent to Prefect
         tags: Flow run tags
@@ -100,9 +161,10 @@ async def trigger_prefect_flow(
             detail="Prefect API URL not configured",
         )
 
-    # Prefect Cloud API endpoint for creating deployments runs by flow name
-    # For simplicity, we'll use the flow runs endpoint directly
-    url = f"{settings.prefect_api_url}/deployments/name/{flow_name}/create_flow_run"
+    # Prefect 3.x: Get deployment ID by name, then create flow run
+    # The /deployments/name/{name}/create_flow_run endpoint was removed in Prefect 3.x
+    deployment_id = await get_deployment_id(flow_name)
+    url = f"{settings.prefect_api_url}/deployments/{deployment_id}/create_flow_run"
 
     # TODO: Priority system is currently non-functional
     #

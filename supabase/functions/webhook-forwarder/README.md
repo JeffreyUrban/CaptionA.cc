@@ -15,7 +15,19 @@ This edge function:
 
 ## Deployment
 
-Deploy the edge function to Supabase:
+### Step 1: Set the WEBHOOK_SECRET
+
+The edge function needs the webhook secret to authenticate with captionacc-api. Set it as a Supabase secret:
+
+```bash
+# Get the webhook secret from captionacc-api
+flyctl secrets list -a captionacc-api | grep WEBHOOK_SECRET
+
+# Set it as a Supabase secret (use the actual secret value, not the hash)
+supabase secrets set WEBHOOK_SECRET=your-actual-webhook-secret-here
+```
+
+### Step 2: Deploy the edge function
 
 ```bash
 # From repository root
@@ -45,20 +57,13 @@ In Supabase Dashboard → Database → Webhooks:
 
 #### HTTP Headers
 
-Add these headers:
+Add this header:
 
 1. **Content-Type**
-   - Name: `Content-type`
+   - Name: `Content-Type`
    - Value: `application/json`
 
-2. **Edge Function Authorization** (Supabase anon key)
-   - Name: `Authorization`
-   - Value: `Bearer [your-supabase-anon-key]`
-
-3. **API Webhook Secret** (captionacc-api webhook secret)
-   - Name: `x-webhook-secret`
-   - Value: `Bearer [your-webhook-secret]`
-   - ⚠️  Use the same secret as `WEBHOOK_SECRET` in captionacc-api
+Note: No authentication headers needed - the edge function has `verify_jwt = false` configured.
 
 #### HTTP Parameters
 
@@ -180,12 +185,17 @@ View logs in Supabase Dashboard:
 
 ### Edge Function Auth Failure
 
-**Symptom**: Edge function logs show "Missing x-webhook-secret header"
+**Symptom**: Edge function returns 500 "WEBHOOK_SECRET not configured"
 
 **Fix**:
-1. Add `x-webhook-secret` header in webhook configuration
-2. Value should be `Bearer [webhook-secret]`
-3. Must match `WEBHOOK_SECRET` in captionacc-api
+1. Set the WEBHOOK_SECRET as a Supabase secret:
+   ```bash
+   supabase secrets set WEBHOOK_SECRET=your-actual-webhook-secret
+   ```
+2. Redeploy the edge function:
+   ```bash
+   supabase functions deploy webhook-forwarder
+   ```
 
 ### All Retries Failing
 

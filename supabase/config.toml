@@ -159,3 +159,6 @@ verify_jwt = false
 
 [functions.captionacc-s3-credentials]
 verify_jwt = false
+
+[functions.webhook-forwarder]
+verify_jwt = false

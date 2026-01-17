@@ -4,6 +4,9 @@
  * Forwards Supabase webhook events to captionacc-api with automatic retries
  * to handle Fly.io machine wake-up delays (up to 60s grace period).
  *
+ * Environment Variables (Supabase Secrets):
+ *   - WEBHOOK_SECRET: Shared secret for authenticating with captionacc-api
+ *
  * Configuration via URL Parameters:
  *   - target_path: API endpoint path (e.g., "/webhooks/supabase/videos")
  *   - max_retries: Maximum retry attempts (default: 5)
@@ -17,8 +20,7 @@
  *   HTTP Parameters:
  *     - target_path: /webhooks/supabase/videos
  *   HTTP Headers:
- *     - Authorization: Bearer [edge-function-anon-key]
- *     - x-webhook-secret: Bearer [captionacc-api-webhook-secret]
+ *     - Content-Type: application/json
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -115,7 +117,7 @@ async function forwardWebhook(
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: webhookSecret,
+          Authorization: `Bearer ${webhookSecret}`,
         },
         body: JSON.stringify(payload),
         signal: controller.signal,
@@ -238,7 +240,7 @@ serve(async (req) => {
       headers: {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization, x-webhook-secret",
+        "Access-Control-Allow-Headers": "Content-Type",
       },
     });
   }
@@ -270,17 +272,17 @@ serve(async (req) => {
       url.searchParams.get("total_timeout_ms") || "65000"
     );
 
-    // Get webhook secret from headers
-    // Supabase passes this from the webhook configuration
-    const webhookSecret = req.headers.get("x-webhook-secret");
+    // Get webhook secret from environment (Supabase secret)
+    // This is more secure than passing it via webhook headers
+    const webhookSecret = Deno.env.get("WEBHOOK_SECRET");
     if (!webhookSecret) {
-      console.error("[Forwarder] Missing x-webhook-secret header");
+      console.error("[Forwarder] WEBHOOK_SECRET environment variable not set");
       return new Response(
         JSON.stringify({
-          error: "Missing x-webhook-secret header",
+          error: "WEBHOOK_SECRET not configured",
         }),
         {
-          status: 400,
+          status: 500,
           headers: { "Content-Type": "application/json" },
         }
       );
