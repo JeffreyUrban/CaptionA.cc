@@ -175,6 +175,89 @@ async def trigger_prefect_flow(
         )
 
 
+async def cancel_prefect_flow_run(flow_run_id: str) -> dict[str, Any]:
+    """
+    Cancel a Prefect flow run via Prefect API.
+
+    Sets the flow run state to CANCELLING, which signals Prefect to attempt
+    graceful cancellation. The worker will stop processing the flow run and
+    any running tasks.
+
+    Args:
+        flow_run_id: UUID of the Prefect flow run to cancel
+
+    Returns:
+        Dictionary containing the new state information
+
+    Raises:
+        HTTPException: If Prefect API call fails
+    """
+    settings = get_settings()
+
+    if not settings.prefect_api_url:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Prefect API URL not configured",
+        )
+
+    url = f"{settings.prefect_api_url}/flow_runs/{flow_run_id}/set_state"
+
+    # Prefect 3.x state structure
+    # State type must be one of: SCHEDULED, PENDING, RUNNING, COMPLETED, FAILED,
+    # CANCELLED, CRASHED, PAUSED, CANCELLING
+    payload = {
+        "state": {
+            "type": "CANCELLING",
+            "name": "Cancelling",
+            "message": "Video deleted - cancelling flow run",
+        }
+    }
+
+    headers = {}
+    if settings.prefect_api_key:
+        headers["Authorization"] = f"Bearer {settings.prefect_api_key}"
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(url, json=payload, headers=headers)
+            response.raise_for_status()
+            result = response.json()
+
+            logger.info(
+                f"Cancelled Prefect flow run {flow_run_id}, "
+                f"new state: {result.get('status', 'CANCELLING')}"
+            )
+
+            return {
+                "flow_run_id": flow_run_id,
+                "status": result.get("status", "CANCELLING"),
+            }
+
+    except httpx.HTTPStatusError as e:
+        # 404 is acceptable - flow may have already completed or been deleted
+        if e.response.status_code == 404:
+            logger.info(f"Flow run {flow_run_id} not found (may have already completed)")
+            return {
+                "flow_run_id": flow_run_id,
+                "status": "NOT_FOUND",
+            }
+
+        logger.error(
+            f"Prefect API returned error cancelling flow run: "
+            f"{e.response.status_code} {e.response.text}"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Failed to cancel Prefect flow run: {e.response.text}",
+        )
+    except httpx.RequestError as e:
+        logger.error(f"Failed to connect to Prefect API: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Failed to connect to Prefect API: {str(e)}",
+        )
+
+
 @router.post("/webhooks/supabase/videos", response_model=WebhookResponse)
 async def supabase_videos_webhook(
     request: Request,
@@ -186,31 +269,45 @@ async def supabase_videos_webhook(
     Handle Supabase webhook for videos table events.
 
     This endpoint is called by Supabase when videos are inserted/updated/deleted.
-    For INSERT events, it triggers the video initial processing flow.
+
+    Event Handling:
+        - INSERT: Triggers video initial processing flow
+        - DELETE: Cancels any running Prefect flow for the deleted video
+        - UPDATE: Ignored (future: could update flow parameters)
 
     IMPORTANT: This endpoint must respond within 5 seconds (Supabase webhook timeout).
-    Flow triggering is done in background to avoid timeout.
+    Flow triggering/cancellation is done in background to avoid timeout.
 
     Authentication:
         - Requires Authorization header: "Bearer {webhook_secret}"
         - webhook_secret is configured via WEBHOOK_SECRET env var
 
-    Payload format:
+    Payload format (INSERT):
         {
             "type": "INSERT",
             "table": "videos",
             "record": {
                 "id": "video-uuid",
                 "tenant_id": "tenant-uuid",
-                "storage_key": "tenant-123/client/videos/video-456/video.mp4",
                 "status": "uploading",
                 "created_at": "2024-01-12T00:00:00Z",
                 ...
             }
         }
 
+    Payload format (DELETE):
+        {
+            "type": "DELETE",
+            "table": "videos",
+            "old_record": {
+                "id": "video-uuid",
+                "prefect_flow_run_id": "flow-run-uuid",
+                ...
+            }
+        }
+
     Returns:
-        202 Accepted immediately (flow is triggered in background)
+        202 Accepted immediately (flow is triggered/cancelled in background)
         401 Unauthorized if authentication fails
         400 Bad Request if payload is invalid
         503 Service Unavailable if Prefect API is not configured
@@ -236,100 +333,157 @@ async def supabase_videos_webhook(
             detail=f"Invalid table '{payload.table}'. Expected 'videos'",
         )
 
-    # Only handle INSERT events
-    if payload.type != "INSERT":
-        logger.info(f"Ignoring {payload.type} event for videos table")
+    # Handle DELETE events - cancel any running flow
+    if payload.type == "DELETE":
+        # Extract video info from old_record (the deleted record)
+        if not payload.old_record:
+            logger.warning("DELETE event received but old_record is missing")
+            return WebhookResponse(
+                success=True,
+                status="ignored",
+                message="DELETE event missing old_record",
+            )
+
+        try:
+            video_id = payload.old_record["id"]
+            flow_run_id = payload.old_record.get("prefect_flow_run_id")
+        except KeyError as e:
+            logger.error(f"Missing required field in old_record: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Missing required field in old_record: {str(e)}",
+            )
+
+        # If no flow run ID, nothing to cancel
+        if not flow_run_id:
+            logger.info(f"Video {video_id} deleted but has no flow run to cancel")
+            return WebhookResponse(
+                success=True,
+                status="no_action_needed",
+                message="No flow run to cancel",
+            )
+
+        # Cancel the flow run in background to avoid timeout
+        import asyncio
+
+        def cancel_flow_sync():
+            """Synchronous wrapper to run async cancel_prefect_flow_run in background."""
+            try:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(cancel_prefect_flow_run(flow_run_id))
+                loop.close()
+            except Exception as e:
+                logger.error(f"Background task failed to cancel flow run {flow_run_id}: {e}")
+
+        background_tasks.add_task(cancel_flow_sync)
+
+        logger.info(f"Video {video_id} deleted, queued cancellation of flow run {flow_run_id}")
+
+        response.status_code = status.HTTP_202_ACCEPTED
         return WebhookResponse(
             success=True,
-            status="ignored",
-            message=f"Event type {payload.type} is not handled",
+            flow_run_id=flow_run_id,
+            status="cancelling",
+            message=f"Flow run cancellation queued for deleted video",
         )
 
-    # Extract required fields from record
-    try:
-        video_id = payload.record["id"]
-        tenant_id = payload.record["tenant_id"]
-    except KeyError as e:
-        logger.error(f"Missing required field in record: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Missing required field in record: {str(e)}",
-        )
-
-    # Compute storage_key from tenant_id and video_id
-    # Pattern: {tenant_id}/client/videos/{video_id}/video.mp4
-    storage_key = f"{tenant_id}/client/videos/{video_id}/video.mp4"
-
-    # Get tenant tier for priority calculation (default to "free" if not available)
-    tenant_tier = payload.record.get("tenant_tier", "free")
-
-    # Calculate priority using priority service
-    created_at_str = payload.record.get("created_at")
-    request_time = None
-    if created_at_str:
+    # Handle INSERT events - trigger video processing flow
+    if payload.type == "INSERT":
+        # Extract required fields from record
         try:
-            request_time = datetime.fromisoformat(created_at_str.replace("Z", "+00:00"))
-        except ValueError:
-            logger.warning(f"Could not parse created_at timestamp: {created_at_str}")
-
-    priority = calculate_flow_priority(
-        tenant_tier=tenant_tier,
-        request_time=request_time,
-        enable_age_boosting=True,
-    )
-
-    # Generate tags for observability
-    tags = get_priority_tags(
-        priority=priority,
-        tenant_id=tenant_id,
-        tenant_tier=tenant_tier,
-        age_boosting_enabled=True,
-    )
-    tags.append("trigger:webhook")
-    tags.append("event:video-insert")
-
-    # Trigger Prefect flow in background to avoid Supabase webhook timeout (5s limit)
-    flow_name = "captionacc-video-initial-processing"
-    parameters = {
-        "video_id": video_id,
-        "tenant_id": tenant_id,
-        "storage_key": storage_key,
-    }
-
-    logger.info(
-        f"Queueing video initial processing for video {video_id} "
-        f"(tenant: {tenant_id}, priority: {priority})"
-    )
-
-    # Create sync wrapper for async trigger_prefect_flow
-    import asyncio
-
-    def trigger_flow_sync():
-        """Synchronous wrapper to run async trigger_prefect_flow in background."""
-        try:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            loop.run_until_complete(
-                trigger_prefect_flow(
-                    flow_name=flow_name,
-                    parameters=parameters,
-                    priority=priority,
-                    tags=tags,
-                )
+            video_id = payload.record["id"]
+            tenant_id = payload.record["tenant_id"]
+        except KeyError as e:
+            logger.error(f"Missing required field in record: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Missing required field in record: {str(e)}",
             )
-            loop.close()
-        except Exception as e:
-            logger.error(f"Background task failed to trigger Prefect flow for video {video_id}: {e}")
 
-    # Add background task to trigger flow (won't block webhook response)
-    # This ensures we respond to Supabase within the 5-second timeout
-    background_tasks.add_task(trigger_flow_sync)
+        # Compute storage_key from tenant_id and video_id
+        # Pattern: {tenant_id}/client/videos/{video_id}/video.mp4
+        storage_key = f"{tenant_id}/client/videos/{video_id}/video.mp4"
 
-    # Return immediately (don't wait for Prefect)
-    response.status_code = status.HTTP_202_ACCEPTED
+        # Get tenant tier for priority calculation (default to "free" if not available)
+        tenant_tier = payload.record.get("tenant_tier", "free")
+
+        # Calculate priority using priority service
+        created_at_str = payload.record.get("created_at")
+        request_time = None
+        if created_at_str:
+            try:
+                request_time = datetime.fromisoformat(created_at_str.replace("Z", "+00:00"))
+            except ValueError:
+                logger.warning(f"Could not parse created_at timestamp: {created_at_str}")
+
+        priority = calculate_flow_priority(
+            tenant_tier=tenant_tier,
+            request_time=request_time,
+            enable_age_boosting=True,
+        )
+
+        # Generate tags for observability
+        tags = get_priority_tags(
+            priority=priority,
+            tenant_id=tenant_id,
+            tenant_tier=tenant_tier,
+            age_boosting_enabled=True,
+        )
+        tags.append("trigger:webhook")
+        tags.append("event:video-insert")
+
+        # Trigger Prefect flow in background to avoid Supabase webhook timeout (5s limit)
+        flow_name = "captionacc-video-initial-processing"
+        parameters = {
+            "video_id": video_id,
+            "tenant_id": tenant_id,
+            "storage_key": storage_key,
+        }
+
+        logger.info(
+            f"Queueing video initial processing for video {video_id} "
+            f"(tenant: {tenant_id}, priority: {priority})"
+        )
+
+        # Create sync wrapper for async trigger_prefect_flow
+        import asyncio
+
+        def trigger_flow_sync():
+            """Synchronous wrapper to run async trigger_prefect_flow in background."""
+            try:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(
+                    trigger_prefect_flow(
+                        flow_name=flow_name,
+                        parameters=parameters,
+                        priority=priority,
+                        tags=tags,
+                    )
+                )
+                loop.close()
+            except Exception as e:
+                logger.error(f"Background task failed to trigger Prefect flow for video {video_id}: {e}")
+
+        # Add background task to trigger flow (won't block webhook response)
+        # This ensures we respond to Supabase within the 5-second timeout
+        background_tasks.add_task(trigger_flow_sync)
+
+        # Return immediately (don't wait for Prefect)
+        response.status_code = status.HTTP_202_ACCEPTED
+        return WebhookResponse(
+            success=True,
+            flow_run_id=None,  # Won't have ID yet since we're not waiting
+            status="queued",
+            message=f"Video processing queued with priority {priority}",
+        )
+
+    # Handle UPDATE events - currently ignored
+    # Future: Could update flow parameters or re-prioritize
+    logger.info(f"Ignoring {payload.type} event for videos table")
     return WebhookResponse(
         success=True,
-        flow_run_id=None,  # Won't have ID yet since we're not waiting
-        status="queued",
-        message=f"Video processing queued with priority {priority}",
+        status="ignored",
+        message=f"Event type {payload.type} is not handled",
     )
