@@ -268,15 +268,17 @@ async def supabase_videos_webhook(
     """
     Handle Supabase webhook for videos table events.
 
-    This endpoint is called by Supabase when videos are inserted/updated/deleted.
+    This endpoint is called by Supabase when videos are inserted/updated.
 
     Event Handling:
         - INSERT: Triggers video initial processing flow
-        - DELETE: Cancels any running Prefect flow for the deleted video
-        - UPDATE: Ignored (future: could update flow parameters)
+        - UPDATE: Detects soft-delete (deleted_at: NULL → timestamp) and cancels running flow
+        - Other UPDATEs: Ignored (future: could handle status changes, re-prioritization)
 
     IMPORTANT: This endpoint must respond within 5 seconds (Supabase webhook timeout).
     Flow triggering/cancellation is done in background to avoid timeout.
+
+    Note: We use soft-delete (deleted_at timestamp), not hard DELETE from database.
 
     Authentication:
         - Requires Authorization header: "Bearer {webhook_secret}"
@@ -295,13 +297,19 @@ async def supabase_videos_webhook(
             }
         }
 
-    Payload format (DELETE):
+    Payload format (UPDATE - soft-delete):
         {
-            "type": "DELETE",
+            "type": "UPDATE",
             "table": "videos",
-            "old_record": {
+            "record": {
                 "id": "video-uuid",
                 "prefect_flow_run_id": "flow-run-uuid",
+                "deleted_at": "2024-01-17T15:00:00Z",
+                ...
+            },
+            "old_record": {
+                "id": "video-uuid",
+                "deleted_at": null,
                 ...
             }
         }
@@ -333,59 +341,73 @@ async def supabase_videos_webhook(
             detail=f"Invalid table '{payload.table}'. Expected 'videos'",
         )
 
-    # Handle DELETE events - cancel any running flow
-    if payload.type == "DELETE":
-        # Extract video info from old_record (the deleted record)
-        if not payload.old_record:
-            logger.warning("DELETE event received but old_record is missing")
+    # Handle UPDATE events - detect soft-delete and cancel flow
+    if payload.type == "UPDATE":
+        # Soft-delete detection: deleted_at changed from NULL to a timestamp
+        if not payload.old_record or not payload.record:
+            logger.warning("UPDATE event received but old_record or record is missing")
             return WebhookResponse(
                 success=True,
                 status="ignored",
-                message="DELETE event missing old_record",
+                message="UPDATE event missing required data",
             )
 
-        try:
-            video_id = payload.old_record["id"]
-            flow_run_id = payload.old_record.get("prefect_flow_run_id")
-        except KeyError as e:
-            logger.error(f"Missing required field in old_record: {e}")
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Missing required field in old_record: {str(e)}",
-            )
+        old_deleted_at = payload.old_record.get("deleted_at")
+        new_deleted_at = payload.record.get("deleted_at")
 
-        # If no flow run ID, nothing to cancel
-        if not flow_run_id:
-            logger.info(f"Video {video_id} deleted but has no flow run to cancel")
+        # Check if video was just soft-deleted (deleted_at: NULL → timestamp)
+        if old_deleted_at is None and new_deleted_at is not None:
+            # Video was soft-deleted - cancel any running flow
+            try:
+                video_id = payload.record["id"]
+                flow_run_id = payload.record.get("prefect_flow_run_id")
+            except KeyError as e:
+                logger.error(f"Missing required field in record: {e}")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Missing required field in record: {str(e)}",
+                )
+
+            # If no flow run ID, nothing to cancel
+            if not flow_run_id:
+                logger.info(f"Video {video_id} soft-deleted but has no flow run to cancel")
+                return WebhookResponse(
+                    success=True,
+                    status="no_action_needed",
+                    message="No flow run to cancel",
+                )
+
+            # Cancel the flow run in background to avoid timeout
+            import asyncio
+
+            def cancel_flow_sync():
+                """Synchronous wrapper to run async cancel_prefect_flow_run in background."""
+                try:
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    loop.run_until_complete(cancel_prefect_flow_run(flow_run_id))
+                    loop.close()
+                except Exception as e:
+                    logger.error(f"Background task failed to cancel flow run {flow_run_id}: {e}")
+
+            background_tasks.add_task(cancel_flow_sync)
+
+            logger.info(f"Video {video_id} soft-deleted, queued cancellation of flow run {flow_run_id}")
+
+            response.status_code = status.HTTP_202_ACCEPTED
             return WebhookResponse(
                 success=True,
-                status="no_action_needed",
-                message="No flow run to cancel",
+                flow_run_id=flow_run_id,
+                status="cancelling",
+                message=f"Flow run cancellation queued for soft-deleted video",
             )
 
-        # Cancel the flow run in background to avoid timeout
-        import asyncio
-
-        def cancel_flow_sync():
-            """Synchronous wrapper to run async cancel_prefect_flow_run in background."""
-            try:
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                loop.run_until_complete(cancel_prefect_flow_run(flow_run_id))
-                loop.close()
-            except Exception as e:
-                logger.error(f"Background task failed to cancel flow run {flow_run_id}: {e}")
-
-        background_tasks.add_task(cancel_flow_sync)
-
-        logger.info(f"Video {video_id} deleted, queued cancellation of flow run {flow_run_id}")
-
-        response.status_code = status.HTTP_202_ACCEPTED
+        # Other UPDATE events (not soft-delete) - ignore for now
+        logger.info(f"Ignoring UPDATE event that is not a soft-delete")
         return WebhookResponse(
             success=True,
-            flow_run_id=flow_run_id,
-            status="cancelling",
-            message=f"Flow run cancellation queued for deleted video",
+            status="ignored",
+            message="UPDATE event is not a soft-delete",
         )
 
     # Handle INSERT events - trigger video processing flow
@@ -479,11 +501,10 @@ async def supabase_videos_webhook(
             message=f"Video processing queued with priority {priority}",
         )
 
-    # Handle UPDATE events - currently ignored
-    # Future: Could update flow parameters or re-prioritize
-    logger.info(f"Ignoring {payload.type} event for videos table")
+    # Unknown event type (should not reach here)
+    logger.warning(f"Unknown event type received: {payload.type}")
     return WebhookResponse(
         success=True,
         status="ignored",
-        message=f"Event type {payload.type} is not handled",
+        message=f"Unknown event type: {payload.type}",
     )
