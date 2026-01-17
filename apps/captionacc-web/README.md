@@ -653,4 +653,3 @@ This template includes infrastructure from the original project. You may want to
 - Unused services in `app/services/`
 - GitHub Actions in `.github/` (customize for your needs)
 - Deployment config in `fly.toml` (if not using Fly.io)
-

@@ -71,24 +71,24 @@ def extract_full_frames_and_ocr_task(
         raise RuntimeError(f"Frame extraction failed: {str(e)}") from e
 
     logger.info(
-        f"Frame extraction complete: {result.frame_count} frames, "
-        f"{result.duration:.1f}s duration, "
-        f"{result.ocr_box_count} OCR boxes detected"
+        f"Frame extraction complete: {result['frame_count']} frames, "
+        f"{result['duration']:.1f}s duration, "
+        f"{result['ocr_box_count']} OCR boxes detected"
     )
 
     return {
-        "frame_count": result.frame_count,
-        "duration": result.duration,
-        "frame_width": result.frame_width,
-        "frame_height": result.frame_height,
-        "video_codec": result.video_codec,
-        "bitrate": result.bitrate,
-        "ocr_box_count": result.ocr_box_count,
-        "failed_ocr_count": result.failed_ocr_count,
-        "processing_duration_seconds": result.processing_duration_seconds,
-        "full_frames_key": result.full_frames_key,
-        "ocr_db_key": result.ocr_db_key,
-        "layout_db_key": result.layout_db_key,
+        "frame_count": result["frame_count"],
+        "duration": result["duration"],
+        "frame_width": result["frame_width"],
+        "frame_height": result["frame_height"],
+        "video_codec": result["video_codec"],
+        "bitrate": result["bitrate"],
+        "ocr_box_count": result["ocr_box_count"],
+        "failed_ocr_count": result["failed_ocr_count"],
+        "processing_duration_seconds": result["processing_duration_seconds"],
+        "full_frames_key": result["full_frames_key"],
+        "ocr_db_key": result["ocr_db_key"],
+        "layout_db_key": result["layout_db_key"],
     }
 
 
@@ -173,7 +173,7 @@ async def video_initial_processing(
         try:
             update_video_status_task(
                 video_id=video_id,
-                status="error",
+                status="failed",
                 error_message=f"Frame extraction failed: {str(e)}",
             )
         except Exception as status_error:

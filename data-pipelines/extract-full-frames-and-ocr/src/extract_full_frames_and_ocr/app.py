@@ -13,8 +13,8 @@ except ImportError:
 if modal:
     app = modal.App("extract-full-frames-and-ocr")
 
-    # Import image builder and implementation
-    from .modal_inference import extract_frames_and_ocr_impl, get_full_frames_image
+    # Import image builder only (not implementation - that has heavy dependencies)
+    from .modal_inference import get_full_frames_image
 
     @app.function(
         image=get_full_frames_image(),
@@ -55,6 +55,9 @@ if modal:
             - {tenant_id}/client/videos/{video_id}/full_frames/frame_NNNNNNNNNN.jpg
             - {tenant_id}/server/videos/{video_id}/fullOCR.db
         """
+        # Import inside function to avoid heavy dependencies during deployment
+        from .modal_inference import extract_frames_and_ocr_impl
+
         return extract_frames_and_ocr_impl(
             video_key, tenant_id, video_id, rate_hz, language
         )

@@ -11,35 +11,23 @@ from .base import OCRBackend
 
 
 class GoogleVisionBackend(OCRBackend):
-    """Google Vision API backend using SERVICE_ACCOUNT_JSON for credentials."""
+    """Google Vision API backend using GOOGLE_APPLICATION_CREDENTIALS."""
 
-    def __init__(self, credentials_json: str | None = None):
-        """Initialize with credentials.
-
-        Args:
-            credentials_json: JSON string with service account credentials.
-                            If not provided, reads from SERVICE_ACCOUNT_JSON env var.
-        """
-        if credentials_json is None:
-            credentials_json = os.environ.get("SERVICE_ACCOUNT_JSON")
-
-        if credentials_json:
-            service_account_info = json.loads(credentials_json)
-            credentials = service_account.Credentials.from_service_account_info(
-                service_account_info
-            )
-            self.client = vision.ImageAnnotatorClient(credentials=credentials)
-        else:
-            # Fall back to default credentials (GOOGLE_APPLICATION_CREDENTIALS)
-            self.client = vision.ImageAnnotatorClient()
+    def __init__(self):
+        """Initialize with credentials from GOOGLE_APPLICATION_CREDENTIALS env var."""
+        credentials_json = os.environ["GOOGLE_APPLICATION_CREDENTIALS"]
+        service_account_info = json.loads(credentials_json)
+        credentials = service_account.Credentials.from_service_account_info(
+            service_account_info
+        )
+        self.client = vision.ImageAnnotatorClient(credentials=credentials)
 
     def get_constraints(self) -> dict:
-        """Return Google Vision API constraints."""
-        # Google Vision limits - see docs
+        """Return Google Vision API constraints matching montage limits."""
         return {
-            "max_image_height": 50000,  # Conservative estimate
-            "max_image_width": 50000,
-            "max_file_size_bytes": 20 * 1024 * 1024,  # 20MB
+            "max_image_height": 50000,  # HEIGHT_LIMIT_PX
+            "max_total_pixels": 50000000,  # PIXEL_LIMIT
+            "max_file_size_bytes": 15 * 1024 * 1024,  # FILE_SIZE_LIMIT_MB
         }
 
     def process_single(self, image_bytes: bytes, language: str) -> OCRResult:

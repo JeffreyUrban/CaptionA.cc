@@ -31,7 +31,7 @@ def get_full_frames_image():
 
     return (
         modal.Image.debian_slim(python_version="3.11")
-        .apt_install("libgl1-mesa-glx", "libglib2.0-0")
+        .apt_install("libgl1-mesa-glx", "libglib2.0-0", "ffmpeg")
         .pip_install(
             # GPU Video Processing
             "PyNvVideoCodec",
@@ -40,6 +40,9 @@ def get_full_frames_image():
             "numpy>=1.24.0",
             "Pillow>=10.0.0",
             "opencv-python-headless",  # For frames_db
+            "pydantic>=2.0.0",  # Required by local packages
+            "sqlalchemy>=2.0.0",  # Required by frames_db
+            "ffmpeg-python",  # For video metadata extraction
             # OCR and storage
             "google-cloud-vision>=3.0.0",
             "boto3",  # For Wasabi S3
@@ -201,11 +204,21 @@ def extract_frames_and_ocr_impl(
         print(f"Frames prefix: {full_frames_prefix}")
         print(f"{'=' * 80}\n")
 
+        # TODO: Extract video metadata (duration, dimensions, codec, bitrate)
+        # TODO: Track failed OCR count during processing
+        # TODO: Generate layout.db and return layout_db_key
         return {
             "version": 1,
             "frame_count": frame_count,
-            "total_ocr_boxes": total_boxes,
+            "duration": 0.0,  # TODO: Extract from video metadata
+            "frame_width": 1920,  # TODO: Extract from video metadata
+            "frame_height": 1080,  # TODO: Extract from video metadata
+            "video_codec": "unknown",  # TODO: Extract from video metadata
+            "bitrate": 0,  # TODO: Extract from video metadata
+            "ocr_box_count": total_boxes,
+            "failed_ocr_count": 0,  # TODO: Track during OCR processing
             "processing_duration_seconds": total_duration,
-            "fullOCR_db_key": db_storage_key,
-            "full_frames_prefix": full_frames_prefix,
+            "full_frames_key": full_frames_prefix,
+            "ocr_db_key": db_storage_key,
+            "layout_db_key": None,  # TODO: Generate layout.db
         }

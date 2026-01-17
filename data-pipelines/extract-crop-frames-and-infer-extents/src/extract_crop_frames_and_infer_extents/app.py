@@ -16,9 +16,8 @@ from .models import CropInferResult, CropRegion
 if modal:
     app = modal.App("extract-crop-frames-and-infer-extents")
 
-    # Import image builders and implementations
+    # Import image builder only (not implementation - that has torch dependency)
     from .inference import get_inference_image
-    from .pipeline import crop_and_infer_caption_frame_extents_pipelined
 
     # Mount model volume
     model_volume = modal.Volume.from_name("boundary-models", create_if_missing=False)
@@ -49,6 +48,9 @@ if modal:
             encoder_workers: Number of parallel VP9 encoding workers (default: 4)
             inference_batch_size: Number of images per inference batch (default: 32)
         """
+        # Import inside function to avoid torch dependency during deployment
+        from .pipeline import crop_and_infer_caption_frame_extents_pipelined
+
         return crop_and_infer_caption_frame_extents_pipelined(
             video_key, tenant_id, video_id, crop_region, frame_rate, encoder_workers, inference_batch_size
         )

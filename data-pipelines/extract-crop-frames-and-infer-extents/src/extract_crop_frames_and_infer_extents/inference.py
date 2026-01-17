@@ -24,6 +24,10 @@ except ImportError:
 
 from .models import CropInferResult, CropRegion
 
+# Compute repo root for adding local packages
+_THIS_FILE = Path(__file__).resolve()
+_REPO_ROOT = _THIS_FILE.parent.parent.parent.parent.parent  # Go up to repo root
+
 
 # GPU image with all dependencies for inference
 # This will be used by app.py when registering the function
@@ -61,9 +65,16 @@ def get_inference_image():
             "psutil",
             "nvidia-ml-py3",  # pynvml for GPU monitoring
         )
-        # Add local packages for inference
-        .add_local_python_source("caption_frame_extents")
-        .add_local_python_source("gpu_video_utils")
+        .env({"PYTHONPATH": "/root"})
+        # Add local packages
+        .add_local_dir(
+            _REPO_ROOT / "data-pipelines" / "caption_frame_extents" / "src" / "caption_frame_extents",
+            remote_path="/root/caption_frame_extents",
+        )
+        .add_local_dir(
+            _REPO_ROOT / "packages" / "gpu_video_utils" / "src" / "gpu_video_utils",
+            remote_path="/root/gpu_video_utils",
+        )
     )
 
 
