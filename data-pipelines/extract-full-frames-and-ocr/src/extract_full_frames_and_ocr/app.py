@@ -26,7 +26,7 @@ if modal:
             modal.Secret.from_name("google-vision"),
         ],
     )
-    def extract_frames_and_ocr(
+    def extract_full_frames_and_ocr(
         video_key: str,
         tenant_id: str,
         video_id: str,
@@ -61,7 +61,7 @@ if modal:
 
 else:
     # Modal not available - provide stub for type checking
-    def extract_frames_and_ocr(
+    def extract_full_frames_and_ocr(
         video_key: str,
         tenant_id: str,
         video_id: str,

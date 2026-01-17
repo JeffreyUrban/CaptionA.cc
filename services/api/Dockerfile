@@ -10,10 +10,19 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies and Supercronic for scheduled tasks
+# Supercronic version and checksums from https://github.com/aptible/supercronic/releases
+ENV SUPERCRONIC_VERSION=0.2.33 \
+    SUPERCRONIC_SHA256=feefa310da569c81b99e1027b86b27b51e6ee9ab647747b49099645120cfc671
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     unzip \
+    jq \
+    && curl -fsSL "https://github.com/aptible/supercronic/releases/download/v${SUPERCRONIC_VERSION}/supercronic-linux-amd64" \
+         -o /usr/local/bin/supercronic \
+    && echo "${SUPERCRONIC_SHA256}  /usr/local/bin/supercronic" | sha256sum -c - \
+    && chmod +x /usr/local/bin/supercronic \
     && rm -rf /var/lib/apt/lists/*
 
 # Download CR-SQLite extension from GitHub (Wasabi mirror available as private backup)
@@ -36,9 +45,15 @@ RUN uv pip install --system -e .
 
 # Copy application code
 COPY app ./app
+COPY scripts ./scripts
+COPY prefect.yaml ./prefect.yaml
+COPY crontab ./crontab
 
-# Create non-root user
-RUN useradd --create-home appuser && chown -R appuser:appuser /app
+# Create non-root user and set permissions
+RUN useradd --create-home appuser \
+    && chmod +x scripts/*.sh \
+    && chown -R appuser:appuser /app
+
 USER appuser
 
 # Expose port
@@ -48,5 +63,5 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-# Run the application
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run the application with Supercronic scheduler
+CMD ["bash", "scripts/start.sh"]

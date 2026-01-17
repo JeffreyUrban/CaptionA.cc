@@ -4,10 +4,12 @@
 app = "captionacc-api"
 primary_region = "ewr"
 
-[experimental]
-  private_network = true  # Enable private networking to reach banchelabs-gateway
-
 [build]
+
+[deploy]
+  # Run before each deployment to register Prefect flows
+  # This ensures deployments are always up-to-date with code changes
+  release_command = "bash scripts/deploy_flows.sh"
 
 [env]
   ENVIRONMENT = "production"
@@ -25,7 +27,7 @@ primary_region = "ewr"
   auto_stop_machines = "stop"
   auto_start_machines = true
   min_machines_running = 0  # Machine stops when idle; working copy safe on volume
-  processes = ["app"]
+  processes = ["app"]  # Single container runs both web app and Supercronic scheduler
 
 # Allow 30s for graceful shutdown (pending Wasabi uploads)
 kill_timeout = "30s"

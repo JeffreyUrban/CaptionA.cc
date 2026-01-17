@@ -1,0 +1,8 @@
+# CaptionA.cc scheduled tasks
+# Runs via Supercronic inside the API container
+#
+# Format: minute hour day month weekday command
+# Note: Times are in UTC
+
+# Check for stuck videos every 15 minutes
+*/15 * * * * bash /app/scripts/trigger_recovery.sh >> /tmp/recovery-cron.log 2>&1

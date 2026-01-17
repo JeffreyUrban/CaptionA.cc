@@ -24,8 +24,8 @@ Self-hosted provides unlimited deployments at minimal cost with auto-stop.
 ├────────────────────────────────────┤
 │  Prefect Server (API + UI)         │
 │  Port: 4200                         │
-│  Database: SQLite (/data/prefect.db)│
-│  Auto-stop: Yes                     │
+│  Database: SQLite (~/.prefect/prefect.db)│
+│  Auto-stop: No (always running)     │
 └────────────────────────────────────┘
             ↕
 ┌────────────────────────────────────┐
@@ -98,7 +98,7 @@ fly secrets set WEBHOOK_SECRET=xxx
 
 **For API Service (.env):**
 ```bash
-PREFECT_API_URL=https://banchelabs-gateway.fly.dev/api
+PREFECT_API_URL=http://banchelabs-gateway.flycast:4200/api  # Fly.io internal network
 WEBHOOK_SECRET=xxx
 SUPABASE_URL=xxx
 SUPABASE_SERVICE_ROLE_KEY=xxx

@@ -55,10 +55,12 @@ class PrefectWorkerManager:
         try:
             # Verify connection to Prefect server
             async with get_client() as client:
-                # Check server health
-                health = await client.api_healthcheck()
-                if not health:
-                    raise Exception("Prefect server health check failed")
+                # Check server health (using direct HTTP request due to client.api_healthcheck() returning None)
+                import httpx
+                async with httpx.AsyncClient() as http_client:
+                    response = await http_client.get(f"{settings.prefect_api_url.rstrip('/api')}/api/health")
+                    if response.status_code != 200 or not response.json():
+                        raise Exception(f"Prefect server health check failed: {response.status_code}")
                 logger.info("Successfully connected to Prefect server")
 
                 # Ensure work pool exists (optional - worker will create if needed)

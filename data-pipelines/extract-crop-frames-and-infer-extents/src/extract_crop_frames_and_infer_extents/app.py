@@ -31,7 +31,7 @@ if modal:
         secrets=[modal.Secret.from_name("wasabi")],
         volumes={"/root/boundary-models": model_volume},
     )
-    def crop_and_infer_caption_frame_extents(
+    def extract_crop_frames_and_infer_extents(
         video_key: str,
         tenant_id: str,
         video_id: str,
@@ -57,7 +57,7 @@ else:
     # Modal not available - provide stubs for type checking
     app = None
 
-    def crop_and_infer_caption_frame_extents(
+    def extract_crop_frames_and_infer_extents(
         _video_key: str,
         _tenant_id: str,
         _video_id: str,

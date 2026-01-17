@@ -44,18 +44,18 @@ def update_video_status_task(
     )
 
 
-@task(name="extract-frames-and-ocr", timeout_seconds=1800, retries=0)
-def extract_frames_and_ocr_task(
+@task(name="extract-full-frames-and-ocr", timeout_seconds=1800, retries=0)
+def extract_full_frames_and_ocr_task(
     video_key: str, tenant_id: str, video_id: str, frame_rate: float = 0.1
 ) -> dict[str, Any]:
-    """Call Modal extract_frames_and_ocr function remotely."""
+    """Call Modal extract_full_frames_and_ocr function remotely."""
     import modal
 
     logger.info(f"Starting frame extraction for video {video_id} at {frame_rate} fps")
 
     # Look up the deployed Modal function
     extract_fn = modal.Function.from_name(
-        "extract-crop-frames-and-infer-extents", "extract_frames_and_ocr"
+        "extract-full-frames-and-ocr", "extract_full_frames_and_ocr"
     )
 
     # Call the Modal function remotely
@@ -64,7 +64,7 @@ def extract_frames_and_ocr_task(
             video_key=video_key,
             tenant_id=tenant_id,
             video_id=video_id,
-            frame_rate=frame_rate,
+            rate_hz=frame_rate,  # Parameter name is rate_hz in Modal function
         )
     except Exception as e:
         logger.error(f"Modal function failed: {e}")
@@ -161,7 +161,7 @@ async def video_initial_processing(
 
     # Step 2: Call Modal for frame extraction and OCR
     try:
-        result = extract_frames_and_ocr_task(
+        result = extract_full_frames_and_ocr_task(
             video_key=storage_key,
             tenant_id=tenant_id,
             video_id=video_id,

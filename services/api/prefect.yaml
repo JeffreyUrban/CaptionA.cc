@@ -1,0 +1,41 @@
+# Prefect deployment configuration for CaptionA.cc flows
+#
+# Deploy all flows:
+#   PREFECT_API_URL=https://banchelabs-gateway.fly.dev/api prefect deploy --all
+#
+# Deploy specific flow:
+#   PREFECT_API_URL=https://banchelabs-gateway.fly.dev/api prefect deploy -n captionacc-video-initial-processing
+
+# Default work pool for all deployments
+work_pool:
+  name: captionacc-workers
+
+# Deployments
+deployments:
+  - name: captionacc-video-initial-processing
+    description: Extract frames and run OCR on uploaded videos
+    entrypoint: app/flows/video_initial_processing.py:video_initial_processing
+    work_pool:
+      name: captionacc-workers
+    schedules: []
+
+  - name: captionacc-crop-and-infer-caption-frame-extents
+    description: Crop frames and infer caption boundaries
+    entrypoint: app/flows/crop_and_infer.py:crop_and_infer
+    work_pool:
+      name: captionacc-workers
+    schedules: []
+
+  - name: captionacc-caption-ocr
+    description: Generate OCR for individual captions
+    entrypoint: app/flows/caption_ocr.py:caption_ocr
+    work_pool:
+      name: captionacc-workers
+    schedules: []
+
+  - name: captionacc-video-recovery
+    description: Find and retry stuck videos (triggered by scheduled machine)
+    entrypoint: app/flows/video_recovery.py:video_recovery
+    work_pool:
+      name: captionacc-workers
+    schedules: []  # No cron schedule - triggered by Fly.io scheduled machine

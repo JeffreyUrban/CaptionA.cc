@@ -13,6 +13,7 @@ from app.routers import (
     admin,
     boxes,
     captions,
+    internal,
     layout,
     preferences,
     stats,
@@ -38,24 +39,32 @@ async def lifespan(app: FastAPI):
     logger.info(f"Starting API service in {settings.environment} mode")
 
     # Check for failed uploads from previous shutdown
-    from app.services.supabase_client import DatabaseStateRepository
+    try:
+        from app.services.supabase_client import DatabaseStateRepository
 
-    repo = DatabaseStateRepository()
-    unsaved = await repo.get_all_with_unsaved_changes()
-    if unsaved:
-        logger.error(
-            f"Found {len(unsaved)} databases with unsaved changes from previous session. "
-            "Previous shutdown may have failed to upload to Wasabi."
-        )
-        for state in unsaved:
+        repo = DatabaseStateRepository()
+        unsaved = await repo.get_all_with_unsaved_changes()
+        if unsaved:
             logger.error(
-                f"  - {state.get('video_id')}/{state.get('database_name')}: "
-                f"server_version={state.get('server_version')} wasabi_version={state.get('wasabi_version')}"
+                f"Found {len(unsaved)} databases with unsaved changes from previous session. "
+                "Previous shutdown may have failed to upload to Wasabi."
             )
+            for state in unsaved:
+                logger.error(
+                    f"  - {state.get('video_id')}/{state.get('database_name')}: "
+                    f"server_version={state.get('server_version')} wasabi_version={state.get('wasabi_version')}"
+                )
+    except Exception as e:
+        logger.error(f"Failed to check for unsaved changes: {e}")
+        # Continue startup even if this check fails
 
     # Start background Wasabi upload worker
     upload_worker = get_upload_worker()
-    await upload_worker.start()
+    try:
+        await upload_worker.start()
+    except Exception as e:
+        logger.error(f"Failed to start upload worker: {e}")
+        # Continue startup even if upload worker fails
 
     # Start Prefect worker to execute flows
     worker_manager = get_worker_manager()
@@ -109,6 +118,9 @@ def create_app() -> FastAPI:
 
     # Webhook routers
     app.include_router(webhooks.router, tags=["webhooks"])
+
+    # Internal system endpoints
+    app.include_router(internal.router, tags=["internal"])
 
     @app.get("/health")
     async def health_check():

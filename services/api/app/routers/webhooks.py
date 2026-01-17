@@ -212,13 +212,16 @@ async def supabase_videos_webhook(
     try:
         video_id = payload.record["id"]
         tenant_id = payload.record["tenant_id"]
-        storage_key = payload.record["storage_key"]
     except KeyError as e:
         logger.error(f"Missing required field in record: {e}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Missing required field in record: {str(e)}",
         )
+
+    # Compute storage_key from tenant_id and video_id
+    # Pattern: {tenant_id}/client/videos/{video_id}/video.mp4
+    storage_key = f"{tenant_id}/client/videos/{video_id}/video.mp4"
 
     # Get tenant tier for priority calculation (default to "free" if not available)
     tenant_tier = payload.record.get("tenant_tier", "free")

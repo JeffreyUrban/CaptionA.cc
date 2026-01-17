@@ -6,6 +6,6 @@ Run as `modal deploy deploy.py`
 This file imports and exposes the Modal app for deployment.
 """
 
-if __name__ == "__main__":
-    # This allows Modal CLI to discover the app
-    pass
+from src.extract_crop_frames_and_infer_extents.app import app
+
+# Modal CLI will discover 'app' automatically
