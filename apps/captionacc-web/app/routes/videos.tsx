@@ -88,19 +88,19 @@ export async function clientLoader() {
       videoId: v.id,
       displayPath: v.display_path ?? v.id,
       isDemo: v.is_demo ?? false,
-      layout_status: v.layout_status,
-      boundaries_status: v.boundaries_status,
-      text_status: v.text_status,
-      total_frames: v.total_frames,
-      covered_frames: v.covered_frames,
-      total_annotations: v.total_annotations,
-      confirmed_annotations: v.confirmed_annotations,
-      predicted_annotations: v.predicted_annotations,
-      boundary_pending_count: v.boundary_pending_count,
-      text_pending_count: v.text_pending_count,
-      layout_error_details: v.layout_error_details,
-      boundaries_error_details: v.boundaries_error_details,
-      text_error_details: v.text_error_details,
+      layout_status: v.layout_status as VideoInfo['layout_status'],
+      boundaries_status: v.boundaries_status as VideoInfo['boundaries_status'],
+      text_status: v.text_status as VideoInfo['text_status'],
+      total_frames: v.total_frames ?? undefined,
+      covered_frames: v.covered_frames ?? undefined,
+      total_annotations: v.total_annotations ?? undefined,
+      confirmed_annotations: v.confirmed_annotations ?? undefined,
+      predicted_annotations: v.predicted_annotations ?? undefined,
+      boundary_pending_count: v.boundary_pending_count ?? undefined,
+      text_pending_count: v.text_pending_count ?? undefined,
+      layout_error_details: v.layout_error_details as VideoInfo['layout_error_details'],
+      boundaries_error_details: v.boundaries_error_details as VideoInfo['boundaries_error_details'],
+      text_error_details: v.text_error_details as VideoInfo['text_error_details'],
     })) ?? []
 
   // Build tree structure from videos only (without stats - will be loaded client-side)
@@ -242,6 +242,9 @@ export default function VideosPage() {
   useEffect(() => {
     setIsMounted(true)
   }, [])
+
+  // Note: Realtime subscriptions are managed by RealtimeProvider at the app level
+  // No need for component-level subscriptions here
 
   // Tree navigation hook
   const { expandedPaths, toggleExpand, expandAll, collapseAll } = useTreeNavigation({ tree })

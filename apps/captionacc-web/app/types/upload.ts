@@ -123,7 +123,7 @@ export const CONCURRENT_UPLOADS = 3
 export const RETRY_DELAYS = [0, 3000, 5000, 10000, 20000, 60000]
 
 /** Maximum number of retry attempts for failed uploads */
-export const MAX_RETRIES = 5
+export const MAX_RETRIES = 2
 
 /** Time without progress before marking upload as stalled (60 seconds) */
 export const STALL_TIMEOUT = 60000

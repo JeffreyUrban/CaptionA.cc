@@ -236,6 +236,20 @@ async def approve_layout(video_id: str, body: TriggerProcessingRequest, auth: Au
         enable_age_boosting=True,  # Enable age boosting by default
     )
 
+    # Update layout_status to 'done' - user has approved the layout
+    try:
+        supabase.update_video_workflow_status(
+            video_id=video_id,
+            layout_status="done",
+        )
+        logger.info(f"Updated layout_status to 'done' for video {video_id}")
+    except Exception as e:
+        logger.error(f"Failed to update layout_status: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update layout status: {str(e)}",
+        )
+
     # Generate tags for observability
     tags = get_priority_tags(
         priority=priority,

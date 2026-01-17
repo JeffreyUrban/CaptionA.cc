@@ -25,11 +25,17 @@ from prefect import flow, task
 logger = logging.getLogger(__name__)
 
 
-@task(name="update-video-status", retries=2)
-def update_video_status_task(
-    video_id: str, status: str, error_message: str | None = None
+@task(name="update-workflow-status", retries=2)
+def update_workflow_status_task(
+    video_id: str,
+    layout_status: str | None = None,
+    boundaries_status: str | None = None,
+    text_status: str | None = None,
+    layout_error_details: dict | None = None,
+    boundaries_error_details: dict | None = None,
+    text_error_details: dict | None = None,
 ) -> None:
-    """Update video status in Supabase."""
+    """Update video workflow status in Supabase."""
     from app.services.supabase_service import SupabaseServiceImpl
 
     supabase = SupabaseServiceImpl(
@@ -38,9 +44,23 @@ def update_video_status_task(
         schema=os.environ.get("SUPABASE_SCHEMA", "captionacc_production"),
     )
 
-    logger.info(f"Updating video {video_id} status to '{status}'")
-    supabase.update_video_status(
-        video_id=video_id, status=status, error_message=error_message
+    status_updates = []
+    if layout_status:
+        status_updates.append(f"layout_status={layout_status}")
+    if boundaries_status:
+        status_updates.append(f"boundaries_status={boundaries_status}")
+    if text_status:
+        status_updates.append(f"text_status={text_status}")
+
+    logger.info(f"Updating video {video_id} workflow status: {', '.join(status_updates)}")
+    supabase.update_video_workflow_status(
+        video_id=video_id,
+        layout_status=layout_status,
+        boundaries_status=boundaries_status,
+        text_status=text_status,
+        layout_error_details=layout_error_details,
+        boundaries_error_details=boundaries_error_details,
+        text_error_details=text_error_details,
     )
 
 
@@ -94,7 +114,7 @@ def extract_full_frames_and_ocr_task(
 
 @task(name="update-video-metadata", retries=2)
 def update_video_metadata_task(
-    video_id: str, frame_count: int, duration: float
+    video_id: str, frame_count: int, duration: float, width: int, height: int
 ) -> None:
     """Update video metadata in Supabase after successful processing."""
     from app.services.supabase_service import SupabaseServiceImpl
@@ -107,11 +127,16 @@ def update_video_metadata_task(
 
     logger.info(
         f"Updating video {video_id} metadata: "
-        f"{frame_count} frames, {duration:.1f}s duration"
+        f"{frame_count} frames, {duration:.1f}s duration, {width}x{height}"
     )
-    supabase.update_video_metadata(
-        video_id=video_id, frame_count=frame_count, duration_seconds=duration
-    )
+
+    # Update total_frames in videos table (for progress tracking)
+    supabase.client.schema(supabase.schema).table("videos").update({
+        "total_frames": frame_count,
+        "duration_seconds": duration,
+        "width": width,
+        "height": height,
+    }).eq("id", video_id).execute()
 
 
 @flow(name="captionacc-video-initial-processing", log_prints=True)
@@ -144,22 +169,19 @@ async def video_initial_processing(
         Exception: If status update fails
 
     State transitions:
-        videos.status: 'uploading' -> 'processing' -> 'active'
-                                                   -> 'error' (on failure)
+        videos.layout_status: 'wait' -> 'annotate' (on success)
+                                     -> 'error' (on failure)
+
+        Note: boundaries_status and text_status remain at default 'wait'
+        until layout annotation is complete
     """
     logger.info(
         f"Starting video initial processing for video {video_id} "
         f"(tenant: {tenant_id}, storage_key: {storage_key})"
     )
 
-    # Step 1: Update status to 'processing'
-    try:
-        update_video_status_task(video_id=video_id, status="processing")
-    except Exception as e:
-        logger.error(f"Failed to update video status to 'processing': {e}")
-        raise
-
-    # Step 2: Call Modal for frame extraction and OCR
+    # Step 1: Call Modal for frame extraction and OCR
+    # (Video starts with all statuses at 'wait' from database defaults)
     try:
         result = extract_full_frames_and_ocr_task(
             video_key=storage_key,
@@ -168,13 +190,16 @@ async def video_initial_processing(
             frame_rate=0.1,  # 1 frame per 10 seconds for initial processing
         )
     except Exception as e:
-        # On failure, update status to 'error'
+        # On failure, update layout_status to 'error'
         logger.error(f"Frame extraction failed: {e}")
         try:
-            update_video_status_task(
+            update_workflow_status_task(
                 video_id=video_id,
-                status="failed",
-                error_message=f"Frame extraction failed: {str(e)}",
+                layout_status="error",
+                layout_error_details={
+                    "message": f"Frame extraction failed: {str(e)}",
+                    "error": str(e),
+                },
             )
         except Exception as status_error:
             logger.error(f"Failed to update error status: {status_error}")
@@ -182,23 +207,25 @@ async def video_initial_processing(
         # Re-raise for Prefect retry mechanism
         raise
 
-    # Step 3: Update video metadata with results
+    # Step 2: Update video metadata with results
     try:
         update_video_metadata_task(
             video_id=video_id,
             frame_count=result["frame_count"],
             duration=result["duration"],
+            width=result["frame_width"],
+            height=result["frame_height"],
         )
     except Exception as e:
         logger.error(f"Failed to update video metadata: {e}")
         # Don't fail the entire flow if metadata update fails
         # Processing was successful, just log the error
 
-    # Step 4: Update status to 'active'
+    # Step 3: Update layout_status to 'annotate' - ready for user to define layout
     try:
-        update_video_status_task(video_id=video_id, status="active")
+        update_workflow_status_task(video_id=video_id, layout_status="annotate")
     except Exception as e:
-        logger.error(f"Failed to update video status to 'active': {e}")
+        logger.error(f"Failed to update workflow status to 'annotate': {e}")
         raise
 
     logger.info(

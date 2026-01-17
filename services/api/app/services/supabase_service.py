@@ -12,22 +12,28 @@ class SupabaseService(Protocol):
     Use Protocol for structural typing - implementations don't need to inherit.
     """
 
-    # Video status updates
-    def update_video_status(
+    # Video workflow status updates
+    def update_video_workflow_status(
         self,
         video_id: str,
-        status: Optional[str] = None,
-        caption_status: Optional[str] = None,
-        error_message: Optional[str] = None,
+        layout_status: Optional[str] = None,
+        boundaries_status: Optional[str] = None,
+        text_status: Optional[str] = None,
+        layout_error_details: Optional[dict] = None,
+        boundaries_error_details: Optional[dict] = None,
+        text_error_details: Optional[dict] = None,
     ) -> None:
         """
-        Update video processing status.
+        Update video workflow status columns.
 
         Args:
             video_id: Video UUID
-            status: Overall video status (uploading, processing, active, error)
-            caption_status: Caption processing status (processing, ready, error)
-            error_message: Error message if status is 'error'
+            layout_status: Layout workflow status ('wait', 'annotate', 'done', 'review', 'error')
+            boundaries_status: Boundaries workflow status ('wait', 'annotate', 'done', 'review', 'error')
+            text_status: Text workflow status ('wait', 'annotate', 'done', 'review', 'error')
+            layout_error_details: Error details for layout stage (JSONB)
+            boundaries_error_details: Error details for boundaries stage (JSONB)
+            text_error_details: Error details for text stage (JSONB)
         """
         ...
 
@@ -169,34 +175,47 @@ class SupabaseServiceImpl:
         self.schema = schema
         self.client = create_client(supabase_url, supabase_key)
 
-    def update_video_status(
+    def update_video_workflow_status(
         self,
         video_id: str,
-        status: Optional[str] = None,
-        caption_status: Optional[str] = None,
-        error_message: Optional[str] = None,
+        layout_status: Optional[str] = None,
+        boundaries_status: Optional[str] = None,
+        text_status: Optional[str] = None,
+        layout_error_details: Optional[dict] = None,
+        boundaries_error_details: Optional[dict] = None,
+        text_error_details: Optional[dict] = None,
     ) -> None:
         """
-        Update video processing status.
+        Update video workflow status columns.
 
         Args:
             video_id: Video UUID
-            status: Overall video status (uploading, processing, active, error)
-            caption_status: Caption processing status (processing, ready, error)
-            error_message: Error message if status is 'error'
-
-        Note:
-            The videos table does not have a separate caption_status column.
-            This parameter is reserved for future use and currently ignored.
+            layout_status: Layout workflow status ('wait', 'annotate', 'done', 'review', 'error')
+            boundaries_status: Boundaries workflow status ('wait', 'annotate', 'done', 'review', 'error')
+            text_status: Text workflow status ('wait', 'annotate', 'done', 'review', 'error')
+            layout_error_details: Error details for layout stage (JSONB)
+            boundaries_error_details: Error details for boundaries stage (JSONB)
+            text_error_details: Error details for text stage (JSONB)
         """
         data = {}
 
-        if status is not None:
-            data["status"] = status
+        if layout_status is not None:
+            data["layout_status"] = layout_status
 
-        # Note: caption_status and error_message are not in the current schema
-        # They are included in the Protocol for future compatibility
-        # For now, we'll use a JSONB metadata field if needed in the future
+        if boundaries_status is not None:
+            data["boundaries_status"] = boundaries_status
+
+        if text_status is not None:
+            data["text_status"] = text_status
+
+        if layout_error_details is not None:
+            data["layout_error_details"] = layout_error_details
+
+        if boundaries_error_details is not None:
+            data["boundaries_error_details"] = boundaries_error_details
+
+        if text_error_details is not None:
+            data["text_error_details"] = text_error_details
 
         if data:  # Only update if we have data to set
             self.client.schema(self.schema).table("videos").update(data).eq(

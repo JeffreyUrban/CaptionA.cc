@@ -25,7 +25,7 @@ from prefect.client.orchestration import get_client
 @task(name="find-stuck-videos", retries=2, retry_delay_seconds=30)
 async def find_stuck_videos(age_minutes: int = 10) -> list[dict[str, Any]]:
     """
-    Find videos stuck in uploading/pending status.
+    Find videos stuck in initial processing (layout_status = 'wait').
 
     Args:
         age_minutes: Consider videos older than this many minutes
@@ -69,8 +69,8 @@ async def find_stuck_videos(age_minutes: int = 10) -> list[dict[str, Any]]:
         response = await client.get(
             "/videos",
             params={
-                "select": "id,tenant_id,display_path,status,uploaded_at",
-                "status": "in.(uploading,processing)",
+                "select": "id,tenant_id,display_path,layout_status,uploaded_at",
+                "layout_status": "eq.wait",
                 "uploaded_at": f"lt.{cutoff_iso}",
                 "order": "uploaded_at.asc",
             },

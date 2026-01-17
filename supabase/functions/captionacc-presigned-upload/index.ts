@@ -8,13 +8,14 @@
  * Request: { filename, contentType, sizeBytes, videoPath?, width?, height? }
  * Response: { uploadUrl, videoId, storageKey, expiresAt }
  *
- * Phase 2 - Confirm upload completion (creates video record with status 'processing'):
+ * Phase 2 - Confirm upload completion (creates video record with workflow statuses at 'wait'):
  * POST /functions/v1/captionacc-presigned-upload/confirm
  * Request: { videoId, storageKey, filename, contentType, sizeBytes, videoPath?, width?, height? }
  * Response: { success: true }
  *
  * The video record is only created after upload completes, so the Supabase
  * INSERT webhook fires when the video is fully uploaded and ready for processing.
+ * Workflow statuses (layout_status, boundaries_status, text_status) default to 'wait'.
  */
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -150,7 +151,7 @@ async function handleGenerate(
 }
 
 /**
- * Phase 2: Confirm upload completion and create video record with status 'processing'
+ * Phase 2: Confirm upload completion and create video record with workflow statuses at 'wait'
  * This triggers the Supabase INSERT webhook for backend processing
  */
 async function handleConfirm(
@@ -175,9 +176,10 @@ async function handleConfirm(
     auth: { persistSession: false },
   });
 
-  // Create video record with status 'processing'
+  // Create video record with workflow statuses defaulting to 'wait'
   // This will trigger the Supabase INSERT webhook for backend processing
   // Note: storage_key is computed as {tenant_id}/client/videos/{video_id}/video.mp4 (not stored)
+  // Note: layout_status, boundaries_status, text_status default to 'wait' via database defaults
   const { error: insertError } = await supabaseAdmin.from("videos").insert({
     id: videoId,
     tenant_id: tenantId,
@@ -185,7 +187,6 @@ async function handleConfirm(
     size_bytes: sizeBytes,
     width: width ?? 0,
     height: height ?? 0,
-    status: "processing", // Video is fully uploaded, ready for processing
     uploaded_by_user_id: userId,
     uploaded_at: new Date().toISOString(),
   });
