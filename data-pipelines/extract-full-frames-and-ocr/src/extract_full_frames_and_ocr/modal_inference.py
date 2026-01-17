@@ -4,9 +4,11 @@ This function:
 1. Downloads video from Wasabi
 2. Extracts frames at specified rate using GPU acceleration
 3. Processes frames with OCR service (montage assembly + Google Vision API)
-4. Creates fullOCR.db with text detection results
-5. Uploads database to Wasabi
-6. Returns statistics
+4. Creates two databases:
+   - raw-ocr.db (server-only): full_frame_ocr table with complete OCR results
+   - layout.db (client-facing): boxes, layout_config, preferences tables
+5. Uploads both databases to Wasabi
+6. Returns statistics and storage keys
 """
 
 import tempfile
@@ -91,10 +93,17 @@ def extract_frames_and_ocr_impl(
         Dict with:
             - version: Result version (1)
             - frame_count: Number of frames extracted
-            - total_ocr_boxes: Total OCR text boxes detected
+            - duration: Video duration in seconds
+            - frame_width: Video frame width
+            - frame_height: Video frame height
+            - video_codec: Video codec name
+            - bitrate: Video bitrate
+            - ocr_box_count: Total OCR text boxes detected
+            - failed_ocr_count: Number of frames that failed OCR
             - processing_duration_seconds: Total processing time
-            - fullOCR_db_key: Wasabi S3 key for database
-            - full_frames_prefix: Wasabi S3 prefix for frame images
+            - full_frames_key: Wasabi S3 prefix for frame images
+            - ocr_db_key: Wasabi S3 key for fullOCR.db (server-only)
+            - layout_db_key: Wasabi S3 key for layout.db (client-facing)
 
     Raises:
         ValueError: Invalid parameters
@@ -102,7 +111,8 @@ def extract_frames_and_ocr_impl(
 
     Wasabi Outputs:
         - {tenant_id}/client/videos/{video_id}/full_frames/frame_NNNNNNNNNN.jpg
-        - {tenant_id}/server/videos/{video_id}/fullOCR.db
+        - {tenant_id}/server/videos/{video_id}/raw-ocr.db (server-only, full OCR data)
+        - {tenant_id}/client/videos/{video_id}/layout.db (client-facing, boxes + config)
     """
     import os
 
@@ -146,7 +156,7 @@ def extract_frames_and_ocr_impl(
         print("[2/4] Processing video with GPU + Google Vision OCR...")
         db_path = tmp_path / "fullOCR.db"
 
-        total_boxes = process_video_with_gpu_and_ocr(
+        total_boxes, failed_ocr_count, video_info = process_video_with_gpu_and_ocr(
             video_path=video_path,
             db_path=db_path,
             rate_hz=rate_hz,
@@ -174,19 +184,145 @@ def extract_frames_and_ocr_impl(
         print(f"  DB box count: {db_box_count}")
         print(f"  Boxes match: {total_boxes == db_box_count}\n")
 
-        # Step 4: Upload database to Wasabi
-        print("[4/4] Uploading database to Wasabi...")
-        upload_start = time.time()
+        # Step 4: Create layout.db with boxes table (client-facing)
+        print("[4/6] Creating layout.db for client...")
+        layout_db_path = tmp_path / "layout.db"
 
-        db_storage_key = f"{tenant_id}/server/videos/{video_id}/fullOCR.db"
+        import sqlite3
+
+        layout_conn = sqlite3.connect(str(layout_db_path))
+        try:
+            # Create database_metadata table
+            layout_conn.execute(
+                """
+                CREATE TABLE database_metadata (
+                    id INTEGER PRIMARY KEY CHECK(id = 1),
+                    schema_version INTEGER NOT NULL,
+                    created_at TEXT NOT NULL
+                )
+                """
+            )
+            layout_conn.execute(
+                "INSERT INTO database_metadata (id, schema_version, created_at) VALUES (1, 1, datetime('now'))"
+            )
+
+            # Create boxes table (transformed from full_frame_ocr)
+            layout_conn.execute(
+                """
+                CREATE TABLE boxes (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    frame_index INTEGER NOT NULL,
+                    box_index INTEGER NOT NULL,
+                    bbox_left REAL NOT NULL,
+                    bbox_top REAL NOT NULL,
+                    bbox_right REAL NOT NULL,
+                    bbox_bottom REAL NOT NULL,
+                    text TEXT,
+                    label TEXT,
+                    label_updated_at TEXT,
+                    predicted_label TEXT,
+                    predicted_confidence REAL,
+                    UNIQUE(frame_index, box_index)
+                )
+                """
+            )
+
+            # Populate boxes table from fullOCR.db
+            ocr_conn = sqlite3.connect(str(db_path))
+            ocr_cursor = ocr_conn.execute(
+                "SELECT frame_index, box_index, text, x, y, width, height FROM full_frame_ocr ORDER BY frame_index, box_index"
+            )
+
+            for row in ocr_cursor:
+                frame_index, box_index, text, x, y, width, height = row
+                # Transform coordinates: x,y,width,height → left,top,right,bottom
+                bbox_left = x
+                bbox_bottom = y
+                bbox_right = x + width
+                bbox_top = y + height
+
+                layout_conn.execute(
+                    """
+                    INSERT INTO boxes (frame_index, box_index, bbox_left, bbox_top, bbox_right, bbox_bottom, text)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (frame_index, box_index, bbox_left, bbox_top, bbox_right, bbox_bottom, text),
+                )
+
+            ocr_conn.close()
+
+            # Create layout_config table
+            layout_conn.execute(
+                """
+                CREATE TABLE layout_config (
+                    id INTEGER PRIMARY KEY CHECK(id = 1),
+                    frame_width INTEGER NOT NULL,
+                    frame_height INTEGER NOT NULL,
+                    crop_left REAL NOT NULL DEFAULT 0,
+                    crop_top REAL NOT NULL DEFAULT 0,
+                    crop_right REAL NOT NULL DEFAULT 1,
+                    crop_bottom REAL NOT NULL DEFAULT 1,
+                    anchor_type TEXT,
+                    anchor_position REAL,
+                    vertical_center REAL,
+                    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+                )
+                """
+            )
+
+            # Initialize layout_config with frame dimensions
+            layout_conn.execute(
+                """
+                INSERT INTO layout_config (id, frame_width, frame_height, crop_left, crop_top, crop_right, crop_bottom)
+                VALUES (1, ?, ?, 0, 0, 1, 1)
+                """,
+                (video_info["width"], video_info["height"]),
+            )
+
+            # Create preferences table
+            layout_conn.execute(
+                """
+                CREATE TABLE preferences (
+                    id INTEGER PRIMARY KEY CHECK(id = 1),
+                    layout_approved INTEGER NOT NULL DEFAULT 0
+                )
+                """
+            )
+            layout_conn.execute("INSERT INTO preferences (id, layout_approved) VALUES (1, 0)")
+
+            layout_conn.commit()
+        finally:
+            layout_conn.close()
+
+        print(f"  Created layout.db with {total_boxes} boxes\n")
+
+        # Step 5: Upload raw-ocr.db to Wasabi (server-only)
+        print("[5/6] Uploading raw-ocr.db to Wasabi (server)...")
+        ocr_upload_start = time.time()
+
+        ocr_db_storage_key = f"{tenant_id}/server/videos/{video_id}/raw-ocr.db"
         wasabi_client.upload_file(
             str(db_path),
             bucket_name,
-            db_storage_key,
+            ocr_db_storage_key,
             ExtraArgs={"ContentType": "application/x-sqlite3"},
         )
 
-        print(f"  Uploaded in {time.time() - upload_start:.2f}s\n")
+        print(f"  Uploaded in {time.time() - ocr_upload_start:.2f}s\n")
+
+        # Step 6: Upload layout.db to Wasabi (client-facing)
+        print("[6/6] Uploading layout.db to Wasabi (client)...")
+        layout_upload_start = time.time()
+
+        layout_db_storage_key = f"{tenant_id}/client/videos/{video_id}/layout.db"
+        wasabi_client.upload_file(
+            str(layout_db_path),
+            bucket_name,
+            layout_db_storage_key,
+            ExtraArgs={"ContentType": "application/x-sqlite3"},
+        )
+
+        print(f"  Uploaded in {time.time() - layout_upload_start:.2f}s\n")
 
         # Build output paths
         full_frames_prefix = f"{tenant_id}/client/videos/{video_id}/full_frames/"
@@ -200,25 +336,23 @@ def extract_frames_and_ocr_impl(
         print(f"Frames: {frame_count}")
         print(f"OCR boxes: {total_boxes}")
         print(f"Total duration: {total_duration:.2f}s")
-        print(f"Database: {db_storage_key}")
+        print(f"Server database (raw-ocr.db): {ocr_db_storage_key}")
+        print(f"Client database (layout.db): {layout_db_storage_key}")
         print(f"Frames prefix: {full_frames_prefix}")
         print(f"{'=' * 80}\n")
 
-        # TODO: Extract video metadata (duration, dimensions, codec, bitrate)
-        # TODO: Track failed OCR count during processing
-        # TODO: Generate layout.db and return layout_db_key
         return {
             "version": 1,
             "frame_count": frame_count,
-            "duration": 0.0,  # TODO: Extract from video metadata
-            "frame_width": 1920,  # TODO: Extract from video metadata
-            "frame_height": 1080,  # TODO: Extract from video metadata
-            "video_codec": "unknown",  # TODO: Extract from video metadata
-            "bitrate": 0,  # TODO: Extract from video metadata
+            "duration": video_info["duration"],
+            "frame_width": video_info["width"],
+            "frame_height": video_info["height"],
+            "video_codec": video_info["codec"],
+            "bitrate": video_info["bitrate"],
             "ocr_box_count": total_boxes,
-            "failed_ocr_count": 0,  # TODO: Track during OCR processing
+            "failed_ocr_count": failed_ocr_count,
             "processing_duration_seconds": total_duration,
             "full_frames_key": full_frames_prefix,
-            "ocr_db_key": db_storage_key,
-            "layout_db_key": None,  # TODO: Generate layout.db
+            "ocr_db_key": ocr_db_storage_key,
+            "layout_db_key": layout_db_storage_key,
         }

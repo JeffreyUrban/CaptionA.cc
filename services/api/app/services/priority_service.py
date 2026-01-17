@@ -2,6 +2,31 @@
 Dynamic priority calculation for Prefect flow runs.
 Priority range: 0-100 (higher = more urgent)
 Age-based boosting is enabled by default to prevent starvation.
+
+TODO: Priority system is currently non-functional with Prefect 3.x
+
+This module calculates dynamic priorities based on tenant tier and request age,
+but Prefect 3.x does not support dynamic priority on flow runs. The calculated
+priority values are used for logging and observability (tags) only.
+
+Prefect 2.x vs 3.x Priority Model:
+- Prefect 2.x: Supported 'priority' field on flow runs (0-100, higher = more urgent)
+- Prefect 3.x: Uses work queues with static priority values (lower number = higher priority)
+
+Why this doesn't work for age-boosting:
+- Flow runs are assigned to a work queue at creation time
+- Once assigned, they cannot be moved between queues
+- Our age-boosting model requires priority to increase over time
+- Example: A free-tier video waiting 20 hours should eventually get same priority
+  as a newly uploaded premium video, but static queue assignment prevents this
+
+Current behavior:
+- Priority values are calculated correctly
+- Values are included in flow run tags for observability
+- All flow runs go to the 'default' work queue in FIFO order
+- No actual prioritization occurs during execution
+
+See app/routers/webhooks.py for additional details and possible solutions.
 """
 
 from datetime import datetime, timezone

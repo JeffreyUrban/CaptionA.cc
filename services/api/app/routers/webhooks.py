@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, Header, HTTPException, Request, Response, status
+from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Request, Response, status
 from pydantic import BaseModel
 
 from app.config import get_settings
@@ -79,7 +79,7 @@ async def trigger_prefect_flow(
     Args:
         flow_name: Name of the Prefect flow to trigger
         parameters: Flow parameters
-        priority: Flow run priority (0-100)
+        priority: Flow run priority (0-100) - currently for logging/tags only, not sent to Prefect
         tags: Flow run tags
 
     Returns:
@@ -87,6 +87,10 @@ async def trigger_prefect_flow(
 
     Raises:
         HTTPException: If Prefect API call fails
+
+    Note:
+        Priority is calculated but not used by Prefect 3.x for actual queue prioritization.
+        See TODO comment below for details on Prefect's priority model changes.
     """
     settings = get_settings()
 
@@ -100,10 +104,39 @@ async def trigger_prefect_flow(
     # For simplicity, we'll use the flow runs endpoint directly
     url = f"{settings.prefect_api_url}/deployments/name/{flow_name}/create_flow_run"
 
+    # TODO: Priority system is currently non-functional
+    #
+    # Prefect 2.x supported a 'priority' field on flow runs (0-100, higher = more urgent).
+    # This was removed in Prefect 3.x in favor of work queues with static priority values.
+    #
+    # Prefect 3 Priority Model:
+    # - Work queues have integer priority values (lower number = higher priority)
+    # - Flow runs are assigned to a queue at creation via 'work_queue_name' field
+    # - Workers pull from queues in priority order
+    # - Once assigned, flow runs CANNOT be moved between queues
+    #
+    # Why this doesn't work for our age-boosting priority system:
+    # - We calculate dynamic priority: base (tenant tier) + age boost (time waiting)
+    # - Example: free-tier video waiting 20h should get same priority as new premium video
+    # - Static queue assignment at creation can't handle priority changes over time
+    # - No API exists to move queued flow runs between queues
+    #
+    # Current behavior:
+    # - Priority is calculated (see priority_service.py) but not sent to Prefect
+    # - All flow runs go to the 'default' work queue (FIFO order)
+    # - Priority value is included in tags for observability only
+    #
+    # Possible solutions:
+    # 1. Static tier-based queues (no age boosting) - free tier can starve
+    # 2. Remove priority system entirely (pure FIFO) - no tenant differentiation
+    # 3. External priority queue (poll Supabase, not Prefect queues) - complex
+    # 4. Wait for Prefect to add dynamic priority support - unknown timeline
+    #
+    # For now: priority={priority} is logged and tagged but has no effect on execution order.
+
     payload = {
         "parameters": parameters,
         "tags": tags,
-        "priority": priority,
     }
 
     headers = {}
@@ -146,6 +179,7 @@ async def trigger_prefect_flow(
 async def supabase_videos_webhook(
     request: Request,
     response: Response,
+    background_tasks: BackgroundTasks,
     authorization: str | None = Header(None),
 ):
     """
@@ -153,6 +187,9 @@ async def supabase_videos_webhook(
 
     This endpoint is called by Supabase when videos are inserted/updated/deleted.
     For INSERT events, it triggers the video initial processing flow.
+
+    IMPORTANT: This endpoint must respond within 5 seconds (Supabase webhook timeout).
+    Flow triggering is done in background to avoid timeout.
 
     Authentication:
         - Requires Authorization header: "Bearer {webhook_secret}"
@@ -173,7 +210,7 @@ async def supabase_videos_webhook(
         }
 
     Returns:
-        202 Accepted with flow_run_id and status
+        202 Accepted immediately (flow is triggered in background)
         401 Unauthorized if authentication fails
         400 Bad Request if payload is invalid
         503 Service Unavailable if Prefect API is not configured
@@ -251,7 +288,7 @@ async def supabase_videos_webhook(
     tags.append("trigger:webhook")
     tags.append("event:video-insert")
 
-    # Trigger Prefect flow
+    # Trigger Prefect flow in background to avoid Supabase webhook timeout (5s limit)
     flow_name = "captionacc-video-initial-processing"
     parameters = {
         "video_id": video_id,
@@ -260,32 +297,39 @@ async def supabase_videos_webhook(
     }
 
     logger.info(
-        f"Triggering video initial processing for video {video_id} "
+        f"Queueing video initial processing for video {video_id} "
         f"(tenant: {tenant_id}, priority: {priority})"
     )
 
-    try:
-        result = await trigger_prefect_flow(
-            flow_name=flow_name,
-            parameters=parameters,
-            priority=priority,
-            tags=tags,
-        )
+    # Create sync wrapper for async trigger_prefect_flow
+    import asyncio
 
-        response.status_code = status.HTTP_202_ACCEPTED
-        return WebhookResponse(
-            success=True,
-            flow_run_id=result["flow_run_id"],
-            status="accepted",
-            message=f"Flow run created with priority {priority}",
-        )
+    def trigger_flow_sync():
+        """Synchronous wrapper to run async trigger_prefect_flow in background."""
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(
+                trigger_prefect_flow(
+                    flow_name=flow_name,
+                    parameters=parameters,
+                    priority=priority,
+                    tags=tags,
+                )
+            )
+            loop.close()
+        except Exception as e:
+            logger.error(f"Background task failed to trigger Prefect flow for video {video_id}: {e}")
 
-    except HTTPException:
-        # Re-raise HTTP exceptions (already formatted)
-        raise
-    except Exception as e:
-        logger.error(f"Unexpected error triggering flow: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unexpected error: {str(e)}",
-        )
+    # Add background task to trigger flow (won't block webhook response)
+    # This ensures we respond to Supabase within the 5-second timeout
+    background_tasks.add_task(trigger_flow_sync)
+
+    # Return immediately (don't wait for Prefect)
+    response.status_code = status.HTTP_202_ACCEPTED
+    return WebhookResponse(
+        success=True,
+        flow_run_id=None,  # Won't have ID yet since we're not waiting
+        status="queued",
+        message=f"Video processing queued with priority {priority}",
+    )

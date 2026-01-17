@@ -23,15 +23,16 @@ def process_video_with_gpu_and_ocr(
     rate_hz: float = 0.1,
     language: str = "zh-Hans",
     progress_callback: Callable[[int, int], None] | None = None,
-) -> int:
+) -> tuple[int, int, dict]:
     """Extract frames with GPU and process with OCR.
 
     Pipeline:
     1. Extract frames using gpu_video_utils.extract_frames_gpu()
-    2. Initialize GoogleVisionBackend from ocr package
-    3. Calculate batch sizes using ocr.batch functions (done automatically)
-    4. Process frames with ocr.process_frames_with_ocr()
-    5. Write results to database using ocr.database functions
+    2. Extract video metadata (duration, dimensions, etc.)
+    3. Initialize GoogleVisionBackend from ocr package
+    4. Calculate batch sizes using ocr.batch functions (done automatically)
+    5. Process frames with ocr.process_frames_with_ocr()
+    6. Write results to database using ocr.database functions
 
     Args:
         video_path: Path to video file
@@ -41,14 +42,17 @@ def process_video_with_gpu_and_ocr(
         progress_callback: Optional callback(current, total) for progress tracking
 
     Returns:
-        Total number of OCR boxes detected
+        Tuple of (total_ocr_boxes, failed_ocr_count, video_info_dict)
+        - total_ocr_boxes: Total number of OCR boxes detected
+        - failed_ocr_count: Number of frames that failed OCR processing
+        - video_info_dict: Dict with keys: fps, width, height, duration, total_frames, codec, bitrate
 
     Example:
         >>> from pathlib import Path
         >>> video = Path("video.mp4")
         >>> db = Path("fullOCR.db")
-        >>> total_boxes = process_video_with_gpu_and_ocr(video, db, rate_hz=0.1)
-        >>> print(f"Processed {total_boxes} text boxes")
+        >>> total_boxes, failed, video_info = process_video_with_gpu_and_ocr(video, db, rate_hz=0.1)
+        >>> print(f"Processed {total_boxes} text boxes from {video_info['duration']:.1f}s video ({failed} failed)")
     """
     print("[Pipeline] Starting GPU-accelerated OCR pipeline")
     print(f"[Pipeline] Video: {video_path}")
@@ -56,7 +60,18 @@ def process_video_with_gpu_and_ocr(
     print(f"[Pipeline] Rate: {rate_hz} Hz")
     print(f"[Pipeline] Language: {language}")
 
-    # Step 1: Extract frames using GPU with JPEG bytes output
+    # Step 1: Extract video metadata
+    print(f"\n[Video] Extracting video metadata...")
+    from gpu_video_utils import GPUVideoDecoder
+
+    decoder = GPUVideoDecoder(video_path)
+    video_info = decoder.get_video_info()
+    print(f"[Video] Duration: {video_info['duration']:.1f}s")
+    print(f"[Video] Dimensions: {video_info['width']}x{video_info['height']}")
+    print(f"[Video] FPS: {video_info['fps']:.2f}")
+    print(f"[Video] Total frames: {video_info['total_frames']}")
+
+    # Step 2: Extract frames using GPU with JPEG bytes output
     print(f"\n[GPU] Extracting frames at {rate_hz} Hz...")
     jpeg_frames = extract_frames_gpu(
         video_path=video_path,
@@ -67,7 +82,7 @@ def process_video_with_gpu_and_ocr(
 
     if not jpeg_frames:
         print("[GPU] No frames extracted")
-        return 0
+        return 0, 0, video_info
 
     print(f"[GPU] Extracted {len(jpeg_frames)} frames")
 
@@ -100,12 +115,12 @@ def process_video_with_gpu_and_ocr(
 
     # Step 4: Process frames with OCR (automatic batching via montage)
     print(f"\n[OCR] Processing {len(frames)} frames with automatic montage batching...")
-    ocr_results = process_frames_with_ocr(
+    ocr_results, failed_ocr_count = process_frames_with_ocr(
         frames=frames,
         backend=backend,
         language=language,
     )
-    print(f"[OCR] Received {len(ocr_results)} OCR results")
+    print(f"[OCR] Received {len(ocr_results)} OCR results ({failed_ocr_count} failed)")
 
     # Step 5: Ensure database table exists
     print("\n[DB] Ensuring OCR table exists...")
@@ -155,7 +170,7 @@ def process_video_with_gpu_and_ocr(
 
     print(f"[DB] Wrote {total_boxes} total OCR boxes to database")
     print(
-        f"\n[Pipeline] Complete! Processed {len(frames)} frames with {total_boxes} text boxes"
+        f"\n[Pipeline] Complete! Processed {len(frames)} frames with {total_boxes} text boxes ({failed_ocr_count} failed)"
     )
 
-    return total_boxes
+    return total_boxes, failed_ocr_count, video_info
