@@ -32,6 +32,7 @@ import {
 
 interface UseLayoutDataParams {
   videoId: string
+  isDbReady?: boolean
   showAlert?: (title: string, message: string, type: 'info' | 'error' | 'success') => void
 }
 
@@ -124,7 +125,7 @@ function processQueueResponse(
 }
 
 // eslint-disable-next-line max-lines-per-function -- Layout data management with loading, saving, and state synchronization
-export function useLayoutData({ videoId, showAlert }: UseLayoutDataParams): UseLayoutDataReturn {
+export function useLayoutData({ videoId, isDbReady = true, showAlert }: UseLayoutDataParams): UseLayoutDataReturn {
   const [frames, setFrames] = useState<FrameInfo[]>([])
   const [layoutConfig, setLayoutConfig] = useState<LayoutConfig | null>(null)
   const [layoutApproved, setLayoutApproved] = useState(false)
@@ -267,10 +268,10 @@ export function useLayoutData({ videoId, showAlert }: UseLayoutDataParams): UseL
   }, [videoId, frames])
 
   useEffect(() => {
-    if (!videoId) return
+    if (!videoId || !isDbReady) return
     void loadAnalysisBoxes()
     void loadQueue(true)
-  }, [videoId, loadAnalysisBoxes, loadQueue])
+  }, [videoId, isDbReady, loadAnalysisBoxes, loadQueue])
 
   useEffect(() => {
     if (!error?.startsWith('Processing:')) return

@@ -271,21 +271,21 @@ export const useDatabaseStore = create<DatabaseStore>()(
             initializedAt: Date.now(),
           })
 
-          // Set up WebSocket sync
-          await get().setupSync(instanceId, database)
+          // TEMPORARILY DISABLED: Set up WebSocket sync
+          // await get().setupSync(instanceId, database)
 
-          // Acquire lock if requested
-          if (options.acquireLock) {
-            try {
-              const lockStatus = await acquireLock(videoId, dbName)
-              get().setLockStatus(instanceId, lockStatus)
-            } catch (error) {
-              // Lock failure is not fatal - we can still read
-              console.warn(`[DatabaseStore] Failed to acquire lock:`, error)
-              const lockCheck = await checkLockState(videoId, dbName)
-              get().setLockStatus(instanceId, lockCheck)
-            }
-          }
+          // TEMPORARILY DISABLED: Acquire lock if requested
+          // if (options.acquireLock) {
+          //   try {
+          //     const lockStatus = await acquireLock(videoId, dbName)
+          //     get().setLockStatus(instanceId, lockStatus)
+          //   } catch (error) {
+          //     // Lock failure is not fatal - we can still read
+          //     console.warn(`[DatabaseStore] Failed to acquire lock:`, error)
+          //     const lockCheck = await checkLockState(videoId, dbName)
+          //     get().setLockStatus(instanceId, lockCheck)
+          //   }
+          // }
 
           console.log(`[DatabaseStore] Database initialized: ${instanceId}`)
           return database

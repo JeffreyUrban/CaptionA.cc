@@ -5,9 +5,9 @@
  * These queries are executed locally via CR-SQLite and synced via WebSocket.
  *
  * Layout database schema:
- * - layout_analysis_boxes: OCR box detections with labels
+ * - boxes: OCR box detections with labels
  * - crop_region: Frame crop region configuration
- * - layout_analysis_parameters: Layout analysis configuration
+ * - layout_config: Layout analysis configuration
  */
 
 import type { CRSQLiteDatabase } from './crsqlite-client'
@@ -19,7 +19,7 @@ import type { BoxLabel, TextAnchor } from '~/types/enums'
 // =============================================================================
 
 /**
- * Raw row from layout_analysis_boxes table.
+ * Raw row from boxes table.
  */
 export interface LayoutAnalysisBoxRow {
   id: number
@@ -48,7 +48,7 @@ export interface CropRegionRow {
 }
 
 /**
- * Raw row from layout_analysis_parameters table.
+ * Raw row from layout_config table.
  */
 export interface LayoutAnalysisParametersRow {
   id: number
@@ -177,7 +177,7 @@ export interface FrameInfoResult {
 export interface LayoutQueueResult {
   frames: FrameInfoResult[]
   layoutConfig: LayoutConfigResult | null
-  layoutApproved: boolean
+  // layoutApproved is now managed via Supabase, not in the SQLite database
 }
 
 // =============================================================================
@@ -237,7 +237,7 @@ export async function getFrameBoxes(
   layoutConfig: LayoutConfigResult | null
 ): Promise<FrameBoxesResult> {
   const result = await db.query<LayoutAnalysisBoxRow>(
-    `SELECT * FROM layout_analysis_boxes
+    `SELECT * FROM boxes
      WHERE frame_index = ?
      ORDER BY box_index`,
     [frameIndex]
@@ -288,7 +288,7 @@ export async function getFrameBoxes(
  */
 export async function getAllAnalysisBoxes(db: CRSQLiteDatabase): Promise<BoxDataResult[]> {
   const result = await db.query<LayoutAnalysisBoxRow>(
-    `SELECT * FROM layout_analysis_boxes ORDER BY frame_index, box_index`
+    `SELECT * FROM boxes ORDER BY frame_index, box_index`
   )
 
   return result.rows.map(row => ({
@@ -318,7 +318,7 @@ export async function getAllAnalysisBoxes(db: CRSQLiteDatabase): Promise<BoxData
  */
 export async function getLayoutConfig(db: CRSQLiteDatabase): Promise<LayoutConfigResult | null> {
   const result = await db.query<LayoutAnalysisParametersRow>(
-    `SELECT * FROM layout_analysis_parameters LIMIT 1`
+    `SELECT * FROM layout_config LIMIT 1`
   )
 
   const row = result.rows[0]
@@ -353,14 +353,11 @@ export async function getLayoutConfig(db: CRSQLiteDatabase): Promise<LayoutConfi
 
 /**
  * Check if layout is approved.
+ * @deprecated Layout approval is now managed via Supabase, not in the SQLite database
  */
 export async function isLayoutApproved(db: CRSQLiteDatabase): Promise<boolean> {
-  const result = await db.query<{ layout_approved: number | null }>(
-    `SELECT layout_approved FROM layout_analysis_parameters LIMIT 1`
-  )
-
-  const row = result.rows[0]
-  return row?.layout_approved === 1
+  // Layout approval is now managed via Supabase
+  return false
 }
 
 /**
@@ -381,7 +378,7 @@ export async function getFrameSummaries(
        END) as caption_box_count,
        MIN(COALESCE(predicted_confidence, 1.0)) as min_confidence,
        MAX(CASE WHEN label IS NOT NULL THEN 1 ELSE 0 END) as has_annotations
-     FROM layout_analysis_boxes
+     FROM boxes
      GROUP BY frame_index
      ORDER BY frame_index`
   )
@@ -403,16 +400,14 @@ export async function getLayoutQueue(
   db: CRSQLiteDatabase,
   videoId: string
 ): Promise<LayoutQueueResult> {
-  const [frames, layoutConfig, layoutApproved] = await Promise.all([
+  const [frames, layoutConfig] = await Promise.all([
     getFrameSummaries(db, videoId),
     getLayoutConfig(db),
-    isLayoutApproved(db),
   ])
 
   return {
     frames,
     layoutConfig,
-    layoutApproved,
   }
 }
 
@@ -428,7 +423,7 @@ export async function updateBoxLabel(
   const now = new Date().toISOString()
 
   return db.exec(
-    `UPDATE layout_analysis_boxes
+    `UPDATE boxes
      SET label = ?, label_updated_at = ?
      WHERE frame_index = ? AND box_index = ?`,
     [label === 'clear' ? null : label, now, frameIndex, boxIndex]
@@ -448,7 +443,7 @@ export async function updateBoxLabels(
 
   for (const annotation of annotations) {
     const rows = await db.exec(
-      `UPDATE layout_analysis_boxes
+      `UPDATE boxes
        SET label = ?, label_updated_at = ?
        WHERE frame_index = ? AND box_index = ?`,
       [annotation.label === 'clear' ? null : annotation.label, now, frameIndex, annotation.boxIndex]
@@ -464,7 +459,7 @@ export async function updateBoxLabels(
  */
 export async function clearAllAnnotations(db: CRSQLiteDatabase): Promise<number> {
   return db.exec(
-    `UPDATE layout_analysis_boxes SET label = NULL, label_updated_at = NULL WHERE label IS NOT NULL`
+    `UPDATE boxes SET label = NULL, label_updated_at = NULL WHERE label IS NOT NULL`
   )
 }
 
@@ -481,7 +476,7 @@ export async function bulkAnnotateByRectangle(
   if (action === 'clear') {
     // Clear annotations for boxes that overlap with rectangle
     return db.exec(
-      `UPDATE layout_analysis_boxes
+      `UPDATE boxes
        SET label = NULL, label_updated_at = ?
        WHERE bbox_left < ? AND bbox_right > ?
          AND bbox_top < ? AND bbox_bottom > ?
@@ -491,7 +486,7 @@ export async function bulkAnnotateByRectangle(
   } else {
     // Mark as 'out' for boxes that overlap with rectangle
     return db.exec(
-      `UPDATE layout_analysis_boxes
+      `UPDATE boxes
        SET label = 'out', label_updated_at = ?
        WHERE bbox_left < ? AND bbox_right > ?
          AND bbox_top < ? AND bbox_bottom > ?`,
@@ -505,7 +500,7 @@ export async function bulkAnnotateByRectangle(
  */
 export async function getAnnotationCount(db: CRSQLiteDatabase): Promise<number> {
   const result = await db.query<{ count: number }>(
-    `SELECT COUNT(*) as count FROM layout_analysis_boxes WHERE label IS NOT NULL`
+    `SELECT COUNT(*) as count FROM boxes WHERE label IS NOT NULL`
   )
   return result.rows[0]?.count ?? 0
 }
@@ -518,7 +513,7 @@ export async function getBoxesNeedingAnnotation(
   confidenceThreshold = 0.5
 ): Promise<LayoutAnalysisBoxRow[]> {
   const result = await db.query<LayoutAnalysisBoxRow>(
-    `SELECT * FROM layout_analysis_boxes
+    `SELECT * FROM boxes
      WHERE label IS NULL
        AND (predicted_confidence IS NULL OR predicted_confidence < ?)
      ORDER BY predicted_confidence ASC, frame_index, box_index`,
@@ -529,9 +524,11 @@ export async function getBoxesNeedingAnnotation(
 
 /**
  * Set layout as approved.
+ * @deprecated Layout approval is now managed via Supabase, not in the SQLite database
  */
 export async function setLayoutApproved(db: CRSQLiteDatabase, approved: boolean): Promise<number> {
-  return db.exec(`UPDATE layout_analysis_parameters SET layout_approved = ?`, [approved ? 1 : 0])
+  // Layout approval is now managed via Supabase
+  return 0
 }
 
 /**
@@ -542,12 +539,12 @@ export async function updateCropRegion(
   cropRegion: { left: number; top: number; right: number; bottom: number }
 ): Promise<number> {
   const result = await db.query<{ crop_region_version: number | null }>(
-    `SELECT crop_region_version FROM layout_analysis_parameters LIMIT 1`
+    `SELECT crop_region_version FROM layout_config LIMIT 1`
   )
   const currentVersion = result.rows[0]?.crop_region_version ?? 0
 
   return db.exec(
-    `UPDATE layout_analysis_parameters
+    `UPDATE layout_config
      SET crop_left = ?, crop_top = ?, crop_right = ?, crop_bottom = ?,
          crop_region_version = ?`,
     [cropRegion.left, cropRegion.top, cropRegion.right, cropRegion.bottom, currentVersion + 1]
@@ -559,7 +556,7 @@ export async function updateCropRegion(
  */
 export async function getFrameIndices(db: CRSQLiteDatabase): Promise<number[]> {
   const result = await db.query<{ frame_index: number }>(
-    `SELECT DISTINCT frame_index FROM layout_analysis_boxes ORDER BY frame_index`
+    `SELECT DISTINCT frame_index FROM boxes ORDER BY frame_index`
   )
   return result.rows.map(row => row.frame_index)
 }

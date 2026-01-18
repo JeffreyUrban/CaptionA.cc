@@ -6,7 +6,7 @@
  */
 
 import { useState, useEffect, useMemo } from 'react'
-import { useSearchParams, useNavigate } from 'react-router'
+import { useNavigate, redirect, useLoaderData } from 'react-router'
 
 import { AppLayout } from '~/components/AppLayout'
 import { LayoutAlertModal } from '~/components/annotation/LayoutAlertModal'
@@ -21,36 +21,70 @@ import { useLayoutCanvas, SELECTION_PADDING } from '~/hooks/useLayoutCanvas'
 import { useLayoutData } from '~/hooks/useLayoutData'
 import { useLayoutDatabase } from '~/hooks/useLayoutDatabase'
 import { useVideoTouched } from '~/hooks/useVideoTouched'
+import { supabase } from '~/services/supabase-client'
 import { RECALC_THRESHOLD, type KeyboardShortcutContext } from '~/types/layout'
 import { generateAnalysisThumbnail } from '~/utils/layout-canvas-helpers'
 import { dispatchKeyboardShortcut } from '~/utils/layout-keyboard-handlers'
 
+// =============================================================================
+// Loader
+// =============================================================================
+
+export async function clientLoader({ request }: { request: Request }) {
+  // Get videoId from URL
+  const url = new URL(request.url)
+  const videoId = url.searchParams.get('videoId')
+
+  if (!videoId) {
+    throw new Response('Missing videoId parameter', { status: 400 })
+  }
+
+  // Get authenticated user
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser()
+
+  if (!user || authError) {
+    throw redirect('/login')
+  }
+
+  // Fetch video metadata including tenant_id and layout_status
+  const { data: video, error: videoError } = await supabase
+    .from('videos')
+    .select('id, tenant_id, layout_status')
+    .eq('id', videoId)
+    .single()
+
+  if (videoError || !video) {
+    throw new Response('Video not found', { status: 404 })
+  }
+
+  // Check if video is ready for layout annotation
+  if (video.layout_status === 'wait') {
+    throw new Response('Video is still being processed. Please wait.', { status: 425 })
+  }
+
+  return {
+    videoId: video.id,
+    tenantId: video.tenant_id,
+    layoutStatus: video.layout_status,
+  }
+}
+
+// =============================================================================
+// Component
+// =============================================================================
+
 // Large layout page component with multiple UI sections - acceptable length for annotation page
 /* eslint-disable max-lines-per-function */
 export default function AnnotateLayout() {
-  const [searchParams] = useSearchParams()
-  const videoId = searchParams.get('videoId')!
+  const loaderData = useLoaderData<typeof clientLoader>()
+  const { videoId: loaderVideoId, tenantId } = loaderData
   const navigate = useNavigate()
 
-  // VideoId is REQUIRED - show error if missing # TODO: Replace with our error modal.
-  if (!videoId) {
-    return (
-      <AppLayout>
-        <div className="flex h-full items-center justify-center">
-          <div className="text-center">
-            <h1 className="text-2xl font-bold text-red-600">Missing Video ID</h1>
-            <p className="mt-2 text-gray-600">This page requires a videoId parameter in the URL.</p>
-            <button
-              onClick={() => navigate('/videos')}
-              className="mt-4 rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
-            >
-              Go to Videos
-            </button>
-          </div>
-        </div>
-      </AppLayout>
-    )
-  }
+  // Use videoId from loader (already validated)
+  const videoId = loaderVideoId
 
   // Mark video as being worked on
   useVideoTouched(videoId)
@@ -58,6 +92,7 @@ export default function AnnotateLayout() {
   // Initialize CR-SQLite database (required before useLayoutData)
   const layoutDb = useLayoutDatabase({
     videoId,
+    tenantId, // Use actual tenant ID from loader
     autoAcquireLock: true,
     onError: error => {
       console.error('[AnnotateLayout] Layout database error:', error)
@@ -111,6 +146,7 @@ export default function AnnotateLayout() {
     handleClearAll,
   } = useLayoutData({
     videoId,
+    isDbReady: layoutDb.isReady,
     showAlert: (title, message, type) => setAlertModal({ title, message, type }),
   })
 

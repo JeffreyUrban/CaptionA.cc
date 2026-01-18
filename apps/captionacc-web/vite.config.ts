@@ -20,7 +20,16 @@ export default defineConfig(({ mode }) => {
         '~': path.resolve(__dirname, './app'),
       },
     },
-    server: {},
+    server: {
+      fs: {
+        // Allow serving files from monorepo root (for node_modules, fonts, WASM, etc.)
+        allow: [path.resolve(__dirname, '../..')],
+      },
+    },
+    assetsInclude: ['**/*.wasm'],
+    optimizeDeps: {
+      exclude: ['@vlcn.io/crsqlite-wasm', 'wa-sqlite'],
+    },
     ssr: {
       // Externalize canvas module for SSR - it's a native Node.js module
       external: ['canvas'],
@@ -28,13 +37,8 @@ export default defineConfig(({ mode }) => {
     build: {
       rollupOptions: {
         // Only externalize canvas for SSR builds, not client builds
-        // Also externalize @vlcn.io/crsqlite-wasm which is dynamically imported
         external: id => {
           if (id === 'canvas') {
-            return true
-          }
-          // Externalize CR-SQLite wasm module - it's dynamically imported at runtime
-          if (id === '@vlcn.io/crsqlite-wasm') {
             return true
           }
           return false

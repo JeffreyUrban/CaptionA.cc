@@ -116,7 +116,10 @@ interface SQLiteVFS {
 // Module State
 // =============================================================================
 
-/** Cached wa-sqlite API instance */
+/** SQLite3 instance from @vlcn.io/crsqlite-wasm */
+let sqlite3Instance: any | null = null
+
+/** Cached wa-sqlite API instance (for compatibility) */
 let sqliteApi: SQLiteAPI | null = null
 
 /** Cached VFS instance */
@@ -161,47 +164,27 @@ export async function initializeSQLite(): Promise<void> {
 async function doInitialize(): Promise<void> {
   try {
     // Dynamic import of @vlcn.io/crsqlite-wasm
-    // This package provides wa-sqlite with CR-SQLite extension pre-loaded
     const crsqliteModule = await import('@vlcn.io/crsqlite-wasm')
     const initCRSQLite = crsqliteModule.default
 
-    // Initialize CR-SQLite WASM module
-    // This internally handles wa-sqlite initialization and CR-SQLite extension loading
-    const sqlite = await initCRSQLite()
+    // Initialize CR-SQLite WASM module - returns SQLite3 instance
+    sqlite3Instance = await initCRSQLite()
 
-    // Store the API reference
-    // @vlcn.io/crsqlite-wasm provides a higher-level API
-    // We'll wrap it in our SQLiteAPI interface for consistency
-    sqliteApi = createSQLiteAPIWrapper(sqlite)
-    sqliteVfs = { name: 'crsqlite-wasm-vfs' }
+    // The API methods are in sqlite3Instance.base (for low-level access if needed)
+    sqliteApi = sqlite3Instance.base as unknown as SQLiteAPI
+    sqliteVfs = null
 
     console.log('[CRSQLite] wa-sqlite + CR-SQLite initialized successfully')
-  } catch (error) {
-    const dbError = wasmLoadError(error)
-    logDatabaseError(dbError)
-    throw dbError
-  }
 
-  try {
     // CR-SQLite extension is already loaded by @vlcn.io/crsqlite-wasm
     crsqliteLoaded = true
     console.log('[CRSQLite] CR-SQLite extension ready')
   } catch (error) {
-    const dbError = crsqliteInitError(error)
+    console.error('[CRSQLite] Initialization failed:', error)
+    const dbError = wasmLoadError(error)
     logDatabaseError(dbError)
     throw dbError
   }
-}
-
-/**
- * Create a wrapper around @vlcn.io/crsqlite-wasm's API to match our SQLiteAPI interface.
- * This provides a consistent interface regardless of the underlying implementation.
- */
-function createSQLiteAPIWrapper(sqlite: unknown): SQLiteAPI {
-  // The actual implementation will depend on the @vlcn.io/crsqlite-wasm API
-  // For now, we cast and assume the API is compatible
-  // The real implementation should map the methods appropriately
-  return sqlite as unknown as SQLiteAPI
 }
 
 /**
@@ -221,6 +204,8 @@ export function isSQLiteInitialized(): boolean {
  */
 export class CRSQLiteDatabase {
   private db: number | null = null
+  private dbInstance: any | null = null // The high-level DB instance from @vlcn.io/crsqlite-wasm
+  private sqlJsDb: any | null = null // sql.js Database instance (used instead of CR-SQLite for now)
   private _siteId: Uint8Array | null = null
   private _version: number = 0
   private closed = false
@@ -256,30 +241,59 @@ export class CRSQLiteDatabase {
     // Ensure wa-sqlite is initialized
     await initializeSQLite()
 
-    if (!sqliteApi) {
-      throw databaseInitError(config.dbName, new Error('SQLite API not initialized'))
+    if (!sqlite3Instance || !sqliteApi) {
+      throw databaseInitError(config.dbName, new Error('SQLite not initialized'))
     }
 
     const instance = new CRSQLiteDatabase(config)
 
     try {
-      // Generate a unique filename for IndexedDB storage
-      const filename = `${config.videoId}_${config.dbName}.db`
+      // Generate a unique filename for VFS storage
+      // Note: IDBBatchAtomicVFS expects paths to start with '/'
+      const filename = `/${config.videoId}_${config.dbName}.db`
 
-      // Open the database
-      // SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE = 6
-      instance.db = await sqliteApi.open_v2(filename, 6, sqliteVfs?.name)
+      // Just use sql.js directly - no copying or CR-SQLite for now
+      if (config.data && config.data.length > 0) {
+        console.log(`[CRSQLite] Opening database with sql.js (${config.data.length} bytes)`)
 
-      // Load CR-SQLite extension
-      await instance.exec("SELECT crsql_as_crr('*')")
+        // Check if the data looks like a valid SQLite database
+        const header = new TextDecoder().decode(config.data.slice(0, 16))
+        if (!header.startsWith('SQLite format 3')) {
+          throw new Error(`Invalid SQLite database header: ${header}`)
+        }
+
+        // Use sql.js to open the database directly
+        console.log('[CRSQLite] Loading sql.js...')
+        const initSqlJs = (await import('sql.js')).default
+        const SQL = await initSqlJs({
+          locateFile: (file: string) => `https://sql.js.org/dist/${file}`
+        })
+
+        // Open the database with sql.js and use it directly
+        instance.sqlJsDb = new SQL.Database(config.data)
+        instance.db = 1 // Dummy handle for compatibility
+        console.log('[CRSQLite] Database opened with sql.js')
+
+        // Log tables
+        const tablesResult = instance.sqlJsDb.exec(
+          "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+        )
+        if (tablesResult.length > 0 && tablesResult[0]) {
+          const tables = tablesResult[0].values.flat()
+          console.log('[CRSQLite] Tables:', tables)
+          console.log('[CRSQLite] Table names:', JSON.stringify(tables))
+        }
+      } else {
+        throw new Error('No database data provided')
+      }
+
+      // TODO: Enable CR-SQLite replication later
+      // For now, just use the database without CR-SQLite to get basic functionality working
+      // The schema needs to be adjusted (add DEFAULT values to NOT NULL columns) before CR-SQLite will work
+      console.log('[CRSQLite] Database ready (CR-SQLite replication disabled for now)')
 
       // Initialize version and site ID
       await instance.initializeMetadata()
-
-      // If initial data provided, load it
-      if (config.data && config.data.length > 0) {
-        await instance.loadFromBytes(config.data)
-      }
 
       // Register for GC tracking
       CRSQLiteDatabase.instances.set(instance.instanceId, new WeakRef(instance))
@@ -289,9 +303,9 @@ export class CRSQLiteDatabase {
       return instance
     } catch (error) {
       // Clean up on failure
-      if (instance.db !== null && sqliteApi) {
+      if (instance.dbInstance) {
         try {
-          await sqliteApi.close(instance.db)
+          await instance.dbInstance.close()
         } catch {
           // Ignore cleanup errors
         }
@@ -315,41 +329,31 @@ export class CRSQLiteDatabase {
    * Initialize database metadata (version and site ID).
    */
   private async initializeMetadata(): Promise<void> {
+    // For now, CR-SQLite replication is disabled
+    // Just use default values instead of querying CR-SQLite metadata
+    this._siteId = new Uint8Array(16)
+    this._version = 0
+
+    // TODO: Enable CR-SQLite and uncomment these queries once schema is compatible
     // Get or create site ID
-    const siteIdResult = await this.query<{ site_id: Uint8Array }>(
-      'SELECT crsql_site_id() as site_id'
-    )
-    const siteIdRow = siteIdResult.rows[0]
-    if (siteIdRow) {
-      this._siteId = siteIdRow.site_id
-    }
+    // const siteIdResult = await this.query<{ site_id: Uint8Array }>(
+    //   'SELECT crsql_site_id() as site_id'
+    // )
+    // const siteIdRow = siteIdResult.rows[0]
+    // if (siteIdRow) {
+    //   this._siteId = siteIdRow.site_id
+    // }
 
     // Get current version
-    const versionResult = await this.query<{ version: number }>(
-      'SELECT crsql_db_version() as version'
-    )
-    const versionRow = versionResult.rows[0]
-    if (versionRow) {
-      this._version = versionRow.version
-    }
+    // const versionResult = await this.query<{ version: number }>(
+    //   'SELECT crsql_db_version() as version'
+    // )
+    // const versionRow = versionResult.rows[0]
+    // if (versionRow) {
+    //   this._version = versionRow.version
+    // }
   }
 
-  /**
-   * Load database content from bytes.
-   * Used when downloading a database from Wasabi.
-   */
-  private async loadFromBytes(data: Uint8Array): Promise<void> {
-    // For wa-sqlite, we need to write the data to the VFS
-    // This is typically done by deserializing the database
-    // The exact implementation depends on the VFS being used
-
-    // For now, we assume the database is already in the correct format
-    // and the VFS handles persistence automatically
-    console.log(`[CRSQLite] Loaded ${data.length} bytes into ${this.instanceId}`)
-
-    // Reinitialize metadata after loading
-    await this.initializeMetadata()
-  }
 
   /**
    * Get the current database version.
@@ -383,6 +387,23 @@ export class CRSQLiteDatabase {
   async exec(sql: string, params?: unknown[]): Promise<number> {
     this.ensureOpen()
 
+    // Use sql.js if available (temporary approach until CR-SQLite is re-enabled)
+    if (this.sqlJsDb) {
+      try {
+        if (params && params.length > 0) {
+          this.sqlJsDb.run(sql, params)
+        } else {
+          this.sqlJsDb.run(sql)
+        }
+        return this.sqlJsDb.getRowsModified()
+      } catch (error) {
+        const dbError = queryError(sql, error)
+        logDatabaseError(dbError)
+        throw dbError
+      }
+    }
+
+    // CR-SQLite path (will be used once re-enabled)
     if (!sqliteApi || this.db === null) {
       throw queryError(sql, new Error('Database not initialized'))
     }
@@ -444,6 +465,67 @@ export class CRSQLiteDatabase {
   ): Promise<QueryResult<T>> {
     this.ensureOpen()
 
+    // Use sql.js if available (temporary approach until CR-SQLite is re-enabled)
+    if (this.sqlJsDb) {
+      try {
+        console.log(`[CRSQLite] Executing query: ${sql.substring(0, 100)}...`)
+        let results
+        if (params && params.length > 0) {
+          // For parameterized queries with sql.js, we need to use prepare/bind/step manually
+          const stmt = this.sqlJsDb.prepare(sql)
+          stmt.bind(params)
+
+          const columns: string[] = stmt.getColumnNames()
+          const rows: T[] = []
+
+          while (stmt.step()) {
+            const rowArray = stmt.get()
+            const row: Record<string, unknown> = {}
+            for (let i = 0; i < columns.length; i++) {
+              const colName = columns[i]
+              if (colName !== undefined) {
+                row[colName] = rowArray[i]
+              }
+            }
+            rows.push(row as T)
+          }
+          stmt.free()
+
+          return { columns, rows }
+        } else {
+          // For simple queries, use exec
+          results = this.sqlJsDb.exec(sql)
+
+          if (results.length === 0) {
+            return { columns: [], rows: [] }
+          }
+
+          const result = results[0]
+          const columns = result.columns
+          const rows: T[] = result.values.map((rowArray: unknown[]) => {
+            const row: Record<string, unknown> = {}
+            for (let i = 0; i < columns.length; i++) {
+              const colName = columns[i]
+              if (colName !== undefined) {
+                row[colName] = rowArray[i]
+              }
+            }
+            return row as T
+          })
+
+          return { columns, rows }
+        }
+      } catch (error) {
+        console.error('[CRSQLite] SQL.js query error:', error)
+        console.error('[CRSQLite] Error message:', (error as Error).message)
+        console.error('[CRSQLite] Query was:', sql.substring(0, 200))
+        const dbError = queryError(sql, error)
+        logDatabaseError(dbError)
+        throw dbError
+      }
+    }
+
+    // CR-SQLite path (will be used once re-enabled)
     if (!sqliteApi || this.db === null) {
       throw queryError(sql, new Error('Database not initialized'))
     }
@@ -582,12 +664,18 @@ export class CRSQLiteDatabase {
     }
 
     try {
-      // Finalize CR-SQLite
-      await this.exec('SELECT crsql_finalize()')
+      // TODO: Finalize CR-SQLite when replication is enabled
+      // await this.exec('SELECT crsql_finalize()')
 
-      // Close the database
-      if (sqliteApi) {
-        await sqliteApi.close(this.db)
+      // Close sql.js database if present
+      if (this.sqlJsDb) {
+        this.sqlJsDb.close()
+        this.sqlJsDb = null
+      }
+
+      // Close CR-SQLite database
+      if (this.dbInstance) {
+        await this.dbInstance.close()
       }
 
       this.db = null

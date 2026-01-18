@@ -120,9 +120,18 @@ export class LayoutSyncService {
    * Downloads database if needed and sets up sync.
    */
   async initialize(acquireLock = true): Promise<void> {
-    if (this.initialized) {
+    // Check if already initialized AND healthy
+    if (this.initialized && this.database !== null && !this.error) {
       console.log(`[LayoutSync] Already initialized for ${this.videoId}`)
       return
+    }
+
+    // If initialized but broken (no database or has error), reset and re-initialize
+    if (this.initialized && (this.database === null || this.error)) {
+      console.log(`[LayoutSync] Resetting broken initialization for ${this.videoId}`)
+      this.initialized = false
+      this.initializing = false
+      this.error = null
     }
 
     if (this.initializing) {
@@ -145,26 +154,32 @@ export class LayoutSyncService {
     this.error = null
 
     try {
+      console.log(`[LayoutSync] Starting initialization for ${this.videoId}`)
       // Use the database store to initialize
       const store = useDatabaseStore.getState()
+      console.log(`[LayoutSync] Calling store.initializeDatabase...`)
       this.database = await store.initializeDatabase(this.tenantId, this.videoId, this.dbName, {
         acquireLock,
       })
+      console.log(`[LayoutSync] Database initialized successfully`)
 
       // Get lock status
       const instance = store.instances[`${this.videoId}:${this.dbName}`]
       if (instance) {
         this.lockStatus = instance.lockStatus
+        console.log(`[LayoutSync] Lock status:`, this.lockStatus)
       }
 
       // Set up subscriptions for UI updates
+      console.log(`[LayoutSync] Setting up subscriptions...`)
       this.setupSubscriptions()
 
       this.initialized = true
       this.emitEvent({ type: 'initialized', videoId: this.videoId })
 
-      console.log(`[LayoutSync] Initialized for ${this.videoId}`)
+      console.log(`[LayoutSync] ✓ Initialized for ${this.videoId}`)
     } catch (err) {
+      console.error(`[LayoutSync] ✗ Initialization failed for ${this.videoId}:`, err)
       this.error = err as Error
       this.emitEvent({ type: 'error', videoId: this.videoId, data: err })
       throw err
