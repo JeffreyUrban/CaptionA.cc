@@ -998,7 +998,7 @@ def crop_and_infer_caption_frame_extents_pipelined(
         )
 
         # Upload caption frame extents database
-        db_storage_key = f"{tenant_id}/server/videos/{video_id}/caption_frame_extents.db"
+        db_storage_key = f"{tenant_id}/server/videos/{video_id}/caption_frame_extents.db.gz"
         wasabi.upload_file(db_path, db_storage_key, content_type="application/x-sqlite3")
 
         print(f"  Uploaded database in {time.time() - db_upload_start:.2f}s\n")

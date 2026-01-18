@@ -83,7 +83,7 @@ frame_rate: float     # Frames/second (default: 10.0)
 
 **Outputs to Wasabi:**
 - `{tenant}/client/videos/{id}/cropped_frames_v{N}/modulo_{M}/chunk_*.webm`
-- `{tenant}/server/videos/{id}/caption_frame_extents.db`
+- `{tenant}/server/videos/{id}/caption_frame_extents.db.gz`
 
 **Modulo Hierarchy:** Progressive loading
 - `modulo_16/` - Every 16th frame (coarse preview)

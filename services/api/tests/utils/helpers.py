@@ -373,7 +373,7 @@ def create_mock_wasabi_keys(
         "full_frames_key": f"{base_prefix}/full_frames/",
         "ocr_db_key": f"{base_prefix}/raw-ocr.db.gz",
         "layout_db_key": f"{base_prefix}/layout.db.gz",
-        "caption_frame_extents_db_key": f"{base_prefix}/caption_frame_extents.db",
+        "caption_frame_extents_db_key": f"{base_prefix}/caption_frame_extents.db.gz",
     }
 
     if version is not None:

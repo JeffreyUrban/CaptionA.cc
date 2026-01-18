@@ -77,7 +77,7 @@ class CropInferResult:
     processing_duration_seconds: float  # Total processing time
 
     # Wasabi storage keys (outputs uploaded to S3)
-    caption_frame_extents_db_key: str  # Path to caption_frame_extents.db (server-only)
+    caption_frame_extents_db_key: str  # Path to caption_frame_extents.db.gz (server-only)
     cropped_frames_prefix: str  # Path prefix to cropped_frames_v{N}/ directory
 
 

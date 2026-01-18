@@ -210,7 +210,6 @@ def extract_frames_and_ocr_impl(
             layout_conn.execute(
                 """
                 CREATE TABLE boxes (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
                     frame_index INTEGER NOT NULL,
                     box_index INTEGER NOT NULL,
                     bbox_left REAL NOT NULL,
@@ -222,8 +221,8 @@ def extract_frames_and_ocr_impl(
                     label_updated_at TEXT,
                     predicted_label TEXT,
                     predicted_confidence REAL,
-                    UNIQUE(frame_index, box_index)
-                )
+                    PRIMARY KEY (frame_index, box_index)
+                ) WITHOUT ROWID
                 """
             )
 
@@ -255,7 +254,7 @@ def extract_frames_and_ocr_impl(
             layout_conn.execute(
                 """
                 CREATE TABLE layout_config (
-                    id INTEGER PRIMARY KEY CHECK(id = 1),
+                    id INTEGER NOT NULL PRIMARY KEY CHECK(id = 1),
                     frame_width INTEGER NOT NULL,
                     frame_height INTEGER NOT NULL,
                     crop_left REAL NOT NULL DEFAULT 0,
@@ -283,7 +282,7 @@ def extract_frames_and_ocr_impl(
             layout_conn.execute(
                 """
                 CREATE TABLE preferences (
-                    id INTEGER PRIMARY KEY CHECK(id = 1),
+                    id INTEGER NOT NULL PRIMARY KEY CHECK(id = 1),
                     layout_approved INTEGER NOT NULL DEFAULT 0
                 )
                 """
@@ -296,30 +295,54 @@ def extract_frames_and_ocr_impl(
 
         print(f"  Created layout.db with {total_boxes} boxes\n")
 
-        # Step 5: Upload raw-ocr.db to Wasabi (server-only)
-        print("[5/6] Uploading raw-ocr.db to Wasabi (server)...")
+        # Step 5: Compress and upload raw-ocr.db.gz to Wasabi (server-only)
+        print("[5/6] Compressing and uploading raw-ocr.db.gz to Wasabi (server)...")
         ocr_upload_start = time.time()
 
-        ocr_db_storage_key = f"{tenant_id}/server/videos/{video_id}/raw-ocr.db"
+        # Compress the database
+        import gzip
+        ocr_db_gz_path = tmp_path / "raw-ocr.db.gz"
+        with open(db_path, "rb") as f_in:
+            with gzip.open(ocr_db_gz_path, "wb") as f_out:
+                f_out.writelines(f_in)
+
+        ocr_original_size = db_path.stat().st_size
+        ocr_compressed_size = ocr_db_gz_path.stat().st_size
+        ocr_ratio = (1 - ocr_compressed_size / ocr_original_size) * 100
+        print(f"  Compressed {ocr_original_size:,} -> {ocr_compressed_size:,} bytes ({ocr_ratio:.1f}% reduction)")
+
+        ocr_db_storage_key = f"{tenant_id}/server/videos/{video_id}/raw-ocr.db.gz"
         wasabi_client.upload_file(
-            str(db_path),
+            str(ocr_db_gz_path),
             bucket_name,
             ocr_db_storage_key,
-            ExtraArgs={"ContentType": "application/x-sqlite3"},
+            ExtraArgs={"ContentType": "application/gzip"},
         )
 
         print(f"  Uploaded in {time.time() - ocr_upload_start:.2f}s\n")
 
-        # Step 6: Upload layout.db to Wasabi (client-facing)
-        print("[6/6] Uploading layout.db to Wasabi (client)...")
+        # Step 6: Compress and upload layout.db.gz to Wasabi (client-facing)
+        print("[6/6] Compressing and uploading layout.db.gz to Wasabi (client)...")
         layout_upload_start = time.time()
 
-        layout_db_storage_key = f"{tenant_id}/client/videos/{video_id}/layout.db"
+        # Compress the database
+        import gzip
+        layout_db_gz_path = tmp_path / "layout.db.gz"
+        with open(layout_db_path, "rb") as f_in:
+            with gzip.open(layout_db_gz_path, "wb") as f_out:
+                f_out.writelines(f_in)
+
+        original_size = layout_db_path.stat().st_size
+        compressed_size = layout_db_gz_path.stat().st_size
+        ratio = (1 - compressed_size / original_size) * 100
+        print(f"  Compressed {original_size:,} -> {compressed_size:,} bytes ({ratio:.1f}% reduction)")
+
+        layout_db_storage_key = f"{tenant_id}/client/videos/{video_id}/layout.db.gz"
         wasabi_client.upload_file(
-            str(layout_db_path),
+            str(layout_db_gz_path),
             bucket_name,
             layout_db_storage_key,
-            ExtraArgs={"ContentType": "application/x-sqlite3"},
+            ExtraArgs={"ContentType": "application/gzip"},
         )
 
         print(f"  Uploaded in {time.time() - layout_upload_start:.2f}s\n")
@@ -337,7 +360,7 @@ def extract_frames_and_ocr_impl(
         print(f"OCR boxes: {total_boxes}")
         print(f"Total duration: {total_duration:.2f}s")
         print(f"Server database (raw-ocr.db): {ocr_db_storage_key}")
-        print(f"Client database (layout.db): {layout_db_storage_key}")
+        print(f"Client database (layout.db.gz): {layout_db_storage_key}")
         print(f"Frames prefix: {full_frames_prefix}")
         print(f"{'=' * 80}\n")
 

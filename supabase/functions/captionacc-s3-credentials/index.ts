@@ -27,9 +27,10 @@ import { assumeRole, STSConfig } from "../_shared/sts.ts";
 
 // Environment variables
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const DB_SCHEMA = Deno.env.get("DB_SCHEMA") || "captionacc_production";
 
-const WASABI_STS_ACCESS_KEY = Deno.env.get("WASABI_STS_ACCESS_KEY")!;
+const WASABI_STS_ACCESS_KEY = Deno.env.get("WASABI_STS_ACCESS_KEY")!
 const WASABI_STS_SECRET_KEY = Deno.env.get("WASABI_STS_SECRET_KEY")!;
 const WASABI_STS_ROLE_ARN = Deno.env.get("WASABI_STS_ROLE_ARN")!;
 const WASABI_BUCKET = Deno.env.get("WASABI_BUCKET")!;
@@ -82,17 +83,22 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     const token = authHeader.replace("Bearer ", "");
 
-    // Create Supabase client with user's token
-    const supabaseUser = createClient(SUPABASE_URL, token, {
+    // Create Supabase client with anon key and user's token
+    const supabaseUser = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       db: { schema: DB_SCHEMA },
       auth: { persistSession: false },
+      global: {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
     });
 
     // Verify user and get their profile
     const {
       data: { user },
       error: authError,
-    } = await supabaseUser.auth.getUser(token);
+    } = await supabaseUser.auth.getUser();
 
     if (authError || !user) {
       return jsonResponse({ error: "Invalid token", code: "AUTH_ERROR" }, 401);

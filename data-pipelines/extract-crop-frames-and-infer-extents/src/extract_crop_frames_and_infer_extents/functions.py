@@ -104,7 +104,7 @@ class CropAndInferCaptionFrameExtents(Protocol):
 
         Wasabi Outputs:
             - {tenant_id}/client/videos/{video_id}/cropped_frames_v{N}/modulo_{M}/chunk_{NNNN}.webm
-            - {tenant_id}/server/videos/{video_id}/caption_frame_extents.db
+            - {tenant_id}/server/videos/{video_id}/caption_frame_extents.db.gz
         """
         ...
 

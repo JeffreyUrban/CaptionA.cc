@@ -134,7 +134,8 @@ export function buildLockUrl(videoId: string, dbName: DatabaseName): string {
 
 /**
  * Build the Wasabi storage key for a database file.
+ * Format: {tenant_id}/client/videos/{video_id}/{dbName}.db.gz
  */
 export function buildStorageKey(tenantId: string, videoId: string, dbName: DatabaseName): string {
-  return `${tenantId}/${videoId}/${dbName}${WASABI_CONFIG.COMPRESSED_EXTENSION}`
+  return `${tenantId}/client/videos/${videoId}/${dbName}${WASABI_CONFIG.COMPRESSED_EXTENSION}`
 }

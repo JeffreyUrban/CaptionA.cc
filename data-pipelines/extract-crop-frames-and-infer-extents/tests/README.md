@@ -166,7 +166,7 @@ Results:
   • Label counts: {'same': 150, 'different': 20, 'empty_empty': 10, ...}
   • Processing duration: 45.23s
   • Cropped frames prefix: .../cropped_frames_v1/
-  • Caption frame extents DB: .../caption_frame_extents.db
+  • Caption frame extents DB: .../caption_frame_extents.db.gz
 
 Overall throughput: 4.1 frames/second
 

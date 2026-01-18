@@ -40,7 +40,7 @@ Prefect: trigger on layout approval
     │
     ├──▶ Modal: crop_and_infer_caption_frame_extents()
     │        video + crop region → cropped_frames/*.webm → Wasabi
-    │        frame_pairs → inference → caption_frame_extents.db → Wasabi
+    │        frame_pairs → inference → caption_frame_extents.db.gz → Wasabi
     │
     ├──▶ API: process_caption_frame_extents_results()
     │        caption_frame_extents_results → caption_frame_extents.db.gz → Wasabi
@@ -114,8 +114,8 @@ Prefect: trigger on caption frame extents confirmation
 | Flow | Trigger | Steps                                                               |
 |------|---------|---------------------------------------------------------------------|
 | `captionacc-video-initial-processing` | Supabase webhook | Modal: frames + OCR                                                 |
-| `captionacc-crop-and-infer-caption-frame-extents` | API call | Modal: crop + infer: caption_frame_extents.db                       |
-| `captionacc-caption-ocr` | API call | caption_frame_extents.db, Modal: median + OCR → API: update caption |
+| `captionacc-crop-and-infer-caption-frame-extents` | API call | Modal: crop + infer: caption_frame_extents.db.gz                       |
+| `captionacc-caption-ocr` | API call | caption_frame_extents.db.gz, Modal: median + OCR → API: update caption |
 
 See [Flows Reference](./flows.md) for detailed specifications.
 

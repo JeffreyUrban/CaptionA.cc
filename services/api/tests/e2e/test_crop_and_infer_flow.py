@@ -9,7 +9,7 @@ Tests the complete crop and infer caption frame extents workflow with real servi
 These tests verify:
 1. Flow execution with real Modal functions
 2. Lock acquisition and release (critical for preventing concurrent edits)
-3. File creation in Wasabi (cropped frames, caption_frame_extents.db)
+3. File creation in Wasabi (cropped frames, caption_frame_extents.db.gz)
 4. Video metadata updates in Supabase
 5. Proper error handling and cleanup
 

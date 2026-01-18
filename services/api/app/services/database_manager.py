@@ -63,11 +63,26 @@ class DatabaseManager:
         return self._cache_dir / f"{hashed}_{db_name}"
 
     async def _download_from_s3(self, s3_key: str, local_path: Path) -> bool:
-        """Download a file from S3 to local cache."""
+        """Download a file from S3 to local cache, decompressing if needed."""
+        import gzip
+        import tempfile
 
         def _download():
             try:
-                self._s3.download_file(self._bucket, s3_key, str(local_path))
+                # Check if we need to download a compressed version
+                is_compressed = s3_key.endswith(".gz")
+                download_path = local_path if not is_compressed else Path(str(local_path) + ".gz")
+
+                self._s3.download_file(self._bucket, s3_key, str(download_path))
+
+                # Decompress if needed
+                if is_compressed:
+                    with gzip.open(download_path, "rb") as f_in:
+                        with open(local_path, "wb") as f_out:
+                            f_out.write(f_in.read())
+                    # Clean up compressed file
+                    download_path.unlink()
+
                 return True
             except ClientError as e:
                 if e.response["Error"]["Code"] == "404":
@@ -77,10 +92,32 @@ class DatabaseManager:
         return await asyncio.to_thread(_download)
 
     async def _upload_to_s3(self, local_path: Path, s3_key: str) -> None:
-        """Upload a file from local cache to S3."""
+        """Upload a file from local cache to S3, compressed with gzip."""
+        import gzip
+        import tempfile
 
         def _upload():
-            self._s3.upload_file(str(local_path), self._bucket, s3_key)
+            # Compress the database before uploading
+            with tempfile.NamedTemporaryFile(suffix=".gz", delete=False) as tmp:
+                compressed_path = Path(tmp.name)
+
+            try:
+                with open(local_path, "rb") as f_in:
+                    with gzip.open(compressed_path, "wb") as f_out:
+                        f_out.writelines(f_in)
+
+                # Upload compressed file with .gz extension
+                s3_key_gz = f"{s3_key}.gz" if not s3_key.endswith(".gz") else s3_key
+                self._s3.upload_file(
+                    str(compressed_path),
+                    self._bucket,
+                    s3_key_gz,
+                    ExtraArgs={"ContentType": "application/gzip"}
+                )
+            finally:
+                # Clean up temporary compressed file
+                if compressed_path.exists():
+                    compressed_path.unlink()
 
         await asyncio.to_thread(_upload)
 
@@ -273,7 +310,7 @@ class DatabaseManager:
 class LayoutDatabaseManager(DatabaseManager):
     """Manages layout.db SQLite databases stored in Wasabi S3."""
 
-    def _s3_key(self, tenant_id: str, video_id: str, db_name: str = "layout.db") -> str:
+    def _s3_key(self, tenant_id: str, video_id: str, db_name: str = "layout.db.gz") -> str:
         """Generate S3 key for a layout database file in client/ path."""
         return f"{tenant_id}/client/videos/{video_id}/{db_name}"
 

@@ -213,7 +213,7 @@ WHERE video_id = 'xxx' AND database_name = 'layout';
 
 # 2. Clear partial outputs
 aws s3 rm s3://caption-acc-prod/{tenant}/client/videos/{id}/cropped_frames_v*/ --recursive
-aws s3 rm s3://caption-acc-prod/{tenant}/server/videos/{id}/caption_frame_extents.db
+aws s3 rm s3://caption-acc-prod/{tenant}/server/videos/{id}/caption_frame_extents.db.gz
 aws s3 rm s3://caption-acc-prod/{tenant}/client/videos/{id}/captions.db.gz
 
 # 3. Reset status

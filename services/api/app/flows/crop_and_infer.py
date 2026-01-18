@@ -179,7 +179,7 @@ def process_inference_results(
     cropped_frames_version: int,
 ) -> None:
     """
-    Call API endpoint to process caption_frame_extents.db into captions.db.
+    Call API endpoint to process caption_frame_extents.db.gz into captions.db.
 
     This step processes raw inference results into user-facing caption records.
 
@@ -192,13 +192,13 @@ def process_inference_results(
     print(f"[API] Inference DB key: {caption_frame_extents_db_key}")
     print(f"[API] Cropped frames version: v{cropped_frames_version}")
 
-    # TODO: Call API endpoint to process caption_frame_extents.db into captions.db
+    # TODO: Call API endpoint to process caption_frame_extents.db.gz into captions.db
     # This step processes raw inference results into user-facing caption records
     # For now, we'll note this as a placeholder
 
     print("[API] TODO: Implement API endpoint to process inference results")
     print("[API] Endpoint should:")
-    print("  1. Download caption_frame_extents.db from Wasabi")
+    print("  1. Download caption_frame_extents.db.gz from Wasabi")
     print("  2. Parse inference results")
     print("  3. Create caption records in captions.db")
     print("  4. Upload captions.db.gz to Wasabi")

@@ -100,7 +100,7 @@ Crops frames to caption region, runs inference, creates captions.db.
    - Crops frames at 10 Hz
    - Encodes as VP9 WebM (modulo hierarchy)
    - Runs boundary inference
-   - Uploads to Wasabi: `cropped_frames_v{N}/`, `caption_frame_extents.db`
+   - Uploads to Wasabi: `cropped_frames_v{N}/`, `caption_frame_extents.db.gz`
 3. **Update metadata** → `videos.cropped_frames_version`, `label_counts`
 4. **Update status** → `videos.caption_status = 'ready'`
 5. **Release lock** (in finally block)
@@ -121,7 +121,7 @@ Server lock:
 | Output | Location | Description |
 |--------|----------|-------------|
 | `cropped_frames_v{N}/` | `{tenant}/client/videos/{id}/` | VP9 WebM chunks (modulo hierarchy) |
-| `caption_frame_extents.db` | `{tenant}/server/videos/{id}/` | Raw inference predictions |
+| `caption_frame_extents.db.gz` | `{tenant}/server/videos/{id}/` | Raw inference predictions |
 
 ### Lock Management
 
