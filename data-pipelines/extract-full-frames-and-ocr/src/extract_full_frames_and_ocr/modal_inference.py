@@ -146,49 +146,125 @@ def extract_frames_and_ocr_impl(
         tmp_path = Path(tmpdir)
 
         # Step 1: Download video from Wasabi
-        print("[1/4] Downloading video from Wasabi...")
+        print("[1/7] Downloading video from Wasabi...")
         download_start = time.time()
         video_path = tmp_path / "video.mp4"
         wasabi_client.download_file(bucket_name, video_key, str(video_path))
         print(f"  Downloaded in {time.time() - download_start:.2f}s\n")
 
-        # Step 2: Process video with GPU + Google Vision OCR
-        print("[2/4] Processing video with GPU + Google Vision OCR...")
+        # Step 2: Extract frames with GPU
+        print("[2/7] Extracting frames with GPU...")
+        from gpu_video_utils import extract_frames_gpu, GPUVideoDecoder
+
+        # Get video info
+        decoder = GPUVideoDecoder(video_path)
+        video_info = decoder.get_video_info()
+        print(f"  Duration: {video_info['duration']:.1f}s")
+        print(f"  Dimensions: {video_info['width']}x{video_info['height']}")
+        print(f"  FPS: {video_info['fps']:.2f}")
+
+        # Extract frames
+        jpeg_frames = extract_frames_gpu(
+            video_path=video_path,
+            frame_rate_hz=rate_hz,
+            output_format="jpeg_bytes",
+        )
+        print(f"  Extracted {len(jpeg_frames)} frames\n")
+
+        # Step 3: Start frame upload in background (runs in parallel with Steps 4-7)
+        print("[3/7] Starting frame and thumbnail upload to Wasabi (background)...")
+        import threading
+        from PIL import Image
+        import io
+
+        # Upload function to run in background
+        upload_error = None
+        def upload_frames_background():
+            nonlocal upload_error
+            try:
+                upload_start = time.time()
+                frames_prefix = f"{tenant_id}/client/videos/{video_id}/full_frames"
+                thumbnails_prefix = f"{tenant_id}/client/videos/{video_id}/full_frames_thumbnails"
+
+                for frame_num, jpeg_bytes in enumerate(jpeg_frames):
+                    # Calculate frame index (matching pipeline logic)
+                    timestamp = frame_num / rate_hz
+                    frame_index = int(timestamp * 10)
+                    frame_filename = f"frame_{frame_index:06d}.jpg"
+
+                    # Upload full frame
+                    frame_key = f"{frames_prefix}/{frame_filename}"
+                    wasabi_client.put_object(
+                        Bucket=bucket_name,
+                        Key=frame_key,
+                        Body=jpeg_bytes,
+                        ContentType="image/jpeg",
+                    )
+
+                    # Generate and upload thumbnail (320px width)
+                    img = Image.open(io.BytesIO(jpeg_bytes))
+
+                    # Calculate thumbnail dimensions maintaining aspect ratio
+                    target_width = 320
+                    aspect_ratio = img.height / img.width
+                    target_height = int(target_width * aspect_ratio)
+
+                    # Resize with high-quality Lanczos filter
+                    thumbnail = img.resize((target_width, target_height), Image.Resampling.LANCZOS)
+
+                    # Save thumbnail to bytes
+                    thumbnail_buffer = io.BytesIO()
+                    thumbnail.save(thumbnail_buffer, format='JPEG', quality=85, optimize=True)
+                    thumbnail_bytes = thumbnail_buffer.getvalue()
+
+                    # Upload thumbnail
+                    thumbnail_key = f"{thumbnails_prefix}/{frame_filename}"
+                    wasabi_client.put_object(
+                        Bucket=bucket_name,
+                        Key=thumbnail_key,
+                        Body=thumbnail_bytes,
+                        ContentType="image/jpeg",
+                    )
+
+                    if (frame_num + 1) % 10 == 0 or frame_num == len(jpeg_frames) - 1:
+                        print(f"  [Background] Uploaded {frame_num + 1}/{len(jpeg_frames)} frames + thumbnails...")
+
+                print(f"  [Background] All frames and thumbnails uploaded in {time.time() - upload_start:.2f}s")
+            except Exception as e:
+                upload_error = e
+                print(f"  [Background] Frame upload ERROR: {e}")
+
+        # Start upload thread (non-daemon so we can join before exit)
+        upload_thread = threading.Thread(target=upload_frames_background, daemon=False)
+        upload_thread.start()
+
+        # Step 4: Process OCR in main thread
+        print("[4/7] Processing frames with OCR...")
         db_path = tmp_path / "fullOCR.db"
 
-        total_boxes, failed_ocr_count, video_info = process_video_with_gpu_and_ocr(
-            video_path=video_path,
+        from extract_full_frames_and_ocr.pipeline import process_frames_with_ocr_only
+
+        ocr_start = time.time()
+        total_boxes, failed_ocr_count = process_frames_with_ocr_only(
+            jpeg_frames=jpeg_frames,
             db_path=db_path,
             rate_hz=rate_hz,
             language=language,
         )
+        print(f"  OCR processing complete in {time.time() - ocr_start:.2f}s")
+        print(f"  Detected {total_boxes} OCR boxes ({failed_ocr_count} failed)\n")
 
-        # Step 3: Count frames and get stats
-        print("[3/4] Collecting statistics...")
-        import sqlite3
-
-        conn = sqlite3.connect(str(db_path))
-
-        # Count frames
-        cursor = conn.execute("SELECT COUNT(DISTINCT frame_index) FROM full_frame_ocr")
-        frame_count = cursor.fetchone()[0]
-
-        # Verify total boxes
-        cursor = conn.execute("SELECT COUNT(*) FROM full_frame_ocr")
-        db_box_count = cursor.fetchone()[0]
-
-        conn.close()
-
-        print(f"  Frame count: {frame_count}")
-        print(f"  Total OCR boxes: {total_boxes}")
-        print(f"  DB box count: {db_box_count}")
-        print(f"  Boxes match: {total_boxes == db_box_count}\n")
-
-        # Step 4: Create layout.db with boxes table (client-facing)
-        print("[4/6] Creating layout.db for client...")
+        # Step 5: Create layout.db with boxes table (client-facing)
+        print("[5/7] Creating layout.db for client...")
         layout_db_path = tmp_path / "layout.db"
 
         import sqlite3
+
+        # Get frame count from OCR database
+        ocr_conn_temp = sqlite3.connect(str(db_path))
+        cursor = ocr_conn_temp.execute("SELECT COUNT(DISTINCT frame_index) FROM full_frame_ocr")
+        frame_count = cursor.fetchone()[0]
+        ocr_conn_temp.close()
 
         layout_conn = sqlite3.connect(str(layout_db_path))
         try:
@@ -295,8 +371,8 @@ def extract_frames_and_ocr_impl(
 
         print(f"  Created layout.db with {total_boxes} boxes\n")
 
-        # Step 5: Compress and upload raw-ocr.db.gz to Wasabi (server-only)
-        print("[5/6] Compressing and uploading raw-ocr.db.gz to Wasabi (server)...")
+        # Step 6: Compress and upload raw-ocr.db.gz to Wasabi (server-only)
+        print("[6/7] Compressing and uploading raw-ocr.db.gz to Wasabi (server)...")
         ocr_upload_start = time.time()
 
         # Compress the database
@@ -321,8 +397,8 @@ def extract_frames_and_ocr_impl(
 
         print(f"  Uploaded in {time.time() - ocr_upload_start:.2f}s\n")
 
-        # Step 6: Compress and upload layout.db.gz to Wasabi (client-facing)
-        print("[6/6] Compressing and uploading layout.db.gz to Wasabi (client)...")
+        # Step 7: Compress and upload layout.db.gz to Wasabi (client-facing)
+        print("[7/7] Compressing and uploading layout.db.gz to Wasabi (client)...")
         layout_upload_start = time.time()
 
         # Compress the database
@@ -346,6 +422,15 @@ def extract_frames_and_ocr_impl(
         )
 
         print(f"  Uploaded in {time.time() - layout_upload_start:.2f}s\n")
+
+        # Wait for background frame upload to complete
+        print("Waiting for background frame upload to complete...")
+        upload_thread.join()
+
+        if upload_error:
+            raise RuntimeError(f"Frame upload failed: {upload_error}")
+
+        print("Background frame upload complete!\n")
 
         # Build output paths
         full_frames_prefix = f"{tenant_id}/client/videos/{video_id}/full_frames/"

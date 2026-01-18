@@ -285,6 +285,8 @@ export default function AnnotateLayout() {
               onMouseDown={handleCanvasClick}
               onMouseMove={handleCanvasMouseMove}
               onContextMenu={handleCanvasContextMenu}
+              tenantId={tenantId}
+              videoId={videoId}
             />
 
             {/* Thumbnail panel */}
@@ -295,6 +297,8 @@ export default function AnnotateLayout() {
               analysisThumbnailUrl={analysisThumbnailUrl}
               loading={loading}
               onThumbnailClick={handleThumbnailClick}
+              tenantId={tenantId}
+              videoId={videoId}
             />
           </div>
 

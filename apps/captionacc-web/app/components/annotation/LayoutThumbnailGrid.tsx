@@ -1,3 +1,5 @@
+import { S3Image } from '~/components/S3Image'
+
 interface FrameInfo {
   frameIndex: number
   imageUrl: string
@@ -13,6 +15,8 @@ interface LayoutThumbnailGridProps {
   analysisThumbnailUrl: string | null
   loading: boolean
   onThumbnailClick: (frameIndexOrMode: number | 'analysis') => void
+  tenantId: string
+  videoId: string
 }
 
 export function LayoutThumbnailGrid({
@@ -22,6 +26,8 @@ export function LayoutThumbnailGrid({
   analysisThumbnailUrl,
   loading,
   onThumbnailClick,
+  tenantId,
+  videoId,
 }: LayoutThumbnailGridProps) {
   return (
     <div
@@ -74,8 +80,10 @@ export function LayoutThumbnailGrid({
           }`}
         >
           <div className="aspect-video w-full bg-black">
-            <img
-              src={frame.imageUrl}
+            <S3Image
+              tenantId={tenantId}
+              videoId={videoId}
+              path={frame.imageUrl}
               alt={`Frame ${frame.frameIndex}`}
               className="h-full w-full object-contain"
             />

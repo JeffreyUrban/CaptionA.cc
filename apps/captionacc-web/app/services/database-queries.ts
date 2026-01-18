@@ -217,10 +217,13 @@ function getColorCode(
 
 /**
  * Build image URL for a frame.
+ * Returns S3 path that can be used with S3Image component for signed URL generation.
+ * @param useThumbnail - If true, returns thumbnail path (320px wide) for faster loading
  */
-function buildFrameImageUrl(videoId: string, frameIndex: number): string {
-  // Returns the relative path - the component will handle actual URL construction
-  return `/api/images/${encodeURIComponent(videoId)}/full_frames/frame_${String(frameIndex).padStart(6, '0')}.jpg`
+function buildFrameImageUrl(videoId: string, frameIndex: number, useThumbnail = false): string {
+  // Returns S3 path - S3Image component will convert to signed URL
+  const prefix = useThumbnail ? 'full_frames_thumbnails' : 'full_frames'
+  return `${prefix}/frame_${String(frameIndex).padStart(6, '0')}.jpg`
 }
 
 // =============================================================================
@@ -362,12 +365,45 @@ export async function isLayoutApproved(db: CRSQLiteDatabase): Promise<boolean> {
 
 /**
  * Get frame summaries for queue display.
+ * Returns up to 11 evenly-distributed representative frames.
+ * TODO: We must load the 11 frames with the lowest min confidence from our Bayesian model.
  */
 export async function getFrameSummaries(
   db: CRSQLiteDatabase,
   videoId: string
 ): Promise<FrameInfoResult[]> {
-  // Get unique frame indices with aggregated stats
+  // First, get total count of frames
+  const countResult = await db.query<{ count: number }>(
+    `SELECT COUNT(DISTINCT frame_index) as count FROM boxes`
+  )
+  const totalFrames = countResult.rows[0]?.count ?? 0
+
+  if (totalFrames === 0) {
+    return []
+  }
+
+  // Calculate step size to get 11 evenly-distributed frames
+  const targetFrameCount = Math.min(11, totalFrames)
+  const step = Math.max(1, Math.floor(totalFrames / targetFrameCount))
+
+  // Get all frame indices first
+  const allFramesResult = await db.query<{ frame_index: number; row_num: number }>(
+    `SELECT frame_index, ROW_NUMBER() OVER (ORDER BY frame_index) as row_num
+     FROM (SELECT DISTINCT frame_index FROM boxes ORDER BY frame_index)`
+  )
+
+  // Select every Nth frame
+  const selectedFrameIndices = allFramesResult.rows
+    .filter((_, index) => index % step === 0)
+    .slice(0, targetFrameCount)
+    .map(row => row.frame_index)
+
+  if (selectedFrameIndices.length === 0) {
+    return []
+  }
+
+  // Get stats for selected frames
+  const placeholders = selectedFrameIndices.map(() => '?').join(',')
   const result = await db.query<FrameSummaryRow>(
     `SELECT
        frame_index,
@@ -379,8 +415,10 @@ export async function getFrameSummaries(
        MIN(COALESCE(predicted_confidence, 1.0)) as min_confidence,
        MAX(CASE WHEN label IS NOT NULL THEN 1 ELSE 0 END) as has_annotations
      FROM boxes
+     WHERE frame_index IN (${placeholders})
      GROUP BY frame_index
-     ORDER BY frame_index`
+     ORDER BY frame_index`,
+    selectedFrameIndices
   )
 
   return result.rows.map(row => ({
@@ -389,7 +427,7 @@ export async function getFrameSummaries(
     captionBoxCount: row.caption_box_count,
     minConfidence: row.min_confidence,
     hasAnnotations: row.has_annotations === 1,
-    imageUrl: buildFrameImageUrl(videoId, row.frame_index),
+    imageUrl: buildFrameImageUrl(videoId, row.frame_index, true), // Use thumbnails for grid
   }))
 }
 

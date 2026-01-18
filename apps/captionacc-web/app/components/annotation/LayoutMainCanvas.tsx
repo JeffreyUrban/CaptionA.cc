@@ -3,6 +3,7 @@
  * Handles rendering of frame/analysis views with overlays.
  */
 
+import { S3Image } from '~/components/S3Image'
 import { type FrameBoxesData, type LayoutConfig, type BoxData, type ViewMode } from '~/types/layout'
 
 interface LayoutMainCanvasProps {
@@ -21,6 +22,8 @@ interface LayoutMainCanvasProps {
   onMouseDown: (e: React.MouseEvent<HTMLDivElement>) => void
   onMouseMove: (e: React.MouseEvent<HTMLDivElement>) => void
   onContextMenu: (e: React.MouseEvent<HTMLDivElement>) => void
+  tenantId: string
+  videoId: string
 }
 
 /**
@@ -96,6 +99,8 @@ function FrameViewContent({
   onMouseDown,
   onMouseMove,
   onContextMenu,
+  tenantId,
+  videoId,
 }: Pick<
   LayoutMainCanvasProps,
   | 'annotationsSinceRecalc'
@@ -106,6 +111,8 @@ function FrameViewContent({
   | 'onMouseDown'
   | 'onMouseMove'
   | 'onContextMenu'
+  | 'tenantId'
+  | 'videoId'
 > & {
   currentFrameBoxes: FrameBoxesData
 }) {
@@ -126,9 +133,11 @@ function FrameViewContent({
           outline: allBoxesAnnotated ? '3px solid #10b981' : 'none',
         }}
       >
-        <img
+        <S3Image
           ref={imageRef}
-          src={currentFrameBoxes.imageUrl}
+          tenantId={tenantId}
+          videoId={videoId}
+          path={currentFrameBoxes.imageUrl}
           alt={`Frame ${currentFrameBoxes.frameIndex}`}
           className="max-w-full max-h-full object-contain block"
         />
@@ -170,6 +179,8 @@ export function LayoutMainCanvas({
   onMouseDown,
   onMouseMove,
   onContextMenu,
+  tenantId,
+  videoId,
 }: LayoutMainCanvasProps) {
   return (
     <div className="relative flex flex-shrink-0 items-center justify-center rounded-lg border border-gray-300 bg-gray-900 dark:border-gray-600 dark:bg-gray-800">
@@ -199,6 +210,8 @@ export function LayoutMainCanvas({
           onMouseDown={onMouseDown}
           onMouseMove={onMouseMove}
           onContextMenu={onContextMenu}
+          tenantId={tenantId}
+          videoId={videoId}
         />
       ) : (
         <EmptyState loadingFrame={loadingFrame} />

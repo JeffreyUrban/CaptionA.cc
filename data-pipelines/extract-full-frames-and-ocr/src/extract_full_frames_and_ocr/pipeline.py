@@ -42,10 +42,11 @@ def process_video_with_gpu_and_ocr(
         progress_callback: Optional callback(current, total) for progress tracking
 
     Returns:
-        Tuple of (total_ocr_boxes, failed_ocr_count, video_info_dict)
+        Tuple of (total_ocr_boxes, failed_ocr_count, video_info_dict, jpeg_frames)
         - total_ocr_boxes: Total number of OCR boxes detected
         - failed_ocr_count: Number of frames that failed OCR processing
         - video_info_dict: Dict with keys: fps, width, height, duration, total_frames, codec, bitrate
+        - jpeg_frames: List of JPEG byte arrays for each extracted frame
 
     Example:
         >>> from pathlib import Path
@@ -82,7 +83,7 @@ def process_video_with_gpu_and_ocr(
 
     if not jpeg_frames:
         print("[GPU] No frames extracted")
-        return 0, 0, video_info
+        return 0, 0, video_info, []
 
     print(f"[GPU] Extracted {len(jpeg_frames)} frames")
 
@@ -173,4 +174,80 @@ def process_video_with_gpu_and_ocr(
         f"\n[Pipeline] Complete! Processed {len(frames)} frames with {total_boxes} text boxes ({failed_ocr_count} failed)"
     )
 
-    return total_boxes, failed_ocr_count, video_info
+    return total_boxes, failed_ocr_count, video_info, jpeg_frames
+
+
+def process_frames_with_ocr_only(
+    jpeg_frames: list[bytes],
+    db_path: Path,
+    rate_hz: float = 0.1,
+    language: str = "zh-Hans",
+) -> tuple[int, int]:
+    """Process already-extracted frames with OCR only.
+
+    Use this when frames have already been extracted and you only need OCR processing.
+    This is useful for parallel processing where frames are uploaded while OCR runs.
+
+    Args:
+        jpeg_frames: List of JPEG byte arrays
+        db_path: Path for output database
+        rate_hz: Frame extraction rate used (for frame index calculation)
+        language: OCR language hint (default: "zh-Hans")
+
+    Returns:
+        Tuple of (total_ocr_boxes, failed_ocr_count)
+    """
+    print(f"[OCR] Processing {len(jpeg_frames)} frames with Google Vision...")
+
+    # Create frame tuples with proper frame IDs
+    frames = []
+    for frame_num, jpeg_bytes in enumerate(jpeg_frames):
+        timestamp = frame_num / rate_hz
+        frame_index = int(timestamp * 10)
+        frame_id = f"frame_{frame_index:010d}"
+        frames.append((frame_id, jpeg_bytes))
+
+    # Initialize Google Vision backend
+    backend = GoogleVisionBackend()
+
+    # Process frames with OCR
+    ocr_results, failed_ocr_count = process_frames_with_ocr(
+        frames=frames,
+        backend=backend,
+        language=language,
+    )
+    print(f"[OCR] Received {len(ocr_results)} OCR results ({failed_ocr_count} failed)")
+
+    # Ensure database table exists
+    ensure_ocr_table(db_path, table_name="full_frame_ocr")
+
+    # Write OCR results to database
+    total_boxes = 0
+    for ocr_result in ocr_results:
+        frame_index = int(ocr_result.id.split("_")[1])
+
+        annotations = []
+        for char in ocr_result.characters:
+            annotations.append(
+                [
+                    char.text,
+                    1.0,
+                    [char.bbox.x, char.bbox.y, char.bbox.width, char.bbox.height],
+                ]
+            )
+
+        db_record = {
+            "image_path": f"frames/{ocr_result.id}.jpg",
+            "framework": "google_vision",
+            "annotations": annotations,
+        }
+
+        boxes_inserted = write_ocr_result_to_database(
+            ocr_result=db_record,
+            db_path=db_path,
+            table_name="full_frame_ocr",
+        )
+        total_boxes += boxes_inserted
+
+    print(f"[OCR] Wrote {total_boxes} total OCR boxes to database")
+    return total_boxes, failed_ocr_count

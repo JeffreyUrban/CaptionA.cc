@@ -9,7 +9,7 @@
  * - TypeScript type safety
  */
 
-import { useState, useEffect, type ImgHTMLAttributes } from 'react'
+import { useState, useEffect, forwardRef, type ImgHTMLAttributes } from 'react'
 
 import { getVideoResourceUrl, type S3PathParams } from '~/services/s3-client'
 
@@ -21,6 +21,9 @@ export interface S3ImageProps extends Omit<
   ImgHTMLAttributes<HTMLImageElement>,
   'src' | 'alt' | 'onLoad' | 'onError'
 > {
+  /** Tenant ID */
+  tenantId: string
+
   /** Video ID */
   videoId: string
 
@@ -53,7 +56,8 @@ export interface S3ImageProps extends Omit<
 // Component
 // ============================================================================
 
-export function S3Image({
+export const S3Image = forwardRef<HTMLImageElement, S3ImageProps>(function S3Image({
+  tenantId,
   videoId,
   path,
   alt,
@@ -64,7 +68,7 @@ export function S3Image({
   preload = false,
   expiresIn = 3600,
   ...imgProps
-}: S3ImageProps) {
+}, ref) {
   const [signedUrl, setSignedUrl] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
@@ -86,7 +90,14 @@ export function S3Image({
 
         if (typeof path === 'string') {
           // Simple path string - parse to determine type
-          if (path.includes('full_frames/')) {
+          if (path.includes('full_frames_thumbnails/')) {
+            const filename = path.split('full_frames_thumbnails/')[1]
+            pathParams = {
+              videoId,
+              type: 'full_frames_thumbnails',
+              filename,
+            }
+          } else if (path.includes('full_frames/')) {
             const filename = path.split('full_frames/')[1]
             pathParams = {
               videoId,
@@ -120,7 +131,7 @@ export function S3Image({
         }
 
         // Get signed URL
-        const url = await getVideoResourceUrl(videoId, pathParams.type, pathParams, expiresIn)
+        const url = await getVideoResourceUrl(tenantId, videoId, pathParams.type, pathParams, expiresIn)
 
         if (!cancelled) {
           setSignedUrl(url)
@@ -128,6 +139,9 @@ export function S3Image({
         }
       } catch (err) {
         const error = err instanceof Error ? err : new Error(String(err))
+        console.error('[S3Image] Error loading image:', error)
+        console.error('[S3Image] Video ID:', videoId)
+        console.error('[S3Image] Path:', path)
 
         if (!cancelled) {
           setError(error)
@@ -142,7 +156,7 @@ export function S3Image({
     return () => {
       cancelled = true
     }
-  }, [videoId, path, expiresIn, onError])
+  }, [tenantId, videoId, path, expiresIn, onError])
 
   // ============================================================================
   // Preload mode
@@ -174,7 +188,7 @@ export function S3Image({
 
   if (error || !signedUrl) {
     if (fallbackSrc) {
-      return <img src={fallbackSrc} alt={alt} className={className} {...imgProps} />
+      return <img ref={ref} src={fallbackSrc} alt={alt} className={className} {...imgProps} />
     }
 
     return (
@@ -195,6 +209,7 @@ export function S3Image({
 
   return (
     <img
+      ref={ref}
       src={signedUrl}
       alt={alt}
       className={className}
@@ -209,7 +224,7 @@ export function S3Image({
       {...imgProps}
     />
   )
-}
+})
 
 // ============================================================================
 // Preload Helper
@@ -229,7 +244,14 @@ export async function preloadS3Image(
   let pathParams: Omit<S3PathParams, 'tenantId'>
 
   if (typeof path === 'string') {
-    if (path.includes('full_frames/')) {
+    if (path.includes('full_frames_thumbnails/')) {
+      const filename = path.split('full_frames_thumbnails/')[1]
+      pathParams = {
+        videoId,
+        type: 'full_frames_thumbnails',
+        filename,
+      }
+    } else if (path.includes('full_frames/')) {
       const filename = path.split('full_frames/')[1]
       pathParams = {
         videoId,

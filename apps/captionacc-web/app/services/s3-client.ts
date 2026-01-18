@@ -27,7 +27,7 @@ import { getUserTenantId, getCurrentUser } from './supabase-client'
 export interface S3PathParams {
   tenantId: string
   videoId: string
-  type: 'video' | 'layout' | 'captions' | 'full_frames' | 'cropped_frames'
+  type: 'video' | 'layout' | 'captions' | 'full_frames' | 'full_frames_thumbnails' | 'cropped_frames'
   filename?: string
   modulo?: number
   chunkIndex?: number
@@ -232,6 +232,12 @@ export function buildS3Path(params: S3PathParams): string {
       }
       return `${basePath}/full_frames/${params.filename}`
 
+    case 'full_frames_thumbnails':
+      if (!params.filename) {
+        throw new Error('filename required for full_frames_thumbnails type')
+      }
+      return `${basePath}/full_frames_thumbnails/${params.filename}`
+
     case 'cropped_frames': {
       const version = params.croppedFramesVersion ?? 2
       const modulo = params.modulo ?? 1
@@ -261,6 +267,9 @@ export function buildS3PathPrefix(params: Omit<S3PathParams, 'filename' | 'chunk
   switch (type) {
     case 'full_frames':
       return `${basePath}/full_frames/`
+
+    case 'full_frames_thumbnails':
+      return `${basePath}/full_frames_thumbnails/`
 
     case 'cropped_frames': {
       const version = params.croppedFramesVersion ?? 2
@@ -412,13 +421,12 @@ export async function getCurrentTenantId(): Promise<string> {
  * Build and get signed URL for a video resource
  */
 export async function getVideoResourceUrl(
+  tenantId: string,
   videoId: string,
   type: S3PathParams['type'],
   params?: Partial<S3PathParams>,
   expiresIn = 3600
 ): Promise<string> {
-  const tenantId = await getCurrentTenantId()
-
   const key = buildS3Path({
     tenantId,
     videoId,
