@@ -93,7 +93,7 @@ export function useBoundaryAnnotationData({
 
     try {
       const response = await fetch(
-        `/api/annotations/${encodedVideoId}?start=${startFrame}&end=999999&workable=true&limit=20`
+        `/videos/${encodedVideoId}?start=${startFrame}&end=999999&workable=true&limit=20`
       )
       const data = await response.json()
 
@@ -185,7 +185,7 @@ export function useBoundaryAnnotationData({
 
       try {
         const response = await fetch(
-          `/api/annotations/${encodedVideoId}?start=${startFrame}&end=${endFrame}`
+          `/videos/${encodedVideoId}?start=${startFrame}&end=${endFrame}`
         )
         const data = await response.json()
         annotationsRef.current = data.annotations ?? []
@@ -219,7 +219,7 @@ export function useBoundaryAnnotationData({
         })
 
         // Save the annotation with overlap resolution
-        const saveResponse = await fetch(`/api/annotations/${encodedVideoId}`, {
+        const saveResponse = await fetch(`/videos/${encodedVideoId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -337,7 +337,7 @@ export function useBoundaryAnnotationData({
         })
 
         // Save the annotation with 'issue' state
-        const saveResponse = await fetch(`/api/annotations/${encodedVideoId}`, {
+        const saveResponse = await fetch(`/videos/${encodedVideoId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -442,7 +442,7 @@ export function useBoundaryAnnotationData({
         const encodedVideoId = encodeURIComponent(videoId)
 
         const response = await fetch(
-          `/api/annotations/${encodedVideoId}/${activeAnnotation.id}/delete`,
+          `/videos/${encodedVideoId}/${activeAnnotation.id}/delete`,
           { method: 'POST' }
         )
 
@@ -517,7 +517,7 @@ export function useBoundaryAnnotationData({
 
           try {
             const encodedVideoId = encodeURIComponent(videoId)
-            const response = await fetch(`/api/annotations/${encodedVideoId}?start=0&end=999999`)
+            const response = await fetch(`/videos/${encodedVideoId}?start=0&end=999999`)
             const data = await response.json()
             const annotation = data.annotations?.find((a: Annotation) => a.id === prevAnnotationId)
 
@@ -589,7 +589,7 @@ export function useBoundaryAnnotationData({
         const encodedVideoId = encodeURIComponent(videoId)
         // Query for annotations containing this frame
         const response = await fetch(
-          `/api/annotations/${encodedVideoId}?start=${frameNumber}&end=${frameNumber}`
+          `/videos/${encodedVideoId}?start=${frameNumber}&end=${frameNumber}`
         )
         const data = await response.json()
 
@@ -623,7 +623,7 @@ export function useBoundaryAnnotationData({
       try {
         const encodedVideoId = encodeURIComponent(videoId)
         const response = await fetch(
-          `/api/annotations/${encodedVideoId}?start=${frameIndex}&end=${frameIndex}`
+          `/videos/${encodedVideoId}?start=${frameIndex}&end=${frameIndex}`
         )
         const data = await response.json()
 

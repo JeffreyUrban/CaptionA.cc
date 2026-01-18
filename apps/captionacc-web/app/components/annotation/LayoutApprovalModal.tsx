@@ -21,7 +21,7 @@ export function LayoutApprovalModal({
 
     try {
       const response = await fetch(
-        `/api/annotations/${encodeURIComponent(videoId)}/layout-complete`,
+        `/videos/${encodeURIComponent(videoId)}/layout-complete`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -33,7 +33,7 @@ export function LayoutApprovalModal({
       onConfirm()
 
       // Trigger frame re-cropping in background
-      fetch(`/api/annotations/${encodeURIComponent(videoId)}/recrop-frames`, {
+      fetch(`/videos/${encodeURIComponent(videoId)}/recrop-frames`, {
         method: 'POST',
       }).catch(err => console.error('Frame re-cropping failed:', err))
     } catch (err) {

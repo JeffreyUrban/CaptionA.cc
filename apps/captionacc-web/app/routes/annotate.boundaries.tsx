@@ -9,17 +9,30 @@ import { useBoundaryWorkflowState } from '~/hooks/useBoundaryWorkflowState'
 import { useImageRegeneration } from '~/hooks/useImageRegeneration'
 import { getAnnotationBorderColor, getEffectiveState } from '~/utils/boundary-helpers'
 
-// Loader function to expose environment variables
-export async function clientLoader() {
-  return {
-    defaultVideoId: process.env['DEFAULT_VIDEO_ID'] ?? '',
-  }
-}
-
 export default function BoundaryWorkflow() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
-  const videoId = searchParams.get('videoId') ?? ''
+  const videoId = searchParams.get('videoId')!
+
+  // VideoId is REQUIRED # TODO: Replace with our error modal.
+  if (!videoId) {
+    return (
+      <AppLayout>
+        <div className="flex h-full items-center justify-center">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold text-red-600">Missing Video ID</h1>
+            <p className="mt-2 text-gray-600">This page requires a videoId parameter in the URL.</p>
+            <button
+              onClick={() => navigate('/videos')}
+              className="mt-4 rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+            >
+              Go to Videos
+            </button>
+          </div>
+        </div>
+      </AppLayout>
+    )
+  }
 
   const workflow = useBoundaryWorkflowState({ videoId })
 

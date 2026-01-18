@@ -254,7 +254,7 @@ class UploadManager {
 
       // Step 1: Get presigned URL from Edge Function
       // POST /functions/v1/captionacc-presigned-upload
-      const supabaseUrl = import.meta.env['VITE_SUPABASE_URL'] ?? 'http://localhost:54321'
+      const supabaseUrl = import.meta.env['VITE_SUPABASE_URL']!
 
       const presignedResponse = await fetch(
         `${supabaseUrl}/functions/v1/captionacc-presigned-upload`,

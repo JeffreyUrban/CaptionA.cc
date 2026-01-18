@@ -9,14 +9,23 @@ import type { FrameInfo, LayoutQueueResponse, FrameBoxesData } from '~/types/lay
  * Fetch layout queue data from the server
  */
 export async function fetchLayoutQueue(videoId: string): Promise<LayoutQueueResponse> {
-  const response = await fetch(`/api/annotations/${encodeURIComponent(videoId)}/layout-queue`)
+  const response = await fetch(`/videos/${encodeURIComponent(videoId)}/layout-queue`)
 
   if (!response.ok) {
-    const errorData = await response.json()
-    if (response.status === 425 && errorData.processingStatus) {
-      throw new Error(`Processing: ${errorData.processingStatus}`)
+    // Check if response is JSON before parsing
+    const contentType = response.headers.get('content-type')
+    if (contentType?.includes('application/json')) {
+      const errorData = await response.json()
+      if (response.status === 425 && errorData.processingStatus) {
+        throw new Error(`Processing: ${errorData.processingStatus}`)
+      }
+      throw new Error(errorData.error ?? 'Failed to load layout queue')
+    } else {
+      // HTML error page or other non-JSON response
+      const errorText = await response.text()
+      console.error('API error (non-JSON):', response.status, errorText.substring(0, 200))
+      throw new Error(`Failed to load layout queue (${response.status})`)
     }
-    throw new Error(errorData.error ?? 'Failed to load layout queue')
   }
 
   return response.json()
@@ -29,7 +38,7 @@ export async function fetchAnalysisBoxes(
   videoId: string
 ): Promise<{ boxes: import('~/types/layout').BoxData[] }> {
   const response = await fetch(
-    `/api/annotations/${encodeURIComponent(videoId)}/layout-analysis-boxes`
+    `/videos/${encodeURIComponent(videoId)}/layout-analysis-boxes`
   )
   if (!response.ok) {
     const errorText = await response.text()
@@ -47,7 +56,7 @@ export async function fetchFrameBoxes(
   frameIndex: number
 ): Promise<FrameBoxesData> {
   const response = await fetch(
-    `/api/annotations/${encodeURIComponent(videoId)}/frames/${frameIndex}/boxes`
+    `/videos/${encodeURIComponent(videoId)}/frames/${frameIndex}/boxes`
   )
   if (!response.ok) throw new Error('Failed to load frame boxes')
   return response.json()
@@ -62,7 +71,7 @@ export async function saveBoxAnnotations(
   annotations: Array<{ boxIndex: number; label: 'in' | 'out' }>
 ): Promise<void> {
   const response = await fetch(
-    `/api/annotations/${encodeURIComponent(videoId)}/frames/${frameIndex}/boxes`,
+    `/videos/${encodeURIComponent(videoId)}/frames/${frameIndex}/boxes`,
     {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -79,7 +88,7 @@ export async function saveBoxAnnotations(
  */
 export async function recalculatePredictions(videoId: string): Promise<void> {
   const response = await fetch(
-    `/api/annotations/${encodeURIComponent(videoId)}/calculate-predictions`,
+    `/videos/${encodeURIComponent(videoId)}/calculate-predictions`,
     { method: 'POST' }
   )
   if (response.ok) {
@@ -97,7 +106,7 @@ export async function resetCropBounds(
   videoId: string
 ): Promise<{ success: boolean; message?: string }> {
   const response = await fetch(
-    `/api/annotations/${encodeURIComponent(videoId)}/reset-crop-bounds`,
+    `/videos/${encodeURIComponent(videoId)}/reset-crop-bounds`,
     { method: 'POST' }
   )
 
@@ -118,7 +127,7 @@ export async function resetCropBounds(
  * Clear all annotations for a video
  */
 export async function clearAllAnnotations(videoId: string): Promise<{ deletedCount: number }> {
-  const response = await fetch(`/api/annotations/${encodeURIComponent(videoId)}/clear-all`, {
+  const response = await fetch(`/videos/${encodeURIComponent(videoId)}/clear-all`, {
     method: 'POST',
   })
   if (!response.ok) throw new Error('Failed to clear annotations')
@@ -134,7 +143,7 @@ export async function bulkAnnotateAll(
   action: 'clear' | 'mark_out'
 ): Promise<{ newlyAnnotatedBoxes?: number; error?: string }> {
   const response = await fetch(
-    `/api/annotations/${encodeURIComponent(videoId)}/bulk-annotate-all`,
+    `/videos/${encodeURIComponent(videoId)}/bulk-annotate-all`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

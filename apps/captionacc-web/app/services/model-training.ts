@@ -46,7 +46,7 @@ export function triggerModelTraining(videoId: string): void {
       // Trigger prediction recalculation in background
       console.log(`[Model Training] Triggering prediction recalculation for ${videoId}`)
       fetch(
-        `http://localhost:5173/api/annotations/${encodeURIComponent(videoId)}/calculate-predictions`,
+        `/videos/${encodeURIComponent(videoId)}/calculate-predictions`,
         {
           method: 'POST',
         }

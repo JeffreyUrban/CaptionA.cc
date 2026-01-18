@@ -42,7 +42,7 @@ export function useImageRegeneration({
       try {
         const encodedVideoId = encodeURIComponent(videoId)
         const response = await fetch(
-          `/api/annotations/${encodedVideoId}/process-regen-queue?maxBatch=${maxBatch}`,
+          `/videos/${encodedVideoId}/process-regen-queue?maxBatch=${maxBatch}`,
           { method: 'POST' }
         )
 

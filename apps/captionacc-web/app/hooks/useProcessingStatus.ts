@@ -56,7 +56,7 @@ export function useProcessingStatus(
     const checkStatus = async () => {
       try {
         const response = await fetch(
-          `/api/annotations/${encodeURIComponent(videoId)}/processing-status`
+          `/videos/${encodeURIComponent(videoId)}/processing-status`
         )
 
         if (!response.ok) {

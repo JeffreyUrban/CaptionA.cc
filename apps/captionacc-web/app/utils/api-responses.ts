@@ -243,7 +243,7 @@ export function parseIntParam(value: string | undefined, paramName: string): Ext
  * Logs errors to console for debugging.
  *
  * @param handler - Async function that may throw
- * @param context - Context string for error logging (e.g., 'GET /api/annotations')
+ * @param context - Context string for error logging (e.g., 'GET /videos')
  * @returns Response from handler or error response
  *
  * @example

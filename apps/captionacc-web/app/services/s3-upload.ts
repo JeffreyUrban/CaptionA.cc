@@ -56,7 +56,7 @@ async function requestPresignedUrl(
   folderPath?: string | null
 ): Promise<PresignedUploadResponse> {
   // Get Supabase URL and JWT
-  const supabaseUrl = import.meta.env['VITE_SUPABASE_URL'] ?? 'http://localhost:54321'
+  const supabaseUrl = import.meta.env['VITE_SUPABASE_URL']!
 
   const {
     data: { session },

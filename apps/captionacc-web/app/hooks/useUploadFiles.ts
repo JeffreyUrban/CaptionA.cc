@@ -100,7 +100,7 @@ export function useUploadFiles(uploading: boolean): UseUploadFilesResult {
         try {
           console.log('[processFiles] Checking for duplicates:', videoPaths)
           const response = await fetch(
-            `/api/annotations/check-duplicates?paths=${encodeURIComponent(videoPaths.join(','))}`
+            `/videos/check-duplicates?paths=${encodeURIComponent(videoPaths.join(','))}`
           )
           const duplicates = await response.json()
           console.log('[processFiles] Duplicate check results:', duplicates)

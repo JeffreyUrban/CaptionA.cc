@@ -911,7 +911,7 @@ function triggerPredictionRecalculation(videoId: string): void {
     `[Layout Config] Layout parameters changed, triggering prediction recalculation for ${videoId}`
   )
   fetch(
-    `http://localhost:5173/api/annotations/${encodeURIComponent(videoId)}/calculate-predictions`,
+    `/videos/${encodeURIComponent(videoId)}/calculate-predictions`,
     { method: 'POST' }
   )
     .then(response => response.json())
