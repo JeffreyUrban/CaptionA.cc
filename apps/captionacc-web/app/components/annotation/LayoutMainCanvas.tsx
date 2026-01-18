@@ -133,15 +133,15 @@ function FrameViewContent({
           outline: allBoxesAnnotated ? '3px solid #10b981' : 'none',
         }}
       >
-        {/* Placeholder to maintain dimensions while loading */}
+        {/* Placeholder to maintain dimensions while loading - imageRef for canvas sizing */}
         <img
+          ref={imageRef}
           src={`data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="${currentFrameBoxes.frameWidth}" height="${currentFrameBoxes.frameHeight}"><rect width="100%" height="100%" fill="black"/></svg>`}
           alt="Frame placeholder"
           className="w-full h-auto object-contain block"
         />
         {/* Actual frame image rendered on top */}
         <S3Image
-          ref={imageRef}
           tenantId={tenantId}
           videoId={videoId}
           path={currentFrameBoxes.imageUrl}
