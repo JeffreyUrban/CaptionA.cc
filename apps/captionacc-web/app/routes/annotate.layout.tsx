@@ -9,7 +9,6 @@ import { useState, useEffect, useMemo } from 'react'
 import { useSearchParams, useNavigate } from 'react-router'
 
 import { AppLayout } from '~/components/AppLayout'
-import { ProcessingIndicator } from '~/components/ProcessingIndicator'
 import { LayoutAlertModal } from '~/components/annotation/LayoutAlertModal'
 import { LayoutApprovalModal } from '~/components/annotation/LayoutApprovalModal'
 import { LayoutConfirmModal } from '~/components/annotation/LayoutConfirmModal'
@@ -20,7 +19,7 @@ import { LayoutThumbnailGrid } from '~/components/annotation/LayoutThumbnailGrid
 import { useKeyboardShortcuts } from '~/hooks/useKeyboardShortcuts'
 import { useLayoutCanvas, SELECTION_PADDING } from '~/hooks/useLayoutCanvas'
 import { useLayoutData } from '~/hooks/useLayoutData'
-import { useProcessingStatus } from '~/hooks/useProcessingStatus'
+import { useLayoutDatabase } from '~/hooks/useLayoutDatabase'
 import { useVideoTouched } from '~/hooks/useVideoTouched'
 import { RECALC_THRESHOLD, type KeyboardShortcutContext } from '~/types/layout'
 import { generateAnalysisThumbnail } from '~/utils/layout-canvas-helpers'
@@ -56,8 +55,14 @@ export default function AnnotateLayout() {
   // Mark video as being worked on
   useVideoTouched(videoId)
 
-  // Track background processing status
-  const processingStatus = useProcessingStatus(videoId)
+  // Initialize CR-SQLite database (required before useLayoutData)
+  const layoutDb = useLayoutDatabase({
+    videoId,
+    autoAcquireLock: true,
+    onError: error => {
+      console.error('[AnnotateLayout] Layout database error:', error)
+    },
+  })
 
   // Modal state
   const [showApproveModal, setShowApproveModal] = useState(false)
@@ -245,9 +250,6 @@ export default function AnnotateLayout() {
               onMouseMove={handleCanvasMouseMove}
               onContextMenu={handleCanvasContextMenu}
             />
-
-            {/* Processing status indicator */}
-            <ProcessingIndicator status={processingStatus} />
 
             {/* Thumbnail panel */}
             <LayoutThumbnailGrid

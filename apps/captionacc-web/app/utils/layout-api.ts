@@ -1,137 +1,126 @@
 /**
  * API functions for the Layout annotation workflow.
- * Handles server communication for layout data and annotations.
+ * Now uses CR-SQLite instead of REST API.
+ *
+ * NOTE: These functions require the layout database to be initialized first
+ * via useLayoutDatabase hook. They delegate to the LayoutSyncService.
  */
 
 import type { FrameInfo, LayoutQueueResponse, FrameBoxesData } from '~/types/layout'
 
 /**
- * Fetch layout queue data from the server
+ * Fetch layout queue data from CR-SQLite database
+ *
+ * NOTE: Requires layout database to be initialized via useLayoutDatabase
  */
 export async function fetchLayoutQueue(videoId: string): Promise<LayoutQueueResponse> {
-  const response = await fetch(`/videos/${encodeURIComponent(videoId)}/layout-queue`)
+  const { getLayoutSyncService } = await import('~/services/layout-sync-service')
+  const service = getLayoutSyncService(videoId, videoId)
 
-  if (!response.ok) {
-    // Check if response is JSON before parsing
-    const contentType = response.headers.get('content-type')
-    if (contentType?.includes('application/json')) {
-      const errorData = await response.json()
-      if (response.status === 425 && errorData.processingStatus) {
-        throw new Error(`Processing: ${errorData.processingStatus}`)
-      }
-      throw new Error(errorData.error ?? 'Failed to load layout queue')
-    } else {
-      // HTML error page or other non-JSON response
-      const errorText = await response.text()
-      console.error('API error (non-JSON):', response.status, errorText.substring(0, 200))
-      throw new Error(`Failed to load layout queue (${response.status})`)
-    }
+  if (!service.isReady) {
+    throw new Error('Layout database not ready. Initialize with useLayoutDatabase first.')
   }
 
-  return response.json()
+  return service.fetchLayoutQueue()
 }
 
 /**
  * Fetch analysis boxes for all frames
+ *
+ * NOTE: This now uses CR-SQLite instead of REST API.
+ * The layout database should already be initialized via useLayoutDatabase.
  */
 export async function fetchAnalysisBoxes(
   videoId: string
 ): Promise<{ boxes: import('~/types/layout').BoxData[] }> {
-  const response = await fetch(
-    `/videos/${encodeURIComponent(videoId)}/layout-analysis-boxes`
-  )
-  if (!response.ok) {
-    const errorText = await response.text()
-    console.error('Failed to load analysis boxes:', response.status, errorText)
-    throw new Error('Failed to load analysis boxes')
+  // Get the layout sync service (should already be initialized)
+  const { getLayoutSyncService } = await import('~/services/layout-sync-service')
+  const service = getLayoutSyncService(videoId, videoId) // tenant ID defaults to video ID
+
+  if (!service.isReady) {
+    throw new Error('Layout database not ready. Initialize with useLayoutDatabase first.')
   }
-  return response.json()
+
+  return service.fetchAnalysisBoxes()
 }
 
 /**
- * Fetch boxes for a specific frame
+ * Fetch boxes for a specific frame from CR-SQLite
  */
 export async function fetchFrameBoxes(
   videoId: string,
   frameIndex: number
 ): Promise<FrameBoxesData> {
-  const response = await fetch(
-    `/videos/${encodeURIComponent(videoId)}/frames/${frameIndex}/boxes`
-  )
-  if (!response.ok) throw new Error('Failed to load frame boxes')
-  return response.json()
+  const { getLayoutSyncService } = await import('~/services/layout-sync-service')
+  const service = getLayoutSyncService(videoId, videoId)
+
+  if (!service.isReady) {
+    throw new Error('Layout database not ready. Initialize with useLayoutDatabase first.')
+  }
+
+  return service.fetchFrameBoxes(frameIndex)
 }
 
 /**
- * Save box annotations for a frame
+ * Save box annotations for a frame to CR-SQLite
  */
 export async function saveBoxAnnotations(
   videoId: string,
   frameIndex: number,
   annotations: Array<{ boxIndex: number; label: 'in' | 'out' }>
 ): Promise<void> {
-  const response = await fetch(
-    `/videos/${encodeURIComponent(videoId)}/frames/${frameIndex}/boxes`,
-    {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ annotations }),
-    }
-  )
-  if (!response.ok) {
-    throw new Error('Failed to save annotation')
+  const { getLayoutSyncService } = await import('~/services/layout-sync-service')
+  const service = getLayoutSyncService(videoId, videoId)
+
+  if (!service.isReady) {
+    throw new Error('Layout database not ready. Initialize with useLayoutDatabase first.')
   }
+
+  return service.saveBoxAnnotations(frameIndex, annotations)
 }
 
 /**
- * Recalculate predictions for the video
+ * Recalculate predictions (server-side operation via API)
  */
 export async function recalculatePredictions(videoId: string): Promise<void> {
-  const response = await fetch(
-    `/videos/${encodeURIComponent(videoId)}/calculate-predictions`,
-    { method: 'POST' }
-  )
-  if (response.ok) {
-    const result = await response.json()
-    console.log('[Layout] Predictions updated:', result)
-  } else {
-    console.warn('[Layout] Failed to update predictions, continuing anyway')
+  const { getLayoutSyncService } = await import('~/services/layout-sync-service')
+  const service = getLayoutSyncService(videoId, videoId)
+
+  if (!service.isReady) {
+    throw new Error('Layout database not ready. Initialize with useLayoutDatabase first.')
   }
+
+  return service.recalculatePredictions()
 }
 
 /**
- * Reset crop bounds based on current annotations
+ * Reset crop bounds based on current annotations (server-side operation)
  */
 export async function resetCropBounds(
   videoId: string
 ): Promise<{ success: boolean; message?: string }> {
-  const response = await fetch(
-    `/videos/${encodeURIComponent(videoId)}/reset-crop-bounds`,
-    { method: 'POST' }
-  )
+  const { getLayoutSyncService } = await import('~/services/layout-sync-service')
+  const service = getLayoutSyncService(videoId, videoId)
 
-  const result = await response.json()
-
-  if (!response.ok) {
-    return {
-      success: false,
-      message: result.message ?? result.error ?? 'Failed to recalculate crop bounds',
-    }
+  if (!service.isReady) {
+    throw new Error('Layout database not ready. Initialize with useLayoutDatabase first.')
   }
 
-  console.log('[Layout] Crop bounds recalculated:', result)
-  return { success: true }
+  return service.resetCropRegion()
 }
 
 /**
  * Clear all annotations for a video
  */
 export async function clearAllAnnotations(videoId: string): Promise<{ deletedCount: number }> {
-  const response = await fetch(`/videos/${encodeURIComponent(videoId)}/clear-all`, {
-    method: 'POST',
-  })
-  if (!response.ok) throw new Error('Failed to clear annotations')
-  return response.json()
+  const { getLayoutSyncService } = await import('~/services/layout-sync-service')
+  const service = getLayoutSyncService(videoId, videoId)
+
+  if (!service.isReady) {
+    throw new Error('Layout database not ready. Initialize with useLayoutDatabase first.')
+  }
+
+  return service.clearAllAnnotations()
 }
 
 /**
@@ -142,23 +131,14 @@ export async function bulkAnnotateAll(
   rectangle: { left: number; top: number; right: number; bottom: number },
   action: 'clear' | 'mark_out'
 ): Promise<{ newlyAnnotatedBoxes?: number; error?: string }> {
-  const response = await fetch(
-    `/videos/${encodeURIComponent(videoId)}/bulk-annotate-all`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ rectangle, action }),
-    }
-  )
+  const { getLayoutSyncService } = await import('~/services/layout-sync-service')
+  const service = getLayoutSyncService(videoId, videoId)
 
-  const result = await response.json()
-
-  if (!response.ok || result.error) {
-    console.error('Bulk annotate all failed:', result.error ?? `HTTP ${response.status}`)
-    throw new Error(result.error ?? 'Failed to bulk annotate')
+  if (!service.isReady) {
+    throw new Error('Layout database not ready. Initialize with useLayoutDatabase first.')
   }
 
-  return result
+  return service.bulkAnnotateAll(rectangle, action)
 }
 
 /**
