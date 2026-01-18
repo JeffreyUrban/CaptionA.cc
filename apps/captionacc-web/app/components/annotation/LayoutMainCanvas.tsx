@@ -48,14 +48,14 @@ function AnalysisViewContent({
   return (
     <div
       ref={interactionAreaRef}
-      className="relative inline-block cursor-crosshair"
+      className="relative flex cursor-crosshair w-full"
       style={{ padding: `${selectionPadding}px` }}
       onMouseDown={onMouseDown}
       onMouseMove={onMouseMove}
       onContextMenu={onContextMenu}
     >
       <div
-        className="relative"
+        className="relative w-full"
         style={{
           outline: boundsMismatch
             ? '3px solid #ec4899' // pink-500
@@ -68,7 +68,7 @@ function AnalysisViewContent({
           ref={imageRef}
           src={`data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="${layoutConfig.frameWidth}" height="${layoutConfig.frameHeight}"><rect width="100%" height="100%" fill="black"/></svg>`}
           alt="Analysis view"
-          className="max-w-full max-h-full object-contain block"
+          className="w-full h-auto object-contain block"
         />
         <canvas
           ref={canvasRef}
@@ -121,14 +121,14 @@ function FrameViewContent({
   return (
     <div
       ref={interactionAreaRef}
-      className="relative inline-block cursor-crosshair"
+      className="relative flex cursor-crosshair w-full"
       style={{ padding: `${selectionPadding}px` }}
       onMouseDown={onMouseDown}
       onMouseMove={onMouseMove}
       onContextMenu={onContextMenu}
     >
       <div
-        className="relative"
+        className="relative w-full"
         style={{
           outline: allBoxesAnnotated ? '3px solid #10b981' : 'none',
         }}
@@ -137,7 +137,7 @@ function FrameViewContent({
         <img
           src={`data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="${currentFrameBoxes.frameWidth}" height="${currentFrameBoxes.frameHeight}"><rect width="100%" height="100%" fill="black"/></svg>`}
           alt="Frame placeholder"
-          className="max-w-full max-h-full object-contain block"
+          className="w-full h-auto object-contain block"
         />
         {/* Actual frame image rendered on top */}
         <S3Image
@@ -146,7 +146,7 @@ function FrameViewContent({
           videoId={videoId}
           path={currentFrameBoxes.imageUrl}
           alt={`Frame ${currentFrameBoxes.frameIndex}`}
-          className="absolute left-0 top-0 max-w-full max-h-full object-contain block"
+          className="absolute left-0 top-0 w-full h-full object-contain block"
         />
         <canvas
           ref={canvasRef}
