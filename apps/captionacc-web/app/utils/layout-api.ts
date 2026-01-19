@@ -183,17 +183,35 @@ export async function analyzeLayout(videoId: string): Promise<{
 }
 
 /**
+ * Box prediction from API
+ */
+export interface BoxPrediction {
+  frameIndex: number
+  boxIndex: number
+  predictedLabel: 'in' | 'out'
+  predictedConfidence: number
+}
+
+/**
+ * Calculate predictions response
+ */
+export interface CalculatePredictionsResult {
+  success: boolean
+  predictionsGenerated: number
+  modelVersion: string
+  predictions: BoxPrediction[]
+}
+
+/**
  * Calculate predictions for all OCR boxes
  *
  * Calls API server to run Bayesian prediction on all boxes.
  * This should be called before layout annotation is available to populate
  * predicted_label and predicted_confidence for all boxes.
+ *
+ * Returns the predictions so they can be applied to the local database.
  */
-export async function calculatePredictions(videoId: string): Promise<{
-  success: boolean
-  predictionsGenerated: number
-  modelVersion: string
-}> {
+export async function calculatePredictions(videoId: string): Promise<CalculatePredictionsResult> {
   const { API_CONFIG } = await import('~/config')
   const { supabase } = await import('~/services/supabase-client')
 
@@ -222,6 +240,26 @@ export async function calculatePredictions(videoId: string): Promise<{
   }
 
   return response.json()
+}
+
+/**
+ * Apply predictions to local database
+ *
+ * Takes predictions from calculatePredictions response and updates the local
+ * CR-SQLite database.
+ */
+export async function applyPredictions(
+  videoId: string,
+  predictions: BoxPrediction[]
+): Promise<number> {
+  const { getLayoutSyncService } = await import('~/services/layout-sync-service')
+  const service = getLayoutSyncService(videoId, videoId)
+
+  if (!service.isReady) {
+    throw new Error('Layout database not ready. Initialize with useLayoutDatabase first.')
+  }
+
+  return service.applyPredictions(predictions)
 }
 
 /**

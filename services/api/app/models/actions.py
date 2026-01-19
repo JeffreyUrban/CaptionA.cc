@@ -59,12 +59,22 @@ class AnalyzeLayoutResponse(BaseModel):
     layoutParams: LayoutParams | None = None
 
 
+class BoxPrediction(BaseModel):
+    """Individual box prediction result."""
+
+    frameIndex: int
+    boxIndex: int
+    predictedLabel: str
+    predictedConfidence: float
+
+
 class CalculatePredictionsResponse(BaseModel):
     """Response for calculate predictions endpoint."""
 
     success: bool
     predictionsGenerated: int
     modelVersion: str
+    predictions: list[BoxPrediction]
 
 
 class ProcessingType(str, Enum):

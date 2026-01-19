@@ -25,11 +25,13 @@ import {
   getAnnotationCount,
   setLayoutApproved,
   updateLayoutParams,
+  applyPredictions as applyPredictionsQuery,
   type LayoutQueueResult,
   type BoxDataResult,
   type FrameBoxesResult,
   type LayoutConfigResult,
   type LayoutParamsUpdate,
+  type BoxPredictionUpdate,
 } from './database-queries'
 import { subscribeToTable, type SubscriptionResult } from './database-subscriptions'
 
@@ -470,6 +472,23 @@ export class LayoutSyncService {
 
     await setLayoutApproved(db, true)
     this.emitEvent({ type: 'config_changed', videoId: this.videoId })
+  }
+
+  /**
+   * Apply predictions to boxes.
+   * Updates predicted_label and predicted_confidence for each box.
+   */
+  async applyPredictions(predictions: BoxPredictionUpdate[]): Promise<number> {
+    const db = this.ensureReady()
+
+    console.log(`[LayoutSync] Applying ${predictions.length} predictions to local database`)
+    const updated = await applyPredictionsQuery(db, predictions)
+    console.log(`[LayoutSync] Applied predictions to ${updated} boxes`)
+
+    // Emit boxes changed event so UI refreshes
+    this.emitEvent({ type: 'boxes_changed', videoId: this.videoId })
+
+    return updated
   }
 
   // ===========================================================================

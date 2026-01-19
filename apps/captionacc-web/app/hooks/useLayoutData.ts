@@ -29,6 +29,7 @@ import {
   clearAllAnnotations,
   prefetchFrameBoxes,
   calculatePredictions,
+  applyPredictions,
 } from '~/utils/layout-api'
 
 interface UseLayoutDataParams {
@@ -251,10 +252,13 @@ export function useLayoutData({
             `[Layout] Predictions calculated: ${result.predictionsGenerated} boxes, model: ${result.modelVersion}`
           )
 
-          // Wait a moment for CR-SQLite sync to pull changes
-          await new Promise(resolve => setTimeout(resolve, 1000))
+          // Apply predictions to local database
+          if (result.predictions && result.predictions.length > 0) {
+            console.log(`[Layout] Applying ${result.predictions.length} predictions to local database`)
+            await applyPredictions(videoId, result.predictions)
+          }
 
-          // Reload boxes after predictions are calculated
+          // Reload boxes after predictions are applied
           const updatedData = await fetchAnalysisBoxes(videoId)
           setAnalysisBoxes(updatedData.boxes ?? [])
         } catch (predError) {

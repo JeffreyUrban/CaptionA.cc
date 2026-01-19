@@ -44,7 +44,10 @@ function AnalysisViewContent({
   onMouseDown,
   onMouseMove,
   onContextMenu,
-}: Omit<LayoutMainCanvasProps, 'viewMode' | 'currentFrameBoxes' | 'loadingFrame' | 'tenantId' | 'videoId'> & {
+}: Omit<
+  LayoutMainCanvasProps,
+  'viewMode' | 'currentFrameBoxes' | 'loadingFrame' | 'tenantId' | 'videoId'
+> & {
   layoutConfig: LayoutConfig
 }) {
   return (

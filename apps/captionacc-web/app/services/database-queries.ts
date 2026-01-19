@@ -503,6 +503,39 @@ export async function clearAllAnnotations(db: CRSQLiteDatabase): Promise<number>
 }
 
 /**
+ * Prediction to apply to a box.
+ */
+export interface BoxPredictionUpdate {
+  frameIndex: number
+  boxIndex: number
+  predictedLabel: 'in' | 'out'
+  predictedConfidence: number
+}
+
+/**
+ * Apply predictions to boxes.
+ * Updates predicted_label and predicted_confidence for each box.
+ */
+export async function applyPredictions(
+  db: CRSQLiteDatabase,
+  predictions: BoxPredictionUpdate[]
+): Promise<number> {
+  if (predictions.length === 0) return 0
+
+  let updated = 0
+  for (const pred of predictions) {
+    const rows = await db.exec(
+      `UPDATE boxes
+       SET predicted_label = ?, predicted_confidence = ?
+       WHERE frame_index = ? AND box_index = ?`,
+      [pred.predictedLabel, pred.predictedConfidence, pred.frameIndex, pred.boxIndex]
+    )
+    updated += rows
+  }
+  return updated
+}
+
+/**
  * Bulk annotate boxes within a rectangle.
  */
 export async function bulkAnnotateByRectangle(

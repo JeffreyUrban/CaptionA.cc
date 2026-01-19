@@ -10,6 +10,7 @@ from app.config import get_settings
 from app.dependencies import Auth
 from app.models.actions import (
     AnalyzeLayoutResponse,
+    BoxPrediction,
     BulkAnnotateAction,
     BulkAnnotateRequest,
     BulkAnnotateResponse,
@@ -280,12 +281,12 @@ async def calculate_predictions(video_id: str, auth: Auth):
             model = load_model(conn)
             model_version = model.model_version if model else "heuristics"
 
-            # Get all boxes from full_frame_ocr
+            # Get all boxes from boxes table
             cursor = conn.cursor()
             rows = cursor.execute(
                 """
-                SELECT id, frame_index, box_index, text, x, y, width, height
-                FROM full_frame_ocr
+                SELECT frame_index, box_index, text, bbox_left, bbox_top, bbox_right, bbox_bottom
+                FROM boxes
                 ORDER BY frame_index, box_index
                 """
             ).fetchall()
@@ -301,19 +302,18 @@ async def calculate_predictions(video_id: str, auth: Auth):
             )
 
             # Prepare predictions
-            predictions_to_save: list[tuple[str, float, str, str, int]] = []
+            predictions_to_save: list[tuple[str, float, str, str, int, int]] = []
             now = datetime.now(timezone.utc).isoformat()
 
             for row in rows:
-                box_id, frame_index, box_index, text, x, y, width, height = row
+                frame_index, box_index, text, bbox_left, bbox_top, bbox_right, bbox_bottom = row
 
                 # Convert fractional coordinates to pixels
-                left = int(x * layout.frame_width)
-                bottom = int((1 - y) * layout.frame_height)
-                box_width_px = int(width * layout.frame_width)
-                box_height_px = int(height * layout.frame_height)
-                top = bottom - box_height_px
-                right = left + box_width_px
+                # boxes table stores normalized coords (0-1) with top > bottom (top of screen is higher y)
+                left = int(bbox_left * layout.frame_width)
+                top = int((1 - bbox_top) * layout.frame_height)
+                right = int(bbox_right * layout.frame_width)
+                bottom = int((1 - bbox_bottom) * layout.frame_height)
 
                 # Create BoxBounds for prediction
                 box_bounds = BoxBounds(
@@ -335,21 +335,23 @@ async def calculate_predictions(video_id: str, auth: Auth):
                         prediction.confidence,
                         model_version,
                         now,
-                        box_id,
+                        frame_index,
+                        box_index,
                     )
                 )
 
-            # Batch update predictions
+            # Batch update predictions in boxes table
             cursor.executemany(
                 """
-                UPDATE full_frame_ocr
+                UPDATE boxes
                 SET predicted_label = ?,
-                    predicted_confidence = ?,
-                    model_version = ?,
-                    predicted_at = ?
-                WHERE id = ?
+                    predicted_confidence = ?
+                WHERE frame_index = ? AND box_index = ?
                 """,
-                predictions_to_save,
+                [
+                    (label, conf, frame_idx, box_idx)
+                    for label, conf, _model, _time, frame_idx, box_idx in predictions_to_save
+                ],
             )
             conn.commit()
 
@@ -360,10 +362,22 @@ async def calculate_predictions(video_id: str, auth: Auth):
                 f"in {elapsed_ms}ms using {model_version}"
             )
 
+            # Convert predictions to response format
+            prediction_results = [
+                BoxPrediction(
+                    frameIndex=frame_idx,
+                    boxIndex=box_idx,
+                    predictedLabel=label,
+                    predictedConfidence=conf,
+                )
+                for label, conf, _model, _time, frame_idx, box_idx in predictions_to_save
+            ]
+
             return CalculatePredictionsResponse(
                 success=True,
                 predictionsGenerated=len(predictions_to_save),
                 modelVersion=model_version,
+                predictions=prediction_results,
             )
 
     except FileNotFoundError:
