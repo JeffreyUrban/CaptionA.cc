@@ -6,12 +6,15 @@ Uses LRU cache to minimize S3 operations.
 
 import asyncio
 import hashlib
+import logging
 import shutil
 import sqlite3
 from collections import OrderedDict
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import AsyncGenerator
+
+logger = logging.getLogger(__name__)
 
 import boto3
 from botocore.exceptions import ClientError
@@ -32,11 +35,22 @@ class DatabaseManager:
         self._locks: dict[str, asyncio.Lock] = {}
 
         # Initialize S3 client for Wasabi
+        access_key = self._settings.effective_wasabi_access_key
+        secret_key = self._settings.effective_wasabi_secret_key
+        logger.info(
+            f"Initializing S3 client: "
+            f"endpoint={self._settings.wasabi_endpoint_url}, "
+            f"region={self._settings.wasabi_region}, "
+            f"bucket={self._settings.wasabi_bucket}, "
+            f"access_key_set={bool(access_key)}, "
+            f"access_key_len={len(access_key) if access_key else 0}, "
+            f"secret_key_set={bool(secret_key)}"
+        )
         self._s3 = boto3.client(
             "s3",
             endpoint_url=self._settings.wasabi_endpoint_url,
-            aws_access_key_id=self._settings.wasabi_access_key_id,
-            aws_secret_access_key=self._settings.wasabi_secret_access_key,
+            aws_access_key_id=access_key,
+            aws_secret_access_key=secret_key,
             region_name=self._settings.wasabi_region,
         )
         self._bucket = self._settings.wasabi_bucket
@@ -69,6 +83,7 @@ class DatabaseManager:
 
         def _download():
             try:
+                logger.info(f"Attempting to download from S3: bucket={self._bucket}, key={s3_key}")
                 # Check if we need to download a compressed version
                 is_compressed = s3_key.endswith(".gz")
                 download_path = local_path if not is_compressed else Path(str(local_path) + ".gz")

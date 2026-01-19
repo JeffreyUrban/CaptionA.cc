@@ -95,9 +95,15 @@ def create_app() -> FastAPI:
     )
 
     # CORS middleware
+    # Note: allow_credentials=True requires specific origins (not "*")
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],  # Configure appropriately for production
+        allow_origins=[
+            "http://localhost:5173",
+            "http://localhost:5174",
+            "https://caption-a.cc",
+            "https://www.caption-a.cc",
+        ],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
