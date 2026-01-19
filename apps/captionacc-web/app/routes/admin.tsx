@@ -17,15 +17,6 @@ interface FailedVideo {
   processingStartedAt: string | null
 }
 
-interface ModelVersionStats {
-  total: number
-  upToDate: number
-  recalculated: number
-  boundsChanged: number
-  errors: number
-  changedVideos: Array<{ displayPath: string; oldVersion: string | null; newVersion: string }>
-}
-
 interface RepairSummary {
   total: number
   current: number
@@ -698,87 +689,6 @@ function FailedCropFramesSection({
   )
 }
 
-interface ModelVersionCheckProps {
-  modelVersionStats: ModelVersionStats | null
-  runningModelCheck: boolean
-  onRunCheck: () => void
-}
-
-function ModelVersionCheckSection({
-  modelVersionStats,
-  runningModelCheck,
-  onRunCheck,
-}: ModelVersionCheckProps) {
-  return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Model Version Check</h2>
-      </div>
-
-      <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-        Check all videos for model version mismatches and trigger automatic recalculation.
-      </p>
-
-      <button
-        onClick={onRunCheck}
-        disabled={runningModelCheck}
-        className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        {runningModelCheck ? 'Running...' : 'Run Model Version Check'}
-      </button>
-
-      {modelVersionStats && (
-        <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-4">
-          <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-2">
-            Last Check Results
-          </h3>
-          <dl className="grid grid-cols-2 gap-3 text-sm">
-            <div>
-              <dt className="text-gray-600 dark:text-gray-400">Total Videos</dt>
-              <dd className="font-medium text-gray-900 dark:text-white">
-                {modelVersionStats.total}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-gray-600 dark:text-gray-400">Up to Date</dt>
-              <dd className="font-medium text-green-600 dark:text-green-400">
-                {modelVersionStats.upToDate}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-gray-600 dark:text-gray-400">Recalculated</dt>
-              <dd className="font-medium text-blue-600 dark:text-blue-400">
-                {modelVersionStats.recalculated}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-gray-600 dark:text-gray-400">Bounds Changed</dt>
-              <dd className="font-medium text-yellow-600 dark:text-yellow-400">
-                {modelVersionStats.boundsChanged}
-              </dd>
-            </div>
-          </dl>
-
-          {modelVersionStats.changedVideos.length > 0 && (
-            <div className="mt-4">
-              <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">
-                Videos with Changed Bounds
-              </h4>
-              <div className="max-h-48 overflow-y-auto space-y-1">
-                {modelVersionStats.changedVideos.map((video, idx) => (
-                  <div key={idx} className="text-xs text-gray-600 dark:text-gray-400 font-mono">
-                    {video.displayPath} ({video.oldVersion ?? 'null'} → {video.newVersion})
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
-
 export default function AdminPage() {
   const { CURRENT_SCHEMA_VERSION, LATEST_SCHEMA_VERSION, hasLatestSchema } =
     useLoaderData<typeof loader>()
@@ -788,8 +698,6 @@ export default function AdminPage() {
   const [failedVideos, setFailedVideos] = useState<FailedVideo[]>([])
   const [loadingFailed, setLoadingFailed] = useState(true)
   const [retryingVideos, setRetryingVideos] = useState<Set<string>>(new Set())
-  const [modelVersionStats, setModelVersionStats] = useState<ModelVersionStats | null>(null)
-  const [runningModelCheck, setRunningModelCheck] = useState(false)
 
   // Check admin status on mount
   useEffect(() => {
@@ -892,28 +800,6 @@ export default function AdminPage() {
     }
   }
 
-  const runModelVersionCheck = async () => {
-    setRunningModelCheck(true)
-    try {
-      const response = await authenticatedFetch('/api/admin/model-version-check', {
-        method: 'POST',
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        setModelVersionStats(data)
-      } else {
-        const error = await response.json()
-        alert(`Failed to run model version check: ${error.error}`)
-      }
-    } catch (error) {
-      console.error('Failed to run model version check:', error)
-      alert('Failed to run model version check')
-    } finally {
-      setRunningModelCheck(false)
-    }
-  }
-
   // Show loading while checking admin status
   if (isAdmin === null) {
     return (
@@ -952,14 +838,6 @@ export default function AdminPage() {
           }}
           onRetryAll={() => {
             void retryAll()
-          }}
-        />
-
-        <ModelVersionCheckSection
-          modelVersionStats={modelVersionStats}
-          runningModelCheck={runningModelCheck}
-          onRunCheck={() => {
-            void runModelVersionCheck()
           }}
         />
 

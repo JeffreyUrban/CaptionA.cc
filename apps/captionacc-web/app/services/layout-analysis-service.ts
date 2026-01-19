@@ -8,7 +8,6 @@
 import type { CanvasRenderingContext2D as NodeCanvasContext } from 'canvas'
 
 import type { TextAnchor } from '~/types/enums'
-import { predictBoxLabel } from '~/utils/box-prediction'
 import { getAnnotationDatabase, getWritableDatabase } from '~/utils/database'
 
 // =============================================================================
@@ -910,10 +909,7 @@ function triggerPredictionRecalculation(videoId: string): void {
   console.log(
     `[Layout Config] Layout parameters changed, triggering prediction recalculation for ${videoId}`
   )
-  fetch(
-    `/videos/${encodeURIComponent(videoId)}/calculate-predictions`,
-    { method: 'POST' }
-  )
+  fetch(`/videos/${encodeURIComponent(videoId)}/calculate-predictions`, { method: 'POST' })
     .then(response => response.json())
     .then(result => {
       console.log(`[Layout Config] Predictions recalculated after layout change:`, result)
@@ -1740,16 +1736,6 @@ interface BoxBounds {
   bottom: number
 }
 
-/** Type for predict function imported lazily. */
-type PredictBoxLabelFn = (
-  boxBounds: BoxBounds,
-  layoutConfig: VideoLayoutConfigRow,
-  allBoxes: BoxBounds[],
-  frameIndex: number,
-  boxIndex: number,
-  db?: import('better-sqlite3').Database
-) => { label: 'in' | 'out'; confidence: number }
-
 /**
  * Generate color code for a box based on its labels.
  *
@@ -1797,34 +1783,20 @@ function buildAnnotationMap(
   return map
 }
 
-/** Process a single box and return its visualization data. */
+/** Process a single box and return its visualization data.
+ *
+ * Predictions are read from the database (calculated server-side).
+ */
 function processBox(
   box: OcrBoxRow,
   bounds: BoxBounds,
-  layoutConfig: VideoLayoutConfigRow,
-  allBounds: BoxBounds[],
-  annotationMap: Map<string, 'in' | 'out'>,
-  updateStmt: import('better-sqlite3').Statement,
-  predictBoxLabel: PredictBoxLabelFn,
-  db: import('better-sqlite3').Database
+  annotationMap: Map<string, 'in' | 'out'>
 ): LayoutAnalysisBox {
   const userLabel = annotationMap.get(`${box.frame_index}-${box.box_index}`) ?? null
-  let predictedLabel: 'in' | 'out' = box.predicted_label ?? 'out'
-  let predictedConfidence = box.predicted_confidence ?? 0
-
-  if (!box.predicted_label || box.predicted_confidence === null) {
-    const prediction = predictBoxLabel(
-      bounds,
-      layoutConfig,
-      allBounds,
-      box.frame_index,
-      box.box_index,
-      db
-    )
-    predictedLabel = prediction.label
-    predictedConfidence = prediction.confidence
-    updateStmt.run(predictedLabel, predictedConfidence, box.id)
-  }
+  // Read predictions from database (calculated server-side)
+  // Default to 'out' with low confidence if not yet calculated
+  const predictedLabel: 'in' | 'out' = box.predicted_label ?? 'out'
+  const predictedConfidence = box.predicted_confidence ?? 0.5
 
   return {
     boxIndex: box.box_index,
@@ -1892,11 +1864,8 @@ export async function getLayoutAnalysisBoxes(
       .all(...params) as Array<{ frame_index: number; box_index: number; label: 'in' | 'out' }>
 
     const annotationMap = buildAnnotationMap(annotations)
-    const updateStmt = db.prepare(
-      `UPDATE full_frame_ocr SET predicted_label = ?, predicted_confidence = ?, predicted_at = datetime('now') WHERE id = ?`
-    )
 
-    // Process boxes by frame
+    // Process boxes - predictions are read from database (calculated server-side)
     const boxesData: LayoutAnalysisBox[] = []
     for (const [, frameBoxes] of groupBoxesByFrame(boxes)) {
       const allBounds = frameBoxes.map(b => convertToPixelBounds(b, layoutConfig))
@@ -1904,18 +1873,7 @@ export async function getLayoutAnalysisBoxes(
         const box = frameBoxes[i]
         const bounds = allBounds[i]
         if (box && bounds) {
-          boxesData.push(
-            processBox(
-              box,
-              bounds,
-              layoutConfig,
-              allBounds,
-              annotationMap,
-              updateStmt,
-              predictBoxLabel,
-              db
-            )
-          )
+          boxesData.push(processBox(box, bounds, annotationMap))
         }
       }
     }

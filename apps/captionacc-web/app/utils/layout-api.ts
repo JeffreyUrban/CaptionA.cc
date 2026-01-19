@@ -142,6 +142,47 @@ export async function bulkAnnotateAll(
 }
 
 /**
+ * Run Bayesian layout analysis on OCR boxes
+ *
+ * Calls API server to analyze OCR box positions and calculate
+ * layout parameters (vertical position, anchor type, etc.)
+ */
+export async function analyzeLayout(videoId: string): Promise<{
+  success: boolean
+  boxesAnalyzed: number
+  processingTimeMs: number
+}> {
+  const { API_CONFIG } = await import('~/config')
+  const { supabase } = await import('~/services/supabase-client')
+
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+
+  if (!session?.access_token) {
+    throw new Error('User not authenticated')
+  }
+
+  const response = await fetch(
+    `${API_CONFIG.PYTHON_API_URL}/videos/${videoId}/actions/analyze-layout`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    }
+  )
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Unknown error' }))
+    throw new Error(error.detail || `HTTP ${response.status}`)
+  }
+
+  return response.json()
+}
+
+/**
  * Prefetch frame boxes for multiple frames
  */
 export async function prefetchFrameBoxes(

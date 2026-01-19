@@ -144,13 +144,82 @@ async def analyze_layout(video_id: str, auth: Auth):
     Run layout analysis (Bayesian model on boxes).
 
     Analyzes OCR box positions to determine optimal caption region.
+    Downloads layout.db from Wasabi, runs Bayesian analysis to calculate
+    layout parameters (vertical position, anchor type, etc.), and uploads
+    updated database back to Wasabi.
+
     Synchronous operation, returns updated predictions.
     """
-    # TODO: Implement Bayesian layout analysis
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="Layout analysis not yet implemented",
-    )
+    import time
+
+    from app.services.layout_analysis import analyze_ocr_boxes, update_layout_config
+
+    start_time = time.time()
+    layout_db_manager = get_layout_database_manager()
+
+    try:
+        # Download layout.db from Wasabi and get writable connection
+        async with layout_db_manager.get_database(
+            auth.tenant_id, video_id, writable=True
+        ) as conn:
+            # Get frame dimensions from layout config
+            cursor = conn.cursor()
+            config_row = cursor.execute(
+                "SELECT frame_width, frame_height FROM layout_config WHERE id = 1"
+            ).fetchone()
+
+            if not config_row:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Layout config not found for video {video_id}",
+                )
+
+            frame_width, frame_height = config_row
+
+            # Count total boxes for response
+            boxes_count = cursor.execute(
+                "SELECT COUNT(*) FROM boxes"
+            ).fetchone()[0]
+
+            logger.info(
+                f"Running Bayesian analysis on {boxes_count} boxes "
+                f"for video {video_id} (frame size: {frame_width}x{frame_height})"
+            )
+
+            # Run Bayesian analysis
+            layout_params = analyze_ocr_boxes(conn, frame_width, frame_height)
+
+            # Update layout config with calculated parameters
+            update_layout_config(conn, layout_params)
+
+            logger.info(
+                f"Layout analysis complete for video {video_id}: "
+                f"anchor_type={layout_params.anchor_type}, "
+                f"vertical_position={layout_params.vertical_position}"
+            )
+
+        # Database automatically uploaded to Wasabi on exit (writable=True)
+
+        elapsed_ms = int((time.time() - start_time) * 1000)
+
+        return AnalyzeLayoutResponse(
+            success=True,
+            boxesAnalyzed=boxes_count,
+            processingTimeMs=elapsed_ms,
+        )
+
+    except ValueError as e:
+        # No OCR boxes found
+        logger.error(f"Layout analysis failed for video {video_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+    except FileNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Layout database not found for video {video_id}",
+        )
 
 
 @router.post(

@@ -2620,10 +2620,6 @@ provides-extras = ["cli", "dev", "google", "livetext"]
 [[package]]
 name = "ocr-box-model"
 source = { editable = "packages/ocr_box_model" }
-dependencies = [
-    { name = "caption-models" },
-    { name = "numpy" },
-]
 
 [package.optional-dependencies]
 dev = [
@@ -2639,9 +2635,7 @@ ml = [
 
 [package.metadata]
 requires-dist = [
-    { name = "caption-models", editable = "packages/caption_models" },
     { name = "joblib", marker = "extra == 'ml'", specifier = ">=1.3.0" },
-    { name = "numpy", specifier = ">=1.26.0" },
     { name = "pyright", marker = "extra == 'dev'", specifier = ">=1.1.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.4.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.1.0" },

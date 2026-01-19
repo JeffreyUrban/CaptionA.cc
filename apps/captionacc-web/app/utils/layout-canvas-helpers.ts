@@ -130,14 +130,23 @@ export function drawLayoutOverlays(
   canvasWidth: number,
   canvasHeight: number
 ): void {
+  console.log('[drawLayoutOverlays] Values:', {
+    verticalPosition: layoutConfig.verticalPosition,
+    anchorType: layoutConfig.anchorType,
+    anchorPosition: layoutConfig.anchorPosition,
+    selectionLeft: layoutConfig.selectionLeft,
+    selectionTop: layoutConfig.selectionTop,
+  })
+
   // Crop bounds (red, dashed)
+  // Note: layoutConfig values are normalized (0-1), so multiply by frame dimensions then scale
   ctx.strokeStyle = '#ef4444'
   ctx.lineWidth = 2
   ctx.setLineDash([15, 5])
-  const cropX = layoutConfig.cropLeft * scale
-  const cropY = layoutConfig.cropTop * scale
-  const cropW = (layoutConfig.cropRight - layoutConfig.cropLeft) * scale
-  const cropH = (layoutConfig.cropBottom - layoutConfig.cropTop) * scale
+  const cropX = layoutConfig.cropLeft * layoutConfig.frameWidth * scale
+  const cropY = layoutConfig.cropTop * layoutConfig.frameHeight * scale
+  const cropW = (layoutConfig.cropRight - layoutConfig.cropLeft) * layoutConfig.frameWidth * scale
+  const cropH = (layoutConfig.cropBottom - layoutConfig.cropTop) * layoutConfig.frameHeight * scale
   ctx.strokeRect(cropX, cropY, cropW, cropH)
   ctx.setLineDash([])
 
@@ -148,41 +157,62 @@ export function drawLayoutOverlays(
     layoutConfig.selectionRight !== null &&
     layoutConfig.selectionBottom !== null
   ) {
+    console.log('[drawLayoutOverlays] Drawing selection rect')
     ctx.strokeStyle = '#3b82f6'
     ctx.lineWidth = 3
     ctx.setLineDash([10, 5])
-    const selX = layoutConfig.selectionLeft * scale
-    const selY = layoutConfig.selectionTop * scale
-    const selW = (layoutConfig.selectionRight - layoutConfig.selectionLeft) * scale
-    const selH = (layoutConfig.selectionBottom - layoutConfig.selectionTop) * scale
+    const selX = layoutConfig.selectionLeft * layoutConfig.frameWidth * scale
+    const selY = layoutConfig.selectionTop * layoutConfig.frameHeight * scale
+    const selW =
+      (layoutConfig.selectionRight - layoutConfig.selectionLeft) * layoutConfig.frameWidth * scale
+    const selH =
+      (layoutConfig.selectionBottom - layoutConfig.selectionTop) * layoutConfig.frameHeight * scale
     ctx.strokeRect(selX, selY, selW, selH)
     ctx.setLineDash([])
   }
 
-  // Vertical center line (purple, dashed)
-  if (layoutConfig.verticalPosition !== null) {
+  // Vertical center line (purple, dashed) - HORIZONTAL line at Y position
+  if (layoutConfig.verticalPosition !== null && layoutConfig.verticalPosition !== undefined) {
+    const lineY = layoutConfig.verticalPosition * layoutConfig.frameHeight * scale
+    console.log('[drawLayoutOverlays] Drawing horizontal line at Y =', lineY)
     ctx.strokeStyle = '#8b5cf6'
     ctx.lineWidth = 2
     ctx.setLineDash([5, 3])
-    const lineY = layoutConfig.verticalPosition * scale
     ctx.beginPath()
     ctx.moveTo(0, lineY)
     ctx.lineTo(canvasWidth, lineY)
     ctx.stroke()
     ctx.setLineDash([])
+  } else {
+    console.log(
+      '[drawLayoutOverlays] NOT drawing horizontal line - verticalPosition is',
+      layoutConfig.verticalPosition
+    )
   }
 
-  // Anchor line (orange, dashed)
-  if (layoutConfig.anchorType !== null && layoutConfig.anchorPosition !== null) {
+  // Anchor line (orange, dashed) - VERTICAL line at X position
+  if (
+    layoutConfig.anchorType !== null &&
+    layoutConfig.anchorPosition !== null &&
+    layoutConfig.anchorPosition !== undefined
+  ) {
+    const lineX = layoutConfig.anchorPosition * layoutConfig.frameWidth * scale
+    console.log('[drawLayoutOverlays] Drawing vertical anchor line at X =', lineX)
     ctx.strokeStyle = '#f59e0b'
     ctx.lineWidth = 2
     ctx.setLineDash([5, 3])
-    const lineX = layoutConfig.anchorPosition * scale
     ctx.beginPath()
     ctx.moveTo(lineX, 0)
     ctx.lineTo(lineX, canvasHeight)
     ctx.stroke()
     ctx.setLineDash([])
+  } else {
+    console.log(
+      '[drawLayoutOverlays] NOT drawing anchor line - anchorType:',
+      layoutConfig.anchorType,
+      'anchorPosition:',
+      layoutConfig.anchorPosition
+    )
   }
 }
 

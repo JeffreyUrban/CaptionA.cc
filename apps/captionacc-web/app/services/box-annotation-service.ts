@@ -1,22 +1,15 @@
 /**
  * Box annotation service for OCR box classification.
  *
- * Provides functionality for annotating OCR boxes as captions or noise,
- * including individual box annotation, bulk annotation, and prediction calculation.
+ * Provides functionality for annotating OCR boxes as captions or noise.
+ * Predictions are calculated server-side via the Python ocr_box_model package.
  */
 
 import type Database from 'better-sqlite3'
 
 import { triggerModelTraining } from '~/services/model-training'
-import {
-  startStreamingUpdate,
-  startFullRetrain,
-  completeProcessing,
-  updateProgress,
-} from '~/services/processing-status-tracker'
-import { applyStreamingPredictionUpdates } from '~/services/streaming-prediction-service'
+import { startFullRetrain } from '~/services/processing-status-tracker'
 import type { TextAnchor } from '~/types/enums'
-import { predictBoxLabel, trainModel, initializeSeedModel } from '~/utils/box-prediction'
 import {
   pixelToCroppedDisplay,
   boundsIntersect,
@@ -25,12 +18,6 @@ import {
   type CropBounds,
 } from '~/utils/coordinate-utils'
 import { getAnnotationDatabase, getWritableDatabase } from '~/utils/database'
-import {
-  shouldTriggerFullRetrain,
-  getRetrainState,
-  formatRetrainTriggerLog,
-} from '~/utils/smart-retrain-triggers'
-import { BATCH_HANDLING_CONFIG } from '~/utils/streaming-prediction-config'
 
 // =============================================================================
 // Type Definitions
@@ -55,7 +42,7 @@ interface VideoLayoutConfigRow {
 }
 
 /**
- * OCR box data from database.
+ * OCR box data from database (includes predictions from server).
  */
 interface OcrBoxRow {
   box_index: number
@@ -65,6 +52,8 @@ interface OcrBoxRow {
   y: number
   width: number
   height: number
+  predicted_label: 'in' | 'out' | null
+  predicted_confidence: number | null
 }
 
 /**
@@ -115,10 +104,8 @@ export interface BoxAnnotationInput {
 export interface SaveAnnotationsResult {
   success: boolean
   annotatedCount: number
-  /** Whether full model retraining was triggered (runs in background) */
-  retrainingTriggered: boolean
-  /** Whether streaming prediction updates were triggered (runs in background) */
-  streamingUpdatesApplied: boolean
+  /** Whether server-side prediction recalculation was triggered */
+  recalculationTriggered: boolean
 }
 
 /**
@@ -182,169 +169,8 @@ export interface BulkAnnotateRectangleAllResult {
   frameIndices: number[]
 }
 
-/**
- * Result of calculating predictions.
- */
-export interface CalculatePredictionsResult {
-  success: boolean
-  updatedCount: number
-  modelVersion: string | null
-}
-
 // =============================================================================
 // Helper Functions
-// =============================================================================
-
-/**
- * OCR box record with computed pixel bounds.
- * Used internally for processing boxes with pre-computed coordinates.
- */
-interface OcrBoxRecord {
-  boxIndex: number
-  text: string
-  bounds: PixelBounds
-}
-
-/**
- * Result of processing boxes in a single frame.
- */
-interface ProcessFrameResult {
-  annotatedCount: number
-  newlyAnnotatedCount: number
-  boxIndices: number[]
-}
-
-// =============================================================================
-// Bulk Annotation Helper Functions
-// =============================================================================
-
-/**
- * Filter OCR boxes that intersect with a rectangle.
- *
- * @param boxes - Array of OCR box records with bounds
- * @param rectangle - Rectangle bounds in pixel coordinates
- * @returns Array of box records that intersect with the rectangle
- */
-function filterBoxesInRectangle(boxes: OcrBoxRecord[], rectangle: PixelBounds): OcrBoxRecord[] {
-  return boxes.filter(box => boundsIntersect(box.bounds, rectangle))
-}
-
-/**
- * Apply annotation action to a single box.
- *
- * Handles 'mark_out' (insert/update) and 'clear' (delete) actions.
- *
- * @param db - Database connection
- * @param frameIndex - Frame index
- * @param box - OCR box record
- * @param action - Action to apply
- * @param prediction - Prediction data for the box (for mark_out)
- * @param modelVersion - Model version string (for mark_out)
- * @returns true if the box was newly annotated (didn't have a label before)
- */
-function applyAnnotationAction(
-  db: Database.Database,
-  frameIndex: number,
-  box: OcrBoxRecord,
-  action: 'mark_out' | 'clear',
-  prediction: { label: 'in' | 'out'; confidence: number } | null,
-  modelVersion: string | null
-): boolean {
-  if (action === 'clear') {
-    db.prepare(`DELETE FROM full_frame_box_labels WHERE frame_index = ? AND box_index = ?`).run(
-      frameIndex,
-      box.boxIndex
-    )
-    return false // Clear doesn't count as "newly annotated"
-  }
-
-  // action === 'mark_out'
-  // Check if box already has a label
-  const existing = db
-    .prepare(`SELECT 1 FROM full_frame_box_labels WHERE frame_index = ? AND box_index = ?`)
-    .get(frameIndex, box.boxIndex)
-
-  const isNewlyAnnotated = !existing
-
-  db.prepare(
-    `
-    INSERT INTO full_frame_box_labels (
-      annotation_source, frame_index, box_index, box_text,
-      box_left, box_top, box_right, box_bottom,
-      label, label_source, predicted_label, predicted_confidence, model_version, labeled_at
-    ) VALUES ('full_frame', ?, ?, ?, ?, ?, ?, ?, 'out', 'user', ?, ?, ?, datetime('now'))
-    ON CONFLICT(annotation_source, frame_index, box_index)
-    DO UPDATE SET label = 'out', label_source = 'user', labeled_at = datetime('now')
-  `
-  ).run(
-    frameIndex,
-    box.boxIndex,
-    box.text,
-    box.bounds.left,
-    box.bounds.top,
-    box.bounds.right,
-    box.bounds.bottom,
-    prediction?.label ?? 'out',
-    prediction?.confidence ?? 0.5,
-    modelVersion
-  )
-
-  return isNewlyAnnotated
-}
-
-/**
- * Process all boxes in a frame that intersect with a rectangle.
- *
- * @param db - Database connection
- * @param frameIndex - Frame index
- * @param boxes - All OCR box records for the frame
- * @param rectangle - Rectangle bounds in pixel coordinates
- * @param action - Action to apply
- * @param layoutConfig - Layout config for predictions
- * @param modelVersion - Model version string
- * @returns Result with counts and affected box indices
- */
-function processFrameBoxes(
-  db: Database.Database,
-  frameIndex: number,
-  boxes: OcrBoxRecord[],
-  rectangle: PixelBounds,
-  action: 'mark_out' | 'clear',
-  layoutConfig: VideoLayoutConfigRow,
-  modelVersion: string | null
-): ProcessFrameResult {
-  const matchingBoxes = filterBoxesInRectangle(boxes, rectangle)
-
-  if (matchingBoxes.length === 0) {
-    return { annotatedCount: 0, newlyAnnotatedCount: 0, boxIndices: [] }
-  }
-
-  // Pre-compute all bounds for prediction feature extraction
-  const allBounds = boxes.map(b => b.bounds)
-  let newlyAnnotatedCount = 0
-  const boxIndices: number[] = []
-
-  for (const box of matchingBoxes) {
-    // Get prediction for mark_out action
-    const prediction =
-      action === 'mark_out'
-        ? predictBoxLabel(box.bounds, layoutConfig, allBounds, frameIndex, box.boxIndex, db)
-        : null
-
-    const isNew = applyAnnotationAction(db, frameIndex, box, action, prediction, modelVersion)
-    if (isNew) newlyAnnotatedCount++
-    boxIndices.push(box.boxIndex)
-  }
-
-  return {
-    annotatedCount: matchingBoxes.length,
-    newlyAnnotatedCount,
-    boxIndices,
-  }
-}
-
-// =============================================================================
-// Color Code Helper
 // =============================================================================
 
 /**
@@ -390,231 +216,14 @@ function ocrToPixelBounds(
   return { left: boxLeft, top: boxTop, right: boxRight, bottom: boxBottom }
 }
 
-/**
- * Check if smart retrain triggers have been reached for auto-retraining.
- *
- * Uses multi-condition logic that adapts to user annotation pace:
- * - Standard: 100 new annotations + 20s elapsed
- * - High-rate: 20+ annotations/minute with 30+ new annotations
- * - Time-based: 5 minutes elapsed with any new annotations
- *
- * @param db - Database connection
- * @returns Whether retraining should be triggered
- */
-function shouldTriggerRetraining(db: Database.Database): boolean {
-  const retrainState = getRetrainState(db)
-  const triggerResult = shouldTriggerFullRetrain(retrainState)
-
-  console.log(formatRetrainTriggerLog(triggerResult))
-
-  return triggerResult.shouldRetrain
-}
-
-/**
- * Apply streaming updates in background without blocking.
- * Opens its own database connection to avoid conflicts.
- * Tracks processing status for UI indicators.
- *
- * @param videoId - Video identifier
- * @param annotation - Annotation to base updates on
- * @param layoutConfig - Video layout configuration
- */
-function applyStreamingUpdatesInBackground(
-  videoId: string,
-  annotation: { frameIndex: number; boxIndex: number; label: 'in' | 'out' },
-  layoutConfig: VideoLayoutConfigRow
-): void {
-  // Mark as processing
-  startStreamingUpdate(videoId)
-
-  // Fire and forget - don't await
-  const runStreamingUpdate = async () => {
-    const dbResult = await getWritableDatabase(videoId)
-    if (!dbResult.success) {
-      console.error('[streamingUpdateBackground] Failed to open database')
-      completeProcessing(videoId)
-      return
-    }
-
-    const db = dbResult.db
-    try {
-      const result = await applyStreamingPredictionUpdates(db, annotation, layoutConfig)
-
-      if (result.success) {
-        updateProgress(videoId, {
-          processed: result.boxesProcessed,
-          message: `Updated ${result.predictionsChanged} predictions`,
-        })
-
-        console.log(
-          `[streamingUpdateBackground] Complete: ${result.boxesProcessed} processed, ` +
-            `${result.predictionsChanged} changed, reason=${result.stopReason}`
-        )
-      }
-    } catch (error) {
-      console.error('[streamingUpdateBackground] Error:', error)
-    } finally {
-      db.close()
-      completeProcessing(videoId)
-    }
-  }
-
-  // Start background task (don't await)
-  runStreamingUpdate().catch(err => {
-    console.error('[streamingUpdateBackground] Unexpected error:', err)
-    completeProcessing(videoId)
-  })
-}
-
-// TODO: Implement streaming prediction updates
-// This will replace batch recalculation with intelligent scope detection:
-// - Load covariance_inverse from model
-// - Identify affected boxes using Mahalanobis distance and prediction uncertainty
-// - Run adaptive recalculation with reversal rate stopping
-// For now, full retrain triggers the standard calculatePredictions()
-
-/**
- * Process a batch of annotations and save to database
- */
-function processAnnotationBatch(
-  db: Database.Database,
-  frameIndex: number,
-  annotations: BoxAnnotationInput[],
-  ocrBoxes: OcrBoxRow[],
-  allBoxBounds: PixelBounds[],
-  layoutConfig: VideoLayoutConfigRow,
-  modelVersion: string | null
-): number {
-  const frameWidth = layoutConfig.frame_width
-  const frameHeight = layoutConfig.frame_height
-
-  const upsert = db.prepare(`
-    INSERT INTO full_frame_box_labels (
-      annotation_source, frame_index, box_index, box_text, box_left, box_top, box_right, box_bottom,
-      label, label_source, predicted_label, predicted_confidence, model_version, labeled_at
-    ) VALUES ('full_frame', ?, ?, ?, ?, ?, ?, ?, ?, 'user', ?, ?, ?, datetime('now'))
-    ON CONFLICT(annotation_source, frame_index, box_index) DO UPDATE SET
-      label = excluded.label,
-      labeled_at = datetime('now')
-  `)
-
-  let savedCount = 0
-
-  for (const annotation of annotations) {
-    const { boxIndex, label } = annotation
-
-    if (boxIndex >= ocrBoxes.length) {
-      console.warn(`Box index ${boxIndex} out of range for frame ${frameIndex}`)
-      continue
-    }
-
-    const ocrBox = ocrBoxes[boxIndex]
-    if (!ocrBox) continue
-
-    const originalBounds = ocrToPixelBounds(ocrBox, frameWidth, frameHeight)
-
-    const prediction = predictBoxLabel(
-      originalBounds,
-      layoutConfig,
-      allBoxBounds,
-      frameIndex,
-      boxIndex,
-      db
-    )
-
-    upsert.run(
-      frameIndex,
-      boxIndex,
-      ocrBox.text,
-      originalBounds.left,
-      originalBounds.top,
-      originalBounds.right,
-      originalBounds.bottom,
-      label,
-      prediction.label,
-      prediction.confidence,
-      modelVersion
-    )
-
-    savedCount++
-  }
-
-  return savedCount
-}
-
-/**
- * Determine update strategy and apply updates
- */
-function determineUpdateStrategy(
-  videoId: string,
-  frameIndex: number,
-  batchSize: number,
-  annotations: BoxAnnotationInput[],
-  fullLayoutConfig: VideoLayoutConfigRow | undefined,
-  db: Database.Database
-): { retrainingTriggered: boolean; streamingUpdatesApplied: boolean } {
-  const isBulkOperation = batchSize >= BATCH_HANDLING_CONFIG.BULK_ANNOTATION_THRESHOLD
-  const isSmallBatch = batchSize <= BATCH_HANDLING_CONFIG.MAX_STREAMING_UPDATE_BATCH_SIZE
-  const retrainingTriggered = shouldTriggerRetraining(db)
-
-  // Strategy 1: Bulk operations (100+ annotations) → Force immediate full retrain
-  if (isBulkOperation) {
-    console.log(
-      `[saveBoxAnnotations] Bulk operation (${batchSize} boxes) - forcing immediate retrain`
-    )
-    startFullRetrain(videoId)
-    triggerModelTraining(videoId)
-    return { retrainingTriggered: true, streamingUpdatesApplied: false }
-  }
-
-  // Strategy 2: Smart retrain triggers met → Full retrain
-  if (retrainingTriggered) {
-    console.log('[saveBoxAnnotations] Retrain triggers met - triggering full retrain')
-    startFullRetrain(videoId)
-    triggerModelTraining(videoId)
-    return { retrainingTriggered: true, streamingUpdatesApplied: false }
-  }
-
-  // Strategy 3: Small batches (1-10 annotations) → Single streaming update (non-blocking)
-  if (isSmallBatch && fullLayoutConfig) {
-    const randomIndex = Math.floor(Math.random() * annotations.length)
-    const selectedAnnotation = annotations[randomIndex]
-
-    if (selectedAnnotation) {
-      console.log(
-        `[saveBoxAnnotations] Small batch (${batchSize} boxes) - triggering streaming update ` +
-          `in background (using annotation ${randomIndex + 1}/${batchSize})`
-      )
-
-      applyStreamingUpdatesInBackground(
-        videoId,
-        {
-          frameIndex,
-          boxIndex: selectedAnnotation.boxIndex,
-          label: selectedAnnotation.label,
-        },
-        fullLayoutConfig
-      )
-
-      return { retrainingTriggered: false, streamingUpdatesApplied: true }
-    }
-  } else if (!isSmallBatch) {
-    // Strategy 4: Medium batches → Skip streaming, wait for triggers
-    console.log(
-      `[saveBoxAnnotations] Medium batch (${batchSize} boxes) - skipping streaming, ` +
-        `waiting for retrain triggers`
-    )
-  }
-
-  return { retrainingTriggered: false, streamingUpdatesApplied: false }
-}
-
 // =============================================================================
 // Service Functions
 // =============================================================================
 
 /**
  * Get all boxes for a frame with predictions and annotations.
+ *
+ * Predictions are read from the database (calculated server-side).
  *
  * @param videoId - Video identifier
  * @param frameIndex - Frame index to retrieve
@@ -642,11 +251,12 @@ export async function getFrameBoxes(
       throw new Error('Layout config not found')
     }
 
-    // Load frame OCR from full_frame_ocr table
+    // Load frame OCR from full_frame_ocr table (includes server-calculated predictions)
     const ocrBoxes = db
       .prepare(
         `
-        SELECT box_index, text, confidence, x, y, width, height
+        SELECT box_index, text, confidence, x, y, width, height,
+               predicted_label, predicted_confidence
         FROM full_frame_ocr
         WHERE frame_index = ?
         ORDER BY box_index
@@ -674,11 +284,6 @@ export async function getFrameBoxes(
       userAnnotationMap.set(ann.box_index, ann.label)
     })
 
-    // Convert all boxes to bounds for feature extraction
-    const allBoxBounds: PixelBounds[] = ocrBoxes.map(box =>
-      ocrToPixelBounds(box, layoutConfig.frame_width, layoutConfig.frame_height)
-    )
-
     const cropBounds: CropBounds = {
       left: layoutConfig.crop_left,
       top: layoutConfig.crop_top,
@@ -686,40 +291,35 @@ export async function getFrameBoxes(
       bottom: layoutConfig.crop_bottom,
     }
 
-    // Process boxes
-    const boxes: BoxData[] = ocrBoxes.map((ocrBox, boxIndex) => {
+    // Process boxes - read predictions from database
+    const boxes: BoxData[] = ocrBoxes.map(ocrBox => {
       const originalBounds = ocrToPixelBounds(
         ocrBox,
         layoutConfig.frame_width,
         layoutConfig.frame_height
       )
 
-      // Predict label using Bayesian model
-      const prediction = predictBoxLabel(
-        originalBounds,
-        layoutConfig,
-        allBoxBounds,
-        frameIndex,
-        boxIndex,
-        db
-      )
+      // Use predictions from database (calculated server-side)
+      // Default to 'out' with low confidence if not yet calculated
+      const predictedLabel = ocrBox.predicted_label ?? 'out'
+      const predictedConfidence = ocrBox.predicted_confidence ?? 0.5
 
       // Get user annotation if exists
-      const userLabel = userAnnotationMap.get(boxIndex) ?? null
+      const userLabel = userAnnotationMap.get(ocrBox.box_index) ?? null
 
       // Calculate display bounds (fractional in cropped space)
       const displayBounds = pixelToCroppedDisplay(originalBounds, cropBounds)
 
       // Determine color code
-      const colorCode = getBoxColorCode(prediction.label, prediction.confidence, userLabel)
+      const colorCode = getBoxColorCode(predictedLabel, predictedConfidence, userLabel)
 
       return {
-        boxIndex,
+        boxIndex: ocrBox.box_index,
         text: ocrBox.text,
         originalBounds,
         displayBounds,
-        predictedLabel: prediction.label,
-        predictedConfidence: prediction.confidence,
+        predictedLabel,
+        predictedConfidence,
         userLabel,
         colorCode,
       }
@@ -741,20 +341,21 @@ export async function getFrameBoxes(
 /**
  * Save box annotations for a frame.
  *
- * After saving, either triggers full model retraining (if thresholds met)
- * or applies streaming prediction updates for incremental improvements.
- * Both retraining and streaming updates run in background without blocking.
+ * After saving, optionally triggers server-side prediction recalculation
+ * if enough annotations have been added.
  *
  * @param videoId - Video identifier
  * @param frameIndex - Frame index
  * @param annotations - Array of box annotations to save
- * @returns Save result with annotation count and update status
+ * @param triggerRecalculation - Whether to trigger server-side prediction recalculation
+ * @returns Save result with annotation count
  * @throws Error if database or frame is not found
  */
 export async function saveBoxAnnotations(
   videoId: string,
   frameIndex: number,
-  annotations: BoxAnnotationInput[]
+  annotations: BoxAnnotationInput[],
+  triggerRecalculation: boolean = false
 ): Promise<SaveAnnotationsResult> {
   const result = await getWritableDatabase(videoId)
   if (!result.success) {
@@ -779,57 +380,71 @@ export async function saveBoxAnnotations(
         `SELECT box_index, text, x, y, width, height
          FROM full_frame_ocr WHERE frame_index = ? ORDER BY box_index`
       )
-      .all(frameIndex) as OcrBoxRow[]
+      .all(frameIndex) as Array<{
+      box_index: number
+      text: string
+      x: number
+      y: number
+      width: number
+      height: number
+    }>
 
     if (ocrBoxes.length === 0) {
       throw new Error(`Frame ${frameIndex} not found in OCR data`)
     }
 
-    // Get full layout config for predictions
-    const fullLayoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as
-      | VideoLayoutConfigRow
-      | undefined
+    // Prepare upsert statement
+    const upsert = db.prepare(`
+      INSERT INTO full_frame_box_labels (
+        annotation_source, frame_index, box_index, box_text, box_left, box_top, box_right, box_bottom,
+        label, label_source, labeled_at
+      ) VALUES ('full_frame', ?, ?, ?, ?, ?, ?, ?, ?, 'user', datetime('now'))
+      ON CONFLICT(annotation_source, frame_index, box_index) DO UPDATE SET
+        label = excluded.label,
+        label_source = 'user',
+        labeled_at = datetime('now')
+    `)
 
-    // Get model version if available
-    const modelInfo = db
-      .prepare('SELECT model_version FROM box_classification_model WHERE id = 1')
-      .get() as { model_version: string } | undefined
-    const modelVersion = modelInfo?.model_version ?? null
+    let savedCount = 0
 
-    // Convert all boxes to bounds for feature extraction
-    const allBoxBounds: PixelBounds[] = ocrBoxes.map(box =>
-      ocrToPixelBounds(box, layoutConfig.frame_width, layoutConfig.frame_height)
-    )
+    for (const annotation of annotations) {
+      const { boxIndex, label } = annotation
 
-    // Process annotations using helper
-    if (fullLayoutConfig) {
-      processAnnotationBatch(
-        db,
+      const ocrBox = ocrBoxes.find(b => b.box_index === boxIndex)
+      if (!ocrBox) {
+        console.warn(`Box index ${boxIndex} not found in frame ${frameIndex}`)
+        continue
+      }
+
+      const bounds = ocrToPixelBounds(ocrBox, layoutConfig.frame_width, layoutConfig.frame_height)
+
+      upsert.run(
         frameIndex,
-        annotations,
-        ocrBoxes,
-        allBoxBounds,
-        fullLayoutConfig,
-        modelVersion
+        boxIndex,
+        ocrBox.text,
+        bounds.left,
+        bounds.top,
+        bounds.right,
+        bounds.bottom,
+        label
       )
+
+      savedCount++
     }
 
-    // Determine update strategy based on batch size and retrain triggers
-    const batchSize = annotations.length
-    const { retrainingTriggered, streamingUpdatesApplied } = determineUpdateStrategy(
-      videoId,
-      frameIndex,
-      batchSize,
-      annotations,
-      fullLayoutConfig,
-      db
-    )
+    // Trigger server-side recalculation if requested
+    let recalculationTriggered = false
+    if (triggerRecalculation && savedCount > 0) {
+      console.log(`[saveBoxAnnotations] Triggering server-side prediction recalculation`)
+      startFullRetrain(videoId)
+      triggerModelTraining(videoId)
+      recalculationTriggered = true
+    }
 
     return {
       success: true,
-      annotatedCount: batchSize,
-      retrainingTriggered,
-      streamingUpdatesApplied,
+      annotatedCount: savedCount,
+      recalculationTriggered,
     }
   } finally {
     db.close()
@@ -839,13 +454,10 @@ export async function saveBoxAnnotations(
 /**
  * Bulk annotate all boxes within a rectangular region for a specific frame.
  *
- * The rectangle is specified in pixel coordinates (full frame space).
- * Supports mark_in, mark_out, and clear actions.
- *
  * @param videoId - Video identifier
  * @param frameIndex - Frame index to annotate
  * @param input - Bulk annotation input with rectangle (in pixels) and action
- * @returns Bulk annotation result with action, count, and affected box indices
+ * @returns Bulk annotation result
  * @throws Error if database or layout config is not found
  */
 export async function bulkAnnotateRectangle(
@@ -874,13 +486,20 @@ export async function bulkAnnotateRectangle(
     const ocrBoxes = db
       .prepare(
         `
-        SELECT box_index, text, confidence, x, y, width, height
+        SELECT box_index, text, x, y, width, height
         FROM full_frame_ocr
         WHERE frame_index = ?
         ORDER BY box_index
       `
       )
-      .all(frameIndex) as OcrBoxRow[]
+      .all(frameIndex) as Array<{
+      box_index: number
+      text: string
+      x: number
+      y: number
+      width: number
+      height: number
+    }>
 
     if (ocrBoxes.length === 0) {
       return {
@@ -897,20 +516,10 @@ export async function bulkAnnotateRectangle(
     for (const box of ocrBoxes) {
       const bounds = ocrToPixelBounds(box, layoutConfig.frame_width, layoutConfig.frame_height)
 
-      // Check if box intersects with rectangle (using < and > for proper intersection)
-      const intersects = !(
-        bounds.right < input.rectangle.left ||
-        bounds.left > input.rectangle.right ||
-        bounds.bottom < input.rectangle.top ||
-        bounds.top > input.rectangle.bottom
-      )
-
-      if (intersects) {
+      if (boundsIntersect(bounds, input.rectangle)) {
         boxesInRectangle.push(box.box_index)
       }
     }
-
-    console.log(`Found ${boxesInRectangle.length} boxes in rectangle for frame ${frameIndex}`)
 
     if (boxesInRectangle.length === 0) {
       return {
@@ -945,17 +554,9 @@ export async function bulkAnnotateRectangle(
 
     const upsertStmt = db.prepare(`
       INSERT INTO full_frame_box_labels (
-        annotation_source,
-        frame_index,
-        box_index,
-        box_text,
-        box_left,
-        box_top,
-        box_right,
-        box_bottom,
-        label,
-        label_source,
-        labeled_at
+        annotation_source, frame_index, box_index, box_text,
+        box_left, box_top, box_right, box_bottom,
+        label, label_source, labeled_at
       ) VALUES ('full_frame', ?, ?, ?, ?, ?, ?, ?, ?, 'user', datetime('now'))
       ON CONFLICT(annotation_source, frame_index, box_index)
       DO UPDATE SET
@@ -965,11 +566,9 @@ export async function bulkAnnotateRectangle(
     `)
 
     for (const boxIndex of boxesInRectangle) {
-      // Find the box data
       const box = ocrBoxes.find(b => b.box_index === boxIndex)
       if (!box) continue
 
-      // Convert to pixel bounds for storage
       const bounds = ocrToPixelBounds(box, layoutConfig.frame_width, layoutConfig.frame_height)
 
       upsertStmt.run(
@@ -996,37 +595,7 @@ export async function bulkAnnotateRectangle(
 }
 
 /**
- * Load OCR boxes for a frame and convert to OcrBoxRecord format.
- *
- * @param db - Database connection
- * @param frameIndex - Frame index to load
- * @param layoutConfig - Layout config with frame dimensions
- * @returns Array of OCR box records with computed bounds
- */
-function loadFrameOcrBoxes(
-  db: Database.Database,
-  frameIndex: number,
-  layoutConfig: VideoLayoutConfigRow
-): OcrBoxRecord[] {
-  const ocrBoxes = db
-    .prepare(
-      `SELECT box_index, text, x, y, width, height
-       FROM full_frame_ocr WHERE frame_index = ? ORDER BY box_index`
-    )
-    .all(frameIndex) as OcrBoxRow[]
-
-  return ocrBoxes.map(box => ({
-    boxIndex: box.box_index,
-    text: box.text,
-    bounds: ocrToPixelBounds(box, layoutConfig.frame_width, layoutConfig.frame_height),
-  }))
-}
-
-/**
  * Bulk annotate all boxes within a rectangular region across ALL frames.
- *
- * This iterates through all analysis frames (0.1Hz) and applies the action
- * to any boxes that intersect with the given rectangle.
  *
  * @param videoId - Video identifier
  * @param rectangle - Rectangle bounds in pixel coordinates (full frame space)
@@ -1047,7 +616,6 @@ export async function bulkAnnotateRectangleAllFrames(
   const db = result.db
 
   try {
-    // Validate inputs and get configuration
     const layoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as
       | VideoLayoutConfigRow
       | undefined
@@ -1055,43 +623,82 @@ export async function bulkAnnotateRectangleAllFrames(
       throw new Error('Layout config not found')
     }
 
-    const modelInfo = db
-      .prepare('SELECT model_version FROM box_classification_model WHERE id = 1')
-      .get() as { model_version: string } | undefined
-    const modelVersion = modelInfo?.model_version ?? null
-
     // Get all frame indices
     const frames = db
       .prepare('SELECT DISTINCT frame_index FROM full_frame_ocr ORDER BY frame_index')
       .all() as Array<{ frame_index: number }>
 
-    // Process each frame and aggregate results
     let totalAnnotatedBoxes = 0
     let newlyAnnotatedBoxes = 0
     const affectedFrameIndices: number[] = []
 
     for (const { frame_index: frameIndex } of frames) {
-      const boxes = loadFrameOcrBoxes(db, frameIndex, layoutConfig)
-      const frameResult = processFrameBoxes(
-        db,
-        frameIndex,
-        boxes,
-        rectangle,
-        action,
-        layoutConfig,
-        modelVersion
-      )
+      // Load OCR boxes for this frame
+      const ocrBoxes = db
+        .prepare(
+          `SELECT box_index, text, x, y, width, height
+           FROM full_frame_ocr WHERE frame_index = ? ORDER BY box_index`
+        )
+        .all(frameIndex) as Array<{
+        box_index: number
+        text: string
+        x: number
+        y: number
+        width: number
+        height: number
+      }>
 
-      if (frameResult.annotatedCount > 0) {
-        totalAnnotatedBoxes += frameResult.annotatedCount
-        newlyAnnotatedBoxes += frameResult.newlyAnnotatedCount
-        affectedFrameIndices.push(frameIndex)
+      // Find boxes in rectangle
+      const matchingBoxes = ocrBoxes.filter(box => {
+        const bounds = ocrToPixelBounds(box, layoutConfig.frame_width, layoutConfig.frame_height)
+        return boundsIntersect(bounds, rectangle)
+      })
+
+      if (matchingBoxes.length === 0) continue
+
+      let frameNewCount = 0
+
+      for (const box of matchingBoxes) {
+        const bounds = ocrToPixelBounds(box, layoutConfig.frame_width, layoutConfig.frame_height)
+
+        if (action === 'clear') {
+          db.prepare(
+            `DELETE FROM full_frame_box_labels WHERE frame_index = ? AND box_index = ?`
+          ).run(frameIndex, box.box_index)
+        } else {
+          // Check if new
+          const existing = db
+            .prepare(`SELECT 1 FROM full_frame_box_labels WHERE frame_index = ? AND box_index = ?`)
+            .get(frameIndex, box.box_index)
+
+          if (!existing) frameNewCount++
+
+          db.prepare(
+            `
+            INSERT INTO full_frame_box_labels (
+              annotation_source, frame_index, box_index, box_text,
+              box_left, box_top, box_right, box_bottom,
+              label, label_source, labeled_at
+            ) VALUES ('full_frame', ?, ?, ?, ?, ?, ?, ?, 'out', 'user', datetime('now'))
+            ON CONFLICT(annotation_source, frame_index, box_index)
+            DO UPDATE SET label = 'out', label_source = 'user', labeled_at = datetime('now')
+          `
+          ).run(
+            frameIndex,
+            box.box_index,
+            box.text,
+            bounds.left,
+            bounds.top,
+            bounds.right,
+            bounds.bottom
+          )
+        }
       }
-    }
 
-    console.log(
-      `Bulk annotated ${totalAnnotatedBoxes} boxes (${newlyAnnotatedBoxes} new) across ${affectedFrameIndices.length} frames`
-    )
+      totalAnnotatedBoxes += matchingBoxes.length
+      newlyAnnotatedBoxes += frameNewCount
+      affectedFrameIndices.push(frameIndex)
+    }
 
     return {
       success: true,
@@ -1180,18 +787,12 @@ export async function bulkAnnotateAll(
         .prepare('SELECT frame_width, frame_height FROM video_layout_config WHERE id = 1')
         .get() as { frame_width: number; frame_height: number }
 
-      // Get model version
-      const modelInfo = db
-        .prepare('SELECT model_version FROM box_classification_model WHERE id = 1')
-        .get() as { model_version: string } | undefined
-      const modelVersion = modelInfo?.model_version ?? null
-
       // Prepare insert statement
       const insert = db.prepare(`
         INSERT INTO full_frame_box_labels (
           annotation_source, frame_index, box_index, box_text, box_left, box_top, box_right, box_bottom,
-          label, label_source, predicted_label, predicted_confidence, model_version, labeled_at
-        ) VALUES ('full_frame', ?, ?, ?, ?, ?, ?, ?, ?, 'model', ?, ?, ?, datetime('now'))
+          label, label_source, labeled_at
+        ) VALUES ('full_frame', ?, ?, ?, ?, ?, ?, ?, ?, 'model', datetime('now'))
       `)
 
       const affectedFrames = new Set<number>()
@@ -1207,10 +808,7 @@ export async function bulkAnnotateAll(
           bounds.top,
           bounds.right,
           bounds.bottom,
-          box.predicted_label,
-          box.predicted_label,
-          box.predicted_confidence,
-          modelVersion
+          box.predicted_label
         )
 
         affectedFrames.add(box.frame_index)
@@ -1224,162 +822,6 @@ export async function bulkAnnotateAll(
     }
 
     throw new Error(`Unknown action: ${action}`)
-  } finally {
-    db.close()
-  }
-}
-
-/**
- * Process predictions for a single frame
- */
-function processFramePredictions(
-  db: Database.Database,
-  frameIndex: number,
-  layoutConfig: VideoLayoutConfigRow,
-  updatePrediction: Database.Statement
-): number {
-  const ocrBoxes = db
-    .prepare(
-      `SELECT box_index, x, y, width, height
-       FROM full_frame_ocr WHERE frame_index = ? ORDER BY box_index`
-    )
-    .all(frameIndex) as Array<{
-    box_index: number
-    x: number
-    y: number
-    width: number
-    height: number
-  }>
-
-  const allBoxBounds: PixelBounds[] = ocrBoxes.map(box =>
-    ocrToPixelBounds(box, layoutConfig.frame_width, layoutConfig.frame_height)
-  )
-
-  let count = 0
-  for (const ocrBox of ocrBoxes) {
-    const bounds = ocrToPixelBounds(ocrBox, layoutConfig.frame_width, layoutConfig.frame_height)
-
-    const prediction = predictBoxLabel(
-      bounds,
-      layoutConfig,
-      allBoxBounds,
-      frameIndex,
-      ocrBox.box_index,
-      db
-    )
-
-    updatePrediction.run(prediction.label, prediction.confidence, frameIndex, ocrBox.box_index)
-    count++
-  }
-
-  return count
-}
-
-/**
- * Process a batch of frames with predictions
- */
-function processBatchPredictions(
-  db: Database.Database,
-  frameBatch: Array<{ frame_index: number }>,
-  layoutConfig: VideoLayoutConfigRow,
-  updatePrediction: Database.Statement
-): number {
-  let updatedCount = 0
-
-  db.prepare('BEGIN TRANSACTION').run()
-
-  try {
-    for (const { frame_index: frameIndex } of frameBatch) {
-      updatedCount += processFramePredictions(db, frameIndex, layoutConfig, updatePrediction)
-    }
-
-    db.prepare('COMMIT').run()
-  } catch (error) {
-    try {
-      db.prepare('ROLLBACK').run()
-    } catch (rollbackError) {
-      console.error('[calculatePredictions] Rollback failed:', rollbackError)
-    }
-    throw error
-  }
-
-  return updatedCount
-}
-
-/**
- * Calculate and cache predictions for all boxes.
- *
- * Trains the model if sufficient annotations exist, then calculates
- * predictions for all boxes and caches them in the database.
- *
- * @param videoId - Video identifier
- * @returns Calculate predictions result
- * @throws Error if database is not found
- */
-export async function calculatePredictions(videoId: string): Promise<CalculatePredictionsResult> {
-  const result = await getWritableDatabase(videoId)
-  if (!result.success) {
-    throw new Error('Database not found')
-  }
-
-  const db = result.db
-
-  try {
-    const layoutConfig = db.prepare('SELECT * FROM video_layout_config WHERE id = 1').get() as
-      | VideoLayoutConfigRow
-      | undefined
-
-    if (!layoutConfig) {
-      throw new Error('Layout config not found')
-    }
-
-    initializeSeedModel(db)
-    trainModel(db, layoutConfig)
-
-    const modelInfo = db
-      .prepare('SELECT model_version FROM box_classification_model WHERE id = 1')
-      .get() as { model_version: string } | undefined
-
-    const frames = db
-      .prepare('SELECT DISTINCT frame_index FROM full_frame_ocr ORDER BY frame_index')
-      .all() as Array<{ frame_index: number }>
-
-    let updatedCount = 0
-
-    const BATCH_SIZE = 10
-    const frameBatches: Array<{ frame_index: number }[]> = []
-    for (let i = 0; i < frames.length; i += BATCH_SIZE) {
-      frameBatches.push(frames.slice(i, i + BATCH_SIZE))
-    }
-
-    console.log(
-      `[calculatePredictions] Processing ${frames.length} frames in ${frameBatches.length} batches`
-    )
-
-    const updatePrediction = db.prepare(`
-      UPDATE full_frame_ocr
-      SET predicted_label = ?, predicted_confidence = ?
-      WHERE frame_index = ? AND box_index = ?
-    `)
-
-    for (let i = 0; i < frameBatches.length; i++) {
-      const frameBatch = frameBatches[i]
-      if (!frameBatch) continue
-
-      updatedCount += processBatchPredictions(db, frameBatch, layoutConfig, updatePrediction)
-
-      // Small delay between batches to allow other operations to acquire locks
-      if (i < frameBatches.length - 1) {
-        const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
-        void sleep(10)
-      }
-    }
-
-    return {
-      success: true,
-      updatedCount,
-      modelVersion: modelInfo?.model_version ?? null,
-    }
   } finally {
     db.close()
   }
