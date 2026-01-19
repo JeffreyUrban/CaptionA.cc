@@ -84,11 +84,12 @@ export interface DatabaseVersion {
 
 /**
  * DB interface from @vlcn.io/crsqlite-wasm
+ * Note: All exec methods return Promises in @vlcn.io/crsqlite-wasm
  */
 interface CRSQLiteDB {
-  execO<T extends object>(sql: string, bind?: unknown[]): T[]
-  execA<T extends unknown[]>(sql: string, bind?: unknown[]): T[]
-  exec(sql: string, bind?: unknown[]): void
+  execO<T extends object>(sql: string, bind?: unknown[]): Promise<T[]>
+  execA<T extends unknown[]>(sql: string, bind?: unknown[]): Promise<T[]>
+  exec(sql: string, bind?: unknown[]): Promise<void>
   close(): void
   onUpdate(
     cb: (updateType: number, dbName: string | null, tblName: string | null, rowid: bigint) => void
@@ -238,12 +239,17 @@ export class CRSQLiteDatabase {
 
       console.log(`[CRSQLite] Opening database (${config.data.length} bytes)`)
 
-      // Create a unique in-memory database name
-      // The :memory: prefix creates an in-memory database
-      const dbName = `:memory:?${config.videoId}_${config.dbName}`
-
-      // Open the database
-      instance.db = await sqlite3Instance.open(dbName)
+      // Open a true in-memory database by passing undefined
+      // This avoids the IndexedDB VFS which causes issues
+      // Note: Each instance gets its own in-memory database
+      console.log('[CRSQLite] Calling sqlite3Instance.open()...')
+      try {
+        instance.db = await sqlite3Instance.open()
+        console.log('[CRSQLite] sqlite3Instance.open() succeeded')
+      } catch (openError) {
+        console.error('[CRSQLite] sqlite3Instance.open() failed:', openError)
+        throw openError
+      }
 
       // Import the database bytes using SQLite's deserialize
       // We need to use the low-level approach since we're loading from bytes
@@ -255,17 +261,26 @@ export class CRSQLiteDatabase {
 
       // Alternative: Use sql.js to read the schema and data, then recreate in crsqlite
       // This is temporary until we find the proper bytes import API
+      console.log('[CRSQLite] Initializing sql.js...')
       const initSqlJs = (await import('sql.js')).default
       const SQL = await initSqlJs({
         locateFile: (file: string) => `https://sql.js.org/dist/${file}`,
       })
+      console.log('[CRSQLite] sql.js initialized')
 
       // Open the source database with sql.js to extract schema and data
+      console.log('[CRSQLite] Opening source database with sql.js...')
       const sourceDb = new SQL.Database(config.data)
+      console.log('[CRSQLite] Source database opened')
 
       // Get all table schemas
+      console.log('[CRSQLite] Getting table schemas...')
       const tablesResult = sourceDb.exec(
         "SELECT name, sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
+      )
+      console.log(
+        '[CRSQLite] Found tables:',
+        tablesResult.length > 0 ? tablesResult[0]?.values.map(r => r[0]) : 'none'
       )
 
       if (tablesResult.length > 0 && tablesResult[0]) {
@@ -275,28 +290,51 @@ export class CRSQLiteDatabase {
 
           if (createSql) {
             // Create the table in the new database
-            instance.db.exec(createSql)
+            console.log(`[CRSQLite] Creating table: ${tableName}`)
+            try {
+              await instance.db.exec(createSql)
+            } catch (tableError) {
+              console.error(`[CRSQLite] Failed to create table ${tableName}:`, tableError)
+              throw tableError
+            }
 
             // Copy data from source to destination
+            console.log(`[CRSQLite] Copying data for table: ${tableName}`)
             const dataResult = sourceDb.exec(`SELECT * FROM "${tableName}"`)
             if (dataResult.length > 0 && dataResult[0] && dataResult[0].values.length > 0) {
               const columns = dataResult[0].columns
+              const rowCount = dataResult[0].values.length
+              console.log(`[CRSQLite] Copying ${rowCount} rows for ${tableName}`)
               const placeholders = columns.map(() => '?').join(', ')
               const insertSql = `INSERT INTO "${tableName}" (${columns.map(c => `"${c}"`).join(', ')}) VALUES (${placeholders})`
 
               for (const dataRow of dataResult[0].values) {
-                instance.db.exec(insertSql, dataRow as unknown[])
+                try {
+                  await instance.db.exec(insertSql, dataRow as unknown[])
+                } catch (insertError) {
+                  console.error(
+                    `[CRSQLite] Failed to insert row into ${tableName}:`,
+                    insertError,
+                    dataRow
+                  )
+                  throw insertError
+                }
               }
+              console.log(`[CRSQLite] Copied ${rowCount} rows for ${tableName}`)
+            } else {
+              console.log(`[CRSQLite] No data to copy for ${tableName}`)
             }
           }
         }
       }
 
       // Close the source database
+      console.log('[CRSQLite] Closing source sql.js database')
       sourceDb.close()
 
       // Log tables
-      const tables = instance.db.execO<{ name: string }>(
+      console.log('[CRSQLite] Listing created tables...')
+      const tables = await instance.db.execO<{ name: string }>(
         "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
       )
       console.log(
@@ -305,10 +343,14 @@ export class CRSQLiteDatabase {
       )
 
       // Initialize CRR tables (idempotent - safe to call if already done)
+      console.log('[CRSQLite] Initializing CRR tables...')
       await instance.ensureCrrInitialized()
+      console.log('[CRSQLite] CRR tables initialized')
 
       // Initialize version and site ID
+      console.log('[CRSQLite] Initializing metadata...')
       await instance.initializeMetadata()
+      console.log('[CRSQLite] Metadata initialized')
 
       // Register for GC tracking
       CRSQLiteDatabase.instances.set(instance.instanceId, new WeakRef(instance))
@@ -317,6 +359,13 @@ export class CRSQLiteDatabase {
       console.log(`[CRSQLite] Database opened: ${instance.instanceId}`)
       return instance
     } catch (error) {
+      // Log the actual error details
+      console.error('[CRSQLite] Database open failed with error:', error)
+      if (error instanceof Error) {
+        console.error('[CRSQLite] Error message:', error.message)
+        console.error('[CRSQLite] Error stack:', error.stack)
+      }
+
       // Clean up on failure
       if (instance.db) {
         try {
@@ -349,16 +398,16 @@ export class CRSQLiteDatabase {
 
     try {
       // Check if crsql_changes exists (indicates CRR already initialized)
-      this.db.execO('SELECT 1 FROM crsql_changes LIMIT 1')
+      await this.db.execO('SELECT 1 FROM crsql_changes LIMIT 1')
     } catch {
       // crsql_changes doesn't exist - initialize CRRs
       if (this.dbName === 'layout') {
-        this.db.exec("SELECT crsql_as_crr('boxes')")
-        this.db.exec("SELECT crsql_as_crr('layout_config')")
-        this.db.exec("SELECT crsql_as_crr('preferences')")
+        await this.db.exec("SELECT crsql_as_crr('boxes')")
+        await this.db.exec("SELECT crsql_as_crr('layout_config')")
+        await this.db.exec("SELECT crsql_as_crr('preferences')")
         console.log('[CRSQLite] Initialized CRR tables for layout')
       } else if (this.dbName === 'captions') {
-        this.db.exec("SELECT crsql_as_crr('captions')")
+        await this.db.exec("SELECT crsql_as_crr('captions')")
         console.log('[CRSQLite] Initialized CRR tables for captions')
       }
     }
@@ -372,7 +421,7 @@ export class CRSQLiteDatabase {
 
     try {
       // Get site ID
-      const siteIdResult = this.db.execA<[Uint8Array]>('SELECT crsql_site_id()')
+      const siteIdResult = await this.db.execA<[Uint8Array]>('SELECT crsql_site_id()')
       if (siteIdResult.length > 0 && siteIdResult[0]) {
         // Convert Uint8Array to base64 string for easier handling
         const siteIdBytes = siteIdResult[0][0]
@@ -380,7 +429,7 @@ export class CRSQLiteDatabase {
       }
 
       // Get current version
-      const versionResult = this.db.execA<[number]>('SELECT crsql_db_version()')
+      const versionResult = await this.db.execA<[number]>('SELECT crsql_db_version()')
       if (versionResult.length > 0 && versionResult[0]) {
         this._version = versionResult[0][0]
       }
@@ -452,7 +501,7 @@ export class CRSQLiteDatabase {
     this.ensureOpen()
 
     try {
-      this.db!.exec(sql, params)
+      await this.db!.exec(sql, params)
       return 0 // crsqlite-wasm doesn't expose rows affected
     } catch (error) {
       const dbError = queryError(sql, error)
@@ -476,7 +525,7 @@ export class CRSQLiteDatabase {
     this.ensureOpen()
 
     try {
-      const rows = this.db!.execO<T>(sql, params)
+      const rows = await this.db!.execO<T>(sql, params)
 
       // Extract column names from first row, or empty if no results
       const columns = rows.length > 0 ? Object.keys(rows[0] as object) : []
@@ -501,7 +550,7 @@ export class CRSQLiteDatabase {
   async getChangesSince(sinceVersion: number): Promise<CRSQLiteChange[]> {
     this.ensureOpen()
 
-    const rows = this.db!.execO<{
+    const rows = await this.db!.execO<{
       table: string
       pk: Uint8Array
       cid: string
@@ -548,14 +597,14 @@ export class CRSQLiteDatabase {
     }
 
     try {
-      this.db!.exec('BEGIN TRANSACTION')
+      await this.db!.exec('BEGIN TRANSACTION')
 
       for (const change of changes) {
         // Convert base64 back to Uint8Array for binary fields
         const pkBytes = this.base64ToUint8Array(change.pk)
         const siteIdBytes = this.base64ToUint8Array(change.site_id)
 
-        this.db!.exec(
+        await this.db!.exec(
           `INSERT INTO crsql_changes ("table", pk, cid, val, col_version, db_version, site_id, cl, seq)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
@@ -572,7 +621,7 @@ export class CRSQLiteDatabase {
         )
       }
 
-      this.db!.exec('COMMIT')
+      await this.db!.exec('COMMIT')
 
       // Update local version
       await this.initializeMetadata()
@@ -581,7 +630,7 @@ export class CRSQLiteDatabase {
       return this._version
     } catch (error) {
       try {
-        this.db!.exec('ROLLBACK')
+        await this.db!.exec('ROLLBACK')
       } catch {
         // Ignore rollback errors
       }
@@ -611,7 +660,7 @@ export class CRSQLiteDatabase {
     try {
       // Finalize CR-SQLite before closing
       try {
-        this.db.exec('SELECT crsql_finalize()')
+        await this.db.exec('SELECT crsql_finalize()')
       } catch {
         // May fail if extension not loaded properly
       }
