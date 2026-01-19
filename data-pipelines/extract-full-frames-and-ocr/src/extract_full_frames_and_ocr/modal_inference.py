@@ -283,20 +283,21 @@ def extract_frames_and_ocr_impl(
             )
 
             # Create boxes table (transformed from full_frame_ocr)
+            # DEFAULT values required for CR-SQLite compatibility (v0.16.1+)
             layout_conn.execute(
                 """
                 CREATE TABLE boxes (
                     frame_index INTEGER NOT NULL,
                     box_index INTEGER NOT NULL,
-                    bbox_left REAL NOT NULL,
-                    bbox_top REAL NOT NULL,
-                    bbox_right REAL NOT NULL,
-                    bbox_bottom REAL NOT NULL,
-                    text TEXT,
-                    label TEXT,
-                    label_updated_at TEXT,
-                    predicted_label TEXT,
-                    predicted_confidence REAL,
+                    bbox_left REAL NOT NULL DEFAULT 0.0,
+                    bbox_top REAL NOT NULL DEFAULT 0.0,
+                    bbox_right REAL NOT NULL DEFAULT 0.0,
+                    bbox_bottom REAL NOT NULL DEFAULT 0.0,
+                    text TEXT DEFAULT NULL,
+                    label TEXT DEFAULT NULL,
+                    label_updated_at TEXT DEFAULT NULL,
+                    predicted_label TEXT DEFAULT NULL,
+                    predicted_confidence REAL DEFAULT NULL,
                     PRIMARY KEY (frame_index, box_index)
                 ) WITHOUT ROWID
                 """
@@ -327,19 +328,20 @@ def extract_frames_and_ocr_impl(
             ocr_conn.close()
 
             # Create layout_config table
+            # DEFAULT values required for CR-SQLite compatibility (v0.16.1+)
             layout_conn.execute(
                 """
                 CREATE TABLE layout_config (
                     id INTEGER NOT NULL PRIMARY KEY CHECK(id = 1),
-                    frame_width INTEGER NOT NULL,
-                    frame_height INTEGER NOT NULL,
+                    frame_width INTEGER NOT NULL DEFAULT 0,
+                    frame_height INTEGER NOT NULL DEFAULT 0,
                     crop_left REAL NOT NULL DEFAULT 0,
                     crop_top REAL NOT NULL DEFAULT 0,
                     crop_right REAL NOT NULL DEFAULT 1,
                     crop_bottom REAL NOT NULL DEFAULT 1,
-                    anchor_type TEXT,
-                    anchor_position REAL,
-                    vertical_center REAL,
+                    anchor_type TEXT DEFAULT NULL,
+                    anchor_position REAL DEFAULT NULL,
+                    vertical_center REAL DEFAULT NULL,
                     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
                 )
                 """

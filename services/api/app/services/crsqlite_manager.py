@@ -140,6 +140,26 @@ class CRSqliteManager:
 
         await asyncio.to_thread(_upload)
 
+    def _ensure_crr_initialized(self, conn: apsw.Connection, db_name: str) -> None:
+        """Initialize tables as CRRs if not already done.
+
+        The data pipeline creates databases with standard sqlite3 which cannot
+        load extensions, so CRR initialization must happen lazily on first access.
+        """
+        try:
+            # Check if crsql_changes exists (indicates CRR already initialized)
+            conn.execute("SELECT 1 FROM crsql_changes LIMIT 1").fetchone()
+        except apsw.SQLError:
+            # crsql_changes doesn't exist - initialize CRRs for layout.db tables
+            if db_name == "layout":
+                conn.execute("SELECT crsql_as_crr('boxes')")
+                conn.execute("SELECT crsql_as_crr('layout_config')")
+                conn.execute("SELECT crsql_as_crr('preferences')")
+                logger.info(f"Initialized CRR tables for {db_name}")
+            elif db_name == "captions":
+                conn.execute("SELECT crsql_as_crr('captions')")
+                logger.info(f"Initialized CRR tables for {db_name}")
+
     def get_connection(
         self,
         tenant_id: str,
@@ -171,6 +191,9 @@ class CRSqliteManager:
                 conn.enableloadextension(True)
                 conn.loadextension(self._extension_path, "sqlite3_crsqlite_init")
                 conn.enableloadextension(False)
+
+                # Ensure CRR tables are initialized (lazy migration)
+                self._ensure_crr_initialized(conn, db_name)
 
             # Configure for durability
             conn.execute("PRAGMA journal_mode=WAL")
@@ -254,6 +277,7 @@ class CRSqliteManager:
         video_id: str,
         db_name: str,
         since_version: int,
+        exclude_site_id: bytes | None = None,
     ) -> list[ChangeRecord]:
         """Get changes since a specific version.
 
@@ -262,6 +286,7 @@ class CRSqliteManager:
             video_id: Video UUID
             db_name: Database name
             since_version: Version to get changes after
+            exclude_site_id: Optional site_id to exclude (avoids echo of own changes)
 
         Returns:
             List of change records
@@ -270,15 +295,28 @@ class CRSqliteManager:
 
         def _query():
             cursor = conn.cursor()
-            rows = cursor.execute(
-                """
-                SELECT "table", "pk", "cid", "val", "col_version", "db_version", "site_id", "cl", "seq"
-                FROM crsql_changes
-                WHERE db_version > ?
-                ORDER BY db_version, seq
-                """,
-                (since_version,),
-            ).fetchall()
+            if exclude_site_id:
+                # Filter out changes from the specified site (avoid echo)
+                rows = cursor.execute(
+                    """
+                    SELECT "table", "pk", "cid", "val", "col_version", "db_version", "site_id", "cl", "seq"
+                    FROM crsql_changes
+                    WHERE db_version > ? AND site_id IS NOT ?
+                    ORDER BY db_version, seq
+                    """,
+                    (since_version, exclude_site_id),
+                ).fetchall()
+            else:
+                # No filter - used for server-initiated pushes
+                rows = cursor.execute(
+                    """
+                    SELECT "table", "pk", "cid", "val", "col_version", "db_version", "site_id", "cl", "seq"
+                    FROM crsql_changes
+                    WHERE db_version > ?
+                    ORDER BY db_version, seq
+                    """,
+                    (since_version,),
+                ).fetchall()
 
             return [
                 {
