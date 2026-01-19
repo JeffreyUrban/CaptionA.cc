@@ -186,6 +186,8 @@ export interface LayoutQueueResult {
 
 /**
  * Determine color code based on box state.
+ * Every box should have either a userLabel or a predictedLabel.
+ * If neither exists, returns 'needs_prediction' to indicate prediction calculation is needed.
  */
 function getColorCode(
   userLabel: BoxLabel | 'clear' | null,
@@ -200,19 +202,22 @@ function getColorCode(
     return 'annotated_out'
   }
 
-  // Use prediction
+  // No user annotation - check for prediction
   const confidence = predictedConfidence ?? 0.5
-  const label = predictedLabel ?? 'in'
 
-  if (label === 'in') {
+  if (predictedLabel === 'in') {
     if (confidence >= 0.8) return 'predicted_in_high'
     if (confidence >= 0.5) return 'predicted_in_medium'
     return 'predicted_in_low'
-  } else {
+  }
+  if (predictedLabel === 'out') {
     if (confidence >= 0.8) return 'predicted_out_high'
     if (confidence >= 0.5) return 'predicted_out_medium'
     return 'predicted_out_low'
   }
+
+  // No userLabel and no predictedLabel - needs prediction calculation
+  return 'needs_prediction'
 }
 
 /**
@@ -320,9 +325,7 @@ export async function getAllAnalysisBoxes(db: CRSQLiteDatabase): Promise<BoxData
  * Get layout configuration.
  */
 export async function getLayoutConfig(db: CRSQLiteDatabase): Promise<LayoutConfigResult | null> {
-  const result = await db.query<LayoutAnalysisParametersRow>(
-    `SELECT * FROM layout_config LIMIT 1`
-  )
+  const result = await db.query<LayoutAnalysisParametersRow>(`SELECT * FROM layout_config LIMIT 1`)
 
   const row = result.rows[0]
   if (!row) {
@@ -496,9 +499,7 @@ export async function updateBoxLabels(
  * Clear all user annotations.
  */
 export async function clearAllAnnotations(db: CRSQLiteDatabase): Promise<number> {
-  return db.exec(
-    `UPDATE boxes SET label = NULL, label_updated_at = NULL WHERE label IS NOT NULL`
-  )
+  return db.exec(`UPDATE boxes SET label = NULL, label_updated_at = NULL WHERE label IS NOT NULL`)
 }
 
 /**
@@ -586,6 +587,41 @@ export async function updateCropRegion(
      SET crop_left = ?, crop_top = ?, crop_right = ?, crop_bottom = ?,
          crop_region_version = ?`,
     [cropRegion.left, cropRegion.top, cropRegion.right, cropRegion.bottom, currentVersion + 1]
+  )
+}
+
+/**
+ * Update layout parameters from Bayesian analysis.
+ */
+export interface LayoutParamsUpdate {
+  verticalPosition?: number | null
+  verticalStd?: number | null
+  boxHeight?: number | null
+  boxHeightStd?: number | null
+  anchorType?: string | null
+  anchorPosition?: number | null
+}
+
+export async function updateLayoutParams(
+  db: CRSQLiteDatabase,
+  params: LayoutParamsUpdate
+): Promise<number> {
+  return db.exec(
+    `UPDATE layout_config
+     SET vertical_position = ?,
+         vertical_std = ?,
+         box_height = ?,
+         box_height_std = ?,
+         anchor_type = ?,
+         anchor_position = ?`,
+    [
+      params.verticalPosition ?? null,
+      params.verticalStd ?? null,
+      params.boxHeight ?? null,
+      params.boxHeightStd ?? null,
+      params.anchorType ?? null,
+      params.anchorPosition ?? null,
+    ]
   )
 }
 

@@ -14,24 +14,33 @@ import {
 } from '~/types/layout'
 
 /**
- * Get fill color for analysis box based on label and prediction
+ * Get fill color for analysis box based on label and prediction.
+ * Returns gray for boxes that need prediction calculation.
  */
 export function getAnalysisBoxFillColor(box: BoxData): string {
+  // User annotation takes precedence
   if (box.userLabel === 'in') {
     return 'rgba(20,184,166,0.05)'
   }
   if (box.userLabel === 'out') {
     return 'rgba(220,38,38,0.05)'
   }
+
+  // No user annotation - check for prediction
   if (box.predictedLabel === 'in') {
     if (box.predictedConfidence >= 0.75) return 'rgba(59,130,246,0.03)'
     if (box.predictedConfidence >= 0.5) return 'rgba(96,165,250,0.02)'
     return 'rgba(147,197,253,0.015)'
   }
-  // Predicted out
-  if (box.predictedConfidence >= 0.75) return 'rgba(249,115,22,0.03)'
-  if (box.predictedConfidence >= 0.5) return 'rgba(251,146,60,0.02)'
-  return 'rgba(253,186,116,0.015)'
+  if (box.predictedLabel === 'out') {
+    if (box.predictedConfidence >= 0.75) return 'rgba(249,115,22,0.03)'
+    if (box.predictedConfidence >= 0.5) return 'rgba(251,146,60,0.02)'
+    return 'rgba(253,186,116,0.015)'
+  }
+
+  // No userLabel and no predictedLabel - needs prediction calculation
+  // Return gray to indicate pending state
+  return 'rgba(128,128,128,0.03)'
 }
 
 /**

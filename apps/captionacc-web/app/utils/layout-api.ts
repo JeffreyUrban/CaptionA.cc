@@ -183,6 +183,48 @@ export async function analyzeLayout(videoId: string): Promise<{
 }
 
 /**
+ * Calculate predictions for all OCR boxes
+ *
+ * Calls API server to run Bayesian prediction on all boxes.
+ * This should be called before layout annotation is available to populate
+ * predicted_label and predicted_confidence for all boxes.
+ */
+export async function calculatePredictions(videoId: string): Promise<{
+  success: boolean
+  predictionsGenerated: number
+  modelVersion: string
+}> {
+  const { API_CONFIG } = await import('~/config')
+  const { supabase } = await import('~/services/supabase-client')
+
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+
+  if (!session?.access_token) {
+    throw new Error('User not authenticated')
+  }
+
+  const response = await fetch(
+    `${API_CONFIG.PYTHON_API_URL}/videos/${videoId}/actions/calculate-predictions`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    }
+  )
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Unknown error' }))
+    throw new Error(error.detail || `HTTP ${response.status}`)
+  }
+
+  return response.json()
+}
+
+/**
  * Prefetch frame boxes for multiple frames
  */
 export async function prefetchFrameBoxes(

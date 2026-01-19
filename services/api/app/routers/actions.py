@@ -14,6 +14,7 @@ from app.models.actions import (
     BulkAnnotateRequest,
     BulkAnnotateResponse,
     CalculatePredictionsResponse,
+    LayoutParams,
     RetryRequest,
     RetryResponse,
     TriggerProcessingRequest,
@@ -206,6 +207,14 @@ async def analyze_layout(video_id: str, auth: Auth):
             success=True,
             boxesAnalyzed=boxes_count,
             processingTimeMs=elapsed_ms,
+            layoutParams=LayoutParams(
+                verticalPosition=layout_params.vertical_position,
+                verticalStd=layout_params.vertical_std,
+                boxHeight=layout_params.box_height,
+                boxHeightStd=layout_params.box_height_std,
+                anchorType=layout_params.anchor_type,
+                anchorPosition=layout_params.anchor_position,
+            ),
         )
 
     except ValueError as e:
@@ -228,16 +237,140 @@ async def analyze_layout(video_id: str, auth: Auth):
 )
 async def calculate_predictions(video_id: str, auth: Auth):
     """
-    Train model and cache predictions for all boxes.
+    Calculate predictions for all boxes using Bayesian model.
 
-    Trains a classification model on user-labeled boxes and generates
-    predictions for all unlabeled boxes.
+    Initializes seed model if none exists, then runs predictions for all
+    boxes in full_frame_ocr and stores results (predicted_label, predicted_confidence).
+    This should be called before layout annotation is available to the user.
     """
-    # TODO: Implement prediction calculation
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="Prediction calculation not yet implemented",
+    import time
+    from datetime import datetime, timezone
+
+    from ocr_box_model import (
+        initialize_seed_model,
+        load_layout_config,
+        load_model,
+        predict_with_heuristics,
+        run_all_migrations,
     )
+    from ocr_box_model.types import BoxBounds
+
+    start_time = time.time()
+    layout_db_manager = get_layout_database_manager()
+
+    try:
+        async with layout_db_manager.get_database(
+            auth.tenant_id, video_id, writable=True
+        ) as conn:
+            # Run migrations to ensure schema is up to date
+            run_all_migrations(conn)
+
+            # Initialize seed model if none exists
+            initialize_seed_model(conn)
+
+            # Load layout config
+            layout = load_layout_config(conn)
+            if not layout:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Layout config not found for video {video_id}",
+                )
+
+            # Load model (seed or trained)
+            model = load_model(conn)
+            model_version = model.model_version if model else "heuristics"
+
+            # Get all boxes from full_frame_ocr
+            cursor = conn.cursor()
+            rows = cursor.execute(
+                """
+                SELECT id, frame_index, box_index, text, x, y, width, height
+                FROM full_frame_ocr
+                ORDER BY frame_index, box_index
+                """
+            ).fetchall()
+
+            if not rows:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="No OCR boxes found in database",
+                )
+
+            logger.info(
+                f"Calculating predictions for {len(rows)} boxes in video {video_id}"
+            )
+
+            # Prepare predictions
+            predictions_to_save: list[tuple[str, float, str, str, int]] = []
+            now = datetime.now(timezone.utc).isoformat()
+
+            for row in rows:
+                box_id, frame_index, box_index, text, x, y, width, height = row
+
+                # Convert fractional coordinates to pixels
+                left = int(x * layout.frame_width)
+                bottom = int((1 - y) * layout.frame_height)
+                box_width_px = int(width * layout.frame_width)
+                box_height_px = int(height * layout.frame_height)
+                top = bottom - box_height_px
+                right = left + box_width_px
+
+                # Create BoxBounds for prediction
+                box_bounds = BoxBounds(
+                    left=left,
+                    top=top,
+                    right=right,
+                    bottom=bottom,
+                    frame_index=frame_index,
+                    box_index=box_index,
+                    text=text or "",
+                )
+
+                # Use heuristics for initial predictions (no user annotations yet)
+                prediction = predict_with_heuristics(box_bounds, layout)
+
+                predictions_to_save.append(
+                    (
+                        prediction.label,
+                        prediction.confidence,
+                        model_version,
+                        now,
+                        box_id,
+                    )
+                )
+
+            # Batch update predictions
+            cursor.executemany(
+                """
+                UPDATE full_frame_ocr
+                SET predicted_label = ?,
+                    predicted_confidence = ?,
+                    model_version = ?,
+                    predicted_at = ?
+                WHERE id = ?
+                """,
+                predictions_to_save,
+            )
+            conn.commit()
+
+            elapsed_ms = int((time.time() - start_time) * 1000)
+
+            logger.info(
+                f"Calculated {len(predictions_to_save)} predictions for video {video_id} "
+                f"in {elapsed_ms}ms using {model_version}"
+            )
+
+            return CalculatePredictionsResponse(
+                success=True,
+                predictionsGenerated=len(predictions_to_save),
+                modelVersion=model_version,
+            )
+
+    except FileNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Layout database not found for video {video_id}",
+        )
 
 
 @router.post(

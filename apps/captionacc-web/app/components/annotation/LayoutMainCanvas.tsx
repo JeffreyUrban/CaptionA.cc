@@ -14,6 +14,7 @@ interface LayoutMainCanvasProps {
   currentFrameBoxes: FrameBoxesData | null
   analysisBoxes: BoxData[] | null
   loadingFrame: boolean
+  isCalculatingPredictions: boolean
   annotationsSinceRecalc: number
   selectionPadding: number
   imageRef: React.RefObject<HTMLImageElement | null>
@@ -34,6 +35,7 @@ function AnalysisViewContent({
   layoutApproved,
   boundsMismatch,
   analysisBoxes,
+  isCalculatingPredictions,
   annotationsSinceRecalc: _annotationsSinceRecalc,
   selectionPadding,
   imageRef,
@@ -42,7 +44,7 @@ function AnalysisViewContent({
   onMouseDown,
   onMouseMove,
   onContextMenu,
-}: Omit<LayoutMainCanvasProps, 'viewMode' | 'currentFrameBoxes' | 'loadingFrame'> & {
+}: Omit<LayoutMainCanvasProps, 'viewMode' | 'currentFrameBoxes' | 'loadingFrame' | 'tenantId' | 'videoId'> & {
   layoutConfig: LayoutConfig
 }) {
   return (
@@ -76,9 +78,11 @@ function AnalysisViewContent({
           style={{ touchAction: 'none', pointerEvents: 'none' }}
         />
       </div>
-      {analysisBoxes === null && (
+      {(analysisBoxes === null || isCalculatingPredictions) && (
         <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="text-white text-lg">Loading analysis boxes...</div>
+          <div className="text-white text-lg">
+            {isCalculatingPredictions ? 'Calculating predictions...' : 'Loading analysis boxes...'}
+          </div>
         </div>
       )}
       {/* RecalculatingOverlay removed - processing now happens in background without blocking */}
@@ -178,6 +182,7 @@ export function LayoutMainCanvas({
   currentFrameBoxes,
   analysisBoxes,
   loadingFrame,
+  isCalculatingPredictions,
   annotationsSinceRecalc,
   selectionPadding,
   imageRef,
@@ -197,6 +202,7 @@ export function LayoutMainCanvas({
           layoutApproved={layoutApproved}
           boundsMismatch={boundsMismatch}
           analysisBoxes={analysisBoxes}
+          isCalculatingPredictions={isCalculatingPredictions}
           annotationsSinceRecalc={annotationsSinceRecalc}
           selectionPadding={selectionPadding}
           imageRef={imageRef}

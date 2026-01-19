@@ -25,6 +25,13 @@ export default defineConfig(({ mode }) => {
         // Allow serving files from monorepo root (for node_modules, fonts, WASM, etc.)
         allow: [path.resolve(__dirname, '../..')],
       },
+      proxy: {
+        // Proxy /api requests to the FastAPI backend
+        '/api': {
+          target: env['API_URL'] || 'http://localhost:8000',
+          changeOrigin: true,
+        },
+      },
     },
     assetsInclude: ['**/*.wasm'],
     optimizeDeps: {

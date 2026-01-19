@@ -60,6 +60,11 @@ export async function clientLoader({ request }: { request: Request }) {
     throw new Response('Video not found', { status: 404 })
   }
 
+  // Ensure video has tenant_id (should always exist)
+  if (!video.tenant_id) {
+    throw new Response('Video is missing tenant ID', { status: 500 })
+  }
+
   // Check if video is ready for layout annotation
   if (video.layout_status === 'wait') {
     throw new Response('Video is still being processed. Please wait.', { status: 425 })
@@ -127,6 +132,7 @@ export default function AnnotateLayout() {
     analysisBoxes,
     annotationsSinceRecalc,
     isRecalculating,
+    isCalculatingPredictions,
     boundsMismatch,
     analysisThumbnailUrl,
     setAnalysisThumbnailUrl,
@@ -277,6 +283,7 @@ export default function AnnotateLayout() {
               currentFrameBoxes={currentFrameBoxes}
               analysisBoxes={analysisBoxes}
               loadingFrame={loadingFrame}
+              isCalculatingPredictions={isCalculatingPredictions}
               annotationsSinceRecalc={annotationsSinceRecalc}
               selectionPadding={SELECTION_PADDING}
               imageRef={imageRef}

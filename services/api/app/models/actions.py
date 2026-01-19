@@ -39,12 +39,24 @@ class BulkAnnotateResponse(BaseModel):
     framesAffected: int
 
 
+class LayoutParams(BaseModel):
+    """Layout parameters from Bayesian analysis."""
+
+    verticalPosition: float | None = None
+    verticalStd: float | None = None
+    boxHeight: float | None = None
+    boxHeightStd: float | None = None
+    anchorType: str | None = None
+    anchorPosition: float | None = None
+
+
 class AnalyzeLayoutResponse(BaseModel):
     """Response for analyze layout endpoint."""
 
     success: bool
     boxesAnalyzed: int
     processingTimeMs: int
+    layoutParams: LayoutParams | None = None
 
 
 class CalculatePredictionsResponse(BaseModel):
