@@ -13,7 +13,7 @@ We test **our implementation** - the integration code, business logic, and orche
 - Lock management (acquire/release)
 - Flow orchestration (steps, error handling, status updates)
 - Service integrations (how we call Prefect, Modal, Supabase, Wasabi)
-- Webhook handling and authentication
+- Internal trigger endpoints (process_new_videos)
 - Error recovery strategies
 
 ### What We Don't Test
@@ -114,19 +114,17 @@ We trust external services work as documented and test the boundaries.
 
 **Coverage Target:** 80%
 
-### 2.2 Webhook Handler Tests
+### 2.2 Internal Trigger Tests
 
-**File:** `services/api/tests/integration/routers/test_webhooks.py`
+**File:** `services/api/tests/integration/routers/test_internal.py`
 
 **Test Cases:**
-- Authentication (missing, invalid, valid tokens)
-- Invalid payload handling
-- Non-INSERT event ignored
-- Successful flow triggering
-- Priority calculation
+- process_new_videos trigger endpoint
+- Flow deployment trigger
 - Prefect API called correctly
+- Error handling when Prefect unavailable
 
-**Mocking:** Mock Prefect API, Supabase
+**Mocking:** Mock Prefect API
 
 **Coverage Target:** 85%
 
@@ -142,7 +140,7 @@ We trust external services work as documented and test the boundaries.
 
 **Scenario:** Upload video → Initial processing completes
 1. Upload test video to Wasabi
-2. Trigger webhook (or call flow directly)
+2. Trigger via internal endpoint (simulates Realtime subscription)
 3. Verify Modal function executes
 4. Verify files uploaded to Wasabi
 5. Verify Supabase status updated
@@ -183,7 +181,7 @@ We trust external services work as documented and test the boundaries.
 **File:** `services/api/tests/load/test_concurrent_flows.py`
 
 **Test Cases:**
-- 10 concurrent webhook requests complete successfully
+- 10 concurrent flow triggers complete successfully
 - Response times acceptable (< 1s p95)
 - Priority calculation remains accurate under load
 - Worker handles queue depth
@@ -231,15 +229,7 @@ We trust external services work as documented and test the boundaries.
 
 ## Level 6: Security Tests
 
-### 6.1 Webhook Authentication
-
-**Test Cases:**
-- Missing Authorization header rejected
-- Invalid secret rejected
-- Valid secret accepted
-- Rate limiting (if implemented)
-
-### 6.2 Tenant Isolation
+### 6.1 Tenant Isolation
 
 **Test Cases:**
 - Tenant cannot access other tenant's videos
@@ -337,7 +327,7 @@ tests/fixtures/databases/
 
 ### Performance Targets
 
-- **Webhook Response:** < 1s (p95)
+- **Internal Trigger Response:** < 1s (p95)
 - **Extract Frames:** < 5 min for 60s video
 - **Crop and Infer:** < 10 min for 60s video
 - **Caption OCR:** < 30s per caption
@@ -345,7 +335,7 @@ tests/fixtures/databases/
 
 ### Reliability Targets
 
-- **Webhook Availability:** 99.9%
+- **API Availability:** 99.9%
 - **Flow Success Rate:** 95%+
 - **Retry Success Rate:** 90%+ (after 1-2 retries)
 - **Lock Contention:** < 1% of flows blocked
@@ -391,7 +381,7 @@ asyncio_mode = auto
 
 ### Phase 2: Integration Tests (Week 2)
 - Flow integration tests
-- Webhook handler tests
+- Internal trigger tests
 - **Target:** 80% coverage
 
 ### Phase 3: E2E Tests (Week 3)

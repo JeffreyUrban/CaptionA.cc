@@ -53,15 +53,16 @@ Self-hosted provides unlimited deployments at minimal cost with auto-stop.
 ```
 
 ### Wake-Up Triggers
-- Webhook request (Supabase → API → Prefect)
+- Supabase Realtime subscription reconnection
 - API health check
 - Flow run creation
+- Cron job (process_new_videos recovery)
 
 ### Wake-Up Time
 - Cold start: ~5-10 seconds
 - Warm (recently stopped): ~2-3 seconds
 
-**Implication:** First flow after idle has 5-10s delay. Supabase webhooks may timeout on cold start (configure retry).
+**Implication:** First flow after idle has 5-10s delay. Realtime subscription reconnects automatically.
 
 ---
 
@@ -93,13 +94,11 @@ fly secrets set SUPABASE_URL=xxx
 fly secrets set SUPABASE_SERVICE_KEY=xxx
 fly secrets set WASABI_ACCESS_KEY=xxx
 fly secrets set WASABI_SECRET_KEY=xxx
-fly secrets set WEBHOOK_SECRET=xxx
 ```
 
 **For API Service (.env):**
 ```bash
 PREFECT_API_URL=http://banchelabs-gateway.flycast:4200/api  # Fly.io internal network
-WEBHOOK_SECRET=xxx
 SUPABASE_URL=xxx
 SUPABASE_SERVICE_ROLE_KEY=xxx
 WASABI_ACCESS_KEY_READWRITE=xxx
@@ -228,9 +227,9 @@ ps aux | grep "prefect worker"
 
 ### Machine Not Auto-Starting
 
-**Cause:** Webhook timeout too short
+**Cause:** Machine auto-stop is configured and no recent activity
 
-**Solution:** Configure Supabase webhook with longer timeout (30s) and retry policy.
+**Solution:** The machine will auto-start when Realtime reconnects or the cron job triggers. The 15-minute cron job acts as a recovery mechanism for any missed events.
 
 ### SQLite Database Corruption
 

@@ -126,7 +126,7 @@ pytest -v --cov=app --cov-report=term-missing --cov-report=html
 ### Focus on critical areas
 
 ```bash
-# Run flow and webhook tests (critical gaps identified in test plan)
+# Run flow tests (critical gaps identified in test plan)
 pytest -m "flows" -v
 
 # Run integration and API tests

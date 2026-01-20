@@ -1,5 +1,7 @@
 /**
- * S3 Credentials Edge Function
+ * S3 Credentials Edge Function (PROD)
+ *
+ * Production version - uses captionacc_prod schema.
  *
  * Returns temporary STS credentials for direct Wasabi S3 access,
  * scoped to the tenant's client/ paths (read-only).
@@ -25,7 +27,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders, handleCorsPreflightRequest } from "../_shared/cors.ts";
 import { assumeRole, STSConfig } from "../_shared/sts.ts";
 
-// Environment variables
+// Environment variables (PROD uses DB_SCHEMA)
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const DB_SCHEMA = Deno.env.get("DB_SCHEMA") || "captionacc_prod";

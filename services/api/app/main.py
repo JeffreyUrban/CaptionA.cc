@@ -18,10 +18,10 @@ from app.routers import (
     preferences,
     stats,
     sync,
-    webhooks,
     websocket_sync,
 )
 from app.services.background_tasks import get_upload_worker
+from app.services.realtime_subscriber import get_realtime_subscriber
 
 # Configure logging
 logging.basicConfig(
@@ -74,10 +74,19 @@ async def lifespan(app: FastAPI):
         logger.error(f"Failed to start Prefect worker: {e}")
         # Continue startup even if Prefect worker fails
 
+    # Start Realtime subscriber for video INSERT events
+    realtime_subscriber = get_realtime_subscriber()
+    try:
+        await realtime_subscriber.start()
+    except Exception as e:
+        logger.error(f"Failed to start Realtime subscriber: {e}")
+        # Continue startup - cron fallback will still work
+
     yield
 
-    # Shutdown - stop worker and upload all pending changes before exit
+    # Shutdown - stop all background services
     logger.info("Shutting down API service")
+    await realtime_subscriber.stop()
     await worker_manager.stop()
     await upload_worker.stop()
 
@@ -121,9 +130,6 @@ def create_app() -> FastAPI:
     # CR-SQLite sync routers
     app.include_router(sync.router, prefix="/videos", tags=["sync"])
     app.include_router(websocket_sync.router, prefix="/videos", tags=["sync"])
-
-    # Webhook routers
-    app.include_router(webhooks.router, tags=["webhooks"])
 
     # Internal system endpoints
     app.include_router(internal.router, tags=["internal"])

@@ -44,15 +44,7 @@ Set ALLOW_E2E_ON_PRODUCTION=true to override.
 
 ## 🔧 Configuration Changes Made
 
-### 1. Environment Variables Added
-
-**`.env` updates:**
-```bash
-# Added webhook authentication secret
-WEBHOOK_SECRET=dev_webhook_secret_e2e_testing_only_change_in_production
-```
-
-### 2. Dependencies Installed
+### 1. Dependencies Installed
 
 **Workspace-level changes (`pyproject.toml`):**
 - Added `captionacc-modal` to `tool.uv.sources`
@@ -121,7 +113,6 @@ ALLOW_E2E_ON_PRODUCTION=true uv run pytest tests/e2e/ --collect-only -q
 | `WASABI_SECRET_KEY_READWRITE` | ✅ Set | .env |
 | `WASABI_BUCKET` | ✅ Set | .env (captionacc-prod) |
 | `WASABI_REGION` | ✅ Set | .env (us-east-1) |
-| `WEBHOOK_SECRET` | ✅ Set | .env (dev secret) |
 | `PREFECT_API_URL` | ✅ Set | .env |
 | `MODAL_TOKEN` | ✅ Configured | Modal CLI authenticated |
 | `ALLOW_E2E_ON_PRODUCTION` | ⚠️ Must set explicitly | Set to "true" to run |

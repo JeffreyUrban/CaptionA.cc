@@ -93,37 +93,6 @@ prefect deployment run "captionacc-video-initial-processing" \
   --param storage_key=xxx
 ```
 
-### 3. Webhook Not Triggering Flows
-
-**Symptoms**: Videos uploaded but processing never starts.
-
-**Causes**:
-- Fly.io machine sleeping (cold start timeout)
-- Webhook secret mismatch
-- Supabase webhook disabled
-
-**Resolution**:
-
-```bash
-# Check if machine is running
-fly status --app banchelabs-gateway
-
-# Wake machine with health check
-curl https://banchelabs-gateway.fly.dev/prefect-internal/prefect/api/health
-
-# Verify webhook in Supabase Dashboard
-# Database → Webhooks → videos table
-
-# Check Prefect logs for webhook receipt
-fly logs --app banchelabs-gateway | grep webhook
-
-# Manually trigger if needed
-curl -X POST https://banchelabs-gateway.fly.dev/webhooks/supabase \
-  -H "Authorization: Bearer $WEBHOOK_SECRET" \
-  -H "Content-Type: application/json" \
-  -d '{"type":"INSERT","table":"videos","record":{...}}'
-```
-
 ### 4. Server Lock Not Released
 
 **Symptoms**: Video stuck in "processing" state, user cannot edit.
@@ -346,32 +315,6 @@ sqlite3 /data/prefect.db "SELECT * FROM flow_run LIMIT 10;"
 
 # Check environment
 env | grep PREFECT
-```
-
-### Test Webhook Locally
-
-```python
-# Send test webhook payload
-import requests
-
-response = requests.post(
-    "https://banchelabs-gateway.fly.dev/webhooks/supabase",
-    headers={
-        "Authorization": "Bearer {webhook_secret}",
-        "Content-Type": "application/json"
-    },
-    json={
-        "type": "INSERT",
-        "table": "videos",
-        "record": {
-            "id": "test-video-id",
-            "tenant_id": "test-tenant-id",
-            "storage_key": "test/videos/test.mp4",
-            "status": "uploading"
-        }
-    }
-)
-print(response.json())
 ```
 
 ---

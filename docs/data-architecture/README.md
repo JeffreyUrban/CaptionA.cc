@@ -136,7 +136,7 @@ See: [SQLite Database Reference](./sqlite-databases.md)
    - Upload progress tracked client-side only (not visible in videos page)
 3. Client calls Edge Function /confirm endpoint after upload completes
    - Edge Function creates video record in Supabase (status: 'processing')
-   - Supabase INSERT webhook fires → triggers Prefect flow
+   - Supabase Realtime notifies API → triggers process_new_videos flow
 4. Prefect flow: captionacc-video-initial-processing
    a. Extract full frames → client/videos/{id}/full_frames/*.jpg
    b. Run OCR → server/videos/{id}/raw-ocr.db.gz

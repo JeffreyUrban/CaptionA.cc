@@ -46,12 +46,17 @@ Key settings:
 
 #### 2. Supabase Schema
 
-Create the dev schema in your Supabase project:
+The dev schema is created via migrations (already applied):
 
-```sql
-CREATE SCHEMA IF NOT EXISTS captionacc_dev;
--- Clone tables/functions from captionacc_prod
+```bash
+cd supabase
+supabase db push
 ```
+
+Migrations applied:
+- `20260120000000_rename_schema_to_prod.sql` - Renames `captionacc_production` → `captionacc_prod`
+- `20260120000001_create_dev_schema.sql` - Creates `captionacc_dev` with all tables/functions/RLS
+- `20260120000002_auth_trigger_multi_schema.sql` - Auth trigger creates profiles in both schemas
 
 #### 3. Prefect Deployments
 
@@ -137,6 +142,60 @@ VITE_SUPABASE_ANON_KEY=...
 3. **Prefect Server** - Same server, different work pools
 4. **Modal Account** - Same account, different app names
 
+## Supabase Configuration
+
+### Edge Functions
+
+Edge Functions are duplicated for prod/dev isolation:
+
+| Function | Environment | Description |
+|----------|-------------|-------------|
+| `captionacc-presigned-upload-prod` | Production | Uses `DB_SCHEMA` → `captionacc_prod` |
+| `captionacc-presigned-upload-dev` | Development | Uses `DB_SCHEMA_DEV` → `captionacc_dev` |
+| `captionacc-s3-credentials-prod` | Production | Uses `DB_SCHEMA` → `captionacc_prod` |
+| `captionacc-s3-credentials-dev` | Development | Uses `DB_SCHEMA_DEV` → `captionacc_dev` |
+
+### Edge Function Secrets
+
+**Production secrets (already configured):**
+```bash
+supabase secrets set DB_SCHEMA=captionacc_prod
+supabase secrets set WASABI_BUCKET=captionacc-prod
+```
+
+**Development secrets (need to be set):**
+```bash
+supabase secrets set DB_SCHEMA_DEV=captionacc_dev
+```
+
+### Video Processing
+
+When a video is uploaded, processing starts immediately via Supabase Realtime:
+
+**Primary mechanism (immediate):**
+- API subscribes to `videos` table INSERT events via Supabase Realtime
+- On INSERT, triggers `process_new_videos` flow immediately
+- Expected latency: seconds
+
+**Recovery fallback (every 15 minutes):**
+- Cron job queries for any videos with `layout_status = 'wait'`
+- Catches missed Realtime events (network issues, API restart, etc.)
+
+Both mechanisms use the same `process_new_videos` flow with built-in race condition protection.
+
+This architecture:
+- Provides immediate processing as the standard flow
+- Works identically in dev and prod (no webhook configuration needed)
+- Decouples the API from Supabase knowing its URL
+
+### Auth & User Profiles
+
+When users sign up, the auth trigger creates profiles in **both** schemas:
+- `captionacc_prod.user_profiles`
+- `captionacc_dev.user_profiles`
+
+This ensures users can work seamlessly in both environments.
+
 ## Troubleshooting
 
 ### Worker Not Starting
@@ -154,3 +213,10 @@ modal app list | grep extract
 ### Database Errors
 
 Verify `SUPABASE_SCHEMA=captionacc_dev` and the schema exists.
+
+### User Profile Not Found
+
+If you get "User profile not found" errors in dev:
+1. Check that `captionacc_dev.user_profiles` has your user
+2. The auth trigger backfill should have created profiles for existing users
+3. New users automatically get profiles in both schemas

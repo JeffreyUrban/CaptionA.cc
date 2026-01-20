@@ -1,7 +1,7 @@
 """
 Prefect flow for initial video processing: frame extraction, OCR, and layout analysis.
 
-Triggered by: Supabase database webhook on `videos` table INSERT
+Triggered by: process_new_videos flow (via Realtime subscription or cron recovery)
 Duration: 2-10 minutes (depending on video length)
 
 This flow:
@@ -317,7 +317,7 @@ async def video_initial_processing(
     """
     Extracts frames from uploaded video, runs OCR, and initializes layout.db.
 
-    This flow is triggered by a Supabase webhook when a new video is uploaded.
+    This flow is triggered by the process_new_videos flow when a video is uploaded.
     It performs the initial processing required before the user can annotate
     caption regions.
 

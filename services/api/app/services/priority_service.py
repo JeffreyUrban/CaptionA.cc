@@ -26,7 +26,7 @@ Current behavior:
 - All flow runs go to the 'default' work queue in FIFO order
 - No actual prioritization occurs during execution
 
-See app/routers/webhooks.py for additional details and possible solutions.
+See docs/prefect-orchestration/ARCHITECTURE.md for additional details and possible solutions.
 """
 
 from datetime import datetime, timezone

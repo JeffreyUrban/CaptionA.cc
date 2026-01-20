@@ -33,9 +33,9 @@ deployments:
       name: captionacc-workers-dev
     schedules: []
 
-  - name: captionacc-dev-video-recovery
-    description: "[DEV] Find and retry stuck videos (triggered by scheduled machine)"
-    entrypoint: app/flows/video_recovery.py:video_recovery
+  - name: captionacc-dev-process-new-videos
+    description: "[DEV] Process new videos (primary: Realtime, recovery: cron)"
+    entrypoint: app/flows/process_new_videos.py:process_new_videos
     work_pool:
       name: captionacc-workers-dev
-    schedules: []  # No cron schedule - triggered manually in dev
+    schedules: []  # Triggered by Realtime (immediate) + cron recovery (15 min)

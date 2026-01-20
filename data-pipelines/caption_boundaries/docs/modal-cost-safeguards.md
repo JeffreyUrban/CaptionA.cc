@@ -637,13 +637,13 @@ def monitor_rejections():
         send_alert(f"{len(rejections)} unacknowledged rejections")
 ```
 
-**Option 3: Real-time webhook (Supabase trigger)**
+**Option 3: Real-time database trigger (Supabase pg_net)**
 ```sql
--- Trigger notification on new rejection
+-- Trigger notification on new rejection using pg_net extension
 CREATE TRIGGER rejection_alert
   AFTER INSERT ON boundary_inference_rejections
   FOR EACH ROW
-  EXECUTE FUNCTION notify_team();
+  EXECUTE FUNCTION notify_team_via_slack();
 ```
 
 ### Response Workflow

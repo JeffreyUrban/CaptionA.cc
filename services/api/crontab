@@ -4,5 +4,5 @@
 # Format: minute hour day month weekday command
 # Note: Times are in UTC
 
-# Check for stuck videos every 15 minutes
-*/15 * * * * bash /app/scripts/trigger_recovery.sh >> /tmp/recovery-cron.log 2>&1
+# Recovery: Check for missed videos every 15 minutes (primary trigger is Realtime)
+*/15 * * * * bash /app/scripts/trigger_process_new_videos.sh >> /tmp/process-new-videos-cron.log 2>&1

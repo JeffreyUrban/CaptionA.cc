@@ -31,7 +31,7 @@ Prefect: trigger on video record insert
     └──▶ Supabase: videos.status = 'active'
 ```
 
-**Trigger**: Supabase webhook on `videos` table insert
+**Trigger**: Supabase Realtime subscription on `videos` table INSERT (immediate) + cron recovery (15 min)
 
 ### 2. Crop and Inference
 
@@ -76,7 +76,7 @@ Prefect: trigger on caption frame extents confirmation
 │    │  1. Upload     │                │                │              │      │
 │    ├───────────────►│                │                │              │      │
 │    │                │                │                │              │      │
-│    │  2. Insert     │  3. Webhook    │                │              │      │
+│    │  2. Insert     │  3. Realtime   │                │              │      │
 │    │  video record  ├───────────────►│                │              │      │
 │    │                │                │                │              │      │
 │    │                │                │  4. Modal call │              │      │
@@ -113,7 +113,8 @@ Prefect: trigger on caption frame extents confirmation
 
 | Flow | Trigger | Steps                                                               |
 |------|---------|---------------------------------------------------------------------|
-| `captionacc-video-initial-processing` | Supabase webhook | Modal: frames + OCR                                                 |
+| `captionacc-process-new-videos` | Realtime + cron | Find videos with layout_status='wait', trigger initial processing |
+| `captionacc-video-initial-processing` | process_new_videos | Modal: frames + OCR                                                 |
 | `captionacc-crop-and-infer-caption-frame-extents` | API call | Modal: crop + infer: caption_frame_extents.db.gz                       |
 | `captionacc-caption-ocr` | API call | caption_frame_extents.db.gz, Modal: median + OCR → API: update caption |
 

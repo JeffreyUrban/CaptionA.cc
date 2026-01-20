@@ -3,7 +3,7 @@
 Retry processing for stuck videos.
 
 This script triggers the video_initial_processing flow for videos that
-failed to be picked up by the webhook.
+failed to be picked up by the Realtime subscription or cron recovery.
 
 Usage:
     # Retry all stuck videos (older than 10 minutes)

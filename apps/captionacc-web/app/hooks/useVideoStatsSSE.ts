@@ -23,7 +23,7 @@ interface UseVideoStatsSSEOptions {
 /**
  * Subscribe to real-time video stats updates via SSE.
  *
- * When a Prefect flow completes, the webhook broadcasts an event,
+ * When a Prefect flow completes, the API broadcasts an SSE event,
  * and this hook triggers a refetch for the affected video.
  */
 export function useVideoStatsSSE({ onUpdate, enabled = true }: UseVideoStatsSSEOptions) {

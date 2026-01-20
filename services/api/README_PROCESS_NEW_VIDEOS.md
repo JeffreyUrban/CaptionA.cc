@@ -1,4 +1,4 @@
-# Video Recovery System
+# Process New Videos System
 
 ## Overview
 
@@ -18,9 +18,9 @@ A video is considered stuck if:
 
 A scheduled Prefect flow runs **every 15 minutes** to automatically find and retry stuck videos.
 
-**Flow:** `captionacc-video-recovery`
+**Flow:** `captionacc-process-new-videos`
 **Schedule:** `*/15 * * * *` (every 15 minutes)
-**Location:** `app/flows/video_recovery.py`
+**Location:** `app/flows/process_new_videos.py`
 
 #### How It Works
 
@@ -49,12 +49,12 @@ The system prevents duplicate processing by checking:
 
 View recovery flow runs:
 ```bash
-PREFECT_API_URL="..." prefect flow-run ls --flow-name captionacc-video-recovery
+PREFECT_API_URL="..." prefect flow-run ls --flow-name captionacc-process-new-videos
 ```
 
 Check recovery logs:
 ```bash
-fly logs --app captionacc-api | grep "video-recovery"
+fly logs --app captionacc-api | grep "process-new-videos"
 ```
 
 ### 2. Manual Recovery Scripts
@@ -135,9 +135,9 @@ export PREFECT_API_URL="https://banchelabs-gateway.fly.dev/prefect-internal/pref
 
 ## Common Scenarios
 
-### Scenario 1: Webhook Failed
+### Scenario 1: Realtime Event Missed
 
-**Problem:** Supabase webhook didn't fire or failed to reach API
+**Problem:** Supabase Realtime notification wasn't received (network issue, API restart)
 
 **Solution:** Automatic recovery will pick it up within 15 minutes
 
@@ -162,7 +162,7 @@ python scripts/retry_stuck_videos.py --age-minutes 30
 
 ### Scenario 3: API Was Down
 
-**Problem:** API service was offline when webhook fired
+**Problem:** API service was offline when video was uploaded
 
 **Solution:** Automatic recovery will retry within 15 minutes of API coming back online
 
@@ -187,10 +187,10 @@ If you need to temporarily disable automatic recovery:
 
 ```bash
 # Pause the schedule
-PREFECT_API_URL="..." prefect deployment pause captionacc-video-recovery/captionacc-video-recovery
+PREFECT_API_URL="..." prefect deployment pause captionacc-process-new-videos/captionacc-process-new-videos
 
 # Resume later
-PREFECT_API_URL="..." prefect deployment resume captionacc-video-recovery/captionacc-video-recovery
+PREFECT_API_URL="..." prefect deployment resume captionacc-process-new-videos/captionacc-process-new-videos
 ```
 
 ## Monitoring & Alerts
@@ -200,7 +200,7 @@ PREFECT_API_URL="..." prefect deployment resume captionacc-video-recovery/captio
 ```bash
 # Recent recovery runs
 PREFECT_API_URL="..." prefect flow-run ls \
-  --flow-name captionacc-video-recovery \
+  --flow-name captionacc-process-new-videos \
   --limit 10
 
 # View specific run details
@@ -228,7 +228,7 @@ fly logs --app captionacc-api | grep recovery
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                   Video Recovery Flow                    │
+│                   Process New Videos Flow                    │
 │                  (runs every 15 minutes)                 │
 └─────────────────────────────────────────────────────────┘
                            │
@@ -264,6 +264,46 @@ fly logs --app captionacc-api | grep recovery
     └────────────────────┘
 ```
 
+## Implementation Details
+
+### Scheduling with Supercronic
+
+The API uses [Supercronic](https://github.com/aptible/supercronic) (Fly.io's recommended approach) for cron-style scheduling:
+
+1. **Supercronic** runs as a background process inside the API container
+2. Every 15 minutes, it executes `scripts/trigger_process_new_videos.sh`
+3. The script calls the internal endpoint `POST /internal/process-new-videos/trigger`
+4. This triggers the `captionacc-process-new-videos` Prefect flow
+
+### Files
+
+| File | Purpose |
+|------|---------|
+| `crontab` | Cron schedule (every 15 minutes) |
+| `scripts/trigger_process_new_videos.sh` | Script that calls the trigger endpoint |
+| `scripts/start.sh` | Startup script launching FastAPI + Supercronic |
+| `app/routers/internal.py` | Internal endpoints including trigger |
+| `app/flows/process_new_videos.py` | Prefect flow that finds and retries stuck videos |
+
+### Duty Cycle
+
+**When no stuck videos are found (typical):**
+- Recovery check: ~5-10 seconds
+- Machine auto-stops based on HTTP inactivity (~5 minutes)
+
+**When stuck videos are found:**
+- Recovery check: ~5-10 seconds
+- Video processing: variable (depends on number of videos)
+- Machine stays on until all triggered flows complete
+
+### Why Supercronic?
+
+| Approach | Pros | Cons |
+|----------|------|------|
+| Fly.io Machines Schedule | Lower duty cycle | Only hourly/daily intervals |
+| External cron service | Fine-grained | External dependency |
+| **Supercronic** | Fine-grained, no external deps | Background process runs continuously |
+
 ## Troubleshooting
 
 ### Recovery isn't running
@@ -276,7 +316,13 @@ PREFECT_API_URL="..." prefect deployment ls
 Verify schedule:
 ```bash
 PREFECT_API_URL="..." prefect deployment inspect \
-  captionacc-video-recovery/captionacc-video-recovery
+  captionacc-process-new-videos/captionacc-process-new-videos
+```
+
+Check Supercronic logs:
+```bash
+fly ssh console
+tail -f /tmp/recovery-cron.log
 ```
 
 ### Videos still stuck after recovery
@@ -301,3 +347,9 @@ Then redeploy:
 ```bash
 fly deploy --app captionacc-api
 ```
+
+## References
+
+- [Fly.io Task Scheduling Guide](https://fly.io/docs/blueprints/task-scheduling/)
+- [Supercronic GitHub](https://github.com/aptible/supercronic)
+- [Fly.io Autostop/Autostart Documentation](https://fly.io/docs/launch/autostop-autostart/)

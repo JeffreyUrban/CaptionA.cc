@@ -327,7 +327,7 @@ class UploadManager {
       console.log(`[UploadManager] Upload complete ${uploadMetadata.relativePath}`)
 
       // Step 3: Confirm upload completion - creates video record with status 'processing'
-      // This triggers the Supabase INSERT webhook for backend processing
+      // This triggers Supabase Realtime notification for immediate backend processing
       console.log(`[UploadManager] Confirming upload for videoId: ${presignedData.videoId}`)
 
       const confirmResponse = await fetch(

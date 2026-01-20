@@ -12,7 +12,6 @@ Environment Variables Required:
     - WASABI_SECRET_KEY_READWRITE: Wasabi secret key (or WASABI_SECRET_ACCESS_KEY)
     - WASABI_BUCKET: S3 bucket name
     - WASABI_REGION: S3 region (default: us-east-1)
-    - WEBHOOK_SECRET: Secret for authenticating webhook requests (optional for most tests)
     - ALLOW_E2E_ON_PRODUCTION: Must be set to "true" to run E2E tests on production schema
 
 Safety:

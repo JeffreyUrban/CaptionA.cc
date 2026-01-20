@@ -118,7 +118,7 @@ class TestVideoProcessingE2E:
         Test complete integration with all real services.
 
         This test:
-        1. Triggers webhook to create flow run (tests webhook handler)
+        1. Triggers process_new_videos via internal endpoint (tests trigger handler)
         2. Executes flow directly (tests flow logic with real Modal/Supabase/Wasabi)
         3. Verifies flow execution results
         4. Verifies Supabase was updated correctly
@@ -162,39 +162,25 @@ class TestVideoProcessingE2E:
         except Exception as e:
             raise RuntimeError(f"Failed to create video record in Supabase: {e}") from e
 
-        # Step 2: Test webhook trigger (tests our webhook handler)
-        # This bypasses actual Supabase webhook but tests our endpoint logic
+        # Step 2: Test process_new_videos trigger (tests our internal endpoint)
+        # This simulates what the Realtime subscriber does when a video is inserted
         app = create_app()
         client = TestClient(app)
 
-        webhook_secret = (
-            settings.webhook_secret or "test-webhook-secret"
-        )  # pragma: allowlist secret
-        webhook_response = client.post(
-            "/webhooks/supabase/videos",
-            headers={"Authorization": f"Bearer {webhook_secret}"},
-            json={
-                "type": "INSERT",
-                "table": "videos",
-                "record": {
-                    "id": video_id,
-                    "tenant_id": tenant_id,
-                    "storage_key": storage_key,
-                    "created_at": datetime.now(timezone.utc).isoformat(),
-                },
-            },
+        trigger_response = client.post(
+            "/internal/process-new-videos/trigger",
+            headers={"Content-Type": "application/json"},
         )
 
-        # Verify webhook response
-        assert webhook_response.status_code == 202, (
-            f"Webhook failed with status {webhook_response.status_code}: "
-            f"{webhook_response.text}"
+        # Verify trigger response
+        assert trigger_response.status_code == 200, (
+            f"Trigger failed with status {trigger_response.status_code}: "
+            f"{trigger_response.text}"
         )
-        webhook_data = webhook_response.json()
-        assert webhook_data["success"] is True
-        assert "flow_run_id" in webhook_data
-        flow_run_id = webhook_data["flow_run_id"]
-        print(f"Webhook triggered successfully, flow_run_id: {flow_run_id}")
+        trigger_data = trigger_response.json()
+        assert "flow_run_id" in trigger_data
+        flow_run_id = trigger_data["flow_run_id"]
+        print(f"Process new videos triggered successfully, flow_run_id: {flow_run_id}")
 
         # Step 3: Execute flow directly (tests our flow logic)
         # This bypasses Prefect scheduling to focus on OUR code

@@ -141,7 +141,7 @@ User Browser
 
 ### 🔄 Prefect Integration
 - Flows update Supabase status during processing
-- Webhooks notify web app when flows complete
+- SSE (Server-Sent Events) notify web app when flows complete
 - Service role key bypasses RLS for system operations
 
 ## Next Steps

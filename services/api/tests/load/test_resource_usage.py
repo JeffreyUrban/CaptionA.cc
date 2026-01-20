@@ -136,34 +136,22 @@ class TestResourceUsage:
                 )
                 assert response.json()["status"] == "healthy"
 
-                # Webhooks should return 503 (service unavailable) when Prefect is down
-                with patch("app.routers.webhooks.trigger_prefect_flow") as mock_trigger:
-                    mock_trigger.side_effect = Exception("Prefect not available")
+                # Internal trigger endpoint should handle Prefect unavailability gracefully
+                with patch("app.routers.internal.run_deployment") as mock_run:
+                    mock_run.side_effect = Exception("Prefect not available")
 
-                    webhook_response = client.post(
-                        "/webhooks/supabase/videos",
-                        json={
-                            "type": "INSERT",
-                            "table": "videos",
-                            "record": {
-                                "id": "test-video-123",
-                                "tenant_id": "test-tenant-456",
-                                "storage_key": "test/path/video.mp4",
-                            },
-                        },
-                        headers={
-                            "Authorization": "Bearer test-secret"
-                        },  # pragma: allowlist secret
+                    trigger_response = client.post(
+                        "/internal/process-new-videos/trigger",
+                        headers={"Content-Type": "application/json"},
                     )
 
                     # Should return error status when Prefect is unavailable
-                    # Could be 401 (auth), 503 (unavailable), or 500 (error)
+                    # Could be 500 (error) or 503 (unavailable)
                     # The key is API is still running
-                    assert webhook_response.status_code in [
-                        401,
-                        503,
+                    assert trigger_response.status_code in [
                         500,
-                    ], "Webhook should handle Prefect unavailability"
+                        503,
+                    ], "Internal trigger should handle Prefect unavailability"
 
     @pytest.mark.asyncio
     async def test_worker_manager_handles_worker_crash(self, caplog):

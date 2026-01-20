@@ -388,13 +388,13 @@ for diff in differences[:10]:
 When layout annotation is approved and cropped frames are regenerated:
 
 1. Prefect `crop_frames_to_webm_flow` completes
-2. Webhook triggers `boundary_inference_flow`
+2. Flow triggers `boundary_inference_flow` (via Prefect)
 3. Flow checks Supabase for existing run
 4. If not found, submits high-priority job to Modal
 5. Modal container starts (<1s cold start)
 6. Inference completes (~40 minutes)
 7. Results uploaded to Wasabi, registered in Supabase
-8. Webhook notifies completion
+8. SSE notifies web app of completion
 
 ### Low Priority: Model Updates
 
@@ -501,7 +501,7 @@ If single-instance performance is insufficient:
 
 ### Phase 4: Prefect Integration
 - Create boundary inference Prefect flow
-- Update webhook to trigger inference
+- Configure flow triggering mechanism
 - Test end-to-end flow
 
 ### Phase 5: Priority Queue & Optimization

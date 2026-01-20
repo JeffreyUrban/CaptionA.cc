@@ -1,16 +1,17 @@
 """
-Video Recovery Flow
+Process New Videos Flow
 
-Automatically finds and retries videos that failed to get picked up for processing.
-This flow runs on a schedule to ensure no videos are left stuck.
+Finds videos waiting to be processed (layout_status = 'wait') and triggers processing.
 
-Flow: captionacc-video-recovery
-Schedule: Every 15 minutes
+Primary trigger: Realtime subscription on videos table INSERT (immediate processing)
+Recovery fallback: Cron job every 15 minutes catches any missed events
+
+Flow: captionacc-process-new-videos
 Duration: 10-60 seconds
 
 Steps:
-1. Query for videos in "uploading" or "pending" status older than 10 minutes
-2. For each stuck video, trigger video_initial_processing flow
+1. Query for videos with layout_status = 'wait'
+2. For each video, trigger video_initial_processing flow
 3. Log results for monitoring
 """
 
@@ -22,16 +23,16 @@ from prefect import flow, get_run_logger, task
 from prefect.client.orchestration import get_client
 
 
-@task(name="find-stuck-videos", retries=2, retry_delay_seconds=30)
-async def find_stuck_videos(age_minutes: int = 10) -> list[dict[str, Any]]:
+@task(name="find-new-videos", retries=2, retry_delay_seconds=30)
+async def find_new_videos(age_minutes: int = 0) -> list[dict[str, Any]]:
     """
-    Find videos stuck in initial processing (layout_status = 'wait').
+    Find videos waiting to be processed (layout_status = 'wait').
 
     Args:
-        age_minutes: Consider videos older than this many minutes
+        age_minutes: Only consider videos older than this many minutes (0 = all)
 
     Returns:
-        List of stuck video records
+        List of video records to process
     """
     import httpx
 
@@ -44,11 +45,14 @@ async def find_stuck_videos(age_minutes: int = 10) -> list[dict[str, Any]]:
     if not supabase_url or not supabase_key:
         raise ValueError("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY")
 
-    # Calculate cutoff time
-    cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=age_minutes)
-    cutoff_iso = cutoff_time.isoformat()
-
-    logger.info(f"Searching for videos stuck since {cutoff_iso}")
+    # Calculate cutoff time (if age_minutes > 0)
+    if age_minutes > 0:
+        cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=age_minutes)
+        cutoff_iso = cutoff_time.isoformat()
+        logger.info(f"Searching for videos waiting since {cutoff_iso}")
+    else:
+        cutoff_iso = None
+        logger.info("Searching for all videos waiting to be processed")
 
     headers = {
         "apikey": supabase_key,
@@ -66,25 +70,25 @@ async def find_stuck_videos(age_minutes: int = 10) -> list[dict[str, Any]]:
         headers=headers,
         timeout=30.0,
     ) as client:
-        response = await client.get(
-            "/videos",
-            params={
-                "select": "id,tenant_id,display_path,layout_status,uploaded_at",
-                "layout_status": "eq.wait",
-                "uploaded_at": f"lt.{cutoff_iso}",
-                "order": "uploaded_at.asc",
-            },
-        )
+        params = {
+            "select": "id,tenant_id,display_path,layout_status,uploaded_at",
+            "layout_status": "eq.wait",
+            "order": "uploaded_at.asc",
+        }
+        if cutoff_iso:
+            params["uploaded_at"] = f"lt.{cutoff_iso}"
+
+        response = await client.get("/videos", params=params)
 
         if response.status_code != 200:
             raise Exception(
                 f"Failed to query videos: {response.status_code} {response.text}"
             )
 
-        stuck_videos = response.json()
-        logger.info(f"Found {len(stuck_videos)} stuck video(s)")
+        new_videos = response.json()
+        logger.info(f"Found {len(new_videos)} video(s) to process")
 
-        return stuck_videos
+        return new_videos
 
 
 @task(name="check-existing-flow-runs", retries=1, retry_delay_seconds=10)
@@ -209,7 +213,7 @@ async def trigger_video_processing(
                 "tenant_id": tenant_id,
                 "storage_key": storage_key,
             },
-            tags=["recovery", "auto-retry"],
+            tags=["process-new-videos", "auto-triggered"],
         )
 
         logger.info(
@@ -224,30 +228,30 @@ async def trigger_video_processing(
 
 
 @flow(
-    name="captionacc-video-recovery",
+    name="captionacc-process-new-videos",
     log_prints=True,
     retries=1,
     retry_delay_seconds=60,
 )
-async def video_recovery(age_minutes: int = 10) -> dict[str, Any]:
+async def process_new_videos(age_minutes: int = 0) -> dict[str, Any]:
     """
-    Find and retry stuck videos.
+    Find and process new videos waiting in queue.
 
     Args:
-        age_minutes: Consider videos older than this many minutes
+        age_minutes: Only consider videos older than this many minutes (0 = all)
 
     Returns:
-        Recovery summary with counts
+        Processing summary with counts
     """
     logger = get_run_logger()
 
-    logger.info(f"Starting video recovery flow (age threshold: {age_minutes} minutes)")
+    logger.info(f"Starting process new videos flow (age threshold: {age_minutes} minutes)")
 
-    # Find stuck videos
-    stuck_videos = await find_stuck_videos(age_minutes=age_minutes)
+    # Find videos to process
+    new_videos = await find_new_videos(age_minutes=age_minutes)
 
-    if not stuck_videos:
-        logger.info("No stuck videos found")
+    if not new_videos:
+        logger.info("No new videos to process")
         return {
             "total": 0,
             "success": 0,
@@ -255,14 +259,14 @@ async def video_recovery(age_minutes: int = 10) -> dict[str, Any]:
             "videos": [],
         }
 
-    logger.info(f"Attempting to recover {len(stuck_videos)} video(s)")
+    logger.info(f"Processing {len(new_videos)} video(s)")
 
     results = []
     success_count = 0
     skipped_count = 0
     failed_count = 0
 
-    for video in stuck_videos:
+    for video in new_videos:
         video_id = video["id"]
         tenant_id = video["tenant_id"]
         # Compute storage_key since it's no longer stored in database
@@ -270,7 +274,7 @@ async def video_recovery(age_minutes: int = 10) -> dict[str, Any]:
         display_path = video.get("display_path") or video_id
 
         try:
-            logger.info(f"Retrying video: {display_path} (ID: {video_id})")
+            logger.info(f"Processing video: {display_path} (ID: {video_id})")
 
             result = await trigger_video_processing(
                 video_id=video_id,
@@ -286,7 +290,7 @@ async def video_recovery(age_minutes: int = 10) -> dict[str, Any]:
                 success_count += 1
 
         except Exception as e:
-            logger.error(f"Failed to recover video {video_id}: {e}")
+            logger.error(f"Failed to process video {video_id}: {e}")
             results.append(
                 {
                     "video_id": video_id,
@@ -298,7 +302,7 @@ async def video_recovery(age_minutes: int = 10) -> dict[str, Any]:
 
     # Summary
     summary = {
-        "total": len(stuck_videos),
+        "total": len(new_videos),
         "success": success_count,
         "skipped": skipped_count,
         "failed": failed_count,
@@ -306,7 +310,7 @@ async def video_recovery(age_minutes: int = 10) -> dict[str, Any]:
     }
 
     logger.info(
-        f"Recovery complete: {success_count} triggered, {skipped_count} skipped, {failed_count} failed"
+        f"Processing complete: {success_count} triggered, {skipped_count} skipped, {failed_count} failed"
     )
 
     return summary

@@ -1,20 +1,22 @@
 /**
- * Presigned Upload Edge Function
+ * Presigned Upload Edge Function (DEV)
+ *
+ * Development version - uses captionacc_dev schema.
  *
  * Two-phase upload process:
  *
  * Phase 1 - Generate presigned URL (no video record created):
- * POST /functions/v1/captionacc-presigned-upload
+ * POST /functions/v1/captionacc-presigned-upload-dev
  * Request: { filename, contentType, sizeBytes, videoPath?, width?, height? }
  * Response: { uploadUrl, videoId, storageKey, expiresAt }
  *
  * Phase 2 - Confirm upload completion (creates video record with workflow statuses at 'wait'):
- * POST /functions/v1/captionacc-presigned-upload/confirm
+ * POST /functions/v1/captionacc-presigned-upload-dev/confirm
  * Request: { videoId, storageKey, filename, contentType, sizeBytes, videoPath?, width?, height? }
  * Response: { success: true }
  *
- * The video record is only created after upload completes, so the Supabase
- * INSERT webhook fires when the video is fully uploaded and ready for processing.
+ * The video record is only created after upload completes. The API service subscribes
+ * to Supabase Realtime INSERT events on the videos table, triggering immediate processing.
  * Workflow statuses (layout_status, boundaries_status, text_status) default to 'wait'.
  */
 
@@ -22,10 +24,10 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders, handleCorsPreflightRequest } from "../_shared/cors.ts";
 import { generatePresignedPutUrl, WasabiConfig } from "../_shared/wasabi.ts";
 
-// Environment variables
+// Environment variables (DEV uses DB_SCHEMA_DEV)
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const DB_SCHEMA = Deno.env.get("DB_SCHEMA") || "captionacc_prod";
+const DB_SCHEMA = Deno.env.get("DB_SCHEMA_DEV") || "captionacc_dev";
 
 const WASABI_ACCESS_KEY_ID = Deno.env.get("WASABI_ACCESS_KEY_READWRITE")!;
 const WASABI_SECRET_ACCESS_KEY = Deno.env.get("WASABI_SECRET_KEY_READWRITE")!;
@@ -152,7 +154,7 @@ async function handleGenerate(
 
 /**
  * Phase 2: Confirm upload completion and create video record with workflow statuses at 'wait'
- * This triggers the Supabase INSERT webhook for backend processing
+ * This triggers Supabase Realtime notification for immediate backend processing
  */
 async function handleConfirm(
   req: Request,
@@ -177,7 +179,7 @@ async function handleConfirm(
   });
 
   // Create video record with workflow statuses defaulting to 'wait'
-  // This will trigger the Supabase INSERT webhook for backend processing
+  // This triggers Supabase Realtime notification for immediate backend processing
   // Note: storage_key is computed as {tenant_id}/client/videos/{video_id}/video.mp4 (not stored)
   // Note: layout_status, boundaries_status, text_status default to 'wait' via database defaults
   const { error: insertError } = await supabaseAdmin.from("videos").insert({

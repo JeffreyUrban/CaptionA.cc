@@ -33,9 +33,9 @@ deployments:
       name: captionacc-workers
     schedules: []
 
-  - name: captionacc-video-recovery
-    description: Find and retry stuck videos (triggered by scheduled machine)
-    entrypoint: app/flows/video_recovery.py:video_recovery
+  - name: captionacc-process-new-videos
+    description: Process new videos (primary: Realtime, recovery: cron)
+    entrypoint: app/flows/process_new_videos.py:process_new_videos
     work_pool:
       name: captionacc-workers
-    schedules: []  # No cron schedule - triggered by Fly.io scheduled machine
+    schedules: []  # Triggered by Realtime (immediate) + cron recovery (15 min)

@@ -159,23 +159,21 @@ def monitor_rejections():
         send_alert(f"{len(rejections)} unacknowledged rejections")
 ```
 
-### Option 3: Supabase Edge Function (Real-time)
+### Option 3: Supabase Database Trigger (Real-time)
 
-Create webhook that triggers on new rejection:
+Create a database trigger that sends notifications via pg_net:
 
 ```sql
--- Create notification function
+-- Create notification function using pg_net extension
 CREATE OR REPLACE FUNCTION notify_rejection()
 RETURNS TRIGGER AS $$
 BEGIN
-  -- Call webhook or send notification
-  PERFORM http_post(
-    'https://your-alerting-service.com/webhook',
-    json_build_object(
-      'rejection_type', NEW.rejection_type,
-      'video_id', NEW.video_id,
-      'message', NEW.rejection_message
-    )
+  -- Send notification via pg_net (Supabase's HTTP extension)
+  PERFORM net.http_post(
+    url := 'https://hooks.slack.com/services/YOUR/SLACK/URL',
+    body := json_build_object(
+      'text', format('Rejection: %s for video %s', NEW.rejection_type, NEW.video_id)
+    )::jsonb
   );
   RETURN NEW;
 END;

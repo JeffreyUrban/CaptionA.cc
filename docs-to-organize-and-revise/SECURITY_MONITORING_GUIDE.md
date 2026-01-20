@@ -468,18 +468,19 @@ HAVING COUNT(*) > 20;
 
 ### Slack Integration
 
+Using Supabase's pg_net extension to send alerts to Slack:
+
 ```sql
--- Function to send Slack alert (example)
+-- Function to send Slack alert using pg_net extension
 CREATE OR REPLACE FUNCTION send_slack_alert(
-  webhook_url TEXT,
+  slack_url TEXT,
   message TEXT
 ) RETURNS VOID AS $$
 BEGIN
-  -- Use HTTP extension to POST to Slack webhook
-  PERFORM http_post(
-    webhook_url,
-    jsonb_build_object('text', message)::TEXT,
-    'application/json'
+  -- Use pg_net to POST to Slack incoming webhook
+  PERFORM net.http_post(
+    url := slack_url,
+    body := jsonb_build_object('text', message)
   );
 END;
 $$ LANGUAGE plpgsql;
@@ -494,7 +495,7 @@ RETURNS TRIGGER AS $$
 BEGIN
   IF NEW.severity = 'critical' THEN
     PERFORM send_slack_alert(
-      'https://hooks.slack.com/services/YOUR/WEBHOOK/URL',
+      'https://hooks.slack.com/services/YOUR/SLACK/URL',
       format(
         '🚨 CRITICAL SECURITY EVENT: %s\nUser: %s\nTenant: %s\nTarget: %s\nResource: %s %s',
         NEW.event_type,

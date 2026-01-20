@@ -1,7 +1,6 @@
 """Internal endpoints for system operations."""
 
 import logging
-from typing import Any
 
 from fastapi import APIRouter, HTTPException, status
 from prefect.client.orchestration import get_client
@@ -11,8 +10,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-class RecoveryTriggerResponse(BaseModel):
-    """Response for recovery trigger endpoint."""
+class ProcessNewVideosResponse(BaseModel):
+    """Response for process new videos trigger endpoint."""
 
     success: bool
     flow_run_id: str | None = None
@@ -20,28 +19,27 @@ class RecoveryTriggerResponse(BaseModel):
     message: str | None = None
 
 
-@router.post("/internal/recovery/trigger", response_model=RecoveryTriggerResponse)
-async def trigger_recovery():
+@router.post("/internal/process-new-videos/trigger", response_model=ProcessNewVideosResponse)
+async def trigger_process_new_videos():
     """
-    Trigger video recovery flow to check for and retry stuck videos.
+    Trigger process new videos flow to check for and process waiting videos.
 
-    This endpoint is designed to be called by Supercronic scheduler.
-    It triggers the recovery flow asynchronously and returns immediately,
-    allowing the machine to auto-stop if no other work is pending.
+    This endpoint is called by:
+    1. Supercronic scheduler (every 15 minutes, fallback)
+    2. Realtime subscription handler (immediate, on INSERT)
 
     Returns:
         202 Accepted with flow_run_id if successful
-        503 Service Unavailable if Prefect API is not configured
+        500 Internal Server Error if Prefect API fails
     """
-    logger.info("Recovery trigger endpoint called - initiating video recovery flow")
+    logger.info("Process new videos trigger endpoint called")
 
-    # Trigger the recovery flow with default parameters
+    # Trigger the flow with default parameters (age_minutes=0 means all waiting videos)
     parameters = {
-        "age_minutes": 10,  # Check for videos stuck for >10 minutes
+        "age_minutes": 0,
     }
     tags = [
-        "recovery",
-        "scheduled",
+        "process-new-videos",
         "trigger:internal-endpoint",
     ]
 
@@ -49,7 +47,7 @@ async def trigger_recovery():
         async with get_client() as client:
             # Get deployment by name (format: "flow-name/deployment-name")
             deployment = await client.read_deployment_by_name(
-                "captionacc-video-recovery/captionacc-video-recovery"
+                "captionacc-process-new-videos/captionacc-process-new-videos"
             )
 
             # Create flow run
@@ -60,19 +58,19 @@ async def trigger_recovery():
             )
 
             logger.info(
-                f"Recovery flow triggered successfully: flow_run_id={flow_run.id}"
+                f"Process new videos flow triggered: flow_run_id={flow_run.id}"
             )
 
-            return RecoveryTriggerResponse(
+            return ProcessNewVideosResponse(
                 success=True,
                 flow_run_id=str(flow_run.id),
                 status="accepted",
-                message="Recovery flow triggered",
+                message="Process new videos flow triggered",
             )
 
     except Exception as e:
-        logger.error(f"Failed to trigger recovery flow: {e}")
+        logger.error(f"Failed to trigger process new videos flow: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to trigger recovery flow: {str(e)}",
+            detail=f"Failed to trigger process new videos flow: {str(e)}",
         )
