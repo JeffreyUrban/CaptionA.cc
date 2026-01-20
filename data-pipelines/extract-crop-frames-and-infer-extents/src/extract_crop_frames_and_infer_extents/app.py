@@ -14,10 +14,10 @@ except ImportError:
 
 from .models import CropInferResult, CropRegion
 
-# Create Modal app with optional namespace suffix
-# Set modal_app_suffix environment variable to deploy with a suffix (e.g., "dev")
+# Create Modal app with namespace suffix (e.g., "dev" or "prod")
+# Set modal_app_suffix environment variable during deployment
 if modal:
-    app_suffix = os.environ.get("modal_app_suffix", "")
+    app_suffix = os.environ.get("modal_app_suffix", "prod")
     app = modal.App(f"extract-crop-frames-and-infer-extents-{app_suffix}")
 
     # Import image builder only (not implementation - that has torch dependency)

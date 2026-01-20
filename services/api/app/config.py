@@ -64,10 +64,10 @@ class Settings(BaseSettings):
 
     @property
     def modal_app_suffix(self) -> str:
-        """Suffix for Modal app names (e.g., 'dev' or 'prod')"""
+        """Suffix for Modal app names (e.g., 'dev' or 'prod')."""
         if self.captionacc_namespace:
-            return f"{self.captionacc_namespace}"
-        return ""
+            return self.captionacc_namespace
+        return "prod"  # Default to prod when no namespace is set
 
     @property
     def deployment_namespace(self) -> str:
