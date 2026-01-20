@@ -22,6 +22,8 @@ from typing import Any
 from prefect import flow, get_run_logger, task
 from prefect.client.orchestration import get_client
 
+from app.config import get_settings
+
 
 @task(name="find-new-videos", retries=2, retry_delay_seconds=30)
 async def find_new_videos(age_minutes: int = 0) -> list[dict[str, Any]]:
@@ -200,9 +202,10 @@ async def trigger_video_processing(
         }
 
     async with get_client() as client:
-        # Get deployment by name
+        # Get deployment by name (uses namespace from config)
+        settings = get_settings()
         deployment = await client.read_deployment_by_name(
-            "captionacc-video-initial-processing/captionacc-video-initial-processing"
+            settings.get_deployment_full_name("video-initial-processing")
         )
 
         # Create flow run

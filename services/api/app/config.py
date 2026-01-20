@@ -59,9 +59,8 @@ class Settings(BaseSettings):
     @property
     def effective_work_pool(self) -> str:
         """Get the work pool name for Prefect workers."""
-        if self.captionacc_namespace:
-            return f"captionacc-workers-{self.captionacc_namespace}"
-        return "captionacc-workers"
+        # Use deployment_namespace which defaults to 'prod'
+        return f"captionacc-workers-{self.deployment_namespace}"
 
     @property
     def modal_app_suffix(self) -> str:
@@ -69,6 +68,42 @@ class Settings(BaseSettings):
         if self.captionacc_namespace:
             return f"{self.captionacc_namespace}"
         return ""
+
+    @property
+    def deployment_namespace(self) -> str:
+        """Get the namespace for Prefect deployment names (e.g., 'dev' or 'prod')."""
+        if self.captionacc_namespace:
+            return self.captionacc_namespace
+        return "prod"  # Default to prod when no namespace is set
+
+    def get_deployment_name(self, base_name: str) -> str:
+        """
+        Get the full deployment name with namespace prefix.
+
+        Args:
+            base_name: The base deployment name (e.g., 'video-initial-processing')
+
+        Returns:
+            Full deployment name (e.g., 'captionacc-prod-video-initial-processing')
+        """
+        return f"captionacc-{self.deployment_namespace}-{base_name}"
+
+    def get_deployment_full_name(self, base_name: str) -> str:
+        """
+        Get the full deployment reference (flow-name/deployment-name).
+
+        In Prefect, deployments are referenced as 'flow-name/deployment-name'.
+        The flow name stays constant; the deployment name varies by namespace.
+
+        Args:
+            base_name: The base deployment name (e.g., 'video-initial-processing')
+
+        Returns:
+            Full reference (e.g., 'captionacc-video-initial-processing/captionacc-prod-video-initial-processing')
+        """
+        flow_name = f"captionacc-{base_name}"
+        deployment_name = self.get_deployment_name(base_name)
+        return f"{flow_name}/{deployment_name}"
 
     @property
     def effective_wasabi_access_key(self) -> str:

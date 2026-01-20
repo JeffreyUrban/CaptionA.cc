@@ -51,8 +51,12 @@ def trigger_video_processing(
         print("ERROR: PREFECT_API_URL environment variable not set")
         sys.exit(1)
 
-    deployment_name = "captionacc-video-initial-processing"
-    url = f"{prefect_api_url}/deployments/name/{deployment_name}/create_flow_run"
+    # Build deployment path (uses namespace from env, defaults to 'prod')
+    namespace = os.getenv("CAPTIONACC_NAMESPACE", "") or "prod"
+    flow_name = "captionacc-video-initial-processing"
+    deployment_name = f"captionacc-{namespace}-video-initial-processing"
+    deployment_path = f"{flow_name}/{deployment_name}"
+    url = f"{prefect_api_url}/deployments/name/{deployment_path}/create_flow_run"
 
     payload = {
         "parameters": {

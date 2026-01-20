@@ -73,14 +73,14 @@ fly secrets set PREFECT_API_URL="https://banchelabs-gateway.fly.dev/prefect-inte
 ### Adding New Flows
 
 1. Create flow in `app/flows/your_flow.py`
-2. Add deployment definition to `prefect.yaml`:
+2. Add deployment definition to `prefect.yaml` (prod) or `prefect-dev.yaml` (dev):
    ```yaml
    deployments:
-     - name: your-deployment-name
+     - name: captionacc-prod-your-deployment-name  # or captionacc-dev-* for dev
        description: What this flow does
        entrypoint: app/flows/your_flow.py:your_flow_function
        work_pool:
-         name: captionacc-workers
+         name: captionacc-workers-prod  # or captionacc-workers-dev for dev
        schedules: []
    ```
 3. Deploy: `fly deploy`

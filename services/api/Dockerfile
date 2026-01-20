@@ -37,21 +37,21 @@ RUN mkdir -p extensions/linux-x86_64 && \
 # Install uv for fast dependency management
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-# Copy dependency files
-COPY pyproject.toml ./
+# Copy dependency files (build context is project root)
+COPY services/api/pyproject.toml ./
 
 # Install dependencies
 RUN uv pip install --system -e .
 
-# Copy local ocr_box_model package source (copied during pre-deploy)
-COPY ocr_box_model_src ./ocr_box_model
+# Copy local ocr_box_model package source from monorepo
+COPY packages/ocr_box_model/src/ocr_box_model ./ocr_box_model
 RUN echo "import sys; sys.path.insert(0, '/app')" > /usr/local/lib/python3.12/site-packages/ocr_box_model.pth
 
-# Copy application code
-COPY app ./app
-COPY scripts ./scripts
-COPY prefect.yaml ./prefect.yaml
-COPY crontab ./crontab
+# Copy application code (build context is project root)
+COPY services/api/app ./app
+COPY services/api/scripts ./scripts
+COPY services/api/prefect.yaml ./prefect.yaml
+COPY services/api/crontab ./crontab
 
 # Create non-root user and set permissions
 RUN useradd --create-home appuser \

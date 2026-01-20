@@ -2,30 +2,39 @@
 """Check Prefect worker status and recent activity."""
 
 import asyncio
+import os
 import sys
 
 from prefect.client.orchestration import get_client
 
 
+def get_work_pool_name() -> str:
+    """Get the work pool name based on namespace (defaults to 'prod')."""
+    namespace = os.getenv("CAPTIONACC_NAMESPACE", "") or "prod"
+    return f"captionacc-workers-{namespace}"
+
+
 async def check_worker_status():
     """Check Prefect worker and work pool status."""
+    work_pool_name = get_work_pool_name()
+
     async with get_client() as client:
         try:
             # Check work pool
             try:
-                pool = await client.read_work_pool("captionacc-workers")
-                print(f"✓ Work pool 'captionacc-workers' exists")
+                pool = await client.read_work_pool(work_pool_name)
+                print(f"✓ Work pool '{work_pool_name}' exists")
                 print(f"  ID: {pool.id}")
                 print(f"  Type: {pool.type}")
                 print(f"  Concurrency: {pool.concurrency_limit}")
                 print()
             except Exception as e:
-                print(f"✗ Work pool 'captionacc-workers' not found: {e}")
+                print(f"✗ Work pool '{work_pool_name}' not found: {e}")
                 return False
 
             # Check workers
             try:
-                workers = await client.read_workers_for_work_pool(work_pool_name="captionacc-workers")
+                workers = await client.read_workers_for_work_pool(work_pool_name=work_pool_name)
                 print(f"Workers: {len(workers)} found")
                 for worker in workers:
                     print(f"  - {worker.name}")

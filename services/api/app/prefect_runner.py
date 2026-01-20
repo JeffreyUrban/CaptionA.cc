@@ -23,7 +23,7 @@ class PrefectWorkerManager:
     Manages Prefect Worker lifecycle alongside FastAPI application.
 
     The worker connects to the Prefect server and executes flows from
-    the 'captionacc-workers' work pool.
+    the namespace-specific work pool (e.g., 'captionacc-workers-prod').
 
     Note: This uses subprocess to run 'prefect worker start' since Prefect 3.x
     doesn't provide a Python API for embedded workers.

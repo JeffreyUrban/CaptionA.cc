@@ -6,6 +6,8 @@ from fastapi import APIRouter, HTTPException, status
 from prefect.client.orchestration import get_client
 from pydantic import BaseModel
 
+from app.config import get_settings
+
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
@@ -44,11 +46,12 @@ async def trigger_process_new_videos():
     ]
 
     try:
+        settings = get_settings()
+        deployment_full_name = settings.get_deployment_full_name("process-new-videos")
+
         async with get_client() as client:
             # Get deployment by name (format: "flow-name/deployment-name")
-            deployment = await client.read_deployment_by_name(
-                "captionacc-process-new-videos/captionacc-process-new-videos"
-            )
+            deployment = await client.read_deployment_by_name(deployment_full_name)
 
             # Create flow run
             flow_run = await client.create_flow_run_from_deployment(

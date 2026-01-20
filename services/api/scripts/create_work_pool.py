@@ -1,20 +1,29 @@
 #!/usr/bin/env python3
-"""Create Prefect work pool for captionacc-workers."""
+"""Create Prefect work pool for captionacc-workers-{namespace}."""
 
 import asyncio
+import os
 import sys
 
 from prefect.client.orchestration import get_client
 
 
+def get_work_pool_name() -> str:
+    """Get the work pool name based on namespace (defaults to 'prod')."""
+    namespace = os.getenv("CAPTIONACC_NAMESPACE", "") or "prod"
+    return f"captionacc-workers-{namespace}"
+
+
 async def create_work_pool():
     """Create the captionacc-workers work pool."""
+    work_pool_name = get_work_pool_name()
+
     async with get_client() as client:
         try:
             # Try to read existing pool
             try:
-                pool = await client.read_work_pool("captionacc-workers")
-                print(f"✓ Work pool 'captionacc-workers' already exists (UUID: {pool.id})")
+                pool = await client.read_work_pool(work_pool_name)
+                print(f"✓ Work pool '{work_pool_name}' already exists (UUID: {pool.id})")
                 return True
             except Exception:
                 pass  # Pool doesn't exist, create it
@@ -23,14 +32,14 @@ async def create_work_pool():
             response = await client._client.post(
                 "/work_pools/",
                 json={
-                    "name": "captionacc-workers",
+                    "name": work_pool_name,
                     "type": "process",
-                    "description": "Work pool for CaptionA.cc video processing",
+                    "description": f"Work pool for CaptionA.cc video processing ({work_pool_name})",
                 },
             )
             response.raise_for_status()
             pool_data = response.json()
-            print(f"✓ Created work pool 'captionacc-workers' (UUID: {pool_data.get('id')})")
+            print(f"✓ Created work pool '{work_pool_name}' (UUID: {pool_data.get('id')})")
             return True
 
         except Exception as e:

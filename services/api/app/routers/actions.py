@@ -400,7 +400,7 @@ async def approve_layout(video_id: str, body: TriggerProcessingRequest, auth: Au
     """
     Approve layout and trigger crop + inference pipeline.
 
-    Triggers the captionacc-crop-and-infer-caption-frame-extents Prefect flow
+    Triggers the crop-and-infer-caption-frame-extents Prefect deployment
     which crops frames, runs caption frame extents inference, and creates captions.db.
     """
     settings = get_settings()
@@ -480,8 +480,8 @@ async def approve_layout(video_id: str, body: TriggerProcessingRequest, auth: Au
     )
     tags.extend(["trigger:user-action", "action:approve-layout"])
 
-    # Build flow name for crop and infer flow
-    flow_name = "captionacc-crop-and-infer-caption-frame-extents"
+    # Build deployment path for crop and infer flow (uses namespace from config)
+    deployment_path = settings.get_deployment_full_name("crop-and-infer-caption-frame-extents")
 
     # Prepare flow parameters
     parameters = {
@@ -491,7 +491,7 @@ async def approve_layout(video_id: str, body: TriggerProcessingRequest, auth: Au
     }
 
     # Build Prefect API URL
-    url = f"{settings.prefect_api_url}/deployments/name/{flow_name}/create_flow_run"
+    url = f"{settings.prefect_api_url}/deployments/name/{deployment_path}/create_flow_run"
 
     # Prepare request payload
     payload = {
@@ -506,7 +506,7 @@ async def approve_layout(video_id: str, body: TriggerProcessingRequest, auth: Au
         headers["Authorization"] = f"Bearer {settings.prefect_api_key}"
 
     logger.info(
-        f"Triggering {flow_name} for video {video_id} "
+        f"Triggering {deployment_path} for video {video_id} "
         f"(tenant: {auth.tenant_id}, priority: {priority})"
     )
 
