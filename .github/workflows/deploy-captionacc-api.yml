@@ -31,7 +31,7 @@ jobs:
           flyctl secrets set \
             SUPABASE_URL="${{ secrets.SUPABASE_URL }}" \
             SUPABASE_JWT_SECRET="${{ secrets.SUPABASE_JWT_SECRET }}" \
-            SUPABASE_SCHEMA="captionacc_production" \
+            SUPABASE_SCHEMA="captionacc_prod" \
             SUPABASE_SERVICE_ROLE_KEY="${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
             WASABI_ACCESS_KEY_ID="${{ secrets.WASABI_ACCESS_KEY_READWRITE }}" \
             WASABI_SECRET_ACCESS_KEY="${{ secrets.WASABI_SECRET_KEY_READWRITE }}" \

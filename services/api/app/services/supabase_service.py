@@ -158,7 +158,7 @@ class SupabaseServiceImpl:
         self,
         supabase_url: str,
         supabase_key: str,
-        schema: str = "captionacc_production",
+        schema: str = "captionacc_prod",
     ):
         """
         Initialize Supabase client.
@@ -166,7 +166,7 @@ class SupabaseServiceImpl:
         Args:
             supabase_url: Supabase project URL
             supabase_key: Supabase service role key
-            schema: PostgreSQL schema name (default: captionacc_production)
+            schema: PostgreSQL schema name (default: captionacc_prod)
         """
         from supabase import create_client
 

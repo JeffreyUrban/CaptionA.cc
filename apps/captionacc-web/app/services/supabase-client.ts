@@ -12,16 +12,16 @@ import { createClient, type Session } from '@supabase/supabase-js'
 
 import type { Database } from '../types/supabase'
 
-// Type alias for production database using captionacc_production schema
-// We merge Functions from both captionacc_production and public schemas
+// Type alias for production database using captionacc_prod schema
+// We merge Functions from both captionacc_prod and public schemas
 // since security audit functions are defined in public schema
 type ProductionDatabase = {
   public: {
-    Tables: Database['captionacc_production']['Tables']
-    Views: Database['captionacc_production']['Views']
-    Functions: Database['captionacc_production']['Functions'] & Database['public']['Functions']
-    Enums: Database['captionacc_production']['Enums']
-    CompositeTypes: Database['captionacc_production']['CompositeTypes']
+    Tables: Database['captionacc_prod']['Tables']
+    Views: Database['captionacc_prod']['Views']
+    Functions: Database['captionacc_prod']['Functions'] & Database['public']['Functions']
+    Enums: Database['captionacc_prod']['Enums']
+    CompositeTypes: Database['captionacc_prod']['CompositeTypes']
   }
 }
 
@@ -31,15 +31,13 @@ const supabaseSchema = import.meta.env['VITE_SUPABASE_SCHEMA']!
 
 // Log Supabase connection info in development
 if (import.meta.env.DEV) {
-  console.log(
-    `🔌 Supabase: ONLINE (${supabaseUrl}) [schema: ${supabaseSchema}]`
-  )
+  console.log(`🔌 Supabase: ONLINE (${supabaseUrl}) [schema: ${supabaseSchema}]`)
 }
 
 /**
  * Create a Supabase client for use in client-side code
  * Uses the anon key which respects RLS policies
- * Both local and remote use captionacc_production schema
+ * Both local and remote use captionacc_prod schema
  */
 export const supabase = createClient<ProductionDatabase>(supabaseUrl, supabaseAnonKey, {
   auth: {

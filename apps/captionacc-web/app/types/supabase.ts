@@ -1,18 +1,12 @@
-export type Json =
-  | string
-  | number
-  | boolean
-  | null
-  | { [key: string]: Json | undefined }
-  | Json[]
+export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
 
 export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.1"
+    PostgrestVersion: '14.1'
   }
-  captionacc_production: {
+  captionacc_prod: {
     Tables: {
       access_tiers: {
         Row: {
@@ -83,18 +77,18 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "boundary_inference_jobs_inference_run_id_fkey"
-            columns: ["inference_run_id"]
+            foreignKeyName: 'boundary_inference_jobs_inference_run_id_fkey'
+            columns: ['inference_run_id']
             isOneToOne: false
-            referencedRelation: "boundary_inference_runs"
-            referencedColumns: ["id"]
+            referencedRelation: 'boundary_inference_runs'
+            referencedColumns: ['id']
           },
           {
-            foreignKeyName: "boundary_inference_jobs_video_id_fkey"
-            columns: ["video_id"]
+            foreignKeyName: 'boundary_inference_jobs_video_id_fkey'
+            columns: ['video_id']
             isOneToOne: false
-            referencedRelation: "videos"
-            referencedColumns: ["id"]
+            referencedRelation: 'videos'
+            referencedColumns: ['id']
           },
         ]
       }
@@ -149,11 +143,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "boundary_inference_rejections_video_id_fkey"
-            columns: ["video_id"]
+            foreignKeyName: 'boundary_inference_rejections_video_id_fkey'
+            columns: ['video_id']
             isOneToOne: false
-            referencedRelation: "videos"
-            referencedColumns: ["id"]
+            referencedRelation: 'videos'
+            referencedColumns: ['id']
           },
         ]
       }
@@ -208,11 +202,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "boundary_inference_runs_video_id_fkey"
-            columns: ["video_id"]
+            foreignKeyName: 'boundary_inference_runs_video_id_fkey'
+            columns: ['video_id']
             isOneToOne: false
-            referencedRelation: "videos"
-            referencedColumns: ["id"]
+            referencedRelation: 'videos'
+            referencedColumns: ['id']
           },
         ]
       }
@@ -243,25 +237,25 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "cohort_videos_cohort_id_fkey"
-            columns: ["cohort_id"]
+            foreignKeyName: 'cohort_videos_cohort_id_fkey'
+            columns: ['cohort_id']
             isOneToOne: false
-            referencedRelation: "training_cohorts"
-            referencedColumns: ["id"]
+            referencedRelation: 'training_cohorts'
+            referencedColumns: ['id']
           },
           {
-            foreignKeyName: "cohort_videos_tenant_id_fkey"
-            columns: ["tenant_id"]
+            foreignKeyName: 'cohort_videos_tenant_id_fkey'
+            columns: ['tenant_id']
             isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
+            referencedRelation: 'tenants'
+            referencedColumns: ['id']
           },
           {
-            foreignKeyName: "cohort_videos_video_id_fkey"
-            columns: ["video_id"]
+            foreignKeyName: 'cohort_videos_video_id_fkey'
+            columns: ['video_id']
             isOneToOne: false
-            referencedRelation: "videos"
-            referencedColumns: ["id"]
+            referencedRelation: 'videos'
+            referencedColumns: ['id']
           },
         ]
       }
@@ -328,18 +322,18 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "cropped_frames_versions_tenant_id_fkey"
-            columns: ["tenant_id"]
+            foreignKeyName: 'cropped_frames_versions_tenant_id_fkey'
+            columns: ['tenant_id']
             isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
+            referencedRelation: 'tenants'
+            referencedColumns: ['id']
           },
           {
-            foreignKeyName: "cropped_frames_versions_video_id_fkey"
-            columns: ["video_id"]
+            foreignKeyName: 'cropped_frames_versions_video_id_fkey'
+            columns: ['video_id']
             isOneToOne: false
-            referencedRelation: "videos"
-            referencedColumns: ["id"]
+            referencedRelation: 'videos'
+            referencedColumns: ['id']
           },
         ]
       }
@@ -364,11 +358,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "daily_uploads_tenant_id_fkey"
-            columns: ["tenant_id"]
+            foreignKeyName: 'daily_uploads_tenant_id_fkey'
+            columns: ['tenant_id']
             isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
+            referencedRelation: 'tenants'
+            referencedColumns: ['id']
           },
         ]
       }
@@ -489,11 +483,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "security_audit_log_tenant_id_fkey"
-            columns: ["tenant_id"]
+            foreignKeyName: 'security_audit_log_tenant_id_fkey'
+            columns: ['tenant_id']
             isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
+            referencedRelation: 'tenants'
+            referencedColumns: ['id']
           },
         ]
       }
@@ -605,11 +599,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "usage_metrics_tenant_id_fkey"
-            columns: ["tenant_id"]
+            foreignKeyName: 'usage_metrics_tenant_id_fkey'
+            columns: ['tenant_id']
             isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
+            referencedRelation: 'tenants'
+            referencedColumns: ['id']
           },
         ]
       }
@@ -658,25 +652,25 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "user_profiles_access_tier_id_fkey"
-            columns: ["access_tier_id"]
+            foreignKeyName: 'user_profiles_access_tier_id_fkey'
+            columns: ['access_tier_id']
             isOneToOne: false
-            referencedRelation: "access_tiers"
-            referencedColumns: ["id"]
+            referencedRelation: 'access_tiers'
+            referencedColumns: ['id']
           },
           {
-            foreignKeyName: "user_profiles_invite_code_used_fkey"
-            columns: ["invite_code_used"]
+            foreignKeyName: 'user_profiles_invite_code_used_fkey'
+            columns: ['invite_code_used']
             isOneToOne: false
-            referencedRelation: "invite_codes"
-            referencedColumns: ["code"]
+            referencedRelation: 'invite_codes'
+            referencedColumns: ['code']
           },
           {
-            foreignKeyName: "user_profiles_tenant_id_fkey"
-            columns: ["tenant_id"]
+            foreignKeyName: 'user_profiles_tenant_id_fkey'
+            columns: ['tenant_id']
             isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
+            referencedRelation: 'tenants'
+            referencedColumns: ['id']
           },
         ]
       }
@@ -731,18 +725,18 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "video_database_state_tenant_id_fkey"
-            columns: ["tenant_id"]
+            foreignKeyName: 'video_database_state_tenant_id_fkey'
+            columns: ['tenant_id']
             isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
+            referencedRelation: 'tenants'
+            referencedColumns: ['id']
           },
           {
-            foreignKeyName: "video_database_state_video_id_fkey"
-            columns: ["video_id"]
+            foreignKeyName: 'video_database_state_video_id_fkey'
+            columns: ['video_id']
             isOneToOne: false
-            referencedRelation: "videos"
-            referencedColumns: ["id"]
+            referencedRelation: 'videos'
+            referencedColumns: ['id']
           },
         ]
       }
@@ -842,11 +836,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "videos_tenant_id_fkey"
-            columns: ["tenant_id"]
+            foreignKeyName: 'videos_tenant_id_fkey'
+            columns: ['tenant_id']
             isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
+            referencedRelation: 'tenants'
+            referencedColumns: ['id']
           },
         ]
       }
@@ -951,11 +945,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "fk_agent__work_queue_id__work_queue"
-            columns: ["work_queue_id"]
+            foreignKeyName: 'fk_agent__work_queue_id__work_queue'
+            columns: ['work_queue_id']
             isOneToOne: false
-            referencedRelation: "work_queue"
-            referencedColumns: ["id"]
+            referencedRelation: 'work_queue'
+            referencedColumns: ['id']
           },
         ]
       }
@@ -1139,11 +1133,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "fk_automation_bucket__automation_id__automation"
-            columns: ["automation_id"]
+            foreignKeyName: 'fk_automation_bucket__automation_id__automation'
+            columns: ['automation_id']
             isOneToOne: false
-            referencedRelation: "automation"
-            referencedColumns: ["id"]
+            referencedRelation: 'automation'
+            referencedColumns: ['id']
           },
         ]
       }
@@ -1207,11 +1201,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "fk_automation_related_resource__automation_id__automation"
-            columns: ["automation_id"]
+            foreignKeyName: 'fk_automation_related_resource__automation_id__automation'
+            columns: ['automation_id']
             isOneToOne: false
-            referencedRelation: "automation"
-            referencedColumns: ["id"]
+            referencedRelation: 'automation'
+            referencedColumns: ['id']
           },
         ]
       }
@@ -1251,18 +1245,18 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "fk_block__block_schema_id__block_schema"
-            columns: ["block_schema_id"]
+            foreignKeyName: 'fk_block__block_schema_id__block_schema'
+            columns: ['block_schema_id']
             isOneToOne: false
-            referencedRelation: "block_schema"
-            referencedColumns: ["id"]
+            referencedRelation: 'block_schema'
+            referencedColumns: ['id']
           },
           {
-            foreignKeyName: "fk_block_document__block_type_id__block_type"
-            columns: ["block_type_id"]
+            foreignKeyName: 'fk_block_document__block_type_id__block_type'
+            columns: ['block_type_id']
             isOneToOne: false
-            referencedRelation: "block_type"
-            referencedColumns: ["id"]
+            referencedRelation: 'block_type'
+            referencedColumns: ['id']
           },
         ]
       }
@@ -1293,18 +1287,18 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "fk_block_document_reference__parent_block_document_id___328f"
-            columns: ["parent_block_document_id"]
+            foreignKeyName: 'fk_block_document_reference__parent_block_document_id___328f'
+            columns: ['parent_block_document_id']
             isOneToOne: false
-            referencedRelation: "block_document"
-            referencedColumns: ["id"]
+            referencedRelation: 'block_document'
+            referencedColumns: ['id']
           },
           {
-            foreignKeyName: "fk_block_document_reference__reference_block_document_i_5759"
-            columns: ["reference_block_document_id"]
+            foreignKeyName: 'fk_block_document_reference__reference_block_document_i_5759'
+            columns: ['reference_block_document_id']
             isOneToOne: false
-            referencedRelation: "block_document"
-            referencedColumns: ["id"]
+            referencedRelation: 'block_document'
+            referencedColumns: ['id']
           },
         ]
       }
@@ -1341,11 +1335,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "fk_block_schema__block_type_id__block_type"
-            columns: ["block_type_id"]
+            foreignKeyName: 'fk_block_schema__block_type_id__block_type'
+            columns: ['block_type_id']
             isOneToOne: false
-            referencedRelation: "block_type"
-            referencedColumns: ["id"]
+            referencedRelation: 'block_type'
+            referencedColumns: ['id']
           },
         ]
       }
@@ -1376,18 +1370,18 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "fk_block_schema_reference__parent_block_schema_id__block_schema"
-            columns: ["parent_block_schema_id"]
+            foreignKeyName: 'fk_block_schema_reference__parent_block_schema_id__block_schema'
+            columns: ['parent_block_schema_id']
             isOneToOne: false
-            referencedRelation: "block_schema"
-            referencedColumns: ["id"]
+            referencedRelation: 'block_schema'
+            referencedColumns: ['id']
           },
           {
-            foreignKeyName: "fk_block_schema_reference__reference_block_schema_id__b_6e5d"
-            columns: ["reference_block_schema_id"]
+            foreignKeyName: 'fk_block_schema_reference__reference_block_schema_id__b_6e5d'
+            columns: ['reference_block_schema_id']
             isOneToOne: false
-            referencedRelation: "block_schema"
-            referencedColumns: ["id"]
+            referencedRelation: 'block_schema'
+            referencedColumns: ['id']
           },
         ]
       }
@@ -1466,11 +1460,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "fk_composite_trigger_child_firing__automation_id__automation"
-            columns: ["automation_id"]
+            foreignKeyName: 'fk_composite_trigger_child_firing__automation_id__automation'
+            columns: ['automation_id']
             isOneToOne: false
-            referencedRelation: "automation"
-            referencedColumns: ["id"]
+            referencedRelation: 'automation'
+            referencedColumns: ['id']
           },
         ]
       }
@@ -1613,7 +1607,7 @@ export type Database = {
           path: string | null
           paused: boolean
           pull_steps: Json | null
-          status: Database["public"]["Enums"]["deployment_status"]
+          status: Database['public']['Enums']['deployment_status']
           storage_document_id: string | null
           tags: Json
           updated: string
@@ -1644,7 +1638,7 @@ export type Database = {
           path?: string | null
           paused?: boolean
           pull_steps?: Json | null
-          status?: Database["public"]["Enums"]["deployment_status"]
+          status?: Database['public']['Enums']['deployment_status']
           storage_document_id?: string | null
           tags?: Json
           updated?: string
@@ -1675,7 +1669,7 @@ export type Database = {
           path?: string | null
           paused?: boolean
           pull_steps?: Json | null
-          status?: Database["public"]["Enums"]["deployment_status"]
+          status?: Database['public']['Enums']['deployment_status']
           storage_document_id?: string | null
           tags?: Json
           updated?: string
@@ -1687,39 +1681,39 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "fk_deployment__concurrency_limit_id__concurrency_limit_v2"
-            columns: ["concurrency_limit_id"]
+            foreignKeyName: 'fk_deployment__concurrency_limit_id__concurrency_limit_v2'
+            columns: ['concurrency_limit_id']
             isOneToOne: false
-            referencedRelation: "concurrency_limit_v2"
-            referencedColumns: ["id"]
+            referencedRelation: 'concurrency_limit_v2'
+            referencedColumns: ['id']
           },
           {
-            foreignKeyName: "fk_deployment__flow_id__flow"
-            columns: ["flow_id"]
+            foreignKeyName: 'fk_deployment__flow_id__flow'
+            columns: ['flow_id']
             isOneToOne: false
-            referencedRelation: "flow"
-            referencedColumns: ["id"]
+            referencedRelation: 'flow'
+            referencedColumns: ['id']
           },
           {
-            foreignKeyName: "fk_deployment__infrastructure_document_id__block_document"
-            columns: ["infrastructure_document_id"]
+            foreignKeyName: 'fk_deployment__infrastructure_document_id__block_document'
+            columns: ['infrastructure_document_id']
             isOneToOne: false
-            referencedRelation: "block_document"
-            referencedColumns: ["id"]
+            referencedRelation: 'block_document'
+            referencedColumns: ['id']
           },
           {
-            foreignKeyName: "fk_deployment__storage_document_id__block_document"
-            columns: ["storage_document_id"]
+            foreignKeyName: 'fk_deployment__storage_document_id__block_document'
+            columns: ['storage_document_id']
             isOneToOne: false
-            referencedRelation: "block_document"
-            referencedColumns: ["id"]
+            referencedRelation: 'block_document'
+            referencedColumns: ['id']
           },
           {
-            foreignKeyName: "fk_deployment__work_queue_id__work_queue"
-            columns: ["work_queue_id"]
+            foreignKeyName: 'fk_deployment__work_queue_id__work_queue'
+            columns: ['work_queue_id']
             isOneToOne: false
-            referencedRelation: "work_queue"
-            referencedColumns: ["id"]
+            referencedRelation: 'work_queue'
+            referencedColumns: ['id']
           },
         ]
       }
@@ -1759,11 +1753,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "fk_deployment_schedule__deployment_id__deployment"
-            columns: ["deployment_id"]
+            foreignKeyName: 'fk_deployment_schedule__deployment_id__deployment'
+            columns: ['deployment_id']
             isOneToOne: false
-            referencedRelation: "deployment"
-            referencedColumns: ["id"]
+            referencedRelation: 'deployment'
+            referencedColumns: ['id']
           },
         ]
       }
@@ -1827,18 +1821,18 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "fk_deployment_version__deployment_id__deployment"
-            columns: ["deployment_id"]
+            foreignKeyName: 'fk_deployment_version__deployment_id__deployment'
+            columns: ['deployment_id']
             isOneToOne: false
-            referencedRelation: "deployment"
-            referencedColumns: ["id"]
+            referencedRelation: 'deployment'
+            referencedColumns: ['id']
           },
           {
-            foreignKeyName: "fk_deployment_version__work_queue_id__work_queue"
-            columns: ["work_queue_id"]
+            foreignKeyName: 'fk_deployment_version__work_queue_id__work_queue'
+            columns: ['work_queue_id']
             isOneToOne: false
-            referencedRelation: "work_queue"
-            referencedColumns: ["id"]
+            referencedRelation: 'work_queue'
+            referencedColumns: ['id']
           },
         ]
       }
@@ -1978,7 +1972,7 @@ export type Database = {
           state_id: string | null
           state_name: string | null
           state_timestamp: string | null
-          state_type: Database["public"]["Enums"]["state_type"] | null
+          state_type: Database['public']['Enums']['state_type'] | null
           tags: Json
           total_run_time: unknown
           updated: string
@@ -2012,7 +2006,7 @@ export type Database = {
           state_id?: string | null
           state_name?: string | null
           state_timestamp?: string | null
-          state_type?: Database["public"]["Enums"]["state_type"] | null
+          state_type?: Database['public']['Enums']['state_type'] | null
           tags?: Json
           total_run_time?: unknown
           updated?: string
@@ -2046,7 +2040,7 @@ export type Database = {
           state_id?: string | null
           state_name?: string | null
           state_timestamp?: string | null
-          state_type?: Database["public"]["Enums"]["state_type"] | null
+          state_type?: Database['public']['Enums']['state_type'] | null
           tags?: Json
           total_run_time?: unknown
           updated?: string
@@ -2055,39 +2049,39 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "fk_flow_run__flow_id__flow"
-            columns: ["flow_id"]
+            foreignKeyName: 'fk_flow_run__flow_id__flow'
+            columns: ['flow_id']
             isOneToOne: false
-            referencedRelation: "flow"
-            referencedColumns: ["id"]
+            referencedRelation: 'flow'
+            referencedColumns: ['id']
           },
           {
-            foreignKeyName: "fk_flow_run__infrastructure_document_id__block_document"
-            columns: ["infrastructure_document_id"]
+            foreignKeyName: 'fk_flow_run__infrastructure_document_id__block_document'
+            columns: ['infrastructure_document_id']
             isOneToOne: false
-            referencedRelation: "block_document"
-            referencedColumns: ["id"]
+            referencedRelation: 'block_document'
+            referencedColumns: ['id']
           },
           {
-            foreignKeyName: "fk_flow_run__parent_task_run_id__task_run"
-            columns: ["parent_task_run_id"]
+            foreignKeyName: 'fk_flow_run__parent_task_run_id__task_run'
+            columns: ['parent_task_run_id']
             isOneToOne: false
-            referencedRelation: "task_run"
-            referencedColumns: ["id"]
+            referencedRelation: 'task_run'
+            referencedColumns: ['id']
           },
           {
-            foreignKeyName: "fk_flow_run__state_id__flow_run_state"
-            columns: ["state_id"]
+            foreignKeyName: 'fk_flow_run__state_id__flow_run_state'
+            columns: ['state_id']
             isOneToOne: false
-            referencedRelation: "flow_run_state"
-            referencedColumns: ["id"]
+            referencedRelation: 'flow_run_state'
+            referencedColumns: ['id']
           },
           {
-            foreignKeyName: "fk_flow_run__work_queue_id__work_queue"
-            columns: ["work_queue_id"]
+            foreignKeyName: 'fk_flow_run__work_queue_id__work_queue'
+            columns: ['work_queue_id']
             isOneToOne: false
-            referencedRelation: "work_queue"
-            referencedColumns: ["id"]
+            referencedRelation: 'work_queue'
+            referencedColumns: ['id']
           },
         ]
       }
@@ -2121,11 +2115,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "fk_flow_run_input__flow_run_id__flow_run"
-            columns: ["flow_run_id"]
+            foreignKeyName: 'fk_flow_run_input__flow_run_id__flow_run'
+            columns: ['flow_run_id']
             isOneToOne: false
-            referencedRelation: "flow_run"
-            referencedColumns: ["id"]
+            referencedRelation: 'flow_run'
+            referencedColumns: ['id']
           },
         ]
       }
@@ -2140,7 +2134,7 @@ export type Database = {
           result_artifact_id: string | null
           state_details: Json
           timestamp: string
-          type: Database["public"]["Enums"]["state_type"]
+          type: Database['public']['Enums']['state_type']
           updated: string
         }
         Insert: {
@@ -2153,7 +2147,7 @@ export type Database = {
           result_artifact_id?: string | null
           state_details?: Json
           timestamp?: string
-          type: Database["public"]["Enums"]["state_type"]
+          type: Database['public']['Enums']['state_type']
           updated?: string
         }
         Update: {
@@ -2166,23 +2160,23 @@ export type Database = {
           result_artifact_id?: string | null
           state_details?: Json
           timestamp?: string
-          type?: Database["public"]["Enums"]["state_type"]
+          type?: Database['public']['Enums']['state_type']
           updated?: string
         }
         Relationships: [
           {
-            foreignKeyName: "fk_flow_run_state__flow_run_id__flow_run"
-            columns: ["flow_run_id"]
+            foreignKeyName: 'fk_flow_run_state__flow_run_id__flow_run'
+            columns: ['flow_run_id']
             isOneToOne: false
-            referencedRelation: "flow_run"
-            referencedColumns: ["id"]
+            referencedRelation: 'flow_run'
+            referencedColumns: ['id']
           },
           {
-            foreignKeyName: "fk_flow_run_state__result_artifact_id__artifact"
-            columns: ["result_artifact_id"]
+            foreignKeyName: 'fk_flow_run_state__result_artifact_id__artifact'
+            columns: ['result_artifact_id']
             isOneToOne: false
-            referencedRelation: "artifact"
-            referencedColumns: ["id"]
+            referencedRelation: 'artifact'
+            referencedColumns: ['id']
           },
         ]
       }
@@ -2344,7 +2338,7 @@ export type Database = {
           state_id: string | null
           state_name: string | null
           state_timestamp: string | null
-          state_type: Database["public"]["Enums"]["state_type"] | null
+          state_type: Database['public']['Enums']['state_type'] | null
           tags: Json
           task_inputs: Json
           task_key: string
@@ -2371,7 +2365,7 @@ export type Database = {
           state_id?: string | null
           state_name?: string | null
           state_timestamp?: string | null
-          state_type?: Database["public"]["Enums"]["state_type"] | null
+          state_type?: Database['public']['Enums']['state_type'] | null
           tags?: Json
           task_inputs?: Json
           task_key: string
@@ -2398,7 +2392,7 @@ export type Database = {
           state_id?: string | null
           state_name?: string | null
           state_timestamp?: string | null
-          state_type?: Database["public"]["Enums"]["state_type"] | null
+          state_type?: Database['public']['Enums']['state_type'] | null
           tags?: Json
           task_inputs?: Json
           task_key?: string
@@ -2408,11 +2402,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "fk_task_run__flow_run_id__flow_run"
-            columns: ["flow_run_id"]
+            foreignKeyName: 'fk_task_run__flow_run_id__flow_run'
+            columns: ['flow_run_id']
             isOneToOne: false
-            referencedRelation: "flow_run"
-            referencedColumns: ["id"]
+            referencedRelation: 'flow_run'
+            referencedColumns: ['id']
           },
         ]
       }
@@ -2427,7 +2421,7 @@ export type Database = {
           state_details: Json
           task_run_id: string
           timestamp: string
-          type: Database["public"]["Enums"]["state_type"]
+          type: Database['public']['Enums']['state_type']
           updated: string
         }
         Insert: {
@@ -2440,7 +2434,7 @@ export type Database = {
           state_details?: Json
           task_run_id: string
           timestamp?: string
-          type: Database["public"]["Enums"]["state_type"]
+          type: Database['public']['Enums']['state_type']
           updated?: string
         }
         Update: {
@@ -2453,23 +2447,23 @@ export type Database = {
           state_details?: Json
           task_run_id?: string
           timestamp?: string
-          type?: Database["public"]["Enums"]["state_type"]
+          type?: Database['public']['Enums']['state_type']
           updated?: string
         }
         Relationships: [
           {
-            foreignKeyName: "fk_task_run_state__result_artifact_id__artifact"
-            columns: ["result_artifact_id"]
+            foreignKeyName: 'fk_task_run_state__result_artifact_id__artifact'
+            columns: ['result_artifact_id']
             isOneToOne: false
-            referencedRelation: "artifact"
-            referencedColumns: ["id"]
+            referencedRelation: 'artifact'
+            referencedColumns: ['id']
           },
           {
-            foreignKeyName: "fk_task_run_state__task_run_id__task_run"
-            columns: ["task_run_id"]
+            foreignKeyName: 'fk_task_run_state__task_run_id__task_run'
+            columns: ['task_run_id']
             isOneToOne: false
-            referencedRelation: "task_run"
-            referencedColumns: ["id"]
+            referencedRelation: 'task_run'
+            referencedColumns: ['id']
           },
         ]
       }
@@ -2539,7 +2533,7 @@ export type Database = {
           last_status_event_id: string | null
           last_transitioned_status_at: string | null
           name: string
-          status: Database["public"]["Enums"]["work_pool_status"]
+          status: Database['public']['Enums']['work_pool_status']
           storage_configuration: Json
           type: string
           updated: string
@@ -2555,7 +2549,7 @@ export type Database = {
           last_status_event_id?: string | null
           last_transitioned_status_at?: string | null
           name: string
-          status?: Database["public"]["Enums"]["work_pool_status"]
+          status?: Database['public']['Enums']['work_pool_status']
           storage_configuration?: Json
           type: string
           updated?: string
@@ -2571,18 +2565,18 @@ export type Database = {
           last_status_event_id?: string | null
           last_transitioned_status_at?: string | null
           name?: string
-          status?: Database["public"]["Enums"]["work_pool_status"]
+          status?: Database['public']['Enums']['work_pool_status']
           storage_configuration?: Json
           type?: string
           updated?: string
         }
         Relationships: [
           {
-            foreignKeyName: "fk_work_pool__default_queue_id__work_queue"
-            columns: ["default_queue_id"]
+            foreignKeyName: 'fk_work_pool__default_queue_id__work_queue'
+            columns: ['default_queue_id']
             isOneToOne: false
-            referencedRelation: "work_queue"
-            referencedColumns: ["id"]
+            referencedRelation: 'work_queue'
+            referencedColumns: ['id']
           },
         ]
       }
@@ -2597,7 +2591,7 @@ export type Database = {
           last_polled: string | null
           name: string
           priority: number
-          status: Database["public"]["Enums"]["work_queue_status"]
+          status: Database['public']['Enums']['work_queue_status']
           updated: string
           work_pool_id: string
         }
@@ -2611,7 +2605,7 @@ export type Database = {
           last_polled?: string | null
           name: string
           priority?: number
-          status?: Database["public"]["Enums"]["work_queue_status"]
+          status?: Database['public']['Enums']['work_queue_status']
           updated?: string
           work_pool_id: string
         }
@@ -2625,17 +2619,17 @@ export type Database = {
           last_polled?: string | null
           name?: string
           priority?: number
-          status?: Database["public"]["Enums"]["work_queue_status"]
+          status?: Database['public']['Enums']['work_queue_status']
           updated?: string
           work_pool_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "fk_work_queue__work_pool_id__work_pool"
-            columns: ["work_pool_id"]
+            foreignKeyName: 'fk_work_queue__work_pool_id__work_pool'
+            columns: ['work_pool_id']
             isOneToOne: false
-            referencedRelation: "work_pool"
-            referencedColumns: ["id"]
+            referencedRelation: 'work_pool'
+            referencedColumns: ['id']
           },
         ]
       }
@@ -2646,7 +2640,7 @@ export type Database = {
           id: string
           last_heartbeat_time: string
           name: string
-          status: Database["public"]["Enums"]["worker_status"]
+          status: Database['public']['Enums']['worker_status']
           updated: string
           work_pool_id: string
         }
@@ -2656,7 +2650,7 @@ export type Database = {
           id?: string
           last_heartbeat_time?: string
           name: string
-          status?: Database["public"]["Enums"]["worker_status"]
+          status?: Database['public']['Enums']['worker_status']
           updated?: string
           work_pool_id: string
         }
@@ -2666,17 +2660,17 @@ export type Database = {
           id?: string
           last_heartbeat_time?: string
           name?: string
-          status?: Database["public"]["Enums"]["worker_status"]
+          status?: Database['public']['Enums']['worker_status']
           updated?: string
           work_pool_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "fk_worker__work_pool_id__work_pool"
-            columns: ["work_pool_id"]
+            foreignKeyName: 'fk_worker__work_pool_id__work_pool'
+            columns: ['work_pool_id']
             isOneToOne: false
-            referencedRelation: "work_pool"
-            referencedColumns: ["id"]
+            referencedRelation: 'work_pool'
+            referencedColumns: ['id']
           },
         ]
       }
@@ -2692,24 +2686,24 @@ export type Database = {
         Returns: boolean
       }
       show_limit: { Args: never; Returns: number }
-      show_trgm: { Args: { "": string }; Returns: string[] }
+      show_trgm: { Args: { '': string }; Returns: string[] }
       update_token_usage: { Args: { token_jti: string }; Returns: undefined }
     }
     Enums: {
-      deployment_status: "READY" | "NOT_READY"
+      deployment_status: 'READY' | 'NOT_READY'
       state_type:
-        | "SCHEDULED"
-        | "PENDING"
-        | "RUNNING"
-        | "COMPLETED"
-        | "FAILED"
-        | "CANCELLED"
-        | "CRASHED"
-        | "PAUSED"
-        | "CANCELLING"
-      work_pool_status: "READY" | "NOT_READY" | "PAUSED"
-      work_queue_status: "READY" | "NOT_READY" | "PAUSED"
-      worker_status: "ONLINE" | "OFFLINE"
+        | 'SCHEDULED'
+        | 'PENDING'
+        | 'RUNNING'
+        | 'COMPLETED'
+        | 'FAILED'
+        | 'CANCELLED'
+        | 'CRASHED'
+        | 'PAUSED'
+        | 'CANCELLING'
+      work_pool_status: 'READY' | 'NOT_READY' | 'PAUSED'
+      work_queue_status: 'READY' | 'NOT_READY' | 'PAUSED'
+      worker_status: 'ONLINE' | 'OFFLINE'
     }
     CompositeTypes: {
       [_ in never]: never
@@ -2728,7 +2722,7 @@ export type Database = {
           owner: string | null
           owner_id: string | null
           public: boolean | null
-          type: Database["storage"]["Enums"]["buckettype"]
+          type: Database['storage']['Enums']['buckettype']
           updated_at: string | null
         }
         Insert: {
@@ -2741,7 +2735,7 @@ export type Database = {
           owner?: string | null
           owner_id?: string | null
           public?: boolean | null
-          type?: Database["storage"]["Enums"]["buckettype"]
+          type?: Database['storage']['Enums']['buckettype']
           updated_at?: string | null
         }
         Update: {
@@ -2754,7 +2748,7 @@ export type Database = {
           owner?: string | null
           owner_id?: string | null
           public?: boolean | null
-          type?: Database["storage"]["Enums"]["buckettype"]
+          type?: Database['storage']['Enums']['buckettype']
           updated_at?: string | null
         }
         Relationships: []
@@ -2766,7 +2760,7 @@ export type Database = {
           format: string
           id: string
           name: string
-          type: Database["storage"]["Enums"]["buckettype"]
+          type: Database['storage']['Enums']['buckettype']
           updated_at: string
         }
         Insert: {
@@ -2775,7 +2769,7 @@ export type Database = {
           format?: string
           id?: string
           name: string
-          type?: Database["storage"]["Enums"]["buckettype"]
+          type?: Database['storage']['Enums']['buckettype']
           updated_at?: string
         }
         Update: {
@@ -2784,7 +2778,7 @@ export type Database = {
           format?: string
           id?: string
           name?: string
-          type?: Database["storage"]["Enums"]["buckettype"]
+          type?: Database['storage']['Enums']['buckettype']
           updated_at?: string
         }
         Relationships: []
@@ -2793,19 +2787,19 @@ export type Database = {
         Row: {
           created_at: string
           id: string
-          type: Database["storage"]["Enums"]["buckettype"]
+          type: Database['storage']['Enums']['buckettype']
           updated_at: string
         }
         Insert: {
           created_at?: string
           id: string
-          type?: Database["storage"]["Enums"]["buckettype"]
+          type?: Database['storage']['Enums']['buckettype']
           updated_at?: string
         }
         Update: {
           created_at?: string
           id?: string
-          type?: Database["storage"]["Enums"]["buckettype"]
+          type?: Database['storage']['Enums']['buckettype']
           updated_at?: string
         }
         Relationships: []
@@ -2879,11 +2873,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "objects_bucketId_fkey"
-            columns: ["bucket_id"]
+            foreignKeyName: 'objects_bucketId_fkey'
+            columns: ['bucket_id']
             isOneToOne: false
-            referencedRelation: "buckets"
-            referencedColumns: ["id"]
+            referencedRelation: 'buckets'
+            referencedColumns: ['id']
           },
         ]
       }
@@ -2911,11 +2905,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "prefixes_bucketId_fkey"
-            columns: ["bucket_id"]
+            foreignKeyName: 'prefixes_bucketId_fkey'
+            columns: ['bucket_id']
             isOneToOne: false
-            referencedRelation: "buckets"
-            referencedColumns: ["id"]
+            referencedRelation: 'buckets'
+            referencedColumns: ['id']
           },
         ]
       }
@@ -2955,11 +2949,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "s3_multipart_uploads_bucket_id_fkey"
-            columns: ["bucket_id"]
+            foreignKeyName: 's3_multipart_uploads_bucket_id_fkey'
+            columns: ['bucket_id']
             isOneToOne: false
-            referencedRelation: "buckets"
-            referencedColumns: ["id"]
+            referencedRelation: 'buckets'
+            referencedColumns: ['id']
           },
         ]
       }
@@ -3002,18 +2996,18 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "s3_multipart_uploads_parts_bucket_id_fkey"
-            columns: ["bucket_id"]
+            foreignKeyName: 's3_multipart_uploads_parts_bucket_id_fkey'
+            columns: ['bucket_id']
             isOneToOne: false
-            referencedRelation: "buckets"
-            referencedColumns: ["id"]
+            referencedRelation: 'buckets'
+            referencedColumns: ['id']
           },
           {
-            foreignKeyName: "s3_multipart_uploads_parts_upload_id_fkey"
-            columns: ["upload_id"]
+            foreignKeyName: 's3_multipart_uploads_parts_upload_id_fkey'
+            columns: ['upload_id']
             isOneToOne: false
-            referencedRelation: "s3_multipart_uploads"
-            referencedColumns: ["id"]
+            referencedRelation: 's3_multipart_uploads'
+            referencedColumns: ['id']
           },
         ]
       }
@@ -3053,11 +3047,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "vector_indexes_bucket_id_fkey"
-            columns: ["bucket_id"]
+            foreignKeyName: 'vector_indexes_bucket_id_fkey'
+            columns: ['bucket_id']
             isOneToOne: false
-            referencedRelation: "buckets_vectors"
-            referencedColumns: ["id"]
+            referencedRelation: 'buckets_vectors'
+            referencedColumns: ['id']
           },
         ]
       }
@@ -3214,7 +3208,7 @@ export type Database = {
       }
     }
     Enums: {
-      buckettype: "STANDARD" | "ANALYTICS" | "VECTOR"
+      buckettype: 'STANDARD' | 'ANALYTICS' | 'VECTOR'
     }
     CompositeTypes: {
       [_ in never]: never
@@ -3222,33 +3216,31 @@ export type Database = {
   }
 }
 
-type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
+type DatabaseWithoutInternals = Omit<Database, '__InternalSupabase'>
 
-type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, 'public'>]
 
 export type Tables<
   DefaultSchemaTableNameOrOptions extends
-    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    | keyof (DefaultSchema['Tables'] & DefaultSchema['Views'])
     | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
-    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Tables'] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Views'])
     : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
-  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Tables'] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Views'])[TableName] extends {
       Row: infer R
     }
     ? R
     : never
-  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])
-    ? (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema['Tables'] & DefaultSchema['Views'])
+    ? (DefaultSchema['Tables'] & DefaultSchema['Views'])[DefaultSchemaTableNameOrOptions] extends {
         Row: infer R
       }
       ? R
@@ -3257,23 +3249,23 @@ export type Tables<
 
 export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
+    | keyof DefaultSchema['Tables']
     | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Tables']
     : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
-  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Tables'][TableName] extends {
       Insert: infer I
     }
     ? I
     : never
-  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
-    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema['Tables']
+    ? DefaultSchema['Tables'][DefaultSchemaTableNameOrOptions] extends {
         Insert: infer I
       }
       ? I
@@ -3282,23 +3274,23 @@ export type TablesInsert<
 
 export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
+    | keyof DefaultSchema['Tables']
     | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Tables']
     : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
-  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Tables'][TableName] extends {
       Update: infer U
     }
     ? U
     : never
-  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
-    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema['Tables']
+    ? DefaultSchema['Tables'][DefaultSchemaTableNameOrOptions] extends {
         Update: infer U
       }
       ? U
@@ -3307,40 +3299,40 @@ export type TablesUpdate<
 
 export type Enums<
   DefaultSchemaEnumNameOrOptions extends
-    | keyof DefaultSchema["Enums"]
+    | keyof DefaultSchema['Enums']
     | { schema: keyof DatabaseWithoutInternals },
   EnumName extends DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions['schema']]['Enums']
     : never = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
-  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
-  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
-    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions['schema']]['Enums'][EnumName]
+  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema['Enums']
+    ? DefaultSchema['Enums'][DefaultSchemaEnumNameOrOptions]
     : never
 
 export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
-    | keyof DefaultSchema["CompositeTypes"]
+    | keyof DefaultSchema['CompositeTypes']
     | { schema: keyof DatabaseWithoutInternals },
   CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
-    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions['schema']]['CompositeTypes']
     : never = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
-  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
-  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
-    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions['schema']]['CompositeTypes'][CompositeTypeName]
+  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema['CompositeTypes']
+    ? DefaultSchema['CompositeTypes'][PublicCompositeTypeNameOrOptions]
     : never
 
 export const Constants = {
-  captionacc_production: {
+  captionacc_prod: {
     Enums: {},
   },
   captionacc_staging: {
@@ -3351,26 +3343,26 @@ export const Constants = {
   },
   public: {
     Enums: {
-      deployment_status: ["READY", "NOT_READY"],
+      deployment_status: ['READY', 'NOT_READY'],
       state_type: [
-        "SCHEDULED",
-        "PENDING",
-        "RUNNING",
-        "COMPLETED",
-        "FAILED",
-        "CANCELLED",
-        "CRASHED",
-        "PAUSED",
-        "CANCELLING",
+        'SCHEDULED',
+        'PENDING',
+        'RUNNING',
+        'COMPLETED',
+        'FAILED',
+        'CANCELLED',
+        'CRASHED',
+        'PAUSED',
+        'CANCELLING',
       ],
-      work_pool_status: ["READY", "NOT_READY", "PAUSED"],
-      work_queue_status: ["READY", "NOT_READY", "PAUSED"],
-      worker_status: ["ONLINE", "OFFLINE"],
+      work_pool_status: ['READY', 'NOT_READY', 'PAUSED'],
+      work_queue_status: ['READY', 'NOT_READY', 'PAUSED'],
+      worker_status: ['ONLINE', 'OFFLINE'],
     },
   },
   storage: {
     Enums: {
-      buckettype: ["STANDARD", "ANALYTICS", "VECTOR"],
+      buckettype: ['STANDARD', 'ANALYTICS', 'VECTOR'],
     },
   },
 } as const

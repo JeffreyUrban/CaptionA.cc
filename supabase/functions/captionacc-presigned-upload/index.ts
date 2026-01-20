@@ -25,7 +25,7 @@ import { generatePresignedPutUrl, WasabiConfig } from "../_shared/wasabi.ts";
 // Environment variables
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const DB_SCHEMA = Deno.env.get("DB_SCHEMA") || "captionacc_production";
+const DB_SCHEMA = Deno.env.get("DB_SCHEMA") || "captionacc_prod";
 
 const WASABI_ACCESS_KEY_ID = Deno.env.get("WASABI_ACCESS_KEY_READWRITE")!;
 const WASABI_SECRET_ACCESS_KEY = Deno.env.get("WASABI_SECRET_KEY_READWRITE")!;

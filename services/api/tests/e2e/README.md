@@ -136,7 +136,7 @@ export SUPABASE_SERVICE_ROLE_KEY="eyJhbGc..."  # Service role key for admin acce
 export SUPABASE_JWT_SECRET="your-jwt-secret"    # For generating test auth tokens  # pragma: allowlist secret
 
 # Optional
-export SUPABASE_SCHEMA="captionacc_production"  # Default: captionacc_production
+export SUPABASE_SCHEMA="captionacc_prod"  # Default: captionacc_prod
 ```
 
 #### Wasabi S3 Configuration
@@ -221,7 +221,7 @@ export WEBHOOK_SECRET="test-webhook-secret"  # Default: test-webhook-secret  # p
 4. **Verify Supabase connection:**
    ```bash
    # Quick Python check
-   python -c "from app.services.supabase_service import SupabaseServiceImpl; import os; s = SupabaseServiceImpl(os.environ['SUPABASE_URL'], os.environ['SUPABASE_SERVICE_ROLE_KEY'], os.environ.get('SUPABASE_SCHEMA', 'captionacc_production')); print('Connected:', s.client is not None)"
+   python -c "from app.services.supabase_service import SupabaseServiceImpl; import os; s = SupabaseServiceImpl(os.environ['SUPABASE_URL'], os.environ['SUPABASE_SERVICE_ROLE_KEY'], os.environ.get('SUPABASE_SCHEMA', 'captionacc_prod')); print('Connected:', s.client is not None)"
    ```
 
 5. **Verify Wasabi connection:**
@@ -463,7 +463,7 @@ async def test_video(self):
    supabase = SupabaseServiceImpl(
        os.environ["SUPABASE_URL"],
        os.environ["SUPABASE_SERVICE_ROLE_KEY"],
-       os.environ.get("SUPABASE_SCHEMA", "captionacc_production")
+       os.environ.get("SUPABASE_SCHEMA", "captionacc_prod")
    )
 
    # Check video record
@@ -712,7 +712,7 @@ export SUPABASE_SERVICE_ROLE_KEY="eyJhbGc..."
 **Solution:**
 1. Verify service role key has admin privileges
 2. Check that schema exists: `SELECT schema_name FROM information_schema.schemata;`
-3. Verify tables exist: `\dt captionacc_production.*` (in psql)
+3. Verify tables exist: `\dt captionacc_prod.*` (in psql)
 4. Check network connectivity to Supabase
 
 #### Issue: "Modal function failed: GPU timeout"

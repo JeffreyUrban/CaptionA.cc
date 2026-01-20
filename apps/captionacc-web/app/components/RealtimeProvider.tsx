@@ -23,11 +23,15 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
         'postgres_changes',
         {
           event: '*', // Listen to INSERT, UPDATE, DELETE
-          schema: 'captionacc_production',
+          schema: 'captionacc_prod',
           table: 'videos',
         },
         payload => {
-          console.log('[Realtime] Videos table change detected:', payload.eventType, payload.new?.id)
+          console.log(
+            '[Realtime] Videos table change detected:',
+            payload.eventType,
+            payload.new?.id
+          )
           // Revalidate to refetch data on current page
           void revalidator.revalidate()
         }

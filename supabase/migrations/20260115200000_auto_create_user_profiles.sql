@@ -9,12 +9,12 @@ DECLARE
 BEGIN
   -- Try to get an existing tenant
   SELECT id INTO v_default_tenant_id
-  FROM captionacc_production.tenants
+  FROM captionacc_prod.tenants
   LIMIT 1;
 
   -- If no tenant exists, create a default one
   IF v_default_tenant_id IS NULL THEN
-    INSERT INTO captionacc_production.tenants (name, slug, created_at)
+    INSERT INTO captionacc_prod.tenants (name, slug, created_at)
     VALUES ('Default Tenant', 'default', NOW())
     RETURNING id INTO v_default_tenant_id;
 
@@ -25,7 +25,7 @@ BEGIN
 END $$;
 
 -- Function to handle new user creation
-CREATE OR REPLACE FUNCTION captionacc_production.handle_new_user()
+CREATE OR REPLACE FUNCTION captionacc_prod.handle_new_user()
 RETURNS TRIGGER
 SECURITY DEFINER
 SET search_path = ''
@@ -36,11 +36,11 @@ DECLARE
 BEGIN
   -- Get the first available tenant (or create one if none exists)
   SELECT id INTO v_tenant_id
-  FROM captionacc_production.tenants
+  FROM captionacc_prod.tenants
   LIMIT 1;
 
   -- Create user profile with default values
-  INSERT INTO captionacc_production.user_profiles (
+  INSERT INTO captionacc_prod.user_profiles (
     id,
     tenant_id,
     full_name,
@@ -69,7 +69,7 @@ DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW
-  EXECUTE FUNCTION captionacc_production.handle_new_user();
+  EXECUTE FUNCTION captionacc_prod.handle_new_user();
 
 -- Backfill: Create profiles for any existing users without profiles
 DO $$
@@ -79,7 +79,7 @@ DECLARE
 BEGIN
   -- Get the first available tenant
   SELECT id INTO v_tenant_id
-  FROM captionacc_production.tenants
+  FROM captionacc_prod.tenants
   LIMIT 1;
 
   IF v_tenant_id IS NULL THEN
@@ -87,7 +87,7 @@ BEGIN
   END IF;
 
   -- Insert profiles for users that don't have them
-  INSERT INTO captionacc_production.user_profiles (
+  INSERT INTO captionacc_prod.user_profiles (
     id,
     tenant_id,
     full_name,
@@ -105,7 +105,7 @@ BEGIN
     'demo',
     NOW()
   FROM auth.users u
-  LEFT JOIN captionacc_production.user_profiles up ON u.id = up.id
+  LEFT JOIN captionacc_prod.user_profiles up ON u.id = up.id
   WHERE up.id IS NULL;
 
   GET DIAGNOSTICS v_count = ROW_COUNT;

@@ -109,10 +109,10 @@ Fast lookup registry for completed inference runs. Avoids slow Wasabi file listi
 
 ```sql
 -- Completed inference runs (metadata + Wasabi location)
-CREATE TABLE captionacc_production.caption_frame_extents_inference_runs (
+CREATE TABLE captionacc_prod.caption_frame_extents_inference_runs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   run_id TEXT UNIQUE NOT NULL,
-  video_id UUID NOT NULL REFERENCES captionacc_production.videos(id),
+  video_id UUID NOT NULL REFERENCES captionacc_prod.videos(id),
   tenant_id UUID NOT NULL,
 
   cropped_frames_version INTEGER NOT NULL,
@@ -138,9 +138,9 @@ CREATE INDEX idx_inference_runs_version_model
 CREATE INDEX idx_inference_runs_model ON caption_frame_extents_inference_runs(model_version);
 
 -- Active job queue (transient, for monitoring)
-CREATE TABLE captionacc_production.caption_frame_extents_inference_jobs (
+CREATE TABLE captionacc_prod.caption_frame_extents_inference_jobs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  video_id UUID NOT NULL REFERENCES captionacc_production.videos(id),
+  video_id UUID NOT NULL REFERENCES captionacc_prod.videos(id),
   tenant_id UUID NOT NULL,
   cropped_frames_version INTEGER NOT NULL,
   model_version TEXT NOT NULL,

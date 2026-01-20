@@ -1,5 +1,5 @@
 -- Fresh Production Schema Setup
--- Consolidated, clean schema for captionacc_production
+-- Consolidated, clean schema for captionacc_prod
 -- Run this after dropping and recreating the empty schema
 
 -- ============================================================================
@@ -7,7 +7,7 @@
 -- ============================================================================
 
 -- Access tiers (must be created first for FK reference)
-CREATE TABLE captionacc_production.access_tiers (
+CREATE TABLE captionacc_prod.access_tiers (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   description TEXT,
@@ -16,7 +16,7 @@ CREATE TABLE captionacc_production.access_tiers (
 );
 
 -- Tenants
-CREATE TABLE captionacc_production.tenants (
+CREATE TABLE captionacc_prod.tenants (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
   slug TEXT UNIQUE NOT NULL,
@@ -28,22 +28,22 @@ CREATE TABLE captionacc_production.tenants (
 );
 
 -- User profiles (extends auth.users)
-CREATE TABLE captionacc_production.user_profiles (
+CREATE TABLE captionacc_prod.user_profiles (
   id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
-  tenant_id UUID REFERENCES captionacc_production.tenants(id) ON DELETE CASCADE,
+  tenant_id UUID REFERENCES captionacc_prod.tenants(id) ON DELETE CASCADE,
   full_name TEXT,
   avatar_url TEXT,
   role TEXT DEFAULT 'member' CHECK (role IN ('owner', 'member')),
   approval_status TEXT DEFAULT 'pending' CHECK (approval_status IN ('pending', 'approved', 'rejected')),
   approved_by UUID REFERENCES auth.users(id),
   approved_at TIMESTAMPTZ,
-  access_tier_id TEXT DEFAULT 'demo' REFERENCES captionacc_production.access_tiers(id),
+  access_tier_id TEXT DEFAULT 'demo' REFERENCES captionacc_prod.access_tiers(id),
   access_notes TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Platform admins (cross-tenant access)
-CREATE TABLE captionacc_production.platform_admins (
+CREATE TABLE captionacc_prod.platform_admins (
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
   admin_level TEXT NOT NULL CHECK (admin_level IN ('super_admin', 'support')),
   granted_by UUID REFERENCES auth.users(id),
@@ -53,9 +53,9 @@ CREATE TABLE captionacc_production.platform_admins (
 );
 
 -- Videos catalog
-CREATE TABLE captionacc_production.videos (
+CREATE TABLE captionacc_prod.videos (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id UUID REFERENCES captionacc_production.tenants(id) ON DELETE CASCADE,
+  tenant_id UUID REFERENCES captionacc_prod.tenants(id) ON DELETE CASCADE,
   video_path TEXT NOT NULL,
   size_bytes BIGINT,
   duration_seconds REAL,
@@ -73,7 +73,7 @@ CREATE TABLE captionacc_production.videos (
 );
 
 -- Training cohorts
-CREATE TABLE captionacc_production.training_cohorts (
+CREATE TABLE captionacc_prod.training_cohorts (
   id TEXT PRIMARY KEY,
   language TEXT,
   domain TEXT,
@@ -89,10 +89,10 @@ CREATE TABLE captionacc_production.training_cohorts (
 );
 
 -- Cohort videos (many-to-many)
-CREATE TABLE captionacc_production.cohort_videos (
-  cohort_id TEXT REFERENCES captionacc_production.training_cohorts(id) ON DELETE CASCADE,
-  video_id UUID REFERENCES captionacc_production.videos(id) ON DELETE CASCADE,
-  tenant_id UUID REFERENCES captionacc_production.tenants(id) ON DELETE CASCADE,
+CREATE TABLE captionacc_prod.cohort_videos (
+  cohort_id TEXT REFERENCES captionacc_prod.training_cohorts(id) ON DELETE CASCADE,
+  video_id UUID REFERENCES captionacc_prod.videos(id) ON DELETE CASCADE,
+  tenant_id UUID REFERENCES captionacc_prod.tenants(id) ON DELETE CASCADE,
   frames_contributed INTEGER,
   annotations_contributed INTEGER,
   included_at TIMESTAMPTZ DEFAULT NOW(),
@@ -100,10 +100,10 @@ CREATE TABLE captionacc_production.cohort_videos (
 );
 
 -- Cropped frames versions
-CREATE TABLE captionacc_production.cropped_frames_versions (
+CREATE TABLE captionacc_prod.cropped_frames_versions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  video_id UUID NOT NULL REFERENCES captionacc_production.videos(id) ON DELETE CASCADE,
-  tenant_id UUID NOT NULL REFERENCES captionacc_production.tenants(id) ON DELETE CASCADE,
+  video_id UUID NOT NULL REFERENCES captionacc_prod.videos(id) ON DELETE CASCADE,
+  tenant_id UUID NOT NULL REFERENCES captionacc_prod.tenants(id) ON DELETE CASCADE,
   version INTEGER NOT NULL,
   storage_prefix TEXT NOT NULL,
   layout_db_storage_key TEXT,
@@ -123,7 +123,7 @@ CREATE TABLE captionacc_production.cropped_frames_versions (
 );
 
 -- Invite codes
-CREATE TABLE captionacc_production.invite_codes (
+CREATE TABLE captionacc_prod.invite_codes (
   code TEXT PRIMARY KEY,
   created_by UUID REFERENCES auth.users(id),
   used_by UUID REFERENCES auth.users(id),
@@ -137,13 +137,13 @@ CREATE TABLE captionacc_production.invite_codes (
 );
 
 -- Add FK for invite_code_used after invite_codes table exists
-ALTER TABLE captionacc_production.user_profiles
-  ADD COLUMN invite_code_used TEXT REFERENCES captionacc_production.invite_codes(code);
+ALTER TABLE captionacc_prod.user_profiles
+  ADD COLUMN invite_code_used TEXT REFERENCES captionacc_prod.invite_codes(code);
 
 -- Usage metrics
-CREATE TABLE captionacc_production.usage_metrics (
+CREATE TABLE captionacc_prod.usage_metrics (
   id BIGSERIAL PRIMARY KEY,
-  tenant_id UUID REFERENCES captionacc_production.tenants(id) ON DELETE CASCADE,
+  tenant_id UUID REFERENCES captionacc_prod.tenants(id) ON DELETE CASCADE,
   metric_type TEXT NOT NULL,
   metric_value NUMERIC NOT NULL,
   cost_estimate_usd NUMERIC,
@@ -152,8 +152,8 @@ CREATE TABLE captionacc_production.usage_metrics (
 );
 
 -- Daily uploads tracking
-CREATE TABLE captionacc_production.daily_uploads (
-  tenant_id UUID REFERENCES captionacc_production.tenants(id) ON DELETE CASCADE,
+CREATE TABLE captionacc_prod.daily_uploads (
+  tenant_id UUID REFERENCES captionacc_prod.tenants(id) ON DELETE CASCADE,
   upload_date DATE NOT NULL,
   upload_count INTEGER DEFAULT 0,
   total_bytes BIGINT DEFAULT 0,
@@ -161,10 +161,10 @@ CREATE TABLE captionacc_production.daily_uploads (
 );
 
 -- Caption frame extents inference runs
-CREATE TABLE captionacc_production.caption_frame_extents_inference_runs (
+CREATE TABLE captionacc_prod.caption_frame_extents_inference_runs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   run_id TEXT UNIQUE NOT NULL,
-  video_id UUID NOT NULL REFERENCES captionacc_production.videos(id) ON DELETE CASCADE,
+  video_id UUID NOT NULL REFERENCES captionacc_prod.videos(id) ON DELETE CASCADE,
   tenant_id UUID NOT NULL,
   cropped_frames_version INTEGER NOT NULL,
   model_version TEXT NOT NULL,
@@ -180,9 +180,9 @@ CREATE TABLE captionacc_production.caption_frame_extents_inference_runs (
 );
 
 -- Caption frame extents inference jobs
-CREATE TABLE captionacc_production.caption_frame_extents_inference_jobs (
+CREATE TABLE captionacc_prod.caption_frame_extents_inference_jobs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  video_id UUID NOT NULL REFERENCES captionacc_production.videos(id) ON DELETE CASCADE,
+  video_id UUID NOT NULL REFERENCES captionacc_prod.videos(id) ON DELETE CASCADE,
   tenant_id UUID NOT NULL,
   cropped_frames_version INTEGER NOT NULL,
   model_version TEXT NOT NULL,
@@ -191,14 +191,14 @@ CREATE TABLE captionacc_production.caption_frame_extents_inference_jobs (
   started_at TIMESTAMPTZ,
   completed_at TIMESTAMPTZ,
   error_message TEXT,
-  inference_run_id UUID REFERENCES captionacc_production.caption_frame_extents_inference_runs(id) ON DELETE SET NULL,
+  inference_run_id UUID REFERENCES captionacc_prod.caption_frame_extents_inference_runs(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Caption frame extents inference rejections
-CREATE TABLE captionacc_production.caption_frame_extents_inference_rejections (
+CREATE TABLE captionacc_prod.caption_frame_extents_inference_rejections (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  video_id UUID NOT NULL REFERENCES captionacc_production.videos(id) ON DELETE CASCADE,
+  video_id UUID NOT NULL REFERENCES captionacc_prod.videos(id) ON DELETE CASCADE,
   tenant_id UUID NOT NULL,
   rejection_type TEXT NOT NULL CHECK (rejection_type IN (
     'frame_count_exceeded', 'cost_exceeded', 'validation_failed', 'rate_limited', 'queue_full'
@@ -216,12 +216,12 @@ CREATE TABLE captionacc_production.caption_frame_extents_inference_rejections (
 );
 
 -- Security audit log
-CREATE TABLE captionacc_production.security_audit_log (
+CREATE TABLE captionacc_prod.security_audit_log (
   id BIGSERIAL PRIMARY KEY,
   event_type TEXT NOT NULL,
   severity TEXT NOT NULL CHECK (severity IN ('info', 'warning', 'critical')),
   user_id UUID REFERENCES auth.users(id),
-  tenant_id UUID REFERENCES captionacc_production.tenants(id),
+  tenant_id UUID REFERENCES captionacc_prod.tenants(id),
   resource_type TEXT,
   resource_id TEXT,
   target_tenant_id UUID,
@@ -239,37 +239,37 @@ CREATE TABLE captionacc_production.security_audit_log (
 -- ============================================================================
 
 -- Get current user's tenant_id
-CREATE OR REPLACE FUNCTION captionacc_production.current_user_tenant_id()
+CREATE OR REPLACE FUNCTION captionacc_prod.current_user_tenant_id()
 RETURNS UUID AS $$
-  SELECT tenant_id FROM captionacc_production.user_profiles WHERE id = auth.uid() LIMIT 1;
+  SELECT tenant_id FROM captionacc_prod.user_profiles WHERE id = auth.uid() LIMIT 1;
 $$ LANGUAGE SQL SECURITY DEFINER STABLE;
 
 -- Get current user's role
-CREATE OR REPLACE FUNCTION captionacc_production.current_user_role()
+CREATE OR REPLACE FUNCTION captionacc_prod.current_user_role()
 RETURNS TEXT AS $$
-  SELECT role FROM captionacc_production.user_profiles WHERE id = auth.uid() LIMIT 1;
+  SELECT role FROM captionacc_prod.user_profiles WHERE id = auth.uid() LIMIT 1;
 $$ LANGUAGE SQL SECURITY DEFINER STABLE;
 
 -- Check if current user is an active platform admin
-CREATE OR REPLACE FUNCTION captionacc_production.is_platform_admin()
+CREATE OR REPLACE FUNCTION captionacc_prod.is_platform_admin()
 RETURNS BOOLEAN AS $$
   SELECT EXISTS (
-    SELECT 1 FROM captionacc_production.platform_admins
+    SELECT 1 FROM captionacc_prod.platform_admins
     WHERE user_id = auth.uid() AND revoked_at IS NULL
   );
 $$ LANGUAGE SQL SECURITY DEFINER STABLE;
 
 -- Check if current user is owner (uses security definer, no recursion)
-CREATE OR REPLACE FUNCTION captionacc_production.is_current_user_owner()
+CREATE OR REPLACE FUNCTION captionacc_prod.is_current_user_owner()
 RETURNS BOOLEAN AS $$
-  SELECT captionacc_production.current_user_role() = 'owner';
+  SELECT captionacc_prod.current_user_role() = 'owner';
 $$ LANGUAGE SQL SECURITY DEFINER STABLE;
 
 -- Check if current user is approved
-CREATE OR REPLACE FUNCTION captionacc_production.is_current_user_approved()
+CREATE OR REPLACE FUNCTION captionacc_prod.is_current_user_approved()
 RETURNS BOOLEAN AS $$
   SELECT EXISTS (
-    SELECT 1 FROM captionacc_production.user_profiles
+    SELECT 1 FROM captionacc_prod.user_profiles
     WHERE id = auth.uid() AND approval_status = 'approved'
   );
 $$ LANGUAGE SQL SECURITY DEFINER STABLE;
@@ -278,49 +278,49 @@ $$ LANGUAGE SQL SECURITY DEFINER STABLE;
 -- INDEXES
 -- ============================================================================
 
-CREATE INDEX idx_videos_tenant ON captionacc_production.videos(tenant_id);
-CREATE INDEX idx_videos_status ON captionacc_production.videos(status) WHERE deleted_at IS NULL;
-CREATE INDEX idx_videos_locked ON captionacc_production.videos(locked_by_user_id) WHERE locked_by_user_id IS NOT NULL;
-CREATE INDEX idx_videos_demo ON captionacc_production.videos(is_demo) WHERE is_demo = TRUE;
-CREATE INDEX idx_cohort_videos_tenant ON captionacc_production.cohort_videos(tenant_id);
-CREATE INDEX idx_cropped_frames_versions_video ON captionacc_production.cropped_frames_versions(video_id);
-CREATE INDEX idx_cropped_frames_versions_tenant ON captionacc_production.cropped_frames_versions(tenant_id);
-CREATE INDEX idx_cropped_frames_versions_status ON captionacc_production.cropped_frames_versions(status);
-CREATE INDEX idx_invite_codes_used_by ON captionacc_production.invite_codes(used_by);
-CREATE INDEX idx_invite_codes_created_by ON captionacc_production.invite_codes(created_by);
-CREATE INDEX idx_usage_tenant_date ON captionacc_production.usage_metrics(tenant_id, recorded_at DESC);
-CREATE INDEX idx_usage_type_date ON captionacc_production.usage_metrics(metric_type, recorded_at DESC);
-CREATE INDEX idx_daily_uploads_date ON captionacc_production.daily_uploads(upload_date DESC);
-CREATE INDEX idx_inference_runs_video ON captionacc_production.caption_frame_extents_inference_runs(video_id);
-CREATE INDEX idx_inference_runs_tenant ON captionacc_production.caption_frame_extents_inference_runs(tenant_id);
-CREATE INDEX idx_inference_jobs_video ON captionacc_production.caption_frame_extents_inference_jobs(video_id);
-CREATE INDEX idx_inference_jobs_status ON captionacc_production.caption_frame_extents_inference_jobs(status);
-CREATE INDEX idx_inference_rejections_video ON captionacc_production.caption_frame_extents_inference_rejections(video_id);
-CREATE INDEX idx_inference_rejections_type ON captionacc_production.caption_frame_extents_inference_rejections(rejection_type);
-CREATE INDEX idx_security_audit_event_type ON captionacc_production.security_audit_log(event_type, created_at DESC);
-CREATE INDEX idx_security_audit_severity ON captionacc_production.security_audit_log(severity, created_at DESC);
-CREATE INDEX idx_security_audit_user ON captionacc_production.security_audit_log(user_id, created_at DESC);
-CREATE INDEX idx_security_audit_tenant ON captionacc_production.security_audit_log(tenant_id, created_at DESC);
+CREATE INDEX idx_videos_tenant ON captionacc_prod.videos(tenant_id);
+CREATE INDEX idx_videos_status ON captionacc_prod.videos(status) WHERE deleted_at IS NULL;
+CREATE INDEX idx_videos_locked ON captionacc_prod.videos(locked_by_user_id) WHERE locked_by_user_id IS NOT NULL;
+CREATE INDEX idx_videos_demo ON captionacc_prod.videos(is_demo) WHERE is_demo = TRUE;
+CREATE INDEX idx_cohort_videos_tenant ON captionacc_prod.cohort_videos(tenant_id);
+CREATE INDEX idx_cropped_frames_versions_video ON captionacc_prod.cropped_frames_versions(video_id);
+CREATE INDEX idx_cropped_frames_versions_tenant ON captionacc_prod.cropped_frames_versions(tenant_id);
+CREATE INDEX idx_cropped_frames_versions_status ON captionacc_prod.cropped_frames_versions(status);
+CREATE INDEX idx_invite_codes_used_by ON captionacc_prod.invite_codes(used_by);
+CREATE INDEX idx_invite_codes_created_by ON captionacc_prod.invite_codes(created_by);
+CREATE INDEX idx_usage_tenant_date ON captionacc_prod.usage_metrics(tenant_id, recorded_at DESC);
+CREATE INDEX idx_usage_type_date ON captionacc_prod.usage_metrics(metric_type, recorded_at DESC);
+CREATE INDEX idx_daily_uploads_date ON captionacc_prod.daily_uploads(upload_date DESC);
+CREATE INDEX idx_inference_runs_video ON captionacc_prod.caption_frame_extents_inference_runs(video_id);
+CREATE INDEX idx_inference_runs_tenant ON captionacc_prod.caption_frame_extents_inference_runs(tenant_id);
+CREATE INDEX idx_inference_jobs_video ON captionacc_prod.caption_frame_extents_inference_jobs(video_id);
+CREATE INDEX idx_inference_jobs_status ON captionacc_prod.caption_frame_extents_inference_jobs(status);
+CREATE INDEX idx_inference_rejections_video ON captionacc_prod.caption_frame_extents_inference_rejections(video_id);
+CREATE INDEX idx_inference_rejections_type ON captionacc_prod.caption_frame_extents_inference_rejections(rejection_type);
+CREATE INDEX idx_security_audit_event_type ON captionacc_prod.security_audit_log(event_type, created_at DESC);
+CREATE INDEX idx_security_audit_severity ON captionacc_prod.security_audit_log(severity, created_at DESC);
+CREATE INDEX idx_security_audit_user ON captionacc_prod.security_audit_log(user_id, created_at DESC);
+CREATE INDEX idx_security_audit_tenant ON captionacc_prod.security_audit_log(tenant_id, created_at DESC);
 
 -- ============================================================================
 -- ENABLE RLS ON ALL TABLES
 -- ============================================================================
 
-ALTER TABLE captionacc_production.access_tiers ENABLE ROW LEVEL SECURITY;
-ALTER TABLE captionacc_production.tenants ENABLE ROW LEVEL SECURITY;
-ALTER TABLE captionacc_production.user_profiles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE captionacc_production.platform_admins ENABLE ROW LEVEL SECURITY;
-ALTER TABLE captionacc_production.videos ENABLE ROW LEVEL SECURITY;
-ALTER TABLE captionacc_production.training_cohorts ENABLE ROW LEVEL SECURITY;
-ALTER TABLE captionacc_production.cohort_videos ENABLE ROW LEVEL SECURITY;
-ALTER TABLE captionacc_production.cropped_frames_versions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE captionacc_production.invite_codes ENABLE ROW LEVEL SECURITY;
-ALTER TABLE captionacc_production.usage_metrics ENABLE ROW LEVEL SECURITY;
-ALTER TABLE captionacc_production.daily_uploads ENABLE ROW LEVEL SECURITY;
-ALTER TABLE captionacc_production.caption_frame_extents_inference_runs ENABLE ROW LEVEL SECURITY;
-ALTER TABLE captionacc_production.caption_frame_extents_inference_jobs ENABLE ROW LEVEL SECURITY;
-ALTER TABLE captionacc_production.caption_frame_extents_inference_rejections ENABLE ROW LEVEL SECURITY;
-ALTER TABLE captionacc_production.security_audit_log ENABLE ROW LEVEL SECURITY;
+ALTER TABLE captionacc_prod.access_tiers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE captionacc_prod.tenants ENABLE ROW LEVEL SECURITY;
+ALTER TABLE captionacc_prod.user_profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE captionacc_prod.platform_admins ENABLE ROW LEVEL SECURITY;
+ALTER TABLE captionacc_prod.videos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE captionacc_prod.training_cohorts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE captionacc_prod.cohort_videos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE captionacc_prod.cropped_frames_versions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE captionacc_prod.invite_codes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE captionacc_prod.usage_metrics ENABLE ROW LEVEL SECURITY;
+ALTER TABLE captionacc_prod.daily_uploads ENABLE ROW LEVEL SECURITY;
+ALTER TABLE captionacc_prod.caption_frame_extents_inference_runs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE captionacc_prod.caption_frame_extents_inference_jobs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE captionacc_prod.caption_frame_extents_inference_rejections ENABLE ROW LEVEL SECURITY;
+ALTER TABLE captionacc_prod.security_audit_log ENABLE ROW LEVEL SECURITY;
 
 -- ============================================================================
 -- RLS POLICIES (using SECURITY DEFINER functions to avoid recursion)
@@ -328,226 +328,226 @@ ALTER TABLE captionacc_production.security_audit_log ENABLE ROW LEVEL SECURITY;
 
 -- Access tiers: authenticated users can read
 CREATE POLICY "Authenticated users view access tiers"
-  ON captionacc_production.access_tiers FOR SELECT
+  ON captionacc_prod.access_tiers FOR SELECT
   TO authenticated USING (true);
 
 CREATE POLICY "Platform admins manage access tiers"
-  ON captionacc_production.access_tiers FOR ALL
-  USING (captionacc_production.is_platform_admin());
+  ON captionacc_prod.access_tiers FOR ALL
+  USING (captionacc_prod.is_platform_admin());
 
 -- Platform admins: simple self-check (no recursion)
 CREATE POLICY "Users check own admin status"
-  ON captionacc_production.platform_admins FOR SELECT
+  ON captionacc_prod.platform_admins FOR SELECT
   USING (user_id = auth.uid());
 
 -- Tenants
 CREATE POLICY "Users view own tenant"
-  ON captionacc_production.tenants FOR SELECT
-  USING (id = captionacc_production.current_user_tenant_id());
+  ON captionacc_prod.tenants FOR SELECT
+  USING (id = captionacc_prod.current_user_tenant_id());
 
 CREATE POLICY "Owners update own tenant"
-  ON captionacc_production.tenants FOR UPDATE
-  USING (id = captionacc_production.current_user_tenant_id() AND captionacc_production.is_current_user_owner());
+  ON captionacc_prod.tenants FOR UPDATE
+  USING (id = captionacc_prod.current_user_tenant_id() AND captionacc_prod.is_current_user_owner());
 
 CREATE POLICY "Platform admins manage tenants"
-  ON captionacc_production.tenants FOR ALL
-  USING (captionacc_production.is_platform_admin());
+  ON captionacc_prod.tenants FOR ALL
+  USING (captionacc_prod.is_platform_admin());
 
 -- User profiles (no subqueries on user_profiles - use functions)
 CREATE POLICY "Users view own profile"
-  ON captionacc_production.user_profiles FOR SELECT
+  ON captionacc_prod.user_profiles FOR SELECT
   USING (id = auth.uid());
 
 CREATE POLICY "Owners view tenant profiles"
-  ON captionacc_production.user_profiles FOR SELECT
+  ON captionacc_prod.user_profiles FOR SELECT
   USING (
-    captionacc_production.is_current_user_owner()
-    AND tenant_id = captionacc_production.current_user_tenant_id()
+    captionacc_prod.is_current_user_owner()
+    AND tenant_id = captionacc_prod.current_user_tenant_id()
   );
 
 CREATE POLICY "Users update own profile"
-  ON captionacc_production.user_profiles FOR UPDATE
+  ON captionacc_prod.user_profiles FOR UPDATE
   USING (id = auth.uid());
 
 CREATE POLICY "Platform admins manage profiles"
-  ON captionacc_production.user_profiles FOR ALL
-  USING (captionacc_production.is_platform_admin());
+  ON captionacc_prod.user_profiles FOR ALL
+  USING (captionacc_prod.is_platform_admin());
 
 -- Videos
 CREATE POLICY "Users view own videos"
-  ON captionacc_production.videos FOR SELECT
+  ON captionacc_prod.videos FOR SELECT
   USING (uploaded_by_user_id = auth.uid() AND deleted_at IS NULL);
 
 CREATE POLICY "Owners view tenant videos"
-  ON captionacc_production.videos FOR SELECT
+  ON captionacc_prod.videos FOR SELECT
   USING (
-    captionacc_production.is_current_user_owner()
-    AND tenant_id = captionacc_production.current_user_tenant_id()
+    captionacc_prod.is_current_user_owner()
+    AND tenant_id = captionacc_prod.current_user_tenant_id()
     AND deleted_at IS NULL
   );
 
 CREATE POLICY "Anyone view demo videos"
-  ON captionacc_production.videos FOR SELECT
+  ON captionacc_prod.videos FOR SELECT
   USING (is_demo = TRUE AND deleted_at IS NULL);
 
 CREATE POLICY "Platform admins view all videos"
-  ON captionacc_production.videos FOR SELECT
-  USING (captionacc_production.is_platform_admin());
+  ON captionacc_prod.videos FOR SELECT
+  USING (captionacc_prod.is_platform_admin());
 
 CREATE POLICY "Approved users insert videos"
-  ON captionacc_production.videos FOR INSERT
+  ON captionacc_prod.videos FOR INSERT
   WITH CHECK (
-    tenant_id = captionacc_production.current_user_tenant_id()
+    tenant_id = captionacc_prod.current_user_tenant_id()
     AND uploaded_by_user_id = auth.uid()
-    AND captionacc_production.is_current_user_approved()
+    AND captionacc_prod.is_current_user_approved()
   );
 
 CREATE POLICY "Users update own videos"
-  ON captionacc_production.videos FOR UPDATE
+  ON captionacc_prod.videos FOR UPDATE
   USING (uploaded_by_user_id = auth.uid());
 
 CREATE POLICY "Owners update tenant videos"
-  ON captionacc_production.videos FOR UPDATE
+  ON captionacc_prod.videos FOR UPDATE
   USING (
-    captionacc_production.is_current_user_owner()
-    AND tenant_id = captionacc_production.current_user_tenant_id()
+    captionacc_prod.is_current_user_owner()
+    AND tenant_id = captionacc_prod.current_user_tenant_id()
   );
 
 CREATE POLICY "Platform admins update videos"
-  ON captionacc_production.videos FOR UPDATE
-  USING (captionacc_production.is_platform_admin());
+  ON captionacc_prod.videos FOR UPDATE
+  USING (captionacc_prod.is_platform_admin());
 
 CREATE POLICY "Users delete own videos"
-  ON captionacc_production.videos FOR DELETE
+  ON captionacc_prod.videos FOR DELETE
   USING (uploaded_by_user_id = auth.uid());
 
 CREATE POLICY "Owners delete tenant videos"
-  ON captionacc_production.videos FOR DELETE
+  ON captionacc_prod.videos FOR DELETE
   USING (
-    captionacc_production.is_current_user_owner()
-    AND tenant_id = captionacc_production.current_user_tenant_id()
+    captionacc_prod.is_current_user_owner()
+    AND tenant_id = captionacc_prod.current_user_tenant_id()
   );
 
 CREATE POLICY "Platform admins delete videos"
-  ON captionacc_production.videos FOR DELETE
-  USING (captionacc_production.is_platform_admin());
+  ON captionacc_prod.videos FOR DELETE
+  USING (captionacc_prod.is_platform_admin());
 
 -- Training cohorts
 CREATE POLICY "Authenticated view cohorts"
-  ON captionacc_production.training_cohorts FOR SELECT
+  ON captionacc_prod.training_cohorts FOR SELECT
   TO authenticated USING (true);
 
 -- Cohort videos
 CREATE POLICY "Authenticated view cohort videos"
-  ON captionacc_production.cohort_videos FOR SELECT
+  ON captionacc_prod.cohort_videos FOR SELECT
   TO authenticated USING (true);
 
 -- Cropped frames versions
 CREATE POLICY "Users view tenant cropped frames"
-  ON captionacc_production.cropped_frames_versions FOR SELECT
-  USING (tenant_id = captionacc_production.current_user_tenant_id());
+  ON captionacc_prod.cropped_frames_versions FOR SELECT
+  USING (tenant_id = captionacc_prod.current_user_tenant_id());
 
 CREATE POLICY "Users insert cropped frames"
-  ON captionacc_production.cropped_frames_versions FOR INSERT
-  WITH CHECK (tenant_id = captionacc_production.current_user_tenant_id());
+  ON captionacc_prod.cropped_frames_versions FOR INSERT
+  WITH CHECK (tenant_id = captionacc_prod.current_user_tenant_id());
 
 CREATE POLICY "Users update cropped frames"
-  ON captionacc_production.cropped_frames_versions FOR UPDATE
-  USING (tenant_id = captionacc_production.current_user_tenant_id());
+  ON captionacc_prod.cropped_frames_versions FOR UPDATE
+  USING (tenant_id = captionacc_prod.current_user_tenant_id());
 
 -- Invite codes
 CREATE POLICY "Platform admins manage invite codes"
-  ON captionacc_production.invite_codes FOR ALL
-  USING (captionacc_production.is_platform_admin());
+  ON captionacc_prod.invite_codes FOR ALL
+  USING (captionacc_prod.is_platform_admin());
 
 -- Usage metrics
 CREATE POLICY "Owners view tenant usage"
-  ON captionacc_production.usage_metrics FOR SELECT
+  ON captionacc_prod.usage_metrics FOR SELECT
   USING (
-    captionacc_production.is_current_user_owner()
-    AND tenant_id = captionacc_production.current_user_tenant_id()
+    captionacc_prod.is_current_user_owner()
+    AND tenant_id = captionacc_prod.current_user_tenant_id()
   );
 
 CREATE POLICY "Platform admins view usage"
-  ON captionacc_production.usage_metrics FOR SELECT
-  USING (captionacc_production.is_platform_admin());
+  ON captionacc_prod.usage_metrics FOR SELECT
+  USING (captionacc_prod.is_platform_admin());
 
 -- Daily uploads
 CREATE POLICY "Owners view tenant uploads"
-  ON captionacc_production.daily_uploads FOR SELECT
+  ON captionacc_prod.daily_uploads FOR SELECT
   USING (
-    captionacc_production.is_current_user_owner()
-    AND tenant_id = captionacc_production.current_user_tenant_id()
+    captionacc_prod.is_current_user_owner()
+    AND tenant_id = captionacc_prod.current_user_tenant_id()
   );
 
 CREATE POLICY "Platform admins view uploads"
-  ON captionacc_production.daily_uploads FOR SELECT
-  USING (captionacc_production.is_platform_admin());
+  ON captionacc_prod.daily_uploads FOR SELECT
+  USING (captionacc_prod.is_platform_admin());
 
 -- Caption frame extents inference runs
 CREATE POLICY "Users view tenant inference runs"
-  ON captionacc_production.caption_frame_extents_inference_runs FOR SELECT
-  USING (tenant_id = captionacc_production.current_user_tenant_id());
+  ON captionacc_prod.caption_frame_extents_inference_runs FOR SELECT
+  USING (tenant_id = captionacc_prod.current_user_tenant_id());
 
 -- Caption frame extents inference jobs
 CREATE POLICY "Users view tenant inference jobs"
-  ON captionacc_production.caption_frame_extents_inference_jobs FOR SELECT
-  USING (tenant_id = captionacc_production.current_user_tenant_id());
+  ON captionacc_prod.caption_frame_extents_inference_jobs FOR SELECT
+  USING (tenant_id = captionacc_prod.current_user_tenant_id());
 
 -- Caption frame extents inference rejections
 CREATE POLICY "Users view tenant rejections"
-  ON captionacc_production.caption_frame_extents_inference_rejections FOR SELECT
-  USING (tenant_id = captionacc_production.current_user_tenant_id());
+  ON captionacc_prod.caption_frame_extents_inference_rejections FOR SELECT
+  USING (tenant_id = captionacc_prod.current_user_tenant_id());
 
 CREATE POLICY "Users update tenant rejections"
-  ON captionacc_production.caption_frame_extents_inference_rejections FOR UPDATE
-  USING (tenant_id = captionacc_production.current_user_tenant_id());
+  ON captionacc_prod.caption_frame_extents_inference_rejections FOR UPDATE
+  USING (tenant_id = captionacc_prod.current_user_tenant_id());
 
 -- Security audit log
 CREATE POLICY "Platform admins view audit logs"
-  ON captionacc_production.security_audit_log FOR SELECT
-  USING (captionacc_production.is_platform_admin());
+  ON captionacc_prod.security_audit_log FOR SELECT
+  USING (captionacc_prod.is_platform_admin());
 
 CREATE POLICY "Service inserts audit logs"
-  ON captionacc_production.security_audit_log FOR INSERT
+  ON captionacc_prod.security_audit_log FOR INSERT
   WITH CHECK (true);
 
 -- ============================================================================
 -- ADDITIONAL FUNCTIONS
 -- ============================================================================
 
-CREATE OR REPLACE FUNCTION captionacc_production.get_next_cropped_frames_version(p_video_id UUID)
+CREATE OR REPLACE FUNCTION captionacc_prod.get_next_cropped_frames_version(p_video_id UUID)
 RETURNS INTEGER LANGUAGE plpgsql AS $$
 DECLARE next_version INTEGER;
 BEGIN
   SELECT COALESCE(MAX(version), 0) + 1 INTO next_version
-  FROM captionacc_production.cropped_frames_versions WHERE video_id = p_video_id;
+  FROM captionacc_prod.cropped_frames_versions WHERE video_id = p_video_id;
   RETURN next_version;
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION captionacc_production.activate_cropped_frames_version(p_version_id UUID)
+CREATE OR REPLACE FUNCTION captionacc_prod.activate_cropped_frames_version(p_version_id UUID)
 RETURNS void LANGUAGE plpgsql AS $$
 DECLARE v_video_id UUID; v_version INTEGER;
 BEGIN
   SELECT video_id, version INTO v_video_id, v_version
-  FROM captionacc_production.cropped_frames_versions WHERE id = p_version_id;
+  FROM captionacc_prod.cropped_frames_versions WHERE id = p_version_id;
   IF v_video_id IS NULL THEN RAISE EXCEPTION 'Version not found: %', p_version_id; END IF;
-  UPDATE captionacc_production.cropped_frames_versions SET status = 'archived', archived_at = NOW()
+  UPDATE captionacc_prod.cropped_frames_versions SET status = 'archived', archived_at = NOW()
   WHERE video_id = v_video_id AND status = 'active';
-  UPDATE captionacc_production.cropped_frames_versions SET status = 'active', activated_at = NOW()
+  UPDATE captionacc_prod.cropped_frames_versions SET status = 'active', activated_at = NOW()
   WHERE id = p_version_id;
-  UPDATE captionacc_production.videos SET current_cropped_frames_version = v_version WHERE id = v_video_id;
+  UPDATE captionacc_prod.videos SET current_cropped_frames_version = v_version WHERE id = v_video_id;
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION captionacc_production.has_feature_access(p_user_id UUID, p_feature TEXT)
+CREATE OR REPLACE FUNCTION captionacc_prod.has_feature_access(p_user_id UUID, p_feature TEXT)
 RETURNS BOOLEAN AS $$
 DECLARE v_tier_id TEXT; v_features JSONB;
 BEGIN
-  SELECT access_tier_id INTO v_tier_id FROM captionacc_production.user_profiles WHERE id = p_user_id;
+  SELECT access_tier_id INTO v_tier_id FROM captionacc_prod.user_profiles WHERE id = p_user_id;
   IF NOT FOUND THEN RETURN FALSE; END IF;
-  SELECT features INTO v_features FROM captionacc_production.access_tiers WHERE id = v_tier_id;
+  SELECT features INTO v_features FROM captionacc_prod.access_tiers WHERE id = v_tier_id;
   RETURN COALESCE((v_features->p_feature)::BOOLEAN, FALSE);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
@@ -556,7 +556,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
 -- SEED DATA
 -- ============================================================================
 
-INSERT INTO captionacc_production.access_tiers (id, name, description, features) VALUES
+INSERT INTO captionacc_prod.access_tiers (id, name, description, features) VALUES
   ('demo', 'Demo Access', 'Read-only access to demo videos only',
    '{"max_videos": 0, "max_storage_gb": 0, "annotation": false, "export": false, "upload": false, "demo_access": true}'),
   ('trial', 'Trial Access', 'Upload up to 3 videos with annotation access',

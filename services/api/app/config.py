@@ -54,7 +54,7 @@ class Settings(BaseSettings):
 
     # Supabase (service role for video_database_state)
     supabase_service_role_key: str = ""
-    supabase_schema: str = "captionacc_production"
+    supabase_schema: str = "captionacc_prod"
 
     # Namespace for dev isolation (empty = production)
     captionacc_namespace: str = ""

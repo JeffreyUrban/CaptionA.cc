@@ -7,7 +7,7 @@ CaptionA.cc uses PostgreSQL schemas for environment isolation within a single Su
 
 **Four Schemas:**
 
-1. **`captionacc_production`** - Production environment
+1. **`captionacc_prod`** - Production environment
    - All application tables (tenants, videos, user_profiles, etc.)
    - Used by: production Fly.io deployment
    - Full RLS policies active
@@ -53,7 +53,7 @@ Using PostgreSQL schemas within a single database instead of separate databases 
 
 **Managed Supabase (production/staging):**
 - Uses named schemas only (no `public` schema for app data)
-- Production: `captionacc_production`
+- Production: `captionacc_prod`
 - Staging: `captionacc_staging`
 - Prefect: `prefect` (optional)
 - Analytics: `umami` (optional)
@@ -64,19 +64,19 @@ In PostgreSQL, schemas are namespaces within a database:
 
 ```sql
 -- Create schemas
-CREATE SCHEMA captionacc_production;
+CREATE SCHEMA captionacc_prod;
 CREATE SCHEMA captionacc_staging;
 CREATE SCHEMA prefect;
 CREATE SCHEMA umami;
 
 -- Tables exist in schemas
-captionacc_production.videos
+captionacc_prod.videos
 captionacc_staging.videos
 prefect.flow_run
 umami.events
 
 -- Set search_path to default schema
-SET search_path TO captionacc_production, public;
+SET search_path TO captionacc_prod, public;
 ```
 
 ## Implementation Approach
@@ -84,8 +84,8 @@ SET search_path TO captionacc_production, public;
 ### 1. Schema Setup Migration
 
 Create new migration that:
-1. Creates `captionacc_production`, `captionacc_staging`, `prefect`, and `umami` schemas
-2. Copies current tables from `public` to `captionacc_production` (on managed instance only)
+1. Creates `captionacc_prod`, `captionacc_staging`, `prefect`, and `umami` schemas
+2. Copies current tables from `public` to `captionacc_prod` (on managed instance only)
 3. Replicates structure (not data) to `captionacc_staging`
 4. Prepares `prefect` schema for Prefect Server (optional)
 5. Prepares `umami` schema for Umami analytics
@@ -103,8 +103,8 @@ Update Supabase client to:
 Add to `.env`:
 ```bash
 # Schema selection based on environment
-SUPABASE_SCHEMA=captionacc_production  # or captionacc_staging, or public (local)
-VITE_SUPABASE_SCHEMA=captionacc_production
+SUPABASE_SCHEMA=captionacc_prod  # or captionacc_staging, or public (local)
+VITE_SUPABASE_SCHEMA=captionacc_prod
 ```
 
 ### 4. Repository Updates
@@ -125,8 +125,8 @@ def get_supabase_client(schema: str = None) -> Client:
 
 **For Production:**
 1. Create schemas in your Supabase project
-2. Run migration to copy `public` → `captionacc_production`
-3. Deploy updated code with `SUPABASE_SCHEMA=captionacc_production`
+2. Run migration to copy `public` → `captionacc_prod`
+3. Deploy updated code with `SUPABASE_SCHEMA=captionacc_prod`
 4. Verify production works
 5. Optional: Clean up old `public` tables
 
@@ -152,36 +152,36 @@ def get_supabase_client(schema: str = None) -> Client:
 -- File: supabase/migrations/YYYYMMDD_multi_schema_setup.sql
 
 -- Create schemas with captionacc_ prefix
-CREATE SCHEMA IF NOT EXISTS captionacc_production;
+CREATE SCHEMA IF NOT EXISTS captionacc_prod;
 CREATE SCHEMA IF NOT EXISTS captionacc_staging;
 CREATE SCHEMA IF NOT EXISTS prefect;
 CREATE SCHEMA IF NOT EXISTS umami;
 
 -- Grant usage on schemas
-GRANT USAGE ON SCHEMA captionacc_production TO postgres, anon, authenticated, service_role;
+GRANT USAGE ON SCHEMA captionacc_prod TO postgres, anon, authenticated, service_role;
 GRANT USAGE ON SCHEMA captionacc_staging TO postgres, anon, authenticated, service_role;
 GRANT USAGE ON SCHEMA prefect TO postgres, anon, authenticated, service_role;
 GRANT USAGE ON SCHEMA umami TO postgres, anon, authenticated, service_role;
 
 -- Grant all privileges on tables (to be created)
-GRANT ALL ON ALL TABLES IN SCHEMA captionacc_production TO postgres, anon, authenticated, service_role;
+GRANT ALL ON ALL TABLES IN SCHEMA captionacc_prod TO postgres, anon, authenticated, service_role;
 GRANT ALL ON ALL TABLES IN SCHEMA captionacc_staging TO postgres, anon, authenticated, service_role;
 GRANT ALL ON ALL TABLES IN SCHEMA prefect TO postgres, anon, authenticated, service_role;
 GRANT ALL ON ALL TABLES IN SCHEMA umami TO postgres, anon, authenticated, service_role;
 
 -- Grant all privileges on sequences
-GRANT ALL ON ALL SEQUENCES IN SCHEMA captionacc_production TO postgres, anon, authenticated, service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA captionacc_prod TO postgres, anon, authenticated, service_role;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA captionacc_staging TO postgres, anon, authenticated, service_role;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA prefect TO postgres, anon, authenticated, service_role;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA umami TO postgres, anon, authenticated, service_role;
 
 -- Set default privileges for future tables
-ALTER DEFAULT PRIVILEGES IN SCHEMA captionacc_production GRANT ALL ON TABLES TO postgres, anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA captionacc_prod GRANT ALL ON TABLES TO postgres, anon, authenticated, service_role;
 ALTER DEFAULT PRIVILEGES IN SCHEMA captionacc_staging GRANT ALL ON TABLES TO postgres, anon, authenticated, service_role;
 ALTER DEFAULT PRIVILEGES IN SCHEMA prefect GRANT ALL ON TABLES TO postgres, anon, authenticated, service_role;
 ALTER DEFAULT PRIVILEGES IN SCHEMA umami GRANT ALL ON TABLES TO postgres, anon, authenticated, service_role;
 
--- Note: Data migration from public to captionacc_production will be done separately
+-- Note: Data migration from public to captionacc_prod will be done separately
 -- Note: captionacc_staging will be populated with schema structure (no data)
 -- Note: prefect and umami will be populated by their respective applications
 ```
@@ -201,7 +201,7 @@ def get_supabase_client(
     Args:
         require_production: Ensure production config is used
         schema: PostgreSQL schema to use (default: from SUPABASE_SCHEMA env var)
-                Options: 'public' (local), 'captionacc_production', 'captionacc_staging'
+                Options: 'public' (local), 'captionacc_prod', 'captionacc_staging'
 
     Returns:
         Supabase client configured for specified schema
@@ -212,7 +212,7 @@ def get_supabase_client(
 
     # Determine schema
     if schema is None:
-        schema = os.environ.get("SUPABASE_SCHEMA", "public" if is_local else "captionacc_production")
+        schema = os.environ.get("SUPABASE_SCHEMA", "public" if is_local else "captionacc_prod")
 
     # Safety check
     if require_production and is_local:
@@ -265,13 +265,13 @@ Update `.env`:
 ```bash
 # Supabase Configuration
 SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_SCHEMA=captionacc_production  # or captionacc_staging, or public (local dev)
+SUPABASE_SCHEMA=captionacc_prod  # or captionacc_staging, or public (local dev)
 SUPABASE_ANON_KEY=your_key
 SUPABASE_SERVICE_ROLE_KEY=your_key
 
 # For web app
 VITE_SUPABASE_URL=https://your-project.supabase.co
-VITE_SUPABASE_SCHEMA=captionacc_production
+VITE_SUPABASE_SCHEMA=captionacc_prod
 VITE_SUPABASE_ANON_KEY=your_key
 VITE_SUPABASE_SERVICE_ROLE_KEY=your_key
 ```
@@ -285,7 +285,7 @@ Update `fly.toml` and workflows:
 [env]
   NODE_ENV = "production"
   ENVIRONMENT = "production"
-  VITE_SUPABASE_SCHEMA = "captionacc_production"  # NEW
+  VITE_SUPABASE_SCHEMA = "captionacc_prod"  # NEW
 ```
 
 ```yaml
@@ -296,7 +296,7 @@ Update `fly.toml` and workflows:
       VITE_SUPABASE_URL="${{ secrets.SUPABASE_URL }}" \
       VITE_SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}" \
       VITE_SUPABASE_SERVICE_ROLE_KEY="${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
-      VITE_SUPABASE_SCHEMA="captionacc_production" \
+      VITE_SUPABASE_SCHEMA="captionacc_prod" \
       --app captionacc-web
 ```
 
@@ -347,7 +347,7 @@ prefect server database upgrade
 
    # Create schemas locally
    psql postgresql://postgres:postgres@localhost:54322/postgres -c "
-     CREATE SCHEMA captionacc_production;
+     CREATE SCHEMA captionacc_prod;
      CREATE SCHEMA captionacc_staging;
      CREATE SCHEMA prefect;
      CREATE SCHEMA umami;
@@ -359,7 +359,7 @@ prefect server database upgrade
 3. Test app with different schemas:
    ```bash
    # Test production schema
-   SUPABASE_SCHEMA=captionacc_production npm run dev
+   SUPABASE_SCHEMA=captionacc_prod npm run dev
 
    # Test staging schema
    SUPABASE_SCHEMA=captionacc_staging npm run dev
@@ -380,7 +380,7 @@ prefect server database upgrade
 4. **Deploy app with schema config:**
    ```bash
    # Set production schema
-   flyctl secrets set VITE_SUPABASE_SCHEMA="captionacc_production" --app captionacc-web
+   flyctl secrets set VITE_SUPABASE_SCHEMA="captionacc_prod" --app captionacc-web
 
    # Deploy
    git push origin main
@@ -390,8 +390,8 @@ prefect server database upgrade
 
 6. **Clean up old public schema (optional):**
    ```sql
-   DROP TABLE captionacc_production.tenants;
-   DROP TABLE captionacc_production.videos;
+   DROP TABLE captionacc_prod.tenants;
+   DROP TABLE captionacc_prod.videos;
    -- etc.
    ```
 
@@ -471,7 +471,7 @@ Rationale:
 - Easy filtering and management in database tools
 
 ### Local vs Production Schema Strategy
-Local development uses PostgreSQL's default `public` schema, while production/staging use named schemas (`captionacc_production`, `captionacc_staging`).
+Local development uses PostgreSQL's default `public` schema, while production/staging use named schemas (`captionacc_prod`, `captionacc_staging`).
 
 Rationale:
 - Local: Minimize configuration complexity for development - standard PostgreSQL setup works out of the box
@@ -479,7 +479,7 @@ Rationale:
 - Auto-detection based on connection URL keeps code simple
 
 ### Search Path vs Qualified Names
-All table references use unqualified names (e.g., `videos` not `captionacc_production.videos`), relying on PostgreSQL's `search_path` set at connection time.
+All table references use unqualified names (e.g., `videos` not `captionacc_prod.videos`), relying on PostgreSQL's `search_path` set at connection time.
 
 Rationale:
 - Cleaner code - same queries work across all schemas

@@ -2,19 +2,19 @@
 -- Consolidates multiple Supabase projects into one using PostgreSQL schemas
 --
 -- Schemas:
---   - captionacc_production: Main alpha/production environment
+--   - captionacc_prod: Main alpha/production environment
 --   - captionacc_staging: Testing/review apps environment
 --   - captionacc_prefect: Prefect Server database (optional, for self-hosted Prefect)
 --   - umami: Umami analytics database
 --
 -- Note: This migration creates the schema structure.
--- Data migration from public → captionacc_production must be done separately.
+-- Data migration from public → captionacc_prod must be done separately.
 
 -- ============================================================================
 -- Create Schemas
 -- ============================================================================
 
-CREATE SCHEMA IF NOT EXISTS captionacc_production;
+CREATE SCHEMA IF NOT EXISTS captionacc_prod;
 CREATE SCHEMA IF NOT EXISTS captionacc_staging;
 CREATE SCHEMA IF NOT EXISTS captionacc_prefect;
 CREATE SCHEMA IF NOT EXISTS umami;
@@ -24,10 +24,10 @@ CREATE SCHEMA IF NOT EXISTS umami;
 -- ============================================================================
 
 -- Production schema
-GRANT USAGE ON SCHEMA captionacc_production TO postgres, anon, authenticated, service_role;
-GRANT ALL ON ALL TABLES IN SCHEMA captionacc_production TO postgres, anon, authenticated, service_role;
-GRANT ALL ON ALL SEQUENCES IN SCHEMA captionacc_production TO postgres, anon, authenticated, service_role;
-GRANT ALL ON ALL FUNCTIONS IN SCHEMA captionacc_production TO postgres, anon, authenticated, service_role;
+GRANT USAGE ON SCHEMA captionacc_prod TO postgres, anon, authenticated, service_role;
+GRANT ALL ON ALL TABLES IN SCHEMA captionacc_prod TO postgres, anon, authenticated, service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA captionacc_prod TO postgres, anon, authenticated, service_role;
+GRANT ALL ON ALL FUNCTIONS IN SCHEMA captionacc_prod TO postgres, anon, authenticated, service_role;
 
 -- Staging schema
 GRANT USAGE ON SCHEMA captionacc_staging TO postgres, anon, authenticated, service_role;
@@ -52,9 +52,9 @@ GRANT ALL ON ALL FUNCTIONS IN SCHEMA umami TO postgres, anon, authenticated, ser
 -- ============================================================================
 
 -- Production schema
-ALTER DEFAULT PRIVILEGES IN SCHEMA captionacc_production GRANT ALL ON TABLES TO postgres, anon, authenticated, service_role;
-ALTER DEFAULT PRIVILEGES IN SCHEMA captionacc_production GRANT ALL ON SEQUENCES TO postgres, anon, authenticated, service_role;
-ALTER DEFAULT PRIVILEGES IN SCHEMA captionacc_production GRANT ALL ON FUNCTIONS TO postgres, anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA captionacc_prod GRANT ALL ON TABLES TO postgres, anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA captionacc_prod GRANT ALL ON SEQUENCES TO postgres, anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA captionacc_prod GRANT ALL ON FUNCTIONS TO postgres, anon, authenticated, service_role;
 
 -- Staging schema
 ALTER DEFAULT PRIVILEGES IN SCHEMA captionacc_staging GRANT ALL ON TABLES TO postgres, anon, authenticated, service_role;
@@ -139,7 +139,7 @@ $$;
 -- Comments
 -- ============================================================================
 
-COMMENT ON SCHEMA captionacc_production IS 'Production/alpha environment for CaptionA.cc application';
+COMMENT ON SCHEMA captionacc_prod IS 'Production/alpha environment for CaptionA.cc application';
 COMMENT ON SCHEMA captionacc_staging IS 'Staging/testing environment for CaptionA.cc application';
 COMMENT ON SCHEMA captionacc_prefect IS 'Prefect workflow orchestration database (optional self-hosted)';
 COMMENT ON SCHEMA umami IS 'Umami web analytics database';
@@ -150,8 +150,8 @@ COMMENT ON SCHEMA umami IS 'Umami web analytics database';
 
 -- After running this migration, you need to:
 --
--- 1. Copy data from public schema to captionacc_production:
---    SELECT copy_schema_structure('public', 'captionacc_production', true);
+-- 1. Copy data from public schema to captionacc_prod:
+--    SELECT copy_schema_structure('public', 'captionacc_prod', true);
 --
 -- 2. Copy structure (no data) to captionacc_staging:
 --    SELECT copy_schema_structure('public', 'captionacc_staging', false);
@@ -160,7 +160,7 @@ COMMENT ON SCHEMA umami IS 'Umami web analytics database';
 --    -- Run all existing migrations
 --
 -- 3. Update application code to use schema parameter:
---    - Set SUPABASE_SCHEMA=captionacc_production for production
+--    - Set SUPABASE_SCHEMA=captionacc_prod for production
 --    - Set SUPABASE_SCHEMA=captionacc_staging for staging
 --
 -- 4. For Prefect Server (optional):
@@ -172,5 +172,5 @@ COMMENT ON SCHEMA umami IS 'Umami web analytics database';
 --    - Run Umami migrations
 --
 -- 6. Once verified, optionally clean up public schema:
---    -- DROP TABLE captionacc_production.tenants CASCADE;
+--    -- DROP TABLE captionacc_prod.tenants CASCADE;
 --    -- etc.

@@ -88,7 +88,7 @@ cd supabase
 # Set shared secrets (first time only)
 supabase secrets set WASABI_BUCKET=captionacc-prod
 supabase secrets set WASABI_REGION=us-east-1
-supabase secrets set DB_SCHEMA=captionacc_production
+supabase secrets set DB_SCHEMA=captionacc_prod
 
 # Set presigned-upload secrets
 supabase secrets set WASABI_ACCESS_KEY_READWRITE=your_key
@@ -131,7 +131,7 @@ See [wasabi-storage.md](../../docs/data-architecture/wasabi-storage.md) for full
 | `WASABI_BUCKET` | both | Wasabi bucket name |
 | `WASABI_REGION` | both | Wasabi region (default: us-east-1) |
 | `WASABI_STS_DURATION_SECONDS` | s3-credentials | Credential duration (default: 3600) |
-| `DB_SCHEMA` | both | Database schema (default: captionacc_production) |
+| `DB_SCHEMA` | both | Database schema (default: captionacc_prod) |
 
 Note: `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are automatically available in edge functions.
 

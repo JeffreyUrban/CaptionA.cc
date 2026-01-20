@@ -122,7 +122,7 @@ Runtime: ~5 seconds (failed fast at database level, before Modal calls)
    -- Run this query to see all columns and constraints:
    SELECT column_name, data_type, is_nullable, column_default
    FROM information_schema.columns
-   WHERE table_name = 'videos' AND table_schema = 'captionacc_production'
+   WHERE table_name = 'videos' AND table_schema = 'captionacc_prod'
    ORDER BY ordinal_position;
    ```
 
@@ -202,7 +202,7 @@ ALLOW_E2E_ON_PRODUCTION=true uv run pytest tests/e2e/ -v -s
 - `app/services/supabase_service.py` - Fix AttributeError
 - `tests/e2e/test_crop_and_infer_flow.py` - Add video record creation
 - `tests/e2e/test_video_processing_flow.py` - Add missing video_path field
-- Database schema for `captionacc_production.videos` table
+- Database schema for `captionacc_prod.videos` table
 
 ---
 

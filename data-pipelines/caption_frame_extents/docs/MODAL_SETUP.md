@@ -67,7 +67,7 @@ modal secret create wasabi-credentials \
 modal secret create supabase-credentials \
   SUPABASE_URL=your_supabase_url \
   SUPABASE_SERVICE_ROLE_KEY=your_service_role_key \
-  SUPABASE_SCHEMA=captionacc_production
+  SUPABASE_SCHEMA=captionacc_prod
 ```
 
 **Verify secrets:**

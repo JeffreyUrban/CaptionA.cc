@@ -46,13 +46,13 @@ Update `.env` file:
 ```bash
 # Online Supabase
 SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_SCHEMA=captionacc_production
+SUPABASE_SCHEMA=captionacc_prod
 SUPABASE_ANON_KEY=your_anon_key_here
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here
 
 # Vite variables (web app)
 VITE_SUPABASE_URL=https://your-project.supabase.co
-VITE_SUPABASE_SCHEMA=captionacc_production
+VITE_SUPABASE_SCHEMA=captionacc_prod
 VITE_SUPABASE_ANON_KEY=your_anon_key_here
 VITE_SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here
 ```

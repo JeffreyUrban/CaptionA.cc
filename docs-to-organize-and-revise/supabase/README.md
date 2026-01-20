@@ -11,7 +11,7 @@
 ## Schema Organization
 
 CaptionA.cc uses four PostgreSQL schemas:
-- `captionacc_production` - Production data
+- `captionacc_prod` - Production data
 - `captionacc_staging` - Staging/test data
 - `prefect` - Prefect workflows (optional)
 - `umami` - Analytics (optional)

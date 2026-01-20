@@ -41,7 +41,7 @@ SELECT
   frame_count,
   estimated_cost_usd,
   LEFT(rejection_message, 100) as message_preview
-FROM captionacc_production.caption_frame_extents_inference_rejections
+FROM captionacc_prod.caption_frame_extents_inference_rejections
 WHERE NOT acknowledged
 ORDER BY created_at DESC
 LIMIT 20;
@@ -57,7 +57,7 @@ SELECT
   AVG(frame_count) as avg_frame_count,
   MAX(frame_count) as max_frame_count,
   AVG(estimated_cost_usd) as avg_cost
-FROM captionacc_production.caption_frame_extents_inference_rejections
+FROM captionacc_prod.caption_frame_extents_inference_rejections
 WHERE created_at > NOW() - INTERVAL '7 days'
 GROUP BY rejection_type
 ORDER BY count DESC;
@@ -72,7 +72,7 @@ SELECT
   COUNT(*) as rejections,
   COUNT(DISTINCT video_id) as unique_videos,
   ARRAY_AGG(DISTINCT rejection_type) as types
-FROM captionacc_production.caption_frame_extents_inference_rejections
+FROM captionacc_prod.caption_frame_extents_inference_rejections
 WHERE created_at > NOW() - INTERVAL '30 days'
 GROUP BY DATE(created_at)
 ORDER BY date DESC;
@@ -88,7 +88,7 @@ SELECT
   estimated_cost_usd,
   COUNT(*) as rejection_count,
   MAX(created_at) as last_rejection
-FROM captionacc_production.caption_frame_extents_inference_rejections
+FROM captionacc_prod.caption_frame_extents_inference_rejections
 WHERE rejection_type = 'frame_count_exceeded'
 GROUP BY video_id, frame_count, estimated_cost_usd
 ORDER BY frame_count DESC;
@@ -183,7 +183,7 @@ $$ LANGUAGE plpgsql;
 
 -- Trigger on insert
 CREATE TRIGGER rejection_alert
-  AFTER INSERT ON captionacc_production.caption_frame_extents_inference_rejections
+  AFTER INSERT ON captionacc_prod.caption_frame_extents_inference_rejections
   FOR EACH ROW
   EXECUTE FUNCTION notify_rejection();
 ```

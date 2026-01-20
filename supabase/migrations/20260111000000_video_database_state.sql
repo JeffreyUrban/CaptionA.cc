@@ -5,11 +5,11 @@
 -- TABLE
 -- ============================================================================
 
-CREATE TABLE captionacc_production.video_database_state (
+CREATE TABLE captionacc_prod.video_database_state (
   -- Composite primary key
-  video_id UUID NOT NULL REFERENCES captionacc_production.videos(id) ON DELETE CASCADE,
+  video_id UUID NOT NULL REFERENCES captionacc_prod.videos(id) ON DELETE CASCADE,
   database_name TEXT NOT NULL CHECK (database_name IN ('layout', 'captions')),
-  tenant_id UUID NOT NULL REFERENCES captionacc_production.tenants(id) ON DELETE CASCADE,
+  tenant_id UUID NOT NULL REFERENCES captionacc_prod.tenants(id) ON DELETE CASCADE,
 
   -- Versioning
   server_version BIGINT NOT NULL DEFAULT 0,      -- Increments on every change (authoritative)
@@ -40,40 +40,40 @@ CREATE TABLE captionacc_production.video_database_state (
 -- ============================================================================
 
 -- Find databases needing Wasabi upload (idle with unsaved changes)
-CREATE INDEX idx_vds_pending_upload ON captionacc_production.video_database_state(last_activity_at)
+CREATE INDEX idx_vds_pending_upload ON captionacc_prod.video_database_state(last_activity_at)
     WHERE server_version > wasabi_version;
 
 -- Find databases locked by a user
-CREATE INDEX idx_vds_lock_holder ON captionacc_production.video_database_state(lock_holder_user_id)
+CREATE INDEX idx_vds_lock_holder ON captionacc_prod.video_database_state(lock_holder_user_id)
     WHERE lock_holder_user_id IS NOT NULL;
 
 -- Tenant lookup for RLS
-CREATE INDEX idx_vds_tenant ON captionacc_production.video_database_state(tenant_id);
+CREATE INDEX idx_vds_tenant ON captionacc_prod.video_database_state(tenant_id);
 
 -- ============================================================================
 -- RLS
 -- ============================================================================
 
-ALTER TABLE captionacc_production.video_database_state ENABLE ROW LEVEL SECURITY;
+ALTER TABLE captionacc_prod.video_database_state ENABLE ROW LEVEL SECURITY;
 
 -- Users can view state for databases in their tenant
 CREATE POLICY "Users view own tenant database state"
-  ON captionacc_production.video_database_state FOR SELECT
-  USING (tenant_id = captionacc_production.current_user_tenant_id());
+  ON captionacc_prod.video_database_state FOR SELECT
+  USING (tenant_id = captionacc_prod.current_user_tenant_id());
 
 -- Service role can do anything (used by API backend)
 -- Note: API uses service_role key which bypasses RLS
 
 -- Platform admins can view all
 CREATE POLICY "Platform admins view all database state"
-  ON captionacc_production.video_database_state FOR SELECT
-  USING (captionacc_production.is_platform_admin());
+  ON captionacc_prod.video_database_state FOR SELECT
+  USING (captionacc_prod.is_platform_admin());
 
 -- ============================================================================
 -- TRIGGER: Update updated_at on change
 -- ============================================================================
 
-CREATE OR REPLACE FUNCTION captionacc_production.update_video_database_state_updated_at()
+CREATE OR REPLACE FUNCTION captionacc_prod.update_video_database_state_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
   NEW.updated_at = NOW();
@@ -82,9 +82,9 @@ END;
 $$ LANGUAGE plpgsql;
 
 CREATE TRIGGER video_database_state_updated_at
-  BEFORE UPDATE ON captionacc_production.video_database_state
+  BEFORE UPDATE ON captionacc_prod.video_database_state
   FOR EACH ROW
-  EXECUTE FUNCTION captionacc_production.update_video_database_state_updated_at();
+  EXECUTE FUNCTION captionacc_prod.update_video_database_state_updated_at();
 
 -- ============================================================================
 -- NOTIFY POSTGREST

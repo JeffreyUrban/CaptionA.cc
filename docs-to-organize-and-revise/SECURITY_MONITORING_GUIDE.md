@@ -67,7 +67,7 @@ SELECT
   target_tenant_id,
   error_message,
   created_at
-FROM captionacc_production.security_audit_log
+FROM captionacc_prod.security_audit_log
 WHERE severity = 'critical'
 ORDER BY created_at DESC
 LIMIT 50;
@@ -115,7 +115,7 @@ SELECT
   user_id,
   COUNT(*) as failure_count,
   MAX(created_at) as last_failure
-FROM captionacc_production.security_audit_log
+FROM captionacc_prod.security_audit_log
 WHERE event_type = 'auth_failure'
   AND created_at > NOW() - INTERVAL '7 days'
 GROUP BY user_id
@@ -137,7 +137,7 @@ SELECT
   resource_type,
   COUNT(*) as failure_count,
   COUNT(DISTINCT user_id) as unique_users
-FROM captionacc_production.security_audit_log
+FROM captionacc_prod.security_audit_log
 WHERE event_type = 'authz_failure'
   AND created_at > NOW() - INTERVAL '7 days'
 GROUP BY resource_type
@@ -159,7 +159,7 @@ SELECT
   event_type,
   severity,
   COUNT(*) as event_count
-FROM captionacc_production.security_audit_log
+FROM captionacc_prod.security_audit_log
 WHERE created_at > NOW() - INTERVAL '3 months'
 GROUP BY week, event_type, severity
 ORDER BY week DESC, event_count DESC;
@@ -285,7 +285,7 @@ LIMIT 10;
      up.role,
      up.approval_status
    FROM auth.users u
-   JOIN captionacc_production.user_profiles up ON up.id = u.id
+   JOIN captionacc_prod.user_profiles up ON up.id = u.id
    WHERE u.id = '<user_id_from_alert>';
    ```
 
@@ -294,7 +294,7 @@ LIMIT 10;
    ```sql
    -- All security events for this user
    SELECT *
-   FROM captionacc_production.security_audit_log
+   FROM captionacc_prod.security_audit_log
    WHERE user_id = '<user_id_from_alert>'
    ORDER BY created_at DESC
    LIMIT 100;
@@ -306,11 +306,11 @@ LIMIT 10;
 
    ```sql
    -- Did user successfully query videos table?
-   SELECT * FROM captionacc_production.videos
+   SELECT * FROM captionacc_prod.videos
    WHERE tenant_id = '<target_tenant_id>'
      AND id IN (
        SELECT resource_id::UUID
-       FROM captionacc_production.security_audit_log
+       FROM captionacc_prod.security_audit_log
        WHERE user_id = '<user_id_from_alert>'
          AND event_type = 'cross_tenant_attempt'
      );
@@ -321,7 +321,7 @@ LIMIT 10;
 
    **Option A - Suspend approval** (reversible):
    ```sql
-   UPDATE captionacc_production.user_profiles
+   UPDATE captionacc_prod.user_profiles
    SET approval_status = 'rejected'
    WHERE id = '<user_id_from_alert>';
    ```
@@ -335,7 +335,7 @@ LIMIT 10;
    **Option C - Delete account** (if clearly malicious):
    ```sql
    -- Soft delete all videos first
-   UPDATE captionacc_production.videos
+   UPDATE captionacc_prod.videos
    SET deleted_at = NOW()
    WHERE uploaded_by_user_id = '<user_id_from_alert>';
 
@@ -387,7 +387,7 @@ LIMIT 10;
      user_agent,
      error_message,
      COUNT(*) as attempts
-   FROM captionacc_production.security_audit_log
+   FROM captionacc_prod.security_audit_log
    WHERE event_type = 'auth_failure'
      AND created_at > NOW() - INTERVAL '1 hour'
    GROUP BY ip_address, user_agent, error_message
@@ -418,7 +418,7 @@ SELECT
   user_id,
   ARRAY_AGG(resource_id ORDER BY created_at) as accessed_ids,
   COUNT(*) as access_count
-FROM captionacc_production.security_audit_log
+FROM captionacc_prod.security_audit_log
 WHERE event_type IN ('authz_failure', 'cross_tenant_attempt')
   AND resource_type = 'video'
   AND created_at > NOW() - INTERVAL '1 hour'
@@ -436,7 +436,7 @@ SELECT
   ip_address,
   COUNT(DISTINCT user_id) as user_count,
   ARRAY_AGG(DISTINCT user_id) as user_ids
-FROM captionacc_production.security_audit_log
+FROM captionacc_prod.security_audit_log
 WHERE event_type = 'auth_success'
   AND created_at > NOW() - INTERVAL '1 hour'
 GROUP BY ip_address
@@ -452,7 +452,7 @@ HAVING COUNT(DISTINCT user_id) > 5;
 SELECT
   user_id,
   COUNT(*) as night_access_count
-FROM captionacc_production.security_audit_log
+FROM captionacc_prod.security_audit_log
 WHERE event_type = 'auth_success'
   AND EXTRACT(HOUR FROM created_at) BETWEEN 0 AND 6
   AND created_at > NOW() - INTERVAL '7 days'
@@ -511,7 +511,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 CREATE TRIGGER alert_critical_events
-AFTER INSERT ON captionacc_production.security_audit_log
+AFTER INSERT ON captionacc_prod.security_audit_log
 FOR EACH ROW
 WHEN (NEW.severity = 'critical')
 EXECUTE FUNCTION notify_critical_events();

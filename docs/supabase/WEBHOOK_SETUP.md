@@ -5,7 +5,7 @@ This guide shows how to configure the Supabase Database Webhook that triggers vi
 ## What This Webhook Does
 
 When a user uploads a video, the Edge Function creates a record in the `videos` table. This webhook:
-1. Detects the INSERT event on `captionacc_production.videos`
+1. Detects the INSERT event on `captionacc_prod.videos`
 2. Sends a POST request to `captionacc-api.fly.dev`
 3. Triggers the `captionacc-video-initial-processing` Prefect flow
 4. The flow extracts frames, runs OCR, and creates the initial layout database
@@ -52,7 +52,7 @@ Click **"Create a new hook"** and configure:
 | Field | Value |
 |-------|-------|
 | **Name** | `captionacc-video-insert` |
-| **Schema** | `captionacc_production` |
+| **Schema** | `captionacc_prod` |
 | **Table** | `videos` |
 | **Events** | `INSERT` (check only this box) |
 | **Type** | `HTTP Request` |

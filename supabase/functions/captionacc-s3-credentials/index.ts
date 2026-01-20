@@ -28,7 +28,7 @@ import { assumeRole, STSConfig } from "../_shared/sts.ts";
 // Environment variables
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
-const DB_SCHEMA = Deno.env.get("DB_SCHEMA") || "captionacc_production";
+const DB_SCHEMA = Deno.env.get("DB_SCHEMA") || "captionacc_prod";
 
 const WASABI_STS_ACCESS_KEY = Deno.env.get("WASABI_STS_ACCESS_KEY")!
 const WASABI_STS_SECRET_KEY = Deno.env.get("WASABI_STS_SECRET_KEY")!;

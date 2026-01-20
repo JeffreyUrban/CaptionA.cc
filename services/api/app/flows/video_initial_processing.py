@@ -41,7 +41,7 @@ def update_workflow_status_task(
     supabase = SupabaseServiceImpl(
         supabase_url=os.environ["SUPABASE_URL"],
         supabase_key=os.environ["SUPABASE_SERVICE_ROLE_KEY"],
-        schema=os.environ.get("SUPABASE_SCHEMA", "captionacc_production"),
+        schema=os.environ.get("SUPABASE_SCHEMA", "captionacc_prod"),
     )
 
     status_updates = []
@@ -291,7 +291,7 @@ def update_video_metadata_task(
     supabase = SupabaseServiceImpl(
         supabase_url=os.environ["SUPABASE_URL"],
         supabase_key=os.environ["SUPABASE_SERVICE_ROLE_KEY"],
-        schema=os.environ.get("SUPABASE_SCHEMA", "captionacc_production"),
+        schema=os.environ.get("SUPABASE_SCHEMA", "captionacc_prod"),
     )
 
     logger.info(

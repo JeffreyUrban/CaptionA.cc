@@ -594,7 +594,7 @@ SELECT
   frame_count,
   estimated_cost_usd,
   LEFT(rejection_message, 100) as message
-FROM captionacc_production.caption_frame_extents_inference_rejections
+FROM captionacc_prod.caption_frame_extents_inference_rejections
 WHERE NOT acknowledged
 ORDER BY created_at DESC;
 ```

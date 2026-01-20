@@ -209,7 +209,7 @@ curl ${SUPABASE_URL}/rest/v1/ \
 
 # Verify schema in secrets
 fly secrets list -a captionacc-web
-# Should have VITE_SUPABASE_SCHEMA=captionacc_production
+# Should have VITE_SUPABASE_SCHEMA=captionacc_prod
 ```
 
 **Wasabi Component Unhealthy**:

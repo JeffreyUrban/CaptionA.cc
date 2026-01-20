@@ -391,7 +391,7 @@ const subscription = supabase
   .channel('video-stats')
   .on('postgres_changes', {
     event: 'UPDATE',
-    schema: 'captionacc_production',
+    schema: 'captionacc_prod',
     table: 'videos',
     filter: `id=eq.${videoId}`
   }, payload => updateVideoStats(payload.new))

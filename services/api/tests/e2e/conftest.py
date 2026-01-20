@@ -7,7 +7,7 @@ in production-like environments.
 Environment Variables Required:
     - SUPABASE_URL: Supabase project URL
     - SUPABASE_SERVICE_ROLE_KEY: Service role key (sb_secret_...) for admin operations
-    - SUPABASE_SCHEMA: Database schema (default: captionacc_production)
+    - SUPABASE_SCHEMA: Database schema (default: captionacc_prod)
     - WASABI_ACCESS_KEY_READWRITE: Wasabi access key (or WASABI_ACCESS_KEY_ID)
     - WASABI_SECRET_KEY_READWRITE: Wasabi secret key (or WASABI_SECRET_ACCESS_KEY)
     - WASABI_BUCKET: S3 bucket name

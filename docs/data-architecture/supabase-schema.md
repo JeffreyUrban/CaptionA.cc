@@ -7,7 +7,7 @@ Supabase (PostgreSQL) serves as the metadata layer for CaptionA.cc, providing mu
 | Property | Value |
 |----------|-------|
 | Postgres Version | 17 |
-| Primary Schema | `captionacc_production` |
+| Primary Schema | `captionacc_prod` |
 | Staging Schema | `captionacc_staging` |
 | RLS | Enabled (production schema) |
 
@@ -15,7 +15,7 @@ Supabase (PostgreSQL) serves as the metadata layer for CaptionA.cc, providing mu
 
 ```bash
 SUPABASE_URL=https://your-project.supabase.co  # or http://localhost:54321
-SUPABASE_SCHEMA=captionacc_production          # or captionacc_staging
+SUPABASE_SCHEMA=captionacc_prod          # or captionacc_staging
 SUPABASE_ANON_KEY=<public_key>                 # RLS-enforced access
 SUPABASE_SERVICE_ROLE_KEY=<service_key>        # Bypasses RLS (backend only)
 
@@ -29,7 +29,7 @@ VITE_SUPABASE_SCHEMA=...
 
 | Schema | Purpose | RLS |
 |--------|---------|-----|
-| `captionacc_production` | Main production environment | Yes |
+| `captionacc_prod` | Main production environment | Yes |
 | `captionacc_staging` | Testing/review apps | No |
 | `prefect` | Prefect Server database | N/A |
 | `umami` | Analytics database | N/A |
@@ -418,7 +418,7 @@ import { createClient } from "@supabase/supabase-js";
 import type { Database } from "~/types/supabase";
 
 const supabase = createClient<Database>(url, anonKey, {
-  db: { schema: "captionacc_production" }
+  db: { schema: "captionacc_prod" }
 });
 
 // Uses RLS - automatically filtered by user's tenant

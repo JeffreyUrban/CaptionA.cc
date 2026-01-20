@@ -32,7 +32,7 @@ $ uv run pytest tests/e2e/ --collect-only
 ╚══════════════════════════════════════════════════════════════════════════════╝
 
 You are attempting to run E2E tests against a PRODUCTION environment:
-  Database Schema: captionacc_production
+  Database Schema: captionacc_prod
   Supabase URL:    https://stbnsczvywpwjzbpfehp.supabase.co
   Wasabi Bucket:   captionacc-prod
 
@@ -116,7 +116,7 @@ ALLOW_E2E_ON_PRODUCTION=true uv run pytest tests/e2e/ --collect-only -q
 |----------|--------|--------|
 | `SUPABASE_URL` | ✅ Set | .env |
 | `SUPABASE_SERVICE_ROLE_KEY` | ✅ Set | .env (sb_secret_*) |
-| `SUPABASE_SCHEMA` | ✅ Set | .env (captionacc_production) |
+| `SUPABASE_SCHEMA` | ✅ Set | .env (captionacc_prod) |
 | `WASABI_ACCESS_KEY_READWRITE` | ✅ Set | .env |
 | `WASABI_SECRET_KEY_READWRITE` | ✅ Set | .env |
 | `WASABI_BUCKET` | ✅ Set | .env (captionacc-prod) |

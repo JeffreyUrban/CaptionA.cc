@@ -21,7 +21,7 @@ modal secret create wasabi-credentials \
 modal secret create supabase-credentials \
   SUPABASE_URL=your_url \
   SUPABASE_SERVICE_ROLE_KEY=your_key \
-  SUPABASE_SCHEMA=captionacc_production
+  SUPABASE_SCHEMA=captionacc_prod
 
 # 3. Upload model checkpoint (131MB)
 python scripts/upload_model_to_modal.py \

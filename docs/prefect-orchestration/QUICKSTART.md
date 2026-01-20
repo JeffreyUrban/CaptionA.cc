@@ -141,7 +141,7 @@ Once testing is complete, configure the webhook in Supabase:
    - **Headers:** `Authorization: Bearer {your-webhook-secret}`
    - **Events:** INSERT
    - **Table:** videos
-   - **Schema:** captionacc_production
+   - **Schema:** captionacc_prod
 
 ## Troubleshooting
 
