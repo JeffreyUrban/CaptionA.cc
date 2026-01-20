@@ -121,7 +121,7 @@ async def caption_ocr(
         from app.config import get_settings
 
         settings = get_settings()
-        modal_app_name = f"extract-crop-frames-and-infer-extents-{settings.modal_app_suffix}"
+        modal_app_name = f"captionacc-extract-crop-frames-and-infer-extents-{settings.modal_app_suffix}"
         logger.info(f"Looking up Modal function: {modal_app_name}")
         ocr_fn = modal.Function.from_name(modal_app_name, "generate_caption_ocr")
 

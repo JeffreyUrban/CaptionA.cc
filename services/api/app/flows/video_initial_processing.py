@@ -77,7 +77,7 @@ def extract_full_frames_and_ocr_task(
     logger.info(f"Starting frame extraction for video {video_id} at {frame_rate} fps")
 
     # Look up the deployed Modal function
-    modal_app_name = f"extract-full-frames-and-ocr-{settings.modal_app_suffix}"
+    modal_app_name = f"captionacc-extract-full-frames-and-ocr-{settings.modal_app_suffix}"
     logger.info(f"Looking up Modal function: {modal_app_name}")
     extract_fn = modal.Function.from_name(modal_app_name, "extract_full_frames_and_ocr")
 

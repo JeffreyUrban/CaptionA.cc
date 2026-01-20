@@ -15,7 +15,7 @@ except ImportError:
 # Set modal_app_suffix environment variable during deployment
 if modal:
     app_suffix = os.environ.get("modal_app_suffix", "prod")
-    app = modal.App(f"extract-full-frames-and-ocr-{app_suffix}")
+    app = modal.App(f"captionacc-extract-full-frames-and-ocr-{app_suffix}")
 
     # Import image builder only (not implementation - that has heavy dependencies)
     from .modal_inference import get_full_frames_image
