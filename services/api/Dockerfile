@@ -43,6 +43,10 @@ COPY pyproject.toml ./
 # Install dependencies
 RUN uv pip install --system -e .
 
+# Copy local ocr_box_model package source (copied during pre-deploy)
+COPY ocr_box_model_src ./ocr_box_model
+RUN echo "import sys; sys.path.insert(0, '/app')" > /usr/local/lib/python3.12/site-packages/ocr_box_model.pth
+
 # Copy application code
 COPY app ./app
 COPY scripts ./scripts

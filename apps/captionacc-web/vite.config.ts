@@ -26,8 +26,9 @@ export default defineConfig(({ mode }) => {
         allow: [path.resolve(__dirname, '../..')],
       },
       proxy: {
-        // Proxy /api requests to the FastAPI backend
-        '/api': {
+        // Proxy API requests to the FastAPI backend
+        // Only proxy paths with /actions/, /database/, or /sync/ segments (not the /videos page itself)
+        '^/videos/[^/]+/(actions|database|sync)': {
           target: env['API_URL'] || 'http://localhost:8000',
           changeOrigin: true,
         },

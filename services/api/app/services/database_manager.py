@@ -395,14 +395,6 @@ class LayoutDatabaseManager(DatabaseManager):
                     );
                     CREATE INDEX IF NOT EXISTS idx_box_labels_frame ON full_frame_box_labels(frame_index);
 
-                    -- Box classification model storage
-                    CREATE TABLE IF NOT EXISTS box_classification_model (
-                        id INTEGER PRIMARY KEY CHECK (id = 1),
-                        model_data BLOB,
-                        model_version TEXT,
-                        trained_at TEXT
-                    );
-
                     -- Video preferences
                     CREATE TABLE IF NOT EXISTS video_preferences (
                         id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -479,9 +471,148 @@ class OcrDatabaseManager(DatabaseManager):
         await asyncio.to_thread(_create)
 
 
+class LayoutServerDatabaseManager(DatabaseManager):
+    """Manages layout-server.db SQLite databases stored in Wasabi S3 (server-only).
+
+    This database contains ML model data and analysis parameters that are never
+    exposed to clients. It's stored in the server/ path in Wasabi.
+    """
+
+    def _s3_key(
+        self, tenant_id: str, video_id: str, db_name: str = "layout-server.db.gz"
+    ) -> str:
+        """Generate S3 key for a layout-server database file in server/ path."""
+        return f"{tenant_id}/server/videos/{video_id}/{db_name}"
+
+    def _cache_path(
+        self, tenant_id: str, video_id: str, db_name: str = "layout-server.db"
+    ) -> Path:
+        """Generate local cache path for a layout-server database file."""
+        key = f"{tenant_id}/{video_id}/{db_name}"
+        hashed = hashlib.md5(key.encode()).hexdigest()[:16]
+        return self._cache_dir / f"{hashed}_{db_name}"
+
+    async def _create_new_database(self, cache_path: Path) -> None:
+        """Create a new layout-server database with schema."""
+
+        def _create():
+            conn = sqlite3.connect(str(cache_path))
+            try:
+                conn.executescript(
+                    """
+                    -- Database metadata for schema versioning
+                    CREATE TABLE IF NOT EXISTS database_metadata (
+                        id INTEGER PRIMARY KEY CHECK (id = 1),
+                        schema_version INTEGER NOT NULL DEFAULT 1,
+                        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                        migrated_at TEXT
+                    );
+                    INSERT OR IGNORE INTO database_metadata (id, schema_version) VALUES (1, 1);
+
+                    -- Box classification model storage (Naive Bayes parameters)
+                    CREATE TABLE IF NOT EXISTS box_classification_model (
+                        id INTEGER PRIMARY KEY CHECK (id = 1),
+                        model_version TEXT,
+                        trained_at TEXT,
+                        n_training_samples INTEGER,
+                        prior_in REAL,
+                        prior_out REAL,
+                        -- Feature 1-7: spatial features (in class)
+                        in_vertical_alignment_mean REAL, in_vertical_alignment_std REAL,
+                        in_height_similarity_mean REAL, in_height_similarity_std REAL,
+                        in_anchor_distance_mean REAL, in_anchor_distance_std REAL,
+                        in_crop_overlap_mean REAL, in_crop_overlap_std REAL,
+                        in_aspect_ratio_mean REAL, in_aspect_ratio_std REAL,
+                        in_normalized_y_mean REAL, in_normalized_y_std REAL,
+                        in_normalized_area_mean REAL, in_normalized_area_std REAL,
+                        -- Feature 8-9: user annotation features (in class)
+                        in_user_annotated_in_mean REAL, in_user_annotated_in_std REAL,
+                        in_user_annotated_out_mean REAL, in_user_annotated_out_std REAL,
+                        -- Feature 10-13: edge positions (in class)
+                        in_normalized_left_mean REAL, in_normalized_left_std REAL,
+                        in_normalized_top_mean REAL, in_normalized_top_std REAL,
+                        in_normalized_right_mean REAL, in_normalized_right_std REAL,
+                        in_normalized_bottom_mean REAL, in_normalized_bottom_std REAL,
+                        -- Feature 14-24: character sets (in class)
+                        in_is_roman_mean REAL, in_is_roman_std REAL,
+                        in_is_hanzi_mean REAL, in_is_hanzi_std REAL,
+                        in_is_arabic_mean REAL, in_is_arabic_std REAL,
+                        in_is_korean_mean REAL, in_is_korean_std REAL,
+                        in_is_hiragana_mean REAL, in_is_hiragana_std REAL,
+                        in_is_katakana_mean REAL, in_is_katakana_std REAL,
+                        in_is_cyrillic_mean REAL, in_is_cyrillic_std REAL,
+                        in_is_devanagari_mean REAL, in_is_devanagari_std REAL,
+                        in_is_thai_mean REAL, in_is_thai_std REAL,
+                        in_is_digits_mean REAL, in_is_digits_std REAL,
+                        in_is_punctuation_mean REAL, in_is_punctuation_std REAL,
+                        -- Feature 25-26: temporal features (in class)
+                        in_time_from_start_mean REAL, in_time_from_start_std REAL,
+                        in_time_from_end_mean REAL, in_time_from_end_std REAL,
+                        -- Feature 1-7: spatial features (out class)
+                        out_vertical_alignment_mean REAL, out_vertical_alignment_std REAL,
+                        out_height_similarity_mean REAL, out_height_similarity_std REAL,
+                        out_anchor_distance_mean REAL, out_anchor_distance_std REAL,
+                        out_crop_overlap_mean REAL, out_crop_overlap_std REAL,
+                        out_aspect_ratio_mean REAL, out_aspect_ratio_std REAL,
+                        out_normalized_y_mean REAL, out_normalized_y_std REAL,
+                        out_normalized_area_mean REAL, out_normalized_area_std REAL,
+                        -- Feature 8-9: user annotation features (out class)
+                        out_user_annotated_in_mean REAL, out_user_annotated_in_std REAL,
+                        out_user_annotated_out_mean REAL, out_user_annotated_out_std REAL,
+                        -- Feature 10-13: edge positions (out class)
+                        out_normalized_left_mean REAL, out_normalized_left_std REAL,
+                        out_normalized_top_mean REAL, out_normalized_top_std REAL,
+                        out_normalized_right_mean REAL, out_normalized_right_std REAL,
+                        out_normalized_bottom_mean REAL, out_normalized_bottom_std REAL,
+                        -- Feature 14-24: character sets (out class)
+                        out_is_roman_mean REAL, out_is_roman_std REAL,
+                        out_is_hanzi_mean REAL, out_is_hanzi_std REAL,
+                        out_is_arabic_mean REAL, out_is_arabic_std REAL,
+                        out_is_korean_mean REAL, out_is_korean_std REAL,
+                        out_is_hiragana_mean REAL, out_is_hiragana_std REAL,
+                        out_is_katakana_mean REAL, out_is_katakana_std REAL,
+                        out_is_cyrillic_mean REAL, out_is_cyrillic_std REAL,
+                        out_is_devanagari_mean REAL, out_is_devanagari_std REAL,
+                        out_is_thai_mean REAL, out_is_thai_std REAL,
+                        out_is_digits_mean REAL, out_is_digits_std REAL,
+                        out_is_punctuation_mean REAL, out_is_punctuation_std REAL,
+                        -- Feature 25-26: temporal features (out class)
+                        out_time_from_start_mean REAL, out_time_from_start_std REAL,
+                        out_time_from_end_mean REAL, out_time_from_end_std REAL,
+                        -- Streaming prediction metadata
+                        feature_importance TEXT,
+                        covariance_matrix TEXT,
+                        covariance_inverse TEXT
+                    );
+
+                    -- Analysis results computed by ML pipeline
+                    CREATE TABLE IF NOT EXISTS analysis_results (
+                        id INTEGER PRIMARY KEY CHECK (id = 1),
+                        vertical_position INTEGER,
+                        vertical_std REAL,
+                        box_height INTEGER,
+                        box_height_std REAL,
+                        top_edge_std REAL,
+                        bottom_edge_std REAL,
+                        horizontal_std_slope REAL,
+                        horizontal_std_intercept REAL,
+                        analysis_model_version TEXT,
+                        ocr_visualization_image BLOB,
+                        computed_at TEXT
+                    );
+                    """
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
+        await asyncio.to_thread(_create)
+
+
 # Singleton instances
 _database_manager: DatabaseManager | None = None
 _layout_database_manager: LayoutDatabaseManager | None = None
+_layout_server_database_manager: LayoutServerDatabaseManager | None = None
 _ocr_database_manager: OcrDatabaseManager | None = None
 
 
@@ -499,6 +630,14 @@ def get_layout_database_manager() -> LayoutDatabaseManager:
     if _layout_database_manager is None:
         _layout_database_manager = LayoutDatabaseManager()
     return _layout_database_manager
+
+
+def get_layout_server_database_manager() -> LayoutServerDatabaseManager:
+    """Get the singleton LayoutServerDatabaseManager instance for layout-server.db."""
+    global _layout_server_database_manager
+    if _layout_server_database_manager is None:
+        _layout_server_database_manager = LayoutServerDatabaseManager()
+    return _layout_server_database_manager
 
 
 def get_ocr_database_manager() -> OcrDatabaseManager:

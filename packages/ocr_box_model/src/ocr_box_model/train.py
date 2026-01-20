@@ -12,7 +12,7 @@ from ocr_box_model.config import MIN_ANNOTATIONS_FOR_RETRAIN, MIN_STD, NUM_FEATU
 from ocr_box_model.db import (
     get_video_duration,
     load_layout_config,
-    run_all_migrations,
+    run_model_migrations,
     save_model,
 )
 from ocr_box_model.features import extract_features
@@ -257,7 +257,8 @@ def calculate_gaussian_params(
 
 
 def train_model(
-    conn: sqlite3.Connection,
+    layout_conn: sqlite3.Connection,
+    model_conn: sqlite3.Connection,
     layout: VideoLayoutConfig | None = None,
 ) -> int | None:
     """Train Bayesian model using user annotations.
@@ -266,23 +267,24 @@ def train_model(
     parameters, and stores in database.
 
     Args:
-        conn: SQLite database connection
+        layout_conn: SQLite connection to layout.db (annotations, OCR data)
+        model_conn: SQLite connection to layout-server.db (model storage)
         layout: Video layout configuration (loaded from DB if not provided)
 
     Returns:
         Number of training samples used, or None if insufficient data
     """
-    run_all_migrations(conn)
+    run_model_migrations(model_conn)
 
     # Load layout if not provided
     if layout is None:
-        layout = load_layout_config(conn)
+        layout = load_layout_config(layout_conn)
         if layout is None:
             logger.error("No layout configuration found")
             return None
 
     # Fetch annotations
-    annotations = fetch_user_annotations(conn)
+    annotations = fetch_user_annotations(layout_conn)
 
     if len(annotations) < MIN_ANNOTATIONS_FOR_RETRAIN:
         logger.info(
@@ -291,7 +293,7 @@ def train_model(
         )
 
         # Check if we need to reset to seed model
-        cursor = conn.cursor()
+        cursor = model_conn.cursor()
         result = cursor.execute(
             "SELECT n_training_samples FROM box_classification_model WHERE id = 1"
         ).fetchone()
@@ -299,18 +301,18 @@ def train_model(
         if result and result[0] >= MIN_ANNOTATIONS_FOR_RETRAIN:
             logger.info("Resetting to seed model (annotations cleared)")
             cursor.execute("DELETE FROM box_classification_model WHERE id = 1")
-            conn.commit()
+            model_conn.commit()
 
         return None
 
     logger.info(f"Training with {len(annotations)} user annotations")
 
     # Get video duration
-    duration_seconds = get_video_duration(conn)
+    duration_seconds = get_video_duration(layout_conn)
 
     # Extract features
     in_features, out_features = extract_all_features(
-        conn, annotations, layout, duration_seconds
+        layout_conn, annotations, layout, duration_seconds
     )
 
     # Need at least 2 samples per class
@@ -376,7 +378,7 @@ def train_model(
     )
 
     # Save model
-    save_model(conn, model)
+    save_model(model_conn, model)
 
     logger.info(f"Model trained: {len(in_features)} 'in', {len(out_features)} 'out'")
     return total
@@ -388,9 +390,9 @@ def initialize_seed_model(conn: sqlite3.Connection) -> None:
     Provides reasonable starting predictions before user annotations.
 
     Args:
-        conn: SQLite database connection
+        conn: SQLite database connection (layout-server.db)
     """
-    run_all_migrations(conn)
+    run_model_migrations(conn)
 
     # Check if model exists
     cursor = conn.cursor()
@@ -418,27 +420,27 @@ def initialize_seed_model(conn: sqlite3.Connection) -> None:
 
 
 def get_training_samples(
-    conn: sqlite3.Connection,
+    layout_conn: sqlite3.Connection,
 ) -> tuple[ClassSamples, ClassSamples] | None:
     """Get training samples for streaming update calculations.
 
     Args:
-        conn: SQLite database connection
+        layout_conn: SQLite connection to layout.db (annotations, OCR data)
 
     Returns:
         Tuple of (in_samples, out_samples) or None if insufficient data
     """
-    layout = load_layout_config(conn)
+    layout = load_layout_config(layout_conn)
     if layout is None:
         return None
 
-    annotations = fetch_user_annotations(conn)
+    annotations = fetch_user_annotations(layout_conn)
     if len(annotations) < MIN_ANNOTATIONS_FOR_RETRAIN:
         return None
 
-    duration_seconds = get_video_duration(conn)
+    duration_seconds = get_video_duration(layout_conn)
     in_features, out_features = extract_all_features(
-        conn, annotations, layout, duration_seconds
+        layout_conn, annotations, layout, duration_seconds
     )
 
     if len(in_features) < 2 or len(out_features) < 2:

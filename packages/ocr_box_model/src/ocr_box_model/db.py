@@ -33,11 +33,54 @@ def is_readonly_error(error: Exception) -> bool:
 def migrate_model_schema(conn: sqlite3.Connection) -> None:
     """Migrate box_classification_model schema to 26-feature model if needed.
 
-    Adds columns for features 8-26 if they don't exist.
+    Adds all required columns if they don't exist.
     """
     cursor = conn.cursor()
 
-    # Check if 26-feature schema exists
+    # TODO: Remove this migration block once all layout-server.db files in Wasabi
+    # have been recreated with the full schema from database_manager.py.
+    # This is a temporary fix for databases created before Jan 2026 that are
+    # missing base columns and spatial feature columns.
+    base_columns = [
+        ("n_training_samples", "INTEGER"),
+        ("prior_in", "REAL"),
+        ("prior_out", "REAL"),
+    ]
+    for col_name, col_type in base_columns:
+        try:
+            cursor.execute(f"SELECT {col_name} FROM box_classification_model WHERE id = 1")
+        except sqlite3.OperationalError:
+            try:
+                cursor.execute(
+                    f"ALTER TABLE box_classification_model ADD COLUMN {col_name} {col_type}"
+                )
+            except sqlite3.OperationalError:
+                pass  # Column might already exist
+
+    spatial_features = [
+        "vertical_alignment",
+        "height_similarity",
+        "anchor_distance",
+        "crop_overlap",
+        "aspect_ratio",
+        "normalized_y",
+        "normalized_area",
+    ]
+    for feature in spatial_features:
+        for prefix in ["in_", "out_"]:
+            for suffix in ["_mean", "_std"]:
+                col = f"{prefix}{feature}{suffix}"
+                try:
+                    cursor.execute(
+                        f"ALTER TABLE box_classification_model ADD COLUMN {col} REAL"
+                    )
+                except sqlite3.OperationalError:
+                    pass  # Column already exists
+
+    conn.commit()
+    # END TODO
+
+    # Check if 26-feature schema exists (edge positions)
     try:
         cursor.execute(
             "SELECT in_normalized_left_mean FROM box_classification_model WHERE id = 1"
@@ -245,8 +288,20 @@ def migrate_full_frame_ocr_schema(conn: sqlite3.Connection) -> None:
         raise
 
 
+def run_model_migrations(conn: sqlite3.Connection) -> None:
+    """Run schema migrations for layout-server.db (model database)."""
+    migrate_model_schema(conn)
+    migrate_streaming_prediction_schema(conn)
+
+
+def run_layout_migrations(conn: sqlite3.Connection) -> None:
+    """Run schema migrations for layout.db (client-facing database)."""
+    migrate_video_preferences_schema(conn)
+    migrate_full_frame_ocr_schema(conn)
+
+
 def run_all_migrations(conn: sqlite3.Connection) -> None:
-    """Run all schema migrations."""
+    """Run all schema migrations. DEPRECATED: Use run_model_migrations or run_layout_migrations."""
     migrate_model_schema(conn)
     migrate_streaming_prediction_schema(conn)
     migrate_video_preferences_schema(conn)
@@ -264,12 +319,12 @@ def load_model(conn: sqlite3.Connection) -> ModelParams | None:
     Accepts both seed model (n_training_samples=0) and trained models (>=10).
 
     Args:
-        conn: SQLite database connection
+        conn: SQLite database connection (layout-server.db)
 
     Returns:
         ModelParams or None if no valid model exists
     """
-    run_all_migrations(conn)
+    run_model_migrations(conn)
 
     cursor = conn.cursor()
     row = cursor.execute(
@@ -396,10 +451,10 @@ def save_model(conn: sqlite3.Connection, model: ModelParams) -> None:
     """Save model parameters to database.
 
     Args:
-        conn: SQLite database connection
+        conn: SQLite database connection (layout-server.db)
         model: Model parameters to save
     """
-    run_all_migrations(conn)
+    run_model_migrations(conn)
 
     # Build the INSERT/REPLACE statement
     in_flat = []

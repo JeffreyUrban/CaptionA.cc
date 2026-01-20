@@ -329,6 +329,7 @@ def extract_frames_and_ocr_impl(
 
             # Create layout_config table
             # DEFAULT values required for CR-SQLite compatibility (v0.16.1+)
+            # Schema must match client expectations in database-queries.ts
             layout_conn.execute(
                 """
                 CREATE TABLE layout_config (
@@ -339,9 +340,21 @@ def extract_frames_and_ocr_impl(
                     crop_top REAL NOT NULL DEFAULT 0,
                     crop_right REAL NOT NULL DEFAULT 1,
                     crop_bottom REAL NOT NULL DEFAULT 1,
+                    selection_left REAL DEFAULT NULL,
+                    selection_top REAL DEFAULT NULL,
+                    selection_right REAL DEFAULT NULL,
+                    selection_bottom REAL DEFAULT NULL,
+                    vertical_center REAL DEFAULT NULL,
+                    vertical_std REAL DEFAULT NULL,
+                    box_height INTEGER DEFAULT NULL,
+                    box_height_std REAL DEFAULT NULL,
                     anchor_type TEXT DEFAULT NULL,
                     anchor_position REAL DEFAULT NULL,
-                    vertical_center REAL DEFAULT NULL,
+                    top_edge_std REAL DEFAULT NULL,
+                    bottom_edge_std REAL DEFAULT NULL,
+                    horizontal_std_slope REAL DEFAULT NULL,
+                    horizontal_std_intercept REAL DEFAULT NULL,
+                    crop_region_version INTEGER NOT NULL DEFAULT 0,
                     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
                 )
                 """

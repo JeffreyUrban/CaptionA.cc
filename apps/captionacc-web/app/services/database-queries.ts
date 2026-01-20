@@ -62,7 +62,7 @@ export interface LayoutAnalysisParametersRow {
   selection_top: number | null
   selection_right: number | null
   selection_bottom: number | null
-  vertical_position: number | null
+  vertical_center: number | null
   vertical_std: number | null
   box_height: number | null
   box_height_std: number | null
@@ -343,7 +343,7 @@ export async function getLayoutConfig(db: CRSQLiteDatabase): Promise<LayoutConfi
     selectionTop: row.selection_top,
     selectionRight: row.selection_right,
     selectionBottom: row.selection_bottom,
-    verticalPosition: row.vertical_position,
+    verticalPosition: row.vertical_center,
     verticalStd: row.vertical_std,
     boxHeight: row.box_height,
     boxHeightStd: row.box_height_std,
@@ -641,7 +641,7 @@ export async function updateLayoutParams(
 ): Promise<number> {
   return db.exec(
     `UPDATE layout_config
-     SET vertical_position = ?,
+     SET vertical_center = ?,
          vertical_std = ?,
          box_height = ?,
          box_height_std = ?,

@@ -53,30 +53,6 @@ export const supabase = createClient<ProductionDatabase>(supabaseUrl, supabaseAn
 })
 
 /**
- * Create a Supabase client for server-side operations
- * Uses the service role key which bypasses RLS (use carefully)
- * Only available on the server
- * Both local and remote use captionacc_production schema
- */
-export function createServerSupabaseClient() {
-  if (typeof window !== 'undefined') {
-    throw new Error('Server-side Supabase client should not be used in the browser')
-  }
-
-  const serviceRoleKey = import.meta.env['VITE_SUPABASE_SERVICE_ROLE_KEY']!
-
-  return createClient<ProductionDatabase>(supabaseUrl, serviceRoleKey, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-    },
-    db: {
-      schema: supabaseSchema, // Set PostgreSQL schema (same as client)
-    },
-  })
-}
-
-/**
  * Get the current authenticated user
  */
 export async function getCurrentUser() {

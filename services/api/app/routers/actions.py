@@ -26,6 +26,7 @@ from app.repositories.layout import LayoutRepository
 from app.repositories.ocr import OcrRepository
 from app.services.database_manager import (
     get_layout_database_manager,
+    get_layout_server_database_manager,
     get_ocr_database_manager,
 )
 from app.services.priority_service import calculate_flow_priority, get_priority_tags
@@ -240,9 +241,8 @@ async def calculate_predictions(video_id: str, auth: Auth):
     """
     Calculate predictions for all boxes using Bayesian model.
 
-    Initializes seed model if none exists, then runs predictions for all
-    boxes in full_frame_ocr and stores results (predicted_label, predicted_confidence).
-    This should be called before layout annotation is available to the user.
+    Uses layout.db for boxes/layout config and layout-server.db for model data.
+    Initializes seed model if none exists, then runs predictions for all boxes.
     """
     import time
     from datetime import datetime, timezone
@@ -252,133 +252,138 @@ async def calculate_predictions(video_id: str, auth: Auth):
         load_layout_config,
         load_model,
         predict_with_heuristics,
-        run_all_migrations,
+        run_model_migrations,
     )
     from ocr_box_model.types import BoxBounds
 
     start_time = time.time()
     layout_db_manager = get_layout_database_manager()
+    layout_server_db_manager = get_layout_server_database_manager()
 
     try:
+        # Open both databases - layout.db for boxes, layout-server.db for model
         async with layout_db_manager.get_database(
             auth.tenant_id, video_id, writable=True
-        ) as conn:
-            # Run migrations to ensure schema is up to date
-            run_all_migrations(conn)
+        ) as layout_conn:
+            async with layout_server_db_manager.get_or_create_database(
+                auth.tenant_id, video_id
+            ) as model_conn:
+                # Run model migrations on layout-server.db
+                run_model_migrations(model_conn)
 
-            # Initialize seed model if none exists
-            initialize_seed_model(conn)
+                # Initialize seed model if none exists (on layout-server.db)
+                initialize_seed_model(model_conn)
 
-            # Load layout config
-            layout = load_layout_config(conn)
-            if not layout:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Layout config not found for video {video_id}",
-                )
-
-            # Load model (seed or trained)
-            model = load_model(conn)
-            model_version = model.model_version if model else "heuristics"
-
-            # Get all boxes from boxes table
-            cursor = conn.cursor()
-            rows = cursor.execute(
-                """
-                SELECT frame_index, box_index, text, bbox_left, bbox_top, bbox_right, bbox_bottom
-                FROM boxes
-                ORDER BY frame_index, box_index
-                """
-            ).fetchall()
-
-            if not rows:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="No OCR boxes found in database",
-                )
-
-            logger.info(
-                f"Calculating predictions for {len(rows)} boxes in video {video_id}"
-            )
-
-            # Prepare predictions
-            predictions_to_save: list[tuple[str, float, str, str, int, int]] = []
-            now = datetime.now(timezone.utc).isoformat()
-
-            for row in rows:
-                frame_index, box_index, text, bbox_left, bbox_top, bbox_right, bbox_bottom = row
-
-                # Convert fractional coordinates to pixels
-                # boxes table stores normalized coords (0-1) with top > bottom (top of screen is higher y)
-                left = int(bbox_left * layout.frame_width)
-                top = int((1 - bbox_top) * layout.frame_height)
-                right = int(bbox_right * layout.frame_width)
-                bottom = int((1 - bbox_bottom) * layout.frame_height)
-
-                # Create BoxBounds for prediction
-                box_bounds = BoxBounds(
-                    left=left,
-                    top=top,
-                    right=right,
-                    bottom=bottom,
-                    frame_index=frame_index,
-                    box_index=box_index,
-                    text=text or "",
-                )
-
-                # Use heuristics for initial predictions (no user annotations yet)
-                prediction = predict_with_heuristics(box_bounds, layout)
-
-                predictions_to_save.append(
-                    (
-                        prediction.label,
-                        prediction.confidence,
-                        model_version,
-                        now,
-                        frame_index,
-                        box_index,
+                # Load layout config from layout.db
+                layout = load_layout_config(layout_conn)
+                if not layout:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail=f"Layout config not found for video {video_id}",
                     )
+
+                # Load model from layout-server.db
+                model = load_model(model_conn)
+                model_version = model.model_version if model else "heuristics"
+
+                # Get all boxes from boxes table (layout.db)
+                cursor = layout_conn.cursor()
+                rows = cursor.execute(
+                    """
+                    SELECT frame_index, box_index, text, bbox_left, bbox_top, bbox_right, bbox_bottom
+                    FROM boxes
+                    ORDER BY frame_index, box_index
+                    """
+                ).fetchall()
+
+                if not rows:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="No OCR boxes found in database",
+                    )
+
+                logger.info(
+                    f"Calculating predictions for {len(rows)} boxes in video {video_id}"
                 )
 
-            # Batch update predictions in boxes table
-            cursor.executemany(
-                """
-                UPDATE boxes
-                SET predicted_label = ?,
-                    predicted_confidence = ?
-                WHERE frame_index = ? AND box_index = ?
-                """,
-                [
-                    (label, conf, frame_idx, box_idx)
+                # Prepare predictions
+                predictions_to_save: list[tuple[str, float, str, str, int, int]] = []
+                now = datetime.now(timezone.utc).isoformat()
+
+                for row in rows:
+                    frame_index, box_index, text, bbox_left, bbox_top, bbox_right, bbox_bottom = row
+
+                    # Convert fractional coordinates to pixels
+                    # boxes table stores normalized coords (0-1) with top > bottom (top of screen is higher y)
+                    left = int(bbox_left * layout.frame_width)
+                    top = int((1 - bbox_top) * layout.frame_height)
+                    right = int(bbox_right * layout.frame_width)
+                    bottom = int((1 - bbox_bottom) * layout.frame_height)
+
+                    # Create BoxBounds for prediction
+                    box_bounds = BoxBounds(
+                        left=left,
+                        top=top,
+                        right=right,
+                        bottom=bottom,
+                        frame_index=frame_index,
+                        box_index=box_index,
+                        text=text or "",
+                    )
+
+                    # Use heuristics for initial predictions (no user annotations yet)
+                    prediction = predict_with_heuristics(box_bounds, layout)
+
+                    predictions_to_save.append(
+                        (
+                            prediction.label,
+                            prediction.confidence,
+                            model_version,
+                            now,
+                            frame_index,
+                            box_index,
+                        )
+                    )
+
+                # Batch update predictions in boxes table (layout.db)
+                cursor.executemany(
+                    """
+                    UPDATE boxes
+                    SET predicted_label = ?,
+                        predicted_confidence = ?
+                    WHERE frame_index = ? AND box_index = ?
+                    """,
+                    [
+                        (label, conf, frame_idx, box_idx)
+                        for label, conf, _model, _time, frame_idx, box_idx in predictions_to_save
+                    ],
+                )
+                layout_conn.commit()
+
+                elapsed_ms = int((time.time() - start_time) * 1000)
+
+                logger.info(
+                    f"Calculated {len(predictions_to_save)} predictions for video {video_id} "
+                    f"in {elapsed_ms}ms using {model_version}"
+                )
+
+                # Convert predictions to response format
+                prediction_results = [
+                    BoxPrediction(
+                        frameIndex=frame_idx,
+                        boxIndex=box_idx,
+                        predictedLabel=label,
+                        predictedConfidence=conf,
+                    )
                     for label, conf, _model, _time, frame_idx, box_idx in predictions_to_save
-                ],
-            )
-            conn.commit()
+                ]
 
-            elapsed_ms = int((time.time() - start_time) * 1000)
-
-            logger.info(
-                f"Calculated {len(predictions_to_save)} predictions for video {video_id} "
-                f"in {elapsed_ms}ms using {model_version}"
-            )
-
-            # Convert predictions to response format
-            prediction_results = [
-                BoxPrediction(
-                    frameIndex=frame_idx,
-                    boxIndex=box_idx,
-                    predictedLabel=label,
-                    predictedConfidence=conf,
+                return CalculatePredictionsResponse(
+                    success=True,
+                    predictionsGenerated=len(predictions_to_save),
+                    modelVersion=model_version,
+                    predictions=prediction_results,
                 )
-                for label, conf, _model, _time, frame_idx, box_idx in predictions_to_save
-            ]
-
-            return CalculatePredictionsResponse(
-                success=True,
-                predictionsGenerated=len(predictions_to_save),
-                modelVersion=model_version,
-                predictions=prediction_results,
-            )
 
     except FileNotFoundError:
         raise HTTPException(

@@ -4,6 +4,7 @@ Handles lock acquisition, version tracking, and state management
 for the CR-SQLite sync protocol.
 """
 
+import logging
 from datetime import datetime, timezone
 from functools import lru_cache
 from typing import Any
@@ -11,6 +12,8 @@ from typing import Any
 from supabase import Client, create_client
 
 from app.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 # Type alias for database state records
 StateDict = dict[str, Any]
@@ -20,6 +23,7 @@ StateDict = dict[str, Any]
 def get_supabase_client() -> Client:
     """Get cached Supabase client for API service."""
     settings = get_settings()
+    logger.info(f"Creating Supabase client: url={settings.supabase_url}, key={settings.supabase_service_role_key[:20]}...")
     return create_client(
         settings.supabase_url,
         settings.supabase_service_role_key,
@@ -73,15 +77,24 @@ class DatabaseStateRepository:
         Returns:
             State dict or None if not found
         """
-        response = (
-            self._table()
-            .select("*")
-            .eq("video_id", video_id)
-            .eq("database_name", db_name)
-            .maybe_single()
-            .execute()
-        )
-        return self._extract_single(response)
+        logger.info(f"get_state: video_id={video_id}, db_name={db_name}, schema={self._schema}")
+        try:
+            response = (
+                self._table()
+                .select("*")
+                .eq("video_id", video_id)
+                .eq("database_name", db_name)
+                .limit(1)
+                .execute()
+            )
+            logger.info(f"get_state response: {response}")
+            # Extract first item from list, or None if empty
+            if response.data and len(response.data) > 0:
+                return response.data[0]
+            return None
+        except Exception as e:
+            logger.error(f"get_state error: {e}")
+            raise
 
     async def create_state(
         self,

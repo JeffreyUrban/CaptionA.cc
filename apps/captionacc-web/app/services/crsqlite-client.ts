@@ -494,7 +494,7 @@ export class CRSQLiteDatabase {
    *
    * @param sql SQL statement
    * @param params Optional parameters
-   * @returns Number of rows affected (always 0 for now, crsqlite-wasm doesn't expose this)
+   * @returns Number of rows affected
    * @throws DatabaseError if execution fails
    */
   async exec(sql: string, params?: unknown[]): Promise<number> {
@@ -502,7 +502,9 @@ export class CRSQLiteDatabase {
 
     try {
       await this.db!.exec(sql, params)
-      return 0 // crsqlite-wasm doesn't expose rows affected
+      // Query changes() to get actual rows affected
+      const result = await this.db!.execA('SELECT changes()')
+      return (result[0]?.[0] as number) ?? 0
     } catch (error) {
       const dbError = queryError(sql, error)
       logDatabaseError(dbError)

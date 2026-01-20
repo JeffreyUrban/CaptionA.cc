@@ -7,8 +7,8 @@ Main Functions:
     extract_features: Extract 26 features from a box
     predict_box_label: Predict label using Bayesian model or heuristics
     predict_bayesian: Predict using trained model
-    train_model: Train model from user annotations
-    initialize_seed_model: Initialize with bootstrap parameters
+    train_model: Train model from user annotations (requires layout_conn + model_conn)
+    initialize_seed_model: Initialize with bootstrap parameters (model_conn only)
 
 Types:
     BoxBounds: Box coordinates in top-referenced system
@@ -63,6 +63,8 @@ from ocr_box_model.db import (
     load_layout_config,
     load_model,
     run_all_migrations,
+    run_layout_migrations,
+    run_model_migrations,
     save_model,
 )
 from ocr_box_model.charset import detect_character_sets
@@ -98,6 +100,8 @@ __all__ = [
     "load_model",
     "save_model",
     "run_all_migrations",
+    "run_model_migrations",
+    "run_layout_migrations",
     "load_layout_config",
     "load_all_boxes",
     "load_boxes_for_frame",
