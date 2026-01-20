@@ -26,7 +26,6 @@ members = [
     "ocr",
     "ocr-box-model",
     "ocr-utils",
-    "orchestrator",
     "video-utils",
     "vp9-utils",
 ]
@@ -633,7 +632,7 @@ requires-dist = [
     { name = "caption-text", editable = "data-pipelines/caption_text" },
     { name = "crop-frames", editable = "data-pipelines/crop_frames" },
     { name = "full-frames", editable = "data-pipelines/full_frames" },
-    { name = "orchestrator", editable = "services/orchestrator" },
+    { name = "orchestrator" },
     { name = "pillow", specifier = ">=11.0.0" },
     { name = "tqdm", specifier = ">=4.67.1" },
 ]
@@ -2810,42 +2809,11 @@ wheels = [
 [[package]]
 name = "orchestrator"
 version = "1.0.0"
-source = { editable = "services/orchestrator" }
-dependencies = [
-    { name = "boto3" },
-    { name = "fastapi" },
-    { name = "frames-db" },
-    { name = "httpx" },
-    { name = "prefect" },
-    { name = "python-dotenv" },
-    { name = "requests" },
-    { name = "supabase" },
-    { name = "uvicorn" },
-    { name = "vp9-utils" },
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/ef/47/b0fde2c16a98cb34f1b8b6c1cacee8c65e0dd928ea366b9204d34926da6a/orchestrator-1.0.tar.gz", hash = "sha256:8d45b1650b27a61577a1cf30a536e813f4e4c9c1689acaaba4d01255c270cb12", size = 4374, upload-time = "2020-11-06T16:00:08.282Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/67/60/520297b027aded0e70ac97278181ef8edac8026de48858536abfb4140727/orchestrator-1.0-py3-none-any.whl", hash = "sha256:d273f2bd7850465b8f09a201ba35cd08a81f7439c9e6e27f7f50373b5e2e78c6", size = 5651, upload-time = "2020-11-06T16:00:06.118Z" },
 ]
-
-[package.optional-dependencies]
-dev = [
-    { name = "pytest" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "boto3", specifier = ">=1.34.0" },
-    { name = "fastapi", specifier = ">=0.100.0" },
-    { name = "frames-db", editable = "packages/frames_db" },
-    { name = "httpx", specifier = ">=0.24.0" },
-    { name = "prefect", specifier = ">=3.0.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
-    { name = "python-dotenv", specifier = ">=1.0.0" },
-    { name = "requests", specifier = ">=2.31.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8.0" },
-    { name = "supabase", specifier = ">=2.0.0" },
-    { name = "uvicorn", specifier = ">=0.23.0" },
-    { name = "vp9-utils", editable = "packages/vp9_utils" },
-]
-provides-extras = ["dev"]
 
 [[package]]
 name = "orjson"
