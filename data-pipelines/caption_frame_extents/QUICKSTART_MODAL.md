@@ -15,7 +15,7 @@ modal token new
 modal secret create wasabi-credentials \
   WASABI_ACCESS_KEY=your_key \
   WASABI_SECRET_KEY=your_secret \
-  WASABI_BUCKET=caption-acc-prod \
+  WASABI_BUCKET=captionacc-prod \
   WASABI_REGION=us-east-1
 
 modal secret create supabase-credentials \

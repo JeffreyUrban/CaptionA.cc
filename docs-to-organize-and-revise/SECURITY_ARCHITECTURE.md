@@ -335,7 +335,7 @@ CREATE POLICY "Platform admins view all videos"
   "Statement": [{
     "Effect": "Allow",
     "Action": ["s3:GetObject"],
-    "Resource": "arn:aws:s3:::caption-acc-prod/*"
+    "Resource": "arn:aws:s3:::captionacc-prod/*"
   }]
 }
 ```

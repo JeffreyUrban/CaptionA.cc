@@ -6,7 +6,7 @@ This directory contains Wasabi storage documentation for CaptionA.cc.
 
 | Property | Value |
 |----------|-------|
-| Bucket | `caption-acc-prod` |
+| Bucket | `captionacc-prod` |
 | Region | `us-east-1` |
 | Endpoint | `https://s3.us-east-1.wasabisys.com` |
 
@@ -15,7 +15,7 @@ This directory contains Wasabi storage documentation for CaptionA.cc.
 Paths are organized by **access level** at the top for simple IAM policies:
 
 ```
-caption-acc-prod/
+captionacc-prod/
 └── {tenant_id}/
     ├── client/                          # Tenant-accessible via STS credentials
     │   └── videos/{video_id}/
@@ -58,7 +58,7 @@ Response:
 {
   "credentials": { "accessKeyId": "...", "secretAccessKey": "...", "sessionToken": "..." },
   "expiration": "2026-01-11T23:00:00Z",
-  "bucket": "caption-acc-prod",
+  "bucket": "captionacc-prod",
   "region": "us-east-1",
   "endpoint": "https://s3.us-east-1.wasabisys.com",
   "prefix": "{tenant_id}/client/*"
@@ -81,7 +81,7 @@ See: [IAM Policies](./wasabi-iam-policies/) for policy templates
 
 **Bucket-level:**
 - ✅ Versioning (corruption recovery)
-- ✅ Access logging → `audit-logs-caption-acc` (90-day retention)
+- ✅ Access logging → `captionacc-audit-logs` (90-day retention)
 - ✅ Public access blocked
 - ✅ Server-side encryption (Wasabi default)
 
@@ -133,7 +133,7 @@ WASABI_STS_SECRET_KEY=<secret>
 WASABI_STS_ROLE_ARN=arn:aws:iam::WASABI_ACCOUNT_ID:role/captionacc-client-read
 
 # Bucket configuration
-WASABI_BUCKET=caption-acc-prod
+WASABI_BUCKET=captionacc-prod
 WASABI_REGION=us-east-1
 ```
 
@@ -151,11 +151,11 @@ curl -H "Authorization: Bearer <jwt>" \
 aws s3 ls --endpoint-url https://s3.us-east-1.wasabisys.com
 
 # Should succeed
-aws s3 ls s3://caption-acc-prod/ --endpoint-url https://s3.us-east-1.wasabisys.com
+aws s3 ls s3://captionacc-prod/ --endpoint-url https://s3.us-east-1.wasabisys.com
 ```
 
 **Review access logs:**
 ```bash
-aws s3 ls s3://audit-logs-caption-acc/caption-acc-prod/ \
+aws s3 ls s3://captionacc-audit-logs/captionacc-prod/ \
   --endpoint-url https://s3.us-east-1.wasabisys.com
 ```

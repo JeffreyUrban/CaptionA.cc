@@ -232,7 +232,7 @@ Modal auto-scales based on demand:
 modal secret create wasabi \
   WASABI_ACCESS_KEY=xxx \
   WASABI_SECRET_KEY=xxx \
-  WASABI_BUCKET=caption-acc-prod \
+  WASABI_BUCKET=captionacc-prod \
   WASABI_REGION=us-east-1
 
 modal secret create google-vision \

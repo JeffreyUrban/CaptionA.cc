@@ -30,7 +30,7 @@ class WasabiClient:
         self,
         access_key: str | None = None,
         secret_key: str | None = None,
-        bucket_name: str = "caption-acc-prod",
+        bucket_name: str = "captionacc-prod",
         region: str = "us-east-1",
     ):
         """Initialize Wasabi S3 client.

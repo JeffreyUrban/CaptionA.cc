@@ -102,7 +102,7 @@ Wasabi provides **cost-effective object storage** with free egress bandwidth. It
 - **Client databases**: `client/videos/{id}/layout.db.gz`, `captions.db.gz` (gzip compressed)
 - **Server databases**: `server/videos/{id}/raw-ocr.db.gz`, `layout-server.db.gz`
 
-Bucket: `caption-acc-prod` (us-east-1)
+Bucket: `captionacc-prod` (us-east-1)
 
 See: [Wasabi Storage](./wasabi/)
 
@@ -207,7 +207,7 @@ Response:
     "sessionToken": "..."
   },
   "expiration": "2026-01-11T23:00:00Z",
-  "bucket": "caption-acc-prod",
+  "bucket": "captionacc-prod",
   "region": "us-east-1",
   "endpoint": "https://s3.us-east-1.wasabisys.com",
   "prefix": "{tenant_id}/client/*"
@@ -245,7 +245,7 @@ See: [Sync Protocol Reference](./sync-protocol.md)
 ### Wasabi Path Pattern
 
 ```
-caption-acc-prod/
+captionacc-prod/
 └── {tenant_id}/
     ├── client/                              # STS credentials (tenant read-only)
     │   └── videos/{video_id}/

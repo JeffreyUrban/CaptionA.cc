@@ -106,14 +106,14 @@ source .env
 Test 1: Can list all buckets?
 ✅ NO - Credentials restricted (good!)
 
-Test 2: Can access caption-acc-prod bucket?
+Test 2: Can access captionacc-prod bucket?
 ✅ YES - Can access app bucket (expected)
 
-Test 3: Can write to caption-acc-prod bucket?
+Test 3: Can write to captionacc-prod bucket?
 [For readonly]: ⚠️  NO - Read-only access
 [For readwrite]: ✅ YES - Has write access
 
-Test 4: Can delete from caption-acc-prod bucket?
+Test 4: Can delete from captionacc-prod bucket?
 [For readonly]: ⚠️  Cannot test (no write access)
 [For readwrite]: ✅ YES - Has delete access
 ```
@@ -207,7 +207,7 @@ fly secrets list -a <app-name>
 # Test credentials directly
 export WASABI_ACCESS_KEY="<key>"
 export WASABI_SECRET_KEY="<secret>"
-aws s3 ls s3://caption-acc-prod/ --endpoint-url https://s3.us-east-1.wasabisys.com
+aws s3 ls s3://captionacc-prod/ --endpoint-url https://s3.us-east-1.wasabisys.com
 
 # Should succeed. If not, check Wasabi Console IAM settings
 ```

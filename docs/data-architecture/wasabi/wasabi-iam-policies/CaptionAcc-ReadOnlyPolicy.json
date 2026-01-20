@@ -8,7 +8,7 @@
         "s3:ListBucket",
         "s3:GetBucketLocation"
       ],
-      "Resource": "arn:aws:s3:::caption-acc-prod"
+      "Resource": "arn:aws:s3:::captionacc-prod"
     },
     {
       "Sid": "AllowReadOnlyCaptionAccProdObjects",
@@ -17,15 +17,15 @@
         "s3:GetObject",
         "s3:GetObjectVersion"
       ],
-      "Resource": "arn:aws:s3:::caption-acc-prod/*"
+      "Resource": "arn:aws:s3:::captionacc-prod/*"
     },
     {
       "Sid": "DenyAccessToAllOtherBuckets",
       "Effect": "Deny",
       "Action": "s3:*",
       "NotResource": [
-        "arn:aws:s3:::caption-acc-prod",
-        "arn:aws:s3:::caption-acc-prod/*"
+        "arn:aws:s3:::captionacc-prod",
+        "arn:aws:s3:::captionacc-prod/*"
       ]
     },
     {

@@ -3,7 +3,7 @@
 ## Current Setup
 
 ### Application Bucket
-**Name:** `caption-acc-prod`
+**Name:** `captionacc-prod`
 **Region:** `us-east-1`
 
 **Features Enabled:**
@@ -13,10 +13,10 @@
 - ✅ Server-side encryption (Wasabi default)
 
 ### Audit Logs Bucket
-**Name:** `audit-logs-caption-acc`
+**Name:** `captionacc-audit-logs`
 **Region:** `us-east-1`
 
-**Purpose:** Stores access logs for caption-acc-prod bucket
+**Purpose:** Stores access logs for captionacc-prod bucket
 
 **Lifecycle:** Logs auto-delete after 90 days
 
@@ -27,7 +27,7 @@
 ### Initial Setup
 
 **Prerequisites:**
-1. Create `audit-logs-caption-acc` bucket manually in Wasabi Console
+1. Create `captionacc-audit-logs` bucket manually in Wasabi Console
 2. AWS CLI configured with appropriate credentials
 
 **Run setup script:**
@@ -37,11 +37,11 @@
 
 ### What the Script Does
 
-1. **Enables access logging** on `caption-acc-prod`
-   - Logs written to: `s3://audit-logs-caption-acc/caption-acc-prod/`
+1. **Enables access logging** on `captionacc-prod`
+   - Logs written to: `s3://captionacc-audit-logs/captionacc-prod/`
    - Captures: All GET, PUT, DELETE operations
 
-2. **Configures lifecycle policy** on `audit-logs-caption-acc`
+2. **Configures lifecycle policy** on `captionacc-audit-logs`
    - Auto-deletes logs after 90 days
    - Prevents unbounded storage growth
 
@@ -56,11 +56,11 @@
 #### Enable Access Logging
 ```bash
 aws s3api put-bucket-logging \
-  --bucket caption-acc-prod \
+  --bucket captionacc-prod \
   --bucket-logging-status '{
     "LoggingEnabled": {
-      "TargetBucket": "audit-logs-caption-acc",
-      "TargetPrefix": "caption-acc-prod/"
+      "TargetBucket": "captionacc-audit-logs",
+      "TargetPrefix": "captionacc-prod/"
     }
   }' \
   --endpoint-url https://s3.us-east-1.wasabisys.com
@@ -86,7 +86,7 @@ cat > /tmp/lifecycle.json << 'EOF'
 EOF
 
 aws s3api put-bucket-lifecycle-configuration \
-  --bucket audit-logs-caption-acc \
+  --bucket captionacc-audit-logs \
   --lifecycle-configuration file:///tmp/lifecycle.json \
   --endpoint-url https://s3.us-east-1.wasabisys.com
 ```
@@ -98,7 +98,7 @@ aws s3api put-bucket-lifecycle-configuration \
 ### Check Logging Status
 ```bash
 aws s3api get-bucket-logging \
-  --bucket caption-acc-prod \
+  --bucket captionacc-prod \
   --endpoint-url https://s3.us-east-1.wasabisys.com
 ```
 
@@ -106,8 +106,8 @@ aws s3api get-bucket-logging \
 ```json
 {
   "LoggingEnabled": {
-    "TargetBucket": "audit-logs-caption-acc",
-    "TargetPrefix": "caption-acc-prod/"
+    "TargetBucket": "captionacc-audit-logs",
+    "TargetPrefix": "captionacc-prod/"
   }
 }
 ```
@@ -115,7 +115,7 @@ aws s3api get-bucket-logging \
 ### Check Lifecycle Policy
 ```bash
 aws s3api get-bucket-lifecycle-configuration \
-  --bucket audit-logs-caption-acc \
+  --bucket captionacc-audit-logs \
   --endpoint-url https://s3.us-east-1.wasabisys.com
 ```
 
@@ -140,11 +140,11 @@ aws s3api get-bucket-lifecycle-configuration \
 ### View Access Logs
 ```bash
 # List recent logs
-aws s3 ls s3://audit-logs-caption-acc/caption-acc-prod/ \
+aws s3 ls s3://captionacc-audit-logs/captionacc-prod/ \
   --endpoint-url https://s3.us-east-1.wasabisys.com
 
 # Download specific log
-aws s3 cp s3://audit-logs-caption-acc/caption-acc-prod/2026-01-06-12-00-00-ABCD1234 . \
+aws s3 cp s3://captionacc-audit-logs/captionacc-prod/2026-01-06-12-00-00-ABCD1234 . \
   --endpoint-url https://s3.us-east-1.wasabisys.com
 ```
 
@@ -174,7 +174,7 @@ aws s3 cp s3://audit-logs-caption-acc/caption-acc-prod/2026-01-06-12-00-00-ABCD1
 
 ```bash
 aws s3api put-bucket-logging \
-  --bucket caption-acc-prod \
+  --bucket captionacc-prod \
   --bucket-logging-status '{}' \
   --endpoint-url https://s3.us-east-1.wasabisys.com
 ```
@@ -183,7 +183,7 @@ aws s3api put-bucket-logging \
 
 ```bash
 aws s3api put-bucket-versioning \
-  --bucket caption-acc-prod \
+  --bucket captionacc-prod \
   --versioning-configuration Status=Enabled \
   --endpoint-url https://s3.us-east-1.wasabisys.com
 ```
@@ -234,13 +234,13 @@ aws s3api put-bucket-versioning \
 **Check:**
 ```bash
 # Verify logging is enabled
-aws s3api get-bucket-logging --bucket caption-acc-prod --endpoint-url https://s3.us-east-1.wasabisys.com
+aws s3api get-bucket-logging --bucket captionacc-prod --endpoint-url https://s3.us-east-1.wasabisys.com
 
 # Trigger some activity
-aws s3 ls s3://caption-acc-prod/ --endpoint-url https://s3.us-east-1.wasabisys.com
+aws s3 ls s3://captionacc-prod/ --endpoint-url https://s3.us-east-1.wasabisys.com
 
 # Wait 30 minutes, then check for logs
-aws s3 ls s3://audit-logs-caption-acc/caption-acc-prod/ --endpoint-url https://s3.us-east-1.wasabisys.com
+aws s3 ls s3://captionacc-audit-logs/captionacc-prod/ --endpoint-url https://s3.us-east-1.wasabisys.com
 ```
 
 ### Lifecycle policy not deleting old logs
@@ -253,10 +253,10 @@ aws s3 ls s3://audit-logs-caption-acc/caption-acc-prod/ --endpoint-url https://s
 **Check:**
 ```bash
 # Verify policy
-aws s3api get-bucket-lifecycle-configuration --bucket audit-logs-caption-acc --endpoint-url https://s3.us-east-1.wasabisys.com
+aws s3api get-bucket-lifecycle-configuration --bucket captionacc-audit-logs --endpoint-url https://s3.us-east-1.wasabisys.com
 
 # Check log ages
-aws s3 ls s3://audit-logs-caption-acc/caption-acc-prod/ --recursive --endpoint-url https://s3.us-east-1.wasabisys.com
+aws s3 ls s3://captionacc-audit-logs/captionacc-prod/ --recursive --endpoint-url https://s3.us-east-1.wasabisys.com
 ```
 
 ---

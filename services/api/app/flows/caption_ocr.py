@@ -39,7 +39,7 @@ def _initialize_services() -> tuple[WasabiServiceImpl, CaptionServiceImpl]:
     wasabi_secret_key = os.getenv("WASABI_SECRET_ACCESS_KEY") or os.getenv(
         "WASABI_SECRET_KEY_READWRITE"
     )
-    wasabi_bucket = os.getenv("WASABI_BUCKET", "caption-acc-prod")
+    wasabi_bucket = os.getenv("WASABI_BUCKET", "captionacc-prod")
     wasabi_region = os.getenv("WASABI_REGION", "us-east-1")
 
     if not wasabi_access_key or not wasabi_secret_key:

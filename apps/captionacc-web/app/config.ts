@@ -77,7 +77,7 @@ export const WASABI_CONFIG = {
   REGION: 'us-east-1',
 
   /** Wasabi bucket name */
-  BUCKET: 'caption-acc-prod',
+  BUCKET: 'captionacc-prod',
 
   /** Wasabi endpoint URL */
   ENDPOINT: 'https://s3.us-east-1.wasabisys.com',

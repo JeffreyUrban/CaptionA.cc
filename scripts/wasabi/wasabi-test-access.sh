@@ -50,10 +50,10 @@ else
 fi
 
 echo ""
-echo "Test 2: Can access caption-acc-prod bucket?"
+echo "Test 2: Can access captionacc-prod bucket?"
 if AWS_ACCESS_KEY_ID="$ACCESS_KEY" \
    AWS_SECRET_ACCESS_KEY="$SECRET_KEY" \
-   aws s3 ls s3://caption-acc-prod/ --endpoint-url "$ENDPOINT" > /tmp/wasabi-app-bucket.txt 2>&1; then
+   aws s3 ls s3://captionacc-prod/ --endpoint-url "$ENDPOINT" > /tmp/wasabi-app-bucket.txt 2>&1; then
     echo -e "${GREEN}✅ YES - Can access app bucket (expected)${NC}"
     FILE_COUNT=$(cat /tmp/wasabi-app-bucket.txt | wc -l | tr -d ' ')
     echo "   Found $FILE_COUNT objects/prefixes"
@@ -63,31 +63,31 @@ else
 fi
 
 echo ""
-echo "Test 3: Can write to caption-acc-prod bucket?"
+echo "Test 3: Can write to captionacc-prod bucket?"
 echo "test" > /tmp/test-write.txt
 if AWS_ACCESS_KEY_ID="$ACCESS_KEY" \
    AWS_SECRET_ACCESS_KEY="$SECRET_KEY" \
-   aws s3 cp /tmp/test-write.txt s3://caption-acc-prod/test-write-access.txt --endpoint-url "$ENDPOINT" 2>&1; then
+   aws s3 cp /tmp/test-write.txt s3://captionacc-prod/test-write-access.txt --endpoint-url "$ENDPOINT" 2>&1; then
     echo -e "${GREEN}✅ YES - Has write access${NC}"
 
     # Clean up test file
     AWS_ACCESS_KEY_ID="$ACCESS_KEY" \
     AWS_SECRET_ACCESS_KEY="$SECRET_KEY" \
-    aws s3 rm s3://caption-acc-prod/test-write-access.txt --endpoint-url "$ENDPOINT" > /dev/null 2>&1 || true
+    aws s3 rm s3://captionacc-prod/test-write-access.txt --endpoint-url "$ENDPOINT" > /dev/null 2>&1 || true
 else
     echo -e "${YELLOW}⚠️  NO - Read-only access${NC}"
 fi
 
 echo ""
-echo "Test 4: Can delete from caption-acc-prod bucket?"
+echo "Test 4: Can delete from captionacc-prod bucket?"
 # First create a test file to delete
 if AWS_ACCESS_KEY_ID="$ACCESS_KEY" \
    AWS_SECRET_ACCESS_KEY="$SECRET_KEY" \
-   aws s3 cp /tmp/test-write.txt s3://caption-acc-prod/test-delete-access.txt --endpoint-url "$ENDPOINT" 2>&1 > /dev/null; then
+   aws s3 cp /tmp/test-write.txt s3://captionacc-prod/test-delete-access.txt --endpoint-url "$ENDPOINT" 2>&1 > /dev/null; then
 
     if AWS_ACCESS_KEY_ID="$ACCESS_KEY" \
        AWS_SECRET_ACCESS_KEY="$SECRET_KEY" \
-       aws s3 rm s3://caption-acc-prod/test-delete-access.txt --endpoint-url "$ENDPOINT" 2>&1 > /dev/null; then
+       aws s3 rm s3://captionacc-prod/test-delete-access.txt --endpoint-url "$ENDPOINT" 2>&1 > /dev/null; then
         echo -e "${RED}⚠️  YES - Has delete access${NC}"
         echo -e "${RED}🚨 SECURITY RISK: App should use read-only credentials${NC}"
     else
@@ -115,7 +115,7 @@ if [ -f /tmp/wasabi-buckets.txt ]; then
         echo ""
         echo "Recommended Actions:"
         echo "1. Create restricted IAM user for CaptionA.cc"
-        echo "2. Apply IAM policy limiting access to caption-acc-prod only"
+        echo "2. Apply IAM policy limiting access to captionacc-prod only"
         echo "3. Update .env with new restricted credentials"
         echo ""
     else

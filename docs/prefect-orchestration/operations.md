@@ -190,9 +190,9 @@ When initial processing fails, reprocess from scratch:
 UPDATE videos SET status = 'uploading' WHERE id = 'xxx';
 
 # 2. Clear any partial outputs in Wasabi
-aws s3 rm s3://caption-acc-prod/{tenant}/client/videos/{id}/full_frames/ --recursive
-aws s3 rm s3://caption-acc-prod/{tenant}/server/videos/{id}/ --recursive
-aws s3 rm s3://caption-acc-prod/{tenant}/client/videos/{id}/layout.db.gz
+aws s3 rm s3://captionacc-prod/{tenant}/client/videos/{id}/full_frames/ --recursive
+aws s3 rm s3://captionacc-prod/{tenant}/server/videos/{id}/ --recursive
+aws s3 rm s3://captionacc-prod/{tenant}/client/videos/{id}/layout.db.gz
 
 # 3. Trigger reprocessing
 prefect deployment run "captionacc-video-initial-processing" \
@@ -212,9 +212,9 @@ SET lock_holder_user_id = NULL, lock_type = NULL
 WHERE video_id = 'xxx' AND database_name = 'layout';
 
 # 2. Clear partial outputs
-aws s3 rm s3://caption-acc-prod/{tenant}/client/videos/{id}/cropped_frames_v*/ --recursive
-aws s3 rm s3://caption-acc-prod/{tenant}/server/videos/{id}/caption_frame_extents.db.gz
-aws s3 rm s3://caption-acc-prod/{tenant}/client/videos/{id}/captions.db.gz
+aws s3 rm s3://captionacc-prod/{tenant}/client/videos/{id}/cropped_frames_v*/ --recursive
+aws s3 rm s3://captionacc-prod/{tenant}/server/videos/{id}/caption_frame_extents.db.gz
+aws s3 rm s3://captionacc-prod/{tenant}/client/videos/{id}/captions.db.gz
 
 # 3. Reset status
 UPDATE videos SET caption_status = NULL WHERE id = 'xxx';

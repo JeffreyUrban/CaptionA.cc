@@ -117,7 +117,7 @@ if (lockResult.needsDownload) {
   // No server working copy - download from Wasabi using STS credentials
   const s3Key = `${tenantId}/client/videos/${videoId}/${dbName}.db.gz`;
   const response = await s3Client.send(new GetObjectCommand({
-    Bucket: "caption-acc-prod",
+    Bucket: "captionacc-prod",
     Key: s3Key
   }));
   const compressedBuffer = await response.Body.transformToByteArray();
@@ -514,7 +514,7 @@ async def upload_to_wasabi(working_path: Path, video_id: str, db_name: str):
 
     key = f"{tenant_id}/{video_id}/{db_name}.db.gz"
     await s3.put_object(
-        Bucket="caption-acc-prod",
+        Bucket="captionacc-prod",
         Key=key,
         Body=compressed,
         ContentType="application/gzip"
@@ -592,13 +592,13 @@ S3 versioning is enabled on the Wasabi bucket. Each PUT creates a new version, p
 ```bash
 # List versions of a database
 aws s3api list-object-versions \
-  --bucket caption-acc-prod \
+  --bucket captionacc-prod \
   --prefix "tenant-id/video-id/layout.db"
 
 # Restore previous version
 aws s3api copy-object \
-  --bucket caption-acc-prod \
-  --copy-source "caption-acc-prod/tenant-id/video-id/layout.db?versionId=xxx" \
+  --bucket captionacc-prod \
+  --copy-source "captionacc-prod/tenant-id/video-id/layout.db?versionId=xxx" \
   --key "tenant-id/video-id/layout.db"
 ```
 
@@ -769,7 +769,7 @@ import gzip
 async def download_from_wasabi(video_id: str, db_name: str, dest_path: Path):
     """Download and decompress database from Wasabi."""
     key = f"{tenant_id}/{video_id}/{db_name}.db.gz"
-    response = await s3.get_object(Bucket="caption-acc-prod", Key=key)
+    response = await s3.get_object(Bucket="captionacc-prod", Key=key)
     compressed = await response['Body'].read()
 
     # Decompress and write to disk

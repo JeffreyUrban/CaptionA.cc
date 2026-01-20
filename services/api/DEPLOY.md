@@ -66,7 +66,7 @@ ARG CRSQLITE_RELEASE_TAG=prebuild-test.main-438663b8
 5. Run `./extensions/upload-to-wasabi.sh <new-tag>` to backup to Wasabi
 6. Deploy: `flyctl deploy`
 
-**Wasabi mirror** (private backup): `s3://caption-acc-prod/artifacts/cr-sqlite/`
+**Wasabi mirror** (private backup): `s3://captionacc-prod/artifacts/cr-sqlite/`
 
 ## Useful Commands
 

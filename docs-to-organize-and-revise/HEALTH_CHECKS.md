@@ -219,7 +219,7 @@ fly secrets list -a captionacc-web
 # Should have WASABI_ACCESS_KEY_READONLY, WASABI_SECRET_KEY_READONLY
 
 # Test credentials locally
-aws s3 ls s3://caption-acc-prod \
+aws s3 ls s3://captionacc-prod \
   --endpoint-url https://s3.us-east-1.wasabisys.com \
   --profile wasabi-readonly
 ```

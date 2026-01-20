@@ -56,7 +56,7 @@ Modal uses secrets to securely store credentials. Create these in the Modal dash
 modal secret create wasabi-credentials \
   WASABI_ACCESS_KEY=your_access_key \
   WASABI_SECRET_KEY=your_secret_key \
-  WASABI_BUCKET=caption-acc-prod \
+  WASABI_BUCKET=captionacc-prod \
   WASABI_REGION=us-east-1 \
   WASABI_ENDPOINT=https://s3.us-east-1.wasabisys.com
 ```

@@ -27,7 +27,7 @@ SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 # Wasabi (verify these are set)
 WASABI_ACCESS_KEY_READWRITE=your-access-key
 WASABI_SECRET_KEY_READWRITE=your-secret-key
-WASABI_BUCKET=caption-acc-prod
+WASABI_BUCKET=captionacc-prod
 ```
 
 ## Installation
