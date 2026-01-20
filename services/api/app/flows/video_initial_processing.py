@@ -71,12 +71,15 @@ def extract_full_frames_and_ocr_task(
     """Call Modal extract_full_frames_and_ocr function remotely."""
     import modal
 
+    from app.config import get_settings
+
+    settings = get_settings()
     logger.info(f"Starting frame extraction for video {video_id} at {frame_rate} fps")
 
     # Look up the deployed Modal function
-    extract_fn = modal.Function.from_name(
-        "extract-full-frames-and-ocr", "extract_full_frames_and_ocr"
-    )
+    modal_app_name = f"extract-full-frames-and-ocr-{settings.modal_app_suffix}"
+    logger.info(f"Looking up Modal function: {modal_app_name}")
+    extract_fn = modal.Function.from_name(modal_app_name, "extract_full_frames_and_ocr")
 
     # Call the Modal function remotely
     try:

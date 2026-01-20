@@ -49,7 +49,7 @@ class PrefectWorkerManager:
             )
             return
 
-        logger.info("Starting Prefect worker for work pool 'captionacc-workers'")
+        logger.info(f"Starting Prefect worker for work pool '{settings.effective_work_pool}'")
         logger.info(f"Connecting to Prefect server: {settings.prefect_api_url}")
 
         try:
@@ -65,10 +65,10 @@ class PrefectWorkerManager:
 
                 # Ensure work pool exists (optional - worker will create if needed)
                 try:
-                    await client.read_work_pool("captionacc-workers")
-                    logger.info("Work pool 'captionacc-workers' exists")
+                    await client.read_work_pool(settings.effective_work_pool)
+                    logger.info(f"Work pool '{settings.effective_work_pool}' exists")
                 except Exception as e:
-                    logger.info(f"Work pool 'captionacc-workers' not found ({e}), worker will create it")
+                    logger.info(f"Work pool '{settings.effective_work_pool}' not found ({e}), worker will create it")
         except Exception as e:
             logger.error(f"Failed to connect to Prefect server: {e}")
             raise Exception(
@@ -103,11 +103,11 @@ class PrefectWorkerManager:
                 "worker",
                 "start",
                 "--pool",
-                "captionacc-workers",
+                settings.effective_work_pool,
                 "--type",
                 "process",
                 "--name",
-                "captionacc-api-worker",
+                f"captionacc-api-worker-{settings.captionacc_namespace or 'prod'}",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 env=env,

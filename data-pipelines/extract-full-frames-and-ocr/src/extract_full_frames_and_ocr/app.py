@@ -4,14 +4,18 @@ This module defines the Modal app and registers the GPU-accelerated
 full frame extraction and OCR function.
 """
 
+import os
+
 try:
     import modal
 except ImportError:
     modal = None
 
-# Create Modal app
+# Create Modal app with optional namespace suffix
+# Set modal_app_suffix environment variable to deploy with a suffix (e.g., "dev")
 if modal:
-    app = modal.App("extract-full-frames-and-ocr")
+    app_suffix = os.environ.get("modal_app_suffix", "")
+    app = modal.App(f"extract-full-frames-and-ocr-{app_suffix}")
 
     # Import image builder only (not implementation - that has heavy dependencies)
     from .modal_inference import get_full_frames_image

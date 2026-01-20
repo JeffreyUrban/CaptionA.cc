@@ -56,6 +56,23 @@ class Settings(BaseSettings):
     supabase_service_role_key: str = ""
     supabase_schema: str = "captionacc_production"
 
+    # Namespace for dev isolation (empty = production)
+    captionacc_namespace: str = ""
+
+    @property
+    def effective_work_pool(self) -> str:
+        """Get the work pool name for Prefect workers."""
+        if self.captionacc_namespace:
+            return f"captionacc-workers-{self.captionacc_namespace}"
+        return "captionacc-workers"
+
+    @property
+    def modal_app_suffix(self) -> str:
+        """Suffix for Modal app names (e.g., 'dev' or 'prod')"""
+        if self.captionacc_namespace:
+            return f"{self.captionacc_namespace}"
+        return ""
+
     @property
     def effective_wasabi_access_key(self) -> str:
         """Get Wasabi access key."""

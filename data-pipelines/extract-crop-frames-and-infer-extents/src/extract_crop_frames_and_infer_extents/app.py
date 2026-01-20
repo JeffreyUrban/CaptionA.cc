@@ -5,6 +5,8 @@ This module defines the Modal app and registers GPU-intensive functions:
 - crop_and_infer_caption_frame_extents - Cropping and inference (A10G GPU)
 """
 
+import os
+
 try:
     import modal
 except ImportError:
@@ -12,9 +14,11 @@ except ImportError:
 
 from .models import CropInferResult, CropRegion
 
-# Create Modal app
+# Create Modal app with optional namespace suffix
+# Set modal_app_suffix environment variable to deploy with a suffix (e.g., "dev")
 if modal:
-    app = modal.App("extract-crop-frames-and-infer-extents")
+    app_suffix = os.environ.get("modal_app_suffix", "")
+    app = modal.App(f"extract-crop-frames-and-infer-extents-{app_suffix}")
 
     # Import image builder only (not implementation - that has torch dependency)
     from .inference import get_inference_image
