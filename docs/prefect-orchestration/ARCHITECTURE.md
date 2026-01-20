@@ -88,7 +88,7 @@ We needed:
 
 ### Prefect Server (Coordination Only)
 
-**URL:** `https://banchelabs-gateway.fly.dev/api`
+**URL:** `https://banchelabs-gateway.fly.dev/prefect-internal/prefect/api`
 
 **Responsibilities:**
 - Track flow run state (scheduled, running, completed, failed)
@@ -434,7 +434,7 @@ except Exception as e:
 ### Adding a New Flow
 
 1. Define flow in `/services/api/app/flows/new_flow.py`
-2. Register with Prefect: `./scripts/register_flows.sh`
+2. Add deployment to `prefect.yaml`, then register: `prefect deploy --all`
 3. Add trigger (webhook or API endpoint)
 4. Configure priority calculation
 5. Test with sample data

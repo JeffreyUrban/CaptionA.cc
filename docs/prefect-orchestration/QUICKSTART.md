@@ -6,7 +6,7 @@ Get the Prefect orchestration system running in your development environment.
 
 - Python 3.11+
 - Modal account with API token configured (`modal token list`)
-- Prefect server running at `https://banchelabs-gateway.fly.dev/api`
+- Prefect server running at `https://banchelabs-gateway.fly.dev/prefect-internal/prefect/api`
 - Environment variables configured (see below)
 
 ## Environment Setup
@@ -18,7 +18,7 @@ Create `/services/api/.env` with required variables:
 WEBHOOK_SECRET=your-random-secret-key-here
 
 # Prefect (already configured)
-PREFECT_API_URL=https://banchelabs-gateway.fly.dev/api
+PREFECT_API_URL=https://banchelabs-gateway.fly.dev/prefect-internal/prefect/api
 
 # Supabase (verify these are set)
 SUPABASE_URL=https://stbnsczvywpwjzbpfehp.supabase.co
@@ -59,29 +59,19 @@ modal app list
 
 ## Register Flows with Prefect
 
+Flow deployments are registered using the `prefect deploy` CLI with `prefect.yaml`:
+
 ```bash
 cd services/api
 
 # Set Prefect API URL
-export PREFECT_API_URL=https://banchelabs-gateway.fly.dev/api
+export PREFECT_API_URL=https://banchelabs-gateway.fly.dev/prefect-internal/prefect/api
 
-# Register all flows
-./scripts/register_flows.sh
+# Register all flows defined in prefect.yaml
+prefect deploy --all
 ```
 
-Expected output:
-```
-✓ Checking Prefect installation...
-✓ Connecting to Prefect server...
-✓ Checking work pool 'captionacc-workers'...
-
-Registering flows...
-✓ captionacc-video-initial-processing
-✓ captionacc-crop-and-infer-caption-frame-extents
-✓ captionacc-caption-ocr
-
-Summary: 3 flows registered successfully
-```
+This registers the deployments defined in `services/api/prefect.yaml`. In production, this runs automatically when deploying the API service to Fly.io (`fly deploy` in `services/api`), via the release command configured in `fly.toml`.
 
 ## Start API Service
 
@@ -162,7 +152,7 @@ Once testing is complete, configure the webhook in Supabase:
 echo $PREFECT_API_URL
 
 # If not set, add to .env
-echo "PREFECT_API_URL=https://banchelabs-gateway.fly.dev/api" >> services/api/.env
+echo "PREFECT_API_URL=https://banchelabs-gateway.fly.dev/prefect-internal/prefect/api" >> services/api/.env
 
 # Restart API service
 ```
@@ -220,7 +210,7 @@ curl -X POST http://localhost:8000/webhooks/supabase/videos \
   -d '{"type":"INSERT","table":"videos","record":{"id":"test","tenant_id":"test","storage_key":"test.mp4","created_at":"2024-01-12T00:00:00Z"}}'
 
 # Check Prefect deployments
-export PREFECT_API_URL=https://banchelabs-gateway.fly.dev/api
+export PREFECT_API_URL=https://banchelabs-gateway.fly.dev/prefect-internal/prefect/api
 prefect deployment ls
 
 # View flow runs
@@ -230,5 +220,5 @@ prefect flow-run ls --limit 10
 modal app list
 
 # Re-register flows
-cd services/api && ./scripts/register_flows.sh
+cd services/api && prefect deploy --all
 ```

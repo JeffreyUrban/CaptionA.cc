@@ -1,10 +1,10 @@
 # Prefect deployment configuration for CaptionA.cc flows
 #
 # Deploy all flows:
-#   PREFECT_API_URL=https://banchelabs-gateway.fly.dev/api prefect deploy --all
+#   PREFECT_API_URL=https://banchelabs-gateway.fly.dev/prefect-internal/prefect/api prefect deploy --all
 #
 # Deploy specific flow:
-#   PREFECT_API_URL=https://banchelabs-gateway.fly.dev/api prefect deploy -n captionacc-video-initial-processing
+#   PREFECT_API_URL=https://banchelabs-gateway.fly.dev/prefect-internal/prefect/api prefect deploy -n captionacc-video-initial-processing
 
 # Default work pool for all deployments
 work_pool:

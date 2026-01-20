@@ -185,19 +185,18 @@ captions.caption_ocr_status:
 
 ## Flow Registration
 
-**Script:** `services/api/scripts/register_flows.sh`
+**Configuration:** `services/api/prefect.yaml`
 
-Registers all three flows with Prefect server:
-- Creates deployments in work pool `captionacc-workers`
-- Sets concurrency limits per flow
-- Configures tags for observability
+Flow deployments are defined declaratively in `prefect.yaml` and registered using the Prefect CLI.
 
-**Usage:**
+**Local/Manual Registration:**
 ```bash
 cd services/api
-export PREFECT_API_URL=https://banchelabs-gateway.fly.dev/api
-./scripts/register_flows.sh
+export PREFECT_API_URL=https://banchelabs-gateway.fly.dev/prefect-internal/prefect/api
+prefect deploy --all
 ```
+
+**Production:** Flows are automatically registered when deploying the API service to Fly.io (`fly deploy` in `services/api`). The `fly.toml` release command runs `scripts/deploy_flows.sh`, which executes `prefect deploy --all`.
 
 ---
 

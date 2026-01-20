@@ -147,7 +147,7 @@ fly deploy --image registry.fly.io/banchelabs-gateway:v123
 
 ### Prefect Server
 ```bash
-curl https://banchelabs-gateway.fly.dev/api/health
+curl https://banchelabs-gateway.fly.dev/prefect-internal/prefect/api/health
 # Expected: {"status": "ok"}
 ```
 
@@ -210,7 +210,7 @@ Actual cost depends on usage patterns.
 echo $PREFECT_API_URL
 
 # Test connection
-curl https://banchelabs-gateway.fly.dev/api/health
+curl https://banchelabs-gateway.fly.dev/prefect-internal/prefect/api/health
 ```
 
 ### Flow Runs Stuck in "Scheduled"
