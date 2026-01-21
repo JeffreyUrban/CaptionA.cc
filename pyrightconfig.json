@@ -12,6 +12,7 @@
     "**/extract-full-frames-and-ocr/**",
     "**/packages/gpu_video_utils/**",
     "**/packages/ocr/**",
+    "**/packages/ocr_box_model/**",
     "**/services/api/**"
   ]
 }
