@@ -458,7 +458,9 @@ class TestModalFailureRecovery:
             prefect_test_harness(),
         ):
             # Should eventually succeed after retries
-            update_workflow_status_task(video_id=test_video_id, layout_status="processing")
+            update_workflow_status_task(
+                video_id=test_video_id, layout_status="processing"
+            )
 
             # Verify it was called multiple times (with retries)
             assert mock_supabase_service.update_video_status.call_count == 3
@@ -547,7 +549,11 @@ class TestModalFailureRecovery:
             # Call just the metadata update task
             with pytest.raises(ConnectionError):
                 update_video_metadata_task(
-                    video_id=test_video_id, frame_count=100, duration=10.0, width=1920, height=1080
+                    video_id=test_video_id,
+                    frame_count=100,
+                    duration=10.0,
+                    width=1920,
+                    height=1080,
                 )
 
             # Verify the mock was called
