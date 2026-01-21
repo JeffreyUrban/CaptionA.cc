@@ -3,7 +3,6 @@
 from typing import Annotated
 
 from fastapi import Depends, Header, HTTPException, status
-from jose import JWTError, jwt
 from pydantic import BaseModel
 
 from app.config import Settings, get_settings

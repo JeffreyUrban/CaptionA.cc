@@ -77,3 +77,9 @@ exclude_lines = [
 
 [tool.hatch.build.hooks.vcs]
 version-file = "src/ocr_box_model/_version.py"
+
+[tool.pyright]
+# Include the src directory in the Python path for type checking
+include = ["src", "tests"]
+pythonVersion = "3.14"
+typeCheckingMode = "standard"

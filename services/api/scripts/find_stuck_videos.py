@@ -135,8 +135,8 @@ def main():
                 f"{video['id']:<38} {display:<40} {video['status']:<12} {age_str:<15}"
             )
 
-        print(f"\nTo retry these videos, run:")
-        print(f"  python scripts/retry_stuck_videos.py")
+        print("\nTo retry these videos, run:")
+        print("  python scripts/retry_stuck_videos.py")
 
 
 if __name__ == "__main__":

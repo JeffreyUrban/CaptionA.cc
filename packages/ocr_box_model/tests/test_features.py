@@ -153,16 +153,16 @@ class TestMathUtils:
     def test_calculate_mode(self):
         """Test mode calculation."""
         # Values clustered around 10 and 20
-        values = [9, 10, 10, 11, 19, 20, 20, 21]
+        values = [9.0, 10.0, 10.0, 11.0, 19.0, 20.0, 20.0, 21.0]
         mode = calculate_mode(values, bin_size=5)
         # Should find mode at bin center 10 or 20
         assert mode in [10.0, 20.0]
 
     def test_filter_outliers(self):
         """Test outlier filtering."""
-        values = [1, 2, 3, 4, 5, 100]  # 100 is outlier
+        values = [1.0, 2.0, 3.0, 4.0, 5.0, 100.0]  # 100 is outlier
         # Need at least 10 values for filtering
-        values = [1, 2, 3, 4, 5, 4, 3, 2, 1, 100]
+        values = [1.0, 2.0, 3.0, 4.0, 5.0, 4.0, 3.0, 2.0, 1.0, 100.0]
         filtered = filter_outliers(values)
         # Outlier should be filtered
         assert 100 not in filtered or len(filtered) >= len(values) * 0.9

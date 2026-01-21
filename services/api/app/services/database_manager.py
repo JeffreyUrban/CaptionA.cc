@@ -14,12 +14,12 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import AsyncGenerator
 
-logger = logging.getLogger(__name__)
-
 import boto3
 from botocore.exceptions import ClientError
 
 from app.config import Settings, get_settings
+
+logger = logging.getLogger(__name__)
 
 
 class DatabaseManager:
@@ -79,7 +79,6 @@ class DatabaseManager:
     async def _download_from_s3(self, s3_key: str, local_path: Path) -> bool:
         """Download a file from S3 to local cache, decompressing if needed."""
         import gzip
-        import tempfile
 
         def _download():
             try:
