@@ -67,8 +67,13 @@ jobs:
 
       - name: Check for build artifacts
         run: |
-          if [ ! -d "build/client" ] || [ ! -d "build/server" ]; then
-            echo "Build failed: Missing build artifacts"
+          # SPA mode (ssr:false) only produces client build
+          if [ ! -d "build/client" ]; then
+            echo "Build failed: Missing build/client"
             exit 1
           fi
-          echo "Build successful: All artifacts present"
+          if [ ! -f "build/client/index.html" ]; then
+            echo "Build failed: Missing build/client/index.html"
+            exit 1
+          fi
+          echo "Build successful: SPA artifacts present"
