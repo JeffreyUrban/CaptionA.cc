@@ -16,6 +16,7 @@ jobs:
   deploy:
     name: Deploy to Fly.io
     runs-on: ubuntu-latest
+    environment: prod
     # Only deploy from main branch
     if: github.ref == 'refs/heads/main'
 
@@ -38,14 +39,14 @@ jobs:
       - name: Configure Fly.io secrets
         run: |
           flyctl secrets set \
-            SUPABASE_URL="${{ secrets.SUPABASE_URL }}" \
+            SUPABASE_URL="${{ vars.SUPABASE_URL }}" \
             SUPABASE_JWT_SECRET="${{ secrets.SUPABASE_JWT_SECRET }}" \
             SUPABASE_SCHEMA="captionacc_prod" \
             SUPABASE_SERVICE_ROLE_KEY="${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
             WASABI_ACCESS_KEY_ID="${{ secrets.WASABI_ACCESS_KEY_READWRITE }}" \
             WASABI_SECRET_ACCESS_KEY="${{ secrets.WASABI_SECRET_KEY_READWRITE }}" \
-            WASABI_BUCKET="${{ secrets.WASABI_BUCKET }}" \
-            WASABI_REGION="${{ secrets.WASABI_REGION }}" \
+            WASABI_BUCKET="${{ vars.WASABI_BUCKET }}" \
+            WASABI_REGION="${{ vars.WASABI_REGION }}" \
             WASABI_ENDPOINT_URL="https://s3.wasabisys.com" \
             --app captionacc-api-prod \
             --stage
@@ -54,7 +55,7 @@ jobs:
 
       - name: Deploy to Fly.io
         # Build context is project root to include packages/ocr_box_model
-        run: flyctl deploy -c services/api/fly.toml --dockerfile services/api/Dockerfile --remote-only
+        run: flyctl deploy -c services/api/fly.prod.toml --dockerfile services/api/Dockerfile --remote-only
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
