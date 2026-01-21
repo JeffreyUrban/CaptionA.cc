@@ -47,6 +47,10 @@ jobs:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
       - name: Deploy to Fly.io
-        run: flyctl deploy --remote-only
+        run: |
+          flyctl deploy --remote-only \
+            --build-arg VITE_SUPABASE_URL="${{ secrets.SUPABASE_URL }}" \
+            --build-arg VITE_SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}" \
+            --build-arg VITE_SUPABASE_SCHEMA="captionacc_prod"
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
