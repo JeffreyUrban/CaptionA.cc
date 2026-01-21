@@ -80,29 +80,57 @@ curl -X POST http://localhost:54321/functions/v1/captionacc-presigned-upload \
   -d '{"filename": "test.mp4", "contentType": "video/mp4", "sizeBytes": 1000000}'
 ```
 
-### Deploy to Production
+### Deploy to Supabase Projects
+
+Functions are unified - deploy the same code to each Supabase project (prod/dev).
+Each project has its own secrets configured.
+
+**Project References:**
+- Production: `<SUPABASE_PROD_PROJECT_REF>` (e.g., `cuvzwbtarrkngqeqmdaz`)
+- Development: `<SUPABASE_DEV_PROJECT_REF>` (e.g., `okxgkojcukqjzlrqrmox`)
 
 ```bash
 cd supabase
 
-# Set shared secrets (first time only)
-supabase secrets set WASABI_BUCKET=captionacc-prod
-supabase secrets set WASABI_REGION=us-east-1
-supabase secrets set DB_SCHEMA=captionacc_prod
+# ============================================================================
+# PRODUCTION DEPLOYMENT
+# ============================================================================
 
-# Set presigned-upload secrets
-supabase secrets set WASABI_ACCESS_KEY_READWRITE=your_key
-supabase secrets set WASABI_SECRET_KEY_READWRITE=your_secret
+# Set secrets for prod (first time or when updating)
+supabase secrets set DB_SCHEMA=captionacc --project-ref <SUPABASE_PROD_PROJECT_REF>
+supabase secrets set WASABI_BUCKET=captionacc-prod --project-ref <SUPABASE_PROD_PROJECT_REF>
+supabase secrets set WASABI_REGION=us-east-1 --project-ref <SUPABASE_PROD_PROJECT_REF>
+supabase secrets set WASABI_ACCESS_KEY_READWRITE=<WASABI_PROD_READWRITE_KEY> --project-ref <SUPABASE_PROD_PROJECT_REF>
+supabase secrets set WASABI_SECRET_KEY_READWRITE=<WASABI_PROD_READWRITE_SECRET> --project-ref <SUPABASE_PROD_PROJECT_REF>
 
-# Set s3-credentials secrets (requires Wasabi IAM setup first - see below)
-supabase secrets set WASABI_STS_ACCESS_KEY=your_sts_assumer_key
-supabase secrets set WASABI_STS_SECRET_KEY=your_sts_assumer_secret
-supabase secrets set WASABI_STS_ROLE_ARN=arn:aws:iam::ACCOUNT:role/captionacc-client-read
-supabase secrets set WASABI_STS_DURATION_SECONDS=3600
+# STS secrets for s3-credentials (requires Wasabi IAM setup - see below)
+supabase secrets set WASABI_STS_ACCESS_KEY=<WASABI_STS_ASSUMER_KEY> --project-ref <SUPABASE_PROD_PROJECT_REF>
+supabase secrets set WASABI_STS_SECRET_KEY=<WASABI_STS_ASSUMER_SECRET> --project-ref <SUPABASE_PROD_PROJECT_REF>
+supabase secrets set WASABI_STS_ROLE_ARN=arn:aws:iam::<WASABI_ACCOUNT>:role/captionacc-client-read --project-ref <SUPABASE_PROD_PROJECT_REF>
 
-# Deploy functions
-supabase functions deploy captionacc-presigned-upload
-supabase functions deploy captionacc-s3-credentials
+# Deploy functions to prod
+supabase functions deploy captionacc-presigned-upload --project-ref <SUPABASE_PROD_PROJECT_REF>
+supabase functions deploy captionacc-s3-credentials --project-ref <SUPABASE_PROD_PROJECT_REF>
+
+# ============================================================================
+# DEVELOPMENT DEPLOYMENT
+# ============================================================================
+
+# Set secrets for dev (first time or when updating)
+supabase secrets set DB_SCHEMA=captionacc --project-ref <SUPABASE_DEV_PROJECT_REF>
+supabase secrets set WASABI_BUCKET=captionacc-dev --project-ref <SUPABASE_DEV_PROJECT_REF>
+supabase secrets set WASABI_REGION=us-east-1 --project-ref <SUPABASE_DEV_PROJECT_REF>
+supabase secrets set WASABI_ACCESS_KEY_READWRITE=<WASABI_DEV_READWRITE_KEY> --project-ref <SUPABASE_DEV_PROJECT_REF>
+supabase secrets set WASABI_SECRET_KEY_READWRITE=<WASABI_DEV_READWRITE_SECRET> --project-ref <SUPABASE_DEV_PROJECT_REF>
+
+# STS secrets for s3-credentials (requires Wasabi IAM setup - see below)
+supabase secrets set WASABI_STS_ACCESS_KEY=<WASABI_STS_ASSUMER_KEY> --project-ref <SUPABASE_DEV_PROJECT_REF>
+supabase secrets set WASABI_STS_SECRET_KEY=<WASABI_STS_ASSUMER_SECRET> --project-ref <SUPABASE_DEV_PROJECT_REF>
+supabase secrets set WASABI_STS_ROLE_ARN=arn:aws:iam::<WASABI_ACCOUNT>:role/captionacc-client-read --project-ref <SUPABASE_DEV_PROJECT_REF>
+
+# Deploy functions to dev
+supabase functions deploy captionacc-presigned-upload --project-ref <SUPABASE_DEV_PROJECT_REF>
+supabase functions deploy captionacc-s3-credentials --project-ref <SUPABASE_DEV_PROJECT_REF>
 ```
 
 ### Wasabi IAM Setup (for s3-credentials)
@@ -131,7 +159,7 @@ See [wasabi-storage.md](../../docs/data-architecture/wasabi-storage.md) for full
 | `WASABI_BUCKET` | both | Wasabi bucket name |
 | `WASABI_REGION` | both | Wasabi region (default: us-east-1) |
 | `WASABI_STS_DURATION_SECONDS` | s3-credentials | Credential duration (default: 3600) |
-| `DB_SCHEMA` | both | Database schema (default: captionacc_prod) |
+| `DB_SCHEMA` | both | Database schema (default: captionacc) |
 
 Note: `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are automatically available in edge functions.
 
