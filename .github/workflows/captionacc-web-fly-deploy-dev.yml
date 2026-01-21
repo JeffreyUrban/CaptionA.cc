@@ -1,0 +1,53 @@
+# See https://fly.io/docs/app-guides/continuous-deployment-with-github-actions/
+
+name: Fly Deploy Dev
+on:
+  workflow_dispatch:  # Manual triggering only for dev
+jobs:
+  deploy:
+    name: Deploy app
+    runs-on: ubuntu-latest
+    environment: dev
+    concurrency: deploy-group-dev    # optional: ensure only one action runs at a time
+    defaults:
+      run:
+        working-directory: apps/captionacc-web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Check if app exists
+        working-directory: .
+        run: |
+          if ! flyctl apps list | grep -q "captionacc-web-dev"; then
+            echo "::error::Fly.io app 'captionacc-web-dev' does not exist. Create it with: flyctl apps create captionacc-web-dev"
+            exit 1
+          fi
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Configure Fly.io secrets
+        run: |
+          flyctl secrets set \
+            VITE_SUPABASE_URL="${{ vars.SUPABASE_URL }}" \
+            VITE_SUPABASE_SCHEMA="captionacc_dev" \
+            VITE_SUPABASE_ANON_KEY="${{ vars.SUPABASE_ANON_KEY }}" \
+            VITE_SUPABASE_SERVICE_ROLE_KEY="${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            WASABI_ACCESS_KEY_READONLY="${{ secrets.WASABI_ACCESS_KEY_READONLY }}" \
+            WASABI_SECRET_KEY_READONLY="${{ secrets.WASABI_SECRET_KEY_READONLY }}" \
+            WASABI_BUCKET="${{ vars.WASABI_BUCKET }}" \
+            WASABI_REGION="${{ vars.WASABI_REGION }}" \
+            ENVIRONMENT="development" \
+            --app captionacc-web-dev
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Deploy to Fly.io
+        run: |
+          flyctl deploy --remote-only \
+            --build-arg VITE_SUPABASE_URL="${{ vars.SUPABASE_URL }}" \
+            --build-arg VITE_SUPABASE_ANON_KEY="${{ vars.SUPABASE_ANON_KEY }}" \
+            --build-arg VITE_SUPABASE_SCHEMA="captionacc_dev" \
+            --app captionacc-web-dev
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
