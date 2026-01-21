@@ -65,8 +65,10 @@ async def bulk_annotate(video_id: str, body: BulkAnnotateRequest, auth: Auth):
             if body.allFrames:
                 # Get all frame indices
                 frame_indices = ocr_repo.get_frame_indices()
-            else:
+            elif body.frame is not None:
                 frame_indices = [body.frame]
+            else:
+                frame_indices = []
 
             # Find boxes within rectangle for each frame
             boxes_to_annotate: list[tuple[int, int]] = []  # (frame_index, box_index)

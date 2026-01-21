@@ -59,7 +59,7 @@ class CaptionOcrResult:
     ocr_text: str
     confidence: float
     frame_count: int
-    median_frame_index: int = None
+    median_frame_index: int | None = None
 
 
 sys.modules[

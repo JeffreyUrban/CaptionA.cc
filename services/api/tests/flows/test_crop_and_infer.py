@@ -21,7 +21,7 @@ from app.flows.crop_and_infer import (
     call_modal_crop_and_infer,
     process_inference_results,
     update_video_metadata,
-    update_caption_status,
+    update_boundaries_status,
     crop_and_infer,
 )
 
@@ -1066,10 +1066,10 @@ class TestCropAndInferTasks:
         assert update_video_metadata.retry_delay_seconds == 5
 
     def test_update_status_task_retries(self):
-        """Verify update_caption_status has retries configured."""
+        """Verify update_boundaries_status has retries configured."""
 
-        assert update_caption_status.retries == 2
-        assert update_caption_status.retry_delay_seconds == 5
+        assert update_boundaries_status.retries == 2
+        assert update_boundaries_status.retry_delay_seconds == 5
 
     def test_flow_no_automatic_retries(self):
         """Verify flow has no automatic retries (manual retry strategy)."""

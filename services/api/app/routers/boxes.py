@@ -111,7 +111,7 @@ async def update_boxes(
 
     try:
         async with layout_db_manager.get_or_create_database(
-            auth.tenant_id, video_id, writable=True
+            auth.tenant_id, video_id
         ) as layout_conn:
             layout_repo = LayoutRepository(layout_conn)
 

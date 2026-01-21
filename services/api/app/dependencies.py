@@ -14,6 +14,7 @@ class AuthContext(BaseModel):
     user_id: str
     tenant_id: str
     email: str | None = None
+    is_platform_admin: bool = False
 
 
 async def get_auth_context(
@@ -51,13 +52,13 @@ async def get_auth_context(
         supabase = get_supabase_client()
 
         # Verify token by getting user from Supabase
-        response = supabase.auth.get_user(token)
+        auth_response = supabase.auth.get_user(token)
+        user = auth_response.user if auth_response else None
 
-        if not response.user:
+        if not user:
             logger.error("Failed to verify token with Supabase")
             raise credentials_exception
 
-        user = response.user
         user_id = user.id
         email = user.email
 
@@ -73,13 +74,14 @@ async def get_auth_context(
             .execute()
         )
 
-        if result.data is None:
+        profile_data = result.data if result else None
+        if profile_data is None or not isinstance(profile_data, dict):
             logger.error(f"No user_profile found for user_id: {user_id}")
             raise credentials_exception
 
-        tenant_id = result.data.get("tenant_id")
-        if tenant_id is None:
-            logger.error(f"User profile has no tenant_id: {result.data}")
+        tenant_id = profile_data.get("tenant_id")
+        if not isinstance(tenant_id, str):
+            logger.error(f"User profile has no tenant_id: {profile_data}")
             raise credentials_exception
 
         logger.info(f"Found tenant_id: {tenant_id}")

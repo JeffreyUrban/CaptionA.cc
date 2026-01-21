@@ -8,7 +8,7 @@ from sqlmodel import Field, SQLModel
 class CaptionFrameExtentsRunMetadata(SQLModel, table=True):
     """Metadata for a caption frame extents inference run (single-row per database file)."""
 
-    __tablename__ = "run_metadata"
+    __tablename__ = "run_metadata"  # pyright: ignore[reportAssignmentType]
 
     run_id: str = Field(primary_key=True)
     cropped_frames_version: int
@@ -23,7 +23,7 @@ class CaptionFrameExtentsRunMetadata(SQLModel, table=True):
 class PairResult(SQLModel, table=True):
     """Frame pair inference results with forward and backward predictions."""
 
-    __tablename__ = "pair_results"
+    __tablename__ = "pair_results"  # pyright: ignore[reportAssignmentType]
 
     id: Optional[int] = Field(default=None, primary_key=True)
     frame1_index: int

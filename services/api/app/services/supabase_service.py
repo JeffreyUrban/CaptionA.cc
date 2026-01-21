@@ -317,11 +317,12 @@ class SupabaseServiceImpl:
                 .execute()
             )
 
-            if not video_response.data:
+            video_data = video_response.data if video_response else None
+            if not video_data or not isinstance(video_data, dict):
                 # Video doesn't exist, can't acquire lock
                 return False
 
-            tenant_id = video_response.data.get("tenant_id")
+            tenant_id = video_data.get("tenant_id")
 
             # Create the state record with the lock already acquired
             now = datetime.now(timezone.utc).isoformat()
@@ -419,11 +420,12 @@ class SupabaseServiceImpl:
             .execute()
         )
 
-        if not response.data:
+        profile_data = response.data if response else None
+        if not profile_data or not isinstance(profile_data, dict):
             # Default to free if no users found
             return "free"
 
-        access_tier_id = response.data.get("access_tier_id", "demo")
+        access_tier_id = str(profile_data.get("access_tier_id", "demo"))
 
         # Map access_tier_id to priority tier names
         tier_mapping = {
@@ -454,11 +456,11 @@ class SupabaseServiceImpl:
             .execute()
         )
 
-        if not response.data:
+        video = response.data
+        if not video or not isinstance(video, dict):
             return {}
 
         # Rename fields to match Protocol expectations
-        video = response.data
         return {
             "tenant_id": video.get("tenant_id"),
             "storage_key": video.get("storage_key"),

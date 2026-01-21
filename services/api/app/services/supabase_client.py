@@ -39,7 +39,7 @@ class DatabaseStateRepository:
     Manages lock acquisition, version tracking, and state for CR-SQLite sync.
     """
 
-    def __init__(self, client: Client | None = None):
+    def __init__(self, client: Client | Any | None = None):
         self._client = client or get_supabase_client()
         self._schema = get_settings().supabase_schema
 
@@ -94,8 +94,11 @@ class DatabaseStateRepository:
             )
             logger.info(f"get_state response: {response}")
             # Extract first item from list, or None if empty
-            if response.data and len(response.data) > 0:
-                return response.data[0]
+            data = response.data
+            if data and isinstance(data, list) and len(data) > 0:
+                first_item = data[0]
+                if isinstance(first_item, dict):
+                    return first_item
             return None
         except Exception as e:
             logger.error(f"get_state error: {e}")

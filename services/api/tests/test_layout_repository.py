@@ -73,11 +73,13 @@ class TestVideoLayoutConfig:
     def test_update_layout_config_crop_region(self, seeded_repo: LayoutRepository):
         """Should update crop region and increment version."""
         original = seeded_repo.get_layout_config()
+        assert original is not None
         original_version = original.cropRegionVersion
 
         config = seeded_repo.update_layout_config(
             VideoLayoutConfigUpdate(cropLeft=50, cropTop=60)
         )
+        assert config is not None
         assert config.cropLeft == 50
         assert config.cropTop == 60
         assert config.cropRight == 30  # Unchanged
@@ -94,6 +96,7 @@ class TestVideoLayoutConfig:
                 selectionMode=SelectionMode.AUTO,
             )
         )
+        assert config is not None
         assert config.selectionLeft == 100
         assert config.selectionTop == 200
         assert config.selectionRight == 300
@@ -111,6 +114,7 @@ class TestVideoLayoutConfig:
                 analysisModelVersion="v1.0.0",
             )
         )
+        assert config is not None
         assert config.verticalPosition == 0.85
         assert config.verticalStd == 0.02
         assert config.boxHeight == 0.1
