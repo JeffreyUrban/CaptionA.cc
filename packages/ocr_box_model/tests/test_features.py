@@ -1,14 +1,13 @@
 """Unit tests for feature extraction and related modules."""
 
 import math
-import pytest
 
+import pytest
 from ocr_box_model import (
+    NUM_FEATURES,
     BoxBounds,
-    CharacterSets,
     GaussianParams,
     ModelParams,
-    NUM_FEATURES,
     Prediction,
     VideoLayoutConfig,
     detect_character_sets,
@@ -17,15 +16,11 @@ from ocr_box_model import (
     predict_with_heuristics,
 )
 from ocr_box_model.config import FEATURE_NAMES
-from ocr_box_model.math_utils import (
-    calculate_mean,
-    calculate_mode,
-    calculate_std,
-    filter_outliers,
-    gaussian_pdf,
-    log_gaussian_pdf,
-    log_probs_to_probs,
-    log_sum_exp,
+from ocr_box_model.feature_importance import (
+    calculate_feature_importance,
+    compute_mahalanobis_distance,
+    compute_pooled_covariance,
+    create_identity_matrix,
 )
 from ocr_box_model.knn import (
     compute_horizontal_clustering_score,
@@ -33,12 +28,14 @@ from ocr_box_model.knn import (
     filter_current_box,
     get_k_for_boxes,
 )
-from ocr_box_model.feature_importance import (
-    calculate_feature_importance,
-    compute_mahalanobis_distance,
-    compute_pooled_covariance,
-    create_identity_matrix,
-    invert_covariance_matrix,
+from ocr_box_model.math_utils import (
+    calculate_mean,
+    calculate_mode,
+    calculate_std,
+    filter_outliers,
+    gaussian_pdf,
+    log_probs_to_probs,
+    log_sum_exp,
 )
 from ocr_box_model.types import ClassSamples
 
