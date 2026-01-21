@@ -139,8 +139,8 @@ def analyze_layout_config_task(
     wasabi_client = boto3.client(
         "s3",
         endpoint_url=f"https://s3.{os.environ['WASABI_REGION']}.wasabisys.com",
-        aws_access_key_id=os.environ["WASABI_ACCESS_KEY"],
-        aws_secret_access_key=os.environ["WASABI_SECRET_KEY"],
+        aws_access_key_id=os.environ["WASABI_ACCESS_KEY_READWRITE"],
+        aws_secret_access_key=os.environ["WASABI_SECRET_KEY_READWRITE"],
         region_name=os.environ["WASABI_REGION"],
     )
     bucket_name = os.environ["WASABI_BUCKET"]

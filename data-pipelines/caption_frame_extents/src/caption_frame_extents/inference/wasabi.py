@@ -1,18 +1,20 @@
 """Wasabi S3 Client for Modal inference service.
 
-NOTE: This is a LOCAL COPY of WasabiClient, intentionally duplicated from
-services/orchestrator/wasabi_client.py for Modal compatibility.
+NOTE: This is a LOCAL COPY of WasabiClient for Modal compatibility.
 
 WHY THIS EXISTS:
 - Modal containers only have access to code explicitly added via add_local_python_source()
-- The caption_frame_extents package is added to Modal, but services/orchestrator is NOT
-- Importing from services.orchestrator would fail with ModuleNotFoundError in Modal
+- The caption_frame_extents package is added to Modal, but shared packages are NOT
+- Importing from shared packages would fail with ModuleNotFoundError in Modal
 - This local copy contains only the methods needed for inference (download, upload, URLs)
 
 DO NOT REMOVE: This file is required for Modal GPU inference to work.
-If you need to update WasabiClient functionality used by inference, update BOTH:
-1. services/orchestrator/wasabi_client.py (for orchestrator/Fly.io use)
-2. This file (for Modal GPU inference use)
+
+Environment variables (set via Modal secrets):
+- WASABI_ACCESS_KEY_READWRITE: Wasabi access key
+- WASABI_SECRET_KEY_READWRITE: Wasabi secret key
+- WASABI_BUCKET: S3 bucket name
+- WASABI_REGION: Wasabi region (defaults to us-east-1)
 """
 
 import os
@@ -30,38 +32,32 @@ class WasabiClient:
         self,
         access_key: str | None = None,
         secret_key: str | None = None,
-        bucket_name: str = "captionacc-prod",
-        region: str = "us-east-1",
+        bucket_name: str | None = None,
+        region: str | None = None,
     ):
         """Initialize Wasabi S3 client.
 
         Args:
-            access_key: Wasabi access key (defaults to env var)
-            secret_key: Wasabi secret key (defaults to env var)
-            bucket_name: S3 bucket name
-            region: Wasabi region
+            access_key: Wasabi access key (defaults to WASABI_ACCESS_KEY_READWRITE env var)
+            secret_key: Wasabi secret key (defaults to WASABI_SECRET_KEY_READWRITE env var)
+            bucket_name: S3 bucket name (defaults to WASABI_BUCKET env var)
+            region: Wasabi region (defaults to WASABI_REGION env var, or us-east-1)
         """
-        self.access_key = (
-            access_key
-            or os.environ.get("WASABI_ACCESS_KEY_READWRITE")
-            or os.environ.get("WASABI_ACCESS_KEY")
-        )
-        self.secret_key = (
-            secret_key
-            or os.environ.get("WASABI_SECRET_KEY_READWRITE")
-            or os.environ.get("WASABI_SECRET_KEY")
-        )
-        self.bucket_name = bucket_name
-        self.region = region
+        self.access_key = access_key or os.environ.get("WASABI_ACCESS_KEY_READWRITE")
+        self.secret_key = secret_key or os.environ.get("WASABI_SECRET_KEY_READWRITE")
+        self.bucket_name = bucket_name or os.environ.get("WASABI_BUCKET")
+        self.region = region or os.environ.get("WASABI_REGION", "us-east-1")
 
         if not self.access_key or not self.secret_key:
             raise ValueError(
-                "Wasabi credentials required. Set WASABI_ACCESS_KEY and WASABI_SECRET_KEY"
+                "Wasabi credentials required. Set WASABI_ACCESS_KEY_READWRITE and WASABI_SECRET_KEY_READWRITE"
             )
+        if not self.bucket_name:
+            raise ValueError("Wasabi bucket required. Set WASABI_BUCKET environment variable")
 
         self.s3_client = boto3.client(
             "s3",
-            endpoint_url=f"https://s3.{region}.wasabisys.com",
+            endpoint_url=f"https://s3.{self.region}.wasabisys.com",
             aws_access_key_id=self.access_key,
             aws_secret_access_key=self.secret_key,
             config=Config(signature_version="s3v4"),

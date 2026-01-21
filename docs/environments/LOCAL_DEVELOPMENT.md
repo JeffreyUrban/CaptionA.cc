@@ -151,9 +151,9 @@ Edge Functions are duplicated for prod/dev isolation:
 | Function | Environment | Description |
 |----------|-------------|-------------|
 | `captionacc-presigned-upload-prod` | Production | Uses `DB_SCHEMA` → `captionacc_prod` |
-| `captionacc-presigned-upload-dev` | Development | Uses `DB_SCHEMA_DEV` → `captionacc_dev` |
+| `captionacc-presigned-upload-dev` | Development | Uses `DB_SCHEMA` → `captionacc_dev` |
 | `captionacc-s3-credentials-prod` | Production | Uses `DB_SCHEMA` → `captionacc_prod` |
-| `captionacc-s3-credentials-dev` | Development | Uses `DB_SCHEMA_DEV` → `captionacc_dev` |
+| `captionacc-s3-credentials-dev` | Development | Uses `DB_SCHEMA` → `captionacc_dev` |
 
 ### Edge Function Secrets
 
@@ -165,7 +165,7 @@ supabase secrets set WASABI_BUCKET=captionacc-prod
 
 **Development secrets (need to be set):**
 ```bash
-supabase secrets set DB_SCHEMA_DEV=captionacc_dev
+supabase secrets set DB_SCHEMA=captionacc_dev
 ```
 
 ### Video Processing

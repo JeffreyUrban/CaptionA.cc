@@ -81,12 +81,12 @@ All credentials are **application-level, shared across tenants**:
 - Used by web application to generate presigned URLs
 - Browser downloads frames directly from Wasabi (no server proxy)
 - Principle of least privilege: cannot modify/delete objects
-- IAM policy: `captionacc-app-readonly` (GetObject only)
+- IAM policy: `captionacc-prod-readonly` (GetObject only)
 
 **READ-WRITE credentials** (`WASABI_ACCESS_KEY_READWRITE`):
 - Used by orchestrator service for video processing
 - Can upload videos, chunks, databases
-- IAM policy: `captionacc-orchestrator` (full access to bucket)
+- IAM policy: `captionacc-prod-readwrite` (full access to bucket)
 
 ### Secret Storage: Fly.io Secrets
 

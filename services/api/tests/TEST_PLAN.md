@@ -313,8 +313,8 @@ def mock_env_vars(monkeypatch):
     """Set up environment variables for flow testing."""
     monkeypatch.setenv("SUPABASE_URL", "https://test.supabase.co")
     monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "test-key")  # pragma: allowlist secret
-    monkeypatch.setenv("WASABI_ACCESS_KEY_ID", "test-access")
-    monkeypatch.setenv("WASABI_SECRET_ACCESS_KEY", "test-secret")  # pragma: allowlist secret
+    monkeypatch.setenv("WASABI_ACCESS_KEY_READWRITE", "test-access")
+    monkeypatch.setenv("WASABI_SECRET_KEY_READWRITE", "test-secret")  # pragma: allowlist secret
     monkeypatch.setenv("WASABI_BUCKET", "test-bucket")
 
 @pytest.fixture

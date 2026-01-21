@@ -46,36 +46,6 @@
 
 ---
 
-### captionacc-orchestrator (Processing)
-
-1. **Wasabi Console** → Users → captionacc-orchestrator → Generate New Access Key
-2. **Update local `.env`:**
-   ```bash
-   WASABI_ACCESS_KEY_READWRITE=<new_key>
-   WASABI_SECRET_KEY_READWRITE=<new_secret>
-   ```
-3. **Update Fly.io secrets:**
-   ```bash
-   fly secrets set \
-     WASABI_ACCESS_KEY_READWRITE=<new_key> \
-     WASABI_SECRET_KEY_READWRITE=<new_secret> \
-     -a <orchestrator-app-name>
-   ```
-4. **Verify health:**
-   ```bash
-   # Test local credentials
-   ./scripts/wasabi-test-access.sh
-
-   # Check production health
-   fly status -a <orchestrator-app-name>
-
-   # Trigger test processing job (if available)
-   ```
-5. **Wait 48 hours**
-6. **Delete old access key** in Wasabi Console
-
----
-
 ## Verification
 
 ### Automated Health Checks

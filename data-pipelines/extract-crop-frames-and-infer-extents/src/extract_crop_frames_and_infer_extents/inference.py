@@ -36,6 +36,8 @@ def get_inference_image():
     if not modal:
         return None
 
+    import os
+
     return (
         modal.Image.debian_slim(python_version="3.11")
         .apt_install(

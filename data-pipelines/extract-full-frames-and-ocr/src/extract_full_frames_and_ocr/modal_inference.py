@@ -120,13 +120,14 @@ def extract_frames_and_ocr_impl(
 
     from extract_full_frames_and_ocr.pipeline import process_video_with_gpu_and_ocr
 
-    # Get S3 client (following captionacc-modal pattern)
+    # Get S3 client from environment (set via Modal secrets)
+    region = os.getenv("WASABI_REGION", "us-east-1")
     wasabi_client = boto3.client(
         "s3",
-        endpoint_url=f"https://s3.{os.getenv('WASABI_REGION')}.wasabisys.com",
-        aws_access_key_id=os.getenv("WASABI_ACCESS_KEY"),
-        aws_secret_access_key=os.getenv("WASABI_SECRET_KEY"),
-        region_name=os.getenv("WASABI_REGION"),
+        endpoint_url=f"https://s3.{region}.wasabisys.com",
+        aws_access_key_id=os.getenv("WASABI_ACCESS_KEY_READWRITE"),
+        aws_secret_access_key=os.getenv("WASABI_SECRET_KEY_READWRITE"),
+        region_name=region,
     )
     bucket_name = os.getenv("WASABI_BUCKET")
 

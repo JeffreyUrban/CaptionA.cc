@@ -26,7 +26,7 @@ if modal:
         timeout=1800,  # 30 minutes
         retries=0,
         secrets=[
-            modal.Secret.from_name("wasabi"),
+            modal.Secret.from_name(f"wasabi-{app_suffix}"),
             modal.Secret.from_name("google-vision"),
         ],
     )

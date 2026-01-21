@@ -50,8 +50,11 @@ RUN echo "import sys; sys.path.insert(0, '/app')" > /usr/local/lib/python3.12/si
 # Copy application code (build context is project root)
 COPY services/api/app ./app
 COPY services/api/scripts ./scripts
-COPY services/api/prefect.yaml ./prefect.yaml
 COPY services/api/crontab ./crontab
+
+# Copy prefect config (PREFECT_FILE defaults to prefect.yaml for prod)
+ARG PREFECT_FILE=prefect.yaml
+COPY services/api/${PREFECT_FILE} ./prefect.yaml
 
 # Create non-root user and set permissions
 RUN useradd --create-home appuser \

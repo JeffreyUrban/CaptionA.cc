@@ -71,13 +71,14 @@ export type DatabaseName = (typeof DATABASE_NAMES)[keyof typeof DATABASE_NAMES]
 
 /**
  * Wasabi S3 configuration for database downloads.
+ * Note: Credentials are fetched via STS from the API, not stored in the web app.
  */
 export const WASABI_CONFIG = {
   /** Wasabi region */
   REGION: 'us-east-1',
 
-  /** Wasabi bucket name */
-  BUCKET: 'captionacc-prod',
+  /** Wasabi bucket name (configurable per environment) */
+  BUCKET: import.meta.env['VITE_WASABI_BUCKET'] || 'captionacc-prod',
 
   /** Wasabi endpoint URL */
   ENDPOINT: 'https://s3.us-east-1.wasabisys.com',

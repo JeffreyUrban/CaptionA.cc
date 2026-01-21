@@ -31,7 +31,7 @@ if modal:
         gpu="A10G",
         timeout=3600,  # 60 minutes
         retries=0,
-        secrets=[modal.Secret.from_name("wasabi")],
+        secrets=[modal.Secret.from_name(f"wasabi-{app_suffix}")],
         volumes={"/root/boundary-models": model_volume},
     )
     def extract_crop_frames_and_infer_extents(

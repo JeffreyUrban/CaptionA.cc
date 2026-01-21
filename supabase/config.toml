@@ -162,7 +162,7 @@ verify_jwt = false
 [functions.captionacc-s3-credentials-prod]
 verify_jwt = false
 
-# Development functions (use DB_SCHEMA_DEV secret -> captionacc_dev)
+# Development functions (use DB_SCHEMA secret -> captionacc_dev)
 [functions.captionacc-presigned-upload-dev]
 verify_jwt = false
 

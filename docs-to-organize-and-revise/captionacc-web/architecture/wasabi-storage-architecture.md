@@ -516,15 +516,8 @@ Browser creates object URLs and displays images
    - `storage_location` stores relative Wasabi key: `full_frames/frame_0000000100.jpg`
 
 5. **Environment configuration**
-   ```bash
-   # .env
-   WASABI_ACCESS_KEY=...
-   WASABI_SECRET_KEY=...
-   WASABI_BUCKET=captionacc-media
-   WASABI_REGION=us-east-1
-   WASABI_ENDPOINT=https://s3.us-east-1.wasabisys.com
-   ENVIRONMENT=dev  # or prod
-   ```
+
+(Set secrets)
 
 **Deliverables**:
 

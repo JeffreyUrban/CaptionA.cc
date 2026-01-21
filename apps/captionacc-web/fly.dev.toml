@@ -1,0 +1,36 @@
+# Fly.io configuration for CaptionA.cc Web (Development)
+# Deploy: fly deploy -c fly.dev.toml
+#
+# First-time setup:
+#   fly apps create captionacc-web-dev
+#   fly secrets set VITE_SUPABASE_ANON_KEY=xxx VITE_WEB3FORMS_ACCESS_KEY=xxx -a captionacc-web-dev
+#
+# Note: VITE_ secrets are used as build args (see [build.secrets] below)
+
+app = "captionacc-web-dev"
+primary_region = "ewr"
+
+[build]
+  [build.args]
+    # Build-time environment variables (baked into JS bundle)
+    VITE_API_URL = "https://captionacc-api-dev.fly.dev"
+    # TODO: Update to dev Supabase project URL when available
+    VITE_SUPABASE_URL = "https://stbnsczvywpwjzbpfehp.supabase.co"
+    VITE_UMAMI_SRC = "https://umami.fly.dev/script.js"
+    VITE_WASABI_BUCKET = "captionacc-dev"
+
+[env]
+  NODE_ENV = "production"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+[[vm]]
+  memory = "256mb"
+  cpu_kind = "shared"
+  cpus = 1

@@ -27,10 +27,10 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders, handleCorsPreflightRequest } from "../_shared/cors.ts";
 import { assumeRole, STSConfig } from "../_shared/sts.ts";
 
-// Environment variables (DEV uses DB_SCHEMA_DEV)
+// Environment variables (DEV uses DB_SCHEMA)
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
-const DB_SCHEMA = Deno.env.get("DB_SCHEMA_DEV") || "captionacc_dev";
+const DB_SCHEMA = Deno.env.get("DB_SCHEMA") || "captionacc_dev";
 
 const WASABI_STS_ACCESS_KEY = Deno.env.get("WASABI_STS_ACCESS_KEY")!
 const WASABI_STS_SECRET_KEY = Deno.env.get("WASABI_STS_SECRET_KEY")!;

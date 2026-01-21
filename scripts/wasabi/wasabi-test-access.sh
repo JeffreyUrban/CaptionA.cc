@@ -15,10 +15,6 @@ elif [ -n "$WASABI_ACCESS_KEY_READWRITE" ]; then
     ACCESS_KEY="${WASABI_ACCESS_KEY_READWRITE}"
     SECRET_KEY="${WASABI_SECRET_KEY_READWRITE}"
     CRED_TYPE="READ-WRITE"
-elif [ -n "$WASABI_ACCESS_KEY" ]; then
-    ACCESS_KEY="${WASABI_ACCESS_KEY}"
-    SECRET_KEY="${WASABI_SECRET_KEY}"
-    CRED_TYPE="UNKNOWN"
 else
     echo "❌ No Wasabi credentials found in environment"
     exit 1

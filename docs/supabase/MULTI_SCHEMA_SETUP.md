@@ -107,22 +107,6 @@ flyctl secrets set \
   --app captionacc-web
 ```
 
-### Set Secrets for Orchestrator
-
-```bash
-flyctl secrets set \
-  SUPABASE_URL="https://your-project.supabase.co" \
-  SUPABASE_SERVICE_ROLE_KEY="your_service_role_key" \
-  PREFECT_API_URL="your_prefect_url" \
-  PREFECT_API_KEY="your_prefect_key" \
-  WASABI_ACCESS_KEY_READWRITE="your_key" \
-  WASABI_SECRET_KEY_READWRITE="your_secret" \
-  WASABI_BUCKET="your-bucket" \
-  WASABI_REGION="us-east-1" \
-  ENVIRONMENT="production" \
-  --app captionacc-orchestrator
-```
-
 ### View Current Secrets
 
 ```bash
