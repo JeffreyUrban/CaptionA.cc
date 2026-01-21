@@ -25,31 +25,56 @@ type ProductionDatabase = {
   }
 }
 
-// Environment variables are required - set via fly.toml build args
+// Environment variables are required at runtime - set via fly.toml build args
 // Separate Supabase projects for prod and dev provide isolation
-const supabaseUrl = import.meta.env['VITE_SUPABASE_URL']!
-const supabaseAnonKey = import.meta.env['VITE_SUPABASE_ANON_KEY']!
+// During CI builds, these may be empty - the client will be created lazily
+const supabaseUrl = import.meta.env['VITE_SUPABASE_URL'] ?? ''
+const supabaseAnonKey = import.meta.env['VITE_SUPABASE_ANON_KEY'] ?? ''
 
 // Schema is 'captionacc' in both prod and dev Supabase projects
 const supabaseSchema = import.meta.env['VITE_SUPABASE_SCHEMA'] ?? 'captionacc'
 
 // Log Supabase connection info in development
-if (import.meta.env.DEV) {
+if (import.meta.env.DEV && supabaseUrl) {
   console.log(`🔌 Supabase: ONLINE (${supabaseUrl}) [schema: ${supabaseSchema}]`)
 }
 
+// Lazy initialization to support CI builds where env vars may not be set
+let _supabase: ReturnType<typeof createClient<ProductionDatabase>> | null = null
+
 /**
- * Create a Supabase client for use in client-side code
- * Uses the anon key which respects RLS policies
+ * Get the Supabase client (lazily initialized)
+ * Throws if VITE_SUPABASE_URL is not configured
  */
-export const supabase = createClient<ProductionDatabase>(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true,
-  },
-  db: {
-    schema: supabaseSchema, // Set PostgreSQL schema
+function getSupabaseClient(): ReturnType<typeof createClient<ProductionDatabase>> {
+  if (!_supabase) {
+    if (!supabaseUrl || !supabaseAnonKey) {
+      throw new Error(
+        'Supabase configuration missing. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY environment variables.'
+      )
+    }
+    _supabase = createClient<ProductionDatabase>(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+      },
+      db: {
+        schema: supabaseSchema, // Set PostgreSQL schema
+      },
+    })
+  }
+  return _supabase
+}
+
+/**
+ * Supabase client for use in client-side code
+ * Uses the anon key which respects RLS policies
+ * Note: This is a getter that lazily initializes the client
+ */
+export const supabase = new Proxy({} as ReturnType<typeof createClient<ProductionDatabase>>, {
+  get(_, prop) {
+    return (getSupabaseClient() as unknown as Record<string | symbol, unknown>)[prop]
   },
 })
 
