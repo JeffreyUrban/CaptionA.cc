@@ -12,6 +12,7 @@ jobs:
   deploy:
     name: Deploy app
     runs-on: ubuntu-latest
+    environment: prod
     concurrency: deploy-group    # optional: ensure only one action runs at a time
     defaults:
       run:
@@ -33,14 +34,14 @@ jobs:
       - name: Configure Fly.io secrets
         run: |
           flyctl secrets set \
-            VITE_SUPABASE_URL="${{ secrets.SUPABASE_URL }}" \
+            VITE_SUPABASE_URL="${{ vars.SUPABASE_URL }}" \
             VITE_SUPABASE_SCHEMA="captionacc_prod" \
-            VITE_SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}" \
+            VITE_SUPABASE_ANON_KEY="${{ vars.SUPABASE_ANON_KEY }}" \
             VITE_SUPABASE_SERVICE_ROLE_KEY="${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
             WASABI_ACCESS_KEY_READONLY="${{ secrets.WASABI_ACCESS_KEY_READONLY }}" \
             WASABI_SECRET_KEY_READONLY="${{ secrets.WASABI_SECRET_KEY_READONLY }}" \
-            WASABI_BUCKET="${{ secrets.WASABI_BUCKET }}" \
-            WASABI_REGION="${{ secrets.WASABI_REGION }}" \
+            WASABI_BUCKET="${{ vars.WASABI_BUCKET }}" \
+            WASABI_REGION="${{ vars.WASABI_REGION }}" \
             ENVIRONMENT="production" \
             --app captionacc-web-prod
         env:
@@ -49,8 +50,8 @@ jobs:
       - name: Deploy to Fly.io
         run: |
           flyctl deploy --remote-only \
-            --build-arg VITE_SUPABASE_URL="${{ secrets.SUPABASE_URL }}" \
-            --build-arg VITE_SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}" \
+            --build-arg VITE_SUPABASE_URL="${{ vars.SUPABASE_URL }}" \
+            --build-arg VITE_SUPABASE_ANON_KEY="${{ vars.SUPABASE_ANON_KEY }}" \
             --build-arg VITE_SUPABASE_SCHEMA="captionacc_prod"
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
