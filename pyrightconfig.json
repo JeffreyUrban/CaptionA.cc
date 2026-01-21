@@ -7,6 +7,7 @@
     "**/node_modules",
     "**/__pycache__",
     "**/.*",
+    "**/scripts/**",
     "**/extract-crop-frames-and-infer-extents/**",
     "**/extract-full-frames-and-ocr/**",
     "**/packages/gpu_video_utils/**",
