@@ -1,54 +1,107 @@
 # Fly.io Deployment
 
+## Environment Strategy
+
+We maintain separate Fly.io apps for production and development:
+
+| Environment | API App | Web App |
+|-------------|---------|---------|
+| Production | `captionacc-api-prod` | `captionacc-web-prod` |
+| Development | `captionacc-api-dev` | `captionacc-web-dev` |
+
+Each environment has its own:
+- Fly.io app and volume
+- Secrets (Supabase, Wasabi, Prefect, Modal credentials)
+- Prefect work pool (`captionacc-workers-prod` / `captionacc-workers-dev`)
+- Modal app suffix (`prod` / `dev`)
+
 ## Quick Deploy
 
 ```bash
+# Production
 cd services/api
-flyctl deploy
+fly deploy -c fly.prod.toml
+
+# Development
+cd services/api
+fly deploy -c fly.dev.toml
 ```
 
 ## First-Time Setup
 
-### 1. Create App and Volume
+### 1. Create Apps and Volumes
 
+**Production:**
 ```bash
-flyctl apps create captionacc-api
-flyctl volumes create captionacc_data --region ewr --size 1 -a captionacc-api
+fly apps create captionacc-api-prod
+fly volumes create captionacc_data_prod --region ewr --size 1 -a captionacc-api-prod
 ```
 
-**Volume notes:**
-- Volume stores CR-SQLite working copies at `/data/working/`
-- Must be in same region as app (`ewr`)
-- Single volume is correct for single-writer lock model
-- If host fails, Fly migrates the volume (brief downtime, data safe)
+**Development:**
+```bash
+fly apps create captionacc-api-dev
+fly volumes create captionacc_data_dev --region ewr --size 1 -a captionacc-api-dev
+```
 
 ### 2. Set Secrets
 
-From project root (reads from `.env`):
+Each environment needs its own credentials. Use non-suffixed variable names - the environment separation happens at the app level.
 
+**Production:**
 ```bash
-cd services/api
-SUPABASE_URL=$(grep '^SUPABASE_URL=' ../../.env | cut -d'=' -f2-) && \
-SUPABASE_JWT_SECRET=$(grep '^SUPABASE_JWT_SECRET=' ../../.env | cut -d'=' -f2-) && \
-SUPABASE_SERVICE_ROLE_KEY=$(grep '^SUPABASE_SERVICE_ROLE_KEY=' ../../.env | cut -d'=' -f2-) && \
-WASABI_ACCESS_KEY=$(grep '^WASABI_ACCESS_KEY_READWRITE=' ../../.env | cut -d'=' -f2-) && \
-WASABI_SECRET_KEY=$(grep '^WASABI_SECRET_KEY_READWRITE=' ../../.env | cut -d'=' -f2-) && \
-WASABI_BUCKET=$(grep '^WASABI_BUCKET=' ../../.env | cut -d'=' -f2-) && \
-flyctl secrets set \
-  SUPABASE_URL="$SUPABASE_URL" \
-  SUPABASE_JWT_SECRET="$SUPABASE_JWT_SECRET" \
-  SUPABASE_SERVICE_ROLE_KEY="$SUPABASE_SERVICE_ROLE_KEY" \
-  WASABI_ACCESS_KEY_ID="$WASABI_ACCESS_KEY" \
-  WASABI_SECRET_ACCESS_KEY="$WASABI_SECRET_KEY" \
-  WASABI_BUCKET="$WASABI_BUCKET" \
-  -a captionacc-api
+fly secrets set \
+  SUPABASE_URL="https://your-prod-project.supabase.co" \
+  SUPABASE_JWT_SECRET="your-prod-jwt-secret" \
+  SUPABASE_SERVICE_ROLE_KEY="your-prod-service-role-key" \
+  WASABI_ACCESS_KEY_READWRITE="your-prod-access-key" \
+  WASABI_SECRET_KEY_READWRITE="your-prod-secret-key" \
+  WASABI_BUCKET="captionacc-prod" \
+  WASABI_REGION="us-east-1" \
+  PREFECT_API_URL="https://your-prefect-server/api" \
+  PREFECT_API_KEY="your-prefect-api-key" \
+  -a captionacc-api-prod
+```
+
+**Development:**
+```bash
+fly secrets set \
+  SUPABASE_URL="https://your-dev-project.supabase.co" \
+  SUPABASE_JWT_SECRET="your-dev-jwt-secret" \
+  SUPABASE_SERVICE_ROLE_KEY="your-dev-service-role-key" \
+  WASABI_ACCESS_KEY_READWRITE="your-dev-access-key" \
+  WASABI_SECRET_KEY_READWRITE="your-dev-secret-key" \
+  WASABI_BUCKET="captionacc-dev" \
+  WASABI_REGION="us-east-1" \
+  PREFECT_API_URL="https://your-prefect-server/api" \
+  PREFECT_API_KEY="your-prefect-api-key" \
+  -a captionacc-api-dev
 ```
 
 ### 3. Deploy
 
 ```bash
-flyctl deploy
+# Production
+fly deploy -c fly.prod.toml
+
+# Development
+fly deploy -c fly.dev.toml
 ```
+
+## Configuration Files
+
+| File | Purpose |
+|------|---------|
+| `fly.prod.toml` | Production Fly.io config |
+| `fly.dev.toml` | Development Fly.io config |
+| `prefect.yaml` | Production Prefect deployments |
+| `prefect-dev.yaml` | Development Prefect deployments |
+
+Key differences between environments:
+- `ENVIRONMENT`: `production` vs `development`
+- `MODAL_APP_SUFFIX`: `prod` vs `dev`
+- Volume: `captionacc_data_prod` vs `captionacc_data_dev`
+- Prefect work pool: `captionacc-workers-prod` vs `captionacc-workers-dev`
+- Supabase: Separate projects (different `SUPABASE_URL`), same schema name (`captionacc`)
 
 ## CR-SQLite Extension
 
@@ -64,34 +117,38 @@ ARG CRSQLITE_RELEASE_TAG=prebuild-test.main-438663b8
 3. Update `RELEASE_TAG` in `extensions/download.sh`
 4. Run `./extensions/download.sh all` locally to test
 5. Run `./extensions/upload-to-wasabi.sh <new-tag>` to backup to Wasabi
-6. Deploy: `flyctl deploy`
-
-**Wasabi mirror** (private backup): `s3://caption-acc-prod/artifacts/cr-sqlite/`
+6. Deploy: `fly deploy -c fly.prod.toml`
 
 ## Useful Commands
 
 ```bash
 # Check status
-flyctl status -a captionacc-api
+fly status -a captionacc-api-prod
+fly status -a captionacc-api-dev
 
 # View logs
-flyctl logs -a captionacc-api
+fly logs -a captionacc-api-prod
+fly logs -a captionacc-api-dev
 
 # SSH into machine
-flyctl ssh console -a captionacc-api
+fly ssh console -a captionacc-api-prod
+
+# Check secrets (names only)
+fly secrets list -a captionacc-api-prod
 
 # Check volume
-flyctl volumes list -a captionacc-api
+fly volumes list -a captionacc-api-prod
 
 # Restart
-flyctl machines restart -a captionacc-api
+fly machines restart -a captionacc-api-prod
 ```
 
-## Configuration
+## Migration from Single App
 
-Key settings in `fly.toml`:
-- `primary_region = "ewr"` - Newark, must match volume region
-- `auto_stop_machines = "stop"` - Stops when idle to save costs
-- `min_machines_running = 1` - Keeps one machine warm
+If migrating from the old single `captionacc-api` app:
 
-Environment variables set via `[env]` in fly.toml (non-secret) or `flyctl secrets` (secret).
+1. Create the new prod app and volume (see above)
+2. Set secrets on the new app
+3. Deploy to the new app: `fly deploy -c fly.prod.toml`
+4. Update DNS/load balancer to point to new app
+5. (Optional) Stop the old app: `fly apps destroy captionacc-api`

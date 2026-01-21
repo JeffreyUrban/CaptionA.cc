@@ -5,14 +5,13 @@
 
 import { useState, useCallback } from 'react'
 
+import { supabase } from '~/services/supabase-client'
 import type { RenameVideoModalState, DeleteVideoModalState, ErrorModalState } from '~/types/videos'
-import type { BadgeState } from '~/utils/video-stats'
+import type { BadgeState } from '~/utils/video-badges'
 
 interface UseVideoOperationsParams {
   /** Callback when an operation completes successfully */
   onOperationComplete: () => void
-  /** Callback to clear stats for a deleted video */
-  clearVideoStats?: (videoId: string) => void
 }
 
 interface UseVideoOperationsReturn {
@@ -28,7 +27,7 @@ interface UseVideoOperationsReturn {
 
   // Modal open handlers
   openRenameVideoModal: (videoPath: string, currentName: string) => void
-  openDeleteVideoModal: (videoPath: string, videoName: string) => void
+  openDeleteVideoModal: (videoId: string, videoName: string, videoPath: string) => void
   openErrorModal: (videoId: string, errorDetails: BadgeState['errorDetails']) => void
 
   // Modal close handlers
@@ -49,7 +48,6 @@ interface UseVideoOperationsReturn {
  */
 export function useVideoOperations({
   onOperationComplete,
-  clearVideoStats,
 }: UseVideoOperationsParams): UseVideoOperationsReturn {
   // Modal states
   const [renameVideoModal, setRenameVideoModal] = useState<RenameVideoModalState>({ open: false })
@@ -69,9 +67,12 @@ export function useVideoOperations({
     setVideoLoading(false)
   }, [])
 
-  const openDeleteVideoModal = useCallback((videoPath: string, videoName: string) => {
-    setDeleteVideoModal({ open: true, videoPath, videoName })
-  }, [])
+  const openDeleteVideoModal = useCallback(
+    (videoId: string, videoName: string, videoPath: string) => {
+      setDeleteVideoModal({ open: true, videoId, videoName, videoPath })
+    },
+    []
+  )
 
   const openErrorModal = useCallback(
     (videoId: string, errorDetails: BadgeState['errorDetails']) => {
@@ -102,17 +103,22 @@ export function useVideoOperations({
 
     try {
       const oldPath = renameVideoModal.videoPath
+      const pathParts = oldPath.split('/')
+      pathParts[pathParts.length - 1] = renamedVideoName
+      const newPath = pathParts.join('/')
 
-      const response = await fetch('/api/videos/rename', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ oldPath, newName: renamedVideoName }),
-      })
+      // Update video display_path in Supabase (video_path stays as original, storage_key never changes)
+      const { error } = await supabase
+        .from('videos')
+        .update({
+          display_path: newPath,
+        })
+        .eq('display_path', oldPath)
+        .is('deleted_at', null)
 
-      const data = await response.json()
-
-      if (!response.ok) {
-        setVideoError(data.error ?? 'Failed to rename video')
+      if (error) {
+        console.error('Failed to rename video:', error)
+        setVideoError(error.message ?? 'Failed to rename video')
         setVideoLoading(false)
         return
       }
@@ -122,48 +128,61 @@ export function useVideoOperations({
       setRenameVideoModal({ open: false })
       setRenamedVideoName('')
       onOperationComplete()
-    } catch {
+    } catch (error) {
+      console.error('Rename video error:', error)
       setVideoError('Network error')
       setVideoLoading(false)
     }
   }, [renameVideoModal.videoPath, renamedVideoName, onOperationComplete])
 
   const handleDeleteVideo = useCallback(async () => {
-    if (!deleteVideoModal.videoPath) return
+    if (!deleteVideoModal.videoId) return
 
     setVideoError(null)
     setVideoLoading(true)
 
     try {
+      const videoId = deleteVideoModal.videoId
       const videoPath = deleteVideoModal.videoPath
 
-      const response = await fetch(`/api/videos/${encodeURIComponent(videoPath)}/delete`, {
-        method: 'DELETE',
-      })
+      // Soft delete by setting deleted_at timestamp
+      const { data, error } = await supabase
+        .from('videos')
+        .update({
+          deleted_at: new Date().toISOString(),
+        })
+        .eq('id', videoId)
+        .is('deleted_at', null)
+        .select()
 
-      const data = await response.json()
-
-      if (!response.ok) {
-        setVideoError(data.error ?? 'Failed to delete video')
+      if (error) {
+        console.error('Failed to delete video:', error)
+        setVideoError(error.message ?? 'Failed to delete video')
         setVideoLoading(false)
         return
       }
+
+      // Check if any rows were actually updated
+      if (!data || data.length === 0) {
+        console.error('Delete failed: No video found with ID:', videoId)
+        setVideoError('Video not found or already deleted')
+        setVideoLoading(false)
+        return
+      }
+
+      console.log('Successfully deleted video:', videoId, 'Updated rows:', data.length)
 
       // Success - close modal and reload
       setVideoLoading(false)
       setDeleteVideoModal({ open: false })
 
-      // Clear cached stats for this video
-      if (clearVideoStats) {
-        clearVideoStats(videoPath)
-      }
-
       onOperationComplete()
-    } catch {
+    } catch (error) {
+      console.error('Delete video error:', error)
       setVideoError('Network error')
       setVideoLoading(false)
     }
-  }, [deleteVideoModal.videoPath, onOperationComplete, clearVideoStats])
+  }, [deleteVideoModal.videoId, deleteVideoModal.videoPath, onOperationComplete])
 
   return {
     // Modal states

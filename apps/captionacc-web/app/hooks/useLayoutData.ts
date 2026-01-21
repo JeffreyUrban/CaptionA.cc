@@ -28,10 +28,13 @@ import {
   resetCropBounds,
   clearAllAnnotations,
   prefetchFrameBoxes,
+  calculatePredictions,
+  applyPredictions,
 } from '~/utils/layout-api'
 
 interface UseLayoutDataParams {
   videoId: string
+  isDbReady?: boolean
   showAlert?: (title: string, message: string, type: 'info' | 'error' | 'success') => void
 }
 
@@ -51,6 +54,7 @@ interface UseLayoutDataReturn {
   hasUnsyncedAnnotations: boolean
   annotationsSinceRecalc: number
   isRecalculating: boolean
+  isCalculatingPredictions: boolean
   boundsMismatch: boolean
   analysisThumbnailUrl: string | null
   setAnalysisThumbnailUrl: (url: string | null) => void
@@ -124,7 +128,11 @@ function processQueueResponse(
 }
 
 // eslint-disable-next-line max-lines-per-function -- Layout data management with loading, saving, and state synchronization
-export function useLayoutData({ videoId, showAlert }: UseLayoutDataParams): UseLayoutDataReturn {
+export function useLayoutData({
+  videoId,
+  isDbReady = true,
+  showAlert,
+}: UseLayoutDataParams): UseLayoutDataReturn {
   const [frames, setFrames] = useState<FrameInfo[]>([])
   const [layoutConfig, setLayoutConfig] = useState<LayoutConfig | null>(null)
   const [layoutApproved, setLayoutApproved] = useState(false)
@@ -138,6 +146,7 @@ export function useLayoutData({ videoId, showAlert }: UseLayoutDataParams): UseL
   const [hasUnsyncedAnnotations, setHasUnsyncedAnnotations] = useState(false)
   const [annotationsSinceRecalc, setAnnotationsSinceRecalc] = useState(0)
   const [isRecalculating, setIsRecalculating] = useState(false)
+  const [isCalculatingPredictions, setIsCalculatingPredictions] = useState(false)
   const [analysisThumbnailUrl, setAnalysisThumbnailUrl] = useState<string | null>(null)
   const [pulseStartTime, setPulseStartTime] = useState(Date.now())
   const [cropBoundsEdit, setCropBoundsEdit] = useState<CropBoundsEdit | null>(null)
@@ -229,7 +238,39 @@ export function useLayoutData({ videoId, showAlert }: UseLayoutDataParams): UseL
     if (!videoId) return
     try {
       const data = await fetchAnalysisBoxes(videoId)
-      setAnalysisBoxes(data.boxes ?? [])
+      const boxes = data.boxes ?? []
+
+      // Check if any boxes are missing predictions (predictedLabel is null)
+      const hasMissingPredictions = boxes.some(box => box.predictedLabel === null)
+
+      if (hasMissingPredictions && boxes.length > 0) {
+        console.log('[Layout] Boxes missing predictions, triggering calculation...')
+        setIsCalculatingPredictions(true)
+        try {
+          const result = await calculatePredictions(videoId)
+          console.log(
+            `[Layout] Predictions calculated: ${result.predictionsGenerated} boxes, model: ${result.modelVersion}`
+          )
+
+          // Apply predictions to local database
+          if (result.predictions && result.predictions.length > 0) {
+            console.log(`[Layout] Applying ${result.predictions.length} predictions to local database`)
+            await applyPredictions(videoId, result.predictions)
+          }
+
+          // Reload boxes after predictions are applied
+          const updatedData = await fetchAnalysisBoxes(videoId)
+          setAnalysisBoxes(updatedData.boxes ?? [])
+        } catch (predError) {
+          console.error('Error calculating predictions:', predError)
+          // Still set the boxes even if prediction calculation fails
+          setAnalysisBoxes(boxes)
+        } finally {
+          setIsCalculatingPredictions(false)
+        }
+      } else {
+        setAnalysisBoxes(boxes)
+      }
     } catch (loadError) {
       console.error('Error loading analysis boxes:', loadError)
     }
@@ -267,10 +308,10 @@ export function useLayoutData({ videoId, showAlert }: UseLayoutDataParams): UseL
   }, [videoId, frames])
 
   useEffect(() => {
-    if (!videoId) return
+    if (!videoId || !isDbReady) return
     void loadAnalysisBoxes()
     void loadQueue(true)
-  }, [videoId, loadAnalysisBoxes, loadQueue])
+  }, [videoId, isDbReady, loadAnalysisBoxes, loadQueue])
 
   useEffect(() => {
     if (!error?.startsWith('Processing:')) return
@@ -419,6 +460,7 @@ export function useLayoutData({ videoId, showAlert }: UseLayoutDataParams): UseL
     hasUnsyncedAnnotations,
     annotationsSinceRecalc,
     isRecalculating,
+    isCalculatingPredictions,
     boundsMismatch,
     analysisThumbnailUrl,
     setAnalysisThumbnailUrl,

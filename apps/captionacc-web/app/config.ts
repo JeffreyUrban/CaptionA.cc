@@ -2,7 +2,7 @@
  * Application Configuration
  *
  * Centralized configuration for API endpoints and external services.
- * Uses environment variables with sensible defaults for local development.
+ * All environment variables are required and must be set in .env file.
  */
 
 // =============================================================================
@@ -15,13 +15,13 @@
  */
 export const API_CONFIG = {
   /** Base URL for Python API (FastAPI backend) */
-  PYTHON_API_URL: import.meta.env['VITE_API_URL'] ?? 'https://api.captiona.cc/v1',
+  PYTHON_API_URL: import.meta.env['VITE_API_URL']!,
 
   /** Supabase project URL */
-  SUPABASE_URL: import.meta.env['VITE_SUPABASE_URL'],
+  SUPABASE_URL: import.meta.env['VITE_SUPABASE_URL']!,
 
   /** Supabase anonymous key for client-side auth */
-  SUPABASE_ANON_KEY: import.meta.env['VITE_SUPABASE_ANON_KEY'],
+  SUPABASE_ANON_KEY: import.meta.env['VITE_SUPABASE_ANON_KEY']!,
 } as const
 
 // =============================================================================
@@ -71,13 +71,14 @@ export type DatabaseName = (typeof DATABASE_NAMES)[keyof typeof DATABASE_NAMES]
 
 /**
  * Wasabi S3 configuration for database downloads.
+ * Note: Credentials are fetched via STS from the API, not stored in the web app.
  */
 export const WASABI_CONFIG = {
   /** Wasabi region */
   REGION: 'us-east-1',
 
-  /** Wasabi bucket name */
-  BUCKET: 'caption-acc-prod',
+  /** Wasabi bucket name (configurable per environment) */
+  BUCKET: import.meta.env['VITE_WASABI_BUCKET'] || 'captionacc-prod',
 
   /** Wasabi endpoint URL */
   ENDPOINT: 'https://s3.us-east-1.wasabisys.com',
@@ -134,7 +135,8 @@ export function buildLockUrl(videoId: string, dbName: DatabaseName): string {
 
 /**
  * Build the Wasabi storage key for a database file.
+ * Format: {tenant_id}/client/videos/{video_id}/{dbName}.db.gz
  */
 export function buildStorageKey(tenantId: string, videoId: string, dbName: DatabaseName): string {
-  return `${tenantId}/${videoId}/${dbName}${WASABI_CONFIG.COMPRESSED_EXTENSION}`
+  return `${tenantId}/client/videos/${videoId}/${dbName}${WASABI_CONFIG.COMPRESSED_EXTENSION}`
 }

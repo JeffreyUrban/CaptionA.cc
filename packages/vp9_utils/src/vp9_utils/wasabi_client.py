@@ -27,7 +27,7 @@ def get_s3_client():
     Raises:
         ValueError: If required environment variables are missing
     """
-    required_vars = ["WASABI_REGION", "WASABI_ACCESS_KEY", "WASABI_SECRET_KEY"]
+    required_vars = ["WASABI_REGION", "WASABI_ACCESS_KEY_READONLY", "WASABI_SECRET_KEY_READONLY"]
     missing = [var for var in required_vars if not os.getenv(var)]
 
     if missing:
@@ -36,8 +36,8 @@ def get_s3_client():
     return boto3.client(
         "s3",
         endpoint_url=f"https://s3.{os.getenv('WASABI_REGION')}.wasabisys.com",
-        aws_access_key_id=os.getenv("WASABI_ACCESS_KEY"),
-        aws_secret_access_key=os.getenv("WASABI_SECRET_KEY"),
+        aws_access_key_id=os.getenv("WASABI_ACCESS_KEY_READONLY"),
+        aws_secret_access_key=os.getenv("WASABI_SECRET_KEY_READONLY"),
         region_name=os.getenv("WASABI_REGION"),
     )
 

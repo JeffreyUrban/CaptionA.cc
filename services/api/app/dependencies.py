@@ -3,7 +3,6 @@
 from typing import Annotated
 
 from fastapi import Depends, Header, HTTPException, status
-from jose import JWTError, jwt
 from pydantic import BaseModel
 
 from app.config import Settings, get_settings
@@ -15,6 +14,7 @@ class AuthContext(BaseModel):
     user_id: str
     tenant_id: str
     email: str | None = None
+    is_platform_admin: bool = False
 
 
 async def get_auth_context(
@@ -26,7 +26,7 @@ async def get_auth_context(
 
     The JWT contains:
     - sub: user ID
-    - tenant_id: custom claim for tenant isolation
+    - tenant_id: custom claim for tenant isolation (optional - fetched from DB if missing)
     - email: user's email
     """
     credentials_exception = HTTPException(
@@ -42,26 +42,61 @@ async def get_auth_context(
     token = authorization.removeprefix("Bearer ")
 
     try:
-        payload = jwt.decode(
-            token,
-            settings.supabase_jwt_secret,
-            algorithms=["HS256"],
-            audience="authenticated",
+        import logging
+        from app.services.supabase_client import get_supabase_client
+
+        logger = logging.getLogger(__name__)
+
+        # Use Supabase client to verify token and get user info
+        # This works for both ES256 and HS256 tokens
+        supabase = get_supabase_client()
+
+        # Verify token by getting user from Supabase
+        auth_response = supabase.auth.get_user(token)
+        user = auth_response.user if auth_response else None
+
+        if not user:
+            logger.error("Failed to verify token with Supabase")
+            raise credentials_exception
+
+        user_id = user.id
+        email = user.email
+
+        logger.info(f"Authenticated user: {user_id}")
+
+        # Fetch tenant_id from user_profiles
+        result = (
+            supabase.schema(settings.supabase_schema)
+            .table("user_profiles")
+            .select("tenant_id")
+            .eq("id", user_id)
+            .maybe_single()
+            .execute()
         )
 
-        user_id: str | None = payload.get("sub")
-        tenant_id: str | None = payload.get("tenant_id")
-
-        if user_id is None or tenant_id is None:
+        profile_data = result.data if result else None
+        if profile_data is None or not isinstance(profile_data, dict):
+            logger.error(f"No user_profile found for user_id: {user_id}")
             raise credentials_exception
+
+        tenant_id = profile_data.get("tenant_id")
+        if not isinstance(tenant_id, str):
+            logger.error(f"User profile has no tenant_id: {profile_data}")
+            raise credentials_exception
+
+        logger.info(f"Found tenant_id: {tenant_id}")
 
         return AuthContext(
             user_id=user_id,
             tenant_id=tenant_id,
-            email=payload.get("email"),
+            email=email,
         )
 
-    except JWTError:
+    except Exception as e:
+        import logging
+
+        logger = logging.getLogger(__name__)
+        logger.error(f"Authentication error: {e}")
         raise credentials_exception
 
 

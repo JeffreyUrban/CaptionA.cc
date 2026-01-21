@@ -38,11 +38,20 @@ export function AppRoot() {
 // Example 2: Use S3Image component
 // ============================================================================
 
-export function FrameThumbnail({ videoId, frameIndex }: { videoId: string; frameIndex: number }) {
+export function FrameThumbnail({
+  tenantId,
+  videoId,
+  frameIndex,
+}: {
+  tenantId: string
+  videoId: string
+  frameIndex: number
+}) {
   const filename = `frame_${String(frameIndex).padStart(4, '0')}.jpg`
 
   return (
     <S3Image
+      tenantId={tenantId}
       videoId={videoId}
       path={`full_frames/${filename}`}
       alt={`Frame ${frameIndex}`}
@@ -57,9 +66,10 @@ export function FrameThumbnail({ videoId, frameIndex }: { videoId: string; frame
 // Example 3: Use S3Video component
 // ============================================================================
 
-export function VideoPlayer({ videoId }: { videoId: string }) {
+export function VideoPlayer({ tenantId, videoId }: { tenantId: string; videoId: string }) {
   return (
     <S3Video
+      tenantId={tenantId}
       videoId={videoId}
       path="video.mp4"
       className="w-full"
@@ -98,10 +108,15 @@ export function CredentialsStatus() {
 // Example 5: Generate signed URL programmatically
 // ============================================================================
 
-export async function getFrameUrl(videoId: string, frameIndex: number): Promise<string> {
+export async function getFrameUrl(
+  tenantId: string,
+  videoId: string,
+  frameIndex: number
+): Promise<string> {
   const filename = `frame_${String(frameIndex).padStart(4, '0')}.jpg`
 
   const url = await getVideoResourceUrl(
+    tenantId,
     videoId,
     'full_frames',
     { filename },
@@ -133,7 +148,11 @@ export async function buildFramePath(videoId: string, frameIndex: number): Promi
 // Example 7: Use frame cache
 // ============================================================================
 
-export async function cacheFrame(videoId: string, frameIndex: number): Promise<void> {
+export async function cacheFrame(
+  tenantId: string,
+  videoId: string,
+  frameIndex: number
+): Promise<void> {
   // Check if already cached
   const cached = getFrame(frameIndex)
   if (cached) {
@@ -143,7 +162,7 @@ export async function cacheFrame(videoId: string, frameIndex: number): Promise<v
 
   // Fetch frame from S3
   const filename = `frame_${String(frameIndex).padStart(4, '0')}.jpg`
-  const url = await getVideoResourceUrl(videoId, 'full_frames', { filename })
+  const url = await getVideoResourceUrl(tenantId, videoId, 'full_frames', { filename })
 
   // Download image as bytes
   const response = await fetch(url)
@@ -186,16 +205,19 @@ export function CacheStats() {
 // ============================================================================
 
 export function CroppedFrameChunk({
+  tenantId,
   videoId,
   chunkIndex,
   modulo,
 }: {
+  tenantId: string
   videoId: string
   chunkIndex: number
   modulo: number
 }) {
   return (
     <S3Image
+      tenantId={tenantId}
       videoId={videoId}
       path={{
         type: 'cropped_frames',

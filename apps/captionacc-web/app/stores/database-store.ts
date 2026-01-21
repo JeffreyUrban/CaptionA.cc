@@ -271,10 +271,15 @@ export const useDatabaseStore = create<DatabaseStore>()(
             initializedAt: Date.now(),
           })
 
-          // Set up WebSocket sync
-          await get().setupSync(instanceId, database)
+          // Set up WebSocket sync (non-fatal - database works offline)
+          try {
+            await get().setupSync(instanceId, database)
+          } catch (syncError) {
+            // Sync failure is not fatal - database can work offline
+            console.warn(`[DatabaseStore] WebSocket sync setup failed (offline mode):`, syncError)
+          }
 
-          // Acquire lock if requested
+          // Acquire lock if requested (non-fatal - database works in read-only mode)
           if (options.acquireLock) {
             try {
               const lockStatus = await acquireLock(videoId, dbName)
@@ -282,8 +287,14 @@ export const useDatabaseStore = create<DatabaseStore>()(
             } catch (error) {
               // Lock failure is not fatal - we can still read
               console.warn(`[DatabaseStore] Failed to acquire lock:`, error)
-              const lockCheck = await checkLockState(videoId, dbName)
-              get().setLockStatus(instanceId, lockCheck)
+              try {
+                const lockCheck = await checkLockState(videoId, dbName)
+                get().setLockStatus(instanceId, lockCheck)
+              } catch (checkError) {
+                // Lock check also failed (offline) - set to read-only mode
+                console.warn(`[DatabaseStore] Lock check failed (offline mode):`, checkError)
+                get().setLockStatus(instanceId, { state: 'released', canEdit: false })
+              }
             }
           }
 
@@ -572,8 +583,9 @@ export const useDatabaseStore = create<DatabaseStore>()(
             })
           },
           onError: error => {
-            logDatabaseError(error, '[DatabaseStore]')
-            store.setError(instanceId, error)
+            // Log sync errors but don't set as instance error - sync is non-fatal
+            // Database works in offline mode when sync fails
+            logDatabaseError(error, '[DatabaseStore] Sync error (non-fatal)')
           },
         })
 

@@ -10,10 +10,12 @@ from app.config import get_settings
 from app.dependencies import Auth
 from app.models.actions import (
     AnalyzeLayoutResponse,
+    BoxPrediction,
     BulkAnnotateAction,
     BulkAnnotateRequest,
     BulkAnnotateResponse,
     CalculatePredictionsResponse,
+    LayoutParams,
     RetryRequest,
     RetryResponse,
     TriggerProcessingRequest,
@@ -24,6 +26,7 @@ from app.repositories.layout import LayoutRepository
 from app.repositories.ocr import OcrRepository
 from app.services.database_manager import (
     get_layout_database_manager,
+    get_layout_server_database_manager,
     get_ocr_database_manager,
 )
 from app.services.priority_service import calculate_flow_priority, get_priority_tags
@@ -62,8 +65,10 @@ async def bulk_annotate(video_id: str, body: BulkAnnotateRequest, auth: Auth):
             if body.allFrames:
                 # Get all frame indices
                 frame_indices = ocr_repo.get_frame_indices()
-            else:
+            elif body.frame is not None:
                 frame_indices = [body.frame]
+            else:
+                frame_indices = []
 
             # Find boxes within rectangle for each frame
             boxes_to_annotate: list[tuple[int, int]] = []  # (frame_index, box_index)
@@ -144,13 +149,88 @@ async def analyze_layout(video_id: str, auth: Auth):
     Run layout analysis (Bayesian model on boxes).
 
     Analyzes OCR box positions to determine optimal caption region.
+    Downloads layout.db from Wasabi, runs Bayesian analysis to calculate
+    layout parameters (vertical position, anchor type, etc.), and uploads
+    updated database back to Wasabi.
+
     Synchronous operation, returns updated predictions.
     """
-    # TODO: Implement Bayesian layout analysis
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="Layout analysis not yet implemented",
-    )
+    import time
+
+    from app.services.layout_analysis import analyze_ocr_boxes, update_layout_config
+
+    start_time = time.time()
+    layout_db_manager = get_layout_database_manager()
+
+    try:
+        # Download layout.db from Wasabi and get writable connection
+        async with layout_db_manager.get_database(
+            auth.tenant_id, video_id, writable=True
+        ) as conn:
+            # Get frame dimensions from layout config
+            cursor = conn.cursor()
+            config_row = cursor.execute(
+                "SELECT frame_width, frame_height FROM layout_config WHERE id = 1"
+            ).fetchone()
+
+            if not config_row:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Layout config not found for video {video_id}",
+                )
+
+            frame_width, frame_height = config_row
+
+            # Count total boxes for response
+            boxes_count = cursor.execute("SELECT COUNT(*) FROM boxes").fetchone()[0]
+
+            logger.info(
+                f"Running Bayesian analysis on {boxes_count} boxes "
+                f"for video {video_id} (frame size: {frame_width}x{frame_height})"
+            )
+
+            # Run Bayesian analysis
+            layout_params = analyze_ocr_boxes(conn, frame_width, frame_height)
+
+            # Update layout config with calculated parameters
+            update_layout_config(conn, layout_params)
+
+            logger.info(
+                f"Layout analysis complete for video {video_id}: "
+                f"anchor_type={layout_params.anchor_type}, "
+                f"vertical_position={layout_params.vertical_position}"
+            )
+
+        # Database automatically uploaded to Wasabi on exit (writable=True)
+
+        elapsed_ms = int((time.time() - start_time) * 1000)
+
+        return AnalyzeLayoutResponse(
+            success=True,
+            boxesAnalyzed=boxes_count,
+            processingTimeMs=elapsed_ms,
+            layoutParams=LayoutParams(
+                verticalPosition=layout_params.vertical_position,
+                verticalStd=layout_params.vertical_std,
+                boxHeight=layout_params.box_height,
+                boxHeightStd=layout_params.box_height_std,
+                anchorType=layout_params.anchor_type,
+                anchorPosition=layout_params.anchor_position,
+            ),
+        )
+
+    except ValueError as e:
+        # No OCR boxes found
+        logger.error(f"Layout analysis failed for video {video_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+    except FileNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Layout database not found for video {video_id}",
+        )
 
 
 @router.post(
@@ -159,16 +239,165 @@ async def analyze_layout(video_id: str, auth: Auth):
 )
 async def calculate_predictions(video_id: str, auth: Auth):
     """
-    Train model and cache predictions for all boxes.
+    Calculate predictions for all boxes using Bayesian model.
 
-    Trains a classification model on user-labeled boxes and generates
-    predictions for all unlabeled boxes.
+    Uses layout.db for boxes/layout config and layout-server.db for model data.
+    Initializes seed model if none exists, then runs predictions for all boxes.
     """
-    # TODO: Implement prediction calculation
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="Prediction calculation not yet implemented",
+    import time
+    from datetime import datetime, timezone
+
+    from ocr_box_model import (
+        initialize_seed_model,
+        load_layout_config,
+        load_model,
+        predict_with_heuristics,
+        run_model_migrations,
     )
+    from ocr_box_model.types import BoxBounds
+
+    start_time = time.time()
+    layout_db_manager = get_layout_database_manager()
+    layout_server_db_manager = get_layout_server_database_manager()
+
+    try:
+        # Open both databases - layout.db for boxes, layout-server.db for model
+        async with layout_db_manager.get_database(
+            auth.tenant_id, video_id, writable=True
+        ) as layout_conn:
+            async with layout_server_db_manager.get_or_create_database(
+                auth.tenant_id, video_id
+            ) as model_conn:
+                # Run model migrations on layout-server.db
+                run_model_migrations(model_conn)
+
+                # Initialize seed model if none exists (on layout-server.db)
+                initialize_seed_model(model_conn)
+
+                # Load layout config from layout.db
+                layout = load_layout_config(layout_conn)
+                if not layout:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail=f"Layout config not found for video {video_id}",
+                    )
+
+                # Load model from layout-server.db
+                model = load_model(model_conn)
+                model_version = model.model_version if model else "heuristics"
+
+                # Get all boxes from boxes table (layout.db)
+                cursor = layout_conn.cursor()
+                rows = cursor.execute(
+                    """
+                    SELECT frame_index, box_index, text, bbox_left, bbox_top, bbox_right, bbox_bottom
+                    FROM boxes
+                    ORDER BY frame_index, box_index
+                    """
+                ).fetchall()
+
+                if not rows:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="No OCR boxes found in database",
+                    )
+
+                logger.info(
+                    f"Calculating predictions for {len(rows)} boxes in video {video_id}"
+                )
+
+                # Prepare predictions
+                predictions_to_save: list[tuple[str, float, str, str, int, int]] = []
+                now = datetime.now(timezone.utc).isoformat()
+
+                for row in rows:
+                    (
+                        frame_index,
+                        box_index,
+                        text,
+                        bbox_left,
+                        bbox_top,
+                        bbox_right,
+                        bbox_bottom,
+                    ) = row
+
+                    # Convert fractional coordinates to pixels
+                    # boxes table stores normalized coords (0-1) with top > bottom (top of screen is higher y)
+                    left = int(bbox_left * layout.frame_width)
+                    top = int((1 - bbox_top) * layout.frame_height)
+                    right = int(bbox_right * layout.frame_width)
+                    bottom = int((1 - bbox_bottom) * layout.frame_height)
+
+                    # Create BoxBounds for prediction
+                    box_bounds = BoxBounds(
+                        left=left,
+                        top=top,
+                        right=right,
+                        bottom=bottom,
+                        frame_index=frame_index,
+                        box_index=box_index,
+                        text=text or "",
+                    )
+
+                    # Use heuristics for initial predictions (no user annotations yet)
+                    prediction = predict_with_heuristics(box_bounds, layout)
+
+                    predictions_to_save.append(
+                        (
+                            prediction.label,
+                            prediction.confidence,
+                            model_version,
+                            now,
+                            frame_index,
+                            box_index,
+                        )
+                    )
+
+                # Batch update predictions in boxes table (layout.db)
+                cursor.executemany(
+                    """
+                    UPDATE boxes
+                    SET predicted_label = ?,
+                        predicted_confidence = ?
+                    WHERE frame_index = ? AND box_index = ?
+                    """,
+                    [
+                        (label, conf, frame_idx, box_idx)
+                        for label, conf, _model, _time, frame_idx, box_idx in predictions_to_save
+                    ],
+                )
+                layout_conn.commit()
+
+                elapsed_ms = int((time.time() - start_time) * 1000)
+
+                logger.info(
+                    f"Calculated {len(predictions_to_save)} predictions for video {video_id} "
+                    f"in {elapsed_ms}ms using {model_version}"
+                )
+
+                # Convert predictions to response format
+                prediction_results = [
+                    BoxPrediction(
+                        frameIndex=frame_idx,
+                        boxIndex=box_idx,
+                        predictedLabel=label,
+                        predictedConfidence=conf,
+                    )
+                    for label, conf, _model, _time, frame_idx, box_idx in predictions_to_save
+                ]
+
+                return CalculatePredictionsResponse(
+                    success=True,
+                    predictionsGenerated=len(predictions_to_save),
+                    modelVersion=model_version,
+                    predictions=prediction_results,
+                )
+
+    except FileNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Layout database not found for video {video_id}",
+        )
 
 
 @router.post(
@@ -179,7 +408,7 @@ async def approve_layout(video_id: str, body: TriggerProcessingRequest, auth: Au
     """
     Approve layout and trigger crop + inference pipeline.
 
-    Triggers the captionacc-crop-and-infer-caption-frame-extents Prefect flow
+    Triggers the crop-and-infer-caption-frame-extents Prefect deployment
     which crops frames, runs caption frame extents inference, and creates captions.db.
     """
     settings = get_settings()
@@ -236,6 +465,20 @@ async def approve_layout(video_id: str, body: TriggerProcessingRequest, auth: Au
         enable_age_boosting=True,  # Enable age boosting by default
     )
 
+    # Update layout_status to 'done' - user has approved the layout
+    try:
+        supabase.update_video_workflow_status(
+            video_id=video_id,
+            layout_status="done",
+        )
+        logger.info(f"Updated layout_status to 'done' for video {video_id}")
+    except Exception as e:
+        logger.error(f"Failed to update layout_status: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update layout status: {str(e)}",
+        )
+
     # Generate tags for observability
     tags = get_priority_tags(
         priority=priority,
@@ -245,8 +488,10 @@ async def approve_layout(video_id: str, body: TriggerProcessingRequest, auth: Au
     )
     tags.extend(["trigger:user-action", "action:approve-layout"])
 
-    # Build flow name for crop and infer flow
-    flow_name = "captionacc-crop-and-infer-caption-frame-extents"
+    # Build deployment path for crop and infer flow (uses namespace from config)
+    deployment_path = settings.get_deployment_full_name(
+        "crop-and-infer-caption-frame-extents"
+    )
 
     # Prepare flow parameters
     parameters = {
@@ -256,7 +501,9 @@ async def approve_layout(video_id: str, body: TriggerProcessingRequest, auth: Au
     }
 
     # Build Prefect API URL
-    url = f"{settings.prefect_api_url}/deployments/name/{flow_name}/create_flow_run"
+    url = (
+        f"{settings.prefect_api_url}/deployments/name/{deployment_path}/create_flow_run"
+    )
 
     # Prepare request payload
     payload = {
@@ -271,7 +518,7 @@ async def approve_layout(video_id: str, body: TriggerProcessingRequest, auth: Au
         headers["Authorization"] = f"Bearer {settings.prefect_api_key}"
 
     logger.info(
-        f"Triggering {flow_name} for video {video_id} "
+        f"Triggering {deployment_path} for video {video_id} "
         f"(tenant: {auth.tenant_id}, priority: {priority})"
     )
 

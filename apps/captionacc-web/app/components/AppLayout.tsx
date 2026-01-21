@@ -95,18 +95,10 @@ export function AppLayout({ children, fullScreen = false }: AppLayoutProps) {
         return
       }
 
-      try {
-        const response = await fetch('/api/auth/is-platform-admin', {
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
-        })
-        const data = (await response.json()) as { isPlatformAdmin: boolean }
-        setIsPlatformAdmin(data.isPlatformAdmin)
-      } catch (error) {
-        console.error('Failed to check admin status:', error)
-        setIsPlatformAdmin(false)
-      }
+      // TODO: Integrate with backend API at https://captionacc-api.fly.dev/
+      // Check user_profiles table in Supabase for is_platform_admin flag
+      // For now, default to false
+      setIsPlatformAdmin(false)
     }
 
     void checkAdminStatus()

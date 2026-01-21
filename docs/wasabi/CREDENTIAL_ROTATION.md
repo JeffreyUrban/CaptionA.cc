@@ -46,36 +46,6 @@
 
 ---
 
-### captionacc-orchestrator (Processing)
-
-1. **Wasabi Console** → Users → captionacc-orchestrator → Generate New Access Key
-2. **Update local `.env`:**
-   ```bash
-   WASABI_ACCESS_KEY_READWRITE=<new_key>
-   WASABI_SECRET_KEY_READWRITE=<new_secret>
-   ```
-3. **Update Fly.io secrets:**
-   ```bash
-   fly secrets set \
-     WASABI_ACCESS_KEY_READWRITE=<new_key> \
-     WASABI_SECRET_KEY_READWRITE=<new_secret> \
-     -a <orchestrator-app-name>
-   ```
-4. **Verify health:**
-   ```bash
-   # Test local credentials
-   ./scripts/wasabi-test-access.sh
-
-   # Check production health
-   fly status -a <orchestrator-app-name>
-
-   # Trigger test processing job (if available)
-   ```
-5. **Wait 48 hours**
-6. **Delete old access key** in Wasabi Console
-
----
-
 ## Verification
 
 ### Automated Health Checks
@@ -106,14 +76,14 @@ source .env
 Test 1: Can list all buckets?
 ✅ NO - Credentials restricted (good!)
 
-Test 2: Can access caption-acc-prod bucket?
+Test 2: Can access captionacc-prod bucket?
 ✅ YES - Can access app bucket (expected)
 
-Test 3: Can write to caption-acc-prod bucket?
+Test 3: Can write to captionacc-prod bucket?
 [For readonly]: ⚠️  NO - Read-only access
 [For readwrite]: ✅ YES - Has write access
 
-Test 4: Can delete from caption-acc-prod bucket?
+Test 4: Can delete from captionacc-prod bucket?
 [For readonly]: ⚠️  Cannot test (no write access)
 [For readwrite]: ✅ YES - Has delete access
 ```
@@ -205,9 +175,9 @@ fly secrets list -a <app-name>
 **Fix:**
 ```bash
 # Test credentials directly
-export WASABI_ACCESS_KEY="<key>"
-export WASABI_SECRET_KEY="<secret>"
-aws s3 ls s3://caption-acc-prod/ --endpoint-url https://s3.us-east-1.wasabisys.com
+export WASABI_ACCESS_KEY_READWRITE="<key>"
+export WASABI_SECRET_KEY_READWRITE="<secret>"
+aws s3 ls s3://captionacc-prod/ --endpoint-url https://s3.us-east-1.wasabisys.com
 
 # Should succeed. If not, check Wasabi Console IAM settings
 ```

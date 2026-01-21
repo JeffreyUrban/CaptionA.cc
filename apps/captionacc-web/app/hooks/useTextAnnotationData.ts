@@ -185,7 +185,7 @@ export function useTextAnnotationData({
 // --- API Helper Functions ---
 
 async function fetchQueue(videoId: string) {
-  const response = await fetch(`/api/annotations/${encodeURIComponent(videoId)}/text-queue`)
+  const response = await fetch(`/videos/${encodeURIComponent(videoId)}/text-queue`)
   return response.json()
 }
 
@@ -228,7 +228,7 @@ async function loadAnnotation(
   setError(null)
   try {
     const response = await fetch(
-      `/api/annotations/${encodeURIComponent(videoId)}/${annotationId}/text`
+      `/videos/${encodeURIComponent(videoId)}/${annotationId}/text`
     )
     if (!response.ok) throw new Error('Failed to load annotation')
     const data = await response.json()
@@ -269,7 +269,7 @@ async function saveAnnotationText(
 ): Promise<boolean> {
   try {
     const response = await fetch(
-      `/api/annotations/${encodeURIComponent(videoId)}/${annotationId}/text`,
+      `/videos/${encodeURIComponent(videoId)}/${annotationId}/text`,
       {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },

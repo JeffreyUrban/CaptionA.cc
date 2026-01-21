@@ -3,6 +3,7 @@
 Handles real-time bidirectional sync between browser and server.
 """
 
+import base64
 import json
 import logging
 
@@ -212,6 +213,17 @@ async def handle_sync_message(
     # Extract changes
     changes = message.get("changes", [])
 
+    # Extract client site_id from first change (used to filter echo)
+    client_site_id = None
+    if changes:
+        client_site_id = changes[0].get("site_id")
+        # Convert base64 string to bytes if needed
+        if isinstance(client_site_id, str):
+            try:
+                client_site_id = base64.b64decode(client_site_id)
+            except Exception:
+                client_site_id = None
+
     if changes:
         try:
             # Apply changes to working copy
@@ -227,12 +239,36 @@ async def handle_sync_message(
             await state_repo.update_activity(video_id, db_name)
             ws_manager.update_activity(connection_id)
 
-            # Send ack
+            # Check for server-generated changes to push back
+            # (e.g., model predictions triggered by client edits)
+            server_changes = await cr_manager.get_changes_since(
+                tenant_id=tenant_id,
+                video_id=video_id,
+                db_name=db_name,
+                since_version=new_version - 1,  # Get changes from this batch
+                exclude_site_id=client_site_id,  # Exclude client's own changes
+            )
+
+            # Send ack with any server changes
             await ws_manager.send_ack(
                 connection_id=connection_id,
                 server_version=new_version,
                 applied_count=len(changes),
             )
+
+            # If there are server-generated changes, push them to client
+            if server_changes:
+                await ws_manager.send_message(
+                    connection_id,
+                    {
+                        "type": "server_update",
+                        "changes": server_changes,
+                        "version": new_version,
+                    },
+                )
+                logger.debug(
+                    f"Pushed {len(server_changes)} server changes to {connection_id}"
+                )
 
             logger.debug(
                 f"Applied {len(changes)} changes to {video_id}/{db_name}, version={new_version}"

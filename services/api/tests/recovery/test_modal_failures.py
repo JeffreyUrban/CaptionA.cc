@@ -22,9 +22,9 @@ sys.modules["extract_crop_frames_and_infer_extents"] = MagicMock()
 sys.modules["extract_crop_frames_and_infer_extents.models"] = MagicMock()
 
 from app.flows.video_initial_processing import (
-    extract_frames_and_ocr_task,
+    extract_full_frames_and_ocr_task,
     update_video_metadata_task,
-    update_video_status_task,
+    update_workflow_status_task,
 )
 
 
@@ -150,7 +150,7 @@ class TestModalFailureRecovery:
         ):
             # First attempt - should fail with timeout
             with pytest.raises(RuntimeError) as exc_info:
-                extract_frames_and_ocr_task(
+                extract_full_frames_and_ocr_task(
                     video_key=test_storage_key,
                     tenant_id=test_tenant_id,
                     video_id=test_video_id,
@@ -164,7 +164,7 @@ class TestModalFailureRecovery:
             mock_function.remote = Mock(return_value=MockExtractResult(frame_count=50))
 
             # Second attempt - should succeed
-            result = extract_frames_and_ocr_task(
+            result = extract_full_frames_and_ocr_task(
                 video_key=test_storage_key,
                 tenant_id=test_tenant_id,
                 video_id=test_video_id,
@@ -209,7 +209,7 @@ class TestModalFailureRecovery:
         ):
             # First attempt - should fail with GPU error
             with pytest.raises(RuntimeError) as exc_info:
-                extract_frames_and_ocr_task(
+                extract_full_frames_and_ocr_task(
                     video_key=test_storage_key,
                     tenant_id=test_tenant_id,
                     video_id=test_video_id,
@@ -223,7 +223,7 @@ class TestModalFailureRecovery:
             mock_function.remote = Mock(return_value=MockExtractResult(frame_count=75))
 
             # Second attempt - should succeed after GPU becomes available
-            result = extract_frames_and_ocr_task(
+            result = extract_full_frames_and_ocr_task(
                 video_key=test_storage_key,
                 tenant_id=test_tenant_id,
                 video_id=test_video_id,
@@ -268,7 +268,7 @@ class TestModalFailureRecovery:
             prefect_test_harness(),
         ):
             # Call the task
-            result = extract_frames_and_ocr_task(
+            result = extract_full_frames_and_ocr_task(
                 video_key=test_storage_key,
                 tenant_id=test_tenant_id,
                 video_id=test_video_id,
@@ -324,7 +324,7 @@ class TestModalFailureRecovery:
             mock_function.remote = Mock(side_effect=timeout_error)
 
             with pytest.raises(RuntimeError):
-                extract_frames_and_ocr_task(
+                extract_full_frames_and_ocr_task(
                     video_key=test_storage_key,
                     tenant_id=test_tenant_id,
                     video_id=test_video_id,
@@ -369,7 +369,7 @@ class TestModalFailureRecovery:
         ):
             # First attempt - should fail with network error
             with pytest.raises(RuntimeError) as exc_info:
-                extract_frames_and_ocr_task(
+                extract_full_frames_and_ocr_task(
                     video_key=test_storage_key,
                     tenant_id=test_tenant_id,
                     video_id=test_video_id,
@@ -383,7 +383,7 @@ class TestModalFailureRecovery:
             mock_function.remote = Mock(return_value=MockExtractResult(frame_count=60))
 
             # Second attempt - should succeed
-            result = extract_frames_and_ocr_task(
+            result = extract_full_frames_and_ocr_task(
                 video_key=test_storage_key,
                 tenant_id=test_tenant_id,
                 video_id=test_video_id,
@@ -420,7 +420,7 @@ class TestModalFailureRecovery:
             prefect_test_harness(),
         ):
             with pytest.raises(ValueError) as exc_info:
-                extract_frames_and_ocr_task(
+                extract_full_frames_and_ocr_task(
                     video_key=test_storage_key,
                     tenant_id=test_tenant_id,
                     video_id=test_video_id,
@@ -433,7 +433,7 @@ class TestModalFailureRecovery:
         self, test_video_id: str, mock_supabase_service
     ):
         """
-        Test that update_video_status_task retries on failure.
+        Test that update_workflow_status_task retries on failure.
 
         Verifies:
         1. Status update task has retry configuration
@@ -458,7 +458,9 @@ class TestModalFailureRecovery:
             prefect_test_harness(),
         ):
             # Should eventually succeed after retries
-            update_video_status_task(video_id=test_video_id, status="processing")
+            update_workflow_status_task(
+                video_id=test_video_id, layout_status="processing"
+            )
 
             # Verify it was called multiple times (with retries)
             assert mock_supabase_service.update_video_status.call_count == 3
@@ -472,7 +474,7 @@ class TestModalFailureRecovery:
         mock_modal_app,
     ):
         """
-        Test that extract_frames_and_ocr_task does NOT retry automatically.
+        Test that extract_full_frames_and_ocr_task does NOT retry automatically.
 
         Verifies:
         1. Task has retries=0 configuration
@@ -496,7 +498,7 @@ class TestModalFailureRecovery:
         ):
             # Should fail immediately without retry
             with pytest.raises(RuntimeError) as exc_info:
-                extract_frames_and_ocr_task(
+                extract_full_frames_and_ocr_task(
                     video_key=test_storage_key,
                     tenant_id=test_tenant_id,
                     video_id=test_video_id,
@@ -547,7 +549,11 @@ class TestModalFailureRecovery:
             # Call just the metadata update task
             with pytest.raises(ConnectionError):
                 update_video_metadata_task(
-                    video_id=test_video_id, frame_count=100, duration=10.0
+                    video_id=test_video_id,
+                    frame_count=100,
+                    duration=10.0,
+                    width=1920,
+                    height=1080,
                 )
 
             # Verify the mock was called
@@ -591,7 +597,7 @@ class TestModalFailureRecovery:
         ):
             # Should raise error when trying to access missing fields
             with pytest.raises(AttributeError):
-                extract_frames_and_ocr_task(
+                extract_full_frames_and_ocr_task(
                     video_key=test_storage_key,
                     tenant_id=test_tenant_id,
                     video_id=test_video_id,
@@ -634,7 +640,7 @@ class TestModalFailureRecovery:
             patch.dict(os.environ, {"SUPABASE_URL": "https://test.supabase.co"}),
             prefect_test_harness(),
         ):
-            result = extract_frames_and_ocr_task(
+            result = extract_full_frames_and_ocr_task(
                 video_key=test_storage_key,
                 tenant_id=test_tenant_id,
                 video_id=test_video_id,
@@ -682,7 +688,7 @@ class TestModalFailureRecovery:
             patch.dict(os.environ, {"SUPABASE_URL": "https://test.supabase.co"}),
             prefect_test_harness(),
         ):
-            result = extract_frames_and_ocr_task(
+            result = extract_full_frames_and_ocr_task(
                 video_key=test_storage_key,
                 tenant_id=test_tenant_id,
                 video_id=test_video_id,

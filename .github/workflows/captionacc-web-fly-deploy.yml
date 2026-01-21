@@ -24,7 +24,7 @@ jobs:
         run: |
           flyctl secrets set \
             VITE_SUPABASE_URL="${{ secrets.SUPABASE_URL }}" \
-            VITE_SUPABASE_SCHEMA="captionacc_production" \
+            VITE_SUPABASE_SCHEMA="captionacc_prod" \
             VITE_SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}" \
             VITE_SUPABASE_SERVICE_ROLE_KEY="${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
             WASABI_ACCESS_KEY_READONLY="${{ secrets.WASABI_ACCESS_KEY_READONLY }}" \

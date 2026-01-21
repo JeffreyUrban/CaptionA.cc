@@ -8,13 +8,44 @@ Specifications for each Prefect flow, including triggers, parameters, steps, and
 
 | Flow | Trigger | Duration | Implementation |
 |------|---------|----------|----------------|
-| `captionacc-video-initial-processing` | Supabase webhook | 2-10 min | `services/api/app/flows/video_initial_processing.py` |
+| `captionacc-process-new-videos` | Realtime + cron | < 1 min | `services/api/app/flows/process_new_videos.py` |
+| `captionacc-video-initial-processing` | process_new_videos | 2-10 min | `services/api/app/flows/video_initial_processing.py` |
 | `captionacc-crop-and-infer-caption-frame-extents` | API call | 5-30 min | `services/api/app/flows/crop_and_infer.py` |
 | `captionacc-caption-ocr` | API call | 10-30 sec | `services/api/app/flows/caption_ocr.py` |
 
 ---
 
-## 1. captionacc-video-initial-processing
+## 1. captionacc-process-new-videos
+
+Finds videos waiting to be processed and triggers their initial processing.
+
+**Implementation:** `services/api/app/flows/process_new_videos.py`
+
+### Trigger
+
+**Primary:** Supabase Realtime subscription on `videos` table INSERT events.
+When a video is inserted, the API service is notified immediately.
+
+**Recovery:** Cron job every 15 minutes catches any missed Realtime events.
+
+**Note:** The video record is only created after upload completes, ensuring
+the file is ready for processing when the flow runs.
+
+### Parameters
+
+| Parameter | Type | Source | Description |
+|-----------|------|--------|-------------|
+| `video_id_hint` | UUID (optional) | Realtime | Video ID from Realtime event (optimization) |
+
+### Processing Steps
+
+1. **Query Supabase** → Find videos with `layout_status = 'wait'`
+2. **For each video** → Trigger `video-initial-processing` flow
+3. **Update status** → Mark as processing
+
+---
+
+## 2. captionacc-video-initial-processing
 
 Extracts frames from uploaded video, runs OCR, and initializes layout.db for annotation.
 
@@ -22,34 +53,35 @@ Extracts frames from uploaded video, runs OCR, and initializes layout.db for ann
 
 ### Trigger
 
-**Supabase Database Webhook** on `videos` table INSERT
-
-**Handler:** `services/api/app/routers/webhooks.py:handle_video_insert()`
+**Triggered by:** `process_new_videos` flow (not called directly)
 
 ### Parameters
 
 | Parameter | Type | Source | Description |
 |-----------|------|--------|-------------|
-| `video_id` | UUID | webhook | Video identifier |
-| `tenant_id` | UUID | webhook | Tenant for path scoping |
-| `storage_key` | string | webhook | Wasabi S3 key for video file |
+| `video_id` | UUID | process_new_videos | Video identifier |
+| `tenant_id` | UUID | process_new_videos | Tenant for path scoping |
+
+**Note:** `storage_key` is computed as `{tenant_id}/client/videos/{video_id}/video.mp4` by the backend.
 
 ### Processing Steps
 
-1. **Update status** → `videos.status = 'processing'`
-2. **Call Modal** → `extract_frames_and_ocr()` (T4 GPU, 30 min)
+1. **Call Modal** → `extract_frames_and_ocr()` (T4 GPU, 30 min)
    - Extracts frames at 0.1 Hz
    - Runs Google Vision OCR
    - Uploads to Wasabi: `full_frames/`, `raw-ocr.db.gz`, `layout.db.gz`
-3. **Update metadata** → `videos` table with frame count, duration, codec, etc.
-4. **Update status** → `videos.status = 'active'`
+2. **Update metadata** → `videos` table with frame count, duration, codec, etc.
+3. **Update status** → `videos.status = 'active'`
 
 ### State Transitions
 
 ```
 videos.status:
-  uploading → processing → active
-                        → error (on failure)
+  processing → active
+            → error (on failure)
+
+Note: Video record is created with status 'processing' after upload completes.
+The upload phase happens client-side before the video record exists.
 ```
 
 ### Outputs
@@ -68,7 +100,7 @@ videos.status:
 
 ---
 
-## 2. captionacc-crop-and-infer-caption-frame-extents
+## 3. captionacc-crop-and-infer-caption-frame-extents
 
 Crops frames to caption region, runs inference, creates captions.db.
 
@@ -95,7 +127,7 @@ Crops frames to caption region, runs inference, creates captions.db.
    - Crops frames at 10 Hz
    - Encodes as VP9 WebM (modulo hierarchy)
    - Runs boundary inference
-   - Uploads to Wasabi: `cropped_frames_v{N}/`, `caption_frame_extents.db`
+   - Uploads to Wasabi: `cropped_frames_v{N}/`, `caption_frame_extents.db.gz`
 3. **Update metadata** → `videos.cropped_frames_version`, `label_counts`
 4. **Update status** → `videos.caption_status = 'ready'`
 5. **Release lock** (in finally block)
@@ -116,7 +148,7 @@ Server lock:
 | Output | Location | Description |
 |--------|----------|-------------|
 | `cropped_frames_v{N}/` | `{tenant}/client/videos/{id}/` | VP9 WebM chunks (modulo hierarchy) |
-| `caption_frame_extents.db` | `{tenant}/server/videos/{id}/` | Raw inference predictions |
+| `caption_frame_extents.db.gz` | `{tenant}/server/videos/{id}/` | Raw inference predictions |
 
 ### Lock Management
 
@@ -128,7 +160,7 @@ See: `services/api/app/services/supabase_service.py:acquire_server_lock()`
 
 ---
 
-## 3. captionacc-caption-ocr
+## 4. captionacc-caption-ocr
 
 Generates median frame from caption range and runs OCR.
 
@@ -180,29 +212,34 @@ captions.caption_ocr_status:
 
 ## Flow Registration
 
-**Script:** `services/api/scripts/register_flows.sh`
+**Configuration:** `services/api/prefect.yaml`
 
-Registers all three flows with Prefect server:
-- Creates deployments in work pool `captionacc-workers`
-- Sets concurrency limits per flow
-- Configures tags for observability
+Flow deployments are defined declaratively in `prefect.yaml` and registered using the Prefect CLI.
 
-**Usage:**
+**Local/Manual Registration:**
 ```bash
 cd services/api
-export PREFECT_API_URL=https://banchelabs-gateway.fly.dev/api
-./scripts/register_flows.sh
+export PREFECT_API_URL=https://banchelabs-gateway.fly.dev/prefect-internal/prefect/api
+prefect deploy --all
 ```
+
+**Production:** Flows are automatically registered when deploying the API service to Fly.io (`fly deploy` in `services/api`). The `fly.toml` release command runs `scripts/deploy_flows.sh`, which executes `prefect deploy --all`.
 
 ---
 
 ## Triggering Flows
 
-### From Webhooks
+### From Realtime Subscription
 
-**Implementation:** `services/api/app/routers/webhooks.py`
+**Implementation:** `services/api/app/services/realtime_subscriber.py`
 
-Calculates priority → Triggers flow via Prefect API
+Subscribes to videos INSERT events → Triggers `process_new_videos` flow
+
+### From Cron (Recovery)
+
+**Implementation:** `services/api/crontab` + `scripts/trigger_process_new_videos.sh`
+
+Every 15 minutes, queries for videos with `layout_status = 'wait'`
 
 ### From API Endpoints
 

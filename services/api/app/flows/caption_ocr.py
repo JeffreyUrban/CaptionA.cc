@@ -33,13 +33,11 @@ def _initialize_services() -> tuple[WasabiServiceImpl, CaptionServiceImpl]:
         Tuple of (wasabi_service, caption_service)
     """
     # Load environment variables
-    wasabi_access_key = os.getenv("WASABI_ACCESS_KEY_ID") or os.getenv(
-        "WASABI_ACCESS_KEY_READWRITE"
-    )
-    wasabi_secret_key = os.getenv("WASABI_SECRET_ACCESS_KEY") or os.getenv(
-        "WASABI_SECRET_KEY_READWRITE"
-    )
-    wasabi_bucket = os.getenv("WASABI_BUCKET", "caption-acc-prod")
+    wasabi_access_key = os.getenv("WASABI_ACCESS_KEY_READWRITE")
+    wasabi_secret_key = os.getenv("WASABI_SECRET_KEY_READWRITE")
+    wasabi_bucket = os.getenv("WASABI_BUCKET")
+    if not wasabi_bucket:
+        raise ValueError("WASABI_BUCKET environment variable not set")
     wasabi_region = os.getenv("WASABI_REGION", "us-east-1")
 
     if not wasabi_access_key or not wasabi_secret_key:
@@ -118,10 +116,12 @@ async def caption_ocr(
         )
 
         # Step 2: Call Modal generate_caption_ocr function
-        logger.info("Looking up Modal function")
-        ocr_fn = modal.Function.from_name(
-            "extract-crop-frames-and-infer-extents", "generate_caption_ocr"
-        )
+        from app.config import get_settings
+
+        settings = get_settings()
+        modal_app_name = f"captionacc-extract-crop-frames-and-infer-extents-{settings.modal_app_suffix}"
+        logger.info(f"Looking up Modal function: {modal_app_name}")
+        ocr_fn = modal.Function.from_name(modal_app_name, "generate_caption_ocr")
 
         chunks_prefix = (
             f"{tenant_id}/client/videos/{video_id}/cropped_frames_v{version}/"

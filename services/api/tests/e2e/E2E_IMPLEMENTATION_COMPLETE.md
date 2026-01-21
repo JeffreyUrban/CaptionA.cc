@@ -139,9 +139,6 @@ Successfully implemented and deployed complete E2E test infrastructure for Capti
 
 ### Configuration
 ```
-/.env
-└── Added WEBHOOK_SECRET for testing
-
 /pyproject.toml (root)
 ├── Excluded incomplete `caption_boundaries` package
 ├── Added `captionacc-modal` workspace dependency

@@ -1,0 +1,41 @@
+# Prefect deployment configuration for CaptionA.cc flows (Production)
+#
+# Deploy all prod flows:
+#   PREFECT_API_URL=https://banchelabs-gateway.fly.dev/prefect-internal/prefect/api prefect deploy --all
+#
+# Deploy specific prod flow:
+#   PREFECT_API_URL=https://banchelabs-gateway.fly.dev/prefect-internal/prefect/api prefect deploy -n captionacc-prod-video-initial-processing
+
+# Default work pool for all prod deployments
+work_pool:
+  name: captionacc-workers-prod
+
+# Production Deployments (prefixed with captionacc-prod-)
+deployments:
+  - name: captionacc-prod-video-initial-processing
+    description: Extract frames and run OCR on uploaded videos
+    entrypoint: app/flows/video_initial_processing.py:video_initial_processing
+    work_pool:
+      name: captionacc-workers-prod
+    schedules: []
+
+  - name: captionacc-prod-crop-and-infer-caption-frame-extents
+    description: Crop frames and infer caption boundaries
+    entrypoint: app/flows/crop_and_infer.py:crop_and_infer
+    work_pool:
+      name: captionacc-workers-prod
+    schedules: []
+
+  - name: captionacc-prod-caption-ocr
+    description: Generate OCR for individual captions
+    entrypoint: app/flows/caption_ocr.py:caption_ocr
+    work_pool:
+      name: captionacc-workers-prod
+    schedules: []
+
+  - name: captionacc-prod-process-new-videos
+    description: "Process new videos (primary: Realtime, recovery: cron)"
+    entrypoint: app/flows/process_new_videos.py:process_new_videos
+    work_pool:
+      name: captionacc-workers-prod
+    schedules: []

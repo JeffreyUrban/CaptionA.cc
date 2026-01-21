@@ -49,7 +49,6 @@ Browser → wa-sqlite (client-side) ←WebSocket→ FastAPI (Python) → Wasabi 
 - `POST /videos/{videoId}/database/{db}/lock` - Acquire lock
 - `DELETE /videos/{videoId}/database/{db}/lock` - Release lock
 - `WebSocket /videos/{videoId}/sync/{db}` - Real-time sync
-- `GET /videos/{videoId}/stats` - Video stats
 - `GET/PUT /videos/{videoId}/preferences` - Preferences
 - `GET /admin/databases` - Admin database list
 - `POST /admin/databases/{videoId}/{db}/sync` - Force sync
@@ -392,7 +391,7 @@ const subscription = supabase
   .channel('video-stats')
   .on('postgres_changes', {
     event: 'UPDATE',
-    schema: 'captionacc_production',
+    schema: 'captionacc_prod',
     table: 'videos',
     filter: `id=eq.${videoId}`
   }, payload => updateVideoStats(payload.new))

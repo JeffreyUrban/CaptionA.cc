@@ -36,12 +36,14 @@ export function parseS3Url(url: string): {
 /**
  * Generate signed S3 URL from s3:// URL
  *
+ * @param tenantId - Tenant identifier
  * @param videoId - Video identifier
  * @param s3Url - S3 URL (e.g., "s3://full_frames/frame_0001.jpg")
  * @param expiresIn - URL expiration in seconds (default: 1 hour)
  * @returns Signed S3 URL or null if parsing failed
  */
 export async function generateSignedUrl(
+  tenantId: string,
   videoId: string,
   s3Url: string,
   expiresIn = 3600
@@ -55,6 +57,7 @@ export async function generateSignedUrl(
 
   try {
     const url = await getVideoResourceUrl(
+      tenantId,
       videoId,
       parsed.type,
       { filename: parsed.filename },

@@ -214,7 +214,7 @@ Response:
     "sessionToken": "..."
   },
   "expiration": "2026-01-11T23:00:00Z",
-  "bucket": "caption-acc-prod",
+  "bucket": "captionacc-prod",
   "region": "us-east-1",
   "endpoint": "https://s3.us-east-1.wasabisys.com",
   "prefix": "{tenant_id}/client/*"

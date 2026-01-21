@@ -77,7 +77,7 @@ As outlined in `docs/prefect-orchestration/TEST_PLAN.md`, our E2E tests focus ex
 **Purpose:** Tests the complete video upload to initial processing flow.
 
 **What it tests:**
-- Webhook handler receives video insert events correctly
+- Process new videos trigger endpoint works correctly
 - `video_initial_processing` flow executes with real Modal frame extraction
 - Video metadata is updated in Supabase with correct status
 - Frame images are uploaded to Wasabi in correct locations
@@ -93,7 +93,7 @@ As outlined in `docs/prefect-orchestration/TEST_PLAN.md`, our E2E tests focus ex
 **Typical runtime:** 2-5 minutes (depends on video length and Modal GPU availability)
 
 **Test scenarios:**
-- `test_full_video_processing_integration` - Complete happy path from webhook to processed frames
+- `test_full_video_processing_integration` - Complete happy path from upload to processed frames
 
 ### `test_crop_and_infer_flow.py`
 
@@ -136,7 +136,7 @@ export SUPABASE_SERVICE_ROLE_KEY="eyJhbGc..."  # Service role key for admin acce
 export SUPABASE_JWT_SECRET="your-jwt-secret"    # For generating test auth tokens  # pragma: allowlist secret
 
 # Optional
-export SUPABASE_SCHEMA="captionacc_production"  # Default: captionacc_production
+export SUPABASE_SCHEMA="captionacc_prod"  # Default: captionacc_prod
 ```
 
 #### Wasabi S3 Configuration
@@ -162,12 +162,6 @@ export MODAL_TOKEN_SECRET="your-modal-token-secret"  # pragma: allowlist secret
 
 # Optional
 export MODAL_ENVIRONMENT="main"  # Default: main
-```
-
-#### Webhook Configuration (for webhook handler tests)
-```bash
-# Optional
-export WEBHOOK_SECRET="test-webhook-secret"  # Default: test-webhook-secret  # pragma: allowlist secret
 ```
 
 ### Service Requirements
@@ -221,7 +215,7 @@ export WEBHOOK_SECRET="test-webhook-secret"  # Default: test-webhook-secret  # p
 4. **Verify Supabase connection:**
    ```bash
    # Quick Python check
-   python -c "from app.services.supabase_service import SupabaseServiceImpl; import os; s = SupabaseServiceImpl(os.environ['SUPABASE_URL'], os.environ['SUPABASE_SERVICE_ROLE_KEY'], os.environ.get('SUPABASE_SCHEMA', 'captionacc_production')); print('Connected:', s.client is not None)"
+   python -c "from app.services.supabase_service import SupabaseServiceImpl; import os; s = SupabaseServiceImpl(os.environ['SUPABASE_URL'], os.environ['SUPABASE_SERVICE_ROLE_KEY'], os.environ.get('SUPABASE_SCHEMA', 'captionacc_prod')); print('Connected:', s.client is not None)"
    ```
 
 5. **Verify Wasabi connection:**
@@ -463,7 +457,7 @@ async def test_video(self):
    supabase = SupabaseServiceImpl(
        os.environ["SUPABASE_URL"],
        os.environ["SUPABASE_SERVICE_ROLE_KEY"],
-       os.environ.get("SUPABASE_SCHEMA", "captionacc_production")
+       os.environ.get("SUPABASE_SCHEMA", "captionacc_prod")
    )
 
    # Check video record
@@ -641,7 +635,6 @@ jobs:
           WASABI_REGION: ${{ secrets.WASABI_REGION }}
           MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
           MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
-          WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
         run: |
           cd services/api
           pytest tests/e2e/ -v --timeout=600 --tb=short
@@ -667,7 +660,6 @@ Configure these secrets in your repository:
 - `WASABI_REGION`
 - `MODAL_TOKEN_ID`
 - `MODAL_TOKEN_SECRET`
-- `WEBHOOK_SECRET`
 
 ### Pre-Deployment Checklist
 
@@ -712,7 +704,7 @@ export SUPABASE_SERVICE_ROLE_KEY="eyJhbGc..."
 **Solution:**
 1. Verify service role key has admin privileges
 2. Check that schema exists: `SELECT schema_name FROM information_schema.schemata;`
-3. Verify tables exist: `\dt captionacc_production.*` (in psql)
+3. Verify tables exist: `\dt captionacc_prod.*` (in psql)
 4. Check network connectivity to Supabase
 
 #### Issue: "Modal function failed: GPU timeout"

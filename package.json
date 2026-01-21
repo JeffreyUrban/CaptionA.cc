@@ -20,6 +20,8 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.962.0",
     "@aws-sdk/s3-request-presigner": "^3.962.0",
-    "dotenv": "^17.2.3"
+    "@vlcn.io/crsqlite-wasm": "^0.16.0",
+    "dotenv": "^17.2.3",
+    "wa-sqlite": "^1.0.0"
   }
 }

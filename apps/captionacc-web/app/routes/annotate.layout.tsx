@@ -6,10 +6,9 @@
  */
 
 import { useState, useEffect, useMemo } from 'react'
-import { useSearchParams, useNavigate } from 'react-router'
+import { useNavigate, redirect, useLoaderData } from 'react-router'
 
 import { AppLayout } from '~/components/AppLayout'
-import { ProcessingIndicator } from '~/components/ProcessingIndicator'
 import { LayoutAlertModal } from '~/components/annotation/LayoutAlertModal'
 import { LayoutApprovalModal } from '~/components/annotation/LayoutApprovalModal'
 import { LayoutConfirmModal } from '~/components/annotation/LayoutConfirmModal'
@@ -20,31 +19,90 @@ import { LayoutThumbnailGrid } from '~/components/annotation/LayoutThumbnailGrid
 import { useKeyboardShortcuts } from '~/hooks/useKeyboardShortcuts'
 import { useLayoutCanvas, SELECTION_PADDING } from '~/hooks/useLayoutCanvas'
 import { useLayoutData } from '~/hooks/useLayoutData'
-import { useProcessingStatus } from '~/hooks/useProcessingStatus'
+import { useLayoutDatabase } from '~/hooks/useLayoutDatabase'
 import { useVideoTouched } from '~/hooks/useVideoTouched'
+import { supabase } from '~/services/supabase-client'
 import { RECALC_THRESHOLD, type KeyboardShortcutContext } from '~/types/layout'
 import { generateAnalysisThumbnail } from '~/utils/layout-canvas-helpers'
 import { dispatchKeyboardShortcut } from '~/utils/layout-keyboard-handlers'
 
-// Loader function to expose environment variables
-export async function loader() {
+// =============================================================================
+// Loader
+// =============================================================================
+
+export async function clientLoader({ request }: { request: Request }) {
+  // Get videoId from URL
+  const url = new URL(request.url)
+  const videoId = url.searchParams.get('videoId')
+
+  if (!videoId) {
+    throw new Response('Missing videoId parameter', { status: 400 })
+  }
+
+  // Get authenticated user
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser()
+
+  if (!user || authError) {
+    throw redirect('/login')
+  }
+
+  // Fetch video metadata including tenant_id and layout_status
+  const { data: video, error: videoError } = await supabase
+    .from('videos')
+    .select('id, tenant_id, layout_status')
+    .eq('id', videoId)
+    .single()
+
+  if (videoError || !video) {
+    throw new Response('Video not found', { status: 404 })
+  }
+
+  // Ensure video has tenant_id (should always exist)
+  if (!video.tenant_id) {
+    throw new Response('Video is missing tenant ID', { status: 500 })
+  }
+
+  // Check if video is ready for layout annotation
+  if (video.layout_status === 'wait') {
+    throw new Response('Video is still being processed. Please wait.', { status: 425 })
+  }
+
   return {
-    defaultVideoId: process.env['DEFAULT_VIDEO_ID'] ?? '',
+    videoId: video.id,
+    tenantId: video.tenant_id,
+    layoutStatus: video.layout_status,
   }
 }
+
+// =============================================================================
+// Component
+// =============================================================================
 
 // Large layout page component with multiple UI sections - acceptable length for annotation page
 /* eslint-disable max-lines-per-function */
 export default function AnnotateLayout() {
-  const [searchParams] = useSearchParams()
-  const videoId = searchParams.get('videoId') ?? ''
+  const loaderData = useLoaderData<typeof clientLoader>()
+  const { videoId: loaderVideoId, tenantId } = loaderData
   const navigate = useNavigate()
+
+  // Use videoId from loader (already validated)
+  const videoId = loaderVideoId
 
   // Mark video as being worked on
   useVideoTouched(videoId)
 
-  // Track background processing status
-  const processingStatus = useProcessingStatus(videoId)
+  // Initialize CR-SQLite database (required before useLayoutData)
+  const layoutDb = useLayoutDatabase({
+    videoId,
+    tenantId, // Use actual tenant ID from loader
+    autoAcquireLock: true,
+    onError: error => {
+      console.error('[AnnotateLayout] Layout database error:', error)
+    },
+  })
 
   // Modal state
   const [showApproveModal, setShowApproveModal] = useState(false)
@@ -74,6 +132,7 @@ export default function AnnotateLayout() {
     analysisBoxes,
     annotationsSinceRecalc,
     isRecalculating,
+    isCalculatingPredictions,
     boundsMismatch,
     analysisThumbnailUrl,
     setAnalysisThumbnailUrl,
@@ -93,6 +152,7 @@ export default function AnnotateLayout() {
     handleClearAll,
   } = useLayoutData({
     videoId,
+    isDbReady: layoutDb.isReady,
     showAlert: (title, message, type) => setAlertModal({ title, message, type }),
   })
 
@@ -223,6 +283,7 @@ export default function AnnotateLayout() {
               currentFrameBoxes={currentFrameBoxes}
               analysisBoxes={analysisBoxes}
               loadingFrame={loadingFrame}
+              isCalculatingPredictions={isCalculatingPredictions}
               annotationsSinceRecalc={annotationsSinceRecalc}
               selectionPadding={SELECTION_PADDING}
               imageRef={imageRef}
@@ -231,10 +292,9 @@ export default function AnnotateLayout() {
               onMouseDown={handleCanvasClick}
               onMouseMove={handleCanvasMouseMove}
               onContextMenu={handleCanvasContextMenu}
+              tenantId={tenantId}
+              videoId={videoId}
             />
-
-            {/* Processing status indicator */}
-            <ProcessingIndicator status={processingStatus} />
 
             {/* Thumbnail panel */}
             <LayoutThumbnailGrid
@@ -244,6 +304,8 @@ export default function AnnotateLayout() {
               analysisThumbnailUrl={analysisThumbnailUrl}
               loading={loading}
               onThumbnailClick={handleThumbnailClick}
+              tenantId={tenantId}
+              videoId={videoId}
             />
           </div>
 

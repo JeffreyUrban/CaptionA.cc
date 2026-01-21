@@ -5,12 +5,15 @@
 
 import { useState, useEffect } from 'react'
 
+import { supabase } from '~/services/supabase-client'
 import type { FolderItem } from '~/types/upload'
+import type { VideoData } from '~/utils/upload-folder-structure'
 
 interface UseUploadFoldersResult {
   selectedFolder: string
   setSelectedFolder: (folder: string) => void
   availableFolders: FolderItem[]
+  videos: VideoData[]
   loading: boolean
   error: string | null
 }
@@ -24,6 +27,7 @@ interface UseUploadFoldersResult {
 export function useUploadFolders(preselectedFolder: string | null): UseUploadFoldersResult {
   const [selectedFolder, setSelectedFolder] = useState<string>('')
   const [availableFolders, setAvailableFolders] = useState<FolderItem[]>([])
+  const [videos, setVideos] = useState<VideoData[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -34,9 +38,43 @@ export function useUploadFolders(preselectedFolder: string | null): UseUploadFol
         setLoading(true)
         setError(null)
 
-        const response = await fetch('/api/folders')
-        const data = await response.json()
-        setAvailableFolders(data.folders ?? [])
+        // Query videos to extract folder structure from display_path
+        const { data: videosData, error: videosError } = await supabase
+          .from('videos')
+          .select('id, display_path')
+          .is('deleted_at', null)
+
+        if (videosError) throw videosError
+
+        // Store videos for use in upload processing
+        setVideos(videosData || [])
+
+        // Extract unique folder paths
+        const folderSet = new Set<string>()
+        videosData?.forEach(video => {
+          if (video.display_path) {
+            // Extract folder path (everything before the last /)
+            const lastSlash = video.display_path.lastIndexOf('/')
+            if (lastSlash > 0) {
+              const folder = video.display_path.substring(0, lastSlash)
+              folderSet.add(folder)
+
+              // Also add parent folders
+              const parts = folder.split('/')
+              for (let i = 1; i < parts.length; i++) {
+                folderSet.add(parts.slice(0, i).join('/'))
+              }
+            }
+          }
+        })
+
+        // Convert to FolderItem array
+        const folders: FolderItem[] = Array.from(folderSet).map(path => ({
+          path,
+          name: path.split('/').pop() || path,
+        }))
+
+        setAvailableFolders(folders.sort((a, b) => a.path.localeCompare(b.path)))
 
         // Set preselected folder from URL
         if (preselectedFolder) {
@@ -57,6 +95,7 @@ export function useUploadFolders(preselectedFolder: string | null): UseUploadFol
     selectedFolder,
     setSelectedFolder,
     availableFolders,
+    videos,
     loading,
     error,
   }

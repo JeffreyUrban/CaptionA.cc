@@ -14,7 +14,7 @@ def process_frames_with_ocr(
     frames: list[tuple[str, bytes]],
     backend: OCRBackend,
     language: str = "zh-Hans",
-) -> list[OCRResult]:
+) -> tuple[list[OCRResult], int]:
     """Process frames with OCR using automatic montage batching.
 
     High-level processing flow:
@@ -32,28 +32,42 @@ def process_frames_with_ocr(
         language: Language hint for OCR (default: "zh-Hans")
 
     Returns:
-        List of OCRResult, one per input frame, in same order as input
+        Tuple of (results, failed_count) where:
+        - results: List of OCRResult, one per input frame, in same order as input
+        - failed_count: Number of frames that failed OCR processing
 
     Raises:
         ValueError: If frames list is empty or frame dimensions don't match
     """
     # Handle empty frames list
     if not frames:
-        return []
+        return [], 0
 
     # Handle single frame - no batching needed
     if len(frames) == 1:
         frame_id, image_bytes = frames[0]
-        result = backend.process_single(image_bytes, language)
-        # Return result with the correct frame ID
-        return [
-            OCRResult(
-                id=frame_id,
-                characters=result.characters,
-                text=result.text,
-                char_count=result.char_count,
-            )
-        ]
+        try:
+            result = backend.process_single(image_bytes, language)
+            # Return result with the correct frame ID
+            return [
+                OCRResult(
+                    id=frame_id,
+                    characters=result.characters,
+                    text=result.text,
+                    char_count=result.char_count,
+                )
+            ], 0
+        except Exception as e:
+            print(f"[OCR] Failed to process frame {frame_id}: {e}")
+            # Return empty result for failed frame
+            return [
+                OCRResult(
+                    id=frame_id,
+                    characters=[],
+                    text="",
+                    char_count=0,
+                )
+            ], 1
 
     # Get frame dimensions from first frame
     first_image = Image.open(BytesIO(frames[0][1]))
@@ -66,20 +80,35 @@ def process_frames_with_ocr(
 
     # Process frames in batches
     all_results: list[OCRResult] = []
+    failed_count = 0
 
     for batch_start in range(0, len(frames), even_batch_size):
         batch_end = min(batch_start + even_batch_size, len(frames))
         batch_frames = frames[batch_start:batch_end]
 
-        # Create montage for this batch
-        montage_bytes, metadata = create_vertical_montage(batch_frames)
+        try:
+            # Create montage for this batch
+            montage_bytes, metadata = create_vertical_montage(batch_frames)
 
-        # Process montage with backend
-        montage_result = backend.process_single(montage_bytes, language)
+            # Process montage with backend
+            montage_result = backend.process_single(montage_bytes, language)
 
-        # Distribute results back to individual images
-        batch_results = distribute_results_to_images(montage_result, metadata)
+            # Distribute results back to individual images
+            batch_results = distribute_results_to_images(montage_result, metadata)
 
-        all_results.extend(batch_results)
+            all_results.extend(batch_results)
+        except Exception as e:
+            print(f"[OCR] Failed to process batch {batch_start}-{batch_end}: {e}")
+            # Create empty results for all frames in failed batch
+            for frame_id, _ in batch_frames:
+                all_results.append(
+                    OCRResult(
+                        id=frame_id,
+                        characters=[],
+                        text="",
+                        char_count=0,
+                    )
+                )
+            failed_count += len(batch_frames)
 
-    return all_results
+    return all_results, failed_count

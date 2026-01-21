@@ -24,6 +24,10 @@ except ImportError:
 
 from .models import CropInferResult, CropRegion
 
+# Compute repo root for adding local packages
+_THIS_FILE = Path(__file__).resolve()
+_REPO_ROOT = _THIS_FILE.parent.parent.parent.parent.parent  # Go up to repo root
+
 
 # GPU image with all dependencies for inference
 # This will be used by app.py when registering the function
@@ -61,9 +65,16 @@ def get_inference_image():
             "psutil",
             "nvidia-ml-py3",  # pynvml for GPU monitoring
         )
-        # Add local packages for inference
-        .add_local_python_source("caption_frame_extents")
-        .add_local_python_source("gpu_video_utils")
+        .env({"PYTHONPATH": "/root"})
+        # Add local packages
+        .add_local_dir(
+            _REPO_ROOT / "data-pipelines" / "caption_frame_extents" / "src" / "caption_frame_extents",
+            remote_path="/root/caption_frame_extents",
+        )
+        .add_local_dir(
+            _REPO_ROOT / "packages" / "gpu_video_utils" / "src" / "gpu_video_utils",
+            remote_path="/root/gpu_video_utils",
+        )
     )
 
 
@@ -94,7 +105,7 @@ def crop_and_infer_caption_frame_extents_impl(
 
     Wasabi Outputs:
         - {tenant_id}/client/videos/{video_id}/cropped_frames_v{N}/modulo_{M}/chunk_{NNNN}.webm
-        - {tenant_id}/server/videos/{video_id}/caption_frame_extents.db
+        - {tenant_id}/server/videos/{video_id}/caption_frame_extents.db.gz
     """
     import ffmpeg
     import torch
@@ -446,9 +457,24 @@ def crop_and_infer_caption_frame_extents_impl(
             )
             wasabi.upload_file(chunk_path, storage_key, content_type="video/webm")
 
-        # Upload caption frame extents database
-        db_storage_key = f"{tenant_id}/server/videos/{video_id}/caption_frame_extents.db"
-        wasabi.upload_file(db_path, db_storage_key, content_type="application/x-sqlite3")
+        # Compress and upload caption frame extents database
+        import gzip
+
+        db_gz_path = tmp_path / f"{db_filename}.gz"
+        with open(db_path, "rb") as f_in:
+            with gzip.open(db_gz_path, "wb") as f_out:
+                f_out.writelines(f_in)
+
+        db_original_size = db_path.stat().st_size
+        db_compressed_size = db_gz_path.stat().st_size
+        db_ratio = (1 - db_compressed_size / db_original_size) * 100
+        print(
+            f"  Compressed caption_frame_extents DB: "
+            f"{db_original_size:,} -> {db_compressed_size:,} bytes ({db_ratio:.1f}% reduction)"
+        )
+
+        db_storage_key = f"{tenant_id}/server/videos/{video_id}/caption_frame_extents.db.gz"
+        wasabi.upload_file(db_gz_path, db_storage_key, content_type="application/gzip")
 
         print(f"  Uploaded {len(chunk_paths)} chunks and database in {time.time() - upload_start:.2f}s\n")
 

@@ -5,6 +5,8 @@ This module defines the Modal app and registers GPU-intensive functions:
 - crop_and_infer_caption_frame_extents - Cropping and inference (A10G GPU)
 """
 
+import os
+
 try:
     import modal
 except ImportError:
@@ -12,13 +14,14 @@ except ImportError:
 
 from .models import CropInferResult, CropRegion
 
-# Create Modal app
+# Create Modal app with namespace suffix (e.g., "dev" or "prod")
+# Set modal_app_suffix environment variable during deployment
 if modal:
-    app = modal.App("extract-crop-frames-and-infer-extents")
+    app_suffix = os.environ.get("modal_app_suffix", "prod")
+    app = modal.App(f"captionacc-extract-crop-frames-and-infer-extents-{app_suffix}")
 
-    # Import image builders and implementations
+    # Import image builder only (not implementation - that has torch dependency)
     from .inference import get_inference_image
-    from .pipeline import crop_and_infer_caption_frame_extents_pipelined
 
     # Mount model volume
     model_volume = modal.Volume.from_name("boundary-models", create_if_missing=False)
@@ -28,10 +31,10 @@ if modal:
         gpu="A10G",
         timeout=3600,  # 60 minutes
         retries=0,
-        secrets=[modal.Secret.from_name("wasabi")],
+        secrets=[modal.Secret.from_name(f"wasabi-{app_suffix}")],
         volumes={"/root/boundary-models": model_volume},
     )
-    def crop_and_infer_caption_frame_extents(
+    def extract_crop_frames_and_infer_extents(
         video_key: str,
         tenant_id: str,
         video_id: str,
@@ -49,6 +52,9 @@ if modal:
             encoder_workers: Number of parallel VP9 encoding workers (default: 4)
             inference_batch_size: Number of images per inference batch (default: 32)
         """
+        # Import inside function to avoid torch dependency during deployment
+        from .pipeline import crop_and_infer_caption_frame_extents_pipelined
+
         return crop_and_infer_caption_frame_extents_pipelined(
             video_key, tenant_id, video_id, crop_region, frame_rate, encoder_workers, inference_batch_size
         )
@@ -57,7 +63,7 @@ else:
     # Modal not available - provide stubs for type checking
     app = None
 
-    def crop_and_infer_caption_frame_extents(
+    def extract_crop_frames_and_infer_extents(
         _video_key: str,
         _tenant_id: str,
         _video_id: str,

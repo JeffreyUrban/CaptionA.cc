@@ -38,9 +38,22 @@ import {
 // Loader
 // ============================================================================
 
-export async function loader({ request }: LoaderFunctionArgs) {
+export async function clientLoader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url)
   const preselectedFolder = url.searchParams.get('folder')
+
+  // Check authentication
+  const { supabase } = await import('~/services/supabase-client')
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+
+  if (!session) {
+    // Redirect to login page
+    const { redirect } = await import('react-router')
+    const loginUrl = `/login?redirect=${encodeURIComponent(url.pathname + url.search)}`
+    throw redirect(loginUrl)
+  }
 
   return new Response(JSON.stringify({ preselectedFolder }), {
     headers: { 'Content-Type': 'application/json' },
@@ -63,8 +76,8 @@ export default function UploadPage() {
   const [isProcessingDrop, setIsProcessingDrop] = useState(false)
   const [processingStatus, setProcessingStatus] = useState('')
 
-  // Load available folders for the modal
-  const { availableFolders } = useUploadFolders(loaderData.preselectedFolder)
+  // Load available folders and videos for the modal
+  const { availableFolders, videos } = useUploadFolders(loaderData.preselectedFolder)
 
   // Upload store state - subscribe to the objects, convert to arrays with useMemo
   const activeUploadsObj = useUploadStore(state => state.activeUploads)
@@ -114,28 +127,43 @@ export default function UploadPage() {
     async (entry: FileSystemEntry, path = ''): Promise<UploadFile[]> => {
       const results: UploadFile[] = []
 
-      if (entry.isFile) {
-        const fileEntry = entry as FileSystemFileEntry
-        const file = await new Promise<File>((resolve, reject) => {
-          fileEntry.file(resolve, reject)
-        })
+      try {
+        if (entry.isFile) {
+          const fileEntry = entry as FileSystemFileEntry
+          console.log(`[collectFiles] Processing file: ${entry.name}, path: ${path}`)
+          const file = await new Promise<File>((resolve, reject) => {
+            fileEntry.file(resolve, reject)
+          })
 
-        // Only include video files
-        if (isVideoFile(file)) {
-          results.push({ file, relativePath: path + file.name })
-        }
-      } else if (entry.isDirectory) {
-        const dirEntry = entry as FileSystemDirectoryEntry
-        const reader = dirEntry.createReader()
-        const entries = await new Promise<FileSystemEntry[]>((resolve, reject) => {
-          reader.readEntries(resolve, reject)
-        })
+          console.log(
+            `[collectFiles] Got file: ${file.name}, type: ${file.type}, size: ${file.size}`
+          )
 
-        for (const childEntry of entries) {
-          const childPath = path + entry.name + '/'
-          const childResults = await collectFilesFromEntry(childEntry, childPath)
-          results.push(...childResults)
+          // Only include video files
+          if (isVideoFile(file)) {
+            console.log(`[collectFiles] ✓ Video file accepted: ${file.name}`)
+            results.push({ file, relativePath: path + file.name })
+          } else {
+            console.log(`[collectFiles] ✗ File rejected (not a video): ${file.name}`)
+          }
+        } else if (entry.isDirectory) {
+          const dirEntry = entry as FileSystemDirectoryEntry
+          console.log(`[collectFiles] Processing directory: ${entry.name}, path: ${path}`)
+          const reader = dirEntry.createReader()
+          const entries = await new Promise<FileSystemEntry[]>((resolve, reject) => {
+            reader.readEntries(resolve, reject)
+          })
+
+          console.log(`[collectFiles] Directory ${entry.name} has ${entries.length} entries`)
+
+          for (const childEntry of entries) {
+            const childPath = path + entry.name + '/'
+            const childResults = await collectFilesFromEntry(childEntry, childPath)
+            results.push(...childResults)
+          }
         }
+      } catch (error) {
+        console.error(`[collectFiles] Error processing entry ${entry.name}:`, error)
       }
 
       return results
@@ -156,30 +184,33 @@ export default function UploadPage() {
   }, [])
 
   // Handle modal confirmation - process and upload files
-  const handleUploadConfirm = useCallback(async (files: UploadFile[], options: UploadOptions) => {
-    setShowPreviewModal(false)
+  const handleUploadConfirm = useCallback(
+    async (files: UploadFile[], options: UploadOptions) => {
+      setShowPreviewModal(false)
 
-    console.log(`[UploadPage] Processing ${files.length} files with options:`, options)
+      console.log(`[UploadPage] Processing ${files.length} files with options:`, options)
 
-    // Process files according to options
-    const processed = await processUploadFiles(files, options)
+      // Process files according to options
+      const processed = processUploadFiles(files, options, videos)
 
-    console.log(`[UploadPage] Starting upload for ${processed.length} processed files`)
+      console.log(`[UploadPage] Starting upload for ${processed.length} processed files`)
 
-    // Start each upload
-    for (const upload of processed) {
-      try {
-        await uploadManager.startUpload(upload.file, {
-          fileName: upload.fileName,
-          fileType: upload.file.type,
-          targetFolder: null, // Already included in finalPath
-          relativePath: upload.finalPath,
-        })
-      } catch (error) {
-        console.error(`[UploadPage] Failed to start upload for ${upload.finalPath}:`, error)
+      // Start each upload
+      for (const upload of processed) {
+        try {
+          await uploadManager.startUpload(upload.file, {
+            fileName: upload.fileName,
+            fileType: upload.file.type,
+            targetFolder: null, // Already included in finalPath
+            relativePath: upload.finalPath,
+          })
+        } catch (error) {
+          console.error(`[UploadPage] Failed to start upload for ${upload.finalPath}:`, error)
+        }
       }
-    }
-  }, [])
+    },
+    [videos]
+  )
 
   // Handle modal cancellation
   const handleUploadCancel = useCallback(() => {
@@ -220,20 +251,32 @@ export default function UploadPage() {
 
       try {
         const items = Array.from(e.dataTransfer.items)
+        console.log(`[UploadPage] Processing drop with ${items.length} items`)
         const allFiles: UploadFile[] = []
 
         // Process each dropped item (could be files or directories)
         for (const item of items) {
+          console.log(`[UploadPage] Processing item: ${item.kind}, type: ${item.type}`)
           const entry = item.webkitGetAsEntry()
           if (entry) {
+            console.log(
+              `[UploadPage] Got entry: ${entry.name}, isFile: ${entry.isFile}, isDirectory: ${entry.isDirectory}`
+            )
             setProcessingStatus(`Scanning ${entry.name}...`)
             const files = await collectFilesFromEntry(entry)
+            console.log(`[UploadPage] Collected ${files.length} files from ${entry.name}`)
             allFiles.push(...files)
             setProcessingStatus(`Found ${allFiles.length} video files...`)
+          } else {
+            console.warn(`[UploadPage] No entry for item:`, item)
           }
         }
 
-        console.log(`[UploadPage] Collected ${allFiles.length} files from drop`)
+        console.log(`[UploadPage] Total collected ${allFiles.length} files from drop`)
+
+        if (allFiles.length === 0) {
+          console.warn('[UploadPage] No video files found in drop')
+        }
 
         setProcessingStatus('Preparing preview...')
 
@@ -242,6 +285,8 @@ export default function UploadPage() {
 
         // Show preview modal
         showUploadPreview(allFiles)
+      } catch (error) {
+        console.error('[UploadPage] Error processing drop:', error)
       } finally {
         setIsProcessingDrop(false)
         setProcessingStatus('')
@@ -320,56 +365,32 @@ export default function UploadPage() {
       if (decision === 'cancel_upload') {
         console.log(`[UploadPage] Canceling upload for ${duplicate.relativePath}`)
 
-        // Try to call backend (best effort)
-        try {
-          const response = await fetch(`/api/uploads/resolve-duplicate/${duplicate.videoId}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({ decision }),
-          })
+        // TODO: Integrate duplicate resolution with backend API
+        // No endpoint documented in api-endpoints.md for duplicate resolution
+        // For now, just remove from UI
+        console.log(
+          `[UploadPage] Canceling upload for ${duplicate.relativePath} (backend integration pending)`
+        )
 
-          if (!response.ok) {
-            console.warn('[UploadPage] Backend cancel failed, removing from UI anyway')
-          }
-        } catch (error) {
-          console.warn('[UploadPage] Backend cancel error, removing from UI anyway:', error)
-        }
-
-        // Always remove from UI
+        // Remove from UI
         resolveDuplicate(uploadId)
         return
       }
 
       // For keep_both and replace_existing, call backend
-      try {
-        console.log(`[UploadPage] Resolving duplicate ${duplicate.videoId}: ${decision}`)
+      // TODO: Integrate duplicate resolution with backend API
+      // No endpoint documented in api-endpoints.md for duplicate resolution
+      // For now, just show an error since we can't actually resolve duplicates yet
+      console.log(`[UploadPage] Duplicate resolution not yet implemented: ${decision}`)
 
-        const response = await fetch(`/api/uploads/resolve-duplicate/${duplicate.videoId}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({ decision }),
-        })
-
-        if (!response.ok) {
-          const errorText = await response.text()
-          throw new Error(`Server returned ${response.status}: ${errorText}`)
-        }
-
-        console.log(`[UploadPage] Resolved duplicate ${duplicate.videoId}: ${decision}`)
-
-        // Remove from pending duplicates
-        resolveDuplicate(uploadId)
-      } catch (error) {
-        console.error('[UploadPage] Error resolving duplicate:', error)
-        const action = decision === 'keep_both' ? 'Keep Both' : 'Replace Existing'
-        const errorMsg = error instanceof Error ? error.message : String(error)
-        alert(
-          `Failed to ${action}:\n\n${errorMsg}\n\n` +
-            `You can:\n` +
-            `• Try again (the duplicate will remain in the list)\n` +
-            `• Click "Cancel Upload" to remove it without resolving`
-        )
-      }
+      const action = decision === 'keep_both' ? 'Keep Both' : 'Replace Existing'
+      alert(
+        `Duplicate resolution not yet implemented.\n\n` +
+          `The backend API doesn't have an endpoint for duplicate resolution yet.\n\n` +
+          `You can:\n` +
+          `• Click "Cancel Upload" to remove it from the list\n` +
+          `• Wait for backend API integration`
+      )
     },
     [pendingDuplicates, resolveDuplicate]
   )
@@ -457,6 +478,7 @@ export default function UploadPage() {
         <UploadPreviewModal
           files={pendingFiles}
           availableFolders={availableFolders}
+          videos={videos}
           defaultTargetFolder={loaderData.preselectedFolder}
           onConfirm={(files, options) => void handleUploadConfirm(files, options)}
           onCancel={handleUploadCancel}

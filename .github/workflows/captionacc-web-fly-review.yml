@@ -37,3 +37,12 @@ jobs:
         with:
           name: pr-${{ github.event.number }}-web-react-router-template
           path: apps/captionacc-web
+          # Build args required for Vite to build the React Router app
+          build_args: |
+            VITE_API_URL=${{ secrets.VITE_API_URL }}
+            VITE_SUPABASE_URL=${{ secrets.VITE_SUPABASE_URL }}
+            VITE_SUPABASE_ANON_KEY=${{ secrets.VITE_SUPABASE_ANON_KEY }}
+            VITE_WEB3FORMS_ACCESS_KEY=${{ secrets.VITE_WEB3FORMS_ACCESS_KEY }}
+            VITE_UMAMI_WEBSITE_ID=${{ secrets.VITE_UMAMI_WEBSITE_ID }}
+            VITE_UMAMI_SRC=${{ secrets.VITE_UMAMI_SRC }}
+            VITE_WASABI_BUCKET=${{ secrets.VITE_WASABI_BUCKET }}

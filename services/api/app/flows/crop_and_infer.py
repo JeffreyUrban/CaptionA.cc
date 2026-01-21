@@ -19,7 +19,7 @@ from prefect.artifacts import create_table_artifact
 
 from ..config import get_settings
 from ..services.supabase_service import SupabaseServiceImpl
-from extract_crop_frames_and_infer_extents.models import CropRegion
+from .models import CropRegion
 
 
 @task(
@@ -136,9 +136,15 @@ async def call_modal_crop_and_infer(
 
     import modal
 
+    settings = get_settings()
+
     # Lookup the deployed Modal function
+    modal_app_name = (
+        f"captionacc-extract-crop-frames-and-infer-extents-{settings.modal_app_suffix}"
+    )
+    print(f"[Modal] Looking up function: {modal_app_name}")
     crop_infer_fn = modal.Function.from_name(
-        "extract-crop-frames-and-infer-extents", "crop_and_infer_caption_frame_extents"
+        modal_app_name, "extract_crop_frames_and_infer_extents"
     )
 
     # Call the Modal function remotely
@@ -179,7 +185,7 @@ def process_inference_results(
     cropped_frames_version: int,
 ) -> None:
     """
-    Call API endpoint to process caption_frame_extents.db into captions.db.
+    Call API endpoint to process caption_frame_extents.db.gz into captions.db.
 
     This step processes raw inference results into user-facing caption records.
 
@@ -192,13 +198,13 @@ def process_inference_results(
     print(f"[API] Inference DB key: {caption_frame_extents_db_key}")
     print(f"[API] Cropped frames version: v{cropped_frames_version}")
 
-    # TODO: Call API endpoint to process caption_frame_extents.db into captions.db
+    # TODO: Call API endpoint to process caption_frame_extents.db.gz into captions.db
     # This step processes raw inference results into user-facing caption records
     # For now, we'll note this as a placeholder
 
     print("[API] TODO: Implement API endpoint to process inference results")
     print("[API] Endpoint should:")
-    print("  1. Download caption_frame_extents.db from Wasabi")
+    print("  1. Download caption_frame_extents.db.gz from Wasabi")
     print("  2. Parse inference results")
     print("  3. Create caption records in captions.db")
     print("  4. Upload captions.db.gz to Wasabi")
@@ -241,21 +247,26 @@ def update_video_metadata(
 
 
 @task(
-    name="update-caption-status",
+    name="update-boundaries-status",
     retries=2,
     retry_delay_seconds=5,
     tags=["supabase", "status"],
     log_prints=True,
 )
-def update_caption_status(video_id: str, status: str) -> None:
+def update_boundaries_status(
+    video_id: str,
+    status: str,
+    error_details: dict | None = None,
+) -> None:
     """
-    Update video caption_status.
+    Update video boundaries_status after crop and infer.
 
     Args:
         video_id: Video UUID
-        status: Caption status ('processing', 'ready', 'error')
+        status: Boundaries status ('wait', 'annotate', 'done', 'review', 'error')
+        error_details: Error details if status is 'error'
     """
-    print(f"[Supabase] Updating caption status for video {video_id}: {status}")
+    print(f"[Supabase] Updating boundaries status for video {video_id}: {status}")
 
     settings = get_settings()
     supabase = SupabaseServiceImpl(
@@ -264,12 +275,13 @@ def update_caption_status(video_id: str, status: str) -> None:
         schema=settings.supabase_schema,
     )
 
-    supabase.update_video_status(
+    supabase.update_video_workflow_status(
         video_id=video_id,
-        caption_status=status,
+        boundaries_status=status,
+        boundaries_error_details=error_details,
     )
 
-    print("[Supabase] Caption status updated successfully")
+    print("[Supabase] Boundaries status updated successfully")
 
 
 @flow(
@@ -311,9 +323,7 @@ async def crop_and_infer(
     acquire_server_lock(video_id, "layout")
 
     try:
-        # Step 2: Update caption status to 'processing'
-        print("\nStep 2/6: Updating caption status to 'processing'...")
-        update_caption_status(video_id, "processing")
+        # Step 2: Boundaries inference begins (status stays 'wait' until complete)
 
         # Step 3: Call Modal crop_and_infer_caption_frame_extents function
         print("\nStep 3/6: Calling Modal crop and infer function...")
@@ -340,9 +350,9 @@ async def crop_and_infer(
             cropped_frames_version=modal_result["version"],
         )
 
-        # Step 6: Update video caption_status to 'ready'
-        print("\nStep 6/6: Updating caption status to 'ready'...")
-        update_caption_status(video_id, "ready")
+        # Step 6: Update boundaries_status to 'annotate' - ready for user to review boundaries
+        print("\nStep 6/6: Updating boundaries status to 'annotate'...")
+        update_boundaries_status(video_id, "annotate")
 
         # Create Prefect artifact for visibility
         create_table_artifact(
@@ -373,14 +383,18 @@ async def crop_and_infer(
         }
 
     except Exception as e:
-        # Update video status to 'error' on failure
+        # Update boundaries_status to 'error' on failure
         print(f"\nFlow failed with error: {e}")
-        print("Updating caption status to 'error'...")
+        print("Updating boundaries status to 'error'...")
 
         try:
-            update_caption_status(video_id, "error")
+            update_boundaries_status(
+                video_id,
+                "error",
+                error_details={"message": str(e), "error": str(e)},
+            )
         except Exception as status_error:
-            print(f"Failed to update caption status: {status_error}")
+            print(f"Failed to update boundaries status: {status_error}")
 
         # Re-raise the original exception
         raise

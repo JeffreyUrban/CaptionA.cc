@@ -32,9 +32,9 @@ $ uv run pytest tests/e2e/ --collect-only
 ╚══════════════════════════════════════════════════════════════════════════════╝
 
 You are attempting to run E2E tests against a PRODUCTION environment:
-  Database Schema: captionacc_production
+  Database Schema: captionacc_prod
   Supabase URL:    https://stbnsczvywpwjzbpfehp.supabase.co
-  Wasabi Bucket:   caption-acc-prod
+  Wasabi Bucket:   captionacc-prod
 
 E2E tests write REAL data to these services...
 Set ALLOW_E2E_ON_PRODUCTION=true to override.
@@ -44,15 +44,7 @@ Set ALLOW_E2E_ON_PRODUCTION=true to override.
 
 ## 🔧 Configuration Changes Made
 
-### 1. Environment Variables Added
-
-**`.env` updates:**
-```bash
-# Added webhook authentication secret
-WEBHOOK_SECRET=dev_webhook_secret_e2e_testing_only_change_in_production
-```
-
-### 2. Dependencies Installed
+### 1. Dependencies Installed
 
 **Workspace-level changes (`pyproject.toml`):**
 - Added `captionacc-modal` to `tool.uv.sources`
@@ -116,12 +108,11 @@ ALLOW_E2E_ON_PRODUCTION=true uv run pytest tests/e2e/ --collect-only -q
 |----------|--------|--------|
 | `SUPABASE_URL` | ✅ Set | .env |
 | `SUPABASE_SERVICE_ROLE_KEY` | ✅ Set | .env (sb_secret_*) |
-| `SUPABASE_SCHEMA` | ✅ Set | .env (captionacc_production) |
+| `SUPABASE_SCHEMA` | ✅ Set | .env (captionacc_prod) |
 | `WASABI_ACCESS_KEY_READWRITE` | ✅ Set | .env |
 | `WASABI_SECRET_KEY_READWRITE` | ✅ Set | .env |
-| `WASABI_BUCKET` | ✅ Set | .env (caption-acc-prod) |
+| `WASABI_BUCKET` | ✅ Set | .env (captionacc-prod) |
 | `WASABI_REGION` | ✅ Set | .env (us-east-1) |
-| `WEBHOOK_SECRET` | ✅ Set | .env (dev secret) |
 | `PREFECT_API_URL` | ✅ Set | .env |
 | `MODAL_TOKEN` | ✅ Configured | Modal CLI authenticated |
 | `ALLOW_E2E_ON_PRODUCTION` | ⚠️ Must set explicitly | Set to "true" to run |

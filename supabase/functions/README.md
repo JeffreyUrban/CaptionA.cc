@@ -22,7 +22,7 @@ Generates presigned PUT URLs for direct video upload to Wasabi S3.
 **Response:**
 ```json
 {
-  "uploadUrl": "https://caption-acc-prod.s3.us-east-1.wasabisys.com/...",
+  "uploadUrl": "https://captionacc-prod.s3.us-east-1.wasabisys.com/...",
   "videoId": "uuid",
   "storageKey": "tenant_id/client/videos/video_id/video.mp4",
   "expiresAt": "2026-01-11T11:00:00Z"
@@ -44,7 +44,7 @@ Returns temporary STS credentials for direct Wasabi S3 read access, scoped to th
     "sessionToken": "..."
   },
   "expiration": "2026-01-11T23:00:00Z",
-  "bucket": "caption-acc-prod",
+  "bucket": "captionacc-prod",
   "region": "us-east-1",
   "endpoint": "https://s3.us-east-1.wasabisys.com",
   "prefix": "{tenant_id}/client/*"
@@ -86,9 +86,9 @@ curl -X POST http://localhost:54321/functions/v1/captionacc-presigned-upload \
 cd supabase
 
 # Set shared secrets (first time only)
-supabase secrets set WASABI_BUCKET=caption-acc-prod
+supabase secrets set WASABI_BUCKET=captionacc-prod
 supabase secrets set WASABI_REGION=us-east-1
-supabase secrets set DB_SCHEMA=captionacc_production
+supabase secrets set DB_SCHEMA=captionacc_prod
 
 # Set presigned-upload secrets
 supabase secrets set WASABI_ACCESS_KEY_READWRITE=your_key
@@ -111,7 +111,7 @@ Before deploying `captionacc-s3-credentials`, set up Wasabi IAM:
 
 1. **Create IAM role** `captionacc-client-read`:
    - Trust policy: Allow `captionacc-sts-assumer` user to assume it
-   - Permissions: `s3:GetObject` on `arn:aws:s3:::caption-acc-prod/*/client/*`
+   - Permissions: `s3:GetObject` on `arn:aws:s3:::captionacc-prod/*/client/*`
 
 2. **Create IAM user** `captionacc-sts-assumer`:
    - Permissions: `sts:AssumeRole` on the role above
@@ -131,7 +131,7 @@ See [wasabi-storage.md](../../docs/data-architecture/wasabi-storage.md) for full
 | `WASABI_BUCKET` | both | Wasabi bucket name |
 | `WASABI_REGION` | both | Wasabi region (default: us-east-1) |
 | `WASABI_STS_DURATION_SECONDS` | s3-credentials | Credential duration (default: 3600) |
-| `DB_SCHEMA` | both | Database schema (default: captionacc_production) |
+| `DB_SCHEMA` | both | Database schema (default: captionacc_prod) |
 
 Note: `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are automatically available in edge functions.
 

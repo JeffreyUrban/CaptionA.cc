@@ -11,16 +11,11 @@ import { isbot } from 'isbot'
 import { renderToPipeableStream } from 'react-dom/server'
 import { ServerRouter, type AppLoadContext, type EntryContext } from 'react-router'
 
-import { requireBasicAuth } from '~/middleware/basic-auth'
-import { startPeriodicCleanup } from '~/services/video-cleanup'
-
 const ABORT_DELAY = 5_000
 
-// Start periodic cleanup on server startup
-startPeriodicCleanup()
-
-// Note: Video processing is now handled by Prefect orchestrator
-// Prefect server manages job recovery and retries independently
+// Note: This is a SPA application (ssr: false in react-router.config.ts)
+// Video processing and management is handled by the backend API (captionacc-api.fly.dev)
+// and Prefect orchestrator - no server-side video management in this web app
 
 export default function handleRequest(
   request: Request,
@@ -31,12 +26,6 @@ export default function handleRequest(
   // free to delete this parameter in your app if you're not using it!
   _loadContext: AppLoadContext
 ) {
-  // Check basic auth for preview sites
-  const authResponse = requireBasicAuth(request)
-  if (authResponse) {
-    return authResponse
-  }
-
   return isbot(request.headers.get('user-agent') ?? '')
     ? handleBotRequest(request, responseStatusCode, responseHeaders, routerContext)
     : handleBrowserRequest(request, responseStatusCode, responseHeaders, routerContext)

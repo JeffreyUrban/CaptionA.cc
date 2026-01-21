@@ -3,7 +3,7 @@
  * These types are used across hooks and components for the video list view.
  */
 
-import type { BadgeState } from '~/utils/video-stats'
+import type { BadgeState } from '~/utils/video-badges'
 
 // =============================================================================
 // Folders Metadata
@@ -49,8 +49,9 @@ export interface RenameVideoModalState {
 /** Modal state for deleting videos */
 export interface DeleteVideoModalState {
   open: boolean
-  videoPath?: string
+  videoId?: string
   videoName?: string
+  videoPath?: string // Keep for stats cleanup
 }
 
 /** Modal state for error details */

@@ -6,7 +6,7 @@ Get the Prefect orchestration system running in your development environment.
 
 - Python 3.11+
 - Modal account with API token configured (`modal token list`)
-- Prefect server running at `https://banchelabs-gateway.fly.dev/api`
+- Prefect server running at `https://banchelabs-gateway.fly.dev/prefect-internal/prefect/api`
 - Environment variables configured (see below)
 
 ## Environment Setup
@@ -14,11 +14,8 @@ Get the Prefect orchestration system running in your development environment.
 Create `/services/api/.env` with required variables:
 
 ```bash
-# Webhook Authentication
-WEBHOOK_SECRET=your-random-secret-key-here
-
 # Prefect (already configured)
-PREFECT_API_URL=https://banchelabs-gateway.fly.dev/api
+PREFECT_API_URL=https://banchelabs-gateway.fly.dev/prefect-internal/prefect/api
 
 # Supabase (verify these are set)
 SUPABASE_URL=https://stbnsczvywpwjzbpfehp.supabase.co
@@ -27,7 +24,7 @@ SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 # Wasabi (verify these are set)
 WASABI_ACCESS_KEY_READWRITE=your-access-key
 WASABI_SECRET_KEY_READWRITE=your-secret-key
-WASABI_BUCKET=caption-acc-prod
+WASABI_BUCKET=captionacc-prod
 ```
 
 ## Installation
@@ -59,29 +56,19 @@ modal app list
 
 ## Register Flows with Prefect
 
+Flow deployments are registered using the `prefect deploy` CLI with `prefect.yaml`:
+
 ```bash
 cd services/api
 
 # Set Prefect API URL
-export PREFECT_API_URL=https://banchelabs-gateway.fly.dev/api
+export PREFECT_API_URL=https://banchelabs-gateway.fly.dev/prefect-internal/prefect/api
 
-# Register all flows
-./scripts/register_flows.sh
+# Register all flows defined in prefect.yaml
+prefect deploy --all
 ```
 
-Expected output:
-```
-✓ Checking Prefect installation...
-✓ Connecting to Prefect server...
-✓ Checking work pool 'captionacc-workers'...
-
-Registering flows...
-✓ captionacc-video-initial-processing
-✓ captionacc-crop-and-infer-caption-frame-extents
-✓ captionacc-caption-ocr
-
-Summary: 3 flows registered successfully
-```
+This registers the deployments defined in `services/api/prefect.yaml`. In production, this runs automatically when deploying the API service to Fly.io (`fly deploy` in `services/api`), via the release command configured in `fly.toml`.
 
 ## Start API Service
 
@@ -103,33 +90,21 @@ INFO - Prefect worker started successfully
 
 ## Test the System
 
-### Test Webhook Endpoint
+### Test Process New Videos Trigger
+
+The API service automatically subscribes to Supabase Realtime for video INSERT events.
+You can also manually trigger processing via the internal endpoint:
 
 ```bash
-export WEBHOOK_SECRET="your-random-secret-key-here"  # pragma: allowlist secret
-
-curl -X POST http://localhost:8000/webhooks/supabase/videos \
-  -H "Authorization: Bearer ${WEBHOOK_SECRET}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "type": "INSERT",
-    "table": "videos",
-    "record": {
-      "id": "test-video-123",
-      "tenant_id": "test-tenant-456",
-      "storage_key": "test-tenant-456/client/videos/test-video-123/video.mp4",
-      "created_at": "2024-01-12T00:00:00Z"
-    }
-  }'
+curl -X POST http://localhost:8000/internal/process-new-videos/trigger \
+  -H "Content-Type: application/json"
 ```
 
 Expected response:
 ```json
 {
-  "success": true,
   "flow_run_id": "550e8400-e29b-41d4-a716-446655440000",
-  "status": "accepted",
-  "message": "Flow run created with priority 70"
+  "status": "triggered"
 }
 ```
 
@@ -139,19 +114,19 @@ Expected response:
 2. **Flow Runs:** Check the latest flow run
 3. **Logs:** View execution logs and status
 
-## Configure Supabase Webhook
+## Video Processing Trigger
 
-Once testing is complete, configure the webhook in Supabase:
+Video processing is triggered automatically via two mechanisms:
 
-1. Go to Supabase Dashboard → Database → Webhooks
-2. Create new webhook:
-   - **Name:** prefect-video-processing
-   - **URL:** `http://localhost:8000/webhooks/supabase/videos` (for local testing)
-   - **Method:** POST
-   - **Headers:** `Authorization: Bearer {your-webhook-secret}`
-   - **Events:** INSERT
-   - **Table:** videos
-   - **Schema:** captionacc_production
+1. **Primary (immediate):** Supabase Realtime subscription on `videos` table INSERT
+   - The API subscribes when it starts
+   - Processing starts immediately when a video is uploaded
+
+2. **Recovery (every 15 min):** Cron job catches any missed events
+   - Runs via Supercronic inside the API container
+   - Queries for videos with `layout_status = 'wait'`
+
+No manual configuration is needed - this works automatically in both dev and prod.
 
 ## Troubleshooting
 
@@ -162,19 +137,23 @@ Once testing is complete, configure the webhook in Supabase:
 echo $PREFECT_API_URL
 
 # If not set, add to .env
-echo "PREFECT_API_URL=https://banchelabs-gateway.fly.dev/api" >> services/api/.env
+echo "PREFECT_API_URL=https://banchelabs-gateway.fly.dev/prefect-internal/prefect/api" >> services/api/.env
 
 # Restart API service
 ```
 
-### Webhook Returns 401
+### Realtime Subscription Not Connecting
 
+Check the API logs for Realtime subscription status:
+```
+INFO - Realtime subscriber started for schema captionacc_prod
+INFO - Subscribed to captionacc_prod.videos INSERT events
+```
+
+If not connecting, verify Supabase credentials in `.env`:
 ```bash
-# Verify webhook secret matches
-grep WEBHOOK_SECRET services/api/.env
-
-# Ensure curl uses the same secret
-export WEBHOOK_SECRET="same-value-as-in-env"  # pragma: allowlist secret
+grep SUPABASE_URL services/api/.env
+grep SUPABASE_SERVICE_ROLE_KEY services/api/.env
 ```
 
 ### Modal Function Not Found
@@ -213,14 +192,11 @@ ps aux | grep "prefect worker"
 # Start API service with worker
 cd services/api && uvicorn app.main:app --reload --port 8000
 
-# Test webhook
-curl -X POST http://localhost:8000/webhooks/supabase/videos \
-  -H "Authorization: Bearer ${WEBHOOK_SECRET}" \
-  -H "Content-Type: application/json" \
-  -d '{"type":"INSERT","table":"videos","record":{"id":"test","tenant_id":"test","storage_key":"test.mp4","created_at":"2024-01-12T00:00:00Z"}}'
+# Trigger video processing manually
+curl -X POST http://localhost:8000/internal/process-new-videos/trigger
 
 # Check Prefect deployments
-export PREFECT_API_URL=https://banchelabs-gateway.fly.dev/api
+export PREFECT_API_URL=https://banchelabs-gateway.fly.dev/prefect-internal/prefect/api
 prefect deployment ls
 
 # View flow runs
@@ -230,5 +206,5 @@ prefect flow-run ls --limit 10
 modal app list
 
 # Re-register flows
-cd services/api && ./scripts/register_flows.sh
+cd services/api && prefect deploy --all
 ```

@@ -8,9 +8,9 @@ enabled = true
 port = 54321
 # Schemas to expose in your API. Tables, views and stored procedures in this schema will get API
 # endpoints. public and storage are always included.
-schemas = ["public", "storage", "graphql_public", "captionacc_production", "captionacc_staging"]
+schemas = ["public", "storage", "graphql_public", "captionacc_prod", "captionacc_dev", "captionacc_staging"]
 # Extra schemas to add to the search_path of every request. public is always included.
-extra_search_path = ["public", "extensions", "captionacc_production"]
+extra_search_path = ["public", "extensions", "captionacc_prod"]
 # The maximum number of rows returns from a view, table, or stored procedure. Limits payload size
 # for accidental or malicious requests.
 max_rows = 1000
@@ -154,8 +154,17 @@ inspector_port = 8083
 # Edge Functions configuration
 # Disable legacy JWT verification - we use new short-format API keys (sb_secret_*, sb_publishable_*)
 # and implement our own auth checks in the function code
-[functions.captionacc-presigned-upload]
+
+# Production functions (use DB_SCHEMA secret -> captionacc_prod)
+[functions.captionacc-presigned-upload-prod]
 verify_jwt = false
 
-[functions.captionacc-s3-credentials]
+[functions.captionacc-s3-credentials-prod]
+verify_jwt = false
+
+# Development functions (use DB_SCHEMA secret -> captionacc_dev)
+[functions.captionacc-presigned-upload-dev]
+verify_jwt = false
+
+[functions.captionacc-s3-credentials-dev]
 verify_jwt = false

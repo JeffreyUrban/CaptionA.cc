@@ -1,67 +1,37 @@
 /**
- * Background training service for box classification model.
+ * Model training service - triggers server-side model retraining.
  *
- * Triggers automatic model retraining when annotation thresholds are reached.
+ * The actual model training happens server-side via the Python ocr_box_model package.
+ * This service simply triggers the server API to start training.
  */
 
-import { exec } from 'child_process'
-import { resolve } from 'path'
-
-import { completeProcessing } from './processing-status-tracker'
+import { completeProcessing, startFullRetrain } from './processing-status-tracker'
 
 /**
- * Get path to annotations database for a video.
- */
-function getAnnotationsDatabasePath(videoId: string): string {
-  return resolve(process.cwd(), '..', '..', 'local', 'data', ...videoId.split('/'), 'captions.db')
-}
-
-/**
- * Trigger asynchronous model training.
+ * Trigger model training via server API.
  *
- * Runs the box-classification training CLI command in the background.
- * Training happens asynchronously - this function returns immediately.
+ * Calls the server-side calculate-predictions endpoint which will
+ * train the model if needed and recalculate all predictions.
  *
  * @param videoId Video identifier (e.g., "showname/S01E01")
  */
 export function triggerModelTraining(videoId: string): void {
-  const dbPath = getAnnotationsDatabasePath(videoId)
-  const packageDir = resolve(process.cwd(), '..', '..', 'packages', 'box_classification')
+  console.log(`[Model Training] Triggering server-side training for ${videoId}`)
 
-  console.log(`[Model Training] Triggering retraining for ${videoId}`)
+  // Mark as processing
+  startFullRetrain(videoId)
 
-  // Run training command in background from the package directory
-  exec(`uv run box-classification ${dbPath}`, { cwd: packageDir }, (error, stdout, stderr) => {
-    if (error) {
-      console.error(`[Model Training] Failed for ${videoId}:`, error.message)
-      if (stderr) {
-        console.error(`[Model Training] stderr:`, stderr)
-      }
-      // Mark as complete even on error
-      completeProcessing(videoId)
-    } else {
-      console.log(`[Model Training] Success for ${videoId}`)
-      console.log(stdout)
-
-      // Trigger prediction recalculation in background
-      console.log(`[Model Training] Triggering prediction recalculation for ${videoId}`)
-      fetch(
-        `http://localhost:5173/api/annotations/${encodeURIComponent(videoId)}/calculate-predictions`,
-        {
-          method: 'POST',
-        }
-      )
-        .then(response => response.json())
-        .then(result => {
-          console.log(`[Model Training] Predictions recalculated:`, result)
-          // Mark as complete after predictions recalculated
-          completeProcessing(videoId)
-        })
-        .catch(err => {
-          console.error(`[Model Training] Failed to recalculate predictions:`, err.message)
-          // Mark as complete even on error
-          completeProcessing(videoId)
-        })
-    }
+  // Call server API to train model and calculate predictions
+  fetch(`/videos/${encodeURIComponent(videoId)}/calculate-predictions`, {
+    method: 'POST',
   })
+    .then(response => response.json())
+    .then(result => {
+      console.log(`[Model Training] Server training complete for ${videoId}:`, result)
+      completeProcessing(videoId)
+    })
+    .catch(err => {
+      console.error(`[Model Training] Failed for ${videoId}:`, err.message)
+      completeProcessing(videoId)
+    })
 }

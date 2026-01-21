@@ -3,6 +3,7 @@
  * Handles rendering of frame/analysis views with overlays.
  */
 
+import { S3Image } from '~/components/S3Image'
 import { type FrameBoxesData, type LayoutConfig, type BoxData, type ViewMode } from '~/types/layout'
 
 interface LayoutMainCanvasProps {
@@ -13,6 +14,7 @@ interface LayoutMainCanvasProps {
   currentFrameBoxes: FrameBoxesData | null
   analysisBoxes: BoxData[] | null
   loadingFrame: boolean
+  isCalculatingPredictions: boolean
   annotationsSinceRecalc: number
   selectionPadding: number
   imageRef: React.RefObject<HTMLImageElement | null>
@@ -21,6 +23,8 @@ interface LayoutMainCanvasProps {
   onMouseDown: (e: React.MouseEvent<HTMLDivElement>) => void
   onMouseMove: (e: React.MouseEvent<HTMLDivElement>) => void
   onContextMenu: (e: React.MouseEvent<HTMLDivElement>) => void
+  tenantId: string
+  videoId: string
 }
 
 /**
@@ -31,6 +35,7 @@ function AnalysisViewContent({
   layoutApproved,
   boundsMismatch,
   analysisBoxes,
+  isCalculatingPredictions,
   annotationsSinceRecalc: _annotationsSinceRecalc,
   selectionPadding,
   imageRef,
@@ -39,20 +44,23 @@ function AnalysisViewContent({
   onMouseDown,
   onMouseMove,
   onContextMenu,
-}: Omit<LayoutMainCanvasProps, 'viewMode' | 'currentFrameBoxes' | 'loadingFrame'> & {
+}: Omit<
+  LayoutMainCanvasProps,
+  'viewMode' | 'currentFrameBoxes' | 'loadingFrame' | 'tenantId' | 'videoId'
+> & {
   layoutConfig: LayoutConfig
 }) {
   return (
     <div
       ref={interactionAreaRef}
-      className="relative inline-block cursor-crosshair"
+      className="relative flex cursor-crosshair w-full"
       style={{ padding: `${selectionPadding}px` }}
       onMouseDown={onMouseDown}
       onMouseMove={onMouseMove}
       onContextMenu={onContextMenu}
     >
       <div
-        className="relative"
+        className="relative w-full"
         style={{
           outline: boundsMismatch
             ? '3px solid #ec4899' // pink-500
@@ -65,7 +73,7 @@ function AnalysisViewContent({
           ref={imageRef}
           src={`data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="${layoutConfig.frameWidth}" height="${layoutConfig.frameHeight}"><rect width="100%" height="100%" fill="black"/></svg>`}
           alt="Analysis view"
-          className="max-w-full max-h-full object-contain block"
+          className="w-full h-auto object-contain block"
         />
         <canvas
           ref={canvasRef}
@@ -73,9 +81,11 @@ function AnalysisViewContent({
           style={{ touchAction: 'none', pointerEvents: 'none' }}
         />
       </div>
-      {analysisBoxes === null && (
+      {(analysisBoxes === null || isCalculatingPredictions) && (
         <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="text-white text-lg">Loading analysis boxes...</div>
+          <div className="text-white text-lg">
+            {isCalculatingPredictions ? 'Calculating predictions...' : 'Loading analysis boxes...'}
+          </div>
         </div>
       )}
       {/* RecalculatingOverlay removed - processing now happens in background without blocking */}
@@ -96,6 +106,8 @@ function FrameViewContent({
   onMouseDown,
   onMouseMove,
   onContextMenu,
+  tenantId,
+  videoId,
 }: Pick<
   LayoutMainCanvasProps,
   | 'annotationsSinceRecalc'
@@ -106,6 +118,8 @@ function FrameViewContent({
   | 'onMouseDown'
   | 'onMouseMove'
   | 'onContextMenu'
+  | 'tenantId'
+  | 'videoId'
 > & {
   currentFrameBoxes: FrameBoxesData
 }) {
@@ -114,27 +128,36 @@ function FrameViewContent({
   return (
     <div
       ref={interactionAreaRef}
-      className="relative inline-block cursor-crosshair"
+      className="relative flex cursor-crosshair w-full"
       style={{ padding: `${selectionPadding}px` }}
       onMouseDown={onMouseDown}
       onMouseMove={onMouseMove}
       onContextMenu={onContextMenu}
     >
       <div
-        className="relative"
+        className="relative w-full"
         style={{
           outline: allBoxesAnnotated ? '3px solid #10b981' : 'none',
         }}
       >
+        {/* Placeholder to maintain dimensions while loading - imageRef for canvas sizing */}
         <img
           ref={imageRef}
-          src={currentFrameBoxes.imageUrl}
+          src={`data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="${currentFrameBoxes.frameWidth}" height="${currentFrameBoxes.frameHeight}"><rect width="100%" height="100%" fill="black"/></svg>`}
+          alt="Frame placeholder"
+          className="w-full h-auto object-contain block"
+        />
+        {/* Actual frame image rendered on top */}
+        <S3Image
+          tenantId={tenantId}
+          videoId={videoId}
+          path={currentFrameBoxes.imageUrl}
           alt={`Frame ${currentFrameBoxes.frameIndex}`}
-          className="max-w-full max-h-full object-contain block"
+          className="absolute left-0 top-0 w-full h-full object-contain block z-10"
         />
         <canvas
           ref={canvasRef}
-          className="absolute left-0 top-0"
+          className="absolute left-0 top-0 z-20"
           style={{ touchAction: 'none', pointerEvents: 'none' }}
         />
       </div>
@@ -162,6 +185,7 @@ export function LayoutMainCanvas({
   currentFrameBoxes,
   analysisBoxes,
   loadingFrame,
+  isCalculatingPredictions,
   annotationsSinceRecalc,
   selectionPadding,
   imageRef,
@@ -170,6 +194,8 @@ export function LayoutMainCanvas({
   onMouseDown,
   onMouseMove,
   onContextMenu,
+  tenantId,
+  videoId,
 }: LayoutMainCanvasProps) {
   return (
     <div className="relative flex flex-shrink-0 items-center justify-center rounded-lg border border-gray-300 bg-gray-900 dark:border-gray-600 dark:bg-gray-800">
@@ -179,6 +205,7 @@ export function LayoutMainCanvas({
           layoutApproved={layoutApproved}
           boundsMismatch={boundsMismatch}
           analysisBoxes={analysisBoxes}
+          isCalculatingPredictions={isCalculatingPredictions}
           annotationsSinceRecalc={annotationsSinceRecalc}
           selectionPadding={selectionPadding}
           imageRef={imageRef}
@@ -199,6 +226,8 @@ export function LayoutMainCanvas({
           onMouseDown={onMouseDown}
           onMouseMove={onMouseMove}
           onContextMenu={onContextMenu}
+          tenantId={tenantId}
+          videoId={videoId}
         />
       ) : (
         <EmptyState loadingFrame={loadingFrame} />

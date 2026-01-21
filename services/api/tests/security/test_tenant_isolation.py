@@ -3,7 +3,7 @@
 import sqlite3
 from contextlib import asynccontextmanager
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 from fastapi import FastAPI
@@ -478,56 +478,6 @@ class TestTenantIsolation:
             # Should fail with 500 as the operation cannot complete
             assert response.status_code in [404, 500]
 
-    async def test_tenant_cannot_trigger_flow_for_other_tenant(
-        self,
-        webhook_client: AsyncClient,
-        webhook_auth_header: dict[str, str],
-        tenant_a_id: str,
-        tenant_b_id: str,
-        tenant_b_video_id: str,
-        mock_trigger_prefect_flow: AsyncMock,
-    ):
-        """Verify tenant isolation in flow triggering via webhooks.
-
-        Security Requirement: Webhook events for Tenant B's videos should not
-        be processable with Tenant A's credentials. However, webhooks use a
-        shared secret (not tenant-specific), so this test verifies that the
-        flow is triggered with the correct tenant_id from the payload.
-
-        Expected: Flow is triggered with tenant_b_id, not tenant_a_id.
-        This test verifies the system correctly processes tenant isolation
-        in the Prefect flow parameters.
-        """
-        # Create webhook payload for tenant B's video
-        webhook_payload = {
-            "type": "INSERT",
-            "table": "videos",
-            "record": {
-                "id": tenant_b_video_id,
-                "tenant_id": tenant_b_id,
-                "storage_key": f"{tenant_b_id}/client/videos/{tenant_b_video_id}/video.mp4",
-                "status": "uploading",
-                "tenant_tier": "free",
-            },
-        }
-
-        response = await webhook_client.post(
-            "/webhooks/supabase/videos",
-            json=webhook_payload,
-            headers=webhook_auth_header,
-        )
-
-        # Webhook should succeed (it has valid auth)
-        assert response.status_code == 202
-        data = response.json()
-        assert data["success"] is True
-
-        # Verify the flow was triggered with tenant_b_id (not tenant_a_id)
-        mock_trigger_prefect_flow.assert_called_once()
-        call_kwargs = mock_trigger_prefect_flow.call_args.kwargs
-        assert call_kwargs["parameters"]["tenant_id"] == tenant_b_id
-        assert call_kwargs["parameters"]["video_id"] == tenant_b_video_id
-
     async def test_wasabi_keys_include_tenant_id_captions(
         self,
         tenant_a_id: str,
@@ -674,49 +624,6 @@ class TestTenantIsolation:
             assert response.status_code == 404, f"Failed isolation check for {endpoint}"
             assert "not found" in response.json()["detail"].lower()
 
-    async def test_tenant_isolation_in_storage_key_from_webhook(
-        self,
-        webhook_client: AsyncClient,
-        webhook_auth_header: dict[str, str],
-        tenant_a_id: str,
-        tenant_a_video_id: str,
-        mock_trigger_prefect_flow: AsyncMock,
-    ):
-        """Verify storage_key in webhook payloads includes tenant_id prefix.
-
-        Security Requirement: All storage keys passed through webhooks must
-        include tenant_id to ensure consistent tenant isolation in storage.
-
-        Expected: storage_key format is {tenant_id}/client/videos/{video_id}/...
-        """
-        webhook_payload = {
-            "type": "INSERT",
-            "table": "videos",
-            "record": {
-                "id": tenant_a_video_id,
-                "tenant_id": tenant_a_id,
-                "storage_key": f"{tenant_a_id}/client/videos/{tenant_a_video_id}/video.mp4",
-                "status": "uploading",
-                "tenant_tier": "free",
-            },
-        }
-
-        response = await webhook_client.post(
-            "/webhooks/supabase/videos",
-            json=webhook_payload,
-            headers=webhook_auth_header,
-        )
-
-        assert response.status_code == 202
-        data = response.json()
-        assert data["success"] is True
-
-        # Verify the storage_key passed to Prefect includes tenant_id
-        mock_trigger_prefect_flow.assert_called_once()
-        call_kwargs = mock_trigger_prefect_flow.call_args.kwargs
-        storage_key = call_kwargs["parameters"]["storage_key"]
-        assert storage_key.startswith(f"{tenant_a_id}/")
-
     async def test_tenant_boundary_enforced_by_auth_context(
         self,
         app: FastAPI,
@@ -755,52 +662,3 @@ class TestTenantIsolation:
                 assert response.status_code == 404
 
         app.dependency_overrides.clear()
-
-    async def test_webhook_payload_tenant_id_mismatch_detection(
-        self,
-        webhook_client: AsyncClient,
-        webhook_auth_header: dict[str, str],
-        tenant_a_id: str,
-        tenant_b_id: str,
-        tenant_a_video_id: str,
-        mock_trigger_prefect_flow: AsyncMock,
-    ):
-        """Verify system detects tenant_id mismatch in webhook storage_key.
-
-        Security Requirement: If storage_key doesn't match tenant_id in record,
-        the system should process it correctly (storage_key is authoritative).
-        This test documents expected behavior for malformed data.
-
-        Note: This is a data integrity test. In production, Supabase should
-        enforce this constraint at the database level.
-        """
-        # Payload with mismatched tenant_id and storage_key
-        # storage_key has tenant_b, but record.tenant_id says tenant_a
-        webhook_payload = {
-            "type": "INSERT",
-            "table": "videos",
-            "record": {
-                "id": tenant_a_video_id,
-                "tenant_id": tenant_a_id,  # Says tenant_a
-                "storage_key": f"{tenant_b_id}/client/videos/{tenant_a_video_id}/video.mp4",  # But storage is in tenant_b
-                "status": "uploading",
-                "tenant_tier": "free",
-            },
-        }
-
-        response = await webhook_client.post(
-            "/webhooks/supabase/videos",
-            json=webhook_payload,
-            headers=webhook_auth_header,
-        )
-
-        # Webhook should still process it (it's Supabase's job to validate)
-        assert response.status_code == 202
-
-        # But the flow receives the data as-is, which would cause issues downstream
-        # This test documents that we rely on Supabase for data integrity
-        mock_trigger_prefect_flow.assert_called_once()
-        call_kwargs = mock_trigger_prefect_flow.call_args.kwargs
-        # Both values are passed through - downstream processing must handle this
-        assert call_kwargs["parameters"]["tenant_id"] == tenant_a_id
-        assert call_kwargs["parameters"]["storage_key"].startswith(f"{tenant_b_id}/")

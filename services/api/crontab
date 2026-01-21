@@ -1,0 +1,8 @@
+# CaptionA.cc scheduled tasks
+# Runs via Supercronic inside the API container
+#
+# Format: minute hour day month weekday command
+# Note: Times are in UTC
+
+# Recovery: Check for missed videos every 15 minutes (primary trigger is Realtime)
+*/15 * * * * bash /app/scripts/trigger_process_new_videos.sh >> /tmp/process-new-videos-cron.log 2>&1

@@ -83,7 +83,7 @@ frame_rate: float     # Frames/second (default: 10.0)
 
 **Outputs to Wasabi:**
 - `{tenant}/client/videos/{id}/cropped_frames_v{N}/modulo_{M}/chunk_*.webm`
-- `{tenant}/server/videos/{id}/caption_frame_extents.db`
+- `{tenant}/server/videos/{id}/caption_frame_extents.db.gz`
 
 **Modulo Hierarchy:** Progressive loading
 - `modulo_16/` - Every 16th frame (coarse preview)
@@ -229,11 +229,11 @@ Modal auto-scales based on demand:
 
 ```bash
 # Create Modal secrets
-modal secret create wasabi \
-  WASABI_ACCESS_KEY=xxx \
-  WASABI_SECRET_KEY=xxx \
-  WASABI_BUCKET=caption-acc-prod \
-  WASABI_REGION=us-east-1
+modal secret create wasabi-prod \ 
+    WASABI_ACCESS_KEY_READWRITE=xxx \ 
+    WASABI_SECRET_KEY_READWRITE=xxx \ 
+    WASABI_BUCKET=captionacc-prod \ 
+    WASABI_REGION=us-east-1 
 
 modal secret create google-vision \
   GOOGLE_APPLICATION_CREDENTIALS_JSON='{"type":"service_account",...}'

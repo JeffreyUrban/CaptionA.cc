@@ -353,7 +353,7 @@ class MockCropInferResult:
         frame_count: Number of frames in cropped output
         label_counts: Count of each inferred label
         processing_duration_seconds: Total processing time
-        caption_frame_extents_db_key: Path to caption_frame_extents.db in S3
+        caption_frame_extents_db_key: Path to caption_frame_extents.db.gz in S3
         cropped_frames_prefix: Path prefix to cropped_frames_v{N}/ directory
 
     Example:
@@ -367,7 +367,7 @@ class MockCropInferResult:
     label_counts: Optional[dict[str, int]] = None
     processing_duration_seconds: float = 180.0
     caption_frame_extents_db_key: str = (
-        "tenant-456/server/videos/video-123/caption_frame_extents.db"
+        "tenant-456/server/videos/video-123/caption_frame_extents.db.gz"
     )
     cropped_frames_prefix: str = "tenant-456/client/videos/video-123/cropped_frames_v1/"
 

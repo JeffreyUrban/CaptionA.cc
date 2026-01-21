@@ -14,7 +14,9 @@ function collectAllFolderPaths(nodes: TreeNode[]): string[] {
   for (const node of nodes) {
     if (node.type === 'folder') {
       paths.push(node.path)
-      paths.push(...collectAllFolderPaths(node.children))
+      if (node.children) {
+        paths.push(...collectAllFolderPaths(node.children))
+      }
     }
   }
   return paths

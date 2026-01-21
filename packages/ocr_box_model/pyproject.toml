@@ -10,7 +10,7 @@ readme = "README.md"
 authors = [
     {name = "Jeffrey Urban"}
 ]
-requires-python = ">=3.13,<3.14"
+requires-python = ">=3.12"
 keywords = [
     "ocr",
     "bounding-boxes",
@@ -27,13 +27,7 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.14"
 ]
-dependencies = [
-    "caption_models",
-    "numpy>=1.26.0"
-]
-
-[tool.uv.sources]
-caption_models = { workspace = true }
+dependencies = []
 
 [project.optional-dependencies]
 dev = [
@@ -83,3 +77,9 @@ exclude_lines = [
 
 [tool.hatch.build.hooks.vcs]
 version-file = "src/ocr_box_model/_version.py"
+
+[tool.pyright]
+# Include the src directory in the Python path for type checking
+include = ["src", "tests"]
+pythonVersion = "3.14"
+typeCheckingMode = "standard"

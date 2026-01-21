@@ -12,22 +12,28 @@ class SupabaseService(Protocol):
     Use Protocol for structural typing - implementations don't need to inherit.
     """
 
-    # Video status updates
-    def update_video_status(
+    # Video workflow status updates
+    def update_video_workflow_status(
         self,
         video_id: str,
-        status: Optional[str] = None,
-        caption_status: Optional[str] = None,
-        error_message: Optional[str] = None,
+        layout_status: Optional[str] = None,
+        boundaries_status: Optional[str] = None,
+        text_status: Optional[str] = None,
+        layout_error_details: Optional[dict] = None,
+        boundaries_error_details: Optional[dict] = None,
+        text_error_details: Optional[dict] = None,
     ) -> None:
         """
-        Update video processing status.
+        Update video workflow status columns.
 
         Args:
             video_id: Video UUID
-            status: Overall video status (uploading, processing, active, error)
-            caption_status: Caption processing status (processing, ready, error)
-            error_message: Error message if status is 'error'
+            layout_status: Layout workflow status ('wait', 'annotate', 'done', 'review', 'error')
+            boundaries_status: Boundaries workflow status ('wait', 'annotate', 'done', 'review', 'error')
+            text_status: Text workflow status ('wait', 'annotate', 'done', 'review', 'error')
+            layout_error_details: Error details for layout stage (JSONB)
+            boundaries_error_details: Error details for boundaries stage (JSONB)
+            text_error_details: Error details for text stage (JSONB)
         """
         ...
 
@@ -152,7 +158,7 @@ class SupabaseServiceImpl:
         self,
         supabase_url: str,
         supabase_key: str,
-        schema: str = "captionacc_production",
+        schema: str = "captionacc_prod",
     ):
         """
         Initialize Supabase client.
@@ -160,7 +166,7 @@ class SupabaseServiceImpl:
         Args:
             supabase_url: Supabase project URL
             supabase_key: Supabase service role key
-            schema: PostgreSQL schema name (default: captionacc_production)
+            schema: PostgreSQL schema name (default: captionacc_prod)
         """
         from supabase import create_client
 
@@ -169,34 +175,47 @@ class SupabaseServiceImpl:
         self.schema = schema
         self.client = create_client(supabase_url, supabase_key)
 
-    def update_video_status(
+    def update_video_workflow_status(
         self,
         video_id: str,
-        status: Optional[str] = None,
-        caption_status: Optional[str] = None,
-        error_message: Optional[str] = None,
+        layout_status: Optional[str] = None,
+        boundaries_status: Optional[str] = None,
+        text_status: Optional[str] = None,
+        layout_error_details: Optional[dict] = None,
+        boundaries_error_details: Optional[dict] = None,
+        text_error_details: Optional[dict] = None,
     ) -> None:
         """
-        Update video processing status.
+        Update video workflow status columns.
 
         Args:
             video_id: Video UUID
-            status: Overall video status (uploading, processing, active, error)
-            caption_status: Caption processing status (processing, ready, error)
-            error_message: Error message if status is 'error'
-
-        Note:
-            The videos table does not have a separate caption_status column.
-            This parameter is reserved for future use and currently ignored.
+            layout_status: Layout workflow status ('wait', 'annotate', 'done', 'review', 'error')
+            boundaries_status: Boundaries workflow status ('wait', 'annotate', 'done', 'review', 'error')
+            text_status: Text workflow status ('wait', 'annotate', 'done', 'review', 'error')
+            layout_error_details: Error details for layout stage (JSONB)
+            boundaries_error_details: Error details for boundaries stage (JSONB)
+            text_error_details: Error details for text stage (JSONB)
         """
         data = {}
 
-        if status is not None:
-            data["status"] = status
+        if layout_status is not None:
+            data["layout_status"] = layout_status
 
-        # Note: caption_status and error_message are not in the current schema
-        # They are included in the Protocol for future compatibility
-        # For now, we'll use a JSONB metadata field if needed in the future
+        if boundaries_status is not None:
+            data["boundaries_status"] = boundaries_status
+
+        if text_status is not None:
+            data["text_status"] = text_status
+
+        if layout_error_details is not None:
+            data["layout_error_details"] = layout_error_details
+
+        if boundaries_error_details is not None:
+            data["boundaries_error_details"] = boundaries_error_details
+
+        if text_error_details is not None:
+            data["text_error_details"] = text_error_details
 
         if data:  # Only update if we have data to set
             self.client.schema(self.schema).table("videos").update(data).eq(
@@ -298,11 +317,12 @@ class SupabaseServiceImpl:
                 .execute()
             )
 
-            if not video_response.data:
+            video_data = video_response.data if video_response else None
+            if not video_data or not isinstance(video_data, dict):
                 # Video doesn't exist, can't acquire lock
                 return False
 
-            tenant_id = video_response.data.get("tenant_id")
+            tenant_id = video_data.get("tenant_id")
 
             # Create the state record with the lock already acquired
             now = datetime.now(timezone.utc).isoformat()
@@ -400,11 +420,12 @@ class SupabaseServiceImpl:
             .execute()
         )
 
-        if not response.data:
+        profile_data = response.data if response else None
+        if not profile_data or not isinstance(profile_data, dict):
             # Default to free if no users found
             return "free"
 
-        access_tier_id = response.data.get("access_tier_id", "demo")
+        access_tier_id = str(profile_data.get("access_tier_id", "demo"))
 
         # Map access_tier_id to priority tier names
         tier_mapping = {
@@ -435,11 +456,11 @@ class SupabaseServiceImpl:
             .execute()
         )
 
-        if not response.data:
+        video = response.data
+        if not video or not isinstance(video, dict):
             return {}
 
         # Rename fields to match Protocol expectations
-        video = response.data
         return {
             "tenant_id": video.get("tenant_id"),
             "storage_key": video.get("storage_key"),

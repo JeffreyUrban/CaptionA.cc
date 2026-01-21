@@ -7,7 +7,7 @@ Supabase (PostgreSQL) serves as the metadata layer for CaptionA.cc, providing mu
 | Property | Value |
 |----------|-------|
 | Postgres Version | 17 |
-| Primary Schema | `captionacc_production` |
+| Primary Schema | `captionacc_prod` |
 | Staging Schema | `captionacc_staging` |
 | RLS | Enabled (production schema) |
 
@@ -15,7 +15,7 @@ Supabase (PostgreSQL) serves as the metadata layer for CaptionA.cc, providing mu
 
 ```bash
 SUPABASE_URL=https://your-project.supabase.co  # or http://localhost:54321
-SUPABASE_SCHEMA=captionacc_production          # or captionacc_staging
+SUPABASE_SCHEMA=captionacc_prod          # or captionacc_staging
 SUPABASE_ANON_KEY=<public_key>                 # RLS-enforced access
 SUPABASE_SERVICE_ROLE_KEY=<service_key>        # Bypasses RLS (backend only)
 
@@ -29,7 +29,7 @@ VITE_SUPABASE_SCHEMA=...
 
 | Schema | Purpose | RLS |
 |--------|---------|-----|
-| `captionacc_production` | Main production environment | Yes |
+| `captionacc_prod` | Main production environment | Yes |
 | `captionacc_staging` | Testing/review apps | No |
 | `prefect` | Prefect Server database | N/A |
 | `umami` | Analytics database | N/A |
@@ -81,13 +81,12 @@ Video catalog with multi-tenant isolation. (added width, height)
 |--------|------|----------------------------------------------|
 | `id` | UUID PK | Video identifier                             |
 | `tenant_id` | UUID FK | Owner tenant                                 |
-| `video_path` | TEXT NOT NULL | User-facing path/name                        |
-| `storage_key` | TEXT NOT NULL | Wasabi storage key                           |
+| `display_path` | TEXT NOT NULL | User-facing path for organization            |
 | `size_bytes` | BIGINT | File size                                    |
 | `duration_seconds` | REAL | Video duration                               |
 | `width` | INTEGER NOT NULL | Width                                        |
 | `height` | INTEGER NOT NULL | Height                                       |
-| `status` | TEXT | 'uploading', 'processing', 'active', 'error' |
+| `status` | TEXT | 'processing', 'active', 'error'              |
 | `uploaded_by_user_id` | UUID FK | Uploader                                     |
 | `uploaded_at` | TIMESTAMPTZ | Upload timestamp                             |
 | `locked_by_user_id` | UUID FK | Current editor (locking)                     |
@@ -95,8 +94,9 @@ Video catalog with multi-tenant isolation. (added width, height)
 | `annotations_db_key` | TEXT | captions.db storage key                      |
 | `prefect_flow_run_id` | TEXT | Processing flow ID                           |
 | `is_demo` | BOOLEAN | Shared demo video flag                       |
-| `display_path` | TEXT | User-facing path                             |
 | `deleted_at` | TIMESTAMPTZ | Soft delete timestamp                        |
+
+**Note:** `storage_key` is computed as `{tenant_id}/client/videos/{id}/video.mp4` and not stored in the database.
 | `current_cropped_frames_version` | INTEGER | Active frames version                        |
 
 #### `cropped_frames_versions`
@@ -418,7 +418,7 @@ import { createClient } from "@supabase/supabase-js";
 import type { Database } from "~/types/supabase";
 
 const supabase = createClient<Database>(url, anonKey, {
-  db: { schema: "captionacc_production" }
+  db: { schema: "captionacc_prod" }
 });
 
 // Uses RLS - automatically filtered by user's tenant
@@ -455,7 +455,8 @@ client = get_supabase_client(require_production=True)
 from supabase_client import VideoRepository
 
 video_repo = VideoRepository(client)
-video = video_repo.create_video(tenant_id, storage_key, size_bytes, ...)
+video = video_repo.create_video(tenant_id, display_path, size_bytes, ...)
+# storage_key is computed as f"{tenant_id}/client/videos/{video_id}/video.mp4"
 ```
 
 ---

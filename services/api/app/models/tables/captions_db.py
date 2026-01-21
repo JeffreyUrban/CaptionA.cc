@@ -18,7 +18,7 @@ class CaptionsDatabaseMetadata(SQLModel, table=True):
     have tables with the same name in different SQLite files.
     """
 
-    __tablename__ = "database_metadata"
+    __tablename__ = "database_metadata"  # pyright: ignore[reportAssignmentType]
     __table_args__ = {"extend_existing": True}
 
     key: str = Field(primary_key=True)
@@ -28,7 +28,7 @@ class CaptionsDatabaseMetadata(SQLModel, table=True):
 class Caption(SQLModel, table=True):
     """Caption row in captions.db."""
 
-    __tablename__ = "captions"
+    __tablename__ = "captions"  # pyright: ignore[reportAssignmentType]
 
     id: Optional[int] = Field(default=None, primary_key=True)
     start_frame_index: int

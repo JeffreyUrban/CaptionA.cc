@@ -156,6 +156,10 @@ export function useLayoutDatabase({
   // Service reference
   const serviceRef = useRef<LayoutSyncService | null>(null)
 
+  // Callback ref to avoid effect re-runs when onError changes identity (fix for infinite re-init)
+  const onErrorRef = useRef(onError)
+  onErrorRef.current = onError
+
   // Local state
   const [isLoading, setIsLoading] = useState(true)
   const [localError, setLocalError] = useState<Error | null>(null)
@@ -171,7 +175,11 @@ export function useLayoutDatabase({
   const error = localError ?? storeError
 
   // Derived state
-  const isReady = instance?.ready ?? false
+  // isReady must include !isLoading to avoid race condition:
+  // The store sets ready=true before service.initialize() completes,
+  // but layout-api.ts checks service.isReady which requires initialized=true
+  const isReady = !isLoading && (instance?.ready ?? false) && !error
+
   const canEdit = lockStatus?.canEdit ?? false
   const lockState: LayoutLockState = isLoading ? 'loading' : (lockStatus?.state ?? 'released')
   const lockHolder = lockStatus?.holder ?? null
@@ -203,7 +211,7 @@ export function useLayoutDatabase({
           const error = err as Error
           setLocalError(error)
           setIsLoading(false)
-          onError?.(error)
+          onErrorRef.current?.(error)
         }
       }
     }
@@ -213,7 +221,7 @@ export function useLayoutDatabase({
     return () => {
       cancelled = true
     }
-  }, [videoId, tenantId, autoAcquireLock, onError])
+  }, [videoId, tenantId, autoAcquireLock])
 
   // Cleanup on unmount
   useEffect(() => {

@@ -78,7 +78,8 @@ async def acquire_lock(video_id: str, db: DatabaseName, auth: Auth):
     cr_manager = get_crsqlite_manager()
     settings = get_settings()
 
-    state = await repo.get_state(video_id, db.value)
+    # Get or create state record (auto-creates if this is first access)
+    state = await repo.get_or_create_state(video_id, db.value, auth.tenant_id)
 
     # Check if locked by another user
     if state and state.get("lock_holder_user_id"):

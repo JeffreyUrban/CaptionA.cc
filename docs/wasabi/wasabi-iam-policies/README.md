@@ -10,8 +10,8 @@ This directory contains IAM policy templates for securing Wasabi S3 storage acce
 **Used by:** `captionacc-app-readonly` IAM user
 
 **Permissions:**
-- ✅ ListBucket (caption-acc-prod only)
-- ✅ GetObject (caption-acc-prod only)
+- ✅ ListBucket (captionacc-prod only)
+- ✅ GetObject (captionacc-prod only)
 - ❌ PutObject, DeleteObject (denied)
 - ❌ Access to other buckets (explicitly denied)
 - ❌ ListAllMyBuckets (explicitly denied)
@@ -26,8 +26,8 @@ This directory contains IAM policy templates for securing Wasabi S3 storage acce
 **Used by:** `captionacc-orchestrator` IAM user
 
 **Permissions:**
-- ✅ ListBucket (caption-acc-prod only)
-- ✅ GetObject, PutObject, DeleteObject (caption-acc-prod only)
+- ✅ ListBucket (captionacc-prod only)
+- ✅ GetObject, PutObject, DeleteObject (captionacc-prod only)
 - ❌ Access to other buckets (explicitly denied)
 - ❌ ListAllMyBuckets (explicitly denied)
 
@@ -52,7 +52,7 @@ Policies use **explicit DENY** statements:
 
 ### Bucket Isolation
 
-All policies restrict access to `caption-acc-prod` only:
+All policies restrict access to `captionacc-prod` only:
 - Protects other buckets in same Wasabi account
 - Limits blast radius if credentials compromised
 - Enables safe multi-use of Wasabi account
@@ -125,14 +125,14 @@ WASABI_SECRET_KEY_READWRITE=<captionacc-orchestrator secret>
 **Expected results:**
 
 **Read-only credentials:**
-- ✅ Can list caption-acc-prod
+- ✅ Can list captionacc-prod
 - ✅ Can read objects
 - ❌ Cannot write objects
 - ❌ Cannot delete objects
 - ❌ Cannot list all buckets
 
 **Read-write credentials:**
-- ✅ Can list caption-acc-prod
+- ✅ Can list captionacc-prod
 - ✅ Can read objects
 - ✅ Can write objects
 - ✅ Can delete objects
@@ -148,7 +148,7 @@ If using a different bucket name, update in policies:
 
 ```bash
 # Find and replace in both JSON files
-sed -i 's/caption-acc-prod/your-bucket-name/g' *.json
+sed -i 's/captionacc-prod/your-bucket-name/g' *.json
 ```
 
 ### Different Region
@@ -200,7 +200,7 @@ Update the DENY statement accordingly.
 ```json
 // This approach
 "Effect": "Deny",
-"NotResource": ["arn:aws:s3:::caption-acc-prod", "..."]
+"NotResource": ["arn:aws:s3:::captionacc-prod", "..."]
 
 // Is clearer than
 "Effect": "Deny",

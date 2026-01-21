@@ -13,9 +13,9 @@
 - **Linux x86_64:** https://github.com/superfly/cr-sqlite/releases/download/prebuild-test.main-438663b8/crsqlite-linux-x86_64.zip
 
 ## Download URLs (Wasabi Mirror - Production)
-- **macOS ARM64:** https://s3.wasabisys.com/caption-acc-prod/artifacts/cr-sqlite/prebuild-test.main-438663b8/darwin-aarch64/crsqlite.dylib
-- **Linux x86_64:** https://s3.wasabisys.com/caption-acc-prod/artifacts/cr-sqlite/prebuild-test.main-438663b8/linux-x86_64/crsqlite.so
-- **Latest pointer:** https://s3.wasabisys.com/caption-acc-prod/artifacts/cr-sqlite/LATEST.txt
+- **macOS ARM64:** https://s3.wasabisys.com/captionacc-prod/artifacts/cr-sqlite/prebuild-test.main-438663b8/darwin-aarch64/crsqlite.dylib
+- **Linux x86_64:** https://s3.wasabisys.com/captionacc-prod/artifacts/cr-sqlite/prebuild-test.main-438663b8/linux-x86_64/crsqlite.so
+- **Latest pointer:** https://s3.wasabisys.com/captionacc-prod/artifacts/cr-sqlite/LATEST.txt
 
 ## SHA256 Checksums (prebuild-test.main-438663b8)
 ```

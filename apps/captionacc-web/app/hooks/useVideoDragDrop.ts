@@ -5,13 +5,12 @@
 
 import { useState, useCallback } from 'react'
 
+import { supabase } from '~/services/supabase-client'
 import type { DraggedItemState } from '~/types/videos'
 
 interface UseVideoDragDropParams {
   /** Callback when a drop operation completes successfully */
   onMoveComplete: () => void
-  /** Callback to clear stats for a moved video */
-  clearVideoStats?: (videoId: string) => void
 }
 
 interface UseVideoDragDropReturn {
@@ -42,12 +41,81 @@ interface UseVideoDragDropReturn {
 }
 
 /**
+ * Helper function to perform move operations using Supabase
+ */
+async function performMoveOperation(
+  itemPath: string,
+  itemType: 'video' | 'folder',
+  targetFolder: string
+): Promise<{ success: boolean; newPath?: string; error?: string }> {
+  try {
+    if (itemType === 'video') {
+      // Move a single video (only update display_path, video_path stays as original)
+      const pathParts = itemPath.split('/')
+      const fileName = pathParts[pathParts.length - 1]
+      const newPath = targetFolder ? `${targetFolder}/${fileName}` : fileName
+
+      const { error } = await supabase
+        .from('videos')
+        .update({
+          display_path: newPath,
+        })
+        .eq('display_path', itemPath)
+        .is('deleted_at', null)
+
+      if (error) {
+        console.error('Failed to move video:', error)
+        return { success: false, error: error.message }
+      }
+
+      return { success: true, newPath }
+    } else {
+      // Move a folder (update all videos in the folder)
+      const { data: videos, error: fetchError } = await supabase
+        .from('videos')
+        .select('id, display_path')
+        .like('display_path', `${itemPath}/%`)
+        .is('deleted_at', null)
+
+      if (fetchError) {
+        console.error('Failed to fetch videos in folder:', fetchError)
+        return { success: false, error: fetchError.message }
+      }
+
+      // Update each video's display_path (video_path stays as original, storage_key never changes)
+      for (const video of videos ?? []) {
+        const relativePath = video.display_path?.replace(`${itemPath}/`, '') ?? ''
+        const newDisplayPath = targetFolder
+          ? `${targetFolder}/${itemPath.split('/').pop()}/${relativePath}`
+          : `${itemPath.split('/').pop()}/${relativePath}`
+
+        const { error: updateError } = await supabase
+          .from('videos')
+          .update({
+            display_path: newDisplayPath,
+          })
+          .eq('id', video.id)
+
+        if (updateError) {
+          console.error('Failed to update video:', updateError)
+          return { success: false, error: updateError.message }
+        }
+      }
+
+      return { success: true }
+    }
+  } catch (error) {
+    console.error('Move operation error:', error)
+    return { success: false, error: 'Network error' }
+  }
+}
+
+/**
  * Hook for managing drag and drop operations for videos and folders.
  */
 // eslint-disable-next-line max-lines-per-function -- Drag and drop logic with multiple event handlers and validation
 export function useVideoDragDrop({
   onMoveComplete,
-  clearVideoStats,
 }: UseVideoDragDropParams): UseVideoDragDropReturn {
   const [draggedItem, setDraggedItem] = useState<DraggedItemState | null>(null)
   const [dragOverFolder, setDragOverFolder] = useState<string | null>(null)
@@ -165,31 +233,11 @@ export function useVideoDragDrop({
       // Perform the move to root (empty string as target folder)
       console.log('[DnD] Performing move to root...')
       try {
-        const endpoint = draggedItem.type === 'video' ? '/api/videos/move' : '/api/folders/move'
-        const bodyKey = draggedItem.type === 'video' ? 'videoPath' : 'folderPath'
+        const result = await performMoveOperation(draggedItem.path, draggedItem.type, '')
 
-        console.log('[DnD] API call:', { endpoint, [bodyKey]: draggedItem.path, targetFolder: '' })
-
-        const response = await fetch(endpoint, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            [bodyKey]: draggedItem.path,
-            targetFolder: '', // Empty string = root
-          }),
-        })
-
-        const data = await response.json()
-        console.log('[DnD] API response:', { ok: response.ok, status: response.status, data })
-
-        if (!response.ok) {
-          const errorMessage = data.error ?? `Failed to move ${draggedItem.type}`
-          // Use warn for validation errors (4xx), error for server/network issues (5xx)
-          if (response.status >= 400 && response.status < 500) {
-            console.warn(`[DnD] Move blocked:`, errorMessage)
-          } else {
-            console.error(`[DnD] Failed to move ${draggedItem.type} to root:`, errorMessage)
-          }
+        if (!result.success) {
+          const errorMessage = result.error ?? `Failed to move ${draggedItem.type}`
+          console.error(`[DnD] Failed to move ${draggedItem.type} to root:`, errorMessage)
           setDragDropErrorModal({
             open: true,
             title: 'Move Failed',
@@ -200,14 +248,6 @@ export function useVideoDragDrop({
 
         console.log('[DnD] Move to root successful, reloading tree...')
 
-        // Clear cached stats for moved video (old and new paths)
-        if (draggedItem.type === 'video' && clearVideoStats) {
-          clearVideoStats(draggedItem.path) // Clear old path
-          if (data.newPath) {
-            clearVideoStats(data.newPath) // Clear new path to force refresh
-          }
-        }
-
         // Success - notify parent to reload
         onMoveComplete()
       } catch (error) {
@@ -216,7 +256,7 @@ export function useVideoDragDrop({
         setDraggedItem(null)
       }
     },
-    [draggedItem, onMoveComplete, clearVideoStats]
+    [draggedItem, onMoveComplete]
   )
 
   const handleDrop = useCallback(
@@ -254,35 +294,15 @@ export function useVideoDragDrop({
       // Perform the move
       console.log('[DnD] Performing move...')
       try {
-        const endpoint = draggedItem.type === 'video' ? '/api/videos/move' : '/api/folders/move'
-        const bodyKey = draggedItem.type === 'video' ? 'videoPath' : 'folderPath'
+        const result = await performMoveOperation(
+          draggedItem.path,
+          draggedItem.type,
+          targetFolderPath
+        )
 
-        console.log('[DnD] API call:', {
-          endpoint,
-          [bodyKey]: draggedItem.path,
-          targetFolder: targetFolderPath,
-        })
-
-        const response = await fetch(endpoint, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            [bodyKey]: draggedItem.path,
-            targetFolder: targetFolderPath,
-          }),
-        })
-
-        const data = await response.json()
-        console.log('[DnD] API response:', { ok: response.ok, status: response.status, data })
-
-        if (!response.ok) {
-          const errorMessage = data.error ?? `Failed to move ${draggedItem.type}`
-          // Use warn for validation errors (4xx), error for server/network issues (5xx)
-          if (response.status >= 400 && response.status < 500) {
-            console.warn(`[DnD] Move blocked:`, errorMessage)
-          } else {
-            console.error(`[DnD] Failed to move ${draggedItem.type}:`, errorMessage)
-          }
+        if (!result.success) {
+          const errorMessage = result.error ?? `Failed to move ${draggedItem.type}`
+          console.error(`[DnD] Failed to move ${draggedItem.type}:`, errorMessage)
           setDragDropErrorModal({
             open: true,
             title: 'Move Failed',
@@ -293,14 +313,6 @@ export function useVideoDragDrop({
 
         console.log('[DnD] Move successful, reloading tree...')
 
-        // Clear cached stats for moved video (old and new paths)
-        if (draggedItem.type === 'video' && clearVideoStats) {
-          clearVideoStats(draggedItem.path) // Clear old path
-          if (data.newPath) {
-            clearVideoStats(data.newPath) // Clear new path to force refresh
-          }
-        }
-
         // Success - notify parent to reload
         onMoveComplete()
       } catch (error) {
@@ -309,7 +321,7 @@ export function useVideoDragDrop({
         setDraggedItem(null)
       }
     },
-    [draggedItem, onMoveComplete, clearVideoStats]
+    [draggedItem, onMoveComplete]
   )
 
   return {

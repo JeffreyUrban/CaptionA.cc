@@ -35,10 +35,7 @@ Based on exploration of `/services/api/`, this plan addresses test coverage gaps
    - Endpoints tested with mocked dependencies
    - Missing: Real service interaction tests (within API)
 
-4. **Webhooks** (0% coverage)
-   - `/webhooks/supabase/videos` endpoint has no tests
-
-5. **Unimplemented Endpoints** (No tests)
+4. **Unimplemented Endpoints** (No tests)
    - `POST /actions/analyze-layout` (501)
    - `POST /actions/calculate-predictions` (501)
    - `POST /actions/retry` (501)
@@ -103,27 +100,20 @@ def test_caption_service_overlap_resolution():
 
 **Gaps to Address**:
 
-#### 3.1 Missing Endpoint Tests
-- **Webhooks**: `test_webhooks.py` (0 lines)
-  - POST `/webhooks/supabase/videos`
-  - Auth validation (bearer token)
-  - Prefect flow triggering (mocked)
-  - Invalid payload handling
-
-#### 3.2 Unimplemented Endpoint Stubs
+#### 3.1 Unimplemented Endpoint Stubs
 - Create `test_actions_unimplemented.py`
   - Verify 501 responses for analyze-layout, calculate-predictions, retry
   - Ensure proper error messages
   - Validate request schemas even though not implemented
 
-#### 3.3 Error Path Coverage
+#### 3.2 Error Path Coverage
 **Enhance existing test files**:
 - `test_captions.py`: Add database corruption scenarios
 - `test_boxes.py`: Test missing OCR data edge cases
 - `test_layout.py`: Test initialization race conditions
 - `test_sync_endpoints.py`: Test lock contention with concurrent requests
 
-#### 3.4 Authentication/Authorization
+#### 3.3 Authentication/Authorization
 - Create `test_auth.py`
   - JWT validation logic
   - Tenant isolation verification
@@ -323,8 +313,8 @@ def mock_env_vars(monkeypatch):
     """Set up environment variables for flow testing."""
     monkeypatch.setenv("SUPABASE_URL", "https://test.supabase.co")
     monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "test-key")  # pragma: allowlist secret
-    monkeypatch.setenv("WASABI_ACCESS_KEY_ID", "test-access")
-    monkeypatch.setenv("WASABI_SECRET_ACCESS_KEY", "test-secret")  # pragma: allowlist secret
+    monkeypatch.setenv("WASABI_ACCESS_KEY_READWRITE", "test-access")
+    monkeypatch.setenv("WASABI_SECRET_KEY_READWRITE", "test-secret")  # pragma: allowlist secret
     monkeypatch.setenv("WASABI_BUCKET", "test-bucket")
 
 @pytest.fixture
@@ -395,7 +385,6 @@ tests/
 │   ├── test_admin.py
 │   ├── test_sync_endpoints.py
 │   ├── test_websocket_sync.py
-│   ├── test_webhooks.py           # New
 │   ├── test_auth.py               # New
 │   └── test_actions_unimplemented.py  # New
 └── flows/                         # Level 4: Flow integration
@@ -491,7 +480,6 @@ pytest -m "not slow"
 | **API Endpoints** | 85% | 90% | Medium |
 | **Prefect Flows** | 0% | 80% | **CRITICAL** |
 | **Auth/Security** | Unknown | 90% | High |
-| **Webhooks** | 0% | 85% | High |
 | **WebSocket** | 70% | 85% | Medium |
 | **Overall** | ~65% | 85% | Target |
 
@@ -503,7 +491,6 @@ pytest -m "not slow"
    - `test_caption_ocr.py` (Priority 2)
 
 2. **HIGH**: Missing endpoint tests
-   - `test_webhooks.py` (0% → 85%)
    - `test_auth.py` (new)
    - Enhanced error paths in existing endpoint tests
 
@@ -560,12 +547,11 @@ def test_flow(mock_modal, mock_supabase):
 **Deliverable**: 60+ flow tests, 80% flow coverage
 
 ### Phase 2: Missing API Tests (Week 2)
-- Day 1-2: Implement `test_webhooks.py` (15 tests)
-- Day 3-4: Implement `test_auth.py` (20 tests)
-- Day 5: Implement `test_actions_unimplemented.py` (5 tests)
-- Day 6-7: Add error path tests to existing endpoint files (30+ tests)
+- Day 1-2: Implement `test_auth.py` (20 tests)
+- Day 3: Implement `test_actions_unimplemented.py` (5 tests)
+- Day 4-7: Add error path tests to existing endpoint files (30+ tests)
 
-**Deliverable**: 70+ new API tests, 90% endpoint coverage
+**Deliverable**: 55+ new API tests, 90% endpoint coverage
 
 ### Phase 3: Service Integration (Week 3)
 - Day 1-3: Implement `test_caption_service_integration.py` (25 tests)
@@ -601,7 +587,7 @@ pytest --cov=app --cov-report=html --cov-report=term-missing
 pytest tests/unit/ tests/integration/ tests/api/ tests/flows/
 
 # Specific priorities
-pytest -m "flows or webhooks"  # Critical gaps
+pytest -m "flows"  # Critical gaps
 ```
 
 ### Coverage Validation
@@ -620,7 +606,6 @@ pytest --cov=app.services --cov-report=term-missing
 
 ### Success Criteria
 - [ ] All 3 Prefect flows have 80%+ test coverage
-- [ ] Webhook endpoint has 85%+ coverage
 - [ ] Authentication logic has 90%+ coverage
 - [ ] Overall API service coverage ≥ 85%
 - [ ] All tests pass in < 30 seconds (excluding slow markers)
@@ -635,9 +620,8 @@ pytest --cov=app.services --cov-report=term-missing
 2. `tests/flows/test_video_initial_processing.py` - 20+ tests
 3. `tests/flows/test_crop_and_infer.py` - 25+ tests
 4. `tests/flows/test_caption_ocr.py` - 15+ tests
-5. `tests/api/test_webhooks.py` - 15+ tests
-6. `tests/api/test_auth.py` - 20+ tests
-7. `tests/integration/services/test_caption_service_integration.py` - 25+ tests
+5. `tests/api/test_auth.py` - 20+ tests
+6. `tests/integration/services/test_caption_service_integration.py` - 25+ tests
 
 ### Files to Enhance
 1. `tests/test_captions.py` - Add error path tests

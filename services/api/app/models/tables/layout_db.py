@@ -18,7 +18,7 @@ class LayoutDatabaseMetadata(SQLModel, table=True):
     have tables with the same name in different SQLite files.
     """
 
-    __tablename__ = "database_metadata"
+    __tablename__ = "database_metadata"  # pyright: ignore[reportAssignmentType]
     __table_args__ = {"extend_existing": True}
 
     id: int = Field(default=1, primary_key=True)
@@ -30,7 +30,7 @@ class LayoutDatabaseMetadata(SQLModel, table=True):
 class VideoLayoutConfig(SQLModel, table=True):
     """Video layout configuration including crop region and analysis results."""
 
-    __tablename__ = "video_layout_config"
+    __tablename__ = "video_layout_config"  # pyright: ignore[reportAssignmentType]
 
     id: int = Field(default=1, primary_key=True)
     frame_width: int
@@ -62,7 +62,7 @@ class VideoLayoutConfig(SQLModel, table=True):
 class FullFrameBoxLabel(SQLModel, table=True):
     """Box classification labels from user or model predictions."""
 
-    __tablename__ = "full_frame_box_labels"
+    __tablename__ = "full_frame_box_labels"  # pyright: ignore[reportAssignmentType]
 
     id: Optional[int] = Field(default=None, primary_key=True)
     frame_index: int
@@ -75,7 +75,7 @@ class FullFrameBoxLabel(SQLModel, table=True):
 class BoxClassificationModel(SQLModel, table=True):
     """Trained box classification model (single-row table)."""
 
-    __tablename__ = "box_classification_model"
+    __tablename__ = "box_classification_model"  # pyright: ignore[reportAssignmentType]
 
     id: int = Field(default=1, primary_key=True)
     model_data: Optional[bytes] = None
@@ -86,7 +86,7 @@ class BoxClassificationModel(SQLModel, table=True):
 class VideoPreferences(SQLModel, table=True):
     """User preferences for video processing (single-row table)."""
 
-    __tablename__ = "video_preferences"
+    __tablename__ = "video_preferences"  # pyright: ignore[reportAssignmentType]
 
     id: int = Field(default=1, primary_key=True)
     layout_approved: bool = Field(default=False)

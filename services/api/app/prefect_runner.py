@@ -23,7 +23,7 @@ class PrefectWorkerManager:
     Manages Prefect Worker lifecycle alongside FastAPI application.
 
     The worker connects to the Prefect server and executes flows from
-    the 'captionacc-workers' work pool.
+    the namespace-specific work pool (e.g., 'captionacc-workers-prod').
 
     Note: This uses subprocess to run 'prefect worker start' since Prefect 3.x
     doesn't provide a Python API for embedded workers.
@@ -49,17 +49,35 @@ class PrefectWorkerManager:
             )
             return
 
-        logger.info("Starting Prefect worker for work pool 'captionacc-workers'")
+        logger.info(
+            f"Starting Prefect worker for work pool '{settings.effective_work_pool}'"
+        )
         logger.info(f"Connecting to Prefect server: {settings.prefect_api_url}")
 
         try:
             # Verify connection to Prefect server
             async with get_client() as client:
-                # Check server health
-                health = await client.api_healthcheck()
-                if not health:
-                    raise Exception("Prefect server health check failed")
+                # Check server health (using direct HTTP request due to client.api_healthcheck() returning None)
+                import httpx
+
+                async with httpx.AsyncClient() as http_client:
+                    response = await http_client.get(
+                        f"{settings.prefect_api_url.rstrip('/api')}/api/health"
+                    )
+                    if response.status_code != 200 or not response.json():
+                        raise Exception(
+                            f"Prefect server health check failed: {response.status_code}"
+                        )
                 logger.info("Successfully connected to Prefect server")
+
+                # Ensure work pool exists (optional - worker will create if needed)
+                try:
+                    await client.read_work_pool(settings.effective_work_pool)
+                    logger.info(f"Work pool '{settings.effective_work_pool}' exists")
+                except Exception as e:
+                    logger.info(
+                        f"Work pool '{settings.effective_work_pool}' not found ({e}), worker will create it"
+                    )
         except Exception as e:
             logger.error(f"Failed to connect to Prefect server: {e}")
             raise Exception(
@@ -94,9 +112,11 @@ class PrefectWorkerManager:
                 "worker",
                 "start",
                 "--pool",
-                "captionacc-workers",
+                settings.effective_work_pool,
+                "--type",
+                "process",
                 "--name",
-                "captionacc-api-worker",
+                f"captionacc-api-worker-{settings.captionacc_namespace or 'prod'}",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 env=env,
@@ -119,15 +139,35 @@ class PrefectWorkerManager:
 
         This ensures worker logs are visible in the API service logs.
         """
-        if not self.worker_process or not self.worker_process.stdout:
+        if not self.worker_process:
             return
 
+        async def monitor_stream(stream, prefix):
+            """Monitor a single stream (stdout or stderr)."""
+            if not stream:
+                return
+            try:
+                while True:
+                    line = await stream.readline()
+                    if not line:
+                        break
+                    decoded = line.decode().strip()
+                    if "exception" in decoded.lower() or "error" in decoded.lower():
+                        logger.error(f"[Worker {prefix}] {decoded}")
+                    else:
+                        logger.info(f"[Worker {prefix}] {decoded}")
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                logger.error(f"Error monitoring worker {prefix}: {e}", exc_info=True)
+
         try:
-            while True:
-                line = await self.worker_process.stdout.readline()
-                if not line:
-                    break
-                logger.info(f"[Worker] {line.decode().strip()}")
+            # Monitor both stdout and stderr concurrently
+            await asyncio.gather(
+                monitor_stream(self.worker_process.stdout, "stdout"),
+                monitor_stream(self.worker_process.stderr, "stderr"),
+                return_exceptions=True,
+            )
         except asyncio.CancelledError:
             logger.info("Worker output monitoring cancelled")
             raise

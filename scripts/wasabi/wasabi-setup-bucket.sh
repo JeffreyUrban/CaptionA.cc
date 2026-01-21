@@ -1,18 +1,18 @@
 #!/bin/bash
 # Wasabi Bucket Configuration Setup
 #
-# This script configures access logging and lifecycle policies for caption-acc-prod bucket.
+# This script configures access logging and lifecycle policies for captionacc-prod bucket.
 # Safe to run multiple times (idempotent).
 #
 # Prerequisites:
 # - AWS CLI configured with Wasabi credentials
-# - audit-logs-caption-acc bucket already exists
+# - captionacc-audit-logs bucket already exists
 
 set -e
 
 ENDPOINT="https://s3.us-east-1.wasabisys.com"
-APP_BUCKET="caption-acc-prod"
-AUDIT_BUCKET="audit-logs-caption-acc"
+APP_BUCKET="captionacc-prod"
+AUDIT_BUCKET="captionacc-audit-logs"
 LOG_RETENTION_DAYS=90
 
 echo "=========================================="

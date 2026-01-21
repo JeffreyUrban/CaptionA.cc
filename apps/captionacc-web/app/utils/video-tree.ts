@@ -1,326 +1,141 @@
-import { type VideoStats } from './video-stats'
+/**
+ * Video Tree Utility - Client-side stub
+ * Server-side functionality removed for SPA mode
+ */
+
+import type { WorkflowStatus } from './video-badges'
 
 export interface VideoInfo {
-  videoId: string // UUID (stable identifier)
-  displayPath: string // Display path for tree structure and UI
+  videoId: string
+  displayPath: string
+  isDemo: boolean
+  // Workflow status
+  layout_status?: WorkflowStatus
+  boundaries_status?: WorkflowStatus
+  text_status?: WorkflowStatus
+  // Stats
+  total_frames?: number
+  covered_frames?: number
+  total_annotations?: number
+  confirmed_annotations?: number
+  predicted_annotations?: number
+  boundary_pending_count?: number
+  text_pending_count?: number
+  // Error details
+  layout_error_details?: { message?: string; [key: string]: unknown } | null
+  boundaries_error_details?: { message?: string; [key: string]: unknown } | null
+  text_error_details?: { message?: string; [key: string]: unknown } | null
 }
 
-export type { VideoStats }
-
-export type TreeNode = FolderNode | VideoNode
-
-export interface FolderNode {
-  type: 'folder'
+export interface TreeNode {
+  type: 'folder' | 'video'
   name: string
   path: string
-  children: TreeNode[]
-  stats: VideoStats // Aggregated stats
-  videoCount: number // Total videos recursively
+  children?: TreeNode[]
+  videoId?: string
+  isDemo?: boolean
+  videoCount?: number
+  demoCount?: number
+  // Video workflow data (only for video nodes)
+  layout_status?: WorkflowStatus
+  boundaries_status?: WorkflowStatus
+  text_status?: WorkflowStatus
+  total_frames?: number
+  covered_frames?: number
+  total_annotations?: number
+  confirmed_annotations?: number
+  predicted_annotations?: number
+  boundary_pending_count?: number
+  text_pending_count?: number
+  layout_error_details?: { message?: string; [key: string]: unknown } | null
+  boundaries_error_details?: { message?: string; [key: string]: unknown } | null
+  text_error_details?: { message?: string; [key: string]: unknown } | null
 }
 
-export interface VideoNode {
-  type: 'video'
-  name: string
-  path: string // displayPath (for tree structure)
-  videoId: string // UUID (stable identifier - primary key)
-  displayPath: string // User-facing path (can change)
-  stats: VideoStats | null // Individual video stats (loaded async)
-}
+export type FolderNode = TreeNode & { type: 'folder' }
 
-/**
- * Builds a tree structure from a flat list of videos
- */
 export function buildVideoTree(videos: VideoInfo[]): TreeNode[] {
-  const root: Map<string, TreeNode> = new Map()
+  const tree: TreeNode[] = []
 
-  // Filter out empty video paths (shouldn't happen, but be defensive)
-  const validVideos = videos.filter(video => {
-    if (!video.videoId || video.videoId.trim() === '') {
-      console.warn(`[buildVideoTree] Skipping empty video path`)
-      return false
-    }
-    return true
-  })
+  for (const video of videos) {
+    const parts = video.displayPath.split('/')
+    let current = tree
 
-  for (const video of validVideos) {
-    const segments = video.displayPath.split('/')
-    let currentLevel = root
-    let parentFolder: FolderNode | null = null
+    // Build folder structure
+    for (let i = 0; i < parts.length - 1; i++) {
+      const folderName = parts[i]
+      if (!folderName) continue
 
-    // Build intermediate folder nodes
-    for (let i = 0; i < segments.length - 1; i++) {
-      const segment = segments[i]
-      if (!segment) continue
-      const path = segments.slice(0, i + 1).join('/')
-
-      if (!currentLevel.has(segment)) {
-        const folderNode: FolderNode = {
+      let folder = current.find(n => n.type === 'folder' && n.name === folderName)
+      if (!folder) {
+        folder = {
           type: 'folder',
-          name: segment,
-          path,
+          name: folderName,
+          path: parts.slice(0, i + 1).join('/'),
           children: [],
-          stats: {
-            totalAnnotations: 0,
-            pendingReview: 0,
-            confirmedAnnotations: 0,
-            predictedAnnotations: 0,
-            gapAnnotations: 0,
-            progress: 0,
-            totalFrames: 0,
-            coveredFrames: 0,
-            hasOcrData: false,
-            layoutApproved: false,
-            boundaryPendingReview: 0,
-            textPendingReview: 0,
-            badges: [],
-          },
-          videoCount: 0,
         }
-        currentLevel.set(segment, folderNode)
+        current.push(folder)
       }
-
-      const folderNode = currentLevel.get(segment)
-      if (folderNode?.type !== 'folder') {
-        console.error(
-          `[buildVideoTree] Expected folder node for segment "${segment}", got:`,
-          folderNode
-        )
-        continue
-      }
-
-      // Update parent's children array if needed
-      if (parentFolder && !parentFolder.children.includes(folderNode)) {
-        parentFolder.children.push(folderNode)
-      }
-
-      parentFolder = folderNode
-      currentLevel = new Map(folderNode.children.map(child => [child.name, child]))
+      current = folder.children!
     }
 
-    // Add video node as leaf
-    const videoName = segments[segments.length - 1]
-    if (!videoName) continue
-    const videoNode: VideoNode = {
-      type: 'video',
-      name: videoName,
-      path: video.displayPath, // For tree structure
-      videoId: video.videoId, // UUID (stable identifier - primary key)
-      displayPath: video.displayPath, // User-facing path
-      stats: null, // Will be loaded async
-    }
-
-    if (parentFolder && !parentFolder.children.some(c => c.path === videoNode.path)) {
-      parentFolder.children.push(videoNode)
-    } else if (!parentFolder) {
-      // Video at root level
-      currentLevel.set(videoName, videoNode)
+    // Add video leaf
+    const videoName = parts[parts.length - 1]
+    if (videoName) {
+      current.push({
+        type: 'video',
+        name: videoName,
+        path: video.displayPath,
+        videoId: video.videoId,
+        isDemo: video.isDemo,
+        layout_status: video.layout_status,
+        boundaries_status: video.boundaries_status,
+        text_status: video.text_status,
+        total_frames: video.total_frames,
+        covered_frames: video.covered_frames,
+        total_annotations: video.total_annotations,
+        confirmed_annotations: video.confirmed_annotations,
+        predicted_annotations: video.predicted_annotations,
+        boundary_pending_count: video.boundary_pending_count,
+        text_pending_count: video.text_pending_count,
+        layout_error_details: video.layout_error_details,
+        boundaries_error_details: video.boundaries_error_details,
+        text_error_details: video.text_error_details,
+      })
     }
   }
 
-  return Array.from(root.values())
+  return tree
 }
 
-/**
- * Gets stats for a single video
- */
-export async function getVideoStats(videoId: string): Promise<VideoStats> {
-  if (typeof window !== 'undefined') {
-    throw new Error('getVideoStats is server-side only')
-  }
+export function calculateVideoCounts(node: TreeNode): void {
+  if (node.type === 'video') return
 
-  const { existsSync } = await import('fs')
-  const { resolve } = await import('path')
-  const Database = (await import('better-sqlite3')).default
-
-  const dbPath = resolve(
-    process.cwd(),
-    '..',
-    '..',
-    'local',
-    'data',
-    ...videoId.split('/'),
-    'captions.db'
-  )
-
-  if (!existsSync(dbPath)) {
-    return {
-      totalAnnotations: 0,
-      pendingReview: 0,
-      confirmedAnnotations: 0,
-      predictedAnnotations: 0,
-      gapAnnotations: 0,
-      progress: 0,
-      totalFrames: 0,
-      coveredFrames: 0,
-      hasOcrData: false,
-      layoutApproved: false,
-      boundaryPendingReview: 0,
-      textPendingReview: 0,
-      badges: [],
-    }
-  }
-
-  const db = new Database(dbPath, { readonly: true })
-
-  // Count cropped frames from database (not filesystem)
-  // Frames are written to DB and filesystem is cleaned up after processing
-  let totalFrames = 0
-  try {
-    const frameCount = db.prepare(`SELECT COUNT(*) as count FROM cropped_frames`).get() as
-      | { count: number }
-      | undefined
-    totalFrames = frameCount?.count ?? 0
-  } catch {
-    // Table doesn't exist yet
-    totalFrames = 0
-  }
-
-  try {
-    const result = db
-      .prepare(
-        `
-      SELECT
-        COUNT(*) as total,
-        SUM(CASE WHEN boundary_pending = 1 THEN 1 ELSE 0 END) as pending,
-        SUM(CASE WHEN boundary_state = 'confirmed' THEN 1 ELSE 0 END) as confirmed,
-        SUM(CASE WHEN boundary_state = 'predicted' THEN 1 ELSE 0 END) as predicted,
-        SUM(CASE WHEN boundary_state = 'gap' THEN 1 ELSE 0 END) as gaps
-      FROM captions
-    `
-      )
-      .get() as {
-      total: number
-      pending: number
-      confirmed: number
-      predicted: number
-      gaps: number
-    }
-
-    // Calculate frame coverage for non-gap, non-pending annotations
-    const frameCoverage = db
-      .prepare(
-        `
-      SELECT
-        SUM(end_frame_index - start_frame_index + 1) as covered_frames
-      FROM captions
-      WHERE boundary_state != 'gap' AND boundary_pending = 0
-    `
-      )
-      .get() as { covered_frames: number | null }
-
-    const coveredFrames = frameCoverage.covered_frames ?? 0
-    const progress = totalFrames > 0 ? Math.round((coveredFrames / totalFrames) * 100) : 0
-
-    return {
-      totalAnnotations: result.total,
-      pendingReview: result.pending,
-      confirmedAnnotations: result.confirmed,
-      predictedAnnotations: result.predicted,
-      gapAnnotations: result.gaps,
-      progress,
-      totalFrames,
-      coveredFrames,
-      hasOcrData: false,
-      layoutApproved: false,
-      boundaryPendingReview: 0,
-      textPendingReview: 0,
-      badges: [],
-    }
-  } finally {
-    db.close()
-  }
-}
-
-/**
- * Recursively calculates aggregate stats for a folder node
- */
-export function calculateFolderStats(node: FolderNode): void {
-  let totalAnnotations = 0
-  let pendingReview = 0
-  let confirmedAnnotations = 0
-  let predictedAnnotations = 0
-  let gapAnnotations = 0
-  let totalFrames = 0
-  let coveredFrames = 0
   let videoCount = 0
+  let demoCount = 0
 
-  for (const child of node.children) {
+  for (const child of node.children || []) {
     if (child.type === 'folder') {
-      // Recursively calculate stats for child folders first
-      calculateFolderStats(child)
-      totalAnnotations += child.stats.totalAnnotations
-      pendingReview += child.stats.pendingReview
-      confirmedAnnotations += child.stats.confirmedAnnotations
-      predictedAnnotations += child.stats.predictedAnnotations
-      gapAnnotations += child.stats.gapAnnotations
-      totalFrames += child.stats.totalFrames
-      coveredFrames += child.stats.coveredFrames
-      videoCount += child.videoCount
+      calculateVideoCounts(child)
+      videoCount += child.videoCount || 0
+      demoCount += child.demoCount || 0
     } else {
-      // Video node
-      if (child.stats) {
-        totalAnnotations += child.stats.totalAnnotations
-        pendingReview += child.stats.pendingReview
-        confirmedAnnotations += child.stats.confirmedAnnotations
-        predictedAnnotations += child.stats.predictedAnnotations
-        gapAnnotations += child.stats.gapAnnotations
-        totalFrames += child.stats.totalFrames
-        coveredFrames += child.stats.coveredFrames
-      }
-      videoCount += 1
+      videoCount++
+      if (child.isDemo) demoCount++
     }
   }
 
-  const progress = totalFrames > 0 ? Math.round((coveredFrames / totalFrames) * 100) : 0
-
-  node.stats = {
-    totalAnnotations,
-    pendingReview,
-    confirmedAnnotations,
-    predictedAnnotations,
-    gapAnnotations,
-    progress,
-    totalFrames,
-    coveredFrames,
-    hasOcrData: false,
-    layoutApproved: false,
-    boundaryPendingReview: 0,
-    textPendingReview: 0,
-    badges: [],
-  }
   node.videoCount = videoCount
+  node.demoCount = demoCount
 }
 
-/**
- * Calculates video count for each folder recursively
- */
-export function calculateVideoCounts(node: FolderNode): number {
-  let count = 0
-  for (const child of node.children) {
-    if (child.type === 'video') {
-      count += 1
-    } else {
-      count += calculateVideoCounts(child)
-    }
-  }
-  node.videoCount = count
-  return count
-}
-
-/**
- * Sorts tree nodes: folders first (alphabetically), then videos (alphabetically)
- */
 export function sortTreeNodes(nodes: TreeNode[]): TreeNode[] {
-  const folders = nodes.filter(n => n.type === 'folder') as FolderNode[]
-  const videos = nodes.filter(n => n.type === 'video') as VideoNode[]
-
-  folders.sort((a, b) => a.name.localeCompare(b.name))
-  videos.sort((a, b) => a.name.localeCompare(b.name))
-
-  // Recursively sort children of folders
-  for (const folder of folders) {
-    folder.children = sortTreeNodes(folder.children)
-  }
-
-  return [...folders, ...videos]
+  return nodes.sort((a, b) => {
+    // Folders first
+    if (a.type !== b.type) {
+      return a.type === 'folder' ? -1 : 1
+    }
+    // Then alphabetically
+    return a.name.localeCompare(b.name)
+  })
 }

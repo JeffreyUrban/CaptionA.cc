@@ -21,11 +21,11 @@ Prefect orchestrates asynchronous workflows for CaptionA.cc, coordinating Modal 
 
 ```
 ┌──────────┐     ┌──────────┐     ┌──────────┐     ┌──────────┐
-│  Client  │────▶│ Supabase │────▶│   API    │────▶│  Modal   │
-│          │     │ (webhook)│     │ Service  │     │  (GPU)   │
+│  Client  │────▶│ Supabase │◀───▶│   API    │────▶│  Modal   │
+│          │     │          │     │ Service  │     │  (GPU)   │
 │          │     │          │     │ (flows)  │     │          │
 └──────────┘     └──────────┘     └──────────┘     └──────────┘
-                                        │
+                  (Realtime)            │
                                         ▼
                                    ┌──────────┐
                                    │ Prefect  │
@@ -88,7 +88,7 @@ We needed:
 
 ### Prefect Server (Coordination Only)
 
-**URL:** `https://banchelabs-gateway.fly.dev/api`
+**URL:** `https://banchelabs-gateway.fly.dev/prefect-internal/prefect/api`
 
 **Responsibilities:**
 - Track flow run state (scheduled, running, completed, failed)
@@ -109,7 +109,7 @@ We needed:
 - Define all Prefect flows (`app/flows/`)
 - Run Prefect worker process
 - Execute flow logic (orchestrate Modal calls, update databases)
-- Handle webhooks (Supabase → trigger flows)
+- Subscribe to Supabase Realtime (videos INSERT → trigger flows)
 - Provide endpoints (user actions → trigger flows)
 
 **Key Point:** Flows execute **inside the API service process**, not on Prefect server.
@@ -134,24 +134,25 @@ We needed:
 
 ### Flow Triggering Paths
 
-**Path 1: Webhook (Automatic)**
+**Path 1: Realtime Subscription (Automatic - Primary)**
 ```
 User uploads video
     ↓
-Supabase INSERT trigger
+Edge Function creates video record in Supabase
     ↓
-POST /webhooks/supabase/videos (API service)
+Supabase Realtime notifies API service (INSERT event)
     ↓
-Calculate priority (tenant tier + age boosting)
+API triggers process_new_videos flow immediately
     ↓
-Prefect API: create_flow_run_from_deployment()
+Flow finds video with layout_status='wait'
     ↓
-Flow queued in work pool 'captionacc-workers'
-    ↓
-API service worker picks up flow
+Triggers video-initial-processing flow
     ↓
 Flow executes in API service process
 ```
+
+**Recovery fallback:** A cron job runs every 15 minutes to catch any missed
+Realtime events (network issues, API restarts, etc.).
 
 **Path 2: User Action (On-Demand)**
 ```
@@ -282,19 +283,18 @@ acquire_server_lock(video_id, "layout")   # Locks layout.db only
 acquire_server_lock(video_id, "captions") # Locks captions.db only
 ```
 
-### 6. Webhook Authentication
+### 6. Realtime vs Webhooks
 
-**Decision:** Simple Bearer token authentication (not OAuth/JWT)
+**Decision:** Use Supabase Realtime subscriptions instead of webhooks
 
 **Rationale:**
-- Supabase webhooks are server-to-server
-- No user context needed
-- Simple rotation (single secret in env)
-- Sufficient security for internal communication
+- API subscribes to Supabase, not vice versa (no URL configuration needed)
+- Works identically in dev and prod environments
+- No webhook secrets to manage
+- Immediate processing (no webhook delivery delay)
+- Built-in reconnection handling
 
-```python
-Authorization: Bearer {WEBHOOK_SECRET}
-```
+**Implementation:** `services/api/app/services/realtime_subscriber.py`
 
 ### 7. Caption OCR Storage
 
@@ -434,8 +434,8 @@ except Exception as e:
 ### Adding a New Flow
 
 1. Define flow in `/services/api/app/flows/new_flow.py`
-2. Register with Prefect: `./scripts/register_flows.sh`
-3. Add trigger (webhook or API endpoint)
+2. Add deployment to `prefect.yaml`, then register: `prefect deploy --all`
+3. Add trigger (Realtime subscription, cron, or API endpoint)
 4. Configure priority calculation
 5. Test with sample data
 6. Monitor in Prefect UI

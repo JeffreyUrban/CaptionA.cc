@@ -12,6 +12,8 @@ import React, {
 import { useLocation } from 'react-router'
 
 import { AuthProvider } from '~/components/auth/AuthProvider'
+import { RealtimeProvider } from '~/components/RealtimeProvider'
+import { initializeS3CredentialsStore } from '~/stores/s3-credentials-store'
 
 // Custom hook to track the previous value
 function usePrevious<T>(value: T) {
@@ -103,10 +105,20 @@ export function Providers({ children }: { children: React.ReactNode }) {
   const location = useLocation()
   const previousPathname = usePrevious(location.pathname)
 
+  // Initialize app-level services once on mount
+  useEffect(() => {
+    console.log('[Providers] Initializing app-level services')
+
+    // Start S3 credentials auto-refresh timer
+    initializeS3CredentialsStore()
+  }, [])
+
   return (
     <AppContext.Provider value={{ previousPathname }}>
       <ThemeProvider>
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <RealtimeProvider>{children}</RealtimeProvider>
+        </AuthProvider>
       </ThemeProvider>
     </AppContext.Provider>
   )

@@ -388,7 +388,7 @@ async function annotateBoxesInSelection(
 
   try {
     await fetch(
-      `/api/annotations/${encodeURIComponent(videoId)}/frames/${frameBoxes.frameIndex}/boxes`,
+      `/videos/${encodeURIComponent(videoId)}/frames/${frameBoxes.frameIndex}/boxes`,
       {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -401,7 +401,7 @@ async function annotateBoxesInSelection(
     }
 
     const response = await fetch(
-      `/api/annotations/${encodeURIComponent(videoId)}/frames/${selectedFrameIndex}/boxes`
+      `/videos/${encodeURIComponent(videoId)}/frames/${selectedFrameIndex}/boxes`
     )
     const data = await response.json()
     setCurrentFrameBoxes(data)

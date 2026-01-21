@@ -191,12 +191,12 @@ class TestRunQualityChecks:
         """Coherence check result should be included."""
         from pathlib import Path
 
-        boundaries = [
+        caption_frame_extents = [
             {"frame1_index": 0, "frame2_index": 1, "predicted_label": "same"},
         ]
         result = run_quality_checks(
             video_db_path=Path("/fake/path"),
-            boundaries=boundaries,
+            caption_frame_extents=caption_frame_extents,
         )
         assert "coherence_check" in result
         assert "coherent" in result["coherence_check"]
@@ -206,17 +206,17 @@ class TestRunQualityChecks:
         """OCR confidence threshold should not affect result (kept for API compat)."""
         from pathlib import Path
 
-        boundaries = [
+        caption_frame_extents = [
             {"frame1_index": 0, "frame2_index": 1, "predicted_label": "same"},
         ]
         result1 = run_quality_checks(
             video_db_path=Path("/fake/path"),
-            boundaries=boundaries,
+            caption_frame_extents=caption_frame_extents,
             ocr_confidence_min=0.5,
         )
         result2 = run_quality_checks(
             video_db_path=Path("/fake/path"),
-            boundaries=boundaries,
+            caption_frame_extents=caption_frame_extents,
             ocr_confidence_min=0.9,
         )
         assert result1["pass_rate"] == result2["pass_rate"]

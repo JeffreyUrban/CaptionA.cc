@@ -53,7 +53,7 @@ class LockDeniedResponse(BaseModel):
 
     granted: Literal[False]
     lock_holder_user_id: str
-    locked_at: datetime
+    locked_at: datetime | None = None
 
 
 class LockReleaseResponse(BaseModel):

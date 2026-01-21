@@ -113,19 +113,13 @@ export function getOriginalPath(video: VideoFilePreview): string {
 
 /**
  * Fetch existing folder paths from the server.
+ * TODO: This function may be legacy code - verify if still needed
+ * TODO: If still needed, integrate with backend API or refactor to query Supabase directly
  */
 async function fetchExistingFolders(): Promise<Set<string> | null> {
-  try {
-    const response = await fetch('/api/folders')
-    const data = (await response.json()) as { folders?: Array<{ path: string }> }
-    const folderPaths = (data.folders ?? []).map(f => f.path)
-    const folders = new Set<string>(folderPaths)
-    console.log(`[collapseSingleVideoFolders] Found ${folders.size} existing folders`)
-    return folders
-  } catch (error) {
-    console.error('[collapseSingleVideoFolders] Failed to fetch existing folders:', error)
-    return null
-  }
+  console.warn('[fetchExistingFolders] This function uses a deprecated API endpoint')
+  // API endpoint no longer exists - returning null to skip folder fetching
+  return null
 }
 
 /**

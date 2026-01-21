@@ -89,7 +89,7 @@ export function useReviewLabelsData({
 
       try {
         const response = await fetch(
-          `/api/annotations/${encodeURIComponent(videoId)}/review-labels`
+          `/videos/${encodeURIComponent(videoId)}/review-labels`
         )
 
         if (!response.ok) {
@@ -213,7 +213,7 @@ export function useReviewLabelsData({
         setCurrentFrameBoxes(prev => updateBoxLabel(prev, boxIndex, label))
 
         const response = await fetch(
-          `/api/annotations/${encodeURIComponent(videoId)}/frames/${currentFrameBoxes.frameIndex}/boxes`,
+          `/videos/${encodeURIComponent(videoId)}/frames/${currentFrameBoxes.frameIndex}/boxes`,
           {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
@@ -293,7 +293,7 @@ async function prefetchFrameBoxes(
     try {
       console.log(`[Prefetch] Fetching frame ${frame.frameIndex}`)
       const response = await fetch(
-        `/api/annotations/${encodeURIComponent(videoId)}/frames/${frame.frameIndex}/boxes`
+        `/videos/${encodeURIComponent(videoId)}/frames/${frame.frameIndex}/boxes`
       )
       if (!response.ok) return
 
@@ -320,7 +320,7 @@ async function loadFrameBoxesAsync(
   try {
     console.log(`[Fetch] Loading boxes for frame ${frameIndex}`)
     const response = await fetch(
-      `/api/annotations/${encodeURIComponent(videoId)}/frames/${frameIndex}/boxes`
+      `/videos/${encodeURIComponent(videoId)}/frames/${frameIndex}/boxes`
     )
     if (!response.ok) throw new Error('Failed to load frame boxes')
     const data = await response.json()

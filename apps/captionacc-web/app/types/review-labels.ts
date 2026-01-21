@@ -91,6 +91,7 @@ export const BOX_COLOR_MAP: Record<string, BoxColors> = {
   predicted_out_high: { border: '#f97316', background: 'rgba(249,115,22,0.15)' },
   predicted_out_medium: { border: '#fb923c', background: 'rgba(251,146,60,0.1)' },
   predicted_out_low: { border: '#fdba74', background: 'rgba(253,186,116,0.08)' },
+  needs_prediction: { border: '#9ca3af', background: 'rgba(156,163,175,0.1)' },
 }
 
 export const DEFAULT_BOX_COLORS: BoxColors = {

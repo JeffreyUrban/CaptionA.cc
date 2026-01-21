@@ -1,256 +1,270 @@
 """Feature extraction for OCR box classification.
 
-Extracts spatial, layout alignment, and context features from OCR bounding boxes
-for use in caption text classification. All coordinates are in absolute pixels.
+Extracts 26 features from OCR bounding boxes for use in the
+Gaussian Naive Bayes classifier.
+
+Feature categories:
+- Features 1-7: Spatial features (alignment, clustering, aspect ratio, position, area)
+- Features 8-9: User annotations (binary indicators for "in" and "out" labels)
+- Features 10-13: Edge positions (normalized left, top, right, bottom in [0-1] range)
+- Features 14-24: Character sets (11 binary indicators, non-exclusive)
+- Features 25-26: Temporal features (time from start and end in seconds)
 """
 
-from typing import TypedDict
+import sqlite3
 
-from caption_models import BoundingBox, CropBounds, box_overlap_with_crop, is_box_inside_crop
-
-
-class LayoutParams(TypedDict):
-    """Layout parameters from SubtitleRegion analysis (Bayesian priors).
-
-    All measurements in absolute pixels relative to original frame.
-    """
-
-    vertical_position: int  # Mode of vertical center position
-    vertical_std: float  # Standard deviation (Bayesian prior)
-    box_height: int  # Mode of box heights
-    box_height_std: float  # Standard deviation (Bayesian prior)
-    anchor_type: str  # "left", "center", or "right"
-    anchor_position: int  # Mode of anchor position in pixels
+from ocr_box_model.charset import detect_character_sets
+from ocr_box_model.config import NUM_FEATURES
+from ocr_box_model.knn import (
+    compute_horizontal_clustering_score,
+    compute_knn_alignment_score,
+    filter_current_box,
+    get_k_for_boxes,
+)
+from ocr_box_model.types import BoxBounds, VideoLayoutConfig
 
 
-class BoxFeatures(TypedDict):
-    """Extracted features for a single OCR box.
-
-    All spatial measurements in absolute pixels.
-    Normalized features are in range [0-1] or standardized (z-scores).
-    """
-
-    # Spatial features (absolute pixels)
-    box_center_x: int
-    box_center_y: int
-    box_width: int
-    box_height: int
-    box_area: int
-
-    # Spatial features (normalized [0-1])
-    box_center_x_norm: float  # Relative to frame width
-    box_center_y_norm: float  # Relative to frame height
-
-    # Layout alignment features (pixels)
-    vertical_distance_from_mode: int  # Distance from predicted vertical center
-    horizontal_distance_from_anchor: int  # Distance from anchor position
-    height_difference_from_mode: int  # Difference from predicted height
-
-    # Layout alignment features (standardized z-scores)
-    vertical_alignment_score: float  # (distance / vertical_std)
-    height_similarity_score: float  # (difference / box_height_std)
-
-    # Anchor alignment
-    anchor_consistency: float  # [0-1] how well box aligns with anchor type
-
-    # Constraint features
-    inside_crop_bounds: bool
-    overlap_with_crop: float  # [0-1]
-    inside_selection_rect: bool  # If selection rect exists
-    overlap_with_selection: float  # [0-1]
-
-    # Context features
-    aspect_ratio: float  # width / height
-
-
-def extract_box_features(
-    box: BoundingBox,
-    frame_width: int,
-    frame_height: int,
-    crop_bounds: CropBounds,
-    layout_params: LayoutParams,
-    selection_rect: BoundingBox | None = None,
-) -> BoxFeatures:
-    """Extract features from a single OCR box.
+def query_user_annotation(
+    conn: sqlite3.Connection | None,
+    frame_index: int,
+    box_index: int,
+) -> tuple[float, float]:
+    """Query user annotation from database for a box.
 
     Args:
-        box: Bounding box in original frame pixel coordinates
-        frame_width: Frame width in pixels
-        frame_height: Frame height in pixels
-        crop_bounds: Crop region in original frame coordinates
-        layout_params: Layout parameters from SubtitleRegion analysis
-        selection_rect: Optional selection rectangle constraint (original coords)
+        conn: SQLite database connection (or None)
+        frame_index: Frame index
+        box_index: Box index
 
     Returns:
-        Extracted features for classification
+        Tuple of (is_in, is_out) as floats (0.0 or 1.0)
     """
-    # Spatial features (absolute)
-    center_x = int(box.center_x)
-    center_y = int(box.center_y)
-    width = box.width
-    height = box.height
-    area = box.area
+    if conn is None:
+        return (0.0, 0.0)
 
-    # Spatial features (normalized)
-    center_x_norm = center_x / frame_width
-    center_y_norm = center_y / frame_height
+    try:
+        cursor = conn.cursor()
+        result = cursor.execute(
+            """
+            SELECT label
+            FROM full_frame_box_labels
+            WHERE annotation_source = 'full_frame'
+              AND frame_index = ?
+              AND box_index = ?
+              AND label_source = 'user'
+            """,
+            (frame_index, box_index),
+        ).fetchone()
 
-    # Layout alignment (absolute distances)
-    vertical_distance = abs(center_y - layout_params["vertical_position"])
-    height_difference = abs(height - layout_params["box_height"])
+        if not result:
+            return (0.0, 0.0)
 
-    # Horizontal anchor distance depends on anchor type
-    if layout_params["anchor_type"] == "left":
-        horizontal_distance = abs(box.left - layout_params["anchor_position"])
-    elif layout_params["anchor_type"] == "right":
-        horizontal_distance = abs(box.right - layout_params["anchor_position"])
-    else:  # center
-        horizontal_distance = abs(center_x - layout_params["anchor_position"])
+        label = result[0]
+        return (1.0, 0.0) if label == "in" else (0.0, 1.0)
 
-    # Layout alignment (standardized z-scores)
-    vertical_std = max(layout_params["vertical_std"], 1.0)  # Avoid division by zero
-    height_std = max(layout_params["box_height_std"], 1.0)
+    except Exception:
+        return (0.0, 0.0)
 
-    vertical_alignment_score = vertical_distance / vertical_std
-    height_similarity_score = height_difference / height_std
 
-    # Anchor consistency [0-1]
-    # Measures how consistently the box aligns with the anchor type
-    # High score = box aligns well with anchor type
-    if layout_params["anchor_type"] == "left":
-        # Left-aligned text has consistent left edges
-        anchor_consistency = 1.0 - min(horizontal_distance / frame_width, 1.0)
-    elif layout_params["anchor_type"] == "right":
-        # Right-aligned text has consistent right edges
-        anchor_consistency = 1.0 - min(horizontal_distance / frame_width, 1.0)
-    else:  # center
-        # Center-aligned text has centers near anchor
-        anchor_consistency = 1.0 - min(horizontal_distance / (frame_width / 2), 1.0)
+def extract_features(
+    box: BoxBounds,
+    frame_width: int,
+    frame_height: int,
+    all_boxes: list[BoxBounds],
+    timestamp_seconds: float,
+    duration_seconds: float,
+    conn: sqlite3.Connection | None = None,
+) -> list[float]:
+    """Extract 26 features from a box for Bayesian classification.
 
-    # Constraint features
-    inside_crop = is_box_inside_crop(box, crop_bounds)
-    overlap_crop = box_overlap_with_crop(box, crop_bounds)
+    All spatial features use k-nearest neighbors approach, independent of
+    pre-computed cluster parameters to avoid circular dependencies.
 
-    if selection_rect is not None:
-        inside_selection = box.is_inside(selection_rect)
-        overlap_selection = box.overlap_fraction(selection_rect)
-    else:
-        inside_selection = True  # No constraint if no selection rect
-        overlap_selection = 1.0
+    Args:
+        box: Box bounds in top-referenced coordinates
+        frame_width: Frame width in pixels
+        frame_height: Frame height in pixels
+        all_boxes: All boxes for k-nn comparison
+        timestamp_seconds: Timestamp in seconds
+        duration_seconds: Video duration in seconds
+        conn: SQLite database connection (optional)
 
-    # Aspect ratio
-    aspect_ratio = width / height if height > 0 else 0.0
+    Returns:
+        List of 26 feature values
+    """
+    box_width = box.right - box.left
+    box_height = box.bottom - box.top
+    box_center_x = (box.left + box.right) / 2
+    box_center_y = (box.top + box.bottom) / 2
+    box_area = box_width * box_height
+    frame_area = frame_width * frame_height
 
-    return BoxFeatures(
-        # Spatial (absolute)
-        box_center_x=center_x,
-        box_center_y=center_y,
-        box_width=width,
-        box_height=height,
-        box_area=area,
-        # Spatial (normalized)
-        box_center_x_norm=center_x_norm,
-        box_center_y_norm=center_y_norm,
-        # Layout alignment (absolute)
-        vertical_distance_from_mode=vertical_distance,
-        horizontal_distance_from_anchor=horizontal_distance,
-        height_difference_from_mode=height_difference,
-        # Layout alignment (standardized)
-        vertical_alignment_score=vertical_alignment_score,
-        height_similarity_score=height_similarity_score,
-        anchor_consistency=anchor_consistency,
-        # Constraints
-        inside_crop_bounds=inside_crop,
-        overlap_with_crop=overlap_crop,
-        inside_selection_rect=inside_selection,
-        overlap_with_selection=overlap_selection,
-        # Shape
-        aspect_ratio=aspect_ratio,
+    # K-nearest neighbors parameter
+    k = get_k_for_boxes(len(all_boxes))
+
+    # Filter out the current box from all_boxes
+    other_boxes = filter_current_box(all_boxes, box)
+
+    # Features 1-2: Vertical alignment scores (top and bottom edges)
+    top_alignment_score = compute_knn_alignment_score(
+        other_boxes,
+        k,
+        lambda b: abs(b.top - box.top),
+        lambda b: b.top,
+        box.top,
+    )
+    bottom_alignment_score = compute_knn_alignment_score(
+        other_boxes,
+        k,
+        lambda b: abs(b.bottom - box.bottom),
+        lambda b: b.bottom,
+        box.bottom,
+    )
+
+    # Feature 3: Height similarity (among vertically-aligned neighbors)
+    height_similarity_score = compute_knn_alignment_score(
+        other_boxes,
+        k,
+        lambda b: abs(b.bottom - box.bottom),
+        lambda b: b.bottom - b.top,
+        box_height,
+    )
+
+    # Feature 4: Horizontal clustering
+    horizontal_clustering_score = compute_horizontal_clustering_score(other_boxes, k, box_center_x, box.bottom)
+
+    # Features 5-7: Simple spatial features
+    aspect_ratio = box_width / box_height if box_height > 0 else 0.0
+    normalized_y_position = box_center_y / frame_height if frame_height > 0 else 0.0
+    normalized_area = box_area / frame_area if frame_area > 0 else 0.0
+
+    # Features 8-9: User annotations (binary indicators)
+    is_user_annotated_in, is_user_annotated_out = query_user_annotation(conn, box.frame_index, box.box_index)
+
+    # Features 10-13: Edge positions (normalized to [0-1] range)
+    normalized_left = box.left / frame_width if frame_width > 0 else 0.0
+    normalized_top = box.top / frame_height if frame_height > 0 else 0.0
+    normalized_right = box.right / frame_width if frame_width > 0 else 0.0
+    normalized_bottom = box.bottom / frame_height if frame_height > 0 else 0.0
+
+    # Features 14-24: Character sets (11 binary indicators, non-exclusive)
+    char_sets = detect_character_sets(box.text)
+
+    # Features 25-26: Temporal features
+    time_from_start = timestamp_seconds
+    time_from_end = duration_seconds - timestamp_seconds
+
+    return [
+        # Features 1-7: Spatial
+        top_alignment_score,
+        bottom_alignment_score,
+        height_similarity_score,
+        horizontal_clustering_score,
+        aspect_ratio,
+        normalized_y_position,
+        normalized_area,
+        # Features 8-9: User annotations
+        is_user_annotated_in,
+        is_user_annotated_out,
+        # Features 10-13: Edge positions
+        normalized_left,
+        normalized_top,
+        normalized_right,
+        normalized_bottom,
+        # Features 14-24: Character sets (11 features)
+        char_sets.is_roman,
+        char_sets.is_hanzi,
+        char_sets.is_arabic,
+        char_sets.is_korean,
+        char_sets.is_hiragana,
+        char_sets.is_katakana,
+        char_sets.is_cyrillic,
+        char_sets.is_devanagari,
+        char_sets.is_thai,
+        char_sets.is_digits,
+        char_sets.is_punctuation,
+        # Features 25-26: Temporal
+        time_from_start,
+        time_from_end,
+    ]
+
+
+def extract_features_from_layout(
+    box: BoxBounds,
+    layout: VideoLayoutConfig,
+    all_boxes: list[BoxBounds],
+    timestamp_seconds: float,
+    duration_seconds: float,
+    conn: sqlite3.Connection | None = None,
+) -> list[float]:
+    """Extract features using VideoLayoutConfig for convenience.
+
+    Args:
+        box: Box bounds in top-referenced coordinates
+        layout: Video layout configuration
+        all_boxes: All boxes for k-nn comparison
+        timestamp_seconds: Timestamp in seconds
+        duration_seconds: Video duration in seconds
+        conn: SQLite database connection (optional)
+
+    Returns:
+        List of 26 feature values
+    """
+    return extract_features(
+        box=box,
+        frame_width=layout.frame_width,
+        frame_height=layout.frame_height,
+        all_boxes=all_boxes,
+        timestamp_seconds=timestamp_seconds,
+        duration_seconds=duration_seconds,
+        conn=conn,
     )
 
 
 def extract_features_batch(
-    boxes: list[BoundingBox],
+    boxes: list[BoxBounds],
     frame_width: int,
     frame_height: int,
-    crop_bounds: CropBounds,
-    layout_params: LayoutParams,
-    selection_rect: BoundingBox | None = None,
-) -> list[BoxFeatures]:
+    all_boxes: list[BoxBounds],
+    timestamp_seconds: float,
+    duration_seconds: float,
+    conn: sqlite3.Connection | None = None,
+) -> list[list[float]]:
     """Extract features from multiple OCR boxes.
 
     Args:
-        boxes: List of bounding boxes in original frame coordinates
+        boxes: List of bounding boxes
         frame_width: Frame width in pixels
         frame_height: Frame height in pixels
-        crop_bounds: Crop region in original frame coordinates
-        layout_params: Layout parameters from SubtitleRegion analysis
-        selection_rect: Optional selection rectangle constraint
+        all_boxes: All boxes for k-nn comparison
+        timestamp_seconds: Timestamp in seconds
+        duration_seconds: Video duration in seconds
+        conn: SQLite database connection (optional)
 
     Returns:
-        List of extracted features, one per box
+        List of feature vectors, one per box
     """
     return [
-        extract_box_features(
+        extract_features(
             box=box,
             frame_width=frame_width,
             frame_height=frame_height,
-            crop_bounds=crop_bounds,
-            layout_params=layout_params,
-            selection_rect=selection_rect,
+            all_boxes=all_boxes,
+            timestamp_seconds=timestamp_seconds,
+            duration_seconds=duration_seconds,
+            conn=conn,
         )
         for box in boxes
     ]
 
 
-def features_to_array(features: BoxFeatures) -> list[float]:
-    """Convert BoxFeatures to numerical array for ML models.
+def validate_features(features: list[float]) -> bool:
+    """Validate that a feature vector has the correct length.
 
     Args:
-        features: Extracted box features
+        features: Feature vector to validate
 
     Returns:
-        List of numerical feature values for model input
-
-    Feature order:
-        0: box_center_x_norm
-        1: box_center_y_norm
-        2: box_width
-        3: box_height
-        4: vertical_alignment_score
-        5: height_similarity_score
-        6: horizontal_distance_from_anchor
-        7: anchor_consistency
-        8: inside_crop_bounds (0 or 1)
-        9: overlap_with_crop
-        10: inside_selection_rect (0 or 1)
-        11: overlap_with_selection
-        12: aspect_ratio
+        True if valid, False otherwise
     """
-    return [
-        features["box_center_x_norm"],
-        features["box_center_y_norm"],
-        float(features["box_width"]),
-        float(features["box_height"]),
-        features["vertical_alignment_score"],
-        features["height_similarity_score"],
-        float(features["horizontal_distance_from_anchor"]),
-        features["anchor_consistency"],
-        float(features["inside_crop_bounds"]),
-        features["overlap_with_crop"],
-        float(features["inside_selection_rect"]),
-        features["overlap_with_selection"],
-        features["aspect_ratio"],
-    ]
-
-
-def features_batch_to_array(features_list: list[BoxFeatures]) -> list[list[float]]:
-    """Convert batch of BoxFeatures to numerical arrays.
-
-    Args:
-        features_list: List of extracted box features
-
-    Returns:
-        List of numerical feature arrays for model input
-    """
-    return [features_to_array(f) for f in features_list]
+    return len(features) == NUM_FEATURES

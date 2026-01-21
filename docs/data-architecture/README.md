@@ -102,7 +102,7 @@ Wasabi provides **cost-effective object storage** with free egress bandwidth. It
 - **Client databases**: `client/videos/{id}/layout.db.gz`, `captions.db.gz` (gzip compressed)
 - **Server databases**: `server/videos/{id}/raw-ocr.db.gz`, `layout-server.db.gz`
 
-Bucket: `caption-acc-prod` (us-east-1)
+Bucket: `captionacc-prod` (us-east-1)
 
 See: [Wasabi Storage](./wasabi/)
 
@@ -131,15 +131,21 @@ See: [SQLite Database Reference](./sqlite-databases.md)
 ### Video Upload Flow
 
 ```
-1. Client calls Edge Function for presigned upload URL
+1. Client calls Edge Function for presigned upload URL (no video record created yet)
 2. Client uploads video directly to Wasabi (client/videos/{id}/video.mp4)
-3. Backend creates video record in Supabase (status: 'uploading')
-4. Prefect flow: upload_and_process_video
+   - Upload progress tracked client-side only (not visible in videos page)
+3. Client calls Edge Function /confirm endpoint after upload completes
+   - Edge Function creates video record in Supabase (status: 'processing')
+   - Supabase Realtime notifies API → triggers process_new_videos flow
+4. Prefect flow: captionacc-video-initial-processing
    a. Extract full frames → client/videos/{id}/full_frames/*.jpg
    b. Run OCR → server/videos/{id}/raw-ocr.db.gz
    c. Initialize client/videos/{id}/layout.db.gz with box data from OCR
 5. Video status set to 'active'
+   - Video now appears in videos page with annotation statistics
 ```
+
+**Key design principle:** Video record is only created AFTER upload completes, ensuring the backend never tries to process a partially uploaded file.
 
 ### Layout Annotation Flow (CR-SQLite Sync)
 
@@ -201,7 +207,7 @@ Response:
     "sessionToken": "..."
   },
   "expiration": "2026-01-11T23:00:00Z",
-  "bucket": "caption-acc-prod",
+  "bucket": "captionacc-prod",
   "region": "us-east-1",
   "endpoint": "https://s3.us-east-1.wasabisys.com",
   "prefix": "{tenant_id}/client/*"
@@ -239,7 +245,7 @@ See: [Sync Protocol Reference](./sync-protocol.md)
 ### Wasabi Path Pattern
 
 ```
-caption-acc-prod/
+captionacc-prod/
 └── {tenant_id}/
     ├── client/                              # STS credentials (tenant read-only)
     │   └── videos/{video_id}/

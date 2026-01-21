@@ -118,16 +118,21 @@ export async function getS3Credentials(forceRefresh = false): Promise<S3Credenti
 
     const data = await response.json()
 
+    // Edge function returns credentials nested in a credentials object
     cachedCredentials = {
-      accessKeyId: data.accessKeyId,
-      secretAccessKey: data.secretAccessKey,
-      sessionToken: data.sessionToken,
+      accessKeyId: data.credentials.accessKeyId,
+      secretAccessKey: data.credentials.secretAccessKey,
+      sessionToken: data.credentials.sessionToken,
       expiration: data.expiration ? new Date(data.expiration) : undefined,
     }
 
     credentialsExpiry = cachedCredentials.expiration ?? new Date(Date.now() + 60 * 60 * 1000)
 
-    console.log('[DatabaseLoader] Credentials refreshed, expires:', credentialsExpiry)
+    console.log('[DatabaseLoader] Credentials refreshed')
+    console.log('[DatabaseLoader] Access Key ID:', cachedCredentials.accessKeyId)
+    console.log('[DatabaseLoader] Expiration:', credentialsExpiry)
+    console.log('[DatabaseLoader] Allowed prefix:', data.prefix)
+    console.log('[DatabaseLoader] Bucket:', data.bucket)
     return cachedCredentials
   } catch (error) {
     const dbError = credentialsError(error)
@@ -140,23 +145,27 @@ export async function getS3Credentials(forceRefresh = false): Promise<S3Credenti
  * Get auth headers for Edge Function requests.
  */
 async function getAuthHeaders(): Promise<Record<string, string>> {
-  // Try to get the current session from Supabase
-  try {
-    const { supabase } = await import('./supabase-client')
-    const {
-      data: { session },
-    } = await supabase.auth.getSession()
+  // Get the current session from Supabase
+  const { supabase } = await import('./supabase-client')
+  const {
+    data: { session },
+    error,
+  } = await supabase.auth.getSession()
 
-    if (session?.access_token) {
-      return {
-        Authorization: `Bearer ${session.access_token}`,
-      }
-    }
-  } catch {
-    // Ignore errors, proceed without auth
+  if (error) {
+    console.error('[DatabaseLoader] Failed to get session:', error)
+    throw new Error('Failed to get authentication session')
   }
 
-  return {}
+  if (!session?.access_token) {
+    console.error('[DatabaseLoader] No active session found')
+    throw new Error('No active session - please log in')
+  }
+
+  console.log('[DatabaseLoader] Auth token obtained, length:', session.access_token.length)
+  return {
+    Authorization: `Bearer ${session.access_token}`,
+  }
 }
 
 /**

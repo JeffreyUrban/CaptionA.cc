@@ -1,9 +1,8 @@
 # Security Test Implementation Report
 
-**Date:** 2026-01-12
+**Date:** 2026-01-12 (Updated: 2026-01-20)
 **Branch:** security-tests
 **Test Files:**
-- `/services/api/tests/security/test_webhook_security.py`
 - `/services/api/tests/security/test_tenant_isolation.py`
 - `/services/api/tests/security/conftest.py`
 
@@ -11,84 +10,23 @@
 
 ## Executive Summary
 
-The security test implementation provides comprehensive coverage of the requirements defined in TEST_PLAN.md Section 6. The test suite includes:
+The security test implementation provides comprehensive coverage of multi-tenant data isolation across all API endpoints.
 
-- **38 total security tests** (31 passed, 4 failed, 1 skipped, 2 errors)
-- **18 webhook authentication tests** covering authentication, authorization, and input validation
-- **20 tenant isolation tests** covering multi-tenant data isolation across all API endpoints
+> **Note (2026-01-20):** Webhook authentication tests were removed after replacing Supabase webhooks with Realtime subscriptions. The webhook mechanism is no longer used for video processing triggers. Video processing is now triggered by Supabase Realtime subscription (primary) with a 15-minute cron recovery mechanism.
 
 ### Overall Status
 
-**Coverage: 95% of TEST_PLAN.md requirements implemented**
+**Coverage: Tenant isolation tests implemented**
 
-- Webhook Authentication: 100% coverage (with 1 test intentionally skipped for future feature)
-- Tenant Isolation: 100% coverage with minor test fixture issues to resolve
+- Tenant Isolation: Tests covering multi-tenant data isolation across all API endpoints
 
 ---
 
 ## Test Execution Results
 
-### Summary Statistics
-
-```
-Total Tests:      38
-Passed:          31 (81.6%)
-Failed:           4 (10.5%)
-Errors:           2 (5.3%)
-Skipped:          1 (2.6%)
-```
-
 ### Test Results by Category
 
-#### 1. Webhook Authentication Tests (18 tests)
-
-**File:** `/services/api/tests/security/test_webhook_security.py`
-
-| Test | Status | Description |
-|------|--------|-------------|
-| `test_webhook_requires_auth_missing_header` | ✅ PASS | Rejects requests without Authorization header |
-| `test_webhook_requires_auth_empty_header` | ✅ PASS | Rejects requests with empty Authorization header |
-| `test_webhook_requires_auth_malformed_header_no_bearer` | ✅ PASS | Rejects malformed header (no Bearer prefix) |
-| `test_webhook_requires_auth_malformed_header_extra_parts` | ✅ PASS | Rejects malformed header (extra parts) |
-| `test_webhook_rejects_invalid_secrets` | ✅ PASS | Rejects invalid webhook secrets |
-| `test_webhook_rejects_invalid_secrets_case_sensitive` | ✅ PASS | Enforces case-sensitive secret validation |
-| `test_webhook_rate_limiting` | ⏭️ SKIP | Rate limiting not yet implemented (future feature) |
-| `test_webhook_ignores_non_insert_events_update` | ✅ PASS | Ignores UPDATE events (security best practice) |
-| `test_webhook_ignores_non_insert_events_delete` | ✅ PASS | Ignores DELETE events (security best practice) |
-| `test_webhook_rejects_invalid_payload_wrong_table` | ✅ PASS | Rejects payloads for wrong table |
-| `test_webhook_rejects_invalid_payload_missing_fields` | ✅ PASS | Rejects payloads missing required fields |
-| `test_webhook_rejects_invalid_payload_malformed_json` | ✅ PASS | Handles malformed JSON properly |
-| `test_webhook_rejects_invalid_payload_wrong_structure` | ✅ PASS | Validates payload structure |
-| `test_webhook_success_with_valid_auth_and_payload` | ✅ PASS | Processes valid authenticated requests |
-| `test_webhook_success_premium_tier_higher_priority` | ✅ PASS | Assigns higher priority for premium tiers |
-| `test_webhook_validates_required_record_fields` | ✅ PASS | Validates all required fields in record |
-| `test_webhook_handles_missing_tenant_tier_gracefully` | ✅ PASS | Defaults to 'free' tier when missing |
-| `test_webhook_security_headers_are_not_leaked` | ✅ PASS | Error responses don't leak secrets |
-
-**Coverage vs TEST_PLAN.md Section 6.1:**
-
-| Requirement | Implemented | Notes |
-|-------------|-------------|-------|
-| Webhook requires auth | ✅ Yes | 6 tests covering various auth failure scenarios |
-| Rejects invalid secrets | ✅ Yes | 2 tests including case-sensitivity |
-| Prevents replay attacks | ⚠️ Partial | Not yet implemented (nonce system planned) |
-| Rate limiting | ⏭️ Skipped | Test written, feature not yet implemented |
-| Input validation | ✅ Yes | 5 tests covering various payload validation scenarios |
-| Event type filtering | ✅ Yes | 2 tests for UPDATE/DELETE event rejection |
-| Priority calculation | ✅ Yes | 2 tests for tier-based priority |
-
-**Additional Security Tests (Beyond TEST_PLAN.md):**
-
-The implementation exceeds TEST_PLAN.md requirements with additional tests for:
-- Case-sensitive secret validation
-- Malformed JSON handling
-- Authorization header format validation (Bearer prefix)
-- Graceful handling of missing optional fields
-- Secret leakage prevention in error responses
-
----
-
-#### 2. Tenant Isolation Tests (20 tests)
+#### Tenant Isolation Tests
 
 **File:** `/services/api/tests/security/test_tenant_isolation.py`
 
@@ -104,23 +42,19 @@ The implementation exceeds TEST_PLAN.md requirements with additional tests for:
 | `test_tenant_cannot_access_other_tenant_layout` | ✅ PASS | Prevents layout data access |
 | `test_tenant_cannot_update_other_tenant_layout` | ❌ FAIL | Mock database behavior mismatch |
 | `test_tenant_cannot_init_layout_for_other_tenant` | ✅ PASS | Prevents layout initialization |
-| `test_tenant_cannot_trigger_flow_for_other_tenant` | ✅ PASS | Verifies correct tenant_id in flow triggering |
 | `test_wasabi_keys_include_tenant_id_captions` | ✅ PASS | Validates S3 key format for captions |
 | `test_wasabi_keys_include_tenant_id_layout` | ✅ PASS | Validates S3 key format for layout |
 | `test_wasabi_keys_include_tenant_id_ocr` | ✅ PASS | Validates S3 key format for OCR |
 | `test_database_manager_enforces_tenant_isolation_on_download` | ✅ PASS | Verifies tenant_id in S3 keys |
 | `test_cache_isolation_prevents_cross_tenant_access` | ✅ PASS | Validates cache path uniqueness |
 | `test_tenant_cannot_access_cross_tenant_video_via_api_parameter_manipulation` | ✅ PASS | Prevents parameter manipulation attacks |
-| `test_tenant_isolation_in_storage_key_from_webhook` | ✅ PASS | Validates storage_key format |
 | `test_tenant_boundary_enforced_by_auth_context` | ✅ PASS | Verifies AuthContext enforcement |
-| `test_webhook_payload_tenant_id_mismatch_detection` | ✅ PASS | Documents mismatch handling behavior |
 
-**Coverage vs TEST_PLAN.md Section 6.2:**
+**Coverage vs TEST_PLAN.md Section 6:**
 
 | Requirement | Implemented | Notes |
 |-------------|-------------|-------|
 | Tenant cannot access other tenant's video | ✅ Yes | Multiple tests across different endpoints |
-| Tenant cannot trigger flow for other tenant | ✅ Yes | Webhook flow triggering test |
 | Wasabi keys include tenant_id | ✅ Yes | Tests for captions, layout, and OCR databases |
 | Tenant isolation applies to all resources | ✅ Yes | Tests for captions, layout, OCR, and storage |
 
@@ -130,7 +64,6 @@ The implementation exceeds TEST_PLAN.md requirements with additional tests for:
 - Cache isolation and cache poisoning prevention
 - Parameter manipulation attack prevention
 - AuthContext enforcement at application layer
-- Storage key validation in webhooks
 - Cross-tenant access via batch operations
 - Tenant boundary enforcement in database managers
 
@@ -252,7 +185,6 @@ async def get_database(self, tenant_id: str, video_id: str, _writable: bool = Fa
 
 3. **Well-Organized Fixtures:** The `conftest.py` file provides reusable fixtures for:
    - Authentication contexts for multiple tenants
-   - Webhook payloads (valid, invalid, malformed)
    - Test clients with proper mocking
    - Isolated database managers
 
@@ -285,66 +217,7 @@ async def get_database(self, tenant_id: str, video_id: str, _writable: bool = Fa
 
 ## Coverage Comparison: TEST_PLAN.md vs Implementation
 
-### Section 6.1: Webhook Authentication
-
-**TEST_PLAN.md Requirements:**
-
-```python
-def test_webhook_requires_auth(self):
-    """Webhook rejects requests without auth."""
-    # Test missing Authorization header
-    # Test empty Authorization header
-    # Test malformed Authorization header
-```
-
-**Implementation:** ✅ **EXCEEDS** - 3 separate tests for each scenario plus additional test for case sensitivity
-
----
-
-```python
-def test_webhook_rejects_invalid_secrets(self):
-    """Webhook rejects invalid secrets."""
-    # Test wrong secret
-    # Test expired secret (if implementing rotation)
-```
-
-**Implementation:** ✅ **MEETS** - 2 tests (wrong secret + case sensitivity)
-
----
-
-```python
-def test_webhook_prevents_replay_attacks(self):
-    """Webhook prevents replay attacks."""
-    # Test same request twice
-    # Verify second request is rejected (if implementing nonce)
-```
-
-**Implementation:** ⚠️ **PLANNED** - Feature not yet implemented, test skipped with documentation
-
----
-
-```python
-def test_webhook_rate_limiting(self):
-    """Webhook rate limits requests per IP."""
-    # Send 100 requests rapidly
-    # Verify rate limiting kicks in
-    # Verify legitimate requests still work
-```
-
-**Implementation:** ⚠️ **PLANNED** - Test written but skipped until feature is implemented
-
----
-
-**Additional Tests (Beyond TEST_PLAN.md):**
-- Input validation (wrong table, missing fields, malformed JSON, wrong structure)
-- Event type filtering (UPDATE/DELETE ignored)
-- Priority calculation for different tiers
-- Graceful handling of missing fields
-- Secret leakage prevention
-
----
-
-### Section 6.2: Tenant Isolation
+### Section 6: Tenant Isolation
 
 **TEST_PLAN.md Requirements:**
 
@@ -357,17 +230,6 @@ def test_tenant_cannot_access_other_tenant_video(self):
 ```
 
 **Implementation:** ✅ **EXCEEDS** - Multiple tests across different endpoints (read, update, delete, batch operations)
-
----
-
-```python
-def test_tenant_cannot_trigger_flow_for_other_tenant(self):
-    """Verify tenant isolation in flow triggering."""
-    # Try to trigger flow for another tenant's video
-    # Verify request is rejected
-```
-
-**Implementation:** ✅ **MEETS** - Test verifies correct tenant_id is used in flow parameters
 
 ---
 
@@ -386,7 +248,6 @@ def test_wasabi_keys_include_tenant_id(self):
 - Cache isolation
 - Parameter manipulation prevention
 - AuthContext enforcement
-- Storage key validation in webhooks
 - Database manager isolation
 - Layout endpoint isolation
 - Tenant boundary enforcement
@@ -410,21 +271,10 @@ def test_wasabi_keys_include_tenant_id(self):
 
 ### Future Enhancements
 
-3. **Implement Rate Limiting** (Medium Priority)
-   - Implement webhook rate limiting feature
-   - Un-skip the `test_webhook_rate_limiting` test
-   - Estimated time: 2-4 hours
-
-4. **Implement Replay Attack Prevention** (Medium Priority)
-   - Add nonce-based replay attack prevention
-   - Implement corresponding test
-   - Estimated time: 4-6 hours
-
-5. **Add More Granular Tests** (Low Priority)
+3. **Add More Granular Tests** (Low Priority)
    - Test tenant isolation for preferences endpoints
    - Test tenant isolation for stats endpoints
    - Add performance tests for tenant filtering
-   - Estimated time: 2-3 hours
 
 ### Documentation Improvements
 
@@ -448,34 +298,21 @@ pytest tests/security/ -v -m security
 ### Running Specific Test Files
 
 ```bash
-# Webhook security tests only
-pytest tests/security/test_webhook_security.py -v
-
-# Tenant isolation tests only
+# Tenant isolation tests
 pytest tests/security/test_tenant_isolation.py -v
 ```
 
 ### Running Specific Test Classes
 
 ```bash
-# Webhook authentication tests
-pytest tests/security/test_webhook_security.py::TestWebhookSecurity -v
-
 # Tenant isolation tests
 pytest tests/security/test_tenant_isolation.py::TestTenantIsolation -v
-```
-
-### Running Individual Tests
-
-```bash
-# Single test by name
-pytest tests/security/test_webhook_security.py::TestWebhookSecurity::test_webhook_requires_auth_missing_header -v
 ```
 
 ### Generating Coverage Report
 
 ```bash
-pytest tests/security/ --cov=app.routers.webhooks --cov=app.routers.captions --cov-report=html
+pytest tests/security/ --cov=app.routers.captions --cov-report=html
 ```
 
 ---
@@ -486,27 +323,13 @@ pytest tests/security/ --cov=app.routers.webhooks --cov=app.routers.captions --c
 
 Located in `/services/api/tests/security/conftest.py`:
 
-- `webhook_secret`: Valid webhook secret
-- `invalid_webhook_secret`: Invalid secret for negative tests
-- `webhook_auth_header`: Valid Authorization header
-- `invalid_webhook_auth_header`: Invalid Authorization header
-- `malformed_webhook_auth_header`: Malformed header (no Bearer)
 - `tenant_a_id`, `tenant_b_id`: Tenant identifiers
 - `tenant_a_user_id`, `tenant_b_user_id`: User identifiers
 - `tenant_a_video_id`, `tenant_b_video_id`: Video identifiers
 - `tenant_a_auth_context`, `tenant_b_auth_context`: Authentication contexts
 
-### Webhook Payload Fixtures
-
-- `test_webhook_payload`: Valid INSERT payload
-- `test_webhook_payload_premium`: Premium tier payload
-- `test_webhook_payload_missing_fields`: Invalid payload (missing fields)
-- `test_webhook_payload_update`: UPDATE event (should be ignored)
-- `test_webhook_payload_wrong_table`: Wrong table payload
-
 ### Client Fixtures
 
-- `webhook_client`: AsyncClient for webhook endpoints
 - `tenant_a_client`: AsyncClient authenticated as tenant A
 - `tenant_b_client`: AsyncClient authenticated as tenant B
 - `isolated_tenant_a_client`: AsyncClient with isolated database manager
@@ -519,18 +342,18 @@ Located in `/services/api/tests/security/conftest.py`:
 
 ## Conclusion
 
-The security test implementation provides comprehensive coverage of the requirements in TEST_PLAN.md Section 6, with 38 tests covering webhook authentication and tenant isolation. The test suite demonstrates strong security practices and goes beyond the minimum requirements with additional edge case testing.
+The security test implementation provides coverage of tenant isolation requirements in TEST_PLAN.md Section 6. The test suite demonstrates security practices for multi-tenant data isolation.
+
+> **Note (2026-01-20):** Webhook authentication tests were removed after replacing Supabase webhooks with Realtime subscriptions. Video processing is now triggered via Supabase Realtime subscription (primary) with a 15-minute cron recovery mechanism.
 
 **Key Achievements:**
-- ✅ 95% coverage of TEST_PLAN.md requirements
-- ✅ 81.6% test pass rate
+- ✅ Tenant isolation tests across all API endpoints
 - ✅ Comprehensive test documentation
 - ✅ Well-organized fixtures and test structure
-- ✅ Additional security tests beyond requirements
+- ✅ Additional security tests beyond requirements (cache isolation, parameter manipulation prevention)
 
 **Outstanding Issues:**
 - 2 tests with fixture naming issues (easy fix)
 - 4 tests with mock database behavior issues (requires mock refinement)
-- 1 test skipped for rate limiting (feature not yet implemented)
 
-With the recommended fixes applied, the test suite will achieve **100% pass rate** for all implemented features and provide excellent security validation coverage for the CaptionA.cc API.
+With the recommended fixes applied, the test suite will provide security validation coverage for the CaptionA.cc API.

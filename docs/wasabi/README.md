@@ -2,7 +2,7 @@
 
 ## Architecture Overview
 
-**Bucket:** `caption-acc-prod`
+**Bucket:** `captionacc-prod`
 
 **Storage Path:** `{tenant_id}/{video_id}/{resource}`
 
@@ -96,7 +96,7 @@ if (video.tenant_id !== session.user.tenant_id) {
 
 **Bucket-level:**
 - ✅ Versioning enabled (recovery from accidental deletes)
-- ✅ Access logging → `audit-logs-caption-acc` (90-day retention)
+- ✅ Access logging → `captionacc-audit-logs` (90-day retention)
 - ✅ Public access blocked
 - ✅ Server-side encryption (Wasabi default)
 
@@ -143,12 +143,12 @@ source .env
 aws s3 ls --endpoint-url https://s3.us-east-1.wasabisys.com
 
 # Should succeed
-aws s3 ls s3://caption-acc-prod/ --endpoint-url https://s3.us-east-1.wasabisys.com
+aws s3 ls s3://captionacc-prod/ --endpoint-url https://s3.us-east-1.wasabisys.com
 ```
 
 **Review access logs:**
 ```bash
-aws s3 ls s3://audit-logs-caption-acc/caption-acc-prod/ \
+aws s3 ls s3://captionacc-audit-logs/captionacc-prod/ \
   --endpoint-url https://s3.us-east-1.wasabisys.com
 ```
 

@@ -12,96 +12,71 @@ import { createClient, type Session } from '@supabase/supabase-js'
 
 import type { Database } from '../types/supabase'
 
-// Type alias for production database using captionacc_production schema
-// We merge Functions from both captionacc_production and public schemas
+// Type alias for production database using captionacc_prod schema
+// We merge Functions from both captionacc_prod and public schemas
 // since security audit functions are defined in public schema
 type ProductionDatabase = {
   public: {
-    Tables: Database['captionacc_production']['Tables']
-    Views: Database['captionacc_production']['Views']
-    Functions: Database['captionacc_production']['Functions'] & Database['public']['Functions']
-    Enums: Database['captionacc_production']['Enums']
-    CompositeTypes: Database['captionacc_production']['CompositeTypes']
+    Tables: Database['captionacc_prod']['Tables']
+    Views: Database['captionacc_prod']['Views']
+    Functions: Database['captionacc_prod']['Functions'] & Database['public']['Functions']
+    Enums: Database['captionacc_prod']['Enums']
+    CompositeTypes: Database['captionacc_prod']['CompositeTypes']
   }
 }
 
-// Local Supabase demo keys - These are Supabase's standard public keys for local development
-// Documented at: https://supabase.com/docs/guides/cli/local-development
-// These keys are safe to commit - they only work with `supabase start` on localhost:54321
-// Production keys are NEVER in code - only in environment variables/secrets
-const LOCAL_SUPABASE_URL = 'http://localhost:54321'
-const LOCAL_SUPABASE_ANON_KEY =
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0' // # pragma: allowlist secret
-const LOCAL_SUPABASE_SERVICE_ROLE_KEY =
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU' // # pragma: allowlist secret
+// Environment variables are required at runtime - set via fly.toml build args
+// Separate Supabase projects for prod and dev provide isolation
+// During CI builds, these may be empty - the client will be created lazily
+const supabaseUrl = import.meta.env['VITE_SUPABASE_URL'] ?? ''
+const supabaseAnonKey = import.meta.env['VITE_SUPABASE_ANON_KEY'] ?? ''
 
-// Use environment variables if provided, otherwise default to local
-// For SSR, process.env is available on server, import.meta.env on client
-const supabaseUrl =
-  (typeof process !== 'undefined' ? process.env['VITE_SUPABASE_URL'] : undefined) ??
-  import.meta.env['VITE_SUPABASE_URL'] ??
-  LOCAL_SUPABASE_URL
-const supabaseAnonKey =
-  (typeof process !== 'undefined' ? process.env['VITE_SUPABASE_ANON_KEY'] : undefined) ??
-  import.meta.env['VITE_SUPABASE_ANON_KEY'] ??
-  LOCAL_SUPABASE_ANON_KEY
-
-// Both local and remote use captionacc_production schema for consistency
-const supabaseSchema =
-  (typeof process !== 'undefined' ? process.env['VITE_SUPABASE_SCHEMA'] : undefined) ??
-  import.meta.env['VITE_SUPABASE_SCHEMA'] ??
-  'captionacc_production'
+// Schema is 'captionacc' in both prod and dev Supabase projects
+const supabaseSchema = import.meta.env['VITE_SUPABASE_SCHEMA'] ?? 'captionacc'
 
 // Log Supabase connection info in development
-if (import.meta.env.DEV) {
-  const isLocal = supabaseUrl === LOCAL_SUPABASE_URL
-  console.log(
-    `🔌 Supabase: ${isLocal ? 'LOCAL' : 'ONLINE'} (${supabaseUrl}) [schema: ${supabaseSchema}]`
-  )
+if (import.meta.env.DEV && supabaseUrl) {
+  console.log(`🔌 Supabase: ONLINE (${supabaseUrl}) [schema: ${supabaseSchema}]`)
+}
+
+// Lazy initialization to support CI builds where env vars may not be set
+let _supabase: ReturnType<typeof createClient<ProductionDatabase>> | null = null
+
+/**
+ * Get the Supabase client (lazily initialized)
+ * Throws if VITE_SUPABASE_URL is not configured
+ */
+function getSupabaseClient(): ReturnType<typeof createClient<ProductionDatabase>> {
+  if (!_supabase) {
+    if (!supabaseUrl || !supabaseAnonKey) {
+      throw new Error(
+        'Supabase configuration missing. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY environment variables.'
+      )
+    }
+    _supabase = createClient<ProductionDatabase>(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+      },
+      db: {
+        schema: supabaseSchema, // Set PostgreSQL schema
+      },
+    })
+  }
+  return _supabase
 }
 
 /**
- * Create a Supabase client for use in client-side code
+ * Supabase client for use in client-side code
  * Uses the anon key which respects RLS policies
- * Both local and remote use captionacc_production schema
+ * Note: This is a getter that lazily initializes the client
  */
-export const supabase = createClient<ProductionDatabase>(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true,
-  },
-  db: {
-    schema: supabaseSchema, // Set PostgreSQL schema
+export const supabase = new Proxy({} as ReturnType<typeof createClient<ProductionDatabase>>, {
+  get(_, prop) {
+    return (getSupabaseClient() as unknown as Record<string | symbol, unknown>)[prop]
   },
 })
-
-/**
- * Create a Supabase client for server-side operations
- * Uses the service role key which bypasses RLS (use carefully)
- * Only available on the server
- * Both local and remote use captionacc_production schema
- */
-export function createServerSupabaseClient() {
-  if (typeof window !== 'undefined') {
-    throw new Error('Server-side Supabase client should not be used in the browser')
-  }
-
-  const serviceRoleKey =
-    (typeof process !== 'undefined' ? process.env['VITE_SUPABASE_SERVICE_ROLE_KEY'] : undefined) ??
-    import.meta.env['VITE_SUPABASE_SERVICE_ROLE_KEY'] ??
-    LOCAL_SUPABASE_SERVICE_ROLE_KEY
-
-  return createClient<ProductionDatabase>(supabaseUrl, serviceRoleKey, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-    },
-    db: {
-      schema: supabaseSchema, // Set PostgreSQL schema (same as client)
-    },
-  })
-}
 
 /**
  * Get the current authenticated user

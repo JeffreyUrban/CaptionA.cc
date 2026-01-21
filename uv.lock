@@ -10,7 +10,6 @@ resolution-markers = [
 
 [manifest]
 members = [
-    "caption-boundaries",
     "caption-frame-extents",
     "caption-models",
     "caption-text",
@@ -399,65 +398,6 @@ wheels = [
 ]
 
 [[package]]
-name = "caption-boundaries"
-source = { editable = "data-pipelines/caption_boundaries" }
-dependencies = [
-    { name = "caption-models" },
-    { name = "frames-db" },
-    { name = "numpy" },
-    { name = "opencv-python" },
-    { name = "pillow" },
-    { name = "pydantic" },
-    { name = "python-levenshtein" },
-    { name = "requests" },
-    { name = "rich" },
-    { name = "scikit-learn" },
-    { name = "sqlalchemy" },
-    { name = "supabase" },
-    { name = "torch" },
-    { name = "torchvision" },
-    { name = "transformers" },
-    { name = "typer" },
-    { name = "video-utils" },
-    { name = "wandb" },
-]
-
-[package.optional-dependencies]
-dev = [
-    { name = "pyright" },
-    { name = "pytest" },
-    { name = "pytest-cov" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "caption-models", editable = "packages/caption_models" },
-    { name = "frames-db", editable = "packages/frames_db" },
-    { name = "numpy", specifier = ">=1.26.0" },
-    { name = "opencv-python", specifier = ">=4.8.0" },
-    { name = "pillow", specifier = ">=10.0.0" },
-    { name = "pydantic", specifier = ">=2.0.0" },
-    { name = "pyright", marker = "extra == 'dev'", specifier = ">=1.1.400" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=9.0.0" },
-    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=7.0.0" },
-    { name = "python-levenshtein", specifier = ">=0.21.0" },
-    { name = "requests", specifier = ">=2.31.0" },
-    { name = "rich", specifier = ">=13.0.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.14.0" },
-    { name = "scikit-learn", specifier = ">=1.3.0" },
-    { name = "sqlalchemy", specifier = ">=2.0.0" },
-    { name = "supabase", specifier = ">=2.0.0" },
-    { name = "torch", specifier = ">=2.1.0" },
-    { name = "torchvision", specifier = ">=0.16.0" },
-    { name = "transformers", specifier = ">=4.30.0" },
-    { name = "typer", specifier = ">=0.9.0" },
-    { name = "video-utils", editable = "packages/video_utils" },
-    { name = "wandb", specifier = ">=0.16.0" },
-]
-provides-extras = ["dev"]
-
-[[package]]
 name = "caption-frame-extents"
 source = { editable = "data-pipelines/caption_frame_extents" }
 dependencies = [
@@ -642,7 +582,7 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "boto3" },
-    { name = "caption-boundaries" },
+    { name = "caption-frame-extents" },
     { name = "caption-text" },
     { name = "crop-frames" },
     { name = "full-frames" },
@@ -664,7 +604,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "boto3", specifier = ">=1.28.0" },
-    { name = "caption-boundaries", editable = "data-pipelines/caption_boundaries" },
+    { name = "caption-frame-extents", editable = "data-pipelines/caption_frame_extents" },
     { name = "caption-text", editable = "data-pipelines/caption_text" },
     { name = "crop-frames", editable = "data-pipelines/crop_frames" },
     { name = "full-frames", editable = "data-pipelines/full_frames" },
@@ -2663,10 +2603,6 @@ provides-extras = ["cli", "dev", "google", "livetext"]
 [[package]]
 name = "ocr-box-model"
 source = { editable = "packages/ocr_box_model" }
-dependencies = [
-    { name = "caption-models" },
-    { name = "numpy" },
-]
 
 [package.optional-dependencies]
 dev = [
@@ -2682,9 +2618,7 @@ ml = [
 
 [package.metadata]
 requires-dist = [
-    { name = "caption-models", editable = "packages/caption_models" },
     { name = "joblib", marker = "extra == 'ml'", specifier = ">=1.3.0" },
-    { name = "numpy", specifier = ">=1.26.0" },
     { name = "pyright", marker = "extra == 'dev'", specifier = ">=1.1.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.4.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.1.0" },

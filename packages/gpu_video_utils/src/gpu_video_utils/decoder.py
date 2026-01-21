@@ -64,6 +64,8 @@ class GPUVideoDecoder:
         self._native_fps: float | None = None
         self._frame_width: int | None = None
         self._frame_height: int | None = None
+        self._codec: str | None = None
+        self._bitrate: int | None = None
 
     def _init_decoder_with_retry(self):
         """Initialize decoder with exponential backoff retry."""
@@ -102,7 +104,7 @@ class GPUVideoDecoder:
         """Get video metadata.
 
         Returns:
-            Dict with keys: total_frames, fps, width, height, duration
+            Dict with keys: total_frames, fps, width, height, duration, codec, bitrate
         """
         # Get native FPS (need to probe first frame)
         if self._native_fps is None:
@@ -121,6 +123,10 @@ class GPUVideoDecoder:
             self._frame_width = int(video_stream["width"])
             self._frame_height = int(video_stream["height"])
 
+            # Extract codec and bitrate
+            self._codec = video_stream.get("codec_name", "unknown")
+            self._bitrate = int(video_stream.get("bit_rate", 0))
+
         duration = self._total_frames / self._native_fps
 
         return {
@@ -129,6 +135,8 @@ class GPUVideoDecoder:
             "width": self._frame_width,
             "height": self._frame_height,
             "duration": duration,
+            "codec": self._codec,
+            "bitrate": self._bitrate,
         }
 
     def get_frame_at_index(self, frame_index: int) -> torch.Tensor:

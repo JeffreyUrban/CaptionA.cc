@@ -586,7 +586,7 @@ class TestSupabaseServiceInitialization:
 
             assert service.supabase_url == "https://test.supabase.co"
             assert service.supabase_key == "test-key"  # pragma: allowlist secret
-            assert service.schema == "captionacc_production"
+            assert service.schema == "captionacc_prod"
             assert service.client == mock_client
 
     def test_initialization_with_custom_schema(self):

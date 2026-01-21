@@ -6,12 +6,12 @@ Monitoring, debugging, and recovery procedures for Prefect orchestration.
 
 ### Dashboards
 
-| Dashboard | URL | Purpose |
-|-----------|-----|---------|
-| Prefect UI | https://banchelabs-gateway.fly.dev | Flow runs, work pools, logs |
-| Fly.io | https://fly.io/apps/banchelabs-gateway | Machine status, metrics |
-| Modal | https://modal.com/apps | Function invocations, GPU usage |
-| Supabase | Project dashboard | Video status, database state |
+| Dashboard | URL                                              | Purpose |
+|-----------|--------------------------------------------------|---------|
+| Prefect UI | https://banchelabs-gateway.fly.dev/prefect/login | Flow runs, work pools, logs |
+| Fly.io | https://fly.io/apps/banchelabs-gateway           | Machine status, metrics |
+| Modal | https://modal.com/apps                           | Function invocations, GPU usage |
+| Supabase | Project dashboard                                | Video status, database state |
 
 ### Key Metrics
 
@@ -27,10 +27,10 @@ Monitoring, debugging, and recovery procedures for Prefect orchestration.
 
 ```bash
 # Prefect server health
-curl https://banchelabs-gateway.fly.dev/api/health
+curl https://banchelabs-gateway.fly.dev/prefect-internal/prefect/api/health
 
 # Check worker status
-curl https://banchelabs-gateway.fly.dev/api/work_pools/captionacc-workers/workers
+curl https://banchelabs-gateway.fly.dev/prefect-internal/prefect/api/work_pools/captionacc-workers/workers
 
 # Fly.io machine status
 fly status --app banchelabs-gateway
@@ -91,37 +91,6 @@ prefect deployment run "captionacc-video-initial-processing" \
   --param video_id=xxx \
   --param tenant_id=xxx \
   --param storage_key=xxx
-```
-
-### 3. Webhook Not Triggering Flows
-
-**Symptoms**: Videos uploaded but processing never starts.
-
-**Causes**:
-- Fly.io machine sleeping (cold start timeout)
-- Webhook secret mismatch
-- Supabase webhook disabled
-
-**Resolution**:
-
-```bash
-# Check if machine is running
-fly status --app banchelabs-gateway
-
-# Wake machine with health check
-curl https://banchelabs-gateway.fly.dev/api/health
-
-# Verify webhook in Supabase Dashboard
-# Database → Webhooks → videos table
-
-# Check Prefect logs for webhook receipt
-fly logs --app banchelabs-gateway | grep webhook
-
-# Manually trigger if needed
-curl -X POST https://banchelabs-gateway.fly.dev/webhooks/supabase \
-  -H "Authorization: Bearer $WEBHOOK_SECRET" \
-  -H "Content-Type: application/json" \
-  -d '{"type":"INSERT","table":"videos","record":{...}}'
 ```
 
 ### 4. Server Lock Not Released
@@ -190,9 +159,9 @@ When initial processing fails, reprocess from scratch:
 UPDATE videos SET status = 'uploading' WHERE id = 'xxx';
 
 # 2. Clear any partial outputs in Wasabi
-aws s3 rm s3://caption-acc-prod/{tenant}/client/videos/{id}/full_frames/ --recursive
-aws s3 rm s3://caption-acc-prod/{tenant}/server/videos/{id}/ --recursive
-aws s3 rm s3://caption-acc-prod/{tenant}/client/videos/{id}/layout.db.gz
+aws s3 rm s3://captionacc-prod/{tenant}/client/videos/{id}/full_frames/ --recursive
+aws s3 rm s3://captionacc-prod/{tenant}/server/videos/{id}/ --recursive
+aws s3 rm s3://captionacc-prod/{tenant}/client/videos/{id}/layout.db.gz
 
 # 3. Trigger reprocessing
 prefect deployment run "captionacc-video-initial-processing" \
@@ -212,9 +181,9 @@ SET lock_holder_user_id = NULL, lock_type = NULL
 WHERE video_id = 'xxx' AND database_name = 'layout';
 
 # 2. Clear partial outputs
-aws s3 rm s3://caption-acc-prod/{tenant}/client/videos/{id}/cropped_frames_v*/ --recursive
-aws s3 rm s3://caption-acc-prod/{tenant}/server/videos/{id}/caption_frame_extents.db
-aws s3 rm s3://caption-acc-prod/{tenant}/client/videos/{id}/captions.db.gz
+aws s3 rm s3://captionacc-prod/{tenant}/client/videos/{id}/cropped_frames_v*/ --recursive
+aws s3 rm s3://captionacc-prod/{tenant}/server/videos/{id}/caption_frame_extents.db.gz
+aws s3 rm s3://captionacc-prod/{tenant}/client/videos/{id}/captions.db.gz
 
 # 3. Reset status
 UPDATE videos SET caption_status = NULL WHERE id = 'xxx';
@@ -238,7 +207,7 @@ fly volumes create prefect_data --size 1 --region iad
 fly deploy --app banchelabs-gateway
 
 # 4. Verify
-curl https://banchelabs-gateway.fly.dev/api/health
+curl https://banchelabs-gateway.fly.dev/prefect-internal/prefect/api/health
 
 # 5. Check for stuck videos in Supabase and reprocess
 SELECT id, status, caption_status FROM videos
@@ -253,14 +222,14 @@ WHERE status = 'processing' OR caption_status = 'processing';
 
 ```bash
 # 1. Run tests
+cd services/api
 pytest tests/
 
-# 2. Deploy to Fly.io
-cd services/prefect
+# 2. Deploy API service to Fly.io (includes Prefect worker and flow registration)
 fly deploy
 
-# 3. Verify deployment
-curl https://banchelabs-gateway.fly.dev/api/health
+# 3. Verify Prefect server health
+curl https://banchelabs-gateway.fly.dev/prefect-internal/prefect/api/health
 
 # 4. Check worker connected
 # Prefect UI → Work Pools → captionacc-workers
@@ -268,22 +237,34 @@ curl https://banchelabs-gateway.fly.dev/api/health
 
 ### Rolling Back
 
+**API Service (flows and worker):**
+```bash
+# List recent deployments
+fly releases --app captionacc-api
+
+# Rollback to previous version
+fly deploy --app captionacc-api --image registry.fly.io/captionacc-api:v123
+```
+
+**Prefect Server (gateway):**
 ```bash
 # List recent deployments
 fly releases --app banchelabs-gateway
 
 # Rollback to previous version
-fly deploy --image registry.fly.io/banchelabs-gateway:v123
+fly deploy --app banchelabs-gateway --image registry.fly.io/banchelabs-gateway:v123
 ```
 
 ### Updating Flow Definitions
 
-1. Update flow code in `flows/`
-2. Deploy to Fly.io (flows are bundled in image)
-3. Deployments are re-registered on startup
+1. Update flow code in `services/api/app/flows/`
+2. If adding a new flow, add its deployment to `services/api/prefect.yaml`
+3. Deploy the API service: `cd services/api && fly deploy`
+4. Deployments are automatically re-registered via the release command
 
 ```bash
 # Verify deployments after update
+export PREFECT_API_URL=https://banchelabs-gateway.fly.dev/prefect-internal/prefect/api
 prefect deployment ls
 ```
 
@@ -334,32 +315,6 @@ sqlite3 /data/prefect.db "SELECT * FROM flow_run LIMIT 10;"
 
 # Check environment
 env | grep PREFECT
-```
-
-### Test Webhook Locally
-
-```python
-# Send test webhook payload
-import requests
-
-response = requests.post(
-    "https://banchelabs-gateway.fly.dev/webhooks/supabase",
-    headers={
-        "Authorization": "Bearer {webhook_secret}",
-        "Content-Type": "application/json"
-    },
-    json={
-        "type": "INSERT",
-        "table": "videos",
-        "record": {
-            "id": "test-video-id",
-            "tenant_id": "test-tenant-id",
-            "storage_key": "test/videos/test.mp4",
-            "status": "uploading"
-        }
-    }
-)
-print(response.json())
 ```
 
 ---

@@ -29,7 +29,7 @@ export function useWorkflowProgress(videoId: string | null | undefined): UseWork
 
     try {
       const encodedVideoId = encodeURIComponent(videoId)
-      const response = await fetch(`/api/annotations/${encodedVideoId}/progress`)
+      const response = await fetch(`/videos/${encodedVideoId}/progress`)
       const data: WorkflowProgress = await response.json()
 
       setWorkflowProgress(data.progress_percent ?? 0)

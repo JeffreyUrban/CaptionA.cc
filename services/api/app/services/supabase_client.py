@@ -4,13 +4,17 @@ Handles lock acquisition, version tracking, and state management
 for the CR-SQLite sync protocol.
 """
 
+import logging
 from datetime import datetime, timezone
 from functools import lru_cache
 from typing import Any
 
+from postgrest import APIResponse
 from supabase import Client, create_client
 
 from app.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 # Type alias for database state records
 StateDict = dict[str, Any]
@@ -20,6 +24,9 @@ StateDict = dict[str, Any]
 def get_supabase_client() -> Client:
     """Get cached Supabase client for API service."""
     settings = get_settings()
+    logger.info(
+        f"Creating Supabase client: url={settings.supabase_url}, key={settings.supabase_service_role_key[:20]}..."
+    )
     return create_client(
         settings.supabase_url,
         settings.supabase_service_role_key,
@@ -32,7 +39,7 @@ class DatabaseStateRepository:
     Manages lock acquisition, version tracking, and state for CR-SQLite sync.
     """
 
-    def __init__(self, client: Client | None = None):
+    def __init__(self, client: Client | Any | None = None):
         self._client = client or get_supabase_client()
         self._schema = get_settings().supabase_schema
 
@@ -40,7 +47,7 @@ class DatabaseStateRepository:
         """Get the video_database_state table reference."""
         return self._client.schema(self._schema).table("video_database_state")
 
-    def _extract_single(self, response) -> StateDict | None:  # noqa: ANN001
+    def _extract_single(self, response: APIResponse) -> StateDict | None:
         """Extract single record from response."""
         data = response.data
         if data is None:
@@ -49,14 +56,14 @@ class DatabaseStateRepository:
             return data
         return None
 
-    def _extract_first(self, response) -> StateDict:  # noqa: ANN001
+    def _extract_first(self, response: APIResponse) -> StateDict:
         """Extract first record from list response."""
         data = response.data
         if data and isinstance(data, list) and len(data) > 0:
             return data[0]  # type: ignore[return-value]
         return {}
 
-    def _extract_list(self, response) -> list[StateDict]:  # noqa: ANN001
+    def _extract_list(self, response: APIResponse) -> list[StateDict]:
         """Extract list of records from response."""
         data = response.data
         if data and isinstance(data, list):
@@ -73,15 +80,29 @@ class DatabaseStateRepository:
         Returns:
             State dict or None if not found
         """
-        response = (
-            self._table()
-            .select("*")
-            .eq("video_id", video_id)
-            .eq("database_name", db_name)
-            .maybe_single()
-            .execute()
+        logger.info(
+            f"get_state: video_id={video_id}, db_name={db_name}, schema={self._schema}"
         )
-        return self._extract_single(response)
+        try:
+            response = (
+                self._table()
+                .select("*")
+                .eq("video_id", video_id)
+                .eq("database_name", db_name)
+                .limit(1)
+                .execute()
+            )
+            logger.info(f"get_state response: {response}")
+            # Extract first item from list, or None if empty
+            data = response.data
+            if data and isinstance(data, list) and len(data) > 0:
+                first_item = data[0]
+                if isinstance(first_item, dict):
+                    return first_item
+            return None
+        except Exception as e:
+            logger.error(f"get_state error: {e}")
+            raise
 
     async def create_state(
         self,

@@ -14,7 +14,7 @@ def utc_now() -> datetime:
 class FullFrameOcr(SQLModel, table=True):
     """OCR detection results for full frames."""
 
-    __tablename__ = "full_frame_ocr"
+    __tablename__ = "full_frame_ocr"  # pyright: ignore[reportAssignmentType]
 
     id: Optional[int] = Field(default=None, primary_key=True)
     frame_id: int
