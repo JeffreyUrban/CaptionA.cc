@@ -20,6 +20,16 @@ jobs:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
+      - name: Check if app exists
+        working-directory: .
+        run: |
+          if ! flyctl apps list | grep -q "captionacc-web-prod"; then
+            echo "::error::Fly.io app 'captionacc-web-prod' does not exist. Create it with: flyctl apps create captionacc-web-prod"
+            exit 1
+          fi
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
       - name: Configure Fly.io secrets
         run: |
           flyctl secrets set \
@@ -32,7 +42,7 @@ jobs:
             WASABI_BUCKET="${{ secrets.WASABI_BUCKET }}" \
             WASABI_REGION="${{ secrets.WASABI_REGION }}" \
             ENVIRONMENT="production" \
-            --app captionacc-web
+            --app captionacc-web-prod
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
