@@ -191,7 +191,7 @@ def main():
     try:
         checkpoints = list(volume.listdir("/checkpoints"))
         if checkpoints:
-            for cp in sorted(checkpoints):
+            for cp in sorted(checkpoints, key=lambda x: x.path):
                 print(f"   - {cp}")
         else:
             print(f"   - {remote_filename} (just uploaded)")

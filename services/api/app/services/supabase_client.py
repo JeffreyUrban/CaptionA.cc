@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from functools import lru_cache
 from typing import Any
 
+from postgrest import APIResponse
 from supabase import Client, create_client
 
 from app.config import get_settings
@@ -46,7 +47,7 @@ class DatabaseStateRepository:
         """Get the video_database_state table reference."""
         return self._client.schema(self._schema).table("video_database_state")
 
-    def _extract_single(self, response) -> StateDict | None:  # noqa: ANN001
+    def _extract_single(self, response: APIResponse) -> StateDict | None:
         """Extract single record from response."""
         data = response.data
         if data is None:
@@ -55,14 +56,14 @@ class DatabaseStateRepository:
             return data
         return None
 
-    def _extract_first(self, response) -> StateDict:  # noqa: ANN001
+    def _extract_first(self, response: APIResponse) -> StateDict:
         """Extract first record from list response."""
         data = response.data
         if data and isinstance(data, list) and len(data) > 0:
             return data[0]  # type: ignore[return-value]
         return {}
 
-    def _extract_list(self, response) -> list[StateDict]:  # noqa: ANN001
+    def _extract_list(self, response: APIResponse) -> list[StateDict]:
         """Extract list of records from response."""
         data = response.data
         if data and isinstance(data, list):

@@ -7,17 +7,11 @@
     "**/node_modules",
     "**/__pycache__",
     "**/.*",
-    "**/inference/service.py",
-    "**/upload_model_to_modal.py",
-    "**/scripts/**",
     "**/extract-crop-frames-and-infer-extents/**",
     "**/extract-full-frames-and-ocr/**",
-    "**/caption_frame_extents/tests/**",
-    "**/gpu_video_utils/tests/**",
-    "**/services/api/**",
-    "**/packages/ocr/**",
     "**/packages/gpu_video_utils/**",
-    "**/packages/frames_db/tests/**",
-    "**/packages/ocr_box_model/**"
+    "**/packages/ocr/**",
+    "**/packages/ocr_box_model/**",
+    "**/services/api/**"
   ]
 }
