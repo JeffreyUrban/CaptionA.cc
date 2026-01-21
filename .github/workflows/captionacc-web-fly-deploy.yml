@@ -35,7 +35,7 @@ jobs:
         run: |
           flyctl secrets set \
             VITE_SUPABASE_URL="${{ vars.SUPABASE_URL }}" \
-            VITE_SUPABASE_SCHEMA="captionacc_prod" \
+            VITE_SUPABASE_SCHEMA="captionacc" \
             VITE_SUPABASE_ANON_KEY="${{ vars.SUPABASE_ANON_KEY }}" \
             VITE_SUPABASE_SERVICE_ROLE_KEY="${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
             WASABI_ACCESS_KEY_READONLY="${{ secrets.WASABI_ACCESS_KEY_READONLY }}" \
@@ -52,6 +52,6 @@ jobs:
           flyctl deploy --remote-only \
             --build-arg VITE_SUPABASE_URL="${{ vars.SUPABASE_URL }}" \
             --build-arg VITE_SUPABASE_ANON_KEY="${{ vars.SUPABASE_ANON_KEY }}" \
-            --build-arg VITE_SUPABASE_SCHEMA="captionacc_prod"
+            --build-arg VITE_SUPABASE_SCHEMA="captionacc"
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
