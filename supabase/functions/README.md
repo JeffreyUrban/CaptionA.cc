@@ -85,6 +85,10 @@ curl -X POST http://localhost:54321/functions/v1/captionacc-presigned-upload \
 Functions are unified - deploy the same code to each Supabase project (prod/dev).
 Each project has its own secrets configured.
 
+**Important:** Deploy with `--no-verify-jwt` flag. This disables Supabase's gateway-level
+JWT verification and lets the functions handle authentication themselves (via `getUser(token)`).
+This is required because the gateway verification can fail even with valid JWTs in certain scenarios.
+
 **Project References:**
 - Production: `<SUPABASE_PROD_PROJECT_REF>` (e.g., `cuvzwbtarrkngqeqmdaz`)
 - Development: `<SUPABASE_DEV_PROJECT_REF>` (e.g., `okxgkojcukqjzlrqrmox`)
@@ -108,9 +112,9 @@ supabase secrets set WASABI_STS_ACCESS_KEY=<WASABI_STS_ASSUMER_KEY> --project-re
 supabase secrets set WASABI_STS_SECRET_KEY=<WASABI_STS_ASSUMER_SECRET> --project-ref <SUPABASE_PROD_PROJECT_REF>
 supabase secrets set WASABI_STS_ROLE_ARN=arn:aws:iam::<WASABI_ACCOUNT>:role/captionacc-client-read --project-ref <SUPABASE_PROD_PROJECT_REF>
 
-# Deploy functions to prod
-supabase functions deploy captionacc-presigned-upload --project-ref <SUPABASE_PROD_PROJECT_REF>
-supabase functions deploy captionacc-s3-credentials --project-ref <SUPABASE_PROD_PROJECT_REF>
+# Deploy functions to prod (--no-verify-jwt lets functions handle their own auth)
+supabase functions deploy captionacc-presigned-upload --project-ref <SUPABASE_PROD_PROJECT_REF> --no-verify-jwt
+supabase functions deploy captionacc-s3-credentials --project-ref <SUPABASE_PROD_PROJECT_REF> --no-verify-jwt
 
 # ============================================================================
 # DEVELOPMENT DEPLOYMENT
@@ -128,9 +132,9 @@ supabase secrets set WASABI_STS_ACCESS_KEY=<WASABI_STS_ASSUMER_KEY> --project-re
 supabase secrets set WASABI_STS_SECRET_KEY=<WASABI_STS_ASSUMER_SECRET> --project-ref <SUPABASE_DEV_PROJECT_REF>
 supabase secrets set WASABI_STS_ROLE_ARN=arn:aws:iam::<WASABI_ACCOUNT>:role/captionacc-client-read --project-ref <SUPABASE_DEV_PROJECT_REF>
 
-# Deploy functions to dev
-supabase functions deploy captionacc-presigned-upload --project-ref <SUPABASE_DEV_PROJECT_REF>
-supabase functions deploy captionacc-s3-credentials --project-ref <SUPABASE_DEV_PROJECT_REF>
+# Deploy functions to dev (--no-verify-jwt lets functions handle their own auth)
+supabase functions deploy captionacc-presigned-upload --project-ref <SUPABASE_DEV_PROJECT_REF> --no-verify-jwt
+supabase functions deploy captionacc-s3-credentials --project-ref <SUPABASE_DEV_PROJECT_REF> --no-verify-jwt
 ```
 
 ### Wasabi IAM Setup (for s3-credentials)
