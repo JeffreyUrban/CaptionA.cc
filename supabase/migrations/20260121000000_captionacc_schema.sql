@@ -10,6 +10,9 @@
 
 CREATE SCHEMA IF NOT EXISTS captionacc;
 
+-- Grant schema access to Supabase roles
+GRANT USAGE ON SCHEMA captionacc TO anon, authenticated, service_role;
+
 -- ============================================================================
 -- CORE TABLES
 -- ============================================================================
@@ -721,6 +724,33 @@ BEGIN
   RETURN COALESCE((v_features->p_feature)::BOOLEAN, FALSE);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
+
+-- ============================================================================
+-- GRANT TABLE ACCESS TO SUPABASE ROLES
+-- ============================================================================
+
+-- Grant table access (RLS policies control what data is visible)
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA captionacc TO authenticated;
+GRANT SELECT ON ALL TABLES IN SCHEMA captionacc TO anon;
+GRANT ALL ON ALL TABLES IN SCHEMA captionacc TO service_role;
+
+-- Grant sequence access for serial columns
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA captionacc TO authenticated, service_role;
+
+-- Grant function access
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA captionacc TO anon, authenticated, service_role;
+
+-- Default privileges for future tables
+ALTER DEFAULT PRIVILEGES IN SCHEMA captionacc
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO authenticated;
+ALTER DEFAULT PRIVILEGES IN SCHEMA captionacc
+  GRANT SELECT ON TABLES TO anon;
+ALTER DEFAULT PRIVILEGES IN SCHEMA captionacc
+  GRANT ALL ON TABLES TO service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA captionacc
+  GRANT USAGE, SELECT ON SEQUENCES TO authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA captionacc
+  GRANT EXECUTE ON FUNCTIONS TO anon, authenticated, service_role;
 
 -- ============================================================================
 -- SEED DATA
