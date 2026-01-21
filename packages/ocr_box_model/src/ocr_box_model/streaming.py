@@ -25,7 +25,6 @@ from ocr_box_model.types import (
     AdaptiveRecalcResult,
     Annotation,
     BoxWithPrediction,
-    Prediction,
 )
 
 logger = logging.getLogger(__name__)

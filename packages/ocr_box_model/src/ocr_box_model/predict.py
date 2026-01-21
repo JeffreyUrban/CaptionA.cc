@@ -8,7 +8,6 @@ Predicts whether a box is a caption ("in") or noise ("out") based on:
 import logging
 import math
 import sqlite3
-from typing import Literal
 
 from ocr_box_model.config import NUM_FEATURES, PDF_FLOOR
 from ocr_box_model.db import get_box_text_and_timestamp, get_video_duration, load_model

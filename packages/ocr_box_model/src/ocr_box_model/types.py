@@ -3,7 +3,7 @@
 Dataclasses and types used throughout the package.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Literal
 
 

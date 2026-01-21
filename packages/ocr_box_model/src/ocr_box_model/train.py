@@ -17,12 +17,12 @@ from ocr_box_model.db import (
 )
 from ocr_box_model.features import extract_features
 from ocr_box_model.types import (
+    SEED_IN_PARAMS,
+    SEED_OUT_PARAMS,
     BoxBounds,
     ClassSamples,
     GaussianParams,
     ModelParams,
-    SEED_IN_PARAMS,
-    SEED_OUT_PARAMS,
     VideoLayoutConfig,
 )
 
@@ -346,7 +346,7 @@ def train_model(
         if should_calculate_feature_importance(total):
             feature_importance = calculate_feature_importance(in_params, out_params)
             logger.info(
-                f"Calculated feature importance (top 5): "
+                "Calculated feature importance (top 5): "
                 + ", ".join(
                     f"{f.feature_name}={f.fisher_score:.2f}"
                     for f in sorted(feature_importance, key=lambda x: -x.fisher_score)[:5]

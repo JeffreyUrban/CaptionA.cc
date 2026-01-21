@@ -12,7 +12,6 @@ Feature categories:
 """
 
 import sqlite3
-from typing import Callable
 
 from ocr_box_model.charset import detect_character_sets
 from ocr_box_model.config import NUM_FEATURES

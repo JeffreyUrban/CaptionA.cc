@@ -6,9 +6,7 @@ Handles model loading/saving, schema migrations, and coordinate conversions.
 import json
 import logging
 import sqlite3
-from typing import Any
 
-from ocr_box_model.config import NUM_FEATURES
 from ocr_box_model.types import (
     BoxBounds,
     FeatureImportanceMetrics,
