@@ -217,10 +217,7 @@ class TestFeatureExtraction:
 
     def test_normalized_features_in_range(self):
         """Test that normalized features are in [0,1] range."""
-        box = BoxBounds(
-            left=100, top=800, right=200, bottom=850,
-            frame_index=0, box_index=0, text="Test"
-        )
+        box = BoxBounds(left=100, top=800, right=200, bottom=850, frame_index=0, box_index=0, text="Test")
         features = extract_features(
             box=box,
             frame_width=1920,

@@ -26,7 +26,9 @@ async def test_flow_run():
                 print(f"  - {dep.name} (flow: {dep.flow_name})")
 
             if not deployments:
-                print("\n! No deployments found. Flows need to be deployed before they can be run by workers.")
+                print(
+                    "\n! No deployments found. Flows need to be deployed before they can be run by workers."
+                )
                 print("  Run: prefect deploy to create deployments")
 
             return True
@@ -34,6 +36,7 @@ async def test_flow_run():
         except Exception as e:
             print(f"✗ Error: {e}")
             import traceback
+
             traceback.print_exc()
             return False
 

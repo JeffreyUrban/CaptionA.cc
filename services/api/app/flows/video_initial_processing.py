@@ -52,7 +52,9 @@ def update_workflow_status_task(
     if text_status:
         status_updates.append(f"text_status={text_status}")
 
-    logger.info(f"Updating video {video_id} workflow status: {', '.join(status_updates)}")
+    logger.info(
+        f"Updating video {video_id} workflow status: {', '.join(status_updates)}"
+    )
     supabase.update_video_workflow_status(
         video_id=video_id,
         layout_status=layout_status,
@@ -77,7 +79,9 @@ def extract_full_frames_and_ocr_task(
     logger.info(f"Starting frame extraction for video {video_id} at {frame_rate} fps")
 
     # Look up the deployed Modal function
-    modal_app_name = f"captionacc-extract-full-frames-and-ocr-{settings.modal_app_suffix}"
+    modal_app_name = (
+        f"captionacc-extract-full-frames-and-ocr-{settings.modal_app_suffix}"
+    )
     logger.info(f"Looking up Modal function: {modal_app_name}")
     extract_fn = modal.Function.from_name(modal_app_name, "extract_full_frames_and_ocr")
 
@@ -203,8 +207,10 @@ def analyze_layout_config_task(
             bottom_mode = mode(all_bottoms)
             tolerance = 5
             typical_boxes = [
-                box for box in pixel_boxes
-                if abs(box[1] - top_mode) <= tolerance and abs(box[3] - bottom_mode) <= tolerance
+                box
+                for box in pixel_boxes
+                if abs(box[1] - top_mode) <= tolerance
+                and abs(box[3] - bottom_mode) <= tolerance
             ]
             if not typical_boxes:
                 typical_boxes = pixel_boxes
@@ -267,7 +273,15 @@ def analyze_layout_config_task(
                 updated_at = datetime('now')
             WHERE id = 1
             """,
-            (crop_left, crop_top, crop_right, crop_bottom, anchor_type, anchor_position, vertical_center),
+            (
+                crop_left,
+                crop_top,
+                crop_right,
+                crop_bottom,
+                anchor_type,
+                anchor_position,
+                vertical_center,
+            ),
         )
         conn.commit()
         conn.close()
@@ -300,12 +314,14 @@ def update_video_metadata_task(
     )
 
     # Update total_frames in videos table (for progress tracking)
-    supabase.client.schema(supabase.schema).table("videos").update({
-        "total_frames": frame_count,
-        "duration_seconds": duration,
-        "width": width,
-        "height": height,
-    }).eq("id", video_id).execute()
+    supabase.client.schema(supabase.schema).table("videos").update(
+        {
+            "total_frames": frame_count,
+            "duration_seconds": duration,
+            "width": width,
+            "height": height,
+        }
+    ).eq("id", video_id).execute()
 
 
 @flow(name="captionacc-video-initial-processing", log_prints=True)

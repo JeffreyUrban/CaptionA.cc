@@ -34,7 +34,9 @@ async def check_worker_status():
 
             # Check workers
             try:
-                workers = await client.read_workers_for_work_pool(work_pool_name=work_pool_name)
+                workers = await client.read_workers_for_work_pool(
+                    work_pool_name=work_pool_name
+                )
                 print(f"Workers: {len(workers)} found")
                 for worker in workers:
                     print(f"  - {worker.name}")

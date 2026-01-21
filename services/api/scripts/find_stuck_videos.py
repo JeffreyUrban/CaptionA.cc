@@ -116,9 +116,7 @@ def main():
         print(json.dumps(stuck_videos, indent=2))
     else:
         # Print table
-        print(
-            f"{'ID':<38} {'Display Path':<40} {'Status':<12} {'Age':<15}"
-        )
+        print(f"{'ID':<38} {'Display Path':<40} {'Status':<12} {'Age':<15}")
         print("-" * 110)
 
         for video in stuck_videos:

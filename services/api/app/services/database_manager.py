@@ -82,10 +82,14 @@ class DatabaseManager:
 
         def _download():
             try:
-                logger.info(f"Attempting to download from S3: bucket={self._bucket}, key={s3_key}")
+                logger.info(
+                    f"Attempting to download from S3: bucket={self._bucket}, key={s3_key}"
+                )
                 # Check if we need to download a compressed version
                 is_compressed = s3_key.endswith(".gz")
-                download_path = local_path if not is_compressed else Path(str(local_path) + ".gz")
+                download_path = (
+                    local_path if not is_compressed else Path(str(local_path) + ".gz")
+                )
 
                 self._s3.download_file(self._bucket, s3_key, str(download_path))
 
@@ -126,7 +130,7 @@ class DatabaseManager:
                     str(compressed_path),
                     self._bucket,
                     s3_key_gz,
-                    ExtraArgs={"ContentType": "application/gzip"}
+                    ExtraArgs={"ContentType": "application/gzip"},
                 )
             finally:
                 # Clean up temporary compressed file
@@ -324,7 +328,9 @@ class DatabaseManager:
 class LayoutDatabaseManager(DatabaseManager):
     """Manages layout.db SQLite databases stored in Wasabi S3."""
 
-    def _s3_key(self, tenant_id: str, video_id: str, db_name: str = "layout.db.gz") -> str:
+    def _s3_key(
+        self, tenant_id: str, video_id: str, db_name: str = "layout.db.gz"
+    ) -> str:
         """Generate S3 key for a layout database file in client/ path."""
         return f"{tenant_id}/client/videos/{video_id}/{db_name}"
 

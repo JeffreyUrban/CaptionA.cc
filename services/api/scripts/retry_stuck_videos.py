@@ -190,9 +190,7 @@ def retry_all_stuck_videos(age_minutes: int = 10, dry_run: bool = False) -> dict
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Retry processing for stuck videos"
-    )
+    parser = argparse.ArgumentParser(description="Retry processing for stuck videos")
     parser.add_argument(
         "--video-id",
         type=str,
@@ -220,9 +218,7 @@ def main():
     # Bulk retry
     print(f"Searching for stuck videos (age > {args.age_minutes} minutes)...\n")
 
-    results = retry_all_stuck_videos(
-        age_minutes=args.age_minutes, dry_run=args.dry_run
-    )
+    results = retry_all_stuck_videos(age_minutes=args.age_minutes, dry_run=args.dry_run)
 
     # Print summary
     print("=" * 60)

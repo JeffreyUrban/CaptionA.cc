@@ -53,7 +53,9 @@ class WasabiClient:
                 "Wasabi credentials required. Set WASABI_ACCESS_KEY_READWRITE and WASABI_SECRET_KEY_READWRITE"
             )
         if not self.bucket_name:
-            raise ValueError("Wasabi bucket required. Set WASABI_BUCKET environment variable")
+            raise ValueError(
+                "Wasabi bucket required. Set WASABI_BUCKET environment variable"
+            )
 
         self.s3_client = boto3.client(
             "s3",

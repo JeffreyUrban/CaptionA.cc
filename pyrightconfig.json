@@ -17,6 +17,7 @@
     "**/services/api/**",
     "**/packages/ocr/**",
     "**/packages/gpu_video_utils/**",
-    "**/packages/frames_db/tests/**"
+    "**/packages/frames_db/tests/**",
+    "**/packages/ocr_box_model/**"
   ]
 }

@@ -39,9 +39,7 @@ def calculate_feature_importance(
         List of feature importance metrics, one per feature
     """
     if len(in_features) != NUM_FEATURES or len(out_features) != NUM_FEATURES:
-        raise ValueError(
-            f"Expected {NUM_FEATURES} features, got in={len(in_features)}, out={len(out_features)}"
-        )
+        raise ValueError(f"Expected {NUM_FEATURES} features, got in={len(in_features)}, out={len(out_features)}")
 
     importance: list[FeatureImportanceMetrics] = []
 
@@ -328,10 +326,7 @@ def compute_mahalanobis_distance(
         raise ValueError(f"Expected {NUM_FEATURES} features, got x={len(x)}, y={len(y)}")
 
     if len(covariance_inverse) != NUM_FEATURES * NUM_FEATURES:
-        raise ValueError(
-            f"Expected {NUM_FEATURES * NUM_FEATURES} covariance values, "
-            f"got {len(covariance_inverse)}"
-        )
+        raise ValueError(f"Expected {NUM_FEATURES * NUM_FEATURES} covariance values, got {len(covariance_inverse)}")
 
     # Compute difference vector
     diff = [x[i] - y[i] for i in range(NUM_FEATURES)]

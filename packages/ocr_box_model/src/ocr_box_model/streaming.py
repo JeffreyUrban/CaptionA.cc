@@ -117,9 +117,7 @@ def identify_affected_boxes(
     # Compute change probability for all boxes
     boxes_with_prob: list[tuple[BoxWithPrediction, float]] = []
     for box in all_boxes:
-        change_prob = estimate_prediction_change_prob(
-            box, new_annotation, covariance_inverse
-        )
+        change_prob = estimate_prediction_change_prob(box, new_annotation, covariance_inverse)
         if change_prob >= MIN_CHANGE_PROBABILITY:
             boxes_with_prob.append((box, change_prob))
 
@@ -179,17 +177,13 @@ async def adaptive_recalculation(
         total_processed += len(batch)
 
         # Check if we can stop early
-        if (
-            len(reversal_window) >= MIN_BOXES_BEFORE_CHECK
-            and len(reversal_window) >= REVERSAL_WINDOW_SIZE
-        ):
+        if len(reversal_window) >= MIN_BOXES_BEFORE_CHECK and len(reversal_window) >= REVERSAL_WINDOW_SIZE:
             rolling_reversal_rate = total_reversals / len(reversal_window)
 
             if rolling_reversal_rate < TARGET_REVERSAL_RATE:
                 final_rate = total_reversals / len(reversal_window)
                 logger.info(
-                    f"Stopping early: reversal rate {rolling_reversal_rate:.3f} "
-                    f"below target {TARGET_REVERSAL_RATE}"
+                    f"Stopping early: reversal rate {rolling_reversal_rate:.3f} below target {TARGET_REVERSAL_RATE}"
                 )
 
                 return AdaptiveRecalcResult(
@@ -207,9 +201,7 @@ async def adaptive_recalculation(
     hit_max_boxes = total_processed >= MAX_BOXES_PER_UPDATE
 
     final_rate = (
-        total_reversals / len(reversal_window)
-        if reversal_window
-        else total_reversals / max(1, total_processed)
+        total_reversals / len(reversal_window) if reversal_window else total_reversals / max(1, total_processed)
     )
 
     return AdaptiveRecalcResult(
@@ -263,17 +255,13 @@ def adaptive_recalculation_sync(
         total_processed += len(batch)
 
         # Check if we can stop early
-        if (
-            len(reversal_window) >= MIN_BOXES_BEFORE_CHECK
-            and len(reversal_window) >= REVERSAL_WINDOW_SIZE
-        ):
+        if len(reversal_window) >= MIN_BOXES_BEFORE_CHECK and len(reversal_window) >= REVERSAL_WINDOW_SIZE:
             rolling_reversal_rate = total_reversals / len(reversal_window)
 
             if rolling_reversal_rate < TARGET_REVERSAL_RATE:
                 final_rate = total_reversals / len(reversal_window)
                 logger.info(
-                    f"Stopping early: reversal rate {rolling_reversal_rate:.3f} "
-                    f"below target {TARGET_REVERSAL_RATE}"
+                    f"Stopping early: reversal rate {rolling_reversal_rate:.3f} below target {TARGET_REVERSAL_RATE}"
                 )
 
                 return AdaptiveRecalcResult(
@@ -288,9 +276,7 @@ def adaptive_recalculation_sync(
     hit_max_boxes = total_processed >= MAX_BOXES_PER_UPDATE
 
     final_rate = (
-        total_reversals / len(reversal_window)
-        if reversal_window
-        else total_reversals / max(1, total_processed)
+        total_reversals / len(reversal_window) if reversal_window else total_reversals / max(1, total_processed)
     )
 
     return AdaptiveRecalcResult(

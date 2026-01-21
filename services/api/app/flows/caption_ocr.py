@@ -33,12 +33,8 @@ def _initialize_services() -> tuple[WasabiServiceImpl, CaptionServiceImpl]:
         Tuple of (wasabi_service, caption_service)
     """
     # Load environment variables
-    wasabi_access_key = os.getenv(
-        "WASABI_ACCESS_KEY_READWRITE"
-    )
-    wasabi_secret_key = os.getenv(
-        "WASABI_SECRET_KEY_READWRITE"
-    )
+    wasabi_access_key = os.getenv("WASABI_ACCESS_KEY_READWRITE")
+    wasabi_secret_key = os.getenv("WASABI_SECRET_KEY_READWRITE")
     wasabi_bucket = os.getenv("WASABI_BUCKET")
     if not wasabi_bucket:
         raise ValueError("WASABI_BUCKET environment variable not set")

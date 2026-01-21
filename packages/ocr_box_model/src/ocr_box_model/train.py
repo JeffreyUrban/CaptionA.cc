@@ -234,22 +234,14 @@ def calculate_gaussian_params(
         # Calculate in-class parameters
         in_values = [f[i] for f in in_features]
         in_mean = sum(in_values) / len(in_values) if in_values else 0.0
-        in_variance = (
-            sum((v - in_mean) ** 2 for v in in_values) / len(in_values)
-            if in_values
-            else 0.0
-        )
+        in_variance = sum((v - in_mean) ** 2 for v in in_values) / len(in_values) if in_values else 0.0
         in_std = max((in_variance**0.5), MIN_STD)
         in_params.append(GaussianParams(mean=in_mean, std=in_std))
 
         # Calculate out-class parameters
         out_values = [f[i] for f in out_features]
         out_mean = sum(out_values) / len(out_values) if out_values else 0.0
-        out_variance = (
-            sum((v - out_mean) ** 2 for v in out_values) / len(out_values)
-            if out_values
-            else 0.0
-        )
+        out_variance = sum((v - out_mean) ** 2 for v in out_values) / len(out_values) if out_values else 0.0
         out_std = max((out_variance**0.5), MIN_STD)
         out_params.append(GaussianParams(mean=out_mean, std=out_std))
 
@@ -287,16 +279,11 @@ def train_model(
     annotations = fetch_user_annotations(layout_conn)
 
     if len(annotations) < MIN_ANNOTATIONS_FOR_RETRAIN:
-        logger.info(
-            f"Insufficient training data: {len(annotations)} samples "
-            f"(need {MIN_ANNOTATIONS_FOR_RETRAIN}+)"
-        )
+        logger.info(f"Insufficient training data: {len(annotations)} samples (need {MIN_ANNOTATIONS_FOR_RETRAIN}+)")
 
         # Check if we need to reset to seed model
         cursor = model_conn.cursor()
-        result = cursor.execute(
-            "SELECT n_training_samples FROM box_classification_model WHERE id = 1"
-        ).fetchone()
+        result = cursor.execute("SELECT n_training_samples FROM box_classification_model WHERE id = 1").fetchone()
 
         if result and result[0] >= MIN_ANNOTATIONS_FOR_RETRAIN:
             logger.info("Resetting to seed model (annotations cleared)")
@@ -311,15 +298,11 @@ def train_model(
     duration_seconds = get_video_duration(layout_conn)
 
     # Extract features
-    in_features, out_features = extract_all_features(
-        layout_conn, annotations, layout, duration_seconds
-    )
+    in_features, out_features = extract_all_features(layout_conn, annotations, layout, duration_seconds)
 
     # Need at least 2 samples per class
     if len(in_features) < 2 or len(out_features) < 2:
-        logger.info(
-            f"Insufficient samples per class: in={len(in_features)}, out={len(out_features)}"
-        )
+        logger.info(f"Insufficient samples per class: in={len(in_features)}, out={len(out_features)}")
         return None
 
     # Calculate Gaussian parameters
@@ -396,9 +379,7 @@ def initialize_seed_model(conn: sqlite3.Connection) -> None:
 
     # Check if model exists
     cursor = conn.cursor()
-    result = cursor.execute(
-        "SELECT id FROM box_classification_model WHERE id = 1"
-    ).fetchone()
+    result = cursor.execute("SELECT id FROM box_classification_model WHERE id = 1").fetchone()
 
     if result:
         logger.info("Model already exists, skipping seed initialization")
@@ -439,9 +420,7 @@ def get_training_samples(
         return None
 
     duration_seconds = get_video_duration(layout_conn)
-    in_features, out_features = extract_all_features(
-        layout_conn, annotations, layout, duration_seconds
-    )
+    in_features, out_features = extract_all_features(layout_conn, annotations, layout, duration_seconds)
 
     if len(in_features) < 2 or len(out_features) < 2:
         return None

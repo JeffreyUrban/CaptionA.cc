@@ -248,7 +248,9 @@ async def process_new_videos(age_minutes: int = 0) -> dict[str, Any]:
     """
     logger = get_run_logger()
 
-    logger.info(f"Starting process new videos flow (age threshold: {age_minutes} minutes)")
+    logger.info(
+        f"Starting process new videos flow (age threshold: {age_minutes} minutes)"
+    )
 
     # Find videos to process
     new_videos = await find_new_videos(age_minutes=age_minutes)

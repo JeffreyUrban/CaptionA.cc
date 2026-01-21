@@ -178,12 +178,15 @@ def extract_frames_and_ocr_impl(
 
         # Upload function to run in background
         upload_error = None
+
         def upload_frames_background():
             nonlocal upload_error
             try:
                 upload_start = time.time()
                 frames_prefix = f"{tenant_id}/client/videos/{video_id}/full_frames"
-                thumbnails_prefix = f"{tenant_id}/client/videos/{video_id}/full_frames_thumbnails"
+                thumbnails_prefix = (
+                    f"{tenant_id}/client/videos/{video_id}/full_frames_thumbnails"
+                )
 
                 for frame_num, jpeg_bytes in enumerate(jpeg_frames):
                     # Calculate frame index (matching pipeline logic)
@@ -209,11 +212,15 @@ def extract_frames_and_ocr_impl(
                     target_height = int(target_width * aspect_ratio)
 
                     # Resize with high-quality Lanczos filter
-                    thumbnail = img.resize((target_width, target_height), Image.Resampling.LANCZOS)
+                    thumbnail = img.resize(
+                        (target_width, target_height), Image.Resampling.LANCZOS
+                    )
 
                     # Save thumbnail to bytes
                     thumbnail_buffer = io.BytesIO()
-                    thumbnail.save(thumbnail_buffer, format='JPEG', quality=85, optimize=True)
+                    thumbnail.save(
+                        thumbnail_buffer, format="JPEG", quality=85, optimize=True
+                    )
                     thumbnail_bytes = thumbnail_buffer.getvalue()
 
                     # Upload thumbnail
@@ -226,9 +233,13 @@ def extract_frames_and_ocr_impl(
                     )
 
                     if (frame_num + 1) % 10 == 0 or frame_num == len(jpeg_frames) - 1:
-                        print(f"  [Background] Uploaded {frame_num + 1}/{len(jpeg_frames)} frames + thumbnails...")
+                        print(
+                            f"  [Background] Uploaded {frame_num + 1}/{len(jpeg_frames)} frames + thumbnails..."
+                        )
 
-                print(f"  [Background] All frames and thumbnails uploaded in {time.time() - upload_start:.2f}s")
+                print(
+                    f"  [Background] All frames and thumbnails uploaded in {time.time() - upload_start:.2f}s"
+                )
             except Exception as e:
                 upload_error = e
                 print(f"  [Background] Frame upload ERROR: {e}")
@@ -261,7 +272,9 @@ def extract_frames_and_ocr_impl(
 
         # Get frame count from OCR database
         ocr_conn_temp = sqlite3.connect(str(db_path))
-        cursor = ocr_conn_temp.execute("SELECT COUNT(DISTINCT frame_index) FROM full_frame_ocr")
+        cursor = ocr_conn_temp.execute(
+            "SELECT COUNT(DISTINCT frame_index) FROM full_frame_ocr"
+        )
         frame_count = cursor.fetchone()[0]
         ocr_conn_temp.close()
 
@@ -321,7 +334,15 @@ def extract_frames_and_ocr_impl(
                     INSERT INTO boxes (frame_index, box_index, bbox_left, bbox_top, bbox_right, bbox_bottom, text)
                     VALUES (?, ?, ?, ?, ?, ?, ?)
                     """,
-                    (frame_index, box_index, bbox_left, bbox_top, bbox_right, bbox_bottom, text),
+                    (
+                        frame_index,
+                        box_index,
+                        bbox_left,
+                        bbox_top,
+                        bbox_right,
+                        bbox_bottom,
+                        text,
+                    ),
                 )
 
             ocr_conn.close()
@@ -377,7 +398,9 @@ def extract_frames_and_ocr_impl(
                 )
                 """
             )
-            layout_conn.execute("INSERT INTO preferences (id, layout_approved) VALUES (1, 0)")
+            layout_conn.execute(
+                "INSERT INTO preferences (id, layout_approved) VALUES (1, 0)"
+            )
 
             layout_conn.commit()
         finally:
@@ -391,6 +414,7 @@ def extract_frames_and_ocr_impl(
 
         # Compress the database
         import gzip
+
         ocr_db_gz_path = tmp_path / "raw-ocr.db.gz"
         with open(db_path, "rb") as f_in:
             with gzip.open(ocr_db_gz_path, "wb") as f_out:
@@ -399,7 +423,9 @@ def extract_frames_and_ocr_impl(
         ocr_original_size = db_path.stat().st_size
         ocr_compressed_size = ocr_db_gz_path.stat().st_size
         ocr_ratio = (1 - ocr_compressed_size / ocr_original_size) * 100
-        print(f"  Compressed {ocr_original_size:,} -> {ocr_compressed_size:,} bytes ({ocr_ratio:.1f}% reduction)")
+        print(
+            f"  Compressed {ocr_original_size:,} -> {ocr_compressed_size:,} bytes ({ocr_ratio:.1f}% reduction)"
+        )
 
         ocr_db_storage_key = f"{tenant_id}/server/videos/{video_id}/raw-ocr.db.gz"
         wasabi_client.upload_file(
@@ -417,6 +443,7 @@ def extract_frames_and_ocr_impl(
 
         # Compress the database
         import gzip
+
         layout_db_gz_path = tmp_path / "layout.db.gz"
         with open(layout_db_path, "rb") as f_in:
             with gzip.open(layout_db_gz_path, "wb") as f_out:
@@ -425,7 +452,9 @@ def extract_frames_and_ocr_impl(
         original_size = layout_db_path.stat().st_size
         compressed_size = layout_db_gz_path.stat().st_size
         ratio = (1 - compressed_size / original_size) * 100
-        print(f"  Compressed {original_size:,} -> {compressed_size:,} bytes ({ratio:.1f}% reduction)")
+        print(
+            f"  Compressed {original_size:,} -> {compressed_size:,} bytes ({ratio:.1f}% reduction)"
+        )
 
         layout_db_storage_key = f"{tenant_id}/client/videos/{video_id}/layout.db.gz"
         wasabi_client.upload_file(

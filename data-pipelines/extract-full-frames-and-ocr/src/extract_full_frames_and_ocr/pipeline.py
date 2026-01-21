@@ -109,6 +109,7 @@ def process_video_with_gpu_and_ocr(
     # Step 3: Initialize Google Vision backend
     print("\n[OCR] Initializing Google Vision backend...")
     import os
+
     google_env_vars = {k: "SET" for k in os.environ if "GOOGLE" in k or "SERVICE" in k}
     print(f"[DEBUG] Google/Service env vars: {google_env_vars}")
     backend = GoogleVisionBackend()

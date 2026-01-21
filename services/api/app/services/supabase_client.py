@@ -23,7 +23,9 @@ StateDict = dict[str, Any]
 def get_supabase_client() -> Client:
     """Get cached Supabase client for API service."""
     settings = get_settings()
-    logger.info(f"Creating Supabase client: url={settings.supabase_url}, key={settings.supabase_service_role_key[:20]}...")
+    logger.info(
+        f"Creating Supabase client: url={settings.supabase_url}, key={settings.supabase_service_role_key[:20]}..."
+    )
     return create_client(
         settings.supabase_url,
         settings.supabase_service_role_key,
@@ -77,7 +79,9 @@ class DatabaseStateRepository:
         Returns:
             State dict or None if not found
         """
-        logger.info(f"get_state: video_id={video_id}, db_name={db_name}, schema={self._schema}")
+        logger.info(
+            f"get_state: video_id={video_id}, db_name={db_name}, schema={self._schema}"
+        )
         try:
             response = (
                 self._table()

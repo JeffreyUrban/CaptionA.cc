@@ -662,4 +662,3 @@ class TestTenantIsolation:
                 assert response.status_code == 404
 
         app.dependency_overrides.clear()
-

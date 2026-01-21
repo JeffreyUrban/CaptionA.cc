@@ -49,7 +49,9 @@ class PrefectWorkerManager:
             )
             return
 
-        logger.info(f"Starting Prefect worker for work pool '{settings.effective_work_pool}'")
+        logger.info(
+            f"Starting Prefect worker for work pool '{settings.effective_work_pool}'"
+        )
         logger.info(f"Connecting to Prefect server: {settings.prefect_api_url}")
 
         try:
@@ -57,10 +59,15 @@ class PrefectWorkerManager:
             async with get_client() as client:
                 # Check server health (using direct HTTP request due to client.api_healthcheck() returning None)
                 import httpx
+
                 async with httpx.AsyncClient() as http_client:
-                    response = await http_client.get(f"{settings.prefect_api_url.rstrip('/api')}/api/health")
+                    response = await http_client.get(
+                        f"{settings.prefect_api_url.rstrip('/api')}/api/health"
+                    )
                     if response.status_code != 200 or not response.json():
-                        raise Exception(f"Prefect server health check failed: {response.status_code}")
+                        raise Exception(
+                            f"Prefect server health check failed: {response.status_code}"
+                        )
                 logger.info("Successfully connected to Prefect server")
 
                 # Ensure work pool exists (optional - worker will create if needed)
@@ -68,7 +75,9 @@ class PrefectWorkerManager:
                     await client.read_work_pool(settings.effective_work_pool)
                     logger.info(f"Work pool '{settings.effective_work_pool}' exists")
                 except Exception as e:
-                    logger.info(f"Work pool '{settings.effective_work_pool}' not found ({e}), worker will create it")
+                    logger.info(
+                        f"Work pool '{settings.effective_work_pool}' not found ({e}), worker will create it"
+                    )
         except Exception as e:
             logger.error(f"Failed to connect to Prefect server: {e}")
             raise Exception(

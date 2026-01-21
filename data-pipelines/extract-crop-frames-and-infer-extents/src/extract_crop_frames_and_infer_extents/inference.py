@@ -459,6 +459,7 @@ def crop_and_infer_caption_frame_extents_impl(
 
         # Compress and upload caption frame extents database
         import gzip
+
         db_gz_path = tmp_path / f"{db_filename}.gz"
         with open(db_path, "rb") as f_in:
             with gzip.open(db_gz_path, "wb") as f_out:

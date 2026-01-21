@@ -40,7 +40,10 @@ class RealtimeSubscriber:
         if self._running:
             return
 
-        if not self._settings.supabase_url or not self._settings.supabase_service_role_key:
+        if (
+            not self._settings.supabase_url
+            or not self._settings.supabase_service_role_key
+        ):
             logger.warning(
                 "Supabase credentials not configured, skipping Realtime subscription"
             )
@@ -95,7 +98,9 @@ class RealtimeSubscriber:
             f"Subscribed to {self._settings.supabase_schema}.videos INSERT events"
         )
 
-    def _handle_subscription_status(self, status: str, err: Exception | None = None) -> None:
+    def _handle_subscription_status(
+        self, status: str, err: Exception | None = None
+    ) -> None:
         """Handle subscription status changes."""
         if err:
             logger.error(f"Realtime subscription error: {err}")
@@ -118,7 +123,9 @@ class RealtimeSubscriber:
             video_id = record.get("id", "unknown")
             display_path = record.get("display_path", video_id)
 
-            logger.info(f"Realtime: Video INSERT detected - {display_path} ({video_id})")
+            logger.info(
+                f"Realtime: Video INSERT detected - {display_path} ({video_id})"
+            )
 
             # Trigger processing asynchronously
             asyncio.create_task(self._trigger_processing())

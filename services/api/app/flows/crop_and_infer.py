@@ -139,7 +139,9 @@ async def call_modal_crop_and_infer(
     settings = get_settings()
 
     # Lookup the deployed Modal function
-    modal_app_name = f"captionacc-extract-crop-frames-and-infer-extents-{settings.modal_app_suffix}"
+    modal_app_name = (
+        f"captionacc-extract-crop-frames-and-infer-extents-{settings.modal_app_suffix}"
+    )
     print(f"[Modal] Looking up function: {modal_app_name}")
     crop_infer_fn = modal.Function.from_name(
         modal_app_name, "extract_crop_frames_and_infer_extents"

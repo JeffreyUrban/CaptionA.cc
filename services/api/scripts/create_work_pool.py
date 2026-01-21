@@ -23,7 +23,9 @@ async def create_work_pool():
             # Try to read existing pool
             try:
                 pool = await client.read_work_pool(work_pool_name)
-                print(f"✓ Work pool '{work_pool_name}' already exists (UUID: {pool.id})")
+                print(
+                    f"✓ Work pool '{work_pool_name}' already exists (UUID: {pool.id})"
+                )
                 return True
             except Exception:
                 pass  # Pool doesn't exist, create it
@@ -39,7 +41,9 @@ async def create_work_pool():
             )
             response.raise_for_status()
             pool_data = response.json()
-            print(f"✓ Created work pool '{work_pool_name}' (UUID: {pool_data.get('id')})")
+            print(
+                f"✓ Created work pool '{work_pool_name}' (UUID: {pool_data.get('id')})"
+            )
             return True
 
         except Exception as e:

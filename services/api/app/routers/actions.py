@@ -180,9 +180,7 @@ async def analyze_layout(video_id: str, auth: Auth):
             frame_width, frame_height = config_row
 
             # Count total boxes for response
-            boxes_count = cursor.execute(
-                "SELECT COUNT(*) FROM boxes"
-            ).fetchone()[0]
+            boxes_count = cursor.execute("SELECT COUNT(*) FROM boxes").fetchone()[0]
 
             logger.info(
                 f"Running Bayesian analysis on {boxes_count} boxes "
@@ -311,7 +309,15 @@ async def calculate_predictions(video_id: str, auth: Auth):
                 now = datetime.now(timezone.utc).isoformat()
 
                 for row in rows:
-                    frame_index, box_index, text, bbox_left, bbox_top, bbox_right, bbox_bottom = row
+                    (
+                        frame_index,
+                        box_index,
+                        text,
+                        bbox_left,
+                        bbox_top,
+                        bbox_right,
+                        bbox_bottom,
+                    ) = row
 
                     # Convert fractional coordinates to pixels
                     # boxes table stores normalized coords (0-1) with top > bottom (top of screen is higher y)
@@ -481,7 +487,9 @@ async def approve_layout(video_id: str, body: TriggerProcessingRequest, auth: Au
     tags.extend(["trigger:user-action", "action:approve-layout"])
 
     # Build deployment path for crop and infer flow (uses namespace from config)
-    deployment_path = settings.get_deployment_full_name("crop-and-infer-caption-frame-extents")
+    deployment_path = settings.get_deployment_full_name(
+        "crop-and-infer-caption-frame-extents"
+    )
 
     # Prepare flow parameters
     parameters = {
@@ -491,7 +499,9 @@ async def approve_layout(video_id: str, body: TriggerProcessingRequest, auth: Au
     }
 
     # Build Prefect API URL
-    url = f"{settings.prefect_api_url}/deployments/name/{deployment_path}/create_flow_run"
+    url = (
+        f"{settings.prefect_api_url}/deployments/name/{deployment_path}/create_flow_run"
+    )
 
     # Prepare request payload
     payload = {

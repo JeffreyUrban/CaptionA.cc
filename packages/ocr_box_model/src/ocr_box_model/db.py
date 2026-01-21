@@ -49,9 +49,7 @@ def migrate_model_schema(conn: sqlite3.Connection) -> None:
             cursor.execute(f"SELECT {col_name} FROM box_classification_model WHERE id = 1")
         except sqlite3.OperationalError:
             try:
-                cursor.execute(
-                    f"ALTER TABLE box_classification_model ADD COLUMN {col_name} {col_type}"
-                )
+                cursor.execute(f"ALTER TABLE box_classification_model ADD COLUMN {col_name} {col_type}")
             except sqlite3.OperationalError:
                 pass  # Column might already exist
 
@@ -69,9 +67,7 @@ def migrate_model_schema(conn: sqlite3.Connection) -> None:
             for suffix in ["_mean", "_std"]:
                 col = f"{prefix}{feature}{suffix}"
                 try:
-                    cursor.execute(
-                        f"ALTER TABLE box_classification_model ADD COLUMN {col} REAL"
-                    )
+                    cursor.execute(f"ALTER TABLE box_classification_model ADD COLUMN {col} REAL")
                 except sqlite3.OperationalError:
                     pass  # Column already exists
 
@@ -80,9 +76,7 @@ def migrate_model_schema(conn: sqlite3.Connection) -> None:
 
     # Check if 26-feature schema exists (edge positions)
     try:
-        cursor.execute(
-            "SELECT in_normalized_left_mean FROM box_classification_model WHERE id = 1"
-        )
+        cursor.execute("SELECT in_normalized_left_mean FROM box_classification_model WHERE id = 1")
         return  # Schema already migrated
     except sqlite3.OperationalError:
         pass  # Need to migrate
@@ -92,9 +86,7 @@ def migrate_model_schema(conn: sqlite3.Connection) -> None:
     try:
         # Check if user annotation columns exist (features 8-9)
         try:
-            cursor.execute(
-                "SELECT in_user_annotated_in_mean FROM box_classification_model WHERE id = 1"
-            )
+            cursor.execute("SELECT in_user_annotated_in_mean FROM box_classification_model WHERE id = 1")
         except sqlite3.OperationalError:
             # Add user annotation columns
             user_annotation_columns = [
@@ -108,9 +100,7 @@ def migrate_model_schema(conn: sqlite3.Connection) -> None:
                 "out_user_annotated_out_std",
             ]
             for col in user_annotation_columns:
-                cursor.execute(
-                    f"ALTER TABLE box_classification_model ADD COLUMN {col} REAL"
-                )
+                cursor.execute(f"ALTER TABLE box_classification_model ADD COLUMN {col} REAL")
 
         # Add edge position columns (features 10-13)
         edge_features = [
@@ -124,9 +114,7 @@ def migrate_model_schema(conn: sqlite3.Connection) -> None:
                 for suffix in ["_mean", "_std"]:
                     col = f"{prefix}{feature}{suffix}"
                     try:
-                        cursor.execute(
-                            f"ALTER TABLE box_classification_model ADD COLUMN {col} REAL"
-                        )
+                        cursor.execute(f"ALTER TABLE box_classification_model ADD COLUMN {col} REAL")
                     except sqlite3.OperationalError:
                         pass  # Column already exists
 
@@ -149,9 +137,7 @@ def migrate_model_schema(conn: sqlite3.Connection) -> None:
                 for suffix in ["_mean", "_std"]:
                     col = f"{prefix}{feature}{suffix}"
                     try:
-                        cursor.execute(
-                            f"ALTER TABLE box_classification_model ADD COLUMN {col} REAL"
-                        )
+                        cursor.execute(f"ALTER TABLE box_classification_model ADD COLUMN {col} REAL")
                     except sqlite3.OperationalError:
                         pass
 
@@ -162,9 +148,7 @@ def migrate_model_schema(conn: sqlite3.Connection) -> None:
                 for suffix in ["_mean", "_std"]:
                     col = f"{prefix}{feature}{suffix}"
                     try:
-                        cursor.execute(
-                            f"ALTER TABLE box_classification_model ADD COLUMN {col} REAL"
-                        )
+                        cursor.execute(f"ALTER TABLE box_classification_model ADD COLUMN {col} REAL")
                     except sqlite3.OperationalError:
                         pass
 
@@ -183,9 +167,7 @@ def migrate_streaming_prediction_schema(conn: sqlite3.Connection) -> None:
     cursor = conn.cursor()
 
     try:
-        cursor.execute(
-            "SELECT feature_importance FROM box_classification_model WHERE id = 1"
-        )
+        cursor.execute("SELECT feature_importance FROM box_classification_model WHERE id = 1")
         return  # Already migrated
     except sqlite3.OperationalError:
         pass
@@ -193,15 +175,9 @@ def migrate_streaming_prediction_schema(conn: sqlite3.Connection) -> None:
     logger.info("Adding streaming prediction columns")
 
     try:
-        cursor.execute(
-            "ALTER TABLE box_classification_model ADD COLUMN feature_importance TEXT"
-        )
-        cursor.execute(
-            "ALTER TABLE box_classification_model ADD COLUMN covariance_matrix TEXT"
-        )
-        cursor.execute(
-            "ALTER TABLE box_classification_model ADD COLUMN covariance_inverse TEXT"
-        )
+        cursor.execute("ALTER TABLE box_classification_model ADD COLUMN feature_importance TEXT")
+        cursor.execute("ALTER TABLE box_classification_model ADD COLUMN covariance_matrix TEXT")
+        cursor.execute("ALTER TABLE box_classification_model ADD COLUMN covariance_inverse TEXT")
         conn.commit()
     except Exception as e:
         if is_readonly_error(e):
@@ -223,12 +199,8 @@ def migrate_video_preferences_schema(conn: sqlite3.Connection) -> None:
     logger.info("Adding index_framerate_hz to video_preferences")
 
     try:
-        cursor.execute(
-            "ALTER TABLE video_preferences ADD COLUMN index_framerate_hz REAL DEFAULT 10.0"
-        )
-        cursor.execute(
-            "UPDATE video_preferences SET index_framerate_hz = 10.0 WHERE id = 1"
-        )
+        cursor.execute("ALTER TABLE video_preferences ADD COLUMN index_framerate_hz REAL DEFAULT 10.0")
+        cursor.execute("UPDATE video_preferences SET index_framerate_hz = 10.0 WHERE id = 1")
         conn.commit()
     except Exception as e:
         if is_readonly_error(e):
@@ -244,17 +216,13 @@ def migrate_full_frame_ocr_schema(conn: sqlite3.Connection) -> None:
     try:
         cursor.execute("SELECT timestamp_seconds FROM full_frame_ocr LIMIT 1")
         # Check if we need to populate
-        result = cursor.execute(
-            "SELECT COUNT(*) FROM full_frame_ocr WHERE timestamp_seconds IS NULL"
-        ).fetchone()
+        result = cursor.execute("SELECT COUNT(*) FROM full_frame_ocr WHERE timestamp_seconds IS NULL").fetchone()
         if result and result[0] == 0:
             return
     except sqlite3.OperationalError:
         # Column doesn't exist
         try:
-            cursor.execute(
-                "ALTER TABLE full_frame_ocr ADD COLUMN timestamp_seconds REAL"
-            )
+            cursor.execute("ALTER TABLE full_frame_ocr ADD COLUMN timestamp_seconds REAL")
         except Exception as e:
             if is_readonly_error(e):
                 return
@@ -264,9 +232,7 @@ def migrate_full_frame_ocr_schema(conn: sqlite3.Connection) -> None:
 
     try:
         # Get index framerate
-        result = cursor.execute(
-            "SELECT index_framerate_hz FROM video_preferences WHERE id = 1"
-        ).fetchone()
+        result = cursor.execute("SELECT index_framerate_hz FROM video_preferences WHERE id = 1").fetchone()
         index_framerate = result[0] if result else 10.0
 
         # Populate timestamps
@@ -325,9 +291,7 @@ def load_model(conn: sqlite3.Connection) -> ModelParams | None:
     run_model_migrations(conn)
 
     cursor = conn.cursor()
-    row = cursor.execute(
-        "SELECT * FROM box_classification_model WHERE id = 1"
-    ).fetchone()
+    row = cursor.execute("SELECT * FROM box_classification_model WHERE id = 1").fetchone()
 
     if not row:
         return None
@@ -552,7 +516,9 @@ def save_model(conn: sqlite3.Connection, model: ModelParams) -> None:
             datetime('now'),
             ?,
             ?, ?,
-            """ + ", ".join(["?"] * 104) + """,
+            """
+        + ", ".join(["?"] * 104)
+        + """,
             ?, ?, ?
         )
         """,
@@ -623,9 +589,7 @@ def get_video_duration(conn: sqlite3.Connection) -> float:
         Duration in seconds (default 600.0)
     """
     cursor = conn.cursor()
-    result = cursor.execute(
-        "SELECT duration_seconds FROM video_metadata WHERE id = 1"
-    ).fetchone()
+    result = cursor.execute("SELECT duration_seconds FROM video_metadata WHERE id = 1").fetchone()
     return result[0] if result else 600.0
 
 
@@ -695,9 +659,7 @@ def load_all_boxes(conn: sqlite3.Connection, frame_height: int) -> list[BoxBound
     return boxes
 
 
-def load_boxes_for_frame(
-    conn: sqlite3.Connection, frame_index: int, frame_height: int
-) -> list[BoxBounds]:
+def load_boxes_for_frame(conn: sqlite3.Connection, frame_index: int, frame_height: int) -> list[BoxBounds]:
     """Load OCR boxes for a specific frame.
 
     Args:
@@ -756,9 +718,7 @@ def load_boxes_for_frame(
     return boxes
 
 
-def get_box_text_and_timestamp(
-    conn: sqlite3.Connection, frame_index: int, box_index: int
-) -> tuple[str, float]:
+def get_box_text_and_timestamp(conn: sqlite3.Connection, frame_index: int, box_index: int) -> tuple[str, float]:
     """Get box text and timestamp from database.
 
     Args:

@@ -131,9 +131,7 @@ def extract_features(
     )
 
     # Feature 4: Horizontal clustering
-    horizontal_clustering_score = compute_horizontal_clustering_score(
-        other_boxes, k, box_center_x, box.bottom
-    )
+    horizontal_clustering_score = compute_horizontal_clustering_score(other_boxes, k, box_center_x, box.bottom)
 
     # Features 5-7: Simple spatial features
     aspect_ratio = box_width / box_height if box_height > 0 else 0.0
@@ -141,9 +139,7 @@ def extract_features(
     normalized_area = box_area / frame_area if frame_area > 0 else 0.0
 
     # Features 8-9: User annotations (binary indicators)
-    is_user_annotated_in, is_user_annotated_out = query_user_annotation(
-        conn, box.frame_index, box.box_index
-    )
+    is_user_annotated_in, is_user_annotated_out = query_user_annotation(conn, box.frame_index, box.box_index)
 
     # Features 10-13: Edge positions (normalized to [0-1] range)
     normalized_left = box.left / frame_width if frame_width > 0 else 0.0

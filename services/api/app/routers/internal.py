@@ -21,7 +21,9 @@ class ProcessNewVideosResponse(BaseModel):
     message: str | None = None
 
 
-@router.post("/internal/process-new-videos/trigger", response_model=ProcessNewVideosResponse)
+@router.post(
+    "/internal/process-new-videos/trigger", response_model=ProcessNewVideosResponse
+)
 async def trigger_process_new_videos():
     """
     Trigger process new videos flow to check for and process waiting videos.
@@ -60,9 +62,7 @@ async def trigger_process_new_videos():
                 tags=tags,
             )
 
-            logger.info(
-                f"Process new videos flow triggered: flow_run_id={flow_run.id}"
-            )
+            logger.info(f"Process new videos flow triggered: flow_run_id={flow_run.id}")
 
             return ProcessNewVideosResponse(
                 success=True,

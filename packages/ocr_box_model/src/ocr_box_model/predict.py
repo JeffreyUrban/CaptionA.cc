@@ -147,9 +147,7 @@ def predict_box_label(
             model = load_model(conn)
             if model:
                 # Get box text and timestamp
-                box_text, timestamp_seconds = get_box_text_and_timestamp(
-                    conn, box.frame_index, box.box_index
-                )
+                box_text, timestamp_seconds = get_box_text_and_timestamp(conn, box.frame_index, box.box_index)
                 duration_seconds = get_video_duration(conn)
 
                 # Extract features
@@ -218,10 +216,7 @@ def predict_batch(
     Returns:
         List of predictions, one per box
     """
-    return [
-        predict_box_label(box, layout, all_boxes, conn)
-        for box in boxes
-    ]
+    return [predict_box_label(box, layout, all_boxes, conn) for box in boxes]
 
 
 def get_confident_predictions(
@@ -237,10 +232,7 @@ def get_confident_predictions(
     Returns:
         List of indices where confidence >= threshold
     """
-    return [
-        i for i, pred in enumerate(predictions)
-        if pred.confidence >= threshold
-    ]
+    return [i for i, pred in enumerate(predictions) if pred.confidence >= threshold]
 
 
 def get_uncertain_predictions(
@@ -258,7 +250,4 @@ def get_uncertain_predictions(
     Returns:
         List of indices where confidence < threshold
     """
-    return [
-        i for i, pred in enumerate(predictions)
-        if pred.confidence < threshold
-    ]
+    return [i for i, pred in enumerate(predictions) if pred.confidence < threshold]
