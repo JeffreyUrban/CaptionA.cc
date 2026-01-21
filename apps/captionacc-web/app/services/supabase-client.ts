@@ -25,9 +25,13 @@ type ProductionDatabase = {
   }
 }
 
+// Environment variables are required - set via fly.toml build args
+// Separate Supabase projects for prod and dev provide isolation
 const supabaseUrl = import.meta.env['VITE_SUPABASE_URL']!
 const supabaseAnonKey = import.meta.env['VITE_SUPABASE_ANON_KEY']!
-const supabaseSchema = import.meta.env['VITE_SUPABASE_SCHEMA']!
+
+// Schema is 'captionacc' in both prod and dev Supabase projects
+const supabaseSchema = import.meta.env['VITE_SUPABASE_SCHEMA'] ?? 'captionacc'
 
 // Log Supabase connection info in development
 if (import.meta.env.DEV) {
@@ -37,7 +41,6 @@ if (import.meta.env.DEV) {
 /**
  * Create a Supabase client for use in client-side code
  * Uses the anon key which respects RLS policies
- * Both local and remote use captionacc_prod schema
  */
 export const supabase = createClient<ProductionDatabase>(supabaseUrl, supabaseAnonKey, {
   auth: {

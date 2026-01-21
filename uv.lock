@@ -10,7 +10,6 @@ resolution-markers = [
 
 [manifest]
 members = [
-    "caption-boundaries",
     "caption-frame-extents",
     "caption-models",
     "caption-text",
@@ -29,6 +28,7 @@ members = [
     "video-utils",
     "vp9-utils",
 ]
+overrides = [{ name = "boto3", specifier = ">=1.28.0" }]
 
 [[package]]
 name = "accelerate"
@@ -345,6 +345,24 @@ wheels = [
 ]
 
 [[package]]
+name = "boto3-stubs"
+version = "1.42.28"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "botocore-stubs" },
+    { name = "types-s3transfer" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/9c/3e/8535f663fb400fb62ea8aa4a9ec0aa29797ef3a3ae3cc594aaa18069f707/boto3_stubs-1.42.28.tar.gz", hash = "sha256:6ee83bd1457d6377130d709fcb0f8b2b95ca7928b0657d18abb1d08d19db6ec9", size = 100888, upload-time = "2026-01-14T20:55:36.878Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/12/de/d130380269fa740e2e3ce1de524a32614a9103850fd94bb5c581754cd149/boto3_stubs-1.42.28-py3-none-any.whl", hash = "sha256:f3ff19e73973c392aaeb3a419848cdbe7e54d6219ef43a23fcd168a0d69033d4", size = 69782, upload-time = "2026-01-14T20:55:33.091Z" },
+]
+
+[package.optional-dependencies]
+s3 = [
+    { name = "mypy-boto3-s3" },
+]
+
+[[package]]
 name = "botocore"
 version = "1.42.22"
 source = { registry = "https://pypi.org/simple" }
@@ -359,6 +377,18 @@ wheels = [
 ]
 
 [[package]]
+name = "botocore-stubs"
+version = "1.42.28"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "types-awscrt" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/4d/e3/c80fb5ab821afbe0a5ba0b7a31d39b9d232660fdef7dc98fc8405d77438a/botocore_stubs-1.42.28.tar.gz", hash = "sha256:aa131f92f266c0ac479873e8e914c46256c39db3aecea0c73edf0846d304e9df", size = 42400, upload-time = "2026-01-14T21:28:58.698Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/bf/93/42275ae0df65cb52f5c9318ce31fe4b43c905a8ab29859bf167de2bda75e/botocore_stubs-1.42.28-py3-none-any.whl", hash = "sha256:ce16fb37db1b2d6f8877b9ca2a03cabb6bc67bd40e9f22de8001bc536eecd10d", size = 66761, upload-time = "2026-01-14T21:28:56.899Z" },
+]
+
+[[package]]
 name = "cachetools"
 version = "6.2.4"
 source = { registry = "https://pypi.org/simple" }
@@ -368,68 +398,10 @@ wheels = [
 ]
 
 [[package]]
-name = "caption-boundaries"
-source = { editable = "data-pipelines/caption_boundaries" }
-dependencies = [
-    { name = "caption-models" },
-    { name = "frames-db" },
-    { name = "numpy" },
-    { name = "opencv-python" },
-    { name = "pillow" },
-    { name = "pydantic" },
-    { name = "python-levenshtein" },
-    { name = "requests" },
-    { name = "rich" },
-    { name = "scikit-learn" },
-    { name = "sqlalchemy" },
-    { name = "supabase" },
-    { name = "torch" },
-    { name = "torchvision" },
-    { name = "transformers" },
-    { name = "typer" },
-    { name = "video-utils" },
-    { name = "wandb" },
-]
-
-[package.optional-dependencies]
-dev = [
-    { name = "pyright" },
-    { name = "pytest" },
-    { name = "pytest-cov" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "caption-models", editable = "packages/caption_models" },
-    { name = "frames-db", editable = "packages/frames_db" },
-    { name = "numpy", specifier = ">=1.26.0" },
-    { name = "opencv-python", specifier = ">=4.8.0" },
-    { name = "pillow", specifier = ">=10.0.0" },
-    { name = "pydantic", specifier = ">=2.0.0" },
-    { name = "pyright", marker = "extra == 'dev'", specifier = ">=1.1.400" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=9.0.0" },
-    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=7.0.0" },
-    { name = "python-levenshtein", specifier = ">=0.21.0" },
-    { name = "requests", specifier = ">=2.31.0" },
-    { name = "rich", specifier = ">=13.0.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.14.0" },
-    { name = "scikit-learn", specifier = ">=1.3.0" },
-    { name = "sqlalchemy", specifier = ">=2.0.0" },
-    { name = "supabase", specifier = ">=2.0.0" },
-    { name = "torch", specifier = ">=2.1.0" },
-    { name = "torchvision", specifier = ">=0.16.0" },
-    { name = "transformers", specifier = ">=4.30.0" },
-    { name = "typer", specifier = ">=0.9.0" },
-    { name = "video-utils", editable = "packages/video_utils" },
-    { name = "wandb", specifier = ">=0.16.0" },
-]
-provides-extras = ["dev"]
-
-[[package]]
 name = "caption-frame-extents"
 source = { editable = "data-pipelines/caption_frame_extents" }
 dependencies = [
+    { name = "boto3" },
     { name = "caption-models" },
     { name = "frames-db" },
     { name = "numpy" },
@@ -452,6 +424,7 @@ dependencies = [
 
 [package.optional-dependencies]
 dev = [
+    { name = "boto3-stubs", extra = ["s3"] },
     { name = "pyright" },
     { name = "pytest" },
     { name = "pytest-cov" },
@@ -460,6 +433,8 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "boto3", specifier = ">=1.28.0" },
+    { name = "boto3-stubs", extras = ["s3"], marker = "extra == 'dev'", specifier = ">=1.28.0" },
     { name = "caption-models", editable = "packages/caption_models" },
     { name = "frames-db", editable = "packages/frames_db" },
     { name = "numpy", specifier = ">=1.26.0" },
@@ -606,11 +581,11 @@ name = "captionacc-workspace"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
-    { name = "caption-boundaries" },
+    { name = "boto3" },
+    { name = "caption-frame-extents" },
     { name = "caption-text" },
     { name = "crop-frames" },
     { name = "full-frames" },
-    { name = "orchestrator" },
     { name = "pillow" },
     { name = "tqdm" },
 ]
@@ -628,11 +603,11 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "caption-boundaries", editable = "data-pipelines/caption_boundaries" },
+    { name = "boto3", specifier = ">=1.28.0" },
+    { name = "caption-frame-extents", editable = "data-pipelines/caption_frame_extents" },
     { name = "caption-text", editable = "data-pipelines/caption_text" },
     { name = "crop-frames", editable = "data-pipelines/crop_frames" },
     { name = "full-frames", editable = "data-pipelines/full_frames" },
-    { name = "orchestrator" },
     { name = "pillow", specifier = ">=11.0.0" },
     { name = "tqdm", specifier = ">=4.67.1" },
 ]
@@ -2375,6 +2350,15 @@ wheels = [
 ]
 
 [[package]]
+name = "mypy-boto3-s3"
+version = "1.42.21"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/a0/32/aa7208348dc8db8bd4ea357e5e6e1e8bcba44419033d03456c3b767a6c98/mypy_boto3_s3-1.42.21.tar.gz", hash = "sha256:cab71c918aac7d98c4d742544c722e37d8e7178acb8bc88a0aead7b1035026d2", size = 76024, upload-time = "2026-01-03T02:46:35.161Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f1/c0/01babfa8cef5f992a2a0f3d52fc1123fbbc336ab6decfdfc8f702e88a8af/mypy_boto3_s3-1.42.21-py3-none-any.whl", hash = "sha256:f5b7d1ed718ba5b00f67e95a9a38c6a021159d3071ea235e6cf496e584115ded", size = 83169, upload-time = "2026-01-03T02:46:33.356Z" },
+]
+
+[[package]]
 name = "mypy-extensions"
 version = "1.1.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2804,15 +2788,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/91/df/553f93ed38bf22f4b999d9be9c185adb558982214f33eae539d3b5cd0858/opentelemetry_semantic_conventions-0.60b1.tar.gz", hash = "sha256:87c228b5a0669b748c76d76df6c364c369c28f1c465e50f661e39737e84bc953", size = 137935, upload-time = "2025-12-11T13:32:50.487Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/7a/5e/5958555e09635d09b75de3c4f8b9cae7335ca545d77392ffe7331534c402/opentelemetry_semantic_conventions-0.60b1-py3-none-any.whl", hash = "sha256:9fa8c8b0c110da289809292b0591220d3a7b53c1526a23021e977d68597893fb", size = 219982, upload-time = "2025-12-11T13:32:36.955Z" },
-]
-
-[[package]]
-name = "orchestrator"
-version = "1.0.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/ef/47/b0fde2c16a98cb34f1b8b6c1cacee8c65e0dd928ea366b9204d34926da6a/orchestrator-1.0.tar.gz", hash = "sha256:8d45b1650b27a61577a1cf30a536e813f4e4c9c1689acaaba4d01255c270cb12", size = 4374, upload-time = "2020-11-06T16:00:08.282Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/67/60/520297b027aded0e70ac97278181ef8edac8026de48858536abfb4140727/orchestrator-1.0-py3-none-any.whl", hash = "sha256:d273f2bd7850465b8f09a201ba35cd08a81f7439c9e6e27f7f50373b5e2e78c6", size = 5651, upload-time = "2020-11-06T16:00:06.118Z" },
 ]
 
 [[package]]
@@ -3343,6 +3318,7 @@ name = "pyiceberg"
 version = "0.10.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
+    { name = "boto3" },
     { name = "cachetools" },
     { name = "click" },
     { name = "fsspec" },
@@ -4510,12 +4486,30 @@ wheels = [
 ]
 
 [[package]]
+name = "types-awscrt"
+version = "0.31.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/18/9f/9be587f2243ea7837ad83aad248ff4d8f9a880ac5a84544e9661e5840a22/types_awscrt-0.31.0.tar.gz", hash = "sha256:aa8b42148af0847be14e2b8ea3637a3518ffab038f8d3be7083950f3ce87d3ff", size = 17817, upload-time = "2026-01-12T06:42:37.711Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4c/8d/87ac494b5165e7650b2bc92ee3325c1339a47323489beeda32dffc9a1334/types_awscrt-0.31.0-py3-none-any.whl", hash = "sha256:009cfe5b9af8c75e8304243490e20a5229e7a56203f1d41481f5522233453f51", size = 42509, upload-time = "2026-01-12T06:42:36.187Z" },
+]
+
+[[package]]
 name = "types-certifi"
 version = "2021.10.8.3"
 source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/52/68/943c3aeaf14624712a0357c4a67814dba5cea36d194f5c764dad7959a00c/types-certifi-2021.10.8.3.tar.gz", hash = "sha256:72cf7798d165bc0b76e1c10dd1ea3097c7063c42c21d664523b928e88b554a4f", size = 2095, upload-time = "2022-06-09T15:19:05.244Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b5/63/2463d89481e811f007b0e1cd0a91e52e141b47f9de724d20db7b861dcfec/types_certifi-2021.10.8.3-py3-none-any.whl", hash = "sha256:b2d1e325e69f71f7c78e5943d410e650b4707bb0ef32e4ddf3da37f54176e88a", size = 2136, upload-time = "2022-06-09T15:19:03.127Z" },
+]
+
+[[package]]
+name = "types-s3transfer"
+version = "0.16.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/fe/64/42689150509eb3e6e82b33ee3d89045de1592488842ddf23c56957786d05/types_s3transfer-0.16.0.tar.gz", hash = "sha256:b4636472024c5e2b62278c5b759661efeb52a81851cde5f092f24100b1ecb443", size = 13557, upload-time = "2025-12-08T08:13:09.928Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/98/27/e88220fe6274eccd3bdf95d9382918716d312f6f6cef6a46332d1ee2feff/types_s3transfer-0.16.0-py3-none-any.whl", hash = "sha256:1c0cd111ecf6e21437cb410f5cddb631bfb2263b77ad973e79b9c6d0cb24e0ef", size = 19247, upload-time = "2025-12-08T08:13:08.426Z" },
 ]
 
 [[package]]
@@ -4689,12 +4683,14 @@ dependencies = [
 
 [package.optional-dependencies]
 dev = [
+    { name = "boto3-stubs", extra = ["s3"] },
     { name = "pytest" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "boto3", specifier = ">=1.28.0" },
+    { name = "boto3-stubs", extras = ["s3"], marker = "extra == 'dev'", specifier = ">=1.28.0" },
     { name = "pillow", specifier = ">=10.0.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
