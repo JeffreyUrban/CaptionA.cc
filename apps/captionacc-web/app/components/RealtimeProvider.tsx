@@ -27,10 +27,11 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
           table: 'videos',
         },
         payload => {
+          const newRecord = payload.new as Record<string, unknown> | undefined
           console.log(
             '[Realtime] Videos table change detected:',
             payload.eventType,
-            payload.new?.id
+            newRecord?.['id']
           )
           // Revalidate to refetch data on current page
           void revalidator.revalidate()

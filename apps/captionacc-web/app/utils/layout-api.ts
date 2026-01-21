@@ -21,7 +21,21 @@ export async function fetchLayoutQueue(videoId: string): Promise<LayoutQueueResp
     throw new Error('Layout database not ready. Initialize with useLayoutDatabase first.')
   }
 
-  return service.fetchLayoutQueue()
+  const result = await service.fetchLayoutQueue()
+
+  // Transform LayoutQueueResult to LayoutQueueResponse
+  // Map cropRegionVersion to cropBoundsVersion for compatibility
+  const layoutConfig = result.layoutConfig
+    ? {
+        ...result.layoutConfig,
+        cropBoundsVersion: result.layoutConfig.cropRegionVersion,
+      }
+    : undefined
+
+  return {
+    frames: result.frames,
+    layoutConfig,
+  }
 }
 
 /**
@@ -41,7 +55,15 @@ export async function fetchAnalysisBoxes(
     throw new Error('Layout database not ready. Initialize with useLayoutDatabase first.')
   }
 
-  return service.fetchAnalysisBoxes()
+  const result = await service.fetchAnalysisBoxes()
+
+  // Transform BoxDataResult to BoxData (provide default for nullable predictedLabel)
+  return {
+    boxes: result.boxes.map(box => ({
+      ...box,
+      predictedLabel: box.predictedLabel ?? 'out', // Default to 'out' if no prediction
+    })),
+  }
 }
 
 /**
@@ -58,7 +80,20 @@ export async function fetchFrameBoxes(
     throw new Error('Layout database not ready. Initialize with useLayoutDatabase first.')
   }
 
-  return service.fetchFrameBoxes(frameIndex)
+  const result = await service.fetchFrameBoxes(frameIndex)
+
+  // Transform FrameBoxesResult to FrameBoxesData
+  return {
+    frameIndex: result.frameIndex,
+    imageUrl: result.imageUrl,
+    cropBounds: result.cropRegion, // Rename cropRegion to cropBounds
+    frameWidth: result.frameWidth,
+    frameHeight: result.frameHeight,
+    boxes: result.boxes.map(box => ({
+      ...box,
+      predictedLabel: box.predictedLabel ?? 'out', // Default to 'out' if no prediction
+    })),
+  }
 }
 
 /**

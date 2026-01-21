@@ -380,7 +380,7 @@ export function TreeRow({
 
   return (
     <VideoRow
-      node={node}
+      node={node as TreeNode & { type: 'video' }}
       depth={depth}
       onRenameVideo={onRenameVideo}
       onMoveVideo={onMoveVideo}
@@ -493,11 +493,8 @@ function FolderRow({
           )}
         </td>
         <td className="whitespace-nowrap px-3 py-3 text-sm text-gray-600 dark:text-gray-400">
-          {folderStats &&
-          folderStats.boundaryPendingCount + folderStats.textPendingCount > 0 ? (
-            <PendingBadge
-              count={folderStats.boundaryPendingCount + folderStats.textPendingCount}
-            />
+          {folderStats && folderStats.boundaryPendingCount + folderStats.textPendingCount > 0 ? (
+            <PendingBadge count={folderStats.boundaryPendingCount + folderStats.textPendingCount} />
           ) : (
             ''
           )}

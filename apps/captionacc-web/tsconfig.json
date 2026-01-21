@@ -1,5 +1,6 @@
 {
   "include": ["vite-env.d.ts", "**/*.ts", "**/*.tsx", ".react-router/types/**/*"],
+  "exclude": ["scripts/**/*"],
   "compilerOptions": {
     "lib": ["DOM", "DOM.Iterable", "ES2022"],
     "types": ["@react-router/node", "vite/client"],

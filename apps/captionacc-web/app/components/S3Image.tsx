@@ -56,19 +56,22 @@ export interface S3ImageProps extends Omit<
 // Component
 // ============================================================================
 
-export const S3Image = forwardRef<HTMLImageElement, S3ImageProps>(function S3Image({
-  tenantId,
-  videoId,
-  path,
-  alt,
-  className,
-  onLoad,
-  onError,
-  fallbackSrc,
-  preload = false,
-  expiresIn = 3600,
-  ...imgProps
-}, ref) {
+export const S3Image = forwardRef<HTMLImageElement, S3ImageProps>(function S3Image(
+  {
+    tenantId,
+    videoId,
+    path,
+    alt,
+    className,
+    onLoad,
+    onError,
+    fallbackSrc,
+    preload = false,
+    expiresIn = 3600,
+    ...imgProps
+  },
+  ref
+) {
   const [signedUrl, setSignedUrl] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
@@ -131,7 +134,13 @@ export const S3Image = forwardRef<HTMLImageElement, S3ImageProps>(function S3Ima
         }
 
         // Get signed URL
-        const url = await getVideoResourceUrl(tenantId, videoId, pathParams.type, pathParams, expiresIn)
+        const url = await getVideoResourceUrl(
+          tenantId,
+          videoId,
+          pathParams.type,
+          pathParams,
+          expiresIn
+        )
 
         if (!cancelled) {
           setSignedUrl(url)
@@ -236,6 +245,7 @@ export const S3Image = forwardRef<HTMLImageElement, S3ImageProps>(function S3Ima
  * Useful for preloading images before they're needed
  */
 export async function preloadS3Image(
+  tenantId: string,
   videoId: string,
   path: string | Omit<S3PathParams, 'tenantId' | 'videoId'>,
   expiresIn = 3600
@@ -282,7 +292,7 @@ export async function preloadS3Image(
   }
 
   // Get signed URL
-  const url = await getVideoResourceUrl(videoId, pathParams.type, pathParams, expiresIn)
+  const url = await getVideoResourceUrl(tenantId, videoId, pathParams.type, pathParams, expiresIn)
 
   // Preload image
   return new Promise((resolve, reject) => {

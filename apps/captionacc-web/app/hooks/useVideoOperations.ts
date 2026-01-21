@@ -27,7 +27,7 @@ interface UseVideoOperationsReturn {
 
   // Modal open handlers
   openRenameVideoModal: (videoPath: string, currentName: string) => void
-  openDeleteVideoModal: (videoPath: string, videoName: string) => void
+  openDeleteVideoModal: (videoId: string, videoName: string, videoPath: string) => void
   openErrorModal: (videoId: string, errorDetails: BadgeState['errorDetails']) => void
 
   // Modal close handlers

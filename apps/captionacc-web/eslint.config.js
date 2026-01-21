@@ -123,6 +123,7 @@ export default tseslint.config(
       'build/**',
       'node_modules/**',
       'public/**', // Browser scripts
+      'scripts/**', // Standalone utility scripts
     ],
   }
 )

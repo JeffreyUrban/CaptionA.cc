@@ -153,7 +153,7 @@ async function doInitialize(): Promise<void> {
     const initCRSQLite = crsqliteModule.default
 
     // Initialize CR-SQLite WASM module - returns SQLite3 instance
-    sqlite3Instance = await initCRSQLite()
+    sqlite3Instance = (await initCRSQLite()) as CRSQLite3
 
     console.log('[CRSQLite] @vlcn.io/crsqlite-wasm initialized successfully')
 
@@ -520,7 +520,7 @@ export class CRSQLiteDatabase {
    * @returns Query result with columns and rows
    * @throws DatabaseError if query fails
    */
-  async query<T = Record<string, unknown>>(
+  async query<T extends object = Record<string, unknown>>(
     sql: string,
     params?: unknown[]
   ): Promise<QueryResult<T>> {

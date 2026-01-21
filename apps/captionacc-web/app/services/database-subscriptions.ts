@@ -250,19 +250,19 @@ class DatabaseSubscriptionManager {
 
   /**
    * Check if primary keys match.
+   * changePk is a base64-encoded string from CRSQLiteChange
+   * filterPk is the expected primary key values
    */
-  private pkMatches(changePk: unknown[], filterPk: unknown[]): boolean {
-    if (changePk.length !== filterPk.length) {
-      return false
+  private pkMatches(changePk: string, filterPk: unknown[]): boolean {
+    // For simple single-value primary keys, compare the base64 string
+    // against the JSON stringified filter value
+    if (filterPk.length === 1) {
+      // Simple comparison for single-value PKs
+      return changePk === String(filterPk[0])
     }
-
-    for (let i = 0; i < changePk.length; i++) {
-      if (changePk[i] !== filterPk[i]) {
-        return false
-      }
-    }
-
-    return true
+    // For composite keys, compare the base64 string directly
+    // This assumes the filter provides the same base64 encoding
+    return changePk === filterPk.join(':')
   }
 }
 

@@ -21,6 +21,9 @@ export interface S3VideoProps extends Omit<
   VideoHTMLAttributes<HTMLVideoElement>,
   'src' | 'onLoad' | 'onError' | 'autoPlay' | 'loop' | 'muted' | 'controls'
 > {
+  /** Tenant ID */
+  tenantId: string
+
   /** Video ID */
   videoId: string
 
@@ -60,6 +63,7 @@ export interface S3VideoProps extends Omit<
 // ============================================================================
 
 export function S3Video({
+  tenantId,
   videoId,
   path,
   className,
@@ -112,7 +116,13 @@ export function S3Video({
         }
 
         // Get signed URL
-        const url = await getVideoResourceUrl(videoId, pathParams.type, pathParams, expiresIn)
+        const url = await getVideoResourceUrl(
+          tenantId,
+          videoId,
+          pathParams.type,
+          pathParams,
+          expiresIn
+        )
 
         if (!cancelled) {
           setSignedUrl(url)
@@ -134,7 +144,7 @@ export function S3Video({
     return () => {
       cancelled = true
     }
-  }, [videoId, path, expiresIn, onError])
+  }, [tenantId, videoId, path, expiresIn, onError])
 
   // ============================================================================
   // Loading state
@@ -222,6 +232,7 @@ export function S3Video({
  * Useful for preloading videos before they're needed
  */
 export async function preloadS3Video(
+  tenantId: string,
   videoId: string,
   path: string | Omit<S3PathParams, 'tenantId' | 'videoId'>,
   expiresIn = 3600
@@ -246,7 +257,7 @@ export async function preloadS3Video(
   }
 
   // Get signed URL
-  const url = await getVideoResourceUrl(videoId, pathParams.type, pathParams, expiresIn)
+  const url = await getVideoResourceUrl(tenantId, videoId, pathParams.type, pathParams, expiresIn)
 
   // Preload video metadata
   return new Promise((resolve, reject) => {
