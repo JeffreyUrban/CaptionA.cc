@@ -11,6 +11,7 @@
     "**/extract-crop-frames-and-infer-extents/**",
     "**/extract-full-frames-and-ocr/**",
     "**/packages/gpu_video_utils/**",
-    "**/packages/ocr/**"
+    "**/packages/ocr/**",
+    "**/services/api/**"
   ]
 }
