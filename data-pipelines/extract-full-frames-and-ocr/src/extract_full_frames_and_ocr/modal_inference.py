@@ -118,8 +118,6 @@ def extract_frames_and_ocr_impl(
 
     import boto3
 
-    from extract_full_frames_and_ocr.pipeline import process_video_with_gpu_and_ocr
-
     # Get S3 client from environment (set via Modal secrets)
     region = os.getenv("WASABI_REGION", "us-east-1")
     wasabi_client = boto3.client(

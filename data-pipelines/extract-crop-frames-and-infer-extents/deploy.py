@@ -6,6 +6,6 @@ Run as `modal deploy deploy.py`
 This file imports and exposes the Modal app for deployment.
 """
 
-from src.extract_crop_frames_and_infer_extents.app import app
+from src.extract_crop_frames_and_infer_extents.app import app  # noqa: F401
 
 # Modal CLI will discover 'app' automatically

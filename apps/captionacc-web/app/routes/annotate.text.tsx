@@ -21,28 +21,9 @@ import type { Frame } from '~/types/boundaries'
 export default function AnnotateText() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
-  const videoId = searchParams.get('videoId')!
+  const videoId = searchParams.get('videoId')
 
-  // VideoId is REQUIRED # TODO: Replace with our error modal.
-  if (!videoId) {
-    return (
-      <AppLayout>
-        <div className="flex h-full items-center justify-center">
-          <div className="text-center">
-            <h1 className="text-2xl font-bold text-red-600">Missing Video ID</h1>
-            <p className="mt-2 text-gray-600">This page requires a videoId parameter in the URL.</p>
-            <button
-              onClick={() => navigate('/videos')}
-              className="mt-4 rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
-            >
-              Go to Videos
-            </button>
-          </div>
-        </div>
-      </AppLayout>
-    )
-  }
-
+  // Hooks must be called unconditionally at the top
   // Help modal state
   const [showHelpModal, setShowHelpModal] = useState(false)
   const [jumpToAnnotationInput, setJumpToAnnotationInput] = useState('')
@@ -51,7 +32,7 @@ export default function AnnotateText() {
   const frameContainerRef = useRef<HTMLDivElement>(null)
 
   // Mark this video as being worked on for stats refresh
-  useVideoTouched(videoId)
+  useVideoTouched(videoId ?? '')
 
   // Data management hook
   const {
@@ -75,7 +56,7 @@ export default function AnnotateText() {
     handleSkip,
     handlePrevious,
     jumpToAnnotation,
-  } = useTextAnnotationData({ videoId })
+  } = useTextAnnotationData({ videoId: videoId ?? '' })
 
   // Display preferences hook
   const {
@@ -90,7 +71,7 @@ export default function AnnotateText() {
     handleTextSizeChange,
     handlePaddingScaleChange,
     handleTextAnchorChange,
-  } = useTextAnnotationPreferences({ videoId })
+  } = useTextAnnotationPreferences({ videoId: videoId ?? '' })
 
   // Frame navigation hook
   const { currentFrameIndex, handleDragStart, navigateFrame } = useTextAnnotationFrameNav({
@@ -99,7 +80,7 @@ export default function AnnotateText() {
   })
 
   // Video metadata for frame loading
-  const { metadata, loading: isLoadingMetadata } = useVideoMetadata(videoId)
+  const { metadata, loading: isLoadingMetadata } = useVideoMetadata(videoId ?? '')
 
   // Frame loading state
   const framesRef = useRef<Map<number, Frame>>(new Map())
@@ -112,7 +93,7 @@ export default function AnnotateText() {
 
   // Load frames from Wasabi
   useBoundaryFrameLoader({
-    videoId,
+    videoId: videoId ?? '',
     currentFrameIndexRef,
     jumpRequestedRef,
     jumpTargetRef,
@@ -149,6 +130,26 @@ export default function AnnotateText() {
     navigateFrame,
   })
 
+  // VideoId is REQUIRED # TODO: Replace with our error modal.
+  if (!videoId) {
+    return (
+      <AppLayout>
+        <div className="flex h-full items-center justify-center">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold text-red-600">Missing Video ID</h1>
+            <p className="mt-2 text-gray-600">This page requires a videoId parameter in the URL.</p>
+            <button
+              onClick={() => navigate('/videos')}
+              className="mt-4 rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+            >
+              Go to Videos
+            </button>
+          </div>
+        </div>
+      </AppLayout>
+    )
+  }
+
   // Switch to boundaries mode
   const switchToBoundaries = () => {
     void navigate(`/annotate/boundaries?videoId=${encodeURIComponent(videoId)}`)
@@ -165,15 +166,6 @@ export default function AnnotateText() {
     return (
       <AppLayout fullScreen>
         <LoadingScreen videoId={videoId} />
-      </AppLayout>
-    )
-  }
-
-  // No video selected
-  if (!videoId) {
-    return (
-      <AppLayout fullScreen>
-        <NoVideoScreen />
       </AppLayout>
     )
   }
@@ -252,25 +244,6 @@ function LoadingScreen({ videoId }: LoadingScreenProps) {
           Loading annotation queue...
         </div>
         <div className="mt-2 text-sm text-gray-600 dark:text-gray-400">{videoId}</div>
-      </div>
-    </div>
-  )
-}
-
-function NoVideoScreen() {
-  return (
-    <div className="flex h-[calc(100vh-4rem)] items-center justify-center">
-      <div className="rounded-lg border-2 border-yellow-500 bg-yellow-50 p-6 dark:border-yellow-600 dark:bg-yellow-950">
-        <div className="text-lg font-semibold text-yellow-900 dark:text-yellow-100">
-          No video selected
-        </div>
-        <div className="mt-2 text-sm text-yellow-800 dark:text-yellow-200">
-          Please select a video from the{' '}
-          <a href="/" className="underline hover:text-yellow-900 dark:hover:text-yellow-100">
-            home page
-          </a>
-          .
-        </div>
       </div>
     </div>
   )

@@ -62,7 +62,7 @@ def process_video_with_gpu_and_ocr(
     print(f"[Pipeline] Language: {language}")
 
     # Step 1: Extract video metadata
-    print(f"\n[Video] Extracting video metadata...")
+    print("\n[Video] Extracting video metadata...")
     from gpu_video_utils import GPUVideoDecoder
 
     decoder = GPUVideoDecoder(video_path)

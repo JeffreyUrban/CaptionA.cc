@@ -22,6 +22,20 @@ Database:
     run_all_migrations: Run schema migrations
 """
 
+from ocr_box_model.charset import detect_character_sets
+from ocr_box_model.config import FEATURE_NAMES, NUM_FEATURES
+from ocr_box_model.db import (
+    get_box_text_and_timestamp,
+    get_video_duration,
+    load_all_boxes,
+    load_boxes_for_frame,
+    load_layout_config,
+    load_model,
+    run_all_migrations,
+    run_layout_migrations,
+    run_model_migrations,
+    save_model,
+)
 from ocr_box_model.features import (
     extract_features,
     extract_features_batch,
@@ -55,20 +69,6 @@ from ocr_box_model.types import (
     Prediction,
     VideoLayoutConfig,
 )
-from ocr_box_model.db import (
-    get_box_text_and_timestamp,
-    get_video_duration,
-    load_all_boxes,
-    load_boxes_for_frame,
-    load_layout_config,
-    load_model,
-    run_all_migrations,
-    run_layout_migrations,
-    run_model_migrations,
-    save_model,
-)
-from ocr_box_model.charset import detect_character_sets
-from ocr_box_model.config import FEATURE_NAMES, NUM_FEATURES
 
 try:
     from ocr_box_model._version import __version__, __version_tuple__  # type: ignore[import-not-found]

@@ -7,6 +7,6 @@ Prerequisites: Run `uv sync` first to install workspace dependencies.
 This file imports and exposes the Modal app for deployment.
 """
 
-from src.extract_full_frames_and_ocr.app import app
+from src.extract_full_frames_and_ocr.app import app  # noqa: F401
 
 # Modal CLI will discover 'app' automatically

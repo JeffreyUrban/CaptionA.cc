@@ -16,7 +16,24 @@ import { getAnnotationBorderColor, getEffectiveState } from '~/utils/caption-fra
 export default function CaptionFrameExtentsWorkflow() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
-  const videoId = searchParams.get('videoId')!
+  const videoId = searchParams.get('videoId')
+
+  // Hooks must be called unconditionally at the top
+  // Lock modal state
+  const [showLockModal, setShowLockModal] = useState(true)
+  const lockError: string | null = null
+
+  const workflow = useCaptionFrameExtentsWorkflowState({ videoId: videoId ?? '' })
+
+  // Opportunistically process pending image regenerations during idle time
+  useImageRegeneration({ videoId: videoId ?? '', enabled: !!videoId, idleDelay: 3000, maxBatch: 3 })
+
+  // Close lock modal when ready
+  useEffect(() => {
+    if (workflow.isReady) {
+      setShowLockModal(false)
+    }
+  }, [workflow.isReady])
 
   // VideoId is REQUIRED # TODO: Replace with our error modal.
   if (!videoId) {
@@ -37,22 +54,6 @@ export default function CaptionFrameExtentsWorkflow() {
       </AppLayout>
     )
   }
-
-  // Lock modal state
-  const [showLockModal, setShowLockModal] = useState(true)
-  const lockError: string | null = null
-
-  const workflow = useCaptionFrameExtentsWorkflowState({ videoId })
-
-  // Opportunistically process pending image regenerations during idle time
-  useImageRegeneration({ videoId, enabled: true, idleDelay: 3000, maxBatch: 3 })
-
-  // Close lock modal when ready
-  useEffect(() => {
-    if (workflow.isReady) {
-      setShowLockModal(false)
-    }
-  }, [workflow.isReady])
 
   // Switch to text correction mode
   const switchToText = () => {

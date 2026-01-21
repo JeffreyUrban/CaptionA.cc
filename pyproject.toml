@@ -78,6 +78,10 @@ pythonVersion = "3.14"
 typeCheckingMode = "standard"
 reportMissingImports = true
 reportMissingTypeStubs = false
+# Exclude packages with src-layout that need separate pyright config
+exclude = [
+    "packages/ocr_box_model",
+]
 
 # Workspace-level dev dependencies
 # All workspace members inherit these tools automatically

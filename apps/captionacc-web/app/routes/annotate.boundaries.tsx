@@ -12,7 +12,13 @@ import { getAnnotationBorderColor, getEffectiveState } from '~/utils/boundary-he
 export default function BoundaryWorkflow() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
-  const videoId = searchParams.get('videoId')!
+  const videoId = searchParams.get('videoId')
+
+  // Hooks must be called unconditionally at the top
+  const workflow = useBoundaryWorkflowState({ videoId: videoId ?? '' })
+
+  // Opportunistically process pending image regenerations during idle time
+  useImageRegeneration({ videoId: videoId ?? '', enabled: !!videoId, idleDelay: 3000, maxBatch: 3 })
 
   // VideoId is REQUIRED # TODO: Replace with our error modal.
   if (!videoId) {
@@ -33,11 +39,6 @@ export default function BoundaryWorkflow() {
       </AppLayout>
     )
   }
-
-  const workflow = useBoundaryWorkflowState({ videoId })
-
-  // Opportunistically process pending image regenerations during idle time
-  useImageRegeneration({ videoId, enabled: true, idleDelay: 3000, maxBatch: 3 })
 
   // Switch to text correction mode
   const switchToText = () => {

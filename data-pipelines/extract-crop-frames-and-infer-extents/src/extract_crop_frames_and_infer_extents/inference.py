@@ -36,8 +36,6 @@ def get_inference_image():
     if not modal:
         return None
 
-    import os
-
     return (
         modal.Image.debian_slim(python_version="3.11")
         .apt_install(
@@ -469,7 +467,10 @@ def crop_and_infer_caption_frame_extents_impl(
         db_original_size = db_path.stat().st_size
         db_compressed_size = db_gz_path.stat().st_size
         db_ratio = (1 - db_compressed_size / db_original_size) * 100
-        print(f"  Compressed caption_frame_extents DB: {db_original_size:,} -> {db_compressed_size:,} bytes ({db_ratio:.1f}% reduction)")
+        print(
+            f"  Compressed caption_frame_extents DB: "
+            f"{db_original_size:,} -> {db_compressed_size:,} bytes ({db_ratio:.1f}% reduction)"
+        )
 
         db_storage_key = f"{tenant_id}/server/videos/{video_id}/caption_frame_extents.db.gz"
         wasabi.upload_file(db_gz_path, db_storage_key, content_type="application/gzip")
