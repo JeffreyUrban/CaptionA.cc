@@ -1,41 +1,41 @@
 # Prefect deployment configuration for CaptionA.cc flows (Development)
 #
 # Deploy all dev flows:
-#   PREFECT_API_URL=https://banchelabs-gateway.fly.dev/prefect-internal/prefect/api prefect deploy --all --prefect-file prefect-dev.yaml
+#   PREFECT_API_URL=https://banchelabs-gateway.fly.dev/prefect-internal/prefect/api prefect deploy --all --prefect-file prefect.dev.yaml
 #
 # Deploy specific dev flow:
-#   PREFECT_API_URL=https://banchelabs-gateway.fly.dev/prefect-internal/prefect/api prefect deploy -n captionacc-dev-video-initial-processing --prefect-file prefect-dev.yaml
+#   PREFECT_API_URL=https://banchelabs-gateway.fly.dev/prefect-internal/prefect/api prefect deploy -n captionacc-dev-video-initial-processing --prefect-file prefect.dev.yaml
 
 # Default work pool for all dev deployments
 work_pool:
   name: captionacc-workers-dev
 
-# Dev Deployments (prefixed with captionacc-dev-)
+# Development Deployments (prefixed with captionacc-dev-)
 deployments:
   - name: captionacc-dev-video-initial-processing
-    description: "[DEV] Extract frames and run OCR on uploaded videos"
+    description: Extract frames and run OCR on uploaded videos
     entrypoint: app/flows/video_initial_processing.py:video_initial_processing
     work_pool:
       name: captionacc-workers-dev
     schedules: []
 
   - name: captionacc-dev-crop-and-infer-caption-frame-extents
-    description: "[DEV] Crop frames and infer caption boundaries"
+    description: Crop frames and infer caption boundaries
     entrypoint: app/flows/crop_and_infer.py:crop_and_infer
     work_pool:
       name: captionacc-workers-dev
     schedules: []
 
   - name: captionacc-dev-caption-ocr
-    description: "[DEV] Generate OCR for individual captions"
+    description: Generate OCR for individual captions
     entrypoint: app/flows/caption_ocr.py:caption_ocr
     work_pool:
       name: captionacc-workers-dev
     schedules: []
 
   - name: captionacc-dev-process-new-videos
-    description: "[DEV] Process new videos (primary: Realtime, recovery: cron)"
+    description: "Process new videos (primary: Realtime, recovery: cron)"
     entrypoint: app/flows/process_new_videos.py:process_new_videos
     work_pool:
       name: captionacc-workers-dev
-    schedules: []  # Triggered by Realtime (immediate) + cron recovery (15 min)
+    schedules: []
