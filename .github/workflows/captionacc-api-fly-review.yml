@@ -12,10 +12,12 @@ env:
   # Set these to your Fly.io organization and preferred region.
   FLY_REGION: ewr
   FLY_ORG: personal
+  APP_NAME: pr-${{ github.event.number }}-captionacc-api
 
 jobs:
-  review_app:
+  deploy:
     runs-on: ubuntu-latest
+    if: github.event.action != 'closed'
     outputs:
       url: ${{ steps.deploy.outputs.url }}
     # Only run one deployment at a time per PR.
@@ -25,24 +27,69 @@ jobs:
     # Deploying apps with this "review" environment allows the URL for the app to be displayed in the PR UI.
     environment:
       name: review-api
-      # The script in the `deploy` sets the URL output for each review app.
       url: ${{ steps.deploy.outputs.url }}
     steps:
-      - name: Get code
-        uses: actions/checkout@v6
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: Deploy PR app to Fly.io
+      - name: Setup Fly.io CLI
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Create app if needed
+        run: |
+          if ! flyctl apps list | grep -q "$APP_NAME"; then
+            echo "Creating app $APP_NAME..."
+            flyctl apps create "$APP_NAME" --org "$FLY_ORG"
+          else
+            echo "App $APP_NAME already exists"
+          fi
+
+      - name: Create volume if needed
+        run: |
+          if ! flyctl volumes list -a "$APP_NAME" | grep -q "captionacc_data"; then
+            echo "Creating volume..."
+            flyctl volumes create captionacc_data_dev --region "$FLY_REGION" --size 1 -a "$APP_NAME" -y
+          else
+            echo "Volume already exists"
+          fi
+
+      - name: Configure secrets
+        run: |
+          flyctl secrets set \
+            SUPABASE_URL="${{ secrets.SUPABASE_URL }}" \
+            SUPABASE_JWT_SECRET="${{ secrets.SUPABASE_JWT_SECRET }}" \
+            SUPABASE_SERVICE_ROLE_KEY="${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            WASABI_ACCESS_KEY_ID="${{ secrets.WASABI_ACCESS_KEY_READWRITE }}" \
+            WASABI_SECRET_ACCESS_KEY="${{ secrets.WASABI_SECRET_KEY_READWRITE }}" \
+            WASABI_BUCKET="${{ secrets.WASABI_BUCKET }}" \
+            WASABI_REGION="${{ secrets.WASABI_REGION }}" \
+            WASABI_ENDPOINT_URL="https://s3.wasabisys.com" \
+            -a "$APP_NAME" \
+            --stage
+
+      - name: Deploy to Fly.io
         id: deploy
-        uses: superfly/fly-pr-review-apps@1.5.0
-        with:
-          name: pr-${{ github.event.number }}-captionacc-api
-          config: services/api/fly.dev.toml
-          secrets: |  # pragma: allowlist secret
-            SUPABASE_URL=${{ secrets.SUPABASE_URL }}
-            SUPABASE_JWT_SECRET=${{ secrets.SUPABASE_JWT_SECRET }}
-            SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-            WASABI_ACCESS_KEY_ID=${{ secrets.WASABI_ACCESS_KEY_READWRITE }}
-            WASABI_SECRET_ACCESS_KEY=${{ secrets.WASABI_SECRET_KEY_READWRITE }}
-            WASABI_BUCKET=${{ secrets.WASABI_BUCKET }}
-            WASABI_REGION=${{ secrets.WASABI_REGION }}
-            WASABI_ENDPOINT_URL=https://s3.wasabisys.com
+        run: |
+          # Build context is project root to include packages/ocr_box_model
+          flyctl deploy -c services/api/fly.dev.toml --dockerfile services/api/Dockerfile --remote-only -a "$APP_NAME"
+
+          # Set output URL
+          echo "url=https://${APP_NAME}.fly.dev" >> $GITHUB_OUTPUT
+
+  cleanup:
+    runs-on: ubuntu-latest
+    if: github.event.action == 'closed'
+    concurrency:
+      group: pr-${{ github.event.number }}-api
+    steps:
+      - name: Setup Fly.io CLI
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Destroy review app
+        run: |
+          if flyctl apps list | grep -q "$APP_NAME"; then
+            echo "Destroying app $APP_NAME..."
+            flyctl apps destroy "$APP_NAME" -y
+          else
+            echo "App $APP_NAME does not exist"
+          fi
