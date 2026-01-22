@@ -98,6 +98,50 @@ sed "${SED_ARGS[@]}" "$TEMPLATE_FILE" > "$OUTPUT_FILE"
 
 echo -e "${GREEN}✓ Created $OUTPUT_FILE${NC}"
 
+# Copy secrets from main worktree's .env.local or .env.staging
+SECRETS_SOURCE=""
+GIT_COMMON_DIR=$(git rev-parse --git-common-dir 2>/dev/null || echo ".git")
+if [[ "$GIT_COMMON_DIR" != ".git" ]]; then
+    MAIN_WORKTREE=$(dirname "$GIT_COMMON_DIR")
+    # Prefer .env.local, fall back to .env.staging
+    if [[ -s "$MAIN_WORKTREE/.env.local" ]]; then
+        SECRETS_SOURCE="$MAIN_WORKTREE/.env.local"
+    elif [[ -f "$MAIN_WORKTREE/.env.staging" ]]; then
+        SECRETS_SOURCE="$MAIN_WORKTREE/.env.staging"
+    fi
+fi
+
+if [[ -n "$SECRETS_SOURCE" ]]; then
+    echo -e "${BLUE}Copying secrets from $(basename "$SECRETS_SOURCE")...${NC}"
+
+    # List of secret variables to copy
+    SECRET_VARS=(
+        "WASABI_ACCESS_KEY_READONLY"
+        "WASABI_SECRET_KEY_READONLY"
+        "WASABI_ACCESS_KEY_READWRITE"
+        "WASABI_SECRET_KEY_READWRITE"
+        "WASABI_STS_ACCESS_KEY"
+        "WASABI_STS_SECRET_KEY"
+        "WASABI_STS_ROLE_ARN"
+        "DEEPGRAM_API_KEY"
+        "VITE_UMAMI_SRC"
+        "VITE_UMAMI_WEBSITE_ID"
+        "VITE_WEB3FORMS_ACCESS_KEY"
+    )
+
+    for var in "${SECRET_VARS[@]}"; do
+        # Extract value from secrets source
+        value=$(grep "^${var}=" "$SECRETS_SOURCE" 2>/dev/null | cut -d'=' -f2-)
+        if [[ -n "$value" ]]; then
+            # Replace empty value in generated .env.local
+            sed -i.bak "s|^${var}=.*|${var}=${value}|" "$OUTPUT_FILE"
+        fi
+    done
+    rm -f "${OUTPUT_FILE}.bak"
+
+    echo -e "${GREEN}✓ Secrets copied${NC}"
+fi
+
 # Generate supabase/config.toml from template (if it exists)
 SUPABASE_TEMPLATE="$PROJECT_ROOT/supabase/config.toml.template"
 SUPABASE_CONFIG="$PROJECT_ROOT/supabase/config.toml"
@@ -118,6 +162,5 @@ fi
 
 echo ""
 echo "Next steps:"
-echo "  1. Copy secrets from .env.staging to .env.local (Wasabi, Deepgram, etc.)"
-echo "  2. Start local services: Run 'Dev' in JetBrains (or start manually)"
+echo "  1. Start local services: Run 'Dev' in JetBrains (or start manually)"
 echo ""
