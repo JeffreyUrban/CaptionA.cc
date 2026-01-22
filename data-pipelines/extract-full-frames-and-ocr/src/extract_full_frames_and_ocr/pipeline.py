@@ -2,7 +2,7 @@
 
 Uses:
 - gpu_video_utils for GPU frame extraction
-- ocr package for OCR processing with Google Vision backend
+- ocr package for OCR processing (backend auto-selected by environment)
 """
 
 from collections.abc import Callable
@@ -10,8 +10,8 @@ from pathlib import Path
 
 from gpu_video_utils import extract_frames_gpu
 from ocr import (
-    GoogleVisionBackend,
     ensure_ocr_table,
+    get_backend,
     process_frames_with_ocr,
     write_ocr_result_to_database,
 )
@@ -106,14 +106,16 @@ def process_video_with_gpu_and_ocr(
     print(f"[Frames] First frame: {frames[0][0]}")
     print(f"[Frames] Last frame: {frames[-1][0]}")
 
-    # Step 3: Initialize Google Vision backend
-    print("\n[OCR] Initializing Google Vision backend...")
+    # Step 3: Initialize OCR backend (auto-selected based on ENVIRONMENT)
+    print("\n[OCR] Initializing OCR backend...")
     import os
 
-    google_env_vars = {k: "SET" for k in os.environ if "GOOGLE" in k or "SERVICE" in k}
-    print(f"[DEBUG] Google/Service env vars: {google_env_vars}")
-    backend = GoogleVisionBackend()
-    print(f"[OCR] Backend initialized with constraints: {backend.get_constraints()}")
+    env = os.environ.get("ENVIRONMENT", "unknown")
+    ocr_backend_override = os.environ.get("OCR_BACKEND", "auto")
+    print(f"[OCR] Environment: {env}, OCR_BACKEND: {ocr_backend_override}")
+    backend = get_backend()
+    print(f"[OCR] Backend: {backend.__class__.__name__}")
+    print(f"[OCR] Constraints: {backend.get_constraints()}")
 
     # Step 4: Process frames with OCR (automatic batching via montage)
     print(f"\n[OCR] Processing {len(frames)} frames with automatic montage batching...")
@@ -132,14 +134,20 @@ def process_video_with_gpu_and_ocr(
     print("[DB] Writing OCR results to database...")
     total_boxes = 0
 
+    # Derive framework name from backend class (e.g., GoogleVisionBackend -> google_vision)
+    backend_name = backend.__class__.__name__
+    framework_name = backend_name.replace("Backend", "").lower()
+    if framework_name == "livetext":
+        framework_name = "livetext"
+    elif framework_name == "googlevision":
+        framework_name = "google_vision"
+
     for ocr_result in ocr_results:
         # Convert OCRResult to database format
         # Frame ID format: "frame_0000000100" -> extract the numeric index
         frame_index = int(ocr_result.id.split("_")[1])
 
         # Build annotations list: [[text, confidence, [x, y, width, height]], ...]
-        # Note: Google Vision API doesn't provide per-character confidence,
-        # so we use 1.0 as a placeholder
         annotations = []
         for char in ocr_result.characters:
             annotations.append(
@@ -158,7 +166,7 @@ def process_video_with_gpu_and_ocr(
         # Create database record format
         db_record = {
             "image_path": f"frames/{ocr_result.id}.jpg",
-            "framework": "google_vision",
+            "framework": framework_name,
             "annotations": annotations,
         }
 
@@ -198,7 +206,9 @@ def process_frames_with_ocr_only(
     Returns:
         Tuple of (total_ocr_boxes, failed_ocr_count)
     """
-    print(f"[OCR] Processing {len(jpeg_frames)} frames with Google Vision...")
+    # Initialize OCR backend (auto-selected based on ENVIRONMENT)
+    backend = get_backend()
+    print(f"[OCR] Processing {len(jpeg_frames)} frames with {backend.__class__.__name__}...")
 
     # Create frame tuples with proper frame IDs
     frames = []
@@ -207,9 +217,6 @@ def process_frames_with_ocr_only(
         frame_index = int(timestamp * 10)
         frame_id = f"frame_{frame_index:010d}"
         frames.append((frame_id, jpeg_bytes))
-
-    # Initialize Google Vision backend
-    backend = GoogleVisionBackend()
 
     # Process frames with OCR
     ocr_results, failed_ocr_count = process_frames_with_ocr(
@@ -221,6 +228,14 @@ def process_frames_with_ocr_only(
 
     # Ensure database table exists
     ensure_ocr_table(db_path, table_name="full_frame_ocr")
+
+    # Derive framework name from backend class
+    backend_name = backend.__class__.__name__
+    framework_name = backend_name.replace("Backend", "").lower()
+    if framework_name == "livetext":
+        framework_name = "livetext"
+    elif framework_name == "googlevision":
+        framework_name = "google_vision"
 
     # Write OCR results to database
     total_boxes = 0
@@ -239,7 +254,7 @@ def process_frames_with_ocr_only(
 
         db_record = {
             "image_path": f"frames/{ocr_result.id}.jpg",
-            "framework": "google_vision",
+            "framework": framework_name,
             "annotations": annotations,
         }
 
