@@ -62,7 +62,7 @@ interface ConfirmRequest {
   filename: string;
   contentType: string;
   sizeBytes: number;
-  videoPath?: string;
+  videoPath: string;
   width?: number;
   height?: number;
 }
@@ -166,9 +166,9 @@ async function handleConfirm(
   const { videoId, storageKey, filename, contentType, sizeBytes, videoPath, width, height } = body;
 
   // Validate request
-  if (!videoId || !storageKey || !filename || !contentType || !sizeBytes) {
+  if (!videoId || !storageKey || !filename || !contentType || !sizeBytes || !videoPath) {
     return jsonResponse(
-      { error: "Missing required fields: videoId, storageKey, filename, contentType, sizeBytes" },
+      { error: "Missing required fields: videoId, storageKey, filename, contentType, sizeBytes, videoPath" },
       400
     );
   }
@@ -181,12 +181,13 @@ async function handleConfirm(
 
   // Create video record with workflow statuses defaulting to 'wait'
   // This triggers Supabase Realtime notification for immediate backend processing
-  // Note: storage_key is computed as {tenant_id}/client/videos/{video_id}/video.mp4 (not stored)
   // Note: layout_status, boundaries_status, text_status default to 'wait' via database defaults
   const { error: insertError } = await supabaseAdmin.from("videos").insert({
     id: videoId,
     tenant_id: tenantId,
-    display_path: videoPath || filename,
+    video_path: videoPath,
+    display_path: videoPath,
+    storage_key: storageKey,
     size_bytes: sizeBytes,
     width: width ?? 0,
     height: height ?? 0,
