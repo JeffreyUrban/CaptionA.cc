@@ -1,4 +1,41 @@
-# Local Development Environment Setup Plan
+# Local Development & Staging Environment Setup
+
+## Implementation Status
+
+### Completed
+
+- [x] `scripts/validate-env.sh` - Prod detection, required vars validation
+- [x] `scripts/generate-env-local.sh` - Generate `.env.local` with worktree-specific ports
+- [x] `.env.local.template` - Template for local environment
+- [x] `supabase/config.toml.template` - Template for Supabase worktree ports
+- [x] `scripts/start-web.sh` - Validate env, start Vite dev server
+- [x] `scripts/start-api.sh` - Validate env, start uvicorn
+- [x] `scripts/start-supabase.sh` - Start local Supabase with worktree ports
+- [x] `scripts/start-prefect.sh` - Start local Prefect server
+- [x] `scripts/deploy-staging.sh` - Deploy all services to staging
+- [x] `scripts/deploy-web-staging.sh` - Deploy web to staging
+- [x] `scripts/deploy-api-staging.sh` - Deploy API to staging
+- [x] JetBrains run configs: `Dev.run.xml`, `Web.run.xml`, `API.run.xml`, `Supabase.run.xml`, `Prefect.run.xml`
+- [x] Worktree setup integration (`.claude/scripts/setup-worktree.sh`, `create-worktree.sh`)
+- [x] Renamed `fly.dev.toml` → `fly.staging.toml` (web and API)
+- [x] Renamed `prefect-dev.yaml` → `prefect-staging.yaml`
+- [x] GitHub workflow: `captionacc-web-fly-deploy-staging.yml` (push to staging branch)
+- [x] GitHub workflow: `deploy-captionacc-api-staging.yml` (push to staging branch)
+- [x] Updated prod workflows to trigger on release tags (`v*`)
+- [x] Disabled PR preview deployments (CI only)
+- [x] Updated CI workflow to include staging branch
+
+### Pending (Manual Steps Required)
+
+- [ ] Create GitHub environment `staging` with secrets/vars
+- [ ] Rename Fly.io apps: `captionacc-web-dev` → `captionacc-web-staging`, `captionacc-api-dev` → `captionacc-api-staging`
+- [ ] Create Fly.io volumes for staging API
+- [ ] Rename Modal apps (in Modal dashboard)
+- [ ] Rename Prefect work pool (in Prefect Cloud)
+- [ ] Rename Wasabi bucket or update references
+- [ ] Create `staging` branch in GitHub
+
+---
 
 ## Overview
 
@@ -175,36 +212,39 @@ Deploy scripts hardcode the staging environment:
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-## Files to Create
+## Files Created
 
 ### Scripts (`scripts/`)
 
-| File | Purpose |
-|------|---------|
-| `scripts/validate-env.sh` | Check .env exists, no prod indicators, required vars present |
-| `scripts/generate-env-local.sh` | Generate `.env.local` from template with worktree-specific ports |
-| `scripts/start-web.sh` | Validate, start Vite dev server (hot reload) |
-| `scripts/start-api.sh` | Validate, start uvicorn (hot reload) |
-| `scripts/start-supabase.sh` | Start local Supabase with worktree-specific ports |
-| `scripts/start-prefect.sh` | Start local Prefect server with worktree-specific port |
-| `scripts/deploy-modal.sh` | Validate, deploy Modal to staging (hardcoded `-staging`) |
-| `scripts/deploy-prefect.sh` | Validate, deploy Prefect flows to staging |
-| `scripts/deploy-supabase.sh` | Validate, deploy Supabase migrations to staging |
+| File | Status | Purpose |
+|------|--------|---------|
+| `scripts/validate-env.sh` | ✅ | Check .env exists, no prod indicators, required vars present |
+| `scripts/generate-env-local.sh` | ✅ | Generate `.env.local` from template with worktree-specific ports |
+| `scripts/start-web.sh` | ✅ | Validate, start Vite dev server (hot reload) |
+| `scripts/start-api.sh` | ✅ | Validate, start uvicorn (hot reload) |
+| `scripts/start-supabase.sh` | ✅ | Start local Supabase with worktree-specific ports |
+| `scripts/start-prefect.sh` | ✅ | Start local Prefect server with worktree-specific port |
+| `scripts/deploy-staging.sh` | ✅ | Deploy all services to staging |
+| `scripts/deploy-web-staging.sh` | ✅ | Deploy web to staging via Fly.io |
+| `scripts/deploy-api-staging.sh` | ✅ | Deploy API to staging via Fly.io |
+| `scripts/deploy-modal.sh` | ⏳ | Deploy Modal to staging (future) |
+| `scripts/deploy-prefect.sh` | ⏳ | Deploy Prefect flows to staging (future) |
+| `scripts/deploy-supabase.sh` | ⏳ | Deploy Supabase migrations to staging (future) |
 
 ### JetBrains Run Configs (`.run/`)
 
 All run configs include debugging by default.
 
-| File | Type | Purpose |
-|------|------|---------|
-| `Dev.run.xml` | Compound | Web + API + debuggers (primary workflow) |
-| `Web.run.xml` | Compound | Shell (start-web.sh) + JavaScript Debug |
-| `API.run.xml` | Python | uvicorn with debugger attached |
-| `Supabase.run.xml` | Shell Script | Start local Supabase |
-| `Prefect.run.xml` | Shell Script | Start local Prefect server |
-| `Deploy_Modal.run.xml` | Shell Script | Deploy Modal to staging |
-| `Deploy_Prefect.run.xml` | Shell Script | Deploy Prefect to staging |
-| `Deploy_Supabase.run.xml` | Shell Script | Deploy Supabase to staging |
+| File | Status | Type | Purpose |
+|------|--------|------|---------|
+| `Dev.run.xml` | ✅ | Compound | Supabase + Prefect + API + Web (primary workflow) |
+| `Web.run.xml` | ✅ | npm + JavaScript Debug | Vite dev server with Chrome debug |
+| `API.run.xml` | ✅ | Python | uvicorn with debugger attached |
+| `Supabase.run.xml` | ✅ | Shell Script | Start local Supabase |
+| `Prefect.run.xml` | ✅ | Shell Script | Start local Prefect server |
+| `Deploy_Modal.run.xml` | ⏳ | Shell Script | Deploy Modal to staging (future) |
+| `Deploy_Prefect.run.xml` | ⏳ | Shell Script | Deploy Prefect to staging (future) |
+| `Deploy_Supabase.run.xml` | ⏳ | Shell Script | Deploy Supabase to staging (future) |
 
 ### Config Files
 

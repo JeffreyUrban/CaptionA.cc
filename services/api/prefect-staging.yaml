@@ -1,56 +1,56 @@
-# Prefect deployment configuration for CaptionA.cc flows (Development)
+# Prefect deployment configuration for CaptionA.cc flows (Staging)
 #
-# Deploy all dev flows:
-#   yes n | PREFECT_API_URL=https://banchelabs-gateway.fly.dev/prefect-internal/prefect/api prefect deploy --all --prefect-file prefect-dev.yaml
+# Deploy all staging flows:
+#   yes n | PREFECT_API_URL=https://banchelabs-gateway.fly.dev/prefect-internal/prefect/api prefect deploy --all --prefect-file prefect-staging.yaml
 #
-# Deploy specific dev flow:
-#   yes n | PREFECT_API_URL=https://banchelabs-gateway.fly.dev/prefect-internal/prefect/api prefect deploy -n captionacc-dev-video-initial-processing --prefect-file prefect-dev.yaml
+# Deploy specific staging flow:
+#   yes n | PREFECT_API_URL=https://banchelabs-gateway.fly.dev/prefect-internal/prefect/api prefect deploy -n captionacc-staging-video-initial-processing --prefect-file prefect-staging.yaml
 
-# Default work pool for all dev deployments
+# Default work pool for all staging deployments
 work_pool:
-  name: captionacc-workers-dev
+  name: captionacc-workers-staging
 
 # Disable git pull - code is already in the Docker container
 pull: []
 
-# Development Deployments (prefixed with captionacc-dev-)
+# Staging Deployments (prefixed with captionacc-staging-)
 # pull step sets working directory to /app (WORKDIR in Dockerfile)
 deployments:
-  - name: captionacc-dev-video-initial-processing
+  - name: captionacc-staging-video-initial-processing
     description: Extract frames and run OCR on uploaded videos
     entrypoint: app/flows/video_initial_processing.py:video_initial_processing
     work_pool:
-      name: captionacc-workers-dev
+      name: captionacc-workers-staging
     pull:
       - prefect.deployments.steps.set_working_directory:
           directory: /app
     schedules: []
 
-  - name: captionacc-dev-crop-and-infer-caption-frame-extents
+  - name: captionacc-staging-crop-and-infer-caption-frame-extents
     description: Crop frames and infer caption boundaries
     entrypoint: app/flows/crop_and_infer.py:crop_and_infer
     work_pool:
-      name: captionacc-workers-dev
+      name: captionacc-workers-staging
     pull:
       - prefect.deployments.steps.set_working_directory:
           directory: /app
     schedules: []
 
-  - name: captionacc-dev-caption-ocr
+  - name: captionacc-staging-caption-ocr
     description: Generate OCR for individual captions
     entrypoint: app/flows/caption_ocr.py:caption_ocr
     work_pool:
-      name: captionacc-workers-dev
+      name: captionacc-workers-staging
     pull:
       - prefect.deployments.steps.set_working_directory:
           directory: /app
     schedules: []
 
-  - name: captionacc-dev-process-new-videos
+  - name: captionacc-staging-process-new-videos
     description: "Process new videos (primary: Realtime, recovery: cron)"
     entrypoint: app/flows/process_new_videos.py:process_new_videos
     work_pool:
-      name: captionacc-workers-dev
+      name: captionacc-workers-staging
     pull:
       - prefect.deployments.steps.set_working_directory:
           directory: /app

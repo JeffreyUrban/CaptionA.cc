@@ -1,0 +1,18 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Web" type="js.build_tools.npm">
+    <package-json value="$PROJECT_DIR$/apps/captionacc-web/package.json" />
+    <command value="run" />
+    <scripts>
+      <script value="dev" />
+    </scripts>
+    <arguments value="-- --port 6000" />
+    <node-interpreter value="project" />
+    <envs>
+      <env name="API_URL" value="http://localhost:6001" />
+    </envs>
+    <EXTENSION ID="com.intellij.javascript.debugger.execution.StartBrowserRunConfigurationExtension">
+      <browser with-js-debugger="true" />
+    </EXTENSION>
+    <method v="2" />
+  </configuration>
+</component>

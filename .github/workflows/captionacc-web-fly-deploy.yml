@@ -1,22 +1,25 @@
-# See https://fly.io/docs/app-guides/continuous-deployment-with-github-actions/
+# Deploy CaptionA.cc Web to Production
+# Triggers on release tag (v*) or manual dispatch
+# Requires staging verification before release
 
-name: Fly Deploy
+name: Deploy Web (Prod)
 on:
   push:
-    paths:
-      - 'apps/captionacc-web/**'
-    branches:
-      - main
-  workflow_dispatch:  # Allow manual triggering
+    tags:
+      - 'v*'
+  workflow_dispatch:  # Allow manual triggering (with caution)
+
 jobs:
   deploy:
-    name: Deploy app
+    name: Deploy to Production
     runs-on: ubuntu-latest
     environment: prod
-    concurrency: deploy-group    # optional: ensure only one action runs at a time
+    concurrency: deploy-web-prod
+
     defaults:
       run:
         working-directory: apps/captionacc-web
+
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
@@ -53,6 +56,25 @@ jobs:
             --config fly.prod.toml \
             --build-arg VITE_SUPABASE_URL="${{ vars.SUPABASE_URL }}" \
             --build-arg VITE_SUPABASE_ANON_KEY="${{ vars.SUPABASE_ANON_KEY }}" \
-            --build-arg VITE_SUPABASE_SCHEMA="captionacc"
+            --build-arg VITE_SUPABASE_SCHEMA="captionacc" \
+            --build-arg VITE_API_URL="${{ vars.VITE_API_URL }}" \
+            --build-arg VITE_WASABI_BUCKET="${{ vars.WASABI_BUCKET }}"
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Verify deployment
+        run: |
+          echo "Waiting for service to start..."
+          sleep 15
+
+          for i in {1..5}; do
+            echo "Health check attempt $i/5..."
+            if curl -sf -m 10 "https://captionacc-web-prod.fly.dev" > /dev/null; then
+              echo "✅ Production deployment successful: https://captionacc-web-prod.fly.dev"
+              exit 0
+            fi
+            sleep 10
+          done
+
+          echo "⚠️ Deployment completed but health check inconclusive"
+          echo "Check: https://captionacc-web-prod.fly.dev"

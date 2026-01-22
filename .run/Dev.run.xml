@@ -1,0 +1,9 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Dev" type="CompoundRunConfigurationType">
+    <toRun name="Supabase" type="ShConfigurationType" />
+    <toRun name="Prefect" type="ShConfigurationType" />
+    <toRun name="API" type="PythonConfigurationType" />
+    <toRun name="Web" type="js.build_tools.npm" />
+    <method v="2" />
+  </configuration>
+</component>
