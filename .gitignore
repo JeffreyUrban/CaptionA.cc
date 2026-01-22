@@ -27,7 +27,6 @@ wheels/
 MANIFEST
 
 # Virtual environments
-.env
 .venv
 env/
 venv/
@@ -98,8 +97,9 @@ Thumbs.db
 *~
 
 # Environment variables
-.env.local
-.env.*.local
+.env.dev
+.env.prod
+.env
 
 # Claude
 /CLAUDE-*
@@ -116,3 +116,4 @@ tsconfig.tsbuildinfo
 # Supabase CLI temp files
 supabase/.temp/
 supabase/.branches/
+

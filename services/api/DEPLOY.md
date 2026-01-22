@@ -58,7 +58,8 @@ fly secrets set \
   WASABI_BUCKET="captionacc-prod" \
   WASABI_REGION="us-east-1" \
   PREFECT_API_URL="https://your-prefect-server/api" \
-  PREFECT_API_KEY="your-prefect-api-key" \
+  MODAL_TOKEN_ID="your-modal-token-id" \
+  MODAL_TOKEN_SECRET="your-modal-token-secret" \
   -a captionacc-api-prod
 ```
 
@@ -73,9 +74,12 @@ fly secrets set \
   WASABI_BUCKET="captionacc-dev" \
   WASABI_REGION="us-east-1" \
   PREFECT_API_URL="https://your-prefect-server/api" \
-  PREFECT_API_KEY="your-prefect-api-key" \
+  MODAL_TOKEN_ID="your-modal-token-id" \
+  MODAL_TOKEN_SECRET="your-modal-token-secret" \
   -a captionacc-api-dev
 ```
+
+> **Note:** Modal tokens can be generated at [modal.com/settings/tokens](https://modal.com/settings/tokens). The same token can be used for both environments, or separate tokens for isolation.
 
 ### 3. Deploy
 

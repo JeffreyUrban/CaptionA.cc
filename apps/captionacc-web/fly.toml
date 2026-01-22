@@ -15,9 +15,11 @@ primary_region = 'ewr'
   # Public Vite environment variables (embedded in client bundle at build time)
   # These are REQUIRED for the app to work - they're not secrets
   # The anon key is designed to be public (RLS policies protect data)
-  VITE_SUPABASE_URL = "https://stbnsczvywpwjzbpfehp.supabase.co"  # pragma: allowlist secret
-  VITE_SUPABASE_SCHEMA = "captionacc_production"
-  VITE_SUPABASE_ANON_KEY = "sb_publishable_nJJjrTJfnlqPtEpWWnuyjw_tzqgZ8uf"  # pragma: allowlist secret
+  # VITE_ variables are set via --build-arg in the deploy workflow
+  # These are fallbacks only - the workflow should always provide values
+  VITE_SUPABASE_URL = "https://cuvzwbtarrkngqeqmdaz.supabase.co"
+  VITE_SUPABASE_SCHEMA = "captionacc"
+  # VITE_SUPABASE_ANON_KEY must come from build args (GitHub vars.SUPABASE_ANON_KEY)
 
   # Umami analytics (public, embedded in client bundle)
   # Routed through Traefik gateway

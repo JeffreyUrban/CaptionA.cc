@@ -11,15 +11,15 @@
       "HEAD"
     ],
     "AllowedOrigins": [
-        "http://localhost:5175",
-        "http://localhost:5174",
-        "http://localhost:5173",
-        "https://captionacc-web.fly.dev",
-        "https://captiona.cc"
+      "https://captionacc-web-prod.fly.dev",
+      "https://captiona.cc",
+      "http://localhost:5173",
+      "http://localhost:5174",
+      "http://localhost:5175"
     ],
     "ExposeHeaders": [
       "ETag"
     ],
-    "MaxAgeSeconds": 3000
+    "MaxAgeSeconds": 3600
   }
 ]

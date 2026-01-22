@@ -5,6 +5,7 @@ app = "captionacc-api-dev"
 primary_region = "ewr"
 
 [build]
+  dockerfile = "Dockerfile"
   [build.args]
     PREFECT_FILE = "prefect-dev.yaml"
 

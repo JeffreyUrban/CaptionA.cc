@@ -1,17 +1,18 @@
 /**
- * Presigned Upload Edge Function (DEV)
+ * Presigned Upload Edge Function
  *
- * Development version - uses captionacc_dev schema.
+ * Unified function - uses DB_SCHEMA from environment (default: captionacc).
+ * Deploy to each Supabase project with project-specific secrets.
  *
  * Two-phase upload process:
  *
  * Phase 1 - Generate presigned URL (no video record created):
- * POST /functions/v1/captionacc-presigned-upload-dev
+ * POST /functions/v1/captionacc-presigned-upload
  * Request: { filename, contentType, sizeBytes, videoPath?, width?, height? }
  * Response: { uploadUrl, videoId, storageKey, expiresAt }
  *
  * Phase 2 - Confirm upload completion (creates video record with workflow statuses at 'wait'):
- * POST /functions/v1/captionacc-presigned-upload-dev/confirm
+ * POST /functions/v1/captionacc-presigned-upload/confirm
  * Request: { videoId, storageKey, filename, contentType, sizeBytes, videoPath?, width?, height? }
  * Response: { success: true }
  *
@@ -24,10 +25,10 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders, handleCorsPreflightRequest } from "../_shared/cors.ts";
 import { generatePresignedPutUrl, WasabiConfig } from "../_shared/wasabi.ts";
 
-// Environment variables (DEV uses DB_SCHEMA)
+// Environment variables
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const DB_SCHEMA = Deno.env.get("DB_SCHEMA") || "captionacc_dev";
+const DB_SCHEMA = Deno.env.get("DB_SCHEMA") || "captionacc";
 
 const WASABI_ACCESS_KEY_ID = Deno.env.get("WASABI_ACCESS_KEY_READWRITE")!;
 const WASABI_SECRET_ACCESS_KEY = Deno.env.get("WASABI_SECRET_KEY_READWRITE")!;
@@ -61,7 +62,7 @@ interface ConfirmRequest {
   filename: string;
   contentType: string;
   sizeBytes: number;
-  videoPath?: string;
+  videoPath: string;
   width?: number;
   height?: number;
 }
@@ -165,9 +166,9 @@ async function handleConfirm(
   const { videoId, storageKey, filename, contentType, sizeBytes, videoPath, width, height } = body;
 
   // Validate request
-  if (!videoId || !storageKey || !filename || !contentType || !sizeBytes) {
+  if (!videoId || !storageKey || !filename || !contentType || !sizeBytes || !videoPath) {
     return jsonResponse(
-      { error: "Missing required fields: videoId, storageKey, filename, contentType, sizeBytes" },
+      { error: "Missing required fields: videoId, storageKey, filename, contentType, sizeBytes, videoPath" },
       400
     );
   }
@@ -180,12 +181,13 @@ async function handleConfirm(
 
   // Create video record with workflow statuses defaulting to 'wait'
   // This triggers Supabase Realtime notification for immediate backend processing
-  // Note: storage_key is computed as {tenant_id}/client/videos/{video_id}/video.mp4 (not stored)
   // Note: layout_status, boundaries_status, text_status default to 'wait' via database defaults
   const { error: insertError } = await supabaseAdmin.from("videos").insert({
     id: videoId,
     tenant_id: tenantId,
-    display_path: videoPath || filename,
+    video_path: videoPath,
+    display_path: videoPath,
+    storage_key: storageKey,
     size_bytes: sizeBytes,
     width: width ?? 0,
     height: height ?? 0,
