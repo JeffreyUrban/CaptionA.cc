@@ -11,8 +11,9 @@ echo "Current directory: $(pwd)"
 
 # Check if PREFECT_API_URL is set
 if [ -z "${PREFECT_API_URL:-}" ]; then
-    echo "ERROR: PREFECT_API_URL environment variable is not set"
-    exit 1
+    echo "PREFECT_API_URL not set - skipping Prefect flow deployment"
+    echo "This is expected for review apps where flow registration is not needed"
+    exit 0
 fi
 
 # Check if prefect.yaml exists
