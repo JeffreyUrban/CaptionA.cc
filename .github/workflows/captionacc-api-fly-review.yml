@@ -36,8 +36,7 @@ jobs:
         uses: superfly/fly-pr-review-apps@1.5.0
         with:
           name: pr-${{ github.event.number }}-captionacc-api
-          path: services/api
-          config: fly.dev.toml
+          config: services/api/fly.dev.toml
           secrets: |  # pragma: allowlist secret
             SUPABASE_URL=${{ secrets.SUPABASE_URL }}
             SUPABASE_JWT_SECRET=${{ secrets.SUPABASE_JWT_SECRET }}
