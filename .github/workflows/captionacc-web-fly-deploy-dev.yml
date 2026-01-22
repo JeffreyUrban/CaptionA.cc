@@ -45,6 +45,7 @@ jobs:
       - name: Deploy to Fly.io
         run: |
           flyctl deploy --remote-only \
+            --config fly.dev.toml \
             --build-arg VITE_SUPABASE_URL="${{ vars.SUPABASE_URL }}" \
             --build-arg VITE_SUPABASE_ANON_KEY="${{ vars.SUPABASE_ANON_KEY }}" \
             --build-arg VITE_SUPABASE_SCHEMA="captionacc" \
