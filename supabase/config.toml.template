@@ -8,9 +8,9 @@ enabled = true
 port = {{PORT_SUPABASE_API}}
 # Schemas to expose in your API. Tables, views and stored procedures in this schema will get API
 # endpoints. public and storage are always included.
-schemas = ["public", "storage", "graphql_public", "captionacc_prod", "captionacc_dev", "captionacc_staging"]
+schemas = ["public", "storage", "graphql_public", "captionacc"]
 # Extra schemas to add to the search_path of every request. public is always included.
-extra_search_path = ["public", "extensions", "captionacc_prod"]
+extra_search_path = ["public", "extensions", "captionacc"]
 # The maximum number of rows returns from a view, table, or stored procedure. Limits payload size
 # for accidental or malicious requests.
 max_rows = 1000
@@ -119,7 +119,7 @@ auth_token = "env(SUPABASE_AUTH_SMS_TWILIO_AUTH_TOKEN)"
 enabled = false
 client_id = ""
 # DO NOT commit your OAuth provider secret to git. Use environment variable substitution instead:
-secret = "env(SUPABASE_AUTH_EXTERNAL_APPLE_SECRET)"
+secret = "env(SUPABASE_AUTH_EXTERNAL_APPLE_SECRET)" # pragma: allowlist secret
 # Overrides the default auth redirectUrl.
 redirect_uri = ""
 # Overrides the default auth provider URL. Used to support self-hosted gitlab, single-tenant Azure,
@@ -129,21 +129,21 @@ url = ""
 [auth.external.azure]
 enabled = false
 client_id = ""
-secret = "env(SUPABASE_AUTH_EXTERNAL_AZURE_SECRET)"
+secret = "env(SUPABASE_AUTH_EXTERNAL_AZURE_SECRET)" # pragma: allowlist secret
 redirect_uri = ""
 url = ""
 
 [auth.external.github]
 enabled = false
 client_id = ""
-secret = "env(SUPABASE_AUTH_EXTERNAL_GITHUB_SECRET)"
+secret = "env(SUPABASE_AUTH_EXTERNAL_GITHUB_SECRET)" # pragma: allowlist secret
 redirect_uri = ""
 url = ""
 
 [auth.external.google]
 enabled = false
 client_id = ""
-secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET)"
+secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET)" # pragma: allowlist secret
 redirect_uri = ""
 url = ""
 

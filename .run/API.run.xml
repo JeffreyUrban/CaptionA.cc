@@ -1,23 +1,17 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="API" type="PythonConfigurationType" factoryName="Python">
-    <module name="captionacc-api" />
+  <configuration default="false" name="API" type="ShConfigurationType">
+    <option name="SCRIPT_TEXT" value="" />
+    <option name="INDEPENDENT_SCRIPT_PATH" value="true" />
+    <option name="SCRIPT_PATH" value="$PROJECT_DIR$/scripts/start-api.sh" />
+    <option name="SCRIPT_OPTIONS" value="" />
+    <option name="INDEPENDENT_SCRIPT_WORKING_DIRECTORY" value="true" />
+    <option name="SCRIPT_WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+    <option name="INDEPENDENT_INTERPRETER_PATH" value="true" />
+    <option name="INTERPRETER_PATH" value="/bin/bash" />
     <option name="INTERPRETER_OPTIONS" value="" />
-    <option name="PARENT_ENVS" value="true" />
-    <envs>
-      <env name="API_PORT" value="6001" />
-    </envs>
-    <option name="SDK_HOME" value="" />
-    <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/services/api" />
-    <option name="IS_MODULE_SDK" value="true" />
-    <option name="ADD_CONTENT_ROOTS" value="true" />
-    <option name="ADD_SOURCE_ROOTS" value="true" />
-    <option name="SCRIPT_NAME" value="uvicorn" />
-    <option name="PARAMETERS" value="app.main:app --reload --host 0.0.0.0 --port 6001" />
-    <option name="SHOW_COMMAND_LINE" value="false" />
-    <option name="EMULATE_TERMINAL" value="false" />
-    <option name="MODULE_MODE" value="true" />
-    <option name="REDIRECT_INPUT" value="false" />
-    <option name="INPUT_FILE" value="" />
+    <option name="EXECUTE_IN_TERMINAL" value="true" />
+    <option name="EXECUTE_SCRIPT_FILE" value="true" />
+    <envs />
     <method v="2" />
   </configuration>
 </component>
