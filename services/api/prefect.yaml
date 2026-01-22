@@ -1,22 +1,29 @@
 # Prefect deployment configuration for CaptionA.cc flows (Production)
 #
 # Deploy all prod flows:
-#   PREFECT_API_URL=https://banchelabs-gateway.fly.dev/prefect-internal/prefect/api prefect deploy --all
+#   yes n | PREFECT_API_URL=https://banchelabs-gateway.fly.dev/prefect-internal/prefect/api prefect deploy --all
 #
 # Deploy specific prod flow:
-#   PREFECT_API_URL=https://banchelabs-gateway.fly.dev/prefect-internal/prefect/api prefect deploy -n captionacc-prod-video-initial-processing
+#   yes n | PREFECT_API_URL=https://banchelabs-gateway.fly.dev/prefect-internal/prefect/api prefect deploy -n captionacc-prod-video-initial-processing
 
 # Default work pool for all prod deployments
 work_pool:
   name: captionacc-workers-prod
 
+# Disable git pull - code is already in the Docker container
+pull: []
+
 # Production Deployments (prefixed with captionacc-prod-)
+# pull step sets working directory to /app (WORKDIR in Dockerfile)
 deployments:
   - name: captionacc-prod-video-initial-processing
     description: Extract frames and run OCR on uploaded videos
     entrypoint: app/flows/video_initial_processing.py:video_initial_processing
     work_pool:
       name: captionacc-workers-prod
+    pull:
+      - prefect.deployments.steps.set_working_directory:
+          directory: /app
     schedules: []
 
   - name: captionacc-prod-crop-and-infer-caption-frame-extents
@@ -24,6 +31,9 @@ deployments:
     entrypoint: app/flows/crop_and_infer.py:crop_and_infer
     work_pool:
       name: captionacc-workers-prod
+    pull:
+      - prefect.deployments.steps.set_working_directory:
+          directory: /app
     schedules: []
 
   - name: captionacc-prod-caption-ocr
@@ -31,6 +41,9 @@ deployments:
     entrypoint: app/flows/caption_ocr.py:caption_ocr
     work_pool:
       name: captionacc-workers-prod
+    pull:
+      - prefect.deployments.steps.set_working_directory:
+          directory: /app
     schedules: []
 
   - name: captionacc-prod-process-new-videos
@@ -38,4 +51,8 @@ deployments:
     entrypoint: app/flows/process_new_videos.py:process_new_videos
     work_pool:
       name: captionacc-workers-prod
-    schedules: []
+    pull:
+      - prefect.deployments.steps.set_working_directory:
+          directory: /app
+    schedules:
+      - cron: "0 * * * *"  # Every 60 minutes (hourly recovery)
