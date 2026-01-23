@@ -66,3 +66,22 @@ echo -e "${GREEN}✓ Supabase is running!${NC}"
 echo ""
 echo "Connection details:"
 supabase status
+
+# Seed dev users if they don't exist
+echo ""
+echo -e "${BLUE}Checking for development users...${NC}"
+
+# Check if admin user exists
+ADMIN_EXISTS=$(PGPASSWORD=postgres psql -h localhost -p "$PORT_SUPABASE_DB" -U postgres -d postgres -tAc \
+    "SELECT COUNT(*) FROM auth.users WHERE email = 'admin@local.dev';" 2>/dev/null || echo "0")
+
+if [[ "$ADMIN_EXISTS" == "0" ]]; then
+    echo "Seeding development users..."
+    "$SCRIPT_DIR/seed-dev-users.sh"
+else
+    echo -e "${GREEN}✓ Development users already exist${NC}"
+    echo ""
+    echo "Login credentials:"
+    echo "  Admin: admin@local.dev / adminpass123"
+    echo "  User:  user@local.dev / userpass123"
+fi
