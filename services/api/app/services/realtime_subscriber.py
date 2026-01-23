@@ -136,9 +136,12 @@ class RealtimeSubscriber:
     async def _trigger_processing(self) -> None:
         """Trigger the process_new_videos endpoint."""
         try:
+            settings = get_settings()
+            trigger_url = f"{settings.effective_api_internal_url}/internal/process-new-videos/trigger"
+
             async with httpx.AsyncClient() as client:
                 response = await client.post(
-                    "http://localhost:8000/internal/process-new-videos/trigger",
+                    trigger_url,
                     headers={"Content-Type": "application/json"},
                     timeout=30.0,
                 )

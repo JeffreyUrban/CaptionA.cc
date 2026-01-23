@@ -97,7 +97,8 @@ Thumbs.db
 *~
 
 # Environment variables
-.env.dev
+.env.local
+.env.staging
 .env.prod
 .env
 
@@ -117,3 +118,7 @@ tsconfig.tsbuildinfo
 supabase/.temp/
 supabase/.branches/
 
+# Supabase config (generated from template with worktree-specific ports)
+supabase/config.toml
+
+data/minio/

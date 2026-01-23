@@ -1,0 +1,11 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Dev" type="CompoundRunConfigurationType">
+    <toRun name="Supabase" type="ShConfigurationType" />
+    <toRun name="MinIO" type="ShConfigurationType" />
+    <toRun name="Prefect" type="ShConfigurationType" />
+    <toRun name="Worker" type="ShConfigurationType" />
+    <toRun name="API" type="ShConfigurationType" />
+    <toRun name="Web" type="ShConfigurationType" />
+    <method v="2" />
+  </configuration>
+</component>

@@ -1,54 +1,87 @@
 #!/bin/bash
-# Start Supabase for CaptionA.cc development
+# Start local Supabase for development
+#
+# Usage: ./scripts/start-supabase.sh
+#
+# Uses ports from .env (configured per worktree).
+# Validates environment before starting.
 
 set -e
 
-echo "🚀 Starting Supabase for CaptionA.cc..."
-echo ""
+# Source validation
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/validate-env.sh"
 
-# Navigate to project root
-cd "$(dirname "$0")/.."
+# Validate environment (will exit if prod detected)
+validate_env
+
+# Source .env to get ports
+set -a
+source "$ENV_FILE"
+set +a
 
 # Check if Docker is running
 if ! docker info > /dev/null 2>&1; then
-    echo "❌ Docker is not running. Please start Docker Desktop."
+    echo -e "${RED}ERROR: Docker is not running${NC}"
+    echo "Please start Docker Desktop and try again."
     exit 1
 fi
 
 # Check if Supabase CLI is installed
 if ! command -v supabase &> /dev/null; then
-    echo "❌ Supabase CLI is not installed."
+    echo -e "${RED}ERROR: Supabase CLI is not installed${NC}"
     echo ""
     echo "Install with:"
     echo "  brew install supabase/tap/supabase"
-    echo "  or"
-    echo "  npm install -g supabase"
     exit 1
 fi
 
+# Verify config.toml has correct ports (should match .env)
+CONFIG_FILE="$PROJECT_ROOT/supabase/config.toml"
+if [[ -f "$CONFIG_FILE" ]]; then
+    CONFIG_API_PORT=$(grep -E "^port = [0-9]+" "$CONFIG_FILE" | head -1 | grep -oE "[0-9]+")
+    if [[ "$CONFIG_API_PORT" != "$PORT_SUPABASE_API" ]]; then
+        echo -e "${YELLOW}WARNING: supabase/config.toml ports don't match .env${NC}"
+        echo "  Config API port: $CONFIG_API_PORT"
+        echo "  .env API port:   $PORT_SUPABASE_API"
+        echo ""
+        echo "Regenerating config.toml..."
+        "$SCRIPT_DIR/generate-env-local.sh" "${WORKTREE_INDEX:-0}"
+    fi
+fi
+
+echo ""
+echo -e "${BLUE}Starting Supabase...${NC}"
+echo "  API:     http://localhost:$PORT_SUPABASE_API"
+echo "  DB:      localhost:$PORT_SUPABASE_DB"
+echo "  Studio:  http://localhost:$PORT_SUPABASE_STUDIO"
+echo ""
+
 # Start Supabase
-echo "Starting Supabase services..."
-cd supabase
+cd "$PROJECT_ROOT/supabase"
 supabase start
 
 echo ""
-echo "✅ Supabase is running!"
+echo -e "${GREEN}✓ Supabase is running!${NC}"
 echo ""
-echo "📝 Connection details:"
-echo ""
+echo "Connection details:"
 supabase status
 
+# Seed dev users if they don't exist
 echo ""
-echo "🌐 Access points:"
-echo "   Studio UI: http://localhost:54323"
-echo "   API URL:   http://localhost:54321"
-echo "   DB URL:    postgresql://postgres:postgres@localhost:54322/postgres"
-echo ""
-echo "🔑 Environment variables are already configured in .env"
-echo ""
-echo "Next steps:"
-echo "1. Open Studio: http://localhost:54323"
-echo "2. Create a demo user in Authentication > Users"
-echo "3. Start web app: cd apps/captionacc-web && npm run dev"
-echo "4. Start Prefect: cd services/orchestrator && uv run python serve_flows.py"
-echo ""
+echo -e "${BLUE}Checking for development users...${NC}"
+
+# Check if admin user exists
+ADMIN_EXISTS=$(PGPASSWORD=postgres psql -h localhost -p "$PORT_SUPABASE_DB" -U postgres -d postgres -tAc \
+    "SELECT COUNT(*) FROM auth.users WHERE email = 'admin@local.dev';" 2>/dev/null || echo "0")
+
+if [[ "$ADMIN_EXISTS" == "0" ]]; then
+    echo "Seeding development users..."
+    "$SCRIPT_DIR/seed-dev-users.sh"
+else
+    echo -e "${GREEN}✓ Development users already exist${NC}"
+    echo ""
+    echo "Login credentials:"
+    echo "  Admin: admin@local.dev / adminpass123"
+    echo "  User:  user@local.dev / userpass123"
+fi

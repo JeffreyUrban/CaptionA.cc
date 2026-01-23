@@ -53,6 +53,7 @@ export interface WasabiConfig {
   bucket: string;
   region: string;
   endpoint?: string;
+  pathStyle?: boolean; // Use path-style URLs (required for MinIO)
 }
 
 export interface PresignedUrlOptions {
@@ -70,6 +71,7 @@ export async function generatePresignedPutUrl(
 ): Promise<{ url: string; expiresAt: string }> {
   const { accessKeyId, secretAccessKey, bucket, region } = config;
   const endpoint = config.endpoint || `https://s3.${region}.wasabisys.com`;
+  const pathStyle = config.pathStyle ?? false;
   const { key, contentType, expiresIn = 900 } = options;
 
   const now = new Date();
@@ -78,10 +80,18 @@ export async function generatePresignedPutUrl(
 
   const expiresAt = new Date(now.getTime() + expiresIn * 1000);
 
+  // Parse endpoint to get host and protocol
+  const endpointUrl = new URL(endpoint);
+  const protocol = endpointUrl.protocol; // http: or https:
+
   // Canonical request components
   const method = "PUT";
-  const canonicalUri = "/" + key;
-  const host = `${bucket}.s3.${region}.wasabisys.com`;
+  // Path-style: /bucket/key, Virtual-hosted: /key
+  const canonicalUri = pathStyle ? `/${bucket}/${key}` : `/${key}`;
+  // Path-style: endpoint host, Virtual-hosted: bucket.s3.region.wasabisys.com
+  const host = pathStyle
+    ? endpointUrl.host
+    : `${bucket}.s3.${region}.wasabisys.com`;
 
   // Query parameters for presigned URL
   const algorithm = "AWS4-HMAC-SHA256";
@@ -138,7 +148,7 @@ export async function generatePresignedPutUrl(
   const signature = toHex(await hmacSha256(signingKey, stringToSign));
 
   // Build final URL
-  const presignedUrl = `https://${host}${canonicalUri}?${canonicalQueryString}&X-Amz-Signature=${signature}`;
+  const presignedUrl = `${protocol}//${host}${canonicalUri}?${canonicalQueryString}&X-Amz-Signature=${signature}`;
 
   return {
     url: presignedUrl,
