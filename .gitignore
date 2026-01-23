@@ -121,3 +121,4 @@ supabase/.branches/
 # Supabase config (generated from template with worktree-specific ports)
 supabase/config.toml
 
+data/minio/

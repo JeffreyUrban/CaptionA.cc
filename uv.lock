@@ -10,6 +10,7 @@ resolution-markers = [
 
 [manifest]
 members = [
+    "caption-boundaries",
     "caption-frame-extents",
     "caption-models",
     "caption-text",
@@ -396,6 +397,11 @@ sdist = { url = "https://files.pythonhosted.org/packages/bc/1d/ede8680603f601688
 wheels = [
     { url = "https://files.pythonhosted.org/packages/2c/fc/1d7b80d0eb7b714984ce40efc78859c022cd930e402f599d8ca9e39c78a4/cachetools-6.2.4-py3-none-any.whl", hash = "sha256:69a7a52634fed8b8bf6e24a050fb60bff1c9bd8f6d24572b99c32d4e71e62a51", size = 11551, upload-time = "2025-12-15T18:24:52.332Z" },
 ]
+
+[[package]]
+name = "caption-boundaries"
+version = "0.1.0"
+source = { editable = "data-pipelines/caption_boundaries" }
 
 [[package]]
 name = "caption-frame-extents"
