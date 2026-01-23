@@ -27,12 +27,27 @@ set +a
 
 # Default ports if not set
 PORT_SUPABASE_API="${PORT_SUPABASE_API:-6010}"
+PORT_SUPABASE_DB="${PORT_SUPABASE_DB:-6011}"
 
-# Supabase local URLs
-SUPABASE_URL="http://localhost:$PORT_SUPABASE_API"
+# Get actual keys from Supabase CLI (they're dynamically generated)
+echo -e "${BLUE}Getting Supabase configuration...${NC}"
+SUPABASE_STATUS=$(cd "$PROJECT_ROOT/supabase" && supabase status -o json 2>/dev/null)
 
-# Standard Supabase local dev service role key (not a secret - same for all local installs)
-SERVICE_ROLE_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU"
+if [ -z "$SUPABASE_STATUS" ]; then
+    echo -e "${RED}ERROR: Could not get Supabase status. Is Supabase running?${NC}"
+    exit 1
+fi
+
+# Parse JSON using Python (more reliable than grep for complex JSON)
+SUPABASE_URL=$(echo "$SUPABASE_STATUS" | python3 -c "import sys,json; print(json.load(sys.stdin)['API_URL'])" 2>/dev/null)
+SERVICE_ROLE_KEY=$(echo "$SUPABASE_STATUS" | python3 -c "import sys,json; print(json.load(sys.stdin)['SERVICE_ROLE_KEY'])" 2>/dev/null)
+
+if [ -z "$SERVICE_ROLE_KEY" ]; then
+    echo -e "${RED}ERROR: Could not get SERVICE_ROLE_KEY from Supabase${NC}"
+    exit 1
+fi
+
+echo "  API URL: $SUPABASE_URL"
 
 # Test user credentials
 ADMIN_EMAIL="admin@local.dev"
