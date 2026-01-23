@@ -1,13 +1,17 @@
-"""GPU-accelerated frame extraction at configurable rates."""
+"""Hardware-accelerated frame extraction at configurable rates.
+
+Supports multiple backends:
+- NVIDIA NVDEC (Modal/cloud)
+- Apple VideoToolbox (local macOS)
+- Software decoding (fallback)
+"""
 
 from collections.abc import Callable
 from io import BytesIO
 from pathlib import Path
 
-import torch
+import numpy as np
 from PIL import Image as PILImage
-
-from .decoder import GPUVideoDecoder
 
 
 def _convert_normalized_to_pixels(
@@ -76,19 +80,26 @@ def extract_frames_gpu(
     crop_region: tuple[int, int, int, int] | None = None,
     crop_normalized: tuple[float, float, float, float] | None = None,
     progress_callback: Callable[[int, int], None] | None = None,
-) -> list[torch.Tensor | PILImage.Image | bytes]:
-    """Extract frames using GPU decoder at specified rate.
+    decoder_type: str | None = None,
+) -> list[np.ndarray | PILImage.Image | bytes]:
+    """Extract frames using hardware-accelerated decoder at specified rate.
+
+    Automatically selects the appropriate decoder based on environment:
+    - NVIDIA NVDEC for Modal/cloud (ENVIRONMENT != 'local')
+    - Apple VideoToolbox for local macOS development
+    - Software decoder as fallback
 
     Args:
         video_path: Path to video file
         frame_rate_hz: Frames per second to extract (e.g., 0.1 for 1 frame per 10s)
-        output_format: Output format - "tensor" (GPU), "pil" (CPU PIL Images), "jpeg_bytes" (CPU JPEG bytes)
+        output_format: Output format - "numpy" (array), "pil" (PIL Images), "jpeg_bytes" (JPEG bytes)
         crop_region: Optional crop region as (left, top, right, bottom) in pixels.
             Cannot be used together with crop_normalized.
         crop_normalized: Optional crop region as (left, top, right, bottom) in normalized
             coordinates (0.0 to 1.0). For example, (0.0, 0.9, 1.0, 1.0) crops to the
             bottom 10% of the frame. Cannot be used together with crop_region.
         progress_callback: Optional callback(current, total) for progress tracking
+        decoder_type: Optional explicit decoder type ('nvdec', 'videotoolbox', 'software')
 
     Returns:
         List of frames in requested format
@@ -106,20 +117,28 @@ def extract_frames_gpu(
         # Extract with normalized crop (bottom 10% of frame)
         frames = extract_frames_gpu("video.mp4", 1.0, crop_normalized=(0.0, 0.9, 1.0, 1.0))
 
+        # Explicitly use VideoToolbox decoder
+        frames = extract_frames_gpu("video.mp4", 1.0, decoder_type="videotoolbox")
+
     Raises:
         ValueError: If both crop_region and crop_normalized are provided
     """
-    if output_format not in ["tensor", "pil", "jpeg_bytes"]:
-        raise ValueError(f"Invalid output_format: {output_format}. Must be one of: tensor, pil, jpeg_bytes")
+    # Import here to avoid circular imports
+    from . import get_decoder
+
+    # Support legacy 'tensor' format as alias for 'numpy'
+    if output_format == "tensor":
+        output_format = "numpy"
+
+    if output_format not in ["numpy", "pil", "jpeg_bytes"]:
+        raise ValueError(f"Invalid output_format: {output_format}. Must be one of: numpy, pil, jpeg_bytes")
 
     # Validate crop parameters
     _validate_crop_params(crop_region, crop_normalized)
 
-    decoder = GPUVideoDecoder(video_path)
+    decoder = get_decoder(video_path, decoder_type=decoder_type)
     video_info = decoder.get_video_info()
 
-    video_info["total_frames"]
-    video_info["fps"]
     video_duration = video_info["duration"]
     frame_width = video_info["width"]
     frame_height = video_info["height"]
@@ -132,35 +151,31 @@ def extract_frames_gpu(
     # Calculate number of output frames
     num_output_frames = int(video_duration * frame_rate_hz)
 
-    print(f"Extracting {num_output_frames} frames at {frame_rate_hz} Hz from {video_duration:.1f}s video")
+    decoder_name = decoder.__class__.__name__
+    print(f"Extracting {num_output_frames} frames at {frame_rate_hz} Hz from {video_duration:.1f}s video using {decoder_name}")
 
-    frames = []
+    frames: list[np.ndarray | PILImage.Image | bytes] = []
 
     for frame_idx in range(num_output_frames):
         # Calculate timestamp for this output frame
         target_time = frame_idx / frame_rate_hz
 
-        # Extract frame on GPU
-        frame_tensor = decoder.get_frame_at_time(target_time)
+        # Extract frame (returns numpy array)
+        frame_array = decoder.get_frame_at_time(target_time)
 
-        # Apply GPU cropping if requested
+        # Apply cropping if requested
         if effective_crop_region is not None:
             left, top, right, bottom = effective_crop_region
-            frame_tensor = frame_tensor[top:bottom, left:right, :]
+            frame_array = frame_array[top:bottom, left:right, :]
 
         # Convert to requested format
-        if output_format == "tensor":
-            # Keep on GPU
-            frames.append(frame_tensor)
+        if output_format == "numpy":
+            frames.append(frame_array)
         elif output_format == "pil":
-            # Transfer to CPU and convert to PIL
-            frame_np = frame_tensor.cpu().numpy()
-            pil_image = PILImage.fromarray(frame_np)
+            pil_image = PILImage.fromarray(frame_array)
             frames.append(pil_image)
         elif output_format == "jpeg_bytes":
-            # Transfer to CPU, convert to PIL, encode to JPEG bytes
-            frame_np = frame_tensor.cpu().numpy()
-            pil_image = PILImage.fromarray(frame_np)
+            pil_image = PILImage.fromarray(frame_array)
             buffer = BytesIO()
             pil_image.save(buffer, format="JPEG", quality=95)
             frames.append(buffer.getvalue())
