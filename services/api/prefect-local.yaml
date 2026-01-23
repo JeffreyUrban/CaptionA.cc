@@ -4,41 +4,41 @@
 #   cd services/api && uv run prefect deploy --all --prefect-file prefect-local.yaml
 #
 # Deploy specific local flow:
-#   cd services/api && uv run prefect deploy -n local-video-initial-processing --prefect-file prefect-local.yaml
+#   cd services/api && uv run prefect deploy -n captionacc-local-video-initial-processing --prefect-file prefect-local.yaml
 
 # Default work pool for all local deployments
 work_pool:
-  name: local
+  name: captionacc-workers-local
 
 # Local deployments use the local filesystem
 pull: []
 
-# Local Deployments (prefixed with local-)
+# Local Deployments (follows captionacc-{namespace}-{base_name} pattern)
 deployments:
-  - name: local-video-initial-processing
+  - name: captionacc-local-video-initial-processing
     description: Extract frames and run OCR on uploaded videos
     entrypoint: app/flows/video_initial_processing.py:video_initial_processing
     work_pool:
-      name: local
+      name: captionacc-workers-local
     schedules: []
 
-  - name: local-crop-and-infer-caption-frame-extents
+  - name: captionacc-local-crop-and-infer-caption-frame-extents
     description: Crop frames and infer caption boundaries
     entrypoint: app/flows/crop_and_infer.py:crop_and_infer
     work_pool:
-      name: local
+      name: captionacc-workers-local
     schedules: []
 
-  - name: local-caption-ocr
+  - name: captionacc-local-caption-ocr
     description: Generate OCR for individual captions
     entrypoint: app/flows/caption_ocr.py:caption_ocr
     work_pool:
-      name: local
+      name: captionacc-workers-local
     schedules: []
 
-  - name: local-process-new-videos
+  - name: captionacc-local-process-new-videos
     description: "Process new videos (triggered by API)"
     entrypoint: app/flows/process_new_videos.py:process_new_videos
     work_pool:
-      name: local
+      name: captionacc-workers-local
     schedules: []

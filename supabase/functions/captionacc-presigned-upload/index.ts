@@ -34,6 +34,10 @@ const WASABI_ACCESS_KEY_ID = Deno.env.get("WASABI_ACCESS_KEY_READWRITE")!;
 const WASABI_SECRET_ACCESS_KEY = Deno.env.get("WASABI_SECRET_KEY_READWRITE")!;
 const WASABI_BUCKET = Deno.env.get("WASABI_BUCKET")!;
 const WASABI_REGION = Deno.env.get("WASABI_REGION") || "us-east-1";
+const WASABI_ENDPOINT_URL = Deno.env.get("WASABI_ENDPOINT_URL");
+
+// Detect if using local MinIO (path-style URLs required)
+const isLocalS3 = WASABI_ENDPOINT_URL && !WASABI_ENDPOINT_URL.includes("wasabisys.com");
 
 // Allowed content types for video upload
 const ALLOWED_CONTENT_TYPES = [
@@ -135,6 +139,8 @@ async function handleGenerate(
     secretAccessKey: WASABI_SECRET_ACCESS_KEY,
     bucket: WASABI_BUCKET,
     region: WASABI_REGION,
+    endpoint: WASABI_ENDPOINT_URL,
+    pathStyle: isLocalS3,
   };
 
   const { url, expiresAt } = await generatePresignedPutUrl(wasabiConfig, {

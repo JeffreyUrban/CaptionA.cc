@@ -9,7 +9,8 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
     model_config = SettingsConfigDict(
-        env_file=(".env", "../../.env"),  # Check local and project root
+        # Check env files in order: local .env, .env.local at project root, .env at project root
+        env_file=(".env", "../../.env.local", "../../.env"),
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",  # Ignore extra env vars from root .env
@@ -22,6 +23,7 @@ class Settings(BaseSettings):
     # API
     api_host: str = "0.0.0.0"
     api_port: int = 8000
+    api_internal_url: str = ""  # Internal URL for self-calls (defaults to localhost:api_port)
 
     # Supabase Auth
     supabase_url: str = ""
@@ -104,6 +106,13 @@ class Settings(BaseSettings):
         flow_name = f"captionacc-{base_name}"
         deployment_name = self.get_deployment_name(base_name)
         return f"{flow_name}/{deployment_name}"
+
+    @property
+    def effective_api_internal_url(self) -> str:
+        """Get the internal URL for API self-calls."""
+        if self.api_internal_url:
+            return self.api_internal_url
+        return f"http://localhost:{self.api_port}"
 
     @property
     def effective_wasabi_access_key(self) -> str:

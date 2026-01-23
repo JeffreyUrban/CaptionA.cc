@@ -70,32 +70,47 @@ def update_workflow_status_task(
 def extract_full_frames_and_ocr_task(
     video_key: str, tenant_id: str, video_id: str, frame_rate: float = 0.1
 ) -> dict[str, Any]:
-    """Call Modal extract_full_frames_and_ocr function remotely."""
-    import modal
-
+    """Extract frames and run OCR - uses Modal remotely or local CPU for development."""
     from app.config import get_settings
 
     settings = get_settings()
     logger.info(f"Starting frame extraction for video {video_id} at {frame_rate} fps")
 
-    # Look up the deployed Modal function
-    modal_app_name = (
-        f"captionacc-extract-full-frames-and-ocr-{settings.modal_app_suffix}"
-    )
-    logger.info(f"Looking up Modal function: {modal_app_name}")
-    extract_fn = modal.Function.from_name(modal_app_name, "extract_full_frames_and_ocr")
+    # Check if running in local mode (no Modal deployment)
+    if settings.modal_app_suffix == "local":
+        logger.info("Using LOCAL frame extractor (no Modal)")
+        from app.flows.local_frame_extractor import extract_frames_and_ocr_local
 
-    # Call the Modal function remotely
-    try:
-        result = extract_fn.remote(
-            video_key=video_key,
-            tenant_id=tenant_id,
-            video_id=video_id,
-            rate_hz=frame_rate,  # Parameter name is rate_hz in Modal function
+        try:
+            result = extract_frames_and_ocr_local(
+                video_key=video_key,
+                tenant_id=tenant_id,
+                video_id=video_id,
+                rate_hz=frame_rate,
+            )
+        except Exception as e:
+            logger.error(f"Local frame extraction failed: {e}")
+            raise RuntimeError(f"Frame extraction failed: {str(e)}") from e
+    else:
+        # Use Modal for staging/prod
+        import modal
+
+        modal_app_name = (
+            f"captionacc-extract-full-frames-and-ocr-{settings.modal_app_suffix}"
         )
-    except Exception as e:
-        logger.error(f"Modal function failed: {e}")
-        raise RuntimeError(f"Frame extraction failed: {str(e)}") from e
+        logger.info(f"Looking up Modal function: {modal_app_name}")
+        extract_fn = modal.Function.from_name(modal_app_name, "extract_full_frames_and_ocr")
+
+        try:
+            result = extract_fn.remote(
+                video_key=video_key,
+                tenant_id=tenant_id,
+                video_id=video_id,
+                rate_hz=frame_rate,
+            )
+        except Exception as e:
+            logger.error(f"Modal function failed: {e}")
+            raise RuntimeError(f"Frame extraction failed: {str(e)}") from e
 
     logger.info(
         f"Frame extraction complete: {result['frame_count']} frames, "
@@ -139,13 +154,22 @@ def analyze_layout_config_task(
 
     import boto3
 
-    # Get S3 client
+    # Get S3 client - support both MinIO (local) and Wasabi (staging/prod)
+    endpoint_url = os.environ.get("WASABI_ENDPOINT_URL")
+    region = os.environ.get("WASABI_REGION", "us-east-1")
+
+    # For MinIO, use configured endpoint; for Wasabi, construct from region
+    if endpoint_url:
+        s3_endpoint = endpoint_url
+    else:
+        s3_endpoint = f"https://s3.{region}.wasabisys.com"
+
     wasabi_client = boto3.client(
         "s3",
-        endpoint_url=f"https://s3.{os.environ['WASABI_REGION']}.wasabisys.com",
+        endpoint_url=s3_endpoint,
         aws_access_key_id=os.environ["WASABI_ACCESS_KEY_READWRITE"],
         aws_secret_access_key=os.environ["WASABI_SECRET_KEY_READWRITE"],
-        region_name=os.environ["WASABI_REGION"],
+        region_name=region,
     )
     bucket_name = os.environ["WASABI_BUCKET"]
 
